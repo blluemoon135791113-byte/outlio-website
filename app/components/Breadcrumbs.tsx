@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { serializeJsonLd } from "@/lib/json-ld";
 
 interface BreadcrumbItem {
   label: string;
@@ -47,7 +48,7 @@ export default function Breadcrumbs() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <nav aria-label="Breadcrumb" className="mx-auto max-w-7xl px-6 py-4 sm:px-10">
         <ol className="flex flex-wrap items-center gap-2 text-sm">

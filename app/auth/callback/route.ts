@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { appOrigin, safeRedirectPath } from '@/lib/auth/redirects'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -10,11 +11,10 @@ import { createClient } from '@/lib/supabase/server'
  * this cannot be used as an open redirect.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl
+  const { searchParams } = request.nextUrl
+  const origin = appOrigin(request.nextUrl.origin)
   const code = searchParams.get('code')
-  const rawNext = searchParams.get('next') ?? '/dashboard'
-
-  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard'
+  const next = safeRedirectPath(searchParams.get('next'))
 
   if (!code) {
     return NextResponse.redirect(`${origin}/sign-in?error=missing_code`)

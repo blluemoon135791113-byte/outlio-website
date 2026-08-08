@@ -1,5 +1,7 @@
 "use client";
 
+import { serializeJsonLd } from "@/lib/json-ld";
+
 interface FAQ {
   q: string;
   a: string;
@@ -22,7 +24,7 @@ export default function FAQSchema({ faqs }: { faqs: FAQ[] }) {
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
     />
   );
 }

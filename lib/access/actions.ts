@@ -119,8 +119,8 @@ export async function startCheckoutAction(
 ): Promise<AccessActionState> {
   const ctx = await assertUser()
 
-  const planId = String(formData.get('plan_id') ?? '')
-  if (!planId) return { status: 'error', message: 'Choose a plan first.' }
+  const planId = z.string().uuid().safeParse(formData.get('plan_id'))
+  if (!planId.success) return { status: 'error', message: 'Choose a valid plan.' }
 
   const limit = await consume(REQUEST_RULE, subjectFor(await clientIp(), ctx.email))
   if (!limit.allowed) {
@@ -131,7 +131,7 @@ export async function startCheckoutAction(
     const provider = getPaymentProvider()
     const result = await provider.createCheckout({
       userId: ctx.userId!,
-      planId,
+      planId: planId.data,
       email: ctx.email ?? '',
       returnUrl: '/dashboard',
     })

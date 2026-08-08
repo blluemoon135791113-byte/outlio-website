@@ -173,6 +173,11 @@ export type FinalizeResult =
   | { ok: true; jobId: string; queued: number }
   | { ok: false; message: string }
 
+const finalizeSchema = z.object({
+  jobId: z.string().uuid(),
+  failedFileIds: z.array(z.string().uuid()).max(500),
+})
+
 /**
  * Marks the upload complete and enqueues the job.
  *
@@ -193,36 +198,54 @@ export async function finalizeUploadAction(input: {
     }
   }
 
-  const jobId = z.string().uuid().safeParse(input.jobId)
-  if (!jobId.success) return { ok: false, message: 'That upload could not be finalised.' }
+  const parsed = finalizeSchema.safeParse(input)
+  if (!parsed.success) return { ok: false, message: 'That upload could not be finalised.' }
+  const { jobId, failedFileIds } = parsed.data
 
   const supabase = createAdminClient()
 
   // Ownership check — the job id came from the client.
   const { data: job } = await supabase
     .from('extraction_jobs')
-    .select('id')
-    .eq('id', jobId.data)
+    .select('id, status, file_count')
+    .eq('id', jobId)
     .eq('user_id', ctx.userId!)
     .maybeSingle()
 
   if (!job) return { ok: false, message: 'That upload could not be finalised.' }
 
-  const failed = z.array(z.string().uuid()).safeParse(input.failedFileIds)
-  if (failed.success && failed.data.length > 0) {
-    await supabase
-      .from('uploaded_files')
-      .delete()
-      .eq('extraction_job_id', jobId.data)
-      .eq('user_id', ctx.userId!)
-      .in('id', failed.data)
+  // Network retries after a successful finalize are idempotent and do not
+  // consume a second credit.
+  if (['queued', 'processing', 'completed', 'partially_completed'].includes(job.status)) {
+    return { ok: true, jobId, queued: job.file_count }
   }
 
-  const { data: remaining } = await supabase
+  if (job.status !== 'uploaded') {
+    return { ok: false, message: 'That upload can no longer be finalised.' }
+  }
+
+  if (failedFileIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from('uploaded_files')
+      .delete()
+      .eq('extraction_job_id', jobId)
+      .eq('user_id', ctx.userId!)
+      .in('id', failedFileIds)
+
+    if (deleteError) {
+      return { ok: false, message: 'We could not verify the uploaded files. Please try again.' }
+    }
+  }
+
+  const { data: remaining, error: remainingError } = await supabase
     .from('uploaded_files')
     .select('id')
-    .eq('extraction_job_id', jobId.data)
+    .eq('extraction_job_id', jobId)
     .eq('user_id', ctx.userId!)
+
+  if (remainingError) {
+    return { ok: false, message: 'We could not verify the uploaded files. Please try again.' }
+  }
 
   const queued = remaining?.length ?? 0
 
@@ -234,39 +257,31 @@ export async function finalizeUploadAction(input: {
         error_code: 'ERR_STORAGE',
         error_message: 'No files were uploaded successfully.',
       })
-      .eq('id', jobId.data)
+      .eq('id', jobId)
     return { ok: false, message: 'None of those files finished uploading. Please try again.' }
   }
 
-  await supabase
-    .from('extraction_jobs')
-    .update({ file_count: queued, progress_total: queued })
-    .eq('id', jobId.data)
-
   /*
-   * Spend the extraction credit BEFORE enqueuing.
+   * Finalize, spend the extraction credit, record usage, and enqueue in one
+   * database transaction. This makes retries and concurrent submissions
+   * idempotent: a job can never consume two credits or report success without
+   * a durable queue row.
    *
-   * consume_credit is an atomic check-and-spend that rolls itself back when the
-   * balance is insufficient, so two concurrent uploads cannot both take the last
-   * credit. Charging here rather than in the worker means the user is told
-   * immediately, and a job is never queued that they cannot pay for.
+   * See migration 0017_atomic_job_finalization.sql.
    */
-  const { data: creditsRaw } = await supabase.rpc('consume_credit', {
-    p_user_id: ctx.userId!,
-    p_amount: 1,
-  })
-  const creditsLeft = typeof creditsRaw === 'number' ? creditsRaw : -1
+  const { data: finalizeStatus, error: finalizeError } = await supabase.rpc(
+    'finalize_upload_job',
+    {
+      p_job_id: jobId,
+      p_user_id: ctx.userId!,
+    },
+  )
 
-  if (creditsLeft < 0) {
-    await supabase
-      .from('extraction_jobs')
-      .update({
-        status: 'failed',
-        error_code: 'ERR_LIMIT_REACHED',
-        error_message: 'Not enough credits.',
-      })
-      .eq('id', jobId.data)
+  if (finalizeError) {
+    return { ok: false, message: "We couldn't queue that extraction. Please try again." }
+  }
 
+  if (finalizeStatus === 'insufficient_credits') {
     return {
       ok: false,
       message:
@@ -274,21 +289,19 @@ export async function finalizeUploadAction(input: {
     }
   }
 
-  await supabase.rpc('increment_usage', {
-    p_user_id: ctx.userId!,
-    p_metric: 'files',
-    p_period_start: ctx.usage!.monthPeriod.start.toISOString(),
-    p_period_end: ctx.usage!.monthPeriod.end.toISOString(),
-    p_by: queued,
-  })
+  if (finalizeStatus === 'no_files') {
+    return { ok: false, message: 'None of those files finished uploading. Please try again.' }
+  }
+
+  if (!['ok', 'already_finalized'].includes(finalizeStatus)) {
+    return { ok: false, message: 'That upload could not be finalised.' }
+  }
 
   // Durable record first: even if the after() work never runs, the job is
   // recoverable by the reaper.
-  await supabase.rpc('enqueue_job', { p_job_id: jobId.data })
-
   after(async () => {
     try {
-      await claimAndProcessOne(`after:${jobId.data}`)
+      await claimAndProcessOne(`after:${jobId}`)
     } catch {
       // Recovery is reap_stale_jobs()'s job.
     }
@@ -297,5 +310,5 @@ export async function finalizeUploadAction(input: {
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/jobs')
 
-  return { ok: true, jobId: jobId.data, queued }
+  return { ok: true, jobId, queued }
 }

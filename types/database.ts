@@ -418,6 +418,15 @@ export type Database = {
         Args: { p_job_id: string }
         Returns: undefined
       }
+      finalize_upload_job: {
+        Args: { p_job_id: string; p_user_id: string }
+        /** 'ok' | 'already_finalized' | 'not_found' | 'invalid_state' | 'no_files' | 'insufficient_credits' */
+        Returns: string
+      }
+      set_user_suspension: {
+        Args: { p_user_id: string; p_admin_id: string; p_suspend: boolean }
+        Returns: undefined
+      }
       claim_next_job: {
         Args: { p_claimed_by: string }
         Returns: { job_id: string; user_id: string; attempts: number }[]

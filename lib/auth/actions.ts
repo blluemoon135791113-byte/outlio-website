@@ -19,6 +19,7 @@ import {
   normalizePhone,
 } from '@/lib/auth/profile-fields'
 import { RULES, enforce, subjectFor } from '@/lib/auth/rate-limit'
+import { appOrigin, safeRedirectPath } from '@/lib/auth/redirects'
 import { isAppError } from '@/lib/errors/catalog'
 import { createClient } from '@/lib/supabase/server'
 
@@ -56,12 +57,9 @@ async function clientIp(): Promise<string | null> {
 }
 
 async function siteUrl(): Promise<string> {
-  const configured = process.env.NEXT_PUBLIC_APP_URL
-  if (configured) return configured.replace(/\/$/, '')
   const h = await headers()
-  const host = h.get('host') ?? 'localhost:3000'
-  const proto = host.startsWith('localhost') ? 'http' : 'https'
-  return `${proto}://${host}`
+  const host = h.get('host')
+  return appOrigin(host ? `http://${host}` : undefined)
 }
 
 function failure(message: string): ActionState {
@@ -179,9 +177,7 @@ export async function signInAction(
   if (error) return reject(GENERIC_CREDENTIALS_ERROR)
 
   // Only same-origin relative paths, so `next` cannot become an open redirect.
-  const safeNext =
-    next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard'
-  redirect(safeNext)
+  redirect(safeRedirectPath(next))
 }
 
 // ---------------------------------------------------------------------------

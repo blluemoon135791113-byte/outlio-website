@@ -97,34 +97,13 @@ export async function suspendUserAction(
   const suspend = formData.get('suspend') === 'true'
   const supabase = createAdminClient()
 
-  const { data: before } = await supabase
-    .from('profiles')
-    .select('role, suspended_at')
-    .eq('id', userId.data)
-    .maybeSingle()
-
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      suspended_at: suspend ? new Date().toISOString() : null,
-      suspended_reason: suspend ? 'Suspended by admin' : null,
-      role: suspend ? 'suspended_user' : 'registered_user',
-    })
-    .eq('id', userId.data)
+  const { error } = await supabase.rpc('set_user_suspension', {
+    p_user_id: userId.data,
+    p_admin_id: admin.userId!,
+    p_suspend: suspend,
+  })
 
   if (error) return { status: 'error', message: 'Could not update that account.' }
-
-  // Audit in the same flow as the change.
-  await supabase.from('admin_audit_logs').insert({
-    admin_id: admin.userId,
-    action: suspend ? 'user.suspend' : 'user.unsuspend',
-    target_type: 'profile',
-    target_id: userId.data,
-    target_user_id: userId.data,
-    before_state: before ?? null,
-    after_state: { suspended: suspend },
-    reason: suspend ? 'Suspended by admin' : 'Unsuspended by admin',
-  })
 
   revalidatePath('/admin')
   return { status: 'success', message: suspend ? 'Account suspended.' : 'Account restored.' }

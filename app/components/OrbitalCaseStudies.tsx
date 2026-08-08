@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -117,30 +117,31 @@ export default function OrbitalCaseStudies() {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
 
-  const animate = useCallback((ts: number) => {
-    if (!startRef.current) startRef.current = ts;
-    const t = (ts - startRef.current) / 1000;
-
-    ORBITS.forEach((orbit, i) => {
-      const pos = getPosition(orbit, t);
-      const node = nodesRef.current[i];
-      if (node) {
-        const pctX = ((CX + pos.x) / SIZE) * 100;
-        const pctY = ((CY + pos.y) / SIZE) * 100;
-        node.style.left = `${pctX}%`;
-        node.style.top = `${pctY}%`;
-      }
-    });
-
-    animRef.current = requestAnimationFrame(animate);
-  }, []);
-
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) return;
+
+    function animate(ts: number) {
+      if (!startRef.current) startRef.current = ts;
+      const t = (ts - startRef.current) / 1000;
+
+      ORBITS.forEach((orbit, i) => {
+        const pos = getPosition(orbit, t);
+        const node = nodesRef.current[i];
+        if (node) {
+          const pctX = ((CX + pos.x) / SIZE) * 100;
+          const pctY = ((CY + pos.y) / SIZE) * 100;
+          node.style.left = `${pctX}%`;
+          node.style.top = `${pctY}%`;
+        }
+      });
+
+      animRef.current = requestAnimationFrame(animate);
+    }
+
     animRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animRef.current);
-  }, [animate]);
+  }, []);
 
   useEffect(() => {
     if (!selectedCase) return;
