@@ -36,7 +36,7 @@ const TIERS: Tier[] = [
       'Duplicate removal across every upload',
       'CSV export included',
     ],
-    cta: { label: 'Start your 3-day free trial', href: '/sign-up' },
+    cta: { label: 'Convert your first list free', href: '/sign-up' },
   },
   {
     key: 'professional',
@@ -70,7 +70,7 @@ const TIERS: Tier[] = [
       'Retention and limits set with you',
       'Direct line to the team',
     ],
-    cta: { label: 'Contact us', href: 'mailto:husnain@outlio.io?subject=Outlio%20Lead%20Engine%20—%20Custom%20plan' },
+    cta: { label: 'Contact us', href: 'mailto:husnain@outlio.io?subject=Outlio%20Lead%20Engine%20Custom%20plan' },
   },
 ]
 
@@ -101,11 +101,11 @@ export function Pricing() {
             Pricing
           </p>
           <h2 className="mt-4 text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
-            Pay for what you pull
+            Simple credits. Predictable cost.
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-            One credit per extraction, one per export. A typical page of 25 leads
-            costs two credits from upload to spreadsheet.
+            Use one credit to process a batch and one to export the finished CSV.
+            Start free, then choose a monthly allowance that matches your workflow.
           </p>
         </div>
 
@@ -169,17 +169,17 @@ export function Pricing() {
           <h3 className="text-base font-semibold text-ink">How credits work</h3>
           <ul className="mt-2.5 space-y-1.5 text-sm leading-relaxed text-muted">
             <li>
-              <strong className="font-semibold text-ink">1 credit</strong> — one
+              <strong className="font-semibold text-ink">1 credit:</strong> one
               extraction run, however many files are in the batch
             </li>
             <li>
-              <strong className="font-semibold text-ink">1 credit</strong> — one CSV
+              <strong className="font-semibold text-ink">1 credit:</strong> one CSV
               export
             </li>
             <li>Credits reset at the start of each month. Unused credits do not roll over.</li>
             <li>
               The <strong className="font-semibold text-ink">3-day free trial</strong>{' '}
-              includes 10 credits and 5 files per batch — no card required.
+              includes 10 credits and 5 files per batch. No card required.
             </li>
           </ul>
         </div>

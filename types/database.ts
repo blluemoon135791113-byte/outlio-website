@@ -319,6 +319,17 @@ export type RateLimitRow = {
   updated_at: string
 }
 
+/** Raw network addresses are never stored; both hashes are lowercase hex. */
+export type SignupIpClaimRow = {
+  ip_hash: string
+  token_hash: string | null
+  user_id: string | null
+  reserved_until: string
+  claimed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 // ---------------------------------------------------------------------------
 // Supabase client generic
 // ---------------------------------------------------------------------------
@@ -352,6 +363,7 @@ export type Database = {
       admin_audit_logs: TableShape<AdminAuditLogRow>
       system_events: TableShape<SystemEventRow>
       rate_limits: TableShape<RateLimitRow>
+      signup_ip_claims: TableShape<SignupIpClaimRow>
       lead_keys: TableShape<LeadKeyRow>
     }
     Views: Record<string, never>
@@ -379,6 +391,22 @@ export type Database = {
           p_block_seconds: number
         }
         Returns: { attempts: number; blocked_until: string | null }[]
+      }
+      reserve_signup_ip: {
+        Args: {
+          p_ip_hash: string
+          p_token_hash: string
+          p_reservation_seconds?: number
+        }
+        Returns: boolean
+      }
+      release_signup_ip: {
+        Args: { p_ip_hash: string; p_token_hash: string }
+        Returns: boolean
+      }
+      sweep_signup_ip_reservations: {
+        Args: Record<string, never>
+        Returns: number
       }
       sweep_rate_limits: {
         Args: Record<string, never>

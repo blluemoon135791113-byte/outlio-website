@@ -112,6 +112,8 @@ At tens of thousands of jobs/day this would warrant revisiting. It does not now.
 
 ```
 sign-up
+  → server reserves a keyed hash of the client network (10-minute one-time token)
+  → auth.users trigger consumes the reservation; direct Auth API bypasses fail
   → email verification required
   → profiles row created by on-auth.users-insert trigger, role = registered_user
 access request

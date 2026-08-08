@@ -4,6 +4,8 @@
  * These tests run against the real Supabase project. Every user created here is
  * deleted in cleanup. Nothing in this file may be imported by application code.
  */
+import { createHash, randomBytes } from 'node:crypto'
+
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 import type { Database } from '@/types/database'
@@ -42,6 +44,35 @@ export type TestUser = {
 
 export type TestAuthUser = { id: string; email: string }
 
+export type TestSignupReservation = {
+  ipHash: string
+  token: string
+  tokenHash: string
+}
+
+/** Reserve a fabricated network identity through the same database gate as production. */
+export async function createTestSignupReservation(
+  label: string,
+  ipHashOverride?: string,
+): Promise<TestSignupReservation> {
+  const unique = `${label}:${Date.now()}:${Math.random()}`
+  const ipHash =
+    ipHashOverride ?? createHash('sha256').update(`test-ip:${unique}`).digest('hex')
+  const token = randomBytes(32).toString('base64url')
+  const tokenHash = createHash('sha256').update(token).digest('hex')
+  const { data, error } = await adminClient().rpc('reserve_signup_ip', {
+    p_ip_hash: ipHash,
+    p_token_hash: tokenHash,
+    p_reservation_seconds: 600,
+  })
+
+  if (error || !data) {
+    throw new Error(`createTestSignupReservation failed: ${error?.message ?? 'blocked'}`)
+  }
+
+  return { ipHash, token, tokenHash }
+}
+
 /**
  * Creates a confirmed auth user WITHOUT signing in.
  *
@@ -54,6 +85,7 @@ export type TestAuthUser = { id: string; email: string }
  */
 export async function createAuthUser(label: string): Promise<TestAuthUser> {
   const admin = adminClient()
+  const reservation = await createTestSignupReservation(label)
   const email = `outlio-test-${label}-${Date.now()}-${Math.random()
     .toString(36)
     .slice(2, 8)}@example.com`
@@ -62,8 +94,13 @@ export async function createAuthUser(label: string): Promise<TestAuthUser> {
     email,
     password: `Test-${Math.random().toString(36).slice(2)}-Aa1!`,
     email_confirm: true,
+    user_metadata: { signup_reservation_token: reservation.token },
   })
   if (error || !data.user) {
+    await admin
+      .from('signup_ip_claims')
+      .delete()
+      .eq('ip_hash', reservation.ipHash)
     throw new Error(`createAuthUser failed: ${error?.message ?? 'no user returned'}`)
   }
 
@@ -73,6 +110,7 @@ export async function createAuthUser(label: string): Promise<TestAuthUser> {
 /** Creates a confirmed auth user and returns a client signed in as them. */
 export async function createTestUser(label: string): Promise<TestUser> {
   const admin = adminClient()
+  const reservation = await createTestSignupReservation(label)
   const email = `outlio-test-${label}-${Date.now()}-${Math.random()
     .toString(36)
     .slice(2, 8)}@example.com`
@@ -82,8 +120,13 @@ export async function createTestUser(label: string): Promise<TestUser> {
     email,
     password,
     email_confirm: true,
+    user_metadata: { signup_reservation_token: reservation.token },
   })
   if (error || !data.user) {
+    await admin
+      .from('signup_ip_claims')
+      .delete()
+      .eq('ip_hash', reservation.ipHash)
     throw new Error(`createTestUser failed: ${error?.message ?? 'no user'}`)
   }
 
@@ -111,6 +154,7 @@ export async function createTestUser(label: string): Promise<TestUser> {
 export async function deleteTestUser(userId: string): Promise<void> {
   const admin = adminClient()
   await admin.auth.admin.deleteUser(userId)
+  await admin.from('signup_ip_claims').delete().eq('user_id', userId)
 }
 
 /** Inserts a lead owned by `userId`, bypassing RLS. Returns the row id. */

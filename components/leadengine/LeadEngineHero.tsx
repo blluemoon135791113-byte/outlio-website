@@ -57,18 +57,18 @@ export function LeadEngineHero() {
             className="mx-auto mt-4 max-w-4xl text-[clamp(2rem,5vw,3.9rem)] font-bold uppercase leading-[0.98] tracking-tight text-ink"
             style={{ animation: `fade-in 0.7s ${EASE} 0.05s both` }}
           >
-            Stop retyping your
+            Turn Sales Navigator
             <br />
-            <span className="text-accent">Sales Navigator</span> lists.
+            results into a <span className="text-accent">clean CSV.</span>
           </h1>
 
           <p
             className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg"
             style={{ animation: `fade-in 0.7s ${EASE} 0.12s both` }}
           >
-            You spent an hour building the perfect search. Then you spent three
-            copying names into a spreadsheet. Save the results page instead —
-            Outlio turns it into a clean, de-duplicated CSV in seconds.
+            Save the results page already open in your browser. Outlio extracts
+            the names, titles, companies and profile links, removes duplicates,
+            and gives you a CSV ready for your workflow.
           </p>
 
           <div
@@ -79,7 +79,7 @@ export function LeadEngineHero() {
               href="/sign-up"
               className="rounded-full bg-ink px-7 py-3.5 text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent"
             >
-              Start your 3-day free trial
+              Convert your first list free
             </Link>
             <Link
               href="#how-it-works"
@@ -93,7 +93,7 @@ export function LeadEngineHero() {
             className="mt-4 text-sm text-muted"
             style={{ animation: `fade-in 0.7s ${EASE} 0.24s both` }}
           >
-            No card required · Plans from $38/month
+            3-day free trial · 10 credits · No card required
           </p>
         </div>
 
@@ -104,8 +104,8 @@ export function LeadEngineHero() {
               Before
             </p>
             <p className="mt-2 text-sm leading-relaxed text-ink">
-              25 leads open in 25 tabs. Copy name. Paste. Copy title. Paste.
-              Realise you already had this person.
+              Copy each name, title and company into a spreadsheet. Discover the
+              duplicates only after outreach starts.
             </p>
           </FloatCard>
 
@@ -115,10 +115,10 @@ export function LeadEngineHero() {
             </p>
             <p className="mt-2 text-sm leading-relaxed text-ink">
               <span className="font-semibold">Cmd+S</span> on the results page.
-              Drop the file in. Download the CSV.
+              Upload the saved file. Download a clean CSV.
             </p>
             <p className="mt-3 text-2xl font-black tracking-tight text-ink">
-              ~8 seconds
+              Ready in seconds
             </p>
           </FloatCard>
 

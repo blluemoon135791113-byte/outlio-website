@@ -7,32 +7,32 @@ import { LeadEngineHero } from '@/components/leadengine/LeadEngineHero'
 import { Pricing } from '@/components/leadengine/Pricing'
 
 export const metadata: Metadata = {
-  title: 'Outlio Lead Engine | Sales Navigator Lists Into Clean CSVs',
+  title: 'Sales Navigator CSV Export | Outlio Lead Engine',
   description:
-    'Stop copying LinkedIn Sales Navigator leads by hand. Save the search-results page, upload it, and get a de-duplicated CSV with names, titles, companies, locations and profile links. Plans from $38/month. 3-day free trial, no card required.',
+    'Turn a saved LinkedIn Sales Navigator results page into a clean CSV. Extract names, titles, companies and profile links without sharing your LinkedIn login or installing an extension.',
   alternates: { canonical: 'https://outlio.io/leadengine' },
   openGraph: {
     type: 'website',
     url: 'https://outlio.io/leadengine',
     siteName: 'Outlio',
-    title: 'Outlio Lead Engine | Sales Navigator Lists Into Clean CSVs',
+    title: 'Sales Navigator CSV Export | Outlio Lead Engine',
     description:
-      'Save a Sales Navigator search-results page, upload it, get a de-duplicated CSV. Plans from $38/month. 3-day free trial, no card required.',
+      'Save a Sales Navigator results page and turn it into a clean, duplicate-free CSV without sharing your LinkedIn login.',
   },
 }
 
 const PAINS = [
   {
-    title: 'The copy-paste tax',
-    body: 'Twenty-five results per page. Ten fields worth keeping. That is 250 copy-pastes for one page of search results — and Sales Navigator has no export button.',
+    title: 'Hours lost to copy and paste',
+    body: 'One page can hold 25 prospects and hundreds of useful fields. Moving them into a spreadsheet by hand turns a good search into busywork.',
   },
   {
-    title: 'The same people, twice',
-    body: 'You run a similar search next month and half the names are ones you already contacted. You find out after you have emailed them.',
+    title: 'Duplicate prospects slip through',
+    body: 'Run a similar search next month and old prospects appear again. Outlio checks new uploads against your previous lists before you contact anyone twice.',
   },
   {
-    title: 'Tools that want your password',
-    body: 'Most Sales Navigator scrapers ask you to log in through them or install an extension that drives your account. That risks your seat and your data.',
+    title: 'Your LinkedIn account stays private',
+    body: 'Outlio never asks for your LinkedIn password, cookies or session. There is no browser extension controlling your account.',
   },
 ]
 
@@ -40,17 +40,17 @@ const STEPS = [
   {
     n: '01',
     title: 'Save the results page',
-    body: 'On any Sales Navigator lead search, press Cmd+S (Ctrl+S on Windows) and choose "Webpage, Complete". That is a file on your own computer.',
+    body: 'Open a Sales Navigator lead search, press Cmd+S (Ctrl+S on Windows), then choose "Webpage, Complete".',
   },
   {
     n: '02',
     title: 'Drop it into Outlio',
-    body: 'One page or a hundred. We check every file really is a saved Sales Navigator results page before touching it, and reject anything that is not.',
+    body: 'Upload one saved page or a full batch. Outlio validates every file before processing it and rejects anything that is not a supported results page.',
   },
   {
     n: '03',
     title: 'Download the CSV',
-    body: 'Every lead, every field, duplicates already removed — including people from your previous uploads. Then clear the data with one click.',
+    body: 'Download a structured CSV with duplicates removed across the current batch and your previous uploads. Clear stored lead data whenever you want.',
   },
 ]
 
@@ -76,7 +76,7 @@ const HONEST = [
   },
   {
     title: 'You decide what is kept',
-    body: 'Download the CSV, then clear the data. We keep only an anonymous fingerprint so duplicates are still caught next time — no names, no companies, no links.',
+    body: 'Download the CSV, then clear the data. We keep only an anonymous fingerprint for future duplicate checks. No names, companies or profile links remain.',
   },
 ]
 
@@ -98,8 +98,8 @@ export default function LeadEnginePage() {
               Sales Navigator won&apos;t let you export
             </h2>
             <p className="mt-5 text-base leading-relaxed text-muted sm:text-lg">
-              You pay for it every month. It finds exactly the right people. And
-              then it hands you a list you can only read — never download.
+              Your search has the right prospects. The missing piece is a fast,
+              reliable way to move that list into the tools where your team works.
             </p>
           </div>
 
@@ -124,10 +124,10 @@ export default function LeadEnginePage() {
             The page is already on your computer
           </h2>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-            When Sales Navigator shows you results, your browser has already
-            downloaded every name, title and company. Saving the page keeps them.
-            Lead Engine just reads that file and lays it out as a spreadsheet —
-            no account access, no automation, nothing that touches LinkedIn.
+            Save the results page already loaded in your browser, then upload that
+            file to Outlio. Lead Engine turns the information in the file into a
+            structured CSV. It does not log in to LinkedIn, control your browser or
+            browse on your behalf.
           </p>
         </div>
       </section>
@@ -164,8 +164,8 @@ export default function LeadEnginePage() {
               What lands in your CSV
             </h2>
             <p className="mt-5 text-base leading-relaxed text-muted sm:text-lg">
-              If a field is not on the page, the cell is empty. We never guess,
-              never enrich from elsewhere, and never invent a value to fill a gap.
+              Every value comes from the page you uploaded. Missing fields stay
+              empty, so your team can trust the source of every column.
             </p>
           </div>
 
@@ -194,9 +194,9 @@ export default function LeadEnginePage() {
             What it is not
           </h2>
           <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-            Plenty of tools in this category quietly automate your LinkedIn
-            account. This one does not, and that is a design decision — not a
-            limitation we are working around.
+            Some tools automate your LinkedIn account in the background. Outlio
+            deliberately does not. You stay in control of what is saved and what
+            is uploaded.
           </p>
 
           <div className="mt-14 grid gap-8 md:grid-cols-3">
@@ -228,15 +228,15 @@ export default function LeadEnginePage() {
             Your next list, in a spreadsheet
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
-            Three days free, 10 credits, no card. If it does not save you an
-            afternoon, do not pay us.
+            Try the complete workflow with 10 credits for three days. No card is
+            required, and your LinkedIn credentials are never requested.
           </p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
             <Link
               href="/sign-up"
               className="rounded-full bg-ink px-8 py-4 text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent"
             >
-              Start your 3-day free trial
+              Convert your first list free
             </Link>
             <Link
               href="/sign-in"
@@ -250,22 +250,5 @@ export default function LeadEnginePage() {
 
       <Footer />
     </>
-  )
-}
-
-function Tick() {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 20 20"
-      className="mt-1 h-4 w-4 shrink-0 text-accent"
-      fill="currentColor"
-    >
-      <path
-        fillRule="evenodd"
-        d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4l3.8 3.8 6.8-6.8a1 1 0 0 1 1.4 0Z"
-        clipRule="evenodd"
-      />
-    </svg>
   )
 }

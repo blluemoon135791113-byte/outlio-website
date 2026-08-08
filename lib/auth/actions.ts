@@ -20,6 +20,12 @@ import {
 } from '@/lib/auth/profile-fields'
 import { RULES, enforce, subjectFor } from '@/lib/auth/rate-limit'
 import { appOrigin, safeRedirectPath } from '@/lib/auth/redirects'
+import {
+  clientIp,
+  releaseSignupIp,
+  reserveSignupIp,
+  signupIpWasClaimed,
+} from '@/lib/auth/signup-gate'
 import { isAppError } from '@/lib/errors/catalog'
 import { createClient } from '@/lib/supabase/server'
 
@@ -48,13 +54,6 @@ const emailSchema = z
  */
 const GENERIC_CREDENTIALS_ERROR =
   'That email and password combination did not work. Please try again.'
-
-async function clientIp(): Promise<string | null> {
-  const h = await headers()
-  const forwarded = h.get('x-forwarded-for')
-  if (forwarded) return forwarded.split(',')[0]?.trim() ?? null
-  return h.get('x-real-ip')
-}
 
 async function siteUrl(): Promise<string> {
   const h = await headers()
@@ -117,25 +116,55 @@ export async function signUpAction(
     )
   }
 
-  const supabase = await createClient()
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: `${await siteUrl()}/auth/callback`,
-      // Read by the handle_new_user trigger into public.profiles.
-      // Already normalised above; the DB CHECK constraints are the backstop.
-      data: {
-        full_name: nameResult.value,
-        phone: phoneResult.value,
-        linkedin_url: linkedInResult.value,
-      },
-    },
-  })
+  const reservationResult = await reserveSignupIp()
+  if (reservationResult.status === 'blocked') {
+    return reject(
+      'A trial account has already been created from this network. Sign in to continue or contact support if this is a shared network.',
+    )
+  }
+  if (reservationResult.status === 'unavailable') {
+    return reject(
+      'We could not verify this network for trial eligibility. Please try again or contact support.',
+    )
+  }
 
-  if (error) {
-    // Do not distinguish "already registered" — that would leak account existence.
-    return reject('We could not complete sign-up. Please check your details and try again.')
+  const { reservation } = reservationResult
+
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${await siteUrl()}/auth/callback`,
+        // The database trigger consumes this one-time token before creating the
+        // profile. Direct calls to Supabase Auth without a reservation fail.
+        data: {
+          full_name: nameResult.value,
+          phone: phoneResult.value,
+          linkedin_url: linkedInResult.value,
+          signup_reservation_token: reservation.token,
+        },
+      },
+    })
+
+    if (error || !data.user) {
+      await releaseSignupIp(reservation)
+      // Do not distinguish "already registered" because that would leak
+      // account existence.
+      return reject('We could not complete sign-up. Please check your details and try again.')
+    }
+
+    // Supabase can return an obfuscated user for an already-registered email.
+    // Confirming the trigger's claim prevents that response from burning a new
+    // network reservation or appearing to create a second account.
+    if (!(await signupIpWasClaimed(reservation, data.user.id))) {
+      await releaseSignupIp(reservation)
+      return reject('We could not complete sign-up. Please check your details and try again.')
+    }
+  } catch {
+    await releaseSignupIp(reservation)
+    return reject('We could not complete sign-up. Please try again.')
   }
 
   redirect('/verify-email?sent=1')

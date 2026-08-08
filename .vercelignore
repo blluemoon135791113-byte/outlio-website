@@ -1,0 +1,11 @@
+# Keep deployment source minimal. These files are useful for development and
+# operations but are never required to build or run the Next.js application.
+.git
+.github
+coverage
+docs
+tests
+supabase
+Linkedin Sales Navigator Scraper SaaS
+*.md
+*.log

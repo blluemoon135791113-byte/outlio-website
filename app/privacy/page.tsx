@@ -36,7 +36,7 @@ export default function PrivacyPolicy() {
         <h1 className="mt-4 text-4xl font-bold uppercase tracking-tight sm:text-5xl">
           Privacy Policy
         </h1>
-        <p className="mt-4 text-sm text-muted">Last updated: Tuesday, 21 July 2026</p>
+        <p className="mt-4 text-sm text-muted">Last updated: Sunday, 9 August 2026</p>
 
         <p className="mt-10 leading-relaxed text-ink/80">
           Outlio (&ldquo;we,&rdquo; &ldquo;us,&rdquo; &ldquo;our&rdquo;) respects your privacy. This
@@ -89,6 +89,24 @@ export default function PrivacyPolicy() {
             </li>
           </ul>
           <p>
+            <strong>From Lead Engine account holders:</strong>
+          </p>
+          <ul className="list-disc space-y-2 pl-5">
+            <li>
+              Account and verification details you submit, including your name, work email, phone
+              number, and LinkedIn profile URL.
+            </li>
+            <li>
+              Files you choose to upload and the lead data extracted from them, until you clear the
+              data or the applicable retention period ends.
+            </li>
+            <li>
+              A keyed, one-way hash derived from the signup network address. We do not store the raw
+              address in the trial eligibility record. The hash is used to prevent repeated free-trial
+              accounts from the same network.
+            </li>
+          </ul>
+          <p>
             <strong>From prospects (people we contact on behalf of clients):</strong>
           </p>
           <ul className="list-disc space-y-2 pl-5">
@@ -105,6 +123,7 @@ export default function PrivacyPolicy() {
           <ul className="list-disc space-y-2 pl-5">
             <li>To deliver the Services: run outreach, report results, manage your account.</li>
             <li>To operate our website and respond to inquiries.</li>
+            <li>To prevent duplicate free trials, fraud, and abuse of the Lead Engine service.</li>
             <li>
               To improve our targeting and messaging (using aggregated or anonymized data).
             </li>
@@ -147,6 +166,11 @@ export default function PrivacyPolicy() {
           <p>
             We keep data only as long as needed to deliver the Services, meet legal obligations, or
             resolve disputes, and delete or anonymize it afterward.
+          </p>
+          <p>
+            Trial eligibility hashes may be retained after an account is deleted so that deleting an
+            account does not reset free-trial eligibility. If a shared office, household, school, or
+            other shared network is blocked incorrectly, contact us for a manual review.
           </p>
         </Section>
 

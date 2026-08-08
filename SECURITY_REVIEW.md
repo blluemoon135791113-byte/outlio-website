@@ -1,5 +1,9 @@
 # Outlio Website - Security & Code Review Summary
 
+> Archived July 2026 review. For the current trust boundaries, duplicate-account
+> controls, and deployment requirements, use `docs/SECURITY_CONTROLS.md`. The
+> current implementation was re-audited on 2026-08-09.
+
 **Review Date:** 2026-07-22  
 **Reviewed By:** Claude AI Agent  
 **Overall Status:** ✅ SECURE - No critical vulnerabilities found

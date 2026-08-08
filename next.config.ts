@@ -13,6 +13,23 @@ import type { NextConfig } from "next";
 */
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
+const securityHeaders = [
+  {
+    key: 'Content-Security-Policy',
+    value: "base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+  },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  {
+    key: 'Strict-Transport-Security',
+    value: 'max-age=63072000; includeSubDomains; preload',
+  },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+];
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
@@ -26,9 +43,14 @@ const nextConfig: NextConfig = {
   },
   compress: true,
   poweredByHeader: false,
+  productionBrowserSourceMaps: false,
 
   async headers() {
     return [
+      {
+        source: '/:path*',
+        headers: securityHeaders,
+      },
       {
         source: '/:all*(svg|jpg|jpeg|png|gif|ico|webp|avif)',
         headers: [
