@@ -18,6 +18,14 @@ export default async function DashboardPage() {
   const balance = Array.isArray(balanceRows) ? balanceRows[0] : null
   const limits = ctx.plan?.limits
   const usage = ctx.usage
+  const { data: subscription } = await createAdminClient()
+    .from('subscriptions')
+    .select('status, provider')
+    .eq('user_id', ctx.userId!)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const upgradeTarget = nextPlan(ctx.plan?.key)
 
   const metrics = [
     {
@@ -71,7 +79,7 @@ export default async function DashboardPage() {
           </Link>
           <Link
             href="/dashboard/extract/new"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-accent-deep active:scale-[0.97]"
+            className="product-gradient inline-flex h-10 items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 text-sm font-semibold text-white transition-[filter,transform] duration-150 ease-out hover:brightness-95 active:scale-[0.97]"
           >
             <span aria-hidden className="text-base leading-none">+</span>
             New extraction
@@ -85,7 +93,7 @@ export default async function DashboardPage() {
         ))}
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
         <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel p-6 shadow-[var(--shadow-sm)] sm:p-7">
           <div className="relative z-10 max-w-xl">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-accent-soft text-lg font-semibold text-accent">
@@ -101,7 +109,7 @@ export default async function DashboardPage() {
             <div className="mt-6 flex flex-wrap gap-2">
               <Link
                 href="/dashboard/extract/new"
-                className="inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] bg-ink px-4 text-sm font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97]"
+                className="product-gradient inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] px-4 text-sm font-semibold text-white transition-[filter,transform] duration-150 ease-out hover:brightness-95 active:scale-[0.97]"
               >
                 Start an extraction
               </Link>
@@ -123,6 +131,7 @@ export default async function DashboardPage() {
           />
         </section>
 
+        <div className="space-y-4">
         <section className="rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -154,6 +163,25 @@ export default async function DashboardPage() {
             />
           </dl>
         </section>
+        <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-accent/15 bg-[linear-gradient(145deg,#fbf9ff_0%,#f0eaff_100%)] p-5 shadow-[var(--shadow-sm)]">
+          <div className="relative z-10">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">Subscription</p>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold tracking-[-0.025em] text-ink">{ctx.plan?.name ?? 'Current access'}</h2>
+                <p className="mt-1 text-xs capitalize text-muted">{subscription?.status ?? 'Manual access'} · {subscription?.provider ?? 'Billing not connected'}</p>
+              </div>
+              <span className="rounded-full bg-white/75 px-2.5 py-1 text-[11px] font-semibold text-accent ring-1 ring-accent/10">Active</span>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-muted">{upgradeTarget ? `Move to ${upgradeTarget} when you need more credits, files, and exports.` : 'Talk to us for a custom plan built around your workflow.'}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/dashboard/access?intent=upgrade" className="product-gradient inline-flex h-9 items-center rounded-[var(--radius-md)] px-3.5 text-xs font-semibold text-white hover:brightness-95">{upgradeTarget ? `Upgrade to ${upgradeTarget}` : 'Request a custom plan'}</Link>
+              <Link href="/dashboard/settings#subscription-and-billing" className="inline-flex h-9 items-center rounded-[var(--radius-md)] border border-white/80 bg-white/60 px-3.5 text-xs font-semibold text-ink hover:bg-white">Billing details</Link>
+            </div>
+          </div>
+          <div aria-hidden className="absolute -bottom-12 -right-10 h-36 w-36 rounded-full bg-accent/10 blur-2xl" />
+        </section>
+        </div>
       </div>
     </div>
   )
@@ -176,7 +204,7 @@ function UsageCard({
     <article
       className={
         featured
-          ? 'min-h-36 rounded-[var(--radius-lg)] border border-accent bg-accent p-4 text-white shadow-[var(--shadow-md)]'
+          ? 'product-gradient min-h-36 rounded-[var(--radius-lg)] border border-accent/20 p-4 text-white shadow-[var(--shadow-md)]'
           : 'min-h-36 rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)]'
       }
     >
@@ -222,4 +250,11 @@ function AccountRow({ label, value }: { label: string; value: string }) {
       </dd>
     </div>
   )
+}
+
+function nextPlan(key: string | undefined): string | null {
+  if (!key || key === 'trial') return 'Starter'
+  if (key === 'starter') return 'Professional'
+  if (key === 'professional') return 'Agency'
+  return null
 }

@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { createHmac } from 'node:crypto'
+
 /**
  * Postgres-backed rate limiting.
  *
@@ -69,9 +71,8 @@ export type RateLimitResult = {
 /**
  * Records an attempt and reports whether it is allowed.
  *
- * Fails OPEN on infrastructure error: a rate limiter that is down must not lock
- * every user out of signing in. The failure is thrown upward by the caller's
- * logger instead.
+ * Fails CLOSED on infrastructure error. Authentication availability is less
+ * important than allowing an unbounded brute-force window during an outage.
  */
 export async function consume(
   rule: RateLimitRule,
@@ -89,7 +90,11 @@ export async function consume(
   })
 
   if (error) {
-    return { allowed: true, attempts: 0, blockedUntil: null }
+    return {
+      allowed: false,
+      attempts: rule.maxAttempts,
+      blockedUntil: new Date(Date.now() + rule.blockSeconds * 1000),
+    }
   }
 
   const row = Array.isArray(data) ? data[0] : null
@@ -123,5 +128,7 @@ export async function enforce(
 export function subjectFor(ip: string | null, email?: string | null): string {
   const parts = [`ip:${ip ?? 'unknown'}`]
   if (email) parts.push(`email:${email.trim().toLowerCase()}`)
-  return parts.join('|')
+  const secret = process.env.TRIAL_IP_HASH_SECRET
+  if (!secret) throw new AppError('ERR_INTERNAL', 'Rate-limit hash secret is unavailable')
+  return createHmac('sha256', secret).update(parts.join('|')).digest('hex')
 }

@@ -119,6 +119,8 @@ export type ProfileRow = {
   phone: string | null
   /** Canonical https://www.linkedin.com/in/{slug}. NEVER fetched — see CLAUDE.md rule 1. */
   linkedin_url: string | null
+  /** Private Supabase Storage path in the avatars bucket. */
+  avatar_path: string | null
   role: UserRole
   plan_id: string | null
   access_expires_at: string | null

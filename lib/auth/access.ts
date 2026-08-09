@@ -39,6 +39,8 @@ export type AccessContext = {
   usage: UsageSnapshot | null
   accessExpiresAt: string | null
   profile: ProfileRow | null
+  mfaCurrentLevel: string | null
+  mfaNextLevel: string | null
 }
 
 const UNAUTHENTICATED: AccessContext = {
@@ -52,6 +54,8 @@ const UNAUTHENTICATED: AccessContext = {
   usage: null,
   accessExpiresAt: null,
   profile: null,
+  mfaCurrentLevel: null,
+  mfaNextLevel: null,
 }
 
 /**
@@ -69,6 +73,10 @@ export async function getAccessContext(): Promise<AccessContext> {
   } = await supabase.auth.getUser()
 
   if (!user) return UNAUTHENTICATED
+
+  const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  const mfaCurrentLevel = assurance?.currentLevel ?? null
+  const mfaNextLevel = assurance?.nextLevel ?? null
 
   // Supabase marks this when the verification link is followed.
   const emailVerified = Boolean(user.email_confirmed_at)
@@ -88,7 +96,13 @@ export async function getAccessContext(): Promise<AccessContext> {
   const profile = (profileRow as ProfileRow | null) ?? null
 
   if (!profile || profile.deleted_at) {
-    return { ...UNAUTHENTICATED, userId: user.id, email: user.email ?? null }
+    return {
+      ...UNAUTHENTICATED,
+      userId: user.id,
+      email: user.email ?? null,
+      mfaCurrentLevel,
+      mfaNextLevel,
+    }
   }
 
   const isAdmin = profile.role === 'admin'
@@ -105,6 +119,8 @@ export async function getAccessContext(): Promise<AccessContext> {
     usage,
     accessExpiresAt: profile.access_expires_at,
     profile,
+    mfaCurrentLevel,
+    mfaNextLevel,
   })
 
   // The decision itself lives in lib/auth/decide.ts as a pure function, so
@@ -157,6 +173,9 @@ export function reasonToError(reason: AccessReason): AppError {
  */
 export async function requireAccess(): Promise<AccessContext> {
   const ctx = await getAccessContext()
+  if (ctx.userId && ctx.mfaNextLevel === 'aal2' && ctx.mfaCurrentLevel !== 'aal2') {
+    redirect('/mfa?next=/dashboard')
+  }
   if (ctx.canUseScraper) return ctx
 
   if (ctx.reason === 'unauthenticated') redirect('/sign-in')
@@ -171,6 +190,9 @@ export async function requireAccess(): Promise<AccessContext> {
 export async function requireUser(): Promise<AccessContext> {
   const ctx = await getAccessContext()
   if (!ctx.userId) redirect('/sign-in')
+  if (ctx.mfaNextLevel === 'aal2' && ctx.mfaCurrentLevel !== 'aal2') {
+    redirect('/mfa?next=/dashboard')
+  }
   return ctx
 }
 
@@ -179,6 +201,8 @@ export async function requireAdmin(): Promise<AccessContext> {
   const ctx = await getAccessContext()
   if (!ctx.userId) redirect('/sign-in')
   if (!ctx.isAdmin) redirect('/dashboard')
+  if (ctx.mfaNextLevel !== 'aal2') redirect('/dashboard/settings/security?required=1')
+  if (ctx.mfaCurrentLevel !== 'aal2') redirect('/mfa?next=/admin')
   return ctx
 }
 
@@ -188,6 +212,9 @@ export async function requireAdmin(): Promise<AccessContext> {
  */
 export async function assertAccess(): Promise<AccessContext> {
   const ctx = await getAccessContext()
+  if (ctx.mfaNextLevel === 'aal2' && ctx.mfaCurrentLevel !== 'aal2') {
+    throw new AppError('ERR_FORBIDDEN', 'Action requires an AAL2 session')
+  }
   if (!ctx.canUseScraper) throw reasonToError(ctx.reason)
   return ctx
 }
@@ -195,6 +222,9 @@ export async function assertAccess(): Promise<AccessContext> {
 export async function assertUser(): Promise<AccessContext> {
   const ctx = await getAccessContext()
   if (!ctx.userId) throw new AppError('ERR_UNAUTHENTICATED')
+  if (ctx.mfaNextLevel === 'aal2' && ctx.mfaCurrentLevel !== 'aal2') {
+    throw new AppError('ERR_FORBIDDEN', 'Action requires an AAL2 session')
+  }
   return ctx
 }
 
@@ -202,5 +232,8 @@ export async function assertAdmin(): Promise<AccessContext> {
   const ctx = await getAccessContext()
   if (!ctx.userId) throw new AppError('ERR_UNAUTHENTICATED')
   if (!ctx.isAdmin) throw new AppError('ERR_FORBIDDEN')
+  if (ctx.mfaNextLevel !== 'aal2' || ctx.mfaCurrentLevel !== 'aal2') {
+    throw new AppError('ERR_FORBIDDEN', 'Admin action requires an AAL2 session')
+  }
   return ctx
 }

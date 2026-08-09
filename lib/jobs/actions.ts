@@ -7,6 +7,8 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { assertAccess, assertUser } from '@/lib/auth/access'
+import { consume } from '@/lib/auth/rate-limit'
+import { ACTION_LIMITS } from '@/lib/security/action-limits'
 import { keyBelongsToUser } from '@/lib/upload/storage-key'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -41,6 +43,8 @@ export async function getDownloadUrlAction(
   // Downloading is a product capability, so an expired or suspended account
   // must not be able to bypass the page guard by invoking this action directly.
   const ctx = await assertAccess()
+  const limit = await consume(ACTION_LIMITS.export, `user:${ctx.userId}`)
+  if (!limit.allowed) return { status: 'error', message: 'Too many requests. Please wait and try again.' }
   const jobId = uuid.safeParse(formData.get('job_id'))
   if (!jobId.success) return { status: 'error', message: 'Missing job.' }
 
@@ -113,6 +117,8 @@ export async function purgeJobAction(
   formData: FormData,
 ): Promise<JobActionState> {
   const ctx = await assertUser()
+  const limit = await consume(ACTION_LIMITS.export, `user:${ctx.userId}`)
+  if (!limit.allowed) return { status: 'error', message: 'Too many requests. Please wait and try again.' }
   const jobId = uuid.safeParse(formData.get('job_id'))
   if (!jobId.success) return { status: 'error', message: 'Missing job.' }
 

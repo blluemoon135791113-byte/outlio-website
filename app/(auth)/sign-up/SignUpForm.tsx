@@ -4,6 +4,7 @@ import { useActionState } from 'react'
 
 import { Field } from '@/components/auth/Field'
 import { FormFeedback } from '@/components/auth/FormFeedback'
+import { PhoneField } from '@/components/auth/PhoneField'
 import { SubmitButton } from '@/components/auth/SubmitButton'
 import { signUpAction, type ActionState } from '@/lib/auth/actions'
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth/password'
@@ -42,15 +43,8 @@ export function SignUpForm() {
         defaultValue={prior.email ?? ''}
       />
 
-      <Field
-        id="phone"
-        name="phone"
-        label="Phone number"
-        type="tel"
-        autoComplete="tel"
-        required
-        placeholder="+44 7700 900123"
-        hint="Include your country code, starting with +."
+      <PhoneField
+        defaultCountry={prior.phone_country ?? 'US'}
         defaultValue={prior.phone ?? ''}
       />
 
@@ -62,7 +56,7 @@ export function SignUpForm() {
         autoComplete="url"
         required
         placeholder="linkedin.com/in/your-name"
-        hint="Your own profile. We use it to verify your request — we never visit or scrape it."
+        hint="Your own profile. We use it to verify your request and never visit or scrape it."
         defaultValue={prior.linkedin_url ?? ''}
       />
 

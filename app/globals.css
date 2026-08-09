@@ -3,25 +3,23 @@
 /*
   OUTLIO — DESIGN TOKENS
   Base: warm butter-paper cream (matches the logo's cream). Ink: near-black (matches logo square).
-  Accent: deep royal blue — secondary color supplied by the founder, used between text and select areas.
-  NOTE: an earlier purple + rose-pink direction exists; this parchment + royal-blue palette
-  is the founder's current call — confirm before launch.
+  Accent: Outlio's soft violet, aligned with the public hero treatment.
 */
 :root {
   --paper: #ffffff;
   --panel: #ffffff;
-  --app: #f7f7f5;
-  --surface-muted: #f3f3f0;
+  --app: #faf9ff;
+  --surface-muted: #f5f2fb;
   --cream: #f2eee3;
   --ink: #171715;
   --muted: #696962;
-  --accent: #4f4bff;
-  --accent-deep: #322ed1;
-  --accent-soft: #edecff;
+  --accent: #7c5ce7;
+  --accent-deep: #6548c5;
+  --accent-soft: #f0ebff;
 
   /* GRADIENT SYSTEM — clean white background */
   /* deep, minimal band: near-ink indigo easing into the vivid accent at the far edge */
-  --grad-band: linear-gradient(140deg, #131129 0%, #1c1950 48%, #322ed1 92%, #4f4bff 120%);
+  --grad-band: linear-gradient(140deg, #34265f 0%, #5e42ad 48%, #8c6bea 92%, #b9a6ff 120%);
   --grad-halo: transparent;
   --grad-glass: linear-gradient(
     160deg,
@@ -45,8 +43,8 @@
      ========================================================================== */
 
   /* Borders — the landing page uses ad-hoc `border-ink/10`; this names it. */
-  --border: #e8e8e4;
-  --border-strong: #d4d4ce;
+  --border: #e9e4f3;
+  --border-strong: #d6cbe8;
 
   /* Radius scale — none existed before. */
   --radius-sm: 0.25rem;
@@ -56,9 +54,9 @@
 
   /* Elevation — soft and accent-tinted, matching the landing page's feel,
      but without backdrop-filter (too expensive over scrolling tables). */
-  --shadow-sm: 0 1px 2px rgba(23, 23, 21, 0.035), 0 1px 8px rgba(23, 23, 21, 0.025);
-  --shadow-md: 0 4px 18px rgba(23, 23, 21, 0.055);
-  --shadow-lg: 0 14px 40px rgba(23, 23, 21, 0.11);
+  --shadow-sm: 0 1px 2px rgba(75, 52, 125, 0.035), 0 1px 8px rgba(75, 52, 125, 0.035);
+  --shadow-md: 0 6px 22px rgba(82, 56, 142, 0.08);
+  --shadow-lg: 0 18px 48px rgba(82, 56, 142, 0.14);
 
   /* Status colors — required for job states (completed / partially_completed /
      failed) and validation feedback. The landing page has no status palette. */
@@ -127,6 +125,16 @@ h6 {
 .app-shell {
   --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
   font-family: var(--font-body);
+}
+
+.auth-glass-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(249, 246, 255, 0.58));
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+  backdrop-filter: blur(22px) saturate(130%);
+}
+
+.product-gradient {
+  background: linear-gradient(135deg, #694bc9 0%, #8669e7 52%, #aa95f5 100%);
 }
 
 .app-shell :is(button, summary, a) {
@@ -263,8 +271,8 @@ h6 {
 /* Hero aurora — two soft gradient pools drifting very slowly behind the headline */
 .hero-aurora {
   background:
-    radial-gradient(42% 55% at 78% 12%, rgba(79, 75, 255, 0.16), transparent 70%),
-    radial-gradient(36% 48% at 12% 80%, rgba(124, 121, 255, 0.1), transparent 70%);
+    radial-gradient(42% 55% at 78% 12%, rgba(147, 111, 238, 0.2), transparent 70%),
+    radial-gradient(36% 48% at 12% 80%, rgba(199, 178, 255, 0.2), transparent 70%);
   animation: aurora-drift 16s ease-in-out infinite alternate;
 }
 @keyframes aurora-drift {

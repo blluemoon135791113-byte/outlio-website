@@ -23,6 +23,13 @@ import {
   TRIAL_DEVICE_COOKIE,
   TRIAL_DEVICE_COOKIE_MAX_AGE,
 } from '@/lib/auth/trial-device'
+import {
+  createSessionGuard,
+  readSessionGuard,
+  sessionGuardExpired,
+  SESSION_ABSOLUTE_SECONDS,
+  SESSION_GUARD_COOKIE,
+} from '@/lib/auth/session-guard'
 
 const PROTECTED_PREFIXES = ['/dashboard', '/admin']
 
@@ -50,6 +57,7 @@ const APP_SUBDOMAIN_PATHS = [
   '/verify-email',
   '/forgot-password',
   '/reset-password',
+  '/mfa',
   '/auth',
   '/api',
 ]
@@ -117,6 +125,11 @@ export async function proxy(request: NextRequest) {
   if (!url || !key) return finish(response)
 
   const supabase = createServerClient(url, key, {
+    cookieOptions: {
+      path: '/',
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    },
     cookies: {
       getAll() {
         return request.cookies.getAll()
@@ -149,6 +162,42 @@ export async function proxy(request: NextRequest) {
     signIn.pathname = '/sign-in'
     signIn.searchParams.set('next', pathname)
     return finish(NextResponse.redirect(signIn))
+  }
+
+  if (user) {
+    const rawGuard = request.cookies.get(SESSION_GUARD_COOKIE)?.value
+    const guard = readSessionGuard(rawGuard)
+
+    if ((rawGuard && !guard) || (guard && sessionGuardExpired(guard))) {
+      const signIn = request.nextUrl.clone()
+      signIn.pathname = '/sign-in'
+      signIn.search = ''
+      signIn.searchParams.set('reason', 'session_expired')
+      const expired = NextResponse.redirect(signIn)
+      for (const cookie of request.cookies.getAll()) {
+        if (cookie.name.startsWith('sb-')) expired.cookies.delete(cookie.name)
+      }
+      expired.cookies.delete(SESSION_GUARD_COOKIE)
+      return finish(expired)
+    }
+
+    const refreshedGuard = createSessionGuard(
+      Math.floor(Date.now() / 1000),
+      guard?.issuedAt,
+    )
+    if (refreshedGuard) {
+      response.cookies.set({
+        name: SESSION_GUARD_COOKIE,
+        value: refreshedGuard,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: SESSION_ABSOLUTE_SECONDS,
+      })
+    }
+  } else if (request.cookies.has(SESSION_GUARD_COOKIE)) {
+    response.cookies.delete(SESSION_GUARD_COOKIE)
   }
 
   return finish(response)

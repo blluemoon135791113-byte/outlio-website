@@ -65,13 +65,13 @@ create index if not exists extracted_leads_company_idx on public.extracted_leads
 
 -- Trigram indexes for debounced search over the searchable text columns
 create index if not exists extracted_leads_name_trgm
-  on public.extracted_leads using gin (full_name gin_trgm_ops);
+  on public.extracted_leads using gin (full_name extensions.gin_trgm_ops);
 create index if not exists extracted_leads_company_trgm
-  on public.extracted_leads using gin (company_name gin_trgm_ops);
+  on public.extracted_leads using gin (company_name extensions.gin_trgm_ops);
 create index if not exists extracted_leads_title_trgm
-  on public.extracted_leads using gin (job_title gin_trgm_ops);
+  on public.extracted_leads using gin (job_title extensions.gin_trgm_ops);
 create index if not exists extracted_leads_location_trgm
-  on public.extracted_leads using gin (location gin_trgm_ops);
+  on public.extracted_leads using gin (location extensions.gin_trgm_ops);
 
 -- ---------------------------------------------------------------------------
 -- RLS

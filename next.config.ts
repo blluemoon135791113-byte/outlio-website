@@ -16,9 +16,25 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
-    value: "base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+    value: [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "font-src 'self' data:",
+      "img-src 'self' data: blob: https://*.supabase.co",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
+      'upgrade-insecure-requests',
+    ].join('; '),
   },
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+  { key: 'X-DNS-Prefetch-Control', value: 'off' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   {
@@ -44,6 +60,11 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '3mb',
+    },
+  },
 
   async headers() {
     return [

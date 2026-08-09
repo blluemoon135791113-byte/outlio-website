@@ -173,10 +173,12 @@ describeIf('Privilege escalation', () => {
   })
 
   it('DOES let a user update their own full_name', async () => {
-    await mallory.client
+    const { error } = await mallory.client
       .from('profiles')
       .update({ full_name: 'Mallory Fabricated' })
       .eq('id', mallory.id)
+
+    expect(error).toBeNull()
 
     const { data } = await adminClient()
       .from('profiles')

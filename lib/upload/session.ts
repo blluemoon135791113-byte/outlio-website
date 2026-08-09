@@ -29,12 +29,14 @@ import { after } from 'next/server'
 import { z } from 'zod'
 
 import { assertAccess } from '@/lib/auth/access'
+import { consume } from '@/lib/auth/rate-limit'
 import { isAppError } from '@/lib/errors/catalog'
 import { resolveUploadLimits } from '@/lib/upload/limits'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
 import { buildStorageKey, sanitizeDisplayFilename } from '@/lib/upload/storage-key'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { claimAndProcessJob } from '@/lib/worker/process-job'
+import { ACTION_LIMITS } from '@/lib/security/action-limits'
 
 const DEDUPE_MODES = ['keep_all', 'remove_exact', 'remove_likely', 'review'] as const
 
@@ -87,6 +89,9 @@ export async function createUploadSessionAction(input: {
   if (!parsed.success) {
     return { ok: false, message: 'That upload request was not valid.' }
   }
+
+  const actionLimit = await consume(ACTION_LIMITS.upload, `user:${ctx.userId}`)
+  if (!actionLimit.allowed) return { ok: false, message: 'Too many upload requests. Please wait and try again.' }
 
   const { dedupeMode, files } = parsed.data
   const limits = resolveUploadLimits(ctx.plan?.limits ?? null)
@@ -201,6 +206,9 @@ export async function finalizeUploadAction(input: {
   const parsed = finalizeSchema.safeParse(input)
   if (!parsed.success) return { ok: false, message: 'That upload could not be finalised.' }
   const { jobId, failedFileIds } = parsed.data
+
+  const actionLimit = await consume(ACTION_LIMITS.upload, `user:${ctx.userId}`)
+  if (!actionLimit.allowed) return { ok: false, message: 'Too many upload requests. Please wait and try again.' }
 
   const supabase = createAdminClient()
 

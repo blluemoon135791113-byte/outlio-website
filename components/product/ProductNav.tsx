@@ -10,6 +10,7 @@ type IconName =
   | 'extract'
   | 'history'
   | 'lock'
+  | 'settings'
   | 'website'
 
 const PRODUCT_LINKS: Array<{
@@ -29,6 +30,12 @@ const ACCESS_LINK = {
   icon: 'lock' as const,
 }
 
+const SETTINGS_LINK = {
+  href: '/dashboard/settings',
+  label: 'Settings',
+  icon: 'settings' as const,
+}
+
 export function ProductNav({
   isAdmin,
   canUseScraper,
@@ -41,8 +48,8 @@ export function ProductNav({
   const pathname = usePathname()
   const links = canUseScraper ? PRODUCT_LINKS : [ACCESS_LINK]
   const allLinks = isAdmin
-    ? [...links, { href: '/admin', label: 'User admin', icon: 'admin' as const }]
-    : links
+    ? [...links, SETTINGS_LINK, { href: '/admin', label: 'User admin', icon: 'admin' as const }]
+    : [...links, SETTINGS_LINK]
 
   return (
     <nav aria-label="Product" className="space-y-1">
@@ -125,6 +132,12 @@ export function ProductIcon({
         <path d="M3 12h18" />
         <path d="M12 3a15 15 0 0 1 0 18" />
         <path d="M12 3a15 15 0 0 0 0 18" />
+      </>
+    ),
+    settings: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55V20.3h-3v-.09a1.7 1.7 0 0 0-1.03-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7 15a1.7 1.7 0 0 0-1.55-1.03H5.3v-3h.15A1.7 1.7 0 0 0 7 9.94a1.7 1.7 0 0 0-.34-1.88L6.6 8l2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11.7 4.7V4.6h3v.1a1.7 1.7 0 0 0 1.03 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 8l-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.55 1.03h.15v3h-.15A1.7 1.7 0 0 0 19.4 15Z" />
       </>
     ),
   }

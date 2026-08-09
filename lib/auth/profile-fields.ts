@@ -7,6 +7,11 @@
  * for manual vetting. It is stored as a string and NEVER fetched, visited, or
  * scraped. CLAUDE.md rule 1 (no requests to linkedin.com) is unaffected.
  */
+import {
+  getCountries,
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from 'libphonenumber-js/min'
 
 export type FieldResult =
   | { ok: true; value: string }
@@ -59,6 +64,31 @@ export function normalizePhone(input: string): FieldResult {
   }
 
   return { ok: true, value: cleaned }
+}
+
+/**
+ * Parses a national number using the country explicitly chosen by the user,
+ * then stores one canonical E.164 value. The allow-list comes from the same
+ * maintained metadata that powers the country selector, so a forged country
+ * value cannot change parsing behaviour.
+ */
+export function normalizePhoneForCountry(country: string, input: string): FieldResult {
+  if (!getCountries().includes(country as CountryCode)) {
+    return { ok: false, reason: 'Choose a valid country code.' }
+  }
+
+  const raw = input.trim()
+  if (!raw) return { ok: false, reason: 'Enter your phone number.' }
+
+  try {
+    const parsed = parsePhoneNumberFromString(raw, country as CountryCode)
+    if (!parsed?.isValid()) {
+      return { ok: false, reason: 'That does not look like a valid phone number for this country.' }
+    }
+    return { ok: true, value: parsed.number }
+  } catch {
+    return { ok: false, reason: 'That does not look like a valid phone number for this country.' }
+  }
 }
 
 // ---------------------------------------------------------------------------

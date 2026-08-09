@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import { ProductShell } from '@/components/product/ProductShell'
 import { requireUser } from '@/lib/auth/access'
+import { signedAvatarUrl } from '@/lib/profile/avatar'
 
 /**
  * Authenticated shell.
@@ -16,6 +17,7 @@ import { requireUser } from '@/lib/auth/access'
  */
 export default async function ProductLayout({ children }: { children: ReactNode }) {
   const ctx = await requireUser()
+  const avatarUrl = await signedAvatarUrl(ctx.userId!, ctx.profile?.avatar_path)
 
   return (
     <ProductShell
@@ -24,6 +26,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       planName={ctx.plan?.name ?? null}
       isAdmin={ctx.isAdmin}
       canUseScraper={ctx.canUseScraper}
+      avatarUrl={avatarUrl}
     >
       {children}
     </ProductShell>

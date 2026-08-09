@@ -8,7 +8,7 @@
  * Every flow is rate-limited and returns GENERIC errors that do not reveal
  * whether an account exists.
  */
-import { headers } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 
@@ -16,7 +16,7 @@ import { checkPassword } from '@/lib/auth/password'
 import {
   normalizeFullName,
   normalizeLinkedInUrl,
-  normalizePhone,
+  normalizePhoneForCountry,
 } from '@/lib/auth/profile-fields'
 import { RULES, enforce, subjectFor } from '@/lib/auth/rate-limit'
 import { appOrigin, safeRedirectPath } from '@/lib/auth/redirects'
@@ -28,6 +28,8 @@ import {
   signupSecurityClaims,
 } from '@/lib/auth/signup-gate'
 import { isAppError } from '@/lib/errors/catalog'
+import { recordSecurityEvent } from '@/lib/security/events'
+import { SESSION_GUARD_COOKIE } from '@/lib/auth/session-guard'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -79,6 +81,7 @@ export async function signUpAction(
   const submitted = {
     full_name: String(formData.get('full_name') ?? ''),
     email: String(formData.get('email') ?? ''),
+    phone_country: String(formData.get('phone_country') ?? 'US'),
     phone: String(formData.get('phone') ?? ''),
     linkedin_url: String(formData.get('linkedin_url') ?? ''),
   }
@@ -100,7 +103,7 @@ export async function signUpAction(
   const nameResult = normalizeFullName(submitted.full_name)
   if (!nameResult.ok) return reject(nameResult.reason)
 
-  const phoneResult = normalizePhone(submitted.phone)
+  const phoneResult = normalizePhoneForCountry(submitted.phone_country, submitted.phone)
   if (!phoneResult.ok) return reject(phoneResult.reason)
 
   const linkedInResult = normalizeLinkedInUrl(submitted.linkedin_url)
@@ -207,22 +210,36 @@ export async function signInAction(
   const email = emailResult.data
   const password = String(formData.get('password') ?? '')
   const next = String(formData.get('next') ?? '/dashboard')
+  let rateSubject: string | null = null
 
   try {
-    await enforce(RULES.signIn, subjectFor(await clientIp(), email))
+    rateSubject = subjectFor(await clientIp(), email)
+    await enforce(RULES.signIn, rateSubject)
   } catch (e) {
+    await recordSecurityEvent({ event: 'auth.sign_in_rate_limited', level: 'warn', subject: rateSubject })
     return reject(
       isAppError(e) ? e.userMessage : 'Too many attempts. Please wait and try again.',
     )
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-  if (error) return reject(GENERIC_CREDENTIALS_ERROR)
+  if (error) {
+    await recordSecurityEvent({ event: 'auth.sign_in_failed', level: 'warn', subject: rateSubject })
+    return reject(GENERIC_CREDENTIALS_ERROR)
+  }
+
+  await recordSecurityEvent({ event: 'auth.sign_in_succeeded', userId: data.user.id })
+
+  const destination = safeRedirectPath(next)
+  const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (assurance?.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2') {
+    redirect(`/mfa?next=${encodeURIComponent(destination)}`)
+  }
 
   // Only same-origin relative paths, so `next` cannot become an open redirect.
-  redirect(safeRedirectPath(next))
+  redirect(destination)
 }
 
 // ---------------------------------------------------------------------------
@@ -231,7 +248,11 @@ export async function signInAction(
 
 export async function signOutAction(): Promise<never> {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
   await supabase.auth.signOut()
+  const cookieStore = await cookies()
+  cookieStore.delete(SESSION_GUARD_COOKIE)
+  await recordSecurityEvent({ event: 'auth.sign_out', userId: user?.id ?? null })
   redirect('/sign-in')
 }
 
@@ -293,6 +314,8 @@ export async function updatePasswordAction(
 
   const { error } = await supabase.auth.updateUser({ password })
   if (error) return failure('We could not update your password. Please try again.')
+
+  await recordSecurityEvent({ event: 'auth.password_changed', userId: user.id })
 
   redirect('/dashboard')
 }

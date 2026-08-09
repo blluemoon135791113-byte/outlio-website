@@ -24,6 +24,12 @@ enforce the signup gate at the database layer:
 7. A signed, HttpOnly first-party device token is HMAC-hashed and claimed. Changing IP or enabling a VPN does not change this claim.
 8. Normalized email, phone, and LinkedIn identities receive separate HMAC claims. These persist after account deletion.
 9. New duplicate phone numbers and LinkedIn profile URLs are also rejected by a lock-backed database trigger.
+10. Authentication rate-limit subjects are HMAC-pseudonymized before storage, so the rate-limit table does not retain raw IP or email values.
+
+Authenticated sessions also carry a signed, HttpOnly application guard with an
+eight-hour idle timeout and seven-day absolute lifetime. Set a dedicated
+`SESSION_GUARD_SECRET` when desired; otherwise the established
+`TRIAL_IP_HASH_SECRET` is reused as the signing key.
 
 The combined controls mean changing IP or enabling a VPN alone is insufficient
 to obtain another trial. No website can identify a person with certainty:

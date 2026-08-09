@@ -14,6 +14,7 @@ function pageLabel(pathname: string) {
   if (pathname.startsWith('/dashboard/extract/new')) return 'New extraction'
   if (pathname.startsWith('/dashboard/jobs')) return 'Extraction workspace'
   if (pathname.startsWith('/dashboard/access')) return 'Access status'
+  if (pathname.startsWith('/dashboard/settings')) return 'Settings'
   return 'Overview'
 }
 
@@ -90,6 +91,7 @@ export function ProductShell({
   planName,
   isAdmin,
   canUseScraper,
+  avatarUrl,
 }: {
   children: ReactNode
   email: string
@@ -97,6 +99,7 @@ export function ProductShell({
   planName: string | null
   isAdmin: boolean
   canUseScraper: boolean
+  avatarUrl?: string | null
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -164,8 +167,11 @@ export function ProductShell({
 
             <details className="group relative">
               <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-xl p-1.5 pr-2 transition-[background-color,transform] duration-150 hover:bg-surface-muted active:scale-[0.98] [&::-webkit-details-marker]:hidden">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft font-heading text-xs font-bold text-accent ring-1 ring-accent/15">
-                  {userInitials}
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft bg-cover bg-center font-heading text-xs font-bold text-accent ring-1 ring-accent/15"
+                  style={avatarUrl ? { backgroundImage: `url(${JSON.stringify(avatarUrl).slice(1, -1)})` } : undefined}
+                >
+                  {avatarUrl ? null : userInitials}
                 </span>
                 <span className="hidden max-w-44 text-left sm:block">
                   <span className="block truncate font-heading text-xs font-semibold text-ink">
@@ -183,8 +189,14 @@ export function ProductShell({
                   <p className="mt-0.5 truncate text-xs text-muted">{email}</p>
                 </div>
                 <Link
+                  href="/dashboard/settings"
+                  className="mt-1 flex h-9 items-center rounded-lg px-2 text-sm font-medium text-muted transition-colors duration-150 hover:bg-accent-soft/60 hover:text-accent"
+                >
+                  Settings
+                </Link>
+                <Link
                   href="/"
-                  className="mt-1 flex h-9 items-center rounded-lg px-2 text-sm font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+                  className="flex h-9 items-center rounded-lg px-2 text-sm font-medium text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
                 >
                   Visit Outlio website
                 </Link>

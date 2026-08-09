@@ -2,7 +2,8 @@
 -- Forward-only. Idempotent.
 
 create extension if not exists "pgcrypto";      -- gen_random_uuid()
-create extension if not exists "pg_trgm";       -- trigram search on lead text
+create schema if not exists extensions;
+create extension if not exists "pg_trgm" with schema extensions; -- trigram search on lead text
 
 -- ---------------------------------------------------------------------------
 -- Enums. Postgres types, not free-text checks, so app and DB cannot drift.

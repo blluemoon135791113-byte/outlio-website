@@ -4,6 +4,7 @@ import {
   normalizeFullName,
   normalizeLinkedInUrl,
   normalizePhone,
+  normalizePhoneForCountry,
 } from '@/lib/auth/profile-fields'
 
 describe('normalizePhone', () => {
@@ -66,6 +67,29 @@ describe('normalizePhone', () => {
     ]) {
       expect(normalizePhone(bad).ok, bad).toBe(false)
     }
+  })
+})
+
+describe('normalizePhoneForCountry', () => {
+  it('normalizes national numbers using the selected country', () => {
+    expect(normalizePhoneForCountry('GB', '07400 123456')).toEqual({
+      ok: true,
+      value: '+447400123456',
+    })
+    expect(normalizePhoneForCountry('US', '(415) 555-0132')).toEqual({
+      ok: true,
+      value: '+14155550132',
+    })
+    expect(normalizePhoneForCountry('PK', '0300 1234567')).toEqual({
+      ok: true,
+      value: '+923001234567',
+    })
+  })
+
+  it('rejects forged country codes and invalid local numbers', () => {
+    expect(normalizePhoneForCountry('XX', '123456789').ok).toBe(false)
+    expect(normalizePhoneForCountry('GB', '123').ok).toBe(false)
+    expect(normalizePhoneForCountry("GB'; drop table profiles;--", '07700900123').ok).toBe(false)
   })
 })
 
