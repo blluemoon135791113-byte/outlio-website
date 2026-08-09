@@ -330,6 +330,23 @@ export type SignupIpClaimRow = {
   updated_at: string
 }
 
+/** Pseudonymous first-party device claim; the raw cookie value is not stored. */
+export type SignupDeviceClaimRow = {
+  device_hash: string
+  user_id: string
+  claimed_at: string
+}
+
+export type SignupIdentityKind = 'email' | 'phone' | 'linkedin'
+
+/** HMAC of a normalized signup identity; no raw identity value is stored. */
+export type SignupIdentityClaimRow = {
+  identity_hash: string
+  identity_kind: SignupIdentityKind
+  user_id: string
+  claimed_at: string
+}
+
 // ---------------------------------------------------------------------------
 // Supabase client generic
 // ---------------------------------------------------------------------------
@@ -364,6 +381,8 @@ export type Database = {
       system_events: TableShape<SystemEventRow>
       rate_limits: TableShape<RateLimitRow>
       signup_ip_claims: TableShape<SignupIpClaimRow>
+      signup_device_claims: TableShape<SignupDeviceClaimRow>
+      signup_identity_claims: TableShape<SignupIdentityClaimRow>
       lead_keys: TableShape<LeadKeyRow>
     }
     Views: Record<string, never>

@@ -6,6 +6,12 @@ import {
   normalizeClientIp,
   signupNetworkIdentity,
 } from '@/lib/auth/signup-gate'
+import {
+  createTrialDeviceCookie,
+  hashSignupIdentity,
+  hashTrialDeviceCookie,
+  trialDeviceId,
+} from '@/lib/auth/trial-device'
 
 const TEST_SECRET = 'test-only-secret-that-is-longer-than-thirty-two-characters'
 
@@ -60,5 +66,28 @@ describe('signup hashing', () => {
 
   it('hashes reservation tokens as lowercase SHA-256 hex', () => {
     expect(hashReservationToken('one-time-token')).toMatch(/^[0-9a-f]{64}$/)
+  })
+})
+
+describe('trial device and identity claims', () => {
+  it('accepts a server-signed device cookie and derives a stable claim', () => {
+    const cookie = createTrialDeviceCookie(TEST_SECRET)
+    expect(trialDeviceId(cookie, TEST_SECRET)).toMatch(/^[A-Za-z0-9_-]{32}$/)
+    expect(hashTrialDeviceCookie(cookie, TEST_SECRET)).toMatch(/^[0-9a-f]{64}$/)
+    expect(hashTrialDeviceCookie(cookie, TEST_SECRET)).toBe(
+      hashTrialDeviceCookie(cookie, TEST_SECRET),
+    )
+  })
+
+  it('rejects forged or modified device cookies', () => {
+    const cookie = createTrialDeviceCookie(TEST_SECRET)
+    expect(hashTrialDeviceCookie(`${cookie}x`, TEST_SECRET)).toBeNull()
+    expect(hashTrialDeviceCookie('invented-device.invalid-signature', TEST_SECRET)).toBeNull()
+  })
+
+  it('separates identity kinds even when their values match', () => {
+    expect(hashSignupIdentity('email', 'same-value', TEST_SECRET)).not.toBe(
+      hashSignupIdentity('phone', 'same-value', TEST_SECRET),
+    )
   })
 })

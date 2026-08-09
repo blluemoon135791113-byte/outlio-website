@@ -17,6 +17,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+import {
+  createTrialDeviceCookie,
+  hashTrialDeviceCookie,
+  TRIAL_DEVICE_COOKIE,
+  TRIAL_DEVICE_COOKIE_MAX_AGE,
+} from '@/lib/auth/trial-device'
+
 const PROTECTED_PREFIXES = ['/dashboard', '/admin']
 
 /**
@@ -51,6 +58,36 @@ export async function proxy(request: NextRequest) {
   const host = request.headers.get('host')?.split(':')[0]?.toLowerCase() ?? ''
   const { pathname: rawPath } = request.nextUrl
 
+  let trialDeviceCookie: string | null = null
+  if (rawPath === '/sign-up') {
+    const existing = request.cookies.get(TRIAL_DEVICE_COOKIE)?.value
+    if (!hashTrialDeviceCookie(existing)) {
+      try {
+        trialDeviceCookie = createTrialDeviceCookie()
+      } catch {
+        // The server action fails closed if the secret is unavailable. Do not
+        // issue an unsigned fallback that an attacker could forge.
+      }
+    }
+  }
+
+  const finish = (result: NextResponse): NextResponse => {
+    if (!trialDeviceCookie) return result
+    result.cookies.set({
+      name: TRIAL_DEVICE_COOKIE,
+      value: trialDeviceCookie,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: TRIAL_DEVICE_COOKIE_MAX_AGE,
+      ...(host === 'outlio.io' || host.endsWith('.outlio.io')
+        ? { domain: '.outlio.io' }
+        : {}),
+    })
+    return result
+  }
+
   if (host === APP_HOST) {
     // Bare subdomain root goes straight to the product.
     if (rawPath === '/') {
@@ -77,7 +114,7 @@ export async function proxy(request: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
   // Without configuration we cannot refresh a session; let the route decide.
-  if (!url || !key) return response
+  if (!url || !key) return finish(response)
 
   const supabase = createServerClient(url, key, {
     cookies: {
@@ -111,10 +148,10 @@ export async function proxy(request: NextRequest) {
     const signIn = request.nextUrl.clone()
     signIn.pathname = '/sign-in'
     signIn.searchParams.set('next', pathname)
-    return NextResponse.redirect(signIn)
+    return finish(NextResponse.redirect(signIn))
   }
 
-  return response
+  return finish(response)
 }
 
 export const config = {

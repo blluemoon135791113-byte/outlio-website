@@ -16,11 +16,16 @@ const SERVICES = [
 
 interface NavProps {
   homePrefix?: string;
+  finalCta?: "book-call" | "sign-in";
 }
 
-export default function Nav({ homePrefix = "" }: NavProps) {
+export default function Nav({ homePrefix = "", finalCta = "book-call" }: NavProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const finalCtaHref = finalCta === "sign-in"
+    ? "/sign-in"
+    : "https://calendly.com/blluemoon135791113/30min";
+  const finalCtaLabel = finalCta === "sign-in" ? "Sign In" : "Book a call";
 
   return (
     <header className="sticky top-0 z-50 bg-paper/90 backdrop-blur-md">
@@ -117,12 +122,13 @@ export default function Nav({ homePrefix = "" }: NavProps) {
             </svg>
           </Link>
           <Link
-            href="https://calendly.com/blluemoon135791113/30min"
-            target="_blank"
-            rel="noopener noreferrer"
+            href={finalCtaHref}
+            {...(finalCta === "book-call"
+              ? { target: "_blank", rel: "noopener noreferrer" }
+              : {})}
             className="flex items-center px-6 text-[15px] font-semibold transition-colors hover:bg-ink hover:text-cream"
           >
-            Book a call
+            {finalCtaLabel}
           </Link>
         </div>
 
@@ -188,13 +194,14 @@ export default function Nav({ homePrefix = "" }: NavProps) {
                 Try Outlio&apos;s Lead Engine
               </Link>
               <Link
-                href="https://calendly.com/blluemoon135791113/30min"
-                target="_blank"
-                rel="noopener noreferrer"
+                href={finalCtaHref}
+                {...(finalCta === "book-call"
+                  ? { target: "_blank", rel: "noopener noreferrer" }
+                  : {})}
                 className="mt-3 block rounded-full bg-ink px-6 py-3 text-center text-base font-semibold text-cream transition-colors hover:bg-accent"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                Book a call
+                {finalCtaLabel}
               </Link>
             </div>
           </nav>

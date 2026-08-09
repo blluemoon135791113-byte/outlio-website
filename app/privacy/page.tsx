@@ -105,6 +105,12 @@ export default function PrivacyPolicy() {
               address in the trial eligibility record. The hash is used to prevent repeated free-trial
               accounts from the same network.
             </li>
+            <li>
+              A signed, first-party browser token and keyed, one-way hashes of normalized account
+              identifiers. These pseudonymous records help prevent a VPN, account deletion, or a
+              changed network from resetting free-trial eligibility. We do not store a raw device
+              fingerprint in these records.
+            </li>
           </ul>
           <p>
             <strong>From prospects (people we contact on behalf of clients):</strong>

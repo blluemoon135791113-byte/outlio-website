@@ -3,9 +3,14 @@ import 'server-only'
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { isIP } from 'node:net'
 
-import { headers } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  hashSignupIdentity,
+  hashTrialDeviceCookie,
+  TRIAL_DEVICE_COOKIE,
+} from '@/lib/auth/trial-device'
 
 const RESERVATION_SECONDS = 10 * 60
 const MIN_HASH_SECRET_LENGTH = 32
@@ -20,6 +25,13 @@ export type SignupReservationResult =
   | { status: 'reserved'; reservation: SignupReservation }
   | { status: 'blocked' }
   | { status: 'unavailable' }
+
+export type SignupSecurityClaims = {
+  deviceHash: string
+  emailHash: string
+  phoneHash: string
+  linkedinHash: string
+}
 
 /**
  * Canonicalize an address before hashing so alternate IPv6 spellings cannot
@@ -116,6 +128,29 @@ export function hashReservationToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
 
+export async function signupSecurityClaims(input: {
+  email: string
+  phone: string
+  linkedinUrl: string
+}): Promise<SignupSecurityClaims | null> {
+  const cookieStore = await cookies()
+  const deviceHash = hashTrialDeviceCookie(
+    cookieStore.get(TRIAL_DEVICE_COOKIE)?.value,
+  )
+  if (!deviceHash) return null
+
+  try {
+    return {
+      deviceHash,
+      emailHash: hashSignupIdentity('email', input.email),
+      phoneHash: hashSignupIdentity('phone', input.phone),
+      linkedinHash: hashSignupIdentity('linkedin', input.linkedinUrl),
+    }
+  } catch {
+    return null
+  }
+}
+
 /**
  * Reserve this network before calling Supabase Auth. The database function is
  * atomic, so two concurrent requests from one IP cannot both succeed.
@@ -160,19 +195,44 @@ export async function releaseSignupIp(
   })
 }
 
-/** Confirm that the auth trigger consumed this exact reservation for this user. */
-export async function signupIpWasClaimed(
+/** Confirm that the auth trigger consumed every claim for this exact user. */
+export async function signupClaimsWereClaimed(
   reservation: SignupReservation,
   userId: string,
+  claims: SignupSecurityClaims,
 ): Promise<boolean> {
   const admin = createAdminClient()
-  const { data, error } = await admin
-    .from('signup_ip_claims')
-    .select('claimed_at')
-    .eq('ip_hash', reservation.ipHash)
-    .eq('user_id', userId)
-    .not('claimed_at', 'is', null)
-    .maybeSingle()
+  const [network, device, identities] = await Promise.all([
+    admin
+      .from('signup_ip_claims')
+      .select('claimed_at')
+      .eq('ip_hash', reservation.ipHash)
+      .eq('user_id', userId)
+      .not('claimed_at', 'is', null)
+      .maybeSingle(),
+    admin
+      .from('signup_device_claims')
+      .select('claimed_at')
+      .eq('device_hash', claims.deviceHash)
+      .eq('user_id', userId)
+      .maybeSingle(),
+    admin
+      .from('signup_identity_claims')
+      .select('identity_hash')
+      .eq('user_id', userId)
+      .in('identity_hash', [
+        claims.emailHash,
+        claims.phoneHash,
+        claims.linkedinHash,
+      ]),
+  ])
 
-  return !error && Boolean(data?.claimed_at)
+  return Boolean(
+    !network.error &&
+      network.data?.claimed_at &&
+      !device.error &&
+      device.data?.claimed_at &&
+      !identities.error &&
+      identities.data?.length === 3,
+  )
 }

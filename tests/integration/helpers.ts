@@ -50,6 +50,30 @@ export type TestSignupReservation = {
   tokenHash: string
 }
 
+export type TestSignupSecurityMetadata = {
+  signup_device_hash: string
+  signup_email_hash: string
+  signup_phone_hash: string
+  signup_linkedin_hash: string
+}
+
+export function createTestSignupSecurityMetadata(
+  label: string,
+  overrides: Partial<TestSignupSecurityMetadata> = {},
+): TestSignupSecurityMetadata {
+  const unique = `${label}:${Date.now()}:${Math.random()}`
+  const digest = (kind: string) =>
+    createHash('sha256').update(`test-${kind}:${unique}`).digest('hex')
+
+  return {
+    signup_device_hash: digest('device'),
+    signup_email_hash: digest('email'),
+    signup_phone_hash: digest('phone'),
+    signup_linkedin_hash: digest('linkedin'),
+    ...overrides,
+  }
+}
+
 /** Reserve a fabricated network identity through the same database gate as production. */
 export async function createTestSignupReservation(
   label: string,
@@ -86,6 +110,7 @@ export async function createTestSignupReservation(
 export async function createAuthUser(label: string): Promise<TestAuthUser> {
   const admin = adminClient()
   const reservation = await createTestSignupReservation(label)
+  const securityMetadata = createTestSignupSecurityMetadata(label)
   const email = `outlio-test-${label}-${Date.now()}-${Math.random()
     .toString(36)
     .slice(2, 8)}@example.com`
@@ -94,7 +119,10 @@ export async function createAuthUser(label: string): Promise<TestAuthUser> {
     email,
     password: `Test-${Math.random().toString(36).slice(2)}-Aa1!`,
     email_confirm: true,
-    user_metadata: { signup_reservation_token: reservation.token },
+    user_metadata: {
+      signup_reservation_token: reservation.token,
+      ...securityMetadata,
+    },
   })
   if (error || !data.user) {
     await admin
@@ -111,6 +139,7 @@ export async function createAuthUser(label: string): Promise<TestAuthUser> {
 export async function createTestUser(label: string): Promise<TestUser> {
   const admin = adminClient()
   const reservation = await createTestSignupReservation(label)
+  const securityMetadata = createTestSignupSecurityMetadata(label)
   const email = `outlio-test-${label}-${Date.now()}-${Math.random()
     .toString(36)
     .slice(2, 8)}@example.com`
@@ -120,7 +149,10 @@ export async function createTestUser(label: string): Promise<TestUser> {
     email,
     password,
     email_confirm: true,
-    user_metadata: { signup_reservation_token: reservation.token },
+    user_metadata: {
+      signup_reservation_token: reservation.token,
+      ...securityMetadata,
+    },
   })
   if (error || !data.user) {
     await admin
@@ -155,6 +187,8 @@ export async function deleteTestUser(userId: string): Promise<void> {
   const admin = adminClient()
   await admin.auth.admin.deleteUser(userId)
   await admin.from('signup_ip_claims').delete().eq('user_id', userId)
+  await admin.from('signup_device_claims').delete().eq('user_id', userId)
+  await admin.from('signup_identity_claims').delete().eq('user_id', userId)
 }
 
 /** Inserts a lead owned by `userId`, bypassing RLS. Returns the row id. */

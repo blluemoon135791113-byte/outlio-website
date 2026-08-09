@@ -12,7 +12,8 @@ Last reviewed: 2026-08-09
 
 ## Duplicate-account controls
 
-Migration `0018_signup_ip_gate.sql` enforces the signup gate at the database layer:
+Migrations `0018_signup_ip_gate.sql` and `0019_signup_device_identity_claims.sql`
+enforce the signup gate at the database layer:
 
 1. The server canonicalizes the client IP. IPv6 privacy addresses are grouped by `/64`.
 2. The network identity is HMAC-SHA256 hashed with `TRIAL_IP_HASH_SECRET`. The raw IP is never stored in the claims table.
@@ -20,9 +21,16 @@ Migration `0018_signup_ip_gate.sql` enforces the signup gate at the database lay
 4. Supabase Auth receives a random, one-time reservation token in user metadata.
 5. The `auth.users` insert trigger consumes that token in the same transaction. Direct calls to `auth.signUp` without a valid reservation are rolled back.
 6. Completed network claims are retained after account deletion so deletion cannot reset trial eligibility.
-7. New duplicate phone numbers and LinkedIn profile URLs are rejected by a lock-backed database trigger.
+7. A signed, HttpOnly first-party device token is HMAC-hashed and claimed. Changing IP or enabling a VPN does not change this claim.
+8. Normalized email, phone, and LinkedIn identities receive separate HMAC claims. These persist after account deletion.
+9. New duplicate phone numbers and LinkedIn profile URLs are also rejected by a lock-backed database trigger.
 
-IP controls reduce casual trial abuse but cannot identify a person with certainty. VPNs, mobile carrier networks, schools, offices, and households can create false positives or bypasses. Support should manually review legitimate users on shared networks.
+The combined controls mean changing IP or enabling a VPN alone is insufficient
+to obtain another trial. No website can identify a person with certainty:
+clearing all browser state, changing devices, and supplying entirely new
+verified identities can still evade automated controls. Mobile carrier
+networks, schools, offices, and households can also create false positives.
+Support should manually review legitimate users on shared networks.
 
 ## Deployment requirements
 
@@ -31,9 +39,9 @@ Production requires these secrets in Vercel:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `TRIAL_IP_HASH_SECRET` with at least 32 random characters
 
-Keep `TRIAL_IP_HASH_SECRET` stable. Because raw addresses are deliberately not
-stored, changing the secret creates a new hash namespace and effectively resets
-network-based trial history. Rotate it only as part of an incident response and
-assume previous network claims will no longer match.
+Keep `TRIAL_IP_HASH_SECRET` stable. Because raw addresses, device IDs, and
+identity values are deliberately not stored, changing the secret creates a new
+hash namespace and effectively resets matching against earlier claims. Rotate
+it only as part of an incident response with a planned claims migration.
 
 The Supabase URL and publishable key are public by design. Their safety depends on RLS, restricted RPC grants, and the database signup trigger.

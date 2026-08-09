@@ -24,7 +24,8 @@ import {
   clientIp,
   releaseSignupIp,
   reserveSignupIp,
-  signupIpWasClaimed,
+  signupClaimsWereClaimed,
+  signupSecurityClaims,
 } from '@/lib/auth/signup-gate'
 import { isAppError } from '@/lib/errors/catalog'
 import { createClient } from '@/lib/supabase/server'
@@ -116,6 +117,17 @@ export async function signUpAction(
     )
   }
 
+  const securityClaims = await signupSecurityClaims({
+    email,
+    phone: phoneResult.value,
+    linkedinUrl: linkedInResult.value,
+  })
+  if (!securityClaims) {
+    return reject(
+      'We could not verify this browser for trial eligibility. Refresh the page and try again, or contact support.',
+    )
+  }
+
   const reservationResult = await reserveSignupIp()
   if (reservationResult.status === 'blocked') {
     return reject(
@@ -144,6 +156,10 @@ export async function signUpAction(
           phone: phoneResult.value,
           linkedin_url: linkedInResult.value,
           signup_reservation_token: reservation.token,
+          signup_device_hash: securityClaims.deviceHash,
+          signup_email_hash: securityClaims.emailHash,
+          signup_phone_hash: securityClaims.phoneHash,
+          signup_linkedin_hash: securityClaims.linkedinHash,
         },
       },
     })
@@ -158,7 +174,7 @@ export async function signUpAction(
     // Supabase can return an obfuscated user for an already-registered email.
     // Confirming the trigger's claim prevents that response from burning a new
     // network reservation or appearing to create a second account.
-    if (!(await signupIpWasClaimed(reservation, data.user.id))) {
+    if (!(await signupClaimsWereClaimed(reservation, data.user.id, securityClaims))) {
       await releaseSignupIp(reservation)
       return reject('We could not complete sign-up. Please check your details and try again.')
     }
