@@ -95,10 +95,6 @@
   --color-info-soft: var(--info-soft);
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
 body {
   background: var(--paper);
 }

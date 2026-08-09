@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -16,9 +16,8 @@ interface CaseStudy {
 
 interface OrbitParams {
   radius: number;
-  speed: number;
   phase: number;
-  e: number;
+  duration: number;
 }
 
 const CASE_STUDIES: CaseStudy[] = [
@@ -88,20 +87,11 @@ const CASE_STUDIES: CaseStudy[] = [
 const RING_RADII = [110, 180, 250, 320];
 
 const ORBITS: OrbitParams[] = [
-  { radius: RING_RADII[1], speed: 0.045, phase: 0, e: 0.05 },
-  { radius: RING_RADII[1], speed: 0.045, phase: Math.PI, e: 0.05 },
-  { radius: RING_RADII[2], speed: 0.035, phase: Math.PI * 0.5, e: 0.05 },
-  { radius: RING_RADII[3], speed: 0.025, phase: Math.PI * 1.5, e: 0.05 },
+  { radius: RING_RADII[1], phase: 0, duration: (Math.PI * 2) / 0.045 },
+  { radius: RING_RADII[1], phase: Math.PI, duration: (Math.PI * 2) / 0.045 },
+  { radius: RING_RADII[2], phase: Math.PI * 0.5, duration: (Math.PI * 2) / 0.035 },
+  { radius: RING_RADII[3], phase: Math.PI * 1.5, duration: (Math.PI * 2) / 0.025 },
 ];
-
-function getPosition(orbit: OrbitParams, time: number): { x: number; y: number } {
-  const M = orbit.phase + orbit.speed * time;
-  const theta = M + 2 * orbit.e * Math.sin(M);
-  return {
-    x: orbit.radius * Math.cos(theta),
-    y: orbit.radius * Math.sin(theta),
-  };
-}
 
 const SIZE = 750;
 const CX = SIZE / 2;
@@ -111,37 +101,6 @@ const CY = SIZE / 2;
 export default function OrbitalCaseStudies() {
   const [hoveredCase, setHoveredCase] = useState<string | null>(null);
   const [selectedCase, setSelectedCase] = useState<string | null>(null);
-  const animRef = useRef<number>(0);
-  const startRef = useRef<number>(0);
-  const nodesRef = useRef<(HTMLDivElement | null)[]>([]);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-
-  useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) return;
-
-    function animate(ts: number) {
-      if (!startRef.current) startRef.current = ts;
-      const t = (ts - startRef.current) / 1000;
-
-      ORBITS.forEach((orbit, i) => {
-        const pos = getPosition(orbit, t);
-        const node = nodesRef.current[i];
-        if (node) {
-          const pctX = ((CX + pos.x) / SIZE) * 100;
-          const pctY = ((CY + pos.y) / SIZE) * 100;
-          node.style.left = `${pctX}%`;
-          node.style.top = `${pctY}%`;
-        }
-      });
-
-      animRef.current = requestAnimationFrame(animate);
-    }
-
-    animRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animRef.current);
-  }, []);
 
   useEffect(() => {
     if (!selectedCase) return;
@@ -162,7 +121,7 @@ export default function OrbitalCaseStudies() {
     <div className="relative w-full">
 
       {/* Centered orbital area */}
-      <div className="relative mx-auto w-full max-w-[750px] py-4" style={{ aspectRatio: "1 / 1" }} ref={containerRef}>
+      <div className="relative mx-auto w-full max-w-[750px] py-4" style={{ aspectRatio: "1 / 1" }}>
         {/* Orbital rings SVG */}
         <svg className="absolute inset-0 w-full h-full" viewBox={`0 0 ${SIZE} ${SIZE}`}>
           <defs>
@@ -197,75 +156,73 @@ export default function OrbitalCaseStudies() {
 
         {/* Orbiting bodies */}
         {CASE_STUDIES.map((study, i) => {
-          const initPos = getPosition(ORBITS[i], 0);
-          const initPctX = ((CX + initPos.x) / SIZE) * 100;
-          const initPctY = ((CY + initPos.y) / SIZE) * 100;
+          const orbit = ORBITS[i];
+          const orbitStyle = {
+            "--orbit-radius": `${(orbit.radius / SIZE) * 100}%`,
+            "--orbit-duration": `${orbit.duration}s`,
+            "--orbit-phase": `${orbit.phase}rad`,
+            "--orbit-phase-inverse": `${-orbit.phase}rad`,
+          } as CSSProperties;
 
           return (
             <div
               key={study.id + "-orbit"}
-              ref={(el) => { nodesRef.current[i] = el; }}
-              className="absolute z-20"
-              style={{
-                left: `${initPctX}%`,
-                top: `${initPctY}%`,
-                transform: "translate(-50%, -50%)",
-              }}
+              className="orbital-track absolute inset-0 z-20 pointer-events-none"
+              style={orbitStyle}
             >
-              <div
-                className="relative cursor-pointer transition-transform duration-300 hover:scale-110 group"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedCase(selectedCase === study.id ? null : study.id);
-                }}
-                onMouseEnter={() => setHoveredCase(study.id)}
-                onMouseLeave={() => setHoveredCase(null)}
-              >
-                {/* Hover tooltip */}
+              <div className="orbital-body absolute pointer-events-auto">
                 <div
-                  className={`absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all duration-200 pointer-events-none ${
-                    hoveredCase === study.id ? "opacity-100 -translate-y-1" : "opacity-0 translate-y-0"
-                  }`}
-                  style={{
-                    background: "rgba(0,0,0,0.85)",
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    backdropFilter: "blur(4px)",
+                  className="relative cursor-pointer transition-transform duration-300 hover:scale-110 group"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedCase(selectedCase === study.id ? null : study.id);
                   }}
+                  onMouseEnter={() => setHoveredCase(study.id)}
+                  onMouseLeave={() => setHoveredCase(null)}
                 >
-                  {study.result}
-                </div>
+                  {/* Hover tooltip */}
+                  <div
+                    className={`absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-[opacity,transform] duration-200 pointer-events-none ${
+                      hoveredCase === study.id ? "opacity-100 -translate-y-1" : "opacity-0 translate-y-0"
+                    }`}
+                    style={{
+                      background: "rgba(0,0,0,0.92)",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                    }}
+                  >
+                    {study.result}
+                  </div>
 
-                {/* Selection glow */}
-                <div
-                  className={`absolute -inset-3 rounded-full transition-opacity duration-300 ${
-                    selectedCase === study.id ? "opacity-100" : "opacity-0"
-                  }`}
-                  style={{
-                    background: "radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%)",
-                  }}
-                />
-
-                {/* Icon */}
-                <div
-                  className={`relative w-[4rem] h-[4rem] rounded-full flex items-center justify-center overflow-hidden transition-all duration-300 ${
-                    selectedCase === study.id
-                      ? "border border-white/30"
-                      : "border border-white/10"
-                  }`}
-                  style={{
-                    background: "linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)",
-                    backdropFilter: "blur(8px)",
-                    WebkitBackdropFilter: "blur(8px)",
-                    boxShadow: "0 4px 16px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.06)",
-                  }}
-                >
-                  <Image
-                    src={study.logo}
-                    alt={study.name}
-                    width={64}
-                    height={64}
-                    className={study.id === "3" ? "w-9 h-9 object-contain" : "w-full h-full object-cover rounded-full"}
+                  {/* Selection glow */}
+                  <div
+                    className={`absolute -inset-3 rounded-full transition-opacity duration-300 ${
+                      selectedCase === study.id ? "opacity-100" : "opacity-0"
+                    }`}
+                    style={{
+                      background: "radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%)",
+                    }}
                   />
+
+                  {/* Icon */}
+                  <div
+                    className={`relative w-[4rem] h-[4rem] rounded-full flex items-center justify-center overflow-hidden transition-colors duration-300 ${
+                      selectedCase === study.id
+                        ? "border border-white/30"
+                        : "border border-white/10"
+                    }`}
+                    style={{
+                      background: "linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)",
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    <Image
+                      src={study.logo}
+                      alt={study.name}
+                      width={64}
+                      height={64}
+                      className={study.id === "3" ? "w-9 h-9 object-contain" : "w-full h-full object-cover rounded-full"}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -285,6 +242,7 @@ export default function OrbitalCaseStudies() {
           {/* Modal */}
           <div
             className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl p-8 sm:p-10 animate-[fadeSlideUp_0.3s_ease-out]"
+            data-lenis-prevent
             style={{
               background: "linear-gradient(160deg, rgba(240,238,235,0.92) 0%, rgba(225,222,218,0.88) 100%)",
               backdropFilter: "blur(40px) saturate(180%)",
@@ -349,6 +307,30 @@ export default function OrbitalCaseStudies() {
       )}
 
       <style jsx>{`
+        .orbital-track {
+          transform: rotate(var(--orbit-phase));
+          animation: orbital-rotate var(--orbit-duration) linear infinite;
+          backface-visibility: hidden;
+          contain: layout paint;
+          transform-origin: 50% 50%;
+          will-change: transform;
+        }
+        .orbital-body {
+          left: calc(50% + var(--orbit-radius));
+          top: 50%;
+          transform: translate3d(-50%, -50%, 0) rotate(var(--orbit-phase-inverse));
+          animation: orbital-counter-rotate var(--orbit-duration) linear infinite;
+          backface-visibility: hidden;
+          will-change: transform;
+        }
+        @keyframes orbital-rotate {
+          from { transform: rotate(var(--orbit-phase)); }
+          to { transform: rotate(calc(var(--orbit-phase) + 1turn)); }
+        }
+        @keyframes orbital-counter-rotate {
+          from { transform: translate3d(-50%, -50%, 0) rotate(var(--orbit-phase-inverse)); }
+          to { transform: translate3d(-50%, -50%, 0) rotate(calc(var(--orbit-phase-inverse) - 1turn)); }
+        }
         @keyframes fadeSlideUp {
           from { opacity: 0; transform: translateY(12px); }
           to { opacity: 1; transform: translateY(0); }
@@ -356,6 +338,13 @@ export default function OrbitalCaseStudies() {
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .orbital-track,
+          .orbital-body {
+            animation: none;
+            will-change: auto;
+          }
         }
       `}</style>
     </div>

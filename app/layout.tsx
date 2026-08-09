@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { serializeJsonLd } from "@/lib/json-ld";
+import SmoothScroll from "./components/SmoothScroll";
 import "./globals.css";
+import "lenis/dist/lenis.css";
 
 export const metadata: Metadata = {
   title: "Outlio | Proven Sales Systems For Tech Startups and SaaS",
@@ -174,7 +176,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <SmoothScroll />
+        {children}
+      </body>
     </html>
   );
 }
