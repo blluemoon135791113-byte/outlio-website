@@ -1,8 +1,23 @@
 import type { Metadata } from "next";
+import { Caveat, DM_Sans } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import { serializeJsonLd } from "@/lib/json-ld";
 import SmoothScroll from "./components/SmoothScroll";
 import "./globals.css";
 import "lenis/dist/lenis.css";
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-dm-sans",
+  display: "swap",
+});
+
+const caveat = Caveat({
+  subsets: ["latin"],
+  variable: "--font-caveat",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Outlio | Proven Sales Systems For Tech Startups and SaaS",
@@ -170,17 +185,15 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" className="h-full antialiased">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&display=swap" rel="stylesheet" />
+    <html
+      lang="en"
+      className={`${dmSans.variable} ${caveat.variable} ${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
-      </head>
-      <body className="min-h-full flex flex-col">
         <SmoothScroll />
         {children}
       </body>

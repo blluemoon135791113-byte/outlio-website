@@ -13,7 +13,7 @@ describe('authentication redirects', () => {
   it('never trusts a request host in production', () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '')
-    expect(appOrigin('https://attacker.test')).toBe('https://app.outlio.io')
+    expect(appOrigin('https://attacker.test')).toBe('https://outlio.io')
   })
 
   it('allows localhost request origins during development', () => {

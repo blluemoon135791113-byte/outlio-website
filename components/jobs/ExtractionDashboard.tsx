@@ -236,42 +236,40 @@ export function ExtractionDashboard({
   )
 
   return (
-    <div className="space-y-8">
-      <section className="overflow-hidden rounded-[var(--radius-xl)] border border-accent/20 bg-accent-soft shadow-[var(--shadow-sm)]">
-        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)] lg:items-end">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                Lead Engine workspace
-              </p>
-              <ConnectionBadge connection={connection} />
-            </div>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-              Your extraction pipeline, live.
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted sm:text-base">
-              Follow every file from queue to clean CSV, inspect the leads that made it
-              through, and keep the complete history in one workspace.
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+              Lead Engine
             </p>
+            <ConnectionBadge connection={connection} />
           </div>
+          <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
+            Extraction workspace
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
+            Follow every file, review the leads kept, and download clean CSV files.
+          </p>
+        </div>
 
-          <div className="flex flex-wrap gap-2 lg:justify-end">
-            <Link
-              href="/dashboard/extract/new"
-              className="rounded-[var(--radius-md)] bg-accent px-4 py-2.5 text-sm font-semibold text-cream transition-[background-color,transform] duration-150 hover:bg-accent-deep active:scale-[0.97]"
-            >
-              New extraction
-            </Link>
+        <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void refresh()}
-              className="rounded-[var(--radius-md)] border border-accent/25 bg-panel px-4 py-2.5 text-sm font-semibold text-ink transition-[border-color,transform] duration-150 hover:border-accent/50 active:scale-[0.97]"
+              className="inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-4 text-sm font-semibold text-ink transition-[border-color,background-color,transform] duration-150 ease-out hover:border-accent/35 hover:bg-accent-soft/40 active:scale-[0.97]"
             >
               Refresh now
             </button>
-          </div>
+            <Link
+              href="/dashboard/extract/new"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-accent-deep active:scale-[0.97]"
+            >
+              <span aria-hidden className="text-base leading-none">+</span>
+              New extraction
+            </Link>
         </div>
-      </section>
+      </header>
 
       {refreshError ? (
         <p
@@ -285,7 +283,7 @@ export function ExtractionDashboard({
       {activeJob ? <ActiveRun job={activeJob} /> : <CaughtUp latestJob={jobs[0] ?? null} />}
 
       <section aria-label="Workspace totals" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Credits remaining" value={credits?.remaining ?? 0} detail={credits ? `${credits.used} used of ${credits.allowance}` : planName ?? 'Current plan'} />
+        <MetricCard featured label="Credits remaining" value={credits?.remaining ?? 0} detail={credits ? `${credits.used} used of ${credits.allowance}` : planName ?? 'Current plan'} />
         <MetricCard label="Completed runs" value={totals.completed} detail={`${jobs.length} total in history`} />
         <MetricCard label="Files processed" value={totals.files} detail="Across extraction history" />
         <MetricCard label="Leads extracted" value={totals.leads} detail="Unique leads kept" />
@@ -296,7 +294,7 @@ export function ExtractionDashboard({
         <EmptyState />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-          <section className="min-w-0 self-start rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
+          <section className="min-w-0 self-start overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
               <div>
                 <h2 className="text-base font-semibold text-ink">Extraction history</h2>
@@ -375,7 +373,7 @@ function ActiveRun({ job }: { job: DashboardJob }) {
             <StatusBadge status={job.status} />
             <span className="text-sm font-medium text-muted">{jobLabel(job)}</span>
           </div>
-          <h2 className="mt-3 text-xl font-bold tracking-tight text-ink sm:text-2xl">
+          <h2 className="mt-3 text-xl font-semibold tracking-[-0.025em] text-ink sm:text-2xl">
             {job.progress_step ?? 'Preparing your extraction'}
           </h2>
           <p className="mt-1 text-sm text-muted" aria-live="polite">
@@ -384,7 +382,7 @@ function ActiveRun({ job }: { job: DashboardJob }) {
           </p>
         </div>
         <div className="text-right">
-          <p className="text-4xl font-bold tabular-nums tracking-tight text-ink">{percent}%</p>
+          <p className="font-heading text-4xl font-semibold tabular-nums tracking-[-0.045em] text-ink">{percent}%</p>
           <p className="mt-1 text-xs font-medium uppercase tracking-[0.12em] text-muted">
             Run progress
           </p>
@@ -436,7 +434,7 @@ function RunStat({ label, value, suffix }: { label: string; value: number; suffi
   return (
     <div className="rounded-[var(--radius-lg)] border border-border bg-paper px-4 py-3">
       <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted">{label}</p>
-      <p className="mt-1 text-xl font-bold tabular-nums text-ink">
+      <p className="mt-1 font-heading text-xl font-semibold tabular-nums text-ink">
         {value.toLocaleString()}{' '}
         <span className="text-xs font-medium text-muted">{suffix}</span>
       </p>
@@ -470,12 +468,12 @@ function CaughtUp({ latestJob }: { latestJob: DashboardJob | null }) {
   )
 }
 
-function MetricCard({ label, value, detail }: { label: string; value: number; detail: string }) {
+function MetricCard({ label, value, detail, featured = false }: { label: string; value: number; detail: string; featured?: boolean }) {
   return (
-    <div className="rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)]">
-      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted">{label}</p>
-      <p className="mt-2 text-2xl font-bold tabular-nums text-ink">{value.toLocaleString()}</p>
-      <p className="mt-1 text-xs text-muted">{detail}</p>
+    <div className={featured ? 'min-h-32 rounded-[var(--radius-lg)] border border-accent bg-accent p-4 text-white shadow-[var(--shadow-md)]' : 'min-h-32 rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)]'}>
+      <p className={featured ? 'text-xs font-medium text-white/75' : 'text-xs font-medium text-muted'}>{label}</p>
+      <p className="mt-4 font-heading text-[28px] font-semibold leading-none tabular-nums tracking-[-0.04em]">{value.toLocaleString()}</p>
+      <p className={featured ? 'mt-3 text-xs text-white/70' : 'mt-3 text-xs text-muted'}>{detail}</p>
     </div>
   )
 }
@@ -528,7 +526,7 @@ function JobHistoryRow({
   const purged = (job.progress_step ?? '').toLowerCase().includes('data purged')
 
   return (
-    <li className={selected ? 'bg-accent-soft/60 px-5 py-4' : 'px-5 py-4'}>
+    <li className={selected ? 'bg-accent-soft/55 px-5 py-4' : 'px-5 py-4 transition-colors duration-150 hover:bg-surface-muted/70'}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
           <div className="flex flex-wrap items-center gap-2">
@@ -628,7 +626,7 @@ function PipelineTotal({
 }) {
   return (
     <div className="px-4 py-3 text-center">
-      <p className={`text-lg font-bold tabular-nums ${danger ? 'text-danger' : 'text-ink'}`}>
+      <p className={`font-heading text-lg font-semibold tabular-nums ${danger ? 'text-danger' : 'text-ink'}`}>
         {value.toLocaleString()}
       </p>
       <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted">{label}</p>
@@ -687,7 +685,7 @@ function LeadPreview({
         <div className="overflow-x-auto" data-lenis-prevent-horizontal>
           <table className="w-full min-w-[860px] border-collapse text-left text-sm">
             <thead>
-              <tr className="border-b border-border bg-paper text-xs font-semibold uppercase tracking-[0.1em] text-muted">
+              <tr className="border-b border-border bg-surface-muted/70 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
                 <th className="px-5 py-3">Lead</th>
                 <th className="px-4 py-3">Title</th>
                 <th className="px-4 py-3">Company</th>
@@ -698,7 +696,7 @@ function LeadPreview({
             </thead>
             <tbody className="divide-y divide-border">
               {leads.map((lead) => (
-                <tr key={lead.id} className="transition-colors duration-150 hover:bg-accent-soft/45">
+                <tr key={lead.id} className="transition-colors duration-150 hover:bg-surface-muted/80">
                   <td className="px-5 py-3 font-medium text-ink">{missing(lead.full_name)}</td>
                   <td className="max-w-56 truncate px-4 py-3 text-muted" title={lead.job_title ?? undefined}>
                     {missing(lead.job_title)}

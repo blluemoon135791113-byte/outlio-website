@@ -30,7 +30,7 @@ type FileState = {
 }
 
 const inputClass =
-  'w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 py-2 text-sm text-ink transition-colors duration-150 hover:border-border-strong'
+  'w-full rounded-[var(--radius-md)] border border-border bg-panel px-3 py-2.5 text-sm text-ink transition-colors duration-150 hover:border-border-strong focus:border-accent'
 
 export function UploadForm({
   maxFiles,
@@ -138,7 +138,7 @@ export function UploadForm({
   const uploadedCount = items.filter((i) => i.progress === 100).length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div
         onDragOver={(e) => {
           e.preventDefault()
@@ -152,11 +152,14 @@ export function UploadForm({
         }}
         className={
           dragging
-            ? 'rounded-[var(--radius-lg)] border-2 border-dashed border-accent bg-accent-soft p-8 text-center transition-colors duration-150'
-            : 'rounded-[var(--radius-lg)] border-2 border-dashed border-border bg-panel p-8 text-center transition-colors duration-150'
+            ? 'rounded-[var(--radius-lg)] border border-dashed border-accent bg-accent-soft p-8 text-center transition-colors duration-150 sm:p-10'
+            : 'rounded-[var(--radius-lg)] border border-dashed border-border-strong bg-surface-muted/45 p-8 text-center transition-colors duration-150 sm:p-10'
         }
       >
-        <p className="text-sm font-medium text-ink">Drag and drop your saved pages here</p>
+        <span aria-hidden className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-panel text-lg text-accent shadow-[var(--shadow-sm)]">
+          ↑
+        </span>
+        <p className="text-sm font-semibold text-ink">Drag and drop your saved pages here</p>
         <p className="mt-1 text-sm text-muted">
           or{' '}
           <button
@@ -189,7 +192,7 @@ export function UploadForm({
       </div>
 
       {items.length > 0 ? (
-        <div className="rounded-[var(--radius-lg)] border border-border bg-panel">
+        <div className="overflow-hidden rounded-[var(--radius-lg)] border border-border bg-panel">
           <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
             <p className="text-sm font-medium text-ink">
               {items.length} file{items.length === 1 ? '' : 's'} selected
@@ -303,7 +306,7 @@ export function UploadForm({
         onClick={start}
         disabled={items.length === 0 || !consent || busy}
         aria-busy={busy}
-        className="rounded-[var(--radius-md)] bg-accent px-4 py-2.5 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-accent-deep active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {status === 'preparing'
           ? 'Preparing…'

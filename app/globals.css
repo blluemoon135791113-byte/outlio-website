@@ -10,9 +10,11 @@
 :root {
   --paper: #ffffff;
   --panel: #ffffff;
+  --app: #f7f7f5;
+  --surface-muted: #f3f3f0;
   --cream: #f2eee3;
-  --ink: #16150f;
-  --muted: #605e55;
+  --ink: #171715;
+  --muted: #696962;
   --accent: #4f4bff;
   --accent-deep: #322ed1;
   --accent-soft: #edecff;
@@ -32,11 +34,10 @@
     rgba(255, 255, 255, 0.35) 100%
   );
 
-  /* FONT PLACEHOLDER — tasteful system stack until the founder's fonts arrive */
-  --font-display: "Helvetica Neue", "Arial Nova", Helvetica, Arial, ui-sans-serif, system-ui,
-    sans-serif;
-  --font-body: var(--font-display);
-  --font-handwriting: "Caveat", "Comic Sans MS", cursive;
+  --font-display: var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-body: var(--font-dm-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-code: var(--font-geist-mono), ui-monospace, monospace;
+  --font-handwriting: var(--font-caveat), "Comic Sans MS", cursive;
 
   /* ==========================================================================
      PRODUCT TOKENS — added for the authenticated app (see docs/DESIGN_TOKENS.md)
@@ -44,20 +45,20 @@
      ========================================================================== */
 
   /* Borders — the landing page uses ad-hoc `border-ink/10`; this names it. */
-  --border: #e6e3da;
-  --border-strong: #d2cec2;
+  --border: #e8e8e4;
+  --border-strong: #d4d4ce;
 
   /* Radius scale — none existed before. */
   --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
   --radius-xl: 1rem;
 
   /* Elevation — soft and accent-tinted, matching the landing page's feel,
      but without backdrop-filter (too expensive over scrolling tables). */
-  --shadow-sm: 0 1px 2px 0 rgba(22, 21, 15, 0.05);
-  --shadow-md: 0 4px 12px 0 rgba(22, 21, 15, 0.07);
-  --shadow-lg: 0 12px 32px 0 rgba(22, 21, 15, 0.1);
+  --shadow-sm: 0 1px 2px rgba(23, 23, 21, 0.035), 0 1px 8px rgba(23, 23, 21, 0.025);
+  --shadow-md: 0 4px 18px rgba(23, 23, 21, 0.055);
+  --shadow-lg: 0 14px 40px rgba(23, 23, 21, 0.11);
 
   /* Status colors — required for job states (completed / partially_completed /
      failed) and validation feedback. The landing page has no status palette. */
@@ -75,6 +76,8 @@
 @theme inline {
   --color-paper: var(--paper);
   --color-panel: var(--panel);
+  --color-app: var(--app);
+  --color-surface-muted: var(--surface-muted);
   --color-cream: var(--cream);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
@@ -93,17 +96,46 @@
   --color-danger-soft: var(--danger-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display);
+  --font-mono: var(--font-code);
 }
 
 body {
   background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
 }
 
 /* Handwriting font utility */
 .font-handwriting {
-  font-family: "Caveat", "Comic Sans MS", cursive;
+  font-family: var(--font-handwriting);
   color: var(--ink);
-  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+}
+
+.app-shell {
+  --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
+  font-family: var(--font-body);
+}
+
+.app-shell :is(button, summary, a) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-shell button:not(:disabled),
+.app-shell summary {
+  touch-action: manipulation;
 }
 
 ::selection {

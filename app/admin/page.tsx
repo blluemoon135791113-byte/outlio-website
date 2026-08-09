@@ -65,18 +65,32 @@ export default async function AdminPage() {
   const others = users.filter((u) => !u.pendingRequest)
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-ink">Users</h1>
-        <p className="mt-1 text-sm text-muted">
-          {users.length} account{users.length === 1 ? '' : 's'}
-          {awaiting.length > 0 ? ` · ${awaiting.length} awaiting approval` : ''}
-        </p>
-      </div>
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+            Administration
+          </p>
+          <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
+            Users
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            Review access requests and manage existing Outlio accounts.
+          </p>
+        </div>
+        <span className="inline-flex w-fit rounded-full border border-accent/15 bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent">
+          Admin access
+        </span>
+      </header>
+
+      <section aria-label="Account totals" className="grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
+        <AdminMetric label="Total accounts" value={users.length} featured />
+        <AdminMetric label="Awaiting approval" value={awaiting.length} />
+      </section>
 
       {awaiting.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold tracking-tight text-ink">
+        <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+          <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">
             Awaiting approval
           </h2>
           <ul className="space-y-3">
@@ -92,10 +106,10 @@ export default async function AdminPage() {
         </section>
       ) : null}
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold tracking-tight text-ink">All accounts</h2>
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">All accounts</h2>
         {others.length === 0 ? (
-          <p className="rounded-[var(--radius-lg)] border border-dashed border-border bg-panel p-8 text-center text-sm text-muted">
+          <p className="rounded-[var(--radius-lg)] border border-dashed border-border bg-surface-muted/40 p-8 text-center text-sm text-muted">
             No other accounts yet.
           </p>
         ) : (
@@ -112,15 +126,15 @@ export default async function AdminPage() {
         )}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold tracking-tight text-ink">Recent activity</h2>
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Recent activity</h2>
         <p className="text-sm text-muted">
-          Audit log is append-only — entries can never be edited or deleted.
+          Audit log entries are append-only and cannot be edited or deleted.
         </p>
         {(audit ?? []).length === 0 ? (
           <p className="text-sm text-muted">Nothing recorded yet.</p>
         ) : (
-          <ul className="divide-y divide-border rounded-[var(--radius-lg)] border border-border bg-panel">
+          <ul className="divide-y divide-border overflow-hidden rounded-[var(--radius-lg)] border border-border bg-panel">
             {(audit ?? []).map((a) => (
               <li key={a.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-2.5">
                 <code className="text-sm font-medium text-ink">{a.action}</code>
@@ -141,5 +155,16 @@ export default async function AdminPage() {
         )}
       </section>
     </div>
+  )
+}
+
+function AdminMetric({ label, value, featured = false }: { label: string; value: number; featured?: boolean }) {
+  return (
+    <article className={featured ? 'rounded-[var(--radius-lg)] border border-accent bg-accent p-4 text-white shadow-[var(--shadow-md)]' : 'rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)]'}>
+      <p className={featured ? 'text-xs font-medium text-white/75' : 'text-xs font-medium text-muted'}>{label}</p>
+      <p className="mt-3 font-heading text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums">
+        {value.toLocaleString()}
+      </p>
+    </article>
   )
 }

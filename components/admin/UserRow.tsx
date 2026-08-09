@@ -49,7 +49,7 @@ function Btn({
       type="submit"
       disabled={pending}
       aria-busy={pending}
-      className={`rounded-[var(--radius-md)] border px-3 py-1.5 text-sm font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${cls}`}
+      className={`rounded-[var(--radius-md)] border px-3 py-1.5 text-sm font-medium transition-[background-color,border-color,transform] duration-150 ease-out active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 ${cls}`}
     >
       {pending ? busy : label}
     </button>
@@ -98,11 +98,11 @@ export function UserRow({
   const isSuspended = Boolean(user.suspendedAt) || user.role === 'suspended_user'
 
   return (
-    <li className="rounded-[var(--radius-lg)] border border-border bg-panel p-5">
+    <li className="rounded-[var(--radius-lg)] border border-border bg-surface-muted/25 p-4 transition-colors duration-150 hover:bg-surface-muted/55">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium text-ink">{user.fullName ?? '—'}</span>
+            <span className="font-semibold text-ink">{user.fullName ?? 'Not provided'}</span>
             <RoleBadge role={user.role} suspended={isSuspended} />
             {isSelf ? (
               <span className="text-xs font-medium text-muted">(you)</span>
@@ -115,7 +115,7 @@ export function UserRow({
             {user.phone ?? 'no phone'}
             {user.linkedinUrl ? (
               <>
-                {' · '}
+                {' | '}
                 <a
                   href={user.linkedinUrl}
                   target="_blank"
@@ -132,8 +132,8 @@ export function UserRow({
             <p className="text-sm text-muted">
               {user.planName}
               {user.accessExpiresAt
-                ? ` · expires ${new Date(user.accessExpiresAt).toLocaleDateString('en-GB')}`
-                : ' · no expiry'}
+                ? ` | expires ${new Date(user.accessExpiresAt).toLocaleDateString('en-GB')}`
+                : ' | no expiry'}
             </p>
           ) : null}
 

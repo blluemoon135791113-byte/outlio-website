@@ -1,7 +1,6 @@
-import Link from 'next/link'
 import type { ReactNode } from 'react'
 
-import { signOutAction } from '@/lib/auth/actions'
+import { ProductShell } from '@/components/product/ProductShell'
 import { requireAdmin } from '@/lib/auth/access'
 
 /**
@@ -16,42 +15,14 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const ctx = await requireAdmin()
 
   return (
-    <div className="flex min-h-screen flex-col bg-paper">
-      <header className="border-b border-border bg-panel">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-6">
-            <Link
-              href="/dashboard"
-              className="text-sm font-semibold uppercase tracking-[0.22em] text-accent"
-            >
-              Outlio
-            </Link>
-            <span className="rounded-full border border-accent/30 bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent">
-              Admin
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard"
-              className="text-sm font-medium text-muted transition-colors duration-150 hover:text-ink"
-            >
-              Back to app
-            </Link>
-            <span className="hidden text-sm text-muted sm:inline">{ctx.email}</span>
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                className="rounded-[var(--radius-md)] border border-border px-3 py-1.5 text-sm font-medium text-ink transition-colors duration-150 hover:border-border-strong"
-              >
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
-    </div>
+    <ProductShell
+      email={ctx.email ?? ''}
+      fullName={ctx.profile?.full_name ?? null}
+      planName={ctx.plan?.name ?? null}
+      isAdmin
+      canUseScraper={ctx.canUseScraper}
+    >
+      {children}
+    </ProductShell>
   )
 }

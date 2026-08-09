@@ -46,19 +46,24 @@ export default async function AccessPage() {
   const showOptions = !['suspended', 'rejected', 'email_unverified'].includes(ctx.reason)
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-ink">Access status</h1>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+          Outlio account
+        </p>
+        <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
+          Access status
+        </h1>
         <p className="mt-1 text-sm text-muted">{ctx.email}</p>
-      </div>
+      </header>
 
       <div
         className={
           tone === 'danger'
-            ? 'rounded-[var(--radius-lg)] border border-danger/25 bg-danger-soft p-6'
+            ? 'rounded-[var(--radius-xl)] border border-danger/25 bg-danger-soft p-6 shadow-[var(--shadow-sm)]'
             : tone === 'warning'
-              ? 'rounded-[var(--radius-lg)] border border-warning/25 bg-warning-soft p-6'
-              : 'rounded-[var(--radius-lg)] border border-info/25 bg-info-soft p-6'
+              ? 'rounded-[var(--radius-xl)] border border-warning/25 bg-warning-soft p-6 shadow-[var(--shadow-sm)]'
+              : 'rounded-[var(--radius-xl)] border border-info/25 bg-info-soft p-6 shadow-[var(--shadow-sm)]'
         }
       >
         <h2
@@ -91,7 +96,7 @@ export default async function AccessPage() {
 
       {showOptions ? (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight text-ink">
+          <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">
             How would you like to get access?
           </h2>
           <RequestOptions
@@ -110,7 +115,7 @@ export default async function AccessPage() {
         >
           Contact us
         </a>
-        {' · '}
+        {' | '}
         <Link href="/dashboard" className="font-medium text-accent hover:underline">
           Back to dashboard
         </Link>
@@ -172,7 +177,7 @@ function describe(reason: AccessReason): {
     case 'ok':
       return {
         title: 'Request access',
-        body: 'Your account is registered but does not have access yet. Access is approved manually — choose an option below to get started.',
+        body: 'Your account is registered but does not have access yet. Access is approved manually, so choose an option below to get started.',
         tone: 'info',
       }
   }
