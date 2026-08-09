@@ -3,6 +3,7 @@ import Link from 'next/link'
 
 import Footer from '@/app/components/Footer'
 import Nav from '@/app/components/Nav'
+import { DashboardPreview } from '@/components/leadengine/DashboardPreview'
 import { LeadEngineHero } from '@/components/leadengine/LeadEngineHero'
 import { Pricing } from '@/components/leadengine/Pricing'
 
@@ -86,6 +87,8 @@ export default function LeadEnginePage() {
       <Nav homePrefix="/" finalCta="sign-in" />
 
       <LeadEngineHero />
+
+      <DashboardPreview />
 
       {/* ---- The problem --------------------------------------------------- */}
       <section className="bg-cream px-4 py-20 sm:py-28">
