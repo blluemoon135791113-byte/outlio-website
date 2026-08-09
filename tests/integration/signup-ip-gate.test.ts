@@ -173,20 +173,22 @@ describeIf('signup IP gate', () => {
     }
   })
 
-  it('retains identity claims after account deletion', async () => {
+  it('releases network, device, and identity claims after account deletion', async () => {
     const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`
+    const email = `outlio-test-persistent-${suffix}@example.com`
     const phone = `+1777${suffix.slice(-7)}`
+    const linkedInUrl = `https://www.linkedin.com/in/outlio-persistent-${suffix}`
     const firstReservation = await createTestSignupReservation('persistent-first')
     const firstSecurity = createTestSignupSecurityMetadata('persistent-first')
     const admin = adminClient()
     const { data: first, error: firstError } = await admin.auth.admin.createUser({
-      email: `outlio-test-persistent-first-${suffix}@example.com`,
+      email,
       password: 'fabricated persistent identity passphrase',
       email_confirm: true,
       user_metadata: {
         full_name: 'Persistent Identity One',
         phone,
-        linkedin_url: `https://www.linkedin.com/in/outlio-persistent-first-${suffix}`,
+        linkedin_url: linkedInUrl,
         signup_reservation_token: firstReservation.token,
         ...firstSecurity,
       },
@@ -198,40 +200,47 @@ describeIf('signup IP gate', () => {
     const firstUserId = first.user!.id
     await admin.auth.admin.deleteUser(firstUserId)
 
-    const { data: retainedClaim, error: retainedClaimError } = await admin
-      .from('signup_identity_claims')
-      .select('identity_hash')
-      .eq('identity_hash', firstSecurity.signup_phone_hash)
-      .eq('user_id', firstUserId)
-      .maybeSingle()
-    expect(retainedClaimError).toBeNull()
-    expect(retainedClaim?.identity_hash).toBe(firstSecurity.signup_phone_hash)
+    const [networkClaim, deviceClaim, identityClaims] = await Promise.all([
+      admin.from('signup_ip_claims').select('ip_hash').eq('user_id', firstUserId),
+      admin.from('signup_device_claims').select('device_hash').eq('user_id', firstUserId),
+      admin.from('signup_identity_claims').select('identity_hash').eq('user_id', firstUserId),
+    ])
+    expect(networkClaim.error).toBeNull()
+    expect(deviceClaim.error).toBeNull()
+    expect(identityClaims.error).toBeNull()
+    expect(networkClaim.data).toEqual([])
+    expect(deviceClaim.data).toEqual([])
+    expect(identityClaims.data).toEqual([])
 
-    const secondReservation = await createTestSignupReservation('persistent-second')
+    const secondReservation = await createTestSignupReservation(
+      'persistent-second',
+      firstReservation.ipHash,
+    )
     const secondSecurity = createTestSignupSecurityMetadata('persistent-second', {
+      signup_device_hash: firstSecurity.signup_device_hash,
+      signup_email_hash: firstSecurity.signup_email_hash,
       signup_phone_hash: firstSecurity.signup_phone_hash,
+      signup_linkedin_hash: firstSecurity.signup_linkedin_hash,
     })
 
     try {
       const { data, error } = await admin.auth.admin.createUser({
-        email: `outlio-test-persistent-second-${suffix}@example.com`,
+        email,
         password: 'fabricated persistent identity passphrase',
         email_confirm: true,
         user_metadata: {
           full_name: 'Persistent Identity Two',
           phone,
-          linkedin_url: `https://www.linkedin.com/in/outlio-persistent-second-${suffix}`,
+          linkedin_url: linkedInUrl,
           signup_reservation_token: secondReservation.token,
           ...secondSecurity,
         },
       })
 
-      expect(error).not.toBeNull()
-      expect(data.user).toBeNull()
+      expect(error).toBeNull()
+      expect(data.user).not.toBeNull()
+      if (data.user?.id) await admin.auth.admin.deleteUser(data.user.id)
     } finally {
-      await admin.from('signup_ip_claims').delete().eq('user_id', firstUserId)
-      await admin.from('signup_device_claims').delete().eq('user_id', firstUserId)
-      await admin.from('signup_identity_claims').delete().eq('user_id', firstUserId)
       await admin
         .from('signup_ip_claims')
         .delete()

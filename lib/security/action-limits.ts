@@ -6,4 +6,5 @@ export const ACTION_LIMITS = {
   profile: { bucket: 'action:profile', maxAttempts: 20, windowSeconds: 60 * 60, blockSeconds: 30 * 60 },
   passwordChange: { bucket: 'auth:password-change', maxAttempts: 5, windowSeconds: 15 * 60, blockSeconds: 30 * 60 },
   adminMutation: { bucket: 'action:admin', maxAttempts: 40, windowSeconds: 10 * 60, blockSeconds: 15 * 60 },
+  accountDeletion: { bucket: 'account:delete', maxAttempts: 3, windowSeconds: 60 * 60, blockSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>

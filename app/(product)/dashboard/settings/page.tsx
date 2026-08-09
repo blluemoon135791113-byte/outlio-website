@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
-import { AvatarSettings, MfaSettings, PasswordSettings, ProfileSettings } from '@/components/settings/SettingsForms'
+import { AvatarSettings, DeleteAccountSettings, MfaSettings, PasswordSettings, ProfileSettings } from '@/components/settings/SettingsForms'
 import { requireUser } from '@/lib/auth/access'
 import { signedAvatarUrl } from '@/lib/profile/avatar'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -45,7 +45,7 @@ export default async function SettingsPage({
 
       <div className="grid gap-5 lg:grid-cols-[210px_minmax(0,1fr)]">
         <aside className="h-fit rounded-[var(--radius-xl)] border border-border bg-panel p-2 shadow-[var(--shadow-sm)] lg:sticky lg:top-24">
-          {['Profile', 'Security', 'Subscription and billing'].map((label) => (
+          {['Profile', 'Security', 'Subscription and billing', 'Delete account'].map((label) => (
             <a key={label} href={`#${label.toLowerCase().replaceAll(' ', '-')}`} className="flex h-10 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-accent-soft/60 hover:text-accent">{label}</a>
           ))}
         </aside>
@@ -68,6 +68,9 @@ export default async function SettingsPage({
               <Link href="/dashboard/access?intent=upgrade" className="inline-flex h-10 items-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-deep">View upgrade options</Link>
               <button type="button" disabled title="Connect your billing API to enable this" className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-border px-4 text-sm font-semibold text-muted opacity-65">Manage billing</button>
             </div>
+          </SettingsSection>
+          <SettingsSection id="delete-account" title="Delete account" description="Permanently remove your account and personal data from Outlio.">
+            <DeleteAccountSettings isAdmin={ctx.isAdmin} />
           </SettingsSection>
         </div>
       </div>

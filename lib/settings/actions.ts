@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { z } from 'zod'
 
 import { assertUser } from '@/lib/auth/access'
@@ -11,6 +12,7 @@ import { normalizeFullName } from '@/lib/auth/profile-fields'
 import { consume } from '@/lib/auth/rate-limit'
 import { ACTION_LIMITS } from '@/lib/security/action-limits'
 import { recordSecurityEvent } from '@/lib/security/events'
+import { removeUserStorage } from '@/lib/settings/delete-account'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
@@ -137,4 +139,52 @@ export async function changePasswordAction(
 
   await recordSecurityEvent({ event: 'auth.password_changed', userId: ctx.userId })
   return { status: 'success', message: 'Password changed successfully.' }
+}
+
+export async function deleteAccountAction(
+  _previous: SettingsActionState,
+  formData: FormData,
+): Promise<SettingsActionState> {
+  const ctx = await assertUser()
+  if (ctx.isAdmin) {
+    return { status: 'error', message: 'Admin accounts cannot be self-deleted. Transfer admin responsibility first.' }
+  }
+
+  const limit = await consume(ACTION_LIMITS.accountDeletion, `user:${ctx.userId}`)
+  if (!limit.allowed) {
+    return { status: 'error', message: 'Too many deletion attempts. Please wait and try again.' }
+  }
+
+  const confirmation = String(formData.get('confirmation') ?? '').trim()
+  const currentPassword = z.string().min(1).max(128).safeParse(formData.get('current_password'))
+  if (confirmation !== 'DELETE') {
+    return { status: 'error', message: 'Type DELETE exactly to confirm.' }
+  }
+  if (!currentPassword.success) {
+    return { status: 'error', message: 'Enter your current password.' }
+  }
+
+  const supabase = await createClient()
+  const { error: passwordError } = await supabase.auth.signInWithPassword({
+    email: ctx.email ?? '',
+    password: currentPassword.data,
+  })
+  if (passwordError) {
+    return { status: 'error', message: 'Your current password was not accepted.' }
+  }
+
+  const admin = createAdminClient()
+  try {
+    await removeUserStorage(admin, ctx.userId!)
+  } catch {
+    return { status: 'error', message: 'We could not safely remove all account files. Nothing else was deleted.' }
+  }
+
+  const { error: deleteError } = await admin.auth.admin.deleteUser(ctx.userId!)
+  if (deleteError) {
+    return { status: 'error', message: 'We could not delete the account. Please contact support.' }
+  }
+
+  await supabase.auth.signOut({ scope: 'local' })
+  redirect('/?account_deleted=1')
 }

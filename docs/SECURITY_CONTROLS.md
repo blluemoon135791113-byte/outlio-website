@@ -1,6 +1,6 @@
 # Security controls
 
-Last reviewed: 2026-08-09
+Last reviewed: 2026-08-10
 
 ## Source-code boundaries
 
@@ -20,9 +20,9 @@ enforce the signup gate at the database layer:
 3. A service-role-only RPC atomically reserves the hash for ten minutes.
 4. Supabase Auth receives a random, one-time reservation token in user metadata.
 5. The `auth.users` insert trigger consumes that token in the same transaction. Direct calls to `auth.signUp` without a valid reservation are rolled back.
-6. Completed network claims are retained after account deletion so deletion cannot reset trial eligibility.
+6. Completed network claims remain active while the account exists and are atomically released by migration `0026_release_signup_claims_on_account_delete.sql` when the Auth account is deleted.
 7. A signed, HttpOnly first-party device token is HMAC-hashed and claimed. Changing IP or enabling a VPN does not change this claim.
-8. Normalized email, phone, and LinkedIn identities receive separate HMAC claims. These persist after account deletion.
+8. Normalized email, phone, and LinkedIn identities receive separate HMAC claims. They are released with the device and network claims only after Auth deletion succeeds.
 9. New duplicate phone numbers and LinkedIn profile URLs are also rejected by a lock-backed database trigger.
 10. Authentication rate-limit subjects are HMAC-pseudonymized before storage, so the rate-limit table does not retain raw IP or email values.
 

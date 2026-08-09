@@ -8,6 +8,7 @@ import { FormFeedback } from '@/components/auth/FormFeedback'
 import { SubmitButton } from '@/components/auth/SubmitButton'
 import {
   changePasswordAction,
+  deleteAccountAction,
   updateAvatarAction,
   updateProfileAction,
   type SettingsActionState,
@@ -72,6 +73,38 @@ export function PasswordSettings() {
         </label>
       ))}
       <SubmitButton>Change password</SubmitButton>
+    </form>
+  )
+}
+
+export function DeleteAccountSettings({ isAdmin }: { isAdmin: boolean }) {
+  const [state, action] = useActionState(deleteAccountAction, INITIAL)
+
+  return (
+    <form action={action} className="space-y-4">
+      <FormFeedback state={state} />
+      <p className="text-sm leading-6 text-muted">
+        This permanently removes your Outlio account, profile, extractions, leads, exports, uploaded files, and signup restriction claims. You may create a new account later from the same network.
+      </p>
+      {isAdmin ? (
+        <p className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger">
+          Admin accounts cannot be deleted here. Transfer admin responsibility before requesting deletion.
+        </p>
+      ) : (
+        <>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-ink">Current password</span>
+            <input className={inputClass} name="current_password" type="password" autoComplete="current-password" required maxLength={128} />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-ink">Type DELETE to confirm</span>
+            <input className={inputClass} name="confirmation" autoComplete="off" required maxLength={6} />
+          </label>
+          <button type="submit" className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-danger/30 bg-danger-soft px-4 text-sm font-semibold text-danger transition-[background-color,transform] duration-150 hover:bg-danger/15 active:scale-[0.97]">
+            Permanently delete account
+          </button>
+        </>
+      )}
     </form>
   )
 }

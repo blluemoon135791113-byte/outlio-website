@@ -107,9 +107,10 @@ export default function PrivacyPolicy() {
             </li>
             <li>
               A signed, first-party browser token and keyed, one-way hashes of normalized account
-              identifiers. These pseudonymous records help prevent a VPN, account deletion, or a
-              changed network from resetting free-trial eligibility. We do not store a raw device
-              fingerprint in these records.
+              identifiers. These pseudonymous records help prevent a VPN or changed network from
+              resetting free-trial eligibility while the account exists. We do not store a raw
+              device fingerprint in these records, and the claims are removed when the associated
+              account is deleted.
             </li>
           </ul>
           <p>
@@ -174,9 +175,11 @@ export default function PrivacyPolicy() {
             resolve disputes, and delete or anonymize it afterward.
           </p>
           <p>
-            Trial eligibility hashes may be retained after an account is deleted so that deleting an
-            account does not reset free-trial eligibility. If a shared office, household, school, or
-            other shared network is blocked incorrectly, contact us for a manual review.
+            Trial eligibility hashes remain associated with an active account to prevent duplicate
+            free trials. When that account is deleted, its network, device, and identity claims are
+            removed. A new account may then be created from the same network. If a shared office,
+            household, school, or other shared network is blocked incorrectly, contact us for a
+            manual review.
           </p>
         </Section>
 
