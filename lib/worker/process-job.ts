@@ -129,6 +129,18 @@ export async function processJob(jobId: string, userId: string): Promise<Process
         })
         .eq('id', file.id)
     }
+
+    // Persist the completed-file boundary immediately. The dashboard can now
+    // report an honest N/total count and running lead total without waiting
+    // for the next file to begin.
+    await supabase
+      .from('extraction_jobs')
+      .update({
+        progress_current: index + 1,
+        progress_total: total,
+        leads_parsed: allLeads.length,
+      })
+      .eq('id', jobId)
   }
 
   // ---- dedupe ------------------------------------------------------------
