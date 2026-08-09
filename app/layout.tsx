@@ -60,12 +60,16 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    card: 'summary',
     site: '@outlio',
-    creator: '@husnain_rfq',
-    title: 'Outlio | Proven Sales Systems For Tech Startups and SaaS',
-    description: 'We do research first sales outreach for Tech startups, SaaS startups, and agencies || All human written',
-    images: ['https://outlio.io/outlio-og-image.png'],
+    title: 'OUTLIO',
+    description: 'Client acquisition is no more a problem.',
+    images: [
+      {
+        url: 'https://cdn.imgchest.com/files/ba56a4b5767e.png',
+        alt: 'Sales appollo SAAS outlio appointment setting value agency picture',
+      },
+    ],
   },
   alternates: {
     canonical: 'https://outlio.io',
