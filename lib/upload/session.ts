@@ -34,7 +34,7 @@ import { resolveUploadLimits } from '@/lib/upload/limits'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
 import { buildStorageKey, sanitizeDisplayFilename } from '@/lib/upload/storage-key'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { claimAndProcessOne } from '@/lib/worker/process-job'
+import { claimAndProcessJob } from '@/lib/worker/process-job'
 
 const DEDUPE_MODES = ['keep_all', 'remove_exact', 'remove_likely', 'review'] as const
 
@@ -300,10 +300,14 @@ export async function finalizeUploadAction(input: {
   // Durable record first: even if the after() work never runs, the job is
   // recoverable by the reaper.
   after(async () => {
-    try {
-      await claimAndProcessOne(`after:${jobId}`)
-    } catch {
-      // Recovery is reap_stale_jobs()'s job.
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        await claimAndProcessJob(jobId, ctx.userId!, `after:${jobId}:${attempt}`)
+        return
+      } catch {
+        // Retry one transient job-level failure inside the same wake-up. The
+        // dashboard also provides an atomic recovery wake-up for queued jobs.
+      }
     }
   })
 

@@ -81,6 +81,32 @@ describe('parseSearchResults — valid page', () => {
   })
 })
 
+describe('parseSearchResults — current table layout', () => {
+  const { leads, skippedRows } = parseSearchResults(read('current-table-results.html'))
+
+  it('finds only people rows and ignores table decoys', () => {
+    expect(leads).toHaveLength(2)
+    expect(skippedRows).toBe(0)
+  })
+
+  it('maps the current job-title field to the actual role', () => {
+    expect(leads.map((lead) => lead.jobTitle)).toEqual(['VP of Revenue', 'Founder'])
+    expect(leads[0]?.tenureInRole).toBeNull()
+    expect(leads[0]?.tenureInCompany).toBeNull()
+  })
+
+  it('extracts names, companies, locations, and stable identities', () => {
+    expect(leads[0]).toMatchObject({
+      fullName: 'Avery Fabricated',
+      companyName: 'Table Example Inc',
+      companyUrl: null,
+      location: 'Toronto, Canada',
+      memberUrn: 'ACwAATABLE0001AAAAAAAAAAAAAAAAAAAAAAAAAA',
+    })
+    expect(leads[1]?.companyUrl).toBe('https://www.linkedin.com/sales/company/2000002')
+  })
+})
+
 describe('parseSearchResults — hostile and empty inputs', () => {
   it('throws ERR_FILE_FORMAT on a page with zero results', () => {
     expect(() => parseSearchResults(read('zero-results.html'))).toThrow(ParseError)

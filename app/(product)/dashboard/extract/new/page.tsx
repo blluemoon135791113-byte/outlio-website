@@ -10,6 +10,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
+// The response returns immediately; after() may continue processing the batch.
+export const maxDuration = 300
+
 export default async function NewExtractionPage() {
   // The only access decision. Redirects when denied.
   const ctx = await requireAccess()

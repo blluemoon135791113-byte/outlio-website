@@ -478,6 +478,10 @@ export type Database = {
         Args: { p_claimed_by: string }
         Returns: { job_id: string; user_id: string; attempts: number }[]
       }
+      claim_job: {
+        Args: { p_job_id: string; p_user_id: string; p_claimed_by: string }
+        Returns: { job_id: string; user_id: string; attempts: number }[]
+      }
       reap_stale_jobs: {
         Args: { p_timeout_seconds?: number }
         Returns: number

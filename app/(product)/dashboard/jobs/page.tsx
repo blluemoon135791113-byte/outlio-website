@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { after } from 'next/server'
 
 import { ExtractionDashboard } from '@/components/jobs/ExtractionDashboard'
 import { requireAccess } from '@/lib/auth/access'
@@ -12,6 +13,7 @@ import {
   type DashboardLead,
 } from '@/lib/jobs/dashboard-types'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { claimAndProcessJob } from '@/lib/worker/process-job'
 
 export const metadata: Metadata = {
   title: 'Extraction workspace | Outlio',
@@ -20,6 +22,7 @@ export const metadata: Metadata = {
 
 // Job state changes in the background and must never be served from a route cache.
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
 export default async function JobsPage() {
   const ctx = await requireAccess()
@@ -64,6 +67,22 @@ export default async function JobsPage() {
   ])
 
   const balanceRow = Array.isArray(balanceResult.data) ? balanceResult.data[0] : null
+  const jobs = (jobResult.data ?? []) as DashboardJob[]
+
+  // The upload callback normally starts this exact job. Loading the workspace
+  // provides a second, atomic wake-up path if the serverless callback was cut
+  // short before it could claim a queued job.
+  const queuedJob = jobs.find((job) => job.status === 'queued')
+  if (queuedJob) {
+    after(async () => {
+      try {
+        await claimAndProcessJob(queuedJob.id, userId, `dashboard:${queuedJob.id}`)
+      } catch {
+        // The durable queue remains the source of truth for the next retry.
+      }
+    })
+  }
+
   const credits: CreditSnapshot | null = balanceRow
     ? {
         allowance: balanceRow.allowance,
@@ -75,7 +94,7 @@ export default async function JobsPage() {
   return (
     <ExtractionDashboard
       userId={userId}
-      initialJobs={(jobResult.data ?? []) as DashboardJob[]}
+      initialJobs={jobs}
       initialFiles={(fileResult.data ?? []) as DashboardFile[]}
       initialLeads={(leadResult.data ?? []) as DashboardLead[]}
       credits={credits}

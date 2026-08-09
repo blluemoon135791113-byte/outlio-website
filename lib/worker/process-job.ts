@@ -21,6 +21,10 @@ import { ParseError, parseSearchResults } from '@/lib/leads/parse'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SNIFF_BYTES, sniffHtml } from '@/lib/upload/sniff'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
+import {
+  mapInConcurrentBatches,
+  resolveFileConcurrency,
+} from '@/lib/worker/concurrency'
 
 /**
  * Exports live in their OWN bucket, not alongside uploads.
@@ -95,53 +99,82 @@ export async function processJob(jobId: string, userId: string): Promise<Process
   const allLeads: Array<Awaited<ReturnType<typeof parseOne>>['leads'][number]> = []
   let filesProcessed = 0
   let filesFailed = 0
+  const fileConcurrency = resolveFileConcurrency(process.env.WORKER_FILE_CONCURRENCY)
 
-  for (const [index, file] of fileList.entries()) {
-    await supabase
-      .from('extraction_jobs')
-      .update({
-        progress_step: `Processing file ${index + 1} of ${total}`,
-        progress_current: index,
-        progress_total: total,
-      })
-      .eq('id', jobId)
+  type FileResult =
+    | { ok: true; fileId: string; leads: Awaited<ReturnType<typeof parseOne>>['leads'] }
+    | { ok: false; fileId: string }
 
-    try {
-      const { leads } = await parseOne(file.storage_path, file.id)
+  await mapInConcurrentBatches(
+    fileList,
+    fileConcurrency,
+    async (file): Promise<FileResult> => {
+      try {
+        const { leads } = await parseOne(file.storage_path, file.id, userId, jobId)
 
-      allLeads.push(...leads.map((l) => ({ ...l, uploadedFileId: file.id })))
-      filesProcessed += 1
+        await supabase
+          .from('uploaded_files')
+          .update({
+            status: 'processed',
+            leads_found: leads.length,
+            processed_at: new Date().toISOString(),
+          })
+          .eq('id', file.id)
+          .eq('extraction_job_id', jobId)
+          .eq('user_id', userId)
 
-      await supabase
-        .from('uploaded_files')
-        .update({ status: 'processed', leads_found: leads.length, processed_at: new Date().toISOString() })
-        .eq('id', file.id)
-    } catch (e) {
-      // PER-FILE ISOLATION: record and continue. One bad file never fails the batch.
-      filesFailed += 1
-      const code = e instanceof ParseError ? e.code : 'ERR_FILE_FORMAT'
-      await supabase
-        .from('uploaded_files')
-        .update({
-          status: 'failed',
-          error_code: code,
-          error_message: concise(e instanceof Error ? e.message : 'parse failed'),
-        })
-        .eq('id', file.id)
-    }
+        return { ok: true, fileId: file.id, leads }
+      } catch (e) {
+        // PER-FILE ISOLATION: record and continue. One bad file never fails the batch.
+        const code = e instanceof ParseError ? e.code : 'ERR_FILE_FORMAT'
+        await supabase
+          .from('uploaded_files')
+          .update({
+            status: 'failed',
+            error_code: code,
+            error_message: concise(e instanceof Error ? e.message : 'parse failed'),
+          })
+          .eq('id', file.id)
+          .eq('extraction_job_id', jobId)
+          .eq('user_id', userId)
 
-    // Persist the completed-file boundary immediately. The dashboard can now
-    // report an honest N/total count and running lead total without waiting
-    // for the next file to begin.
-    await supabase
-      .from('extraction_jobs')
-      .update({
-        progress_current: index + 1,
-        progress_total: total,
-        leads_parsed: allLeads.length,
-      })
-      .eq('id', jobId)
-  }
+        return { ok: false, fileId: file.id }
+      }
+    },
+    {
+      onBatchStart: async (start, end) => {
+        await supabase
+          .from('extraction_jobs')
+          .update({
+            progress_step: `Processing files ${start + 1}-${end} of ${total}`,
+            progress_current: start,
+            progress_total: total,
+          })
+          .eq('id', jobId)
+          .eq('user_id', userId)
+      },
+      onBatchComplete: async (results, completed) => {
+        for (const result of results) {
+          if (result.ok) {
+            allLeads.push(...result.leads.map((lead) => ({ ...lead, uploadedFileId: result.fileId })))
+            filesProcessed += 1
+          } else {
+            filesFailed += 1
+          }
+        }
+
+        await supabase
+          .from('extraction_jobs')
+          .update({
+            progress_current: completed,
+            progress_total: total,
+            leads_parsed: allLeads.length,
+          })
+          .eq('id', jobId)
+          .eq('user_id', userId)
+      },
+    },
+  )
 
   // ---- dedupe ------------------------------------------------------------
   await supabase
@@ -267,7 +300,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
  * The real sha256 is also computed here and written back, replacing the
  * placeholder the upload session inserted.
  */
-async function parseOne(storagePath: string, fileId: string) {
+async function parseOne(storagePath: string, fileId: string, userId: string, jobId: string) {
   const supabase = createAdminClient()
 
   const { data, error } = await supabase.storage.from(STORAGE_BUCKET).download(storagePath)
@@ -285,7 +318,12 @@ async function parseOne(storagePath: string, fileId: string) {
 
   // Record the true content hash now that we have the bytes.
   const sha256 = createHash('sha256').update(bytes).digest('hex')
-  await supabase.from('uploaded_files').update({ content_sha256: sha256 }).eq('id', fileId)
+  await supabase
+    .from('uploaded_files')
+    .update({ content_sha256: sha256 })
+    .eq('id', fileId)
+    .eq('extraction_job_id', jobId)
+    .eq('user_id', userId)
 
   // Decode with the encoding the sniffer detected, not a hardcoded UTF-8 —
   // that assumption is defect G3 in the original scraper.
@@ -308,19 +346,68 @@ export async function claimAndProcessOne(claimedBy: string): Promise<ProcessOutc
   const claim = Array.isArray(data) ? data[0] : null
   if (!claim) return null
 
+  return processClaim(claim, claimedBy)
+}
+
+/** Atomically claims the exact job that caused this serverless wake-up. */
+export async function claimAndProcessJob(
+  jobId: string,
+  userId: string,
+  claimedBy: string,
+): Promise<ProcessOutcome | null> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase.rpc('claim_job', {
+    p_job_id: jobId,
+    p_user_id: userId,
+    p_claimed_by: claimedBy,
+  })
+  if (error) throw new Error(`targeted claim failed: ${concise(error.message)}`)
+
+  const claim = Array.isArray(data) ? data[0] : null
+  if (!claim) return null
+  if (claim.job_id !== jobId || claim.user_id !== userId) {
+    throw new Error('targeted claim returned a different job')
+  }
+
+  return processClaim(claim, claimedBy)
+}
+
+async function processClaim(
+  claim: { job_id: string; user_id: string; attempts?: number },
+  _claimedBy: string,
+): Promise<ProcessOutcome> {
+  const supabase = createAdminClient()
+
   try {
     return await processJob(claim.job_id, claim.user_id)
   } catch (e) {
     const message = concise(e instanceof Error ? e.message : 'processing failed')
+    const { data: queue } = await supabase
+      .from('job_queue')
+      .select('attempts, max_attempts')
+      .eq('job_id', claim.job_id)
+      .maybeSingle()
+    const exhausted = (queue?.attempts ?? claim.attempts ?? 1) >= (queue?.max_attempts ?? 3)
 
     await supabase
       .from('extraction_jobs')
-      .update({ status: 'failed', error_code: 'ERR_FILE_FORMAT', error_message: message })
+      .update({
+        status: exhausted ? 'failed' : 'queued',
+        progress_step: exhausted ? 'Failed' : 'Retrying after a temporary error',
+        error_code: exhausted ? 'ERR_FILE_FORMAT' : null,
+        error_message: message,
+      })
       .eq('id', claim.job_id)
+      .eq('user_id', claim.user_id)
 
     await supabase
       .from('job_queue')
-      .update({ status: 'pending', claimed_at: null, claimed_by: null, last_error: message })
+      .update({
+        status: exhausted ? 'failed' : 'pending',
+        claimed_at: null,
+        claimed_by: null,
+        last_error: message,
+      })
       .eq('job_id', claim.job_id)
 
     throw e

@@ -145,17 +145,17 @@ function absolutize(href: string | null | undefined): string | null {
 export function parseSearchResults(html: string): ParseResult {
   const $ = cheerio.load(html)
 
-  // Row anchor. The `person-name` filter is load-bearing, not defensive:
-  // one real page had 25 `li.artdeco-list__item` elements but only 5 leads —
-  // the rest were sidebar and filter items.
-  const rows = $('li.artdeco-list__item').filter(
-    (_, el) => $(el).find('span[data-anonymize="person-name"]').length > 0,
+  // LinkedIn currently ships both the legacy card list and a newer people
+  // table. Stable data attributes are used instead of generated CSS classes.
+  // The person-name filter excludes headers, sidebar rows, and other decoys.
+  const rows = $('li.artdeco-list__item, tr[data-x--people-list--row]').filter(
+    (_, el) => $(el).find('[data-anonymize="person-name"]').length > 0,
   )
 
   if (rows.length === 0) {
     throw new ParseError(
       'ERR_FILE_FORMAT',
-      'no rows matched li.artdeco-list__item containing span[data-anonymize="person-name"]',
+      'no lead rows matched a supported saved search-results layout',
     )
   }
 
@@ -165,14 +165,19 @@ export function parseSearchResults(html: string): ParseResult {
   rows.each((index, el) => {
     const row = $(el)
 
-    const nameEl = row.find('span[data-anonymize="person-name"]').first()
+    const modernTableRow = row.is('tr[data-x--people-list--row]')
+    const nameEl = row.find('[data-anonymize="person-name"]').first()
     const fullName = text(nameEl.text())
 
     // Sales Nav href: the anchor wrapping the name, else the headshot link.
     const nameAnchor = nameEl.closest('a[href]')
     const salesNavHref =
       nameAnchor.attr('href') ??
-      row.find('a[data-anonymize="headshot-photo"][href]').first().attr('href') ??
+      row
+        .find('[data-anonymize="headshot-photo"]')
+        .closest('a[href]')
+        .first()
+        .attr('href') ??
       null
 
     // `data-scroll-into-view` carries the fs_salesProfile URN on an ancestor.
@@ -189,18 +194,33 @@ export function parseSearchResults(html: string): ParseResult {
       return
     }
 
-    // ⚠️ `span[data-anonymize="title"]` is the JOB TITLE.
-    // `div[data-anonymize="job-title"]` is TENURE — see below. Do not swap them.
-    const jobTitle = text(row.find('span[data-anonymize="title"]').first().text())
-
-    const tenureEl = row.find('div[data-anonymize="job-title"]').first()
-    const { inRole: tenureInRole, inCompany: tenureInCompany } = extractTenure(
-      tenureEl.length > 0 ? tenureEl.text() : null,
+    // The field name changed meaning between layouts. In the legacy card,
+    // `title` is the role and `job-title` is tenure. In the current table,
+    // `job-title` is the actual role and tenure is not present.
+    const jobTitle = text(
+      row
+        .find(
+          modernTableRow
+            ? '[data-anonymize="job-title"]'
+            : 'span[data-anonymize="title"]',
+        )
+        .first()
+        .text(),
     )
 
-    // Company: anchor when the company has a LinkedIn page…
-    const companyAnchor = row.find('a[data-anonymize="company-name"]').first()
-    let companyName = text(companyAnchor.text())
+    const tenureEl = modernTableRow
+      ? null
+      : row.find('div[data-anonymize="job-title"]').first()
+    const { inRole: tenureInRole, inCompany: tenureInCompany } = extractTenure(
+      tenureEl && tenureEl.length > 0 ? tenureEl.text() : null,
+    )
+
+    // Company is an anchor in the card layout and a span in the table layout.
+    const companyEl = row.find('[data-anonymize="company-name"]').first()
+    const companyAnchor = companyEl.is('a[href]')
+      ? companyEl
+      : companyEl.closest('a[href]')
+    let companyName = text(companyEl.text())
     const companyUrl = absolutize(companyAnchor.attr('href') ?? null)
 
     // …otherwise the name is a BARE TEXT NODE in the subtitle. Without this
@@ -230,8 +250,8 @@ export function parseSearchResults(html: string): ParseResult {
       jobTitle,
       companyName,
       companyUrl,
-      location: text(row.find('span[data-anonymize="location"]').first().text()),
-      personBlurb: text(row.find('div[data-anonymize="person-blurb"]').first().text()),
+      location: text(row.find('[data-anonymize="location"]').first().text()),
+      personBlurb: text(row.find('[data-anonymize="person-blurb"]').first().text()),
       tenureInRole,
       tenureInCompany,
       sourceRowIndex: index + 1,

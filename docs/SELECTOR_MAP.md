@@ -1,8 +1,16 @@
 # Selector Map — Sales Navigator search results
 
-**Status:** validated against one real saved page (25 leads, 979 KB), 2026-08-05.
+**Status:** validated against both saved-page layouts, most recently a 25-lead
+table page on 2026-08-09.
 **Method:** parsed with BeautifulSoup, field-presence measured across all 25 rows.
 No real personal data appears in this document or in the repo.
+
+> **2026-08-09 layout update:** LinkedIn reintroduced a table-based people list
+> using `tr[data-x--people-list--row]`. It is not the obsolete table described
+> below: the stable fields still use `data-anonymize`, the person name is now an
+> anchor, and `div[data-anonymize="job-title"]` contains the actual role. The
+> parser supports this table and the card-list layout. Fixture coverage prevents
+> the shared field name from being confused with legacy tenure data.
 
 ---
 
