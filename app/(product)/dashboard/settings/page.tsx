@@ -9,8 +9,13 @@ import { createClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = { title: 'Settings | Outlio', robots: { index: false, follow: false } }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ required_mfa?: string }>
+}) {
   const ctx = await requireUser()
+  const adminMfaRequired = ctx.isAdmin && (await searchParams).required_mfa === '1'
   const avatarUrl = await signedAvatarUrl(ctx.userId!, ctx.profile?.avatar_path)
   const { data: factors } = await (await createClient()).auth.mfa.listFactors()
   const initialFactorId = factors?.totp[0]?.id ?? null
@@ -31,6 +36,13 @@ export default async function SettingsPage() {
         <p className="mt-1 text-sm text-muted">Manage your profile, security, subscription, and billing.</p>
       </header>
 
+      {adminMfaRequired ? (
+        <div role="alert" className="rounded-[var(--radius-lg)] border border-accent/25 bg-accent-soft px-4 py-3 text-sm text-ink">
+          <p className="font-semibold">Secure your admin account to continue</p>
+          <p className="mt-1 text-muted">Admin access requires an authenticator app. Set it up below, verify the six-digit code, and you will return to User admin automatically.</p>
+        </div>
+      ) : null}
+
       <div className="grid gap-5 lg:grid-cols-[210px_minmax(0,1fr)]">
         <aside className="h-fit rounded-[var(--radius-xl)] border border-border bg-panel p-2 shadow-[var(--shadow-sm)] lg:sticky lg:top-24">
           {['Profile', 'Security', 'Subscription and billing'].map((label) => (
@@ -43,7 +55,7 @@ export default async function SettingsPage() {
             <div className="grid gap-6 xl:grid-cols-2"><ProfileSettings fullName={ctx.profile?.full_name ?? ''} /><AvatarSettings avatarUrl={avatarUrl} initials={initials} /></div>
           </SettingsSection>
           <SettingsSection id="security" title="Security" description="Use a strong password and require a second factor for new sessions.">
-            <div className="space-y-7"><MfaSettings initialFactorId={initialFactorId} /><div className="border-t border-border pt-6"><PasswordSettings /></div></div>
+            <div className="space-y-7"><MfaSettings initialFactorId={initialFactorId} returnToAdmin={adminMfaRequired} /><div className="border-t border-border pt-6"><PasswordSettings /></div></div>
           </SettingsSection>
           <SettingsSection id="subscription-and-billing" title="Subscription and billing" description="Your plan data is live. Checkout controls will connect here when the billing API is ready.">
             <div className="grid gap-4 sm:grid-cols-2">

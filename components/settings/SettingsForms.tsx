@@ -78,7 +78,13 @@ export function PasswordSettings() {
 
 type Enrollment = { id: string; qr: string; secret: string }
 
-export function MfaSettings({ initialFactorId }: { initialFactorId: string | null }) {
+export function MfaSettings({
+  initialFactorId,
+  returnToAdmin = false,
+}: {
+  initialFactorId: string | null
+  returnToAdmin?: boolean
+}) {
   const router = useRouter()
   const [factorId, setFactorId] = useState<string | null>(initialFactorId)
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null)
@@ -113,7 +119,8 @@ export function MfaSettings({ initialFactorId }: { initialFactorId: string | nul
       setCode('')
       setMessage('Two-factor authentication is active.')
       await refreshFactors()
-      router.refresh()
+      if (returnToAdmin) router.replace('/admin')
+      else router.refresh()
     }
     setBusy(false)
   }

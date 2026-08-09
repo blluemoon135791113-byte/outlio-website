@@ -96,6 +96,7 @@ export function UserRow({
    */
   const hasAccess = ['approved_user', 'subscriber', 'admin'].includes(user.role)
   const isSuspended = Boolean(user.suspendedAt) || user.role === 'suspended_user'
+  const isProtectedAdmin = user.role === 'admin'
 
   return (
     <li className="rounded-[var(--radius-lg)] border border-border bg-surface-muted/25 p-4 transition-colors duration-150 hover:bg-surface-muted/55">
@@ -187,14 +188,14 @@ export function UserRow({
             </form>
           ) : null}
 
-          {hasAccess && !isSelf ? (
+          {hasAccess && !isSelf && !isProtectedAdmin ? (
             <form action={revokeAction}>
               <input type="hidden" name="user_id" value={user.id} />
               <Btn label="Revoke access" busy="Revoking…" />
             </form>
           ) : null}
 
-          {!isSelf ? (
+          {!isSelf && !isProtectedAdmin ? (
             <form action={suspendAction}>
               <input type="hidden" name="user_id" value={user.id} />
               <input type="hidden" name="suspend" value={isSuspended ? 'false' : 'true'} />

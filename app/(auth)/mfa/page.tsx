@@ -15,7 +15,9 @@ export default async function MfaPage({ searchParams }: { searchParams: Promise<
   const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
   const next = safeRedirectPath((await searchParams).next)
   if (assurance?.currentLevel === 'aal2') redirect(next)
-  if (assurance?.nextLevel !== 'aal2') redirect('/dashboard/settings/security')
+  if (assurance?.nextLevel !== 'aal2') {
+    redirect('/dashboard/settings?required_mfa=1#security')
+  }
 
   return <AuthShell title="Verify it’s you" subtitle="Enter the code from your authenticator app to finish signing in."><MfaChallengeForm next={next} /></AuthShell>
 }

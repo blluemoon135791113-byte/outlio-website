@@ -14,7 +14,9 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { assertAdmin } from '@/lib/auth/access'
+import { consume } from '@/lib/auth/rate-limit'
 import { grantEntitlement, revokeEntitlement } from '@/lib/payments/grant'
+import { ACTION_LIMITS } from '@/lib/security/action-limits'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type AdminActionState =
@@ -23,6 +25,29 @@ export type AdminActionState =
   | { status: 'success'; message: string }
 
 const uuid = z.string().uuid()
+
+async function protectAdminMutation(
+  adminId: string,
+  targetUserId: string,
+): Promise<AdminActionState | null> {
+  const limit = await consume(ACTION_LIMITS.adminMutation, `admin:${adminId}`)
+  if (!limit.allowed) {
+    return { status: 'error', message: 'Too many admin changes. Please wait and try again.' }
+  }
+
+  const { data: target, error } = await createAdminClient()
+    .from('profiles')
+    .select('role')
+    .eq('id', targetUserId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (error || !target) return { status: 'error', message: 'That account could not be found.' }
+  if (target.role === 'admin') {
+    return { status: 'error', message: 'Admin accounts are protected from user-management actions.' }
+  }
+  return null
+}
 
 export async function approveUserAction(
   _prev: AdminActionState,
@@ -34,6 +59,8 @@ export async function approveUserAction(
   const planId = uuid.safeParse(formData.get('plan_id'))
   if (!userId.success) return { status: 'error', message: 'Invalid user.' }
   if (!planId.success) return { status: 'error', message: 'Choose a plan.' }
+  const protection = await protectAdminMutation(admin.userId!, userId.data)
+  if (protection) return protection
 
   const rawDays = String(formData.get('duration_days') ?? '').trim()
   const durationDays = rawDays === '' ? null : Number.parseInt(rawDays, 10)
@@ -71,6 +98,8 @@ export async function revokeUserAction(
   if (userId.data === admin.userId) {
     return { status: 'error', message: 'You cannot revoke your own access.' }
   }
+  const protection = await protectAdminMutation(admin.userId!, userId.data)
+  if (protection) return protection
 
   try {
     await revokeEntitlement(userId.data, admin.userId, 'Revoked by admin')
@@ -93,6 +122,8 @@ export async function suspendUserAction(
   if (userId.data === admin.userId) {
     return { status: 'error', message: 'You cannot suspend yourself.' }
   }
+  const protection = await protectAdminMutation(admin.userId!, userId.data)
+  if (protection) return protection
 
   const suspend = formData.get('suspend') === 'true'
   const supabase = createAdminClient()

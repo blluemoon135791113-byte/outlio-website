@@ -19,6 +19,7 @@ import {
   precheckAccess,
   type AccessReason,
 } from '@/lib/auth/decide'
+import { adminGateRedirect, hasAdminAssurance } from '@/lib/auth/admin-gate'
 import { AppError } from '@/lib/errors/catalog'
 import { getPlanById, type Plan } from '@/lib/limits/plans'
 import { getUsageSnapshot, type UsageSnapshot } from '@/lib/limits/usage'
@@ -199,10 +200,8 @@ export async function requireUser(): Promise<AccessContext> {
 /** For admin pages. Admin status comes from `profiles.role`, never a claim. */
 export async function requireAdmin(): Promise<AccessContext> {
   const ctx = await getAccessContext()
-  if (!ctx.userId) redirect('/sign-in')
-  if (!ctx.isAdmin) redirect('/dashboard')
-  if (ctx.mfaNextLevel !== 'aal2') redirect('/dashboard/settings/security?required=1')
-  if (ctx.mfaCurrentLevel !== 'aal2') redirect('/mfa?next=/admin')
+  const destination = adminGateRedirect(ctx)
+  if (destination) redirect(destination)
   return ctx
 }
 
@@ -232,7 +231,7 @@ export async function assertAdmin(): Promise<AccessContext> {
   const ctx = await getAccessContext()
   if (!ctx.userId) throw new AppError('ERR_UNAUTHENTICATED')
   if (!ctx.isAdmin) throw new AppError('ERR_FORBIDDEN')
-  if (ctx.mfaNextLevel !== 'aal2' || ctx.mfaCurrentLevel !== 'aal2') {
+  if (!hasAdminAssurance(ctx)) {
     throw new AppError('ERR_FORBIDDEN', 'Admin action requires an AAL2 session')
   }
   return ctx
