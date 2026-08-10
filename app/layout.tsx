@@ -65,24 +65,31 @@ export const metadata: Metadata = {
     siteName: 'Outlio',
     title: 'Outlio | Proven Sales Systems For Tech Startups and SaaS',
     description: 'We do research first sales outreach for Tech startups, SaaS startups, and agencies || All human written',
+    /*
+     * Dimensions must match the file. The previous entry claimed 1200x630 while
+     * pointing at a 1080x1080 logo, so every platform reserved a 1.91:1 box and
+     * cropped the sides off the logo.
+     */
     images: [
       {
-        url: 'https://outlio.io/outlio-og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'Outlio - Proven Sales Systems',
+        url: 'https://outlio.io/social/og-card.png',
+        width: 640,
+        height: 335,
+        alt: 'Outlio — outbound sales systems for B2B SaaS and tech startups',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    site: '@outlio.io',
+    // X handles allow only letters, digits and underscores, so a dot can never
+    // resolve to an account. '@outlio.io' silently dropped the attribution.
+    site: '@OutlioLeadGen',
     title: 'Client acquisition is no more a bottleneck',
     description:
       'We scale B2B SaaS & Tech Startups with tailored outreach; Powered by our Lead-Engine',
     images: [
       {
-        url: 'https://i.ibb.co/3yKXgfGZ/Ivory-Charcoal-Color-Scheme-Update.png',
+        url: 'https://outlio.io/social/og-card.png',
         alt: 'Outlio — outbound sales systems for B2B SaaS and tech startups',
       },
     ],
