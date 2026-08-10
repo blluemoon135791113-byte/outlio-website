@@ -1,5 +1,7 @@
 import Link from 'next/link'
 
+import { CALENDLY_URL } from '@/app/lib/constants'
+
 /**
  * Pricing — a CREDIT model.
  *
@@ -24,7 +26,7 @@ type Tier = {
   /** Monthly lead ceiling at full batches. */
   leads: string
   features: string[]
-  cta: { label: string; href: string }
+  cta: { label: string; href: string; external?: boolean }
   featured?: boolean
   badge?: string
 }
@@ -81,7 +83,7 @@ const TIERS: Tier[] = [
       'Retention and limits set with you',
       'Direct line to the team',
     ],
-    cta: { label: 'Contact us', href: 'mailto:husnain@outlio.io?subject=Outlio%20Lead%20Engine%20Custom%20plan' },
+    cta: { label: 'Contact us', href: CALENDLY_URL, external: true },
   },
 ]
 
@@ -168,6 +170,8 @@ export function Pricing() {
               <div className="mt-8 flex justify-center">
                 <Link
                   href={tier.cta.href}
+                  target={tier.cta.external ? '_blank' : undefined}
+                  rel={tier.cta.external ? 'noopener noreferrer' : undefined}
                   className={
                     tier.featured
                       ? 'w-full rounded-[var(--radius-md)] bg-accent px-5 py-3 text-center text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep'
