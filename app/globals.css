@@ -137,6 +137,14 @@ h6 {
   background: linear-gradient(135deg, #694bc9 0%, #8669e7 52%, #aa95f5 100%);
 }
 
+/*
+  Soft purple-to-white surface for explanatory sidebar cards inside the product.
+  Built from tokens, so a change to --accent-soft carries through.
+*/
+.credits-gradient {
+  background: linear-gradient(158deg, var(--accent-soft) 0%, var(--panel) 68%);
+}
+
 .app-shell :is(button, summary, a) {
   -webkit-tap-highlight-color: transparent;
 }

@@ -181,36 +181,18 @@ export function Pricing() {
           ))}
         </div>
 
-        <div className="mx-auto mt-10 max-w-2xl rounded-[var(--radius-lg)] border border-border bg-panel p-5">
-          <h3 className="text-base font-semibold text-ink">How credits work</h3>
-          <ul className="mt-2.5 space-y-1.5 text-sm leading-relaxed text-muted">
-            <li>
-              <strong className="font-semibold text-ink">1 credit:</strong> a block of
-              files in one run — 5 files on Lead Engine, 10 on Pro and Custom
-            </li>
-            <li>
-              So a full batch costs{' '}
-              <strong className="font-semibold text-ink">2 credits</strong> on Lead
-              Engine, <strong className="font-semibold text-ink">3</strong> on Pro and{' '}
-              <strong className="font-semibold text-ink">5</strong> on Custom. Smaller
-              batches cost less.
-            </li>
-            <li>
-              <strong className="font-semibold text-ink">Free:</strong> every CSV export.
-              Downloading never costs a credit.
-            </li>
-            <li>Credits reset at the start of each month. Unused credits do not roll over.</li>
-            <li>
-              Lead totals assume full batches at roughly 25 leads per saved page.
-            </li>
-            <li>
-              The <strong className="font-semibold text-ink">3-day free trial</strong>{' '}
-              includes 10 credits and 5 files per batch. No card required.
-            </li>
-          </ul>
-        </div>
+        {/*
+          The long credit explainer lived here. It now sits in the product, on
+          the dashboard and the upload page, where a customer is actually
+          spending credits. The per-card lines carry what a prospect needs.
+        */}
+        <p className="mt-10 text-center text-sm text-muted">
+          Lead totals assume full batches at roughly 25 leads per saved page. The{' '}
+          <strong className="font-semibold text-ink">3-day free trial</strong> includes
+          10 credits and 5 files per batch — no card required.
+        </p>
 
-        <p className="mt-8 text-center text-sm text-muted">
+        <p className="mt-3 text-center text-sm text-muted">
           Access is approved manually so we can keep an eye on how the tool is used.
           You will normally hear back the same day.
         </p>

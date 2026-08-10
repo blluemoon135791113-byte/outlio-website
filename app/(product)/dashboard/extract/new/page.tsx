@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { CreditsSummary } from '@/components/product/CreditsSummary'
 import { UploadForm } from '@/components/upload/UploadForm'
 import { requireAccess } from '@/lib/auth/access'
-import { EXPORT_CREDIT_COST, creditsForFiles } from '@/lib/limits/credits'
 import { resolveUploadLimits } from '@/lib/upload/limits'
 
 export const metadata: Metadata = {
@@ -18,8 +18,6 @@ export default async function NewExtractionPage() {
   // The only access decision. Redirects when denied.
   const ctx = await requireAccess()
   const limits = resolveUploadLimits(ctx.plan?.limits ?? null)
-  // Quote the effective ceiling, which may be tighter than the plan's.
-  const maxCost = creditsForFiles(limits.maxFiles, limits.filesPerCredit)
 
   return (
     <div className="space-y-6">
@@ -72,19 +70,10 @@ export default async function NewExtractionPage() {
             </ol>
           </section>
 
-          <section className="rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-              How credits are charged
-            </p>
-            <p className="mt-3 text-xs leading-5 text-muted">
-              {limits.filesPerCredit
-                ? `1 credit covers up to ${limits.filesPerCredit} files in a single run. A full ${limits.maxFiles}-file extraction costs ${maxCost} credits.`
-                : `Each extraction costs 1 credit.`}{' '}
-              {EXPORT_CREDIT_COST === 0
-                ? 'Downloading the CSV is free.'
-                : `Downloading the CSV costs ${EXPORT_CREDIT_COST} more.`}
-            </p>
-          </section>
+          <CreditsSummary
+            filesPerCredit={limits.filesPerCredit}
+            maxFiles={limits.maxFiles}
+          />
 
           <section className="rounded-[var(--radius-xl)] border border-accent/15 bg-accent-soft/60 p-5">
             <h2 className="text-sm font-semibold text-ink">Your data stays private</h2>

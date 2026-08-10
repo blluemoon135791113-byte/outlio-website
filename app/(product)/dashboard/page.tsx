@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { CreditsSummary } from '@/components/product/CreditsSummary'
 import { requireAccess } from '@/lib/auth/access'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveUploadLimits } from '@/lib/upload/limits'
 
 export const metadata: Metadata = {
   title: 'Dashboard | Outlio',
@@ -17,6 +19,7 @@ export default async function DashboardPage() {
   })
   const balance = Array.isArray(balanceRows) ? balanceRows[0] : null
   const limits = ctx.plan?.limits
+  const uploadLimits = resolveUploadLimits(limits ?? null)
   const usage = ctx.usage
   const { data: subscription } = await createAdminClient()
     .from('subscriptions')
@@ -181,6 +184,11 @@ export default async function DashboardPage() {
           </div>
           <div aria-hidden className="absolute -bottom-12 -right-10 h-36 w-36 rounded-full bg-accent/10 blur-2xl" />
         </section>
+
+        <CreditsSummary
+          filesPerCredit={uploadLimits.filesPerCredit}
+          maxFiles={uploadLimits.maxFiles}
+        />
         </div>
       </div>
     </div>
