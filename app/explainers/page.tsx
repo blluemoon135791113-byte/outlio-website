@@ -6,6 +6,7 @@ import Reveal from "../components/Reveal";
 import VideoShowcase from "../components/VideoShowcase";
 import ServiceWordCycle from "../components/ServiceWordCycle";
 import Breadcrumbs from "../components/Breadcrumbs";
+import { CALENDLY_URL } from "../lib/constants";
 
 export const metadata: Metadata = {
   title: "SaaS Explainer Videos & Motion Graphics | Outlio",
@@ -234,7 +235,7 @@ export default function Explainers() {
             </Reveal>
             <Reveal>
               <Link
-                href="https://calendly.com/blluemoon135791113/30min"
+                href={CALENDLY_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-10 inline-block rounded-full bg-ink px-8 py-4 text-base font-semibold text-cream transition-colors hover:bg-accent"

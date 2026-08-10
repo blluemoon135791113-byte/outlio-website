@@ -21,6 +21,7 @@ import Starfield from "./components/Starfield";
 import MeteorShower from "./components/MeteorShower";
 import StarFieldCanvas from "./components/StarFieldCanvas";
 import FAQSchema from "./components/FAQSchema";
+import { CALENDLY_URL } from "./lib/constants";
 
 const SERVICES = [
   {
@@ -300,7 +301,7 @@ export default function Home() {
                 </HeroScrollFade>
                 <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
                   <Link
-                    href="https://calendly.com/blluemoon135791113/30min"
+                    href={CALENDLY_URL}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="rounded-full bg-ink px-8 py-4 text-base font-semibold text-cream transition-colors hover:bg-accent"
@@ -838,7 +839,7 @@ export default function Home() {
                 One call. Fifteen minutes. No pitch, if we can't help you, we'll say so on the call.
               </p>
               <Link
-                href="https://calendly.com/blluemoon135791113/30min"
+                href={CALENDLY_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-10 inline-block rounded-full bg-cream px-10 py-4 text-lg font-semibold text-ink transition-all hover:scale-105 hover:bg-white"

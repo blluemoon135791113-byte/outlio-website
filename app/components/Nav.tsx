@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { CALENDLY_URL } from "../lib/constants";
 
 const LINKS = [
   { label: "How it works", anchor: "#how" },
@@ -24,7 +25,7 @@ export default function Nav({ homePrefix = "", finalCta = "book-call" }: NavProp
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const finalCtaHref = finalCta === "sign-in"
     ? "/sign-in"
-    : "https://calendly.com/blluemoon135791113/30min";
+    : CALENDLY_URL;
   const finalCtaLabel = finalCta === "sign-in" ? "Sign In" : "Book a call";
 
   return (

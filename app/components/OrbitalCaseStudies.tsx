@@ -3,6 +3,7 @@
 import { useState, useEffect, type CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { CALENDLY_URL } from "../lib/constants";
 
 interface CaseStudy {
   id: string;
@@ -294,7 +295,7 @@ export default function OrbitalCaseStudies() {
             {/* CTA */}
             <div className="mt-10">
               <Link
-                href="https://calendly.com/blluemoon135791113/30min"
+                href={CALENDLY_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-full bg-ink px-8 py-4 text-base font-semibold text-cream transition-colors hover:bg-accent"

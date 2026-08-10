@@ -1,5 +1,9 @@
 // External URLs
-export const CALENDLY_URL = "https://calendly.com/blluemoon135791113/30min";
+//
+// The single source of truth for the booking link. Every "Book a call" CTA
+// imports this — do not paste the URL inline again, or changing it means
+// hunting through five files and missing one.
+export const CALENDLY_URL = "https://calendly.com/husnain_rafiq/30min";
 export const EMAIL = "husnain@outlio.io";
 
 // Social Media
