@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
-import { AvatarSettings, DeleteAccountSettings, MfaSettings, PasswordSettings, ProfileSettings } from '@/components/settings/SettingsForms'
+import { AvatarSettings, DeleteAccountSettings, EmailSettings, MfaSettings, PasswordSettings, ProfileSettings, SubscriptionSettings } from '@/components/settings/SettingsForms'
 import { requireUser } from '@/lib/auth/access'
 import { signedAvatarUrl } from '@/lib/profile/avatar'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -45,7 +45,7 @@ export default async function SettingsPage({
 
       <div className="grid gap-5 lg:grid-cols-[210px_minmax(0,1fr)]">
         <aside className="h-fit rounded-[var(--radius-xl)] border border-border bg-panel p-2 shadow-[var(--shadow-sm)] lg:sticky lg:top-24">
-          {['Profile', 'Security', 'Subscription and billing', 'Delete account'].map((label) => (
+          {['Profile', 'Email address', 'Security', 'Subscription and billing', 'Delete account'].map((label) => (
             <a key={label} href={`#${label.toLowerCase().replaceAll(' ', '-')}`} className="flex h-10 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-accent-soft/60 hover:text-accent">{label}</a>
           ))}
         </aside>
@@ -53,6 +53,9 @@ export default async function SettingsPage({
         <div className="space-y-5">
           <SettingsSection id="profile" title="Profile" description="Update how your account appears across Outlio.">
             <div className="grid gap-6 xl:grid-cols-2"><ProfileSettings fullName={ctx.profile?.full_name ?? ''} /><AvatarSettings avatarUrl={avatarUrl} initials={initials} /></div>
+          </SettingsSection>
+          <SettingsSection id="email-address" title="Email address" description="This is where sign-in links, receipts, and extraction notices are sent.">
+            <div className="max-w-md"><EmailSettings email={ctx.email ?? ''} /></div>
           </SettingsSection>
           <SettingsSection id="security" title="Security" description="Use a strong password and require a second factor for new sessions.">
             <div className="space-y-7"><MfaSettings initialFactorId={initialFactorId} returnToAdmin={adminMfaRequired} /><div className="border-t border-border pt-6"><PasswordSettings /></div></div>
@@ -67,6 +70,13 @@ export default async function SettingsPage({
             <div className="mt-5 flex flex-wrap gap-2">
               <Link href="/dashboard/access?intent=upgrade" className="inline-flex h-10 items-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-deep">View upgrade options</Link>
               <button type="button" disabled title="Connect your billing API to enable this" className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-border px-4 text-sm font-semibold text-muted opacity-65">Manage billing</button>
+            </div>
+            <div className="mt-6 border-t border-border pt-6">
+              <SubscriptionSettings
+                planName={ctx.plan?.name ?? 'Your plan'}
+                cancelAt={subscription?.cancel_at ?? null}
+                hasActiveSubscription={subscription?.status === 'active'}
+              />
             </div>
           </SettingsSection>
           <SettingsSection id="delete-account" title="Delete account" description="Permanently remove your account and personal data from Outlio.">

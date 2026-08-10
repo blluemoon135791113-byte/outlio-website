@@ -161,6 +161,8 @@ export type SubscriptionRow = {
   current_period_end: string | null
   cancel_at: string | null
   cancelled_at: string | null
+  /** The profile expiry before a cancellation was scheduled, so resume restores it. */
+  access_expires_at_before_cancel: string | null
   granted_by: string | null
   created_at: string
   updated_at: string
@@ -506,6 +508,16 @@ export type Database = {
         }
         /** Remaining balance, or -1 when there were not enough credits. */
         Returns: number
+      }
+      request_subscription_cancellation: {
+        Args: { p_user_id: string }
+        /** status: 'ok' | 'no_subscription' | 'not_active' | 'already_scheduled' */
+        Returns: { status: string; ends_at: string | null }[]
+      }
+      resume_subscription: {
+        Args: { p_user_id: string }
+        /** 'ok' | 'no_subscription' | 'not_scheduled' | 'already_ended' */
+        Returns: string
       }
       extraction_credit_cost: {
         Args: { p_file_count: number; p_files_per_credit: number | null }

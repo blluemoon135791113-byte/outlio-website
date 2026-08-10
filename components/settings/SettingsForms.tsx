@@ -7,8 +7,11 @@ import { useActionState, useState } from 'react'
 import { FormFeedback } from '@/components/auth/FormFeedback'
 import { SubmitButton } from '@/components/auth/SubmitButton'
 import {
+  cancelSubscriptionAction,
+  changeEmailAction,
   changePasswordAction,
   deleteAccountAction,
+  resumeSubscriptionAction,
   updateAvatarAction,
   updateProfileAction,
   type SettingsActionState,
@@ -73,6 +76,151 @@ export function PasswordSettings() {
         </label>
       ))}
       <SubmitButton>Change password</SubmitButton>
+    </form>
+  )
+}
+
+export function EmailSettings({ email }: { email: string }) {
+  const [state, action] = useActionState(changeEmailAction, INITIAL)
+
+  return (
+    <form action={action} className="space-y-4">
+      <FormFeedback state={state} />
+
+      <div className="rounded-xl border border-border bg-app/70 p-4">
+        <p className="text-xs font-medium text-muted">Current address</p>
+        <p className="mt-1.5 truncate text-sm font-semibold text-ink" title={email}>
+          {email}
+        </p>
+      </div>
+
+      <label className="block space-y-1.5">
+        <span className="text-sm font-medium text-ink">New email address</span>
+        <input
+          className={inputClass}
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          maxLength={254}
+          placeholder="you@company.com"
+        />
+      </label>
+
+      <label className="block space-y-1.5">
+        <span className="text-sm font-medium text-ink">Current password</span>
+        <input
+          className={inputClass}
+          name="current_password"
+          type="password"
+          autoComplete="current-password"
+          required
+          maxLength={128}
+        />
+      </label>
+
+      <p className="text-xs leading-5 text-muted">
+        We email a confirmation link to both your current and your new address. The
+        change takes effect only after you confirm from both, so losing access to one
+        inbox cannot lock you out.
+      </p>
+
+      <SubmitButton>Send confirmation links</SubmitButton>
+    </form>
+  )
+}
+
+export function SubscriptionSettings({
+  planName,
+  cancelAt,
+  hasActiveSubscription,
+}: {
+  planName: string
+  /** ISO date when access ends, or `null` when the plan is renewing. */
+  cancelAt: string | null
+  hasActiveSubscription: boolean
+}) {
+  const [cancelState, cancelAction] = useActionState(cancelSubscriptionAction, INITIAL)
+  const [resumeState, resumeAction] = useActionState(resumeSubscriptionAction, INITIAL)
+  const [confirming, setConfirming] = useState(false)
+
+  const endsOn = cancelAt
+    ? new Date(cancelAt).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : null
+
+  if (cancelAt) {
+    return (
+      <form action={resumeAction} className="space-y-4">
+        <FormFeedback state={resumeState} />
+        <div className="rounded-xl border border-warning/25 bg-warning-soft p-4">
+          <p className="text-sm font-semibold text-ink">Cancellation scheduled</p>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            {planName} stays fully active until <strong className="font-semibold text-ink">{endsOn}</strong>.
+            Your leads and exports are untouched until then. Change your mind any time
+            before that date.
+          </p>
+        </div>
+        <SubmitButton>Keep my plan</SubmitButton>
+      </form>
+    )
+  }
+
+  if (!hasActiveSubscription) {
+    return (
+      <p className="rounded-xl border border-border bg-app/70 p-4 text-sm leading-6 text-muted">
+        There is no active plan to cancel on this account. If that looks wrong, email{' '}
+        <a className="font-medium text-accent underline underline-offset-2" href="mailto:husnain@outlio.io">
+          husnain@outlio.io
+        </a>
+        .
+      </p>
+    )
+  }
+
+  return (
+    <form action={cancelAction} className="space-y-4">
+      <FormFeedback state={cancelState} />
+
+      {confirming ? (
+        <div className="space-y-4 rounded-xl border border-danger/25 bg-danger-soft p-4">
+          <div>
+            <p className="text-sm font-semibold text-ink">Cancel {planName}?</p>
+            <ul className="mt-2 space-y-1.5 text-sm leading-6 text-muted">
+              <li>You keep full access until the end of the period you have paid for.</li>
+              <li>Credits stop renewing after that date.</li>
+              <li>Your leads and exports stay available until then — nothing is deleted today.</li>
+              <li>You can undo this at any point before the date.</li>
+            </ul>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-danger/30 bg-panel px-4 text-sm font-semibold text-danger transition-[background-color,transform] duration-150 hover:bg-danger/10 active:scale-[0.97]"
+            >
+              Yes, cancel at period end
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-4 text-sm font-semibold text-ink transition-[border-color,transform] duration-150 hover:border-accent/35 active:scale-[0.97]"
+            >
+              Never mind
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-4 text-sm font-semibold text-ink transition-[border-color,background-color,transform] duration-150 hover:border-danger/35 hover:text-danger active:scale-[0.97]"
+        >
+          Cancel subscription
+        </button>
+      )}
     </form>
   )
 }
