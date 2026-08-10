@@ -11,7 +11,7 @@ import type { PlanLimits, UserRole } from '@/types/database'
 
 const LIMITS: PlanLimits = {
   files_per_extraction: 25,
-  files_per_credit: 10,
+  leads_per_credit: 10,
   extractions_per_day: 10,
   extractions_per_month: 30,
   records_per_extraction: 5000,

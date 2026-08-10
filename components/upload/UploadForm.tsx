@@ -9,7 +9,7 @@ import {
   finalizeUploadAction,
 } from '@/lib/upload/session'
 import { formatBytes } from '@/lib/upload/limits'
-import { creditsForFiles } from '@/lib/limits/credits'
+import { estimatedCreditCostForFiles, TYPICAL_LEADS_PER_PAGE } from '@/lib/limits/credits'
 
 /**
  * Files are uploaded DIRECTLY to Supabase Storage using signed upload URLs.
@@ -36,12 +36,12 @@ const inputClass =
 export function UploadForm({
   maxFiles,
   maxFileBytes,
-  filesPerCredit,
+  leadsPerCredit,
 }: {
   maxFiles: number
   maxFileBytes: number
   /** `null` when the plan charges a flat 1 credit per extraction. */
-  filesPerCredit: number | null
+  leadsPerCredit: number | null
 }) {
   const router = useRouter()
   const [items, setItems] = useState<FileState[]>([])
@@ -141,12 +141,13 @@ export function UploadForm({
   const oversize = items.filter((i) => i.file.size > maxFileBytes)
   const uploadedCount = items.filter((i) => i.progress === 100).length
 
-  // Quoted here, charged by the database. Both use the same block arithmetic.
-  const creditCost = creditsForFiles(items.length, filesPerCredit)
-  const filesLeftInBlock =
-    filesPerCredit && items.length > 0
-      ? Math.min(creditCost * filesPerCredit, maxFiles) - items.length
-      : 0
+  /*
+   * An UPPER BOUND, not a price. Credits are charged per block of leads, and
+   * the lead count is unknown until the worker parses the files, so this
+   * assumes every file is a full page. A run of part-full pages costs less.
+   * The database does the real arithmetic in `charge_extraction_leads`.
+   */
+  const maxCreditCost = estimatedCreditCostForFiles(items.length, leadsPerCredit)
 
   return (
     <div className="space-y-5">
@@ -199,8 +200,8 @@ export function UploadForm({
         </p>
         <p className="mt-1 text-xs text-muted">
           Up to {maxFiles} files, {formatBytes(maxFileBytes)} each.
-          {filesPerCredit
-            ? ` 1 credit per ${filesPerCredit} files in a run.`
+          {leadsPerCredit
+            ? ` 1 credit per ${leadsPerCredit} leads, counted across the whole run.`
             : ' 1 credit per run.'}
         </p>
       </div>
@@ -213,15 +214,15 @@ export function UploadForm({
               {status === 'uploading' ? ` · ${uploadedCount}/${items.length} uploaded` : ''}
             </p>
             <p className="text-sm tabular-nums text-muted">
-              {creditCost} credit{creditCost === 1 ? '' : 's'} · {formatBytes(totalBytes)}
+              up to {maxCreditCost} credit{maxCreditCost === 1 ? '' : 's'} ·{' '}
+              {formatBytes(totalBytes)}
             </p>
           </div>
 
-          {filesLeftInBlock > 0 ? (
+          {leadsPerCredit ? (
             <p className="border-b border-border bg-surface-muted/45 px-4 py-2 text-xs text-muted">
-              {filesLeftInBlock} more file{filesLeftInBlock === 1 ? '' : 's'} fit in this
-              extraction for the same {creditCost} credit
-              {creditCost === 1 ? '' : 's'}.
+              Assumes a full page of about {TYPICAL_LEADS_PER_PAGE} leads per file. You are
+              charged for the leads actually found, so part-full pages cost less.
             </p>
           ) : null}
           <ul className="divide-y divide-border">
@@ -339,7 +340,7 @@ export function UploadForm({
             : status === 'finalising'
               ? 'Queuing…'
               : items.length > 0
-                ? `Start extraction · ${creditCost} credit${creditCost === 1 ? '' : 's'}`
+                ? `Start extraction · up to ${maxCreditCost} credit${maxCreditCost === 1 ? '' : 's'}`
                 : 'Start extraction'}
       </button>
     </div>

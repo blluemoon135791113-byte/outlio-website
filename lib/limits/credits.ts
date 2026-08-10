@@ -1,18 +1,26 @@
 /**
  * Extraction credit pricing.
  *
- * An extraction is charged per BLOCK of files. The block size is the plan limit
- * `files_per_credit`, read from `plans.limits` at runtime — nothing here
- * hardcodes a per-plan number.
+ * An extraction is charged per BLOCK of LEADS, aggregated across the whole run.
+ * The block size is the plan limit `leads_per_credit`, read from `plans.limits`
+ * at runtime — nothing here hardcodes a per-plan number.
  *
- *   cost = ceil(fileCount / filesPerCredit), minimum 1
+ *   cost = ceil(leadCount / leadsPerCredit), minimum 1
+ *
+ * Aggregation across the run is the point: three files holding 10 leads each is
+ * 30 leads = 2 credits, NOT 3 credits. Credits are consumed by leads, never by
+ * files.
  *
  * `null` (or a non-positive block size) means a flat 1 credit per extraction.
  *
- * ⚠️ This mirrors `public.extraction_credit_cost` in
- * supabase/migrations/0027_tiered_extraction_credits.sql. The database is what
- * actually bills; this exists so the UI can quote the price before the run.
- * Keep the two in step.
+ * ⚠️ This mirrors `public.lead_credit_cost` in
+ * supabase/migrations/0030_lead_based_credits.sql. The database is what
+ * actually bills; this exists so the UI can quote a price. Keep the two in
+ * step.
+ *
+ * ⚠️ A lead count does not exist until the files are parsed, so this CANNOT be
+ * used to charge at upload time. The charge happens in the worker, via
+ * `charge_extraction_leads`. Anything here is an estimate for display.
  */
 import type { PlanLimits } from '@/types/database'
 
@@ -22,18 +30,37 @@ import type { PlanLimits } from '@/types/database'
  */
 export const EXPORT_CREDIT_COST = 0
 
-export function creditsForFiles(
-  fileCount: number,
-  filesPerCredit: number | null,
+/**
+ * Typical leads on one saved Sales Navigator results page. Used only to
+ * estimate a run's cost before it is parsed; the real charge uses the actual
+ * parsed count.
+ */
+export const TYPICAL_LEADS_PER_PAGE = 25
+
+export function creditsForLeads(
+  leadCount: number,
+  leadsPerCredit: number | null,
 ): number {
-  const files = Math.max(0, Math.trunc(fileCount))
-  if (filesPerCredit === null || filesPerCredit <= 0) return 1
-  return Math.max(1, Math.ceil(files / filesPerCredit))
+  const leads = Math.max(0, Math.trunc(leadCount))
+  if (leadsPerCredit === null || leadsPerCredit <= 0) return 1
+  return Math.max(1, Math.ceil(leads / leadsPerCredit))
 }
 
 export function extractionCreditCost(
-  fileCount: number,
+  leadCount: number,
   limits: PlanLimits | null,
 ): number {
-  return creditsForFiles(fileCount, limits?.files_per_credit ?? null)
+  return creditsForLeads(leadCount, limits?.leads_per_credit ?? null)
+}
+
+/**
+ * Upper-bound estimate for a run before anything is parsed, assuming every file
+ * is a full page. Quote it as a maximum, never as the price.
+ */
+export function estimatedCreditCostForFiles(
+  fileCount: number,
+  leadsPerCredit: number | null,
+): number {
+  const files = Math.max(0, Math.trunc(fileCount))
+  return creditsForLeads(files * TYPICAL_LEADS_PER_PAGE, leadsPerCredit)
 }

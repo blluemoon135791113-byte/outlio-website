@@ -86,10 +86,11 @@ export type UsageMetric =
 export type PlanLimits = {
   files_per_extraction: number | null
   /**
-   * Files per credit for one extraction: cost = ceil(files / this), min 1.
-   * `null` means a flat 1 credit per extraction.
+   * Leads per credit for one extraction, aggregated across the whole run:
+   * cost = ceil(total_leads / this), min 1. `null` means a flat 1 credit per
+   * extraction. Charged only once the run is parsed — see migration 0030.
    */
-  files_per_credit: number | null
+  leads_per_credit: number | null
   extractions_per_day: number | null
   extractions_per_month: number | null
   records_per_extraction: number | null
@@ -521,10 +522,24 @@ export type Database = {
         /** 'ok' | 'no_subscription' | 'not_scheduled' | 'already_ended' */
         Returns: string
       }
-      extraction_credit_cost: {
-        Args: { p_file_count: number; p_files_per_credit: number | null }
+      lead_credit_cost: {
+        Args: { p_lead_count: number; p_leads_per_credit: number | null }
         /** Credits one extraction of this size costs. Never below 1. */
         Returns: number
+      }
+      charge_extraction_leads: {
+        Args: { p_job_id: string; p_user_id: string; p_lead_count: number }
+        /**
+         * Charges a parsed run. `status` is
+         * 'ok' | 'already_charged' | 'insufficient_credits' | 'not_found'.
+         * On 'insufficient_credits' nothing is spent and `required` is the cost.
+         */
+        Returns: {
+          status: string
+          charged: number
+          required: number
+          credits_left: number
+        }[]
       }
       credit_balance: {
         Args: { p_user_id: string }

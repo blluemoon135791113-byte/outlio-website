@@ -1,4 +1,4 @@
-import { creditsForFiles, EXPORT_CREDIT_COST } from '@/lib/limits/credits'
+import { EXPORT_CREDIT_COST, TYPICAL_LEADS_PER_PAGE } from '@/lib/limits/credits'
 
 /**
  * The short "how credits work" explainer shown inside the product — on the
@@ -9,23 +9,26 @@ import { creditsForFiles, EXPORT_CREDIT_COST } from '@/lib/limits/credits'
  * in the database is reflected without touching this file.
  */
 export function CreditsSummary({
-  filesPerCredit,
+  leadsPerCredit,
   maxFiles,
 }: {
   /** `null` when the plan charges a flat 1 credit per extraction. */
-  filesPerCredit: number | null
+  leadsPerCredit: number | null
   maxFiles: number
 }) {
-  const maxCost = creditsForFiles(maxFiles, filesPerCredit)
-
   const lines = [
-    filesPerCredit
-      ? { term: '1 credit', detail: `covers up to ${filesPerCredit} files in one run` }
+    leadsPerCredit
+      ? { term: '1 credit', detail: `covers up to ${leadsPerCredit} leads` }
       : { term: '1 credit', detail: 'covers one extraction, whatever its size' },
-    {
-      term: `${maxCost} credit${maxCost === 1 ? '' : 's'}`,
-      detail: `a full ${maxFiles}-file run — your largest batch`,
-    },
+    leadsPerCredit
+      ? {
+          term: 'By leads',
+          detail: `not by files — ${maxFiles} small files can cost less than one full page`,
+        }
+      : {
+          term: 'Per run',
+          detail: `up to ${maxFiles} files in one extraction`,
+        },
     EXPORT_CREDIT_COST === 0
       ? { term: 'Free', detail: 'every CSV download, always' }
       : {
@@ -50,7 +53,10 @@ export function CreditsSummary({
       </dl>
 
       <p className="mt-4 border-t border-accent/10 pt-3 text-[11px] leading-4 text-muted">
-        Credits reset at the start of each month and do not roll over.
+        {leadsPerCredit
+          ? `A full Sales Navigator page holds about ${TYPICAL_LEADS_PER_PAGE} leads. ` +
+            'Credits are charged once a run is processed, and reset at the start of each month.'
+          : 'Credits reset at the start of each month and do not roll over.'}
       </p>
     </section>
   )

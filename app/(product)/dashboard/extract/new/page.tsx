@@ -54,7 +54,7 @@ export default async function NewExtractionPage() {
           <UploadForm
             maxFiles={limits.maxFiles}
             maxFileBytes={limits.maxFileBytes}
-            filesPerCredit={limits.filesPerCredit}
+            leadsPerCredit={limits.leadsPerCredit}
           />
         </section>
 
@@ -71,7 +71,7 @@ export default async function NewExtractionPage() {
           </section>
 
           <CreditsSummary
-            filesPerCredit={limits.filesPerCredit}
+            leadsPerCredit={limits.leadsPerCredit}
             maxFiles={limits.maxFiles}
           />
 

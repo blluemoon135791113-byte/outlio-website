@@ -31,7 +31,6 @@ import { z } from 'zod'
 import { assertAccess } from '@/lib/auth/access'
 import { consume } from '@/lib/auth/rate-limit'
 import { isAppError } from '@/lib/errors/catalog'
-import { extractionCreditCost } from '@/lib/limits/credits'
 import { resolveUploadLimits } from '@/lib/upload/limits'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
 import { buildStorageKey, sanitizeDisplayFilename } from '@/lib/upload/storage-key'
@@ -271,15 +270,14 @@ export async function finalizeUploadAction(input: {
   }
 
   /*
-   * Finalize, spend the extraction credits, record usage, and enqueue in one
-   * database transaction. This makes retries and concurrent submissions
-   * idempotent: a job can never be charged twice or report success without a
-   * durable queue row.
+   * Finalize, record usage, and enqueue in one database transaction. This makes
+   * retries and concurrent submissions idempotent: a job can never be enqueued
+   * twice or report success without a durable queue row.
    *
-   * The charge is tiered by file count — see
-   * migrations 0017_atomic_job_finalization.sql and
-   * 0027_tiered_extraction_credits.sql. The database computes the cost; the
-   * value below is for messaging only.
+   * NOTHING IS CHARGED HERE. Credits are billed per block of leads, and the
+   * lead count does not exist until the worker parses the files. This call only
+   * gates on an exhausted balance; the real charge happens in the worker via
+   * `charge_extraction_leads`. See migration 0030_lead_based_credits.sql.
    */
   const { data: finalizeStatus, error: finalizeError } = await supabase.rpc(
     'finalize_upload_job',
@@ -294,17 +292,14 @@ export async function finalizeUploadAction(input: {
   }
 
   if (finalizeStatus === 'insufficient_credits') {
-    const cost = extractionCreditCost(queued, ctx.plan?.limits ?? null)
-    const { data: balanceRows } = await supabase.rpc('credit_balance', {
-      p_user_id: ctx.userId!,
-    })
-    const left = Array.isArray(balanceRows) ? (balanceRows[0]?.remaining ?? 0) : 0
+    const perCredit = ctx.plan?.limits?.leads_per_credit ?? null
+    const rate = perCredit ? ` Each credit covers up to ${perCredit} leads.` : ''
 
     return {
       ok: false,
       message:
-        `This extraction costs ${cost} credit${cost === 1 ? '' : 's'} and you have ` +
-        `${left} left this month. Upload fewer files, upgrade your plan, or wait for the reset.`,
+        'You have no extraction credits left this month. Upgrade your plan or ' +
+        `wait for the reset to run another extraction.${rate}`,
     }
   }
 

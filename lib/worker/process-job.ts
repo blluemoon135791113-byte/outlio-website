@@ -176,6 +176,64 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     },
   )
 
+  // ---- charge ------------------------------------------------------------
+  /*
+   * Credits are billed per block of LEADS, so the charge can only happen now —
+   * the count did not exist until the files were parsed. It runs BEFORE any
+   * lead row is inserted and before the CSV is written, so a user who cannot
+   * afford the run is never billed and never receives a partial export.
+   *
+   * Billed on leads PARSED, not on leads kept: the work is the parsing, and
+   * dedupe removing a row the user already owns does not make it free.
+   *
+   * Idempotent in the database via extraction_jobs.credits_charged, which
+   * matters because `after()` retries and the reaper can re-run a claim.
+   */
+  if (allLeads.length > 0) {
+    const { data: chargeRows, error: chargeError } = await supabase.rpc(
+      'charge_extraction_leads',
+      { p_job_id: jobId, p_user_id: userId, p_lead_count: allLeads.length },
+    )
+
+    if (chargeError) {
+      throw new Error(`credit charge failed: ${concise(chargeError.message)}`)
+    }
+
+    const charge = Array.isArray(chargeRows) ? chargeRows[0] : chargeRows
+
+    if (charge?.status === 'insufficient_credits') {
+      // Nothing was spent. Fail loudly and deliver nothing, rather than
+      // handing over a silently truncated list.
+      await supabase
+        .from('extraction_jobs')
+        .update({
+          status: 'failed',
+          error_code: 'ERR_LIMIT_REACHED',
+          error_message:
+            `This extraction found ${allLeads.length} leads and needs ` +
+            `${charge.required} credits, which is more than you have left this month.`,
+          progress_step: 'Not enough credits',
+          progress_current: total,
+          progress_total: total,
+          leads_parsed: allLeads.length,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+        .eq('user_id', userId)
+
+      await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
+
+      return {
+        jobId,
+        status: 'failed',
+        leadsParsed: allLeads.length,
+        leadsKept: 0,
+        filesProcessed,
+        filesFailed,
+      }
+    }
+  }
+
   // ---- dedupe ------------------------------------------------------------
   await supabase
     .from('extraction_jobs')

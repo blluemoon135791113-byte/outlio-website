@@ -193,7 +193,7 @@ export default async function DashboardPage() {
         </section>
 
         <CreditsSummary
-          filesPerCredit={uploadLimits.filesPerCredit}
+          leadsPerCredit={uploadLimits.leadsPerCredit}
           maxFiles={uploadLimits.maxFiles}
         />
 
