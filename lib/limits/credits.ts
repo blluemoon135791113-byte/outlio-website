@@ -16,8 +16,11 @@
  */
 import type { PlanLimits } from '@/types/database'
 
-/** A flat 1 credit per CSV download, on every plan. */
-export const EXPORT_CREDIT_COST = 1
+/**
+ * CSV downloads are free on every plan — credits buy extraction, not delivery.
+ * See the rationale in `getDownloadUrlAction` (lib/jobs/actions.ts).
+ */
+export const EXPORT_CREDIT_COST = 0
 
 export function creditsForFiles(
   fileCount: number,

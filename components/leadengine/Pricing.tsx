@@ -3,9 +3,15 @@ import Link from 'next/link'
 /**
  * Pricing — a CREDIT model.
  *
- * 1 credit per extraction run, 1 per CSV export. These numbers mirror
- * `plans.limits` seeded in migration 0015; if you change one, change the other.
- * The app reads limits from the database at runtime and never from this file.
+ * Credits buy EXTRACTION. One run costs ceil(files / files_per_credit), and
+ * downloading the CSV is free. These numbers mirror `plans.limits` seeded in
+ * migrations 0015 and 0027; if you change one, change the other. The app reads
+ * limits from the database at runtime and never from this file.
+ *
+ * Lead ceilings below are credits ÷ cost-of-a-full-batch × files × LEADS_PER_PAGE:
+ *   starter       100 ÷ 2 =  50 runs × 10 files × 25 =  12,500
+ *   professional  300 ÷ 3 = 100 runs × 30 files × 25 =  75,000
+ *   custom       1000 ÷ 5 = 200 runs × 50 files × 25 = 250,000
  */
 
 type Tier = {
@@ -15,6 +21,8 @@ type Tier = {
   price: string
   period: string
   credits: string
+  /** Monthly lead ceiling at full batches. */
+  leads: string
   features: string[]
   cta: { label: string; href: string }
   featured?: boolean
@@ -29,12 +37,12 @@ const TIERS: Tier[] = [
     price: '$38',
     period: '/ month',
     credits: '100 credits',
+    leads: '12,500',
     features: [
-      '**100 extractions** a month',
-      '**10 files** per batch',
+      '**10 files** per batch — 1 credit per 5 files',
       'Roughly 25 leads per Sales Navigator page',
       'Duplicate removal across every upload',
-      'CSV export included',
+      'Free CSV export — downloads never cost credits',
     ],
     cta: { label: 'Convert your first list free', href: '/sign-up' },
   },
@@ -45,9 +53,9 @@ const TIERS: Tier[] = [
     price: '$73',
     period: '/ month',
     credits: '300 credits',
+    leads: '75,000',
     features: [
-      '**300 extractions** a month',
-      '**30 files** per batch',
+      '**30 files** per batch — 1 credit per 10 files',
       'Everything in Lead Engine',
       'Longer export retention (90 days)',
       'Priority support',
@@ -63,9 +71,9 @@ const TIERS: Tier[] = [
     price: '1000+',
     period: 'credits',
     credits: '1000+ credits',
+    leads: '250,000+',
     features: [
-      '**1000+ extractions** a month',
-      '**50 files** per batch',
+      '**50 files** per batch — 1 credit per 10 files',
       'Everything in Pro',
       'Retention and limits set with you',
       'Direct line to the team',
@@ -104,7 +112,7 @@ export function Pricing() {
             Simple credits. Predictable cost.
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-            Use one credit to process a batch and one to export the finished CSV.
+            Credits buy extraction, and downloading your CSV is always free.
             Start free, then choose a monthly allowance that matches your workflow.
           </p>
         </div>
@@ -135,6 +143,11 @@ export function Pricing() {
 
               <p className="mt-2 inline-flex w-fit rounded-full bg-accent-soft px-3 py-1 text-[12px] font-bold uppercase tracking-[0.14em] text-accent">
                 {tier.credits}
+              </p>
+
+              <p className="mt-4 border-t border-border pt-4 text-lg font-bold tracking-tight text-ink">
+                {tier.leads} leads
+                <span className="ml-1.5 text-sm font-medium text-muted">a month</span>
               </p>
 
               <ul className="mt-7 flex-1 space-y-3 text-base">
@@ -169,14 +182,24 @@ export function Pricing() {
           <h3 className="text-base font-semibold text-ink">How credits work</h3>
           <ul className="mt-2.5 space-y-1.5 text-sm leading-relaxed text-muted">
             <li>
-              <strong className="font-semibold text-ink">1 credit:</strong> one
-              extraction run, however many files are in the batch
+              <strong className="font-semibold text-ink">1 credit:</strong> a block of
+              files in one run — 5 files on Lead Engine, 10 on Pro and Custom
             </li>
             <li>
-              <strong className="font-semibold text-ink">1 credit:</strong> one CSV
-              export
+              So a full batch costs{' '}
+              <strong className="font-semibold text-ink">2 credits</strong> on Lead
+              Engine, <strong className="font-semibold text-ink">3</strong> on Pro and{' '}
+              <strong className="font-semibold text-ink">5</strong> on Custom. Smaller
+              batches cost less.
+            </li>
+            <li>
+              <strong className="font-semibold text-ink">Free:</strong> every CSV export.
+              Downloading never costs a credit.
             </li>
             <li>Credits reset at the start of each month. Unused credits do not roll over.</li>
+            <li>
+              Lead totals assume full batches at roughly 25 leads per saved page.
+            </li>
             <li>
               The <strong className="font-semibold text-ink">3-day free trial</strong>{' '}
               includes 10 credits and 5 files per batch. No card required.

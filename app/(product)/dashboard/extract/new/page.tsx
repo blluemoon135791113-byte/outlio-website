@@ -80,7 +80,9 @@ export default async function NewExtractionPage() {
               {limits.filesPerCredit
                 ? `1 credit covers up to ${limits.filesPerCredit} files in a single run. A full ${limits.maxFiles}-file extraction costs ${maxCost} credits.`
                 : `Each extraction costs 1 credit.`}{' '}
-              Downloading the CSV costs {EXPORT_CREDIT_COST} more.
+              {EXPORT_CREDIT_COST === 0
+                ? 'Downloading the CSV is free.'
+                : `Downloading the CSV costs ${EXPORT_CREDIT_COST} more.`}
             </p>
           </section>
 

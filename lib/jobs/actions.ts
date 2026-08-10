@@ -78,29 +78,16 @@ export async function getDownloadUrlAction(
   }
 
   /*
-   * Spend the export credit only after Storage proves it can sign the object.
-   * The URL remains server-local until the credit succeeds, so a failed charge
-   * never discloses it and a signing outage never consumes a user's credit.
+   * Downloading is FREE — credits are an extraction currency only.
+   *
+   * Exports used to cost 1 credit. That made the advertised monthly lead
+   * ceilings unreachable: a Base user has 100 credits, so 50 full batches, but
+   * paying to download turned every cycle into 3 credits and cut the real
+   * ceiling by a third. Extraction is where the cost is; a user must never have
+   * to choose between running a batch and collecting the leads they paid for.
+   *
+   * Abuse is bounded by ACTION_LIMITS.export above, not by a charge.
    */
-  const { data: remainingRaw, error: creditError } = await supabase.rpc(
-    'consume_credit',
-    {
-      p_user_id: ctx.userId!,
-      p_amount: 1,
-    },
-  )
-
-  if (creditError || typeof remainingRaw !== 'number') {
-    return { status: 'error', message: "We couldn't verify your credits. Please try again." }
-  }
-
-  if (remainingRaw < 0) {
-    return {
-      status: 'error',
-      message:
-        "You're out of credits for this month. Upgrade your plan or wait for the reset.",
-    }
-  }
 
   // Signed URLs are never logged (CLAUDE.md).
   return { status: 'ready', url: signed.signedUrl }
