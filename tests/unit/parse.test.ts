@@ -189,10 +189,13 @@ describe('dedupe', () => {
     expect(leads).toHaveLength(3)
   })
 
-  it('keys on the member URN', () => {
+  it('keys on the member URN, without storing it', () => {
     const { key, strategy } = resolveKey(leads[0]!)
     expect(strategy).toBe('linkedin_url_canonical')
-    expect(key).toBe('li:lead:ACwAAFAKE0001AAAAAAAAAAAAAAAAAAAAAAAAAAA')
+    // The URN identifies the key but is hashed, never embedded — dedupe keys
+    // outlive the lead rows. See tests/unit/dedupe-keys.test.ts.
+    expect(key).toMatch(/^li:[0-9a-f]{32}$/)
+    expect(key).not.toContain('ACwAAFAKE0001')
   })
 
   it('remove_exact drops the repeat', () => {
@@ -216,7 +219,9 @@ describe('dedupe', () => {
   })
 
   it('detects a cross-job duplicate from existing keys', () => {
-    const existing = new Set(['li:lead:ACwAAFAKE0001AAAAAAAAAAAAAAAAAAAAAAAAAAA'])
+    // Derived rather than hardcoded: the stored key is a hash, and pinning the
+    // literal here would just restate the implementation.
+    const existing = new Set([resolveKey(leads[0]!).key])
     const r = dedupeLeads(leads, 'remove_exact', existing)
     expect(r.kept).toHaveLength(1) // both copies of lead 1 removed
   })

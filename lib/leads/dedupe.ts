@@ -42,6 +42,30 @@ export function slug(value: string | null | undefined): string {
 }
 
 /**
+ * One-way key from identifying material.
+ *
+ * ⚠️ EVERY strategy goes through this. Dedupe keys OUTLIVE the lead rows they
+ * came from — `purge_job_leads` copies them into `lead_keys`, which is kept for
+ * the life of the account — so a key that embedded a readable name and employer
+ * meant personal data survived a deletion the user was told was complete. Keys
+ * are only ever compared for equality, so hashing costs nothing.
+ *
+ * These are PSEUDONYMOUS, not anonymous: a stable hash of a person's identifier
+ * still singles that person out. It carries no readable personal data, which is
+ * the point, but it remains personal data under the GDPR and the privacy policy
+ * describes it that way. Do not call it "anonymous" anywhere.
+ *
+ * ⚠️ The material strings below are reproduced verbatim in migration
+ * 0031_hash_dedupe_keys.sql, which rewrote the keys that already existed.
+ * Change one without the other and cross-upload duplicate detection breaks
+ * silently.
+ */
+function hashedKey(prefix: string, material: string): string {
+  const digest = createHash('sha256').update(material).digest('hex').slice(0, 32)
+  return `${prefix}:${digest}`
+}
+
+/**
  * Resolves the dedupe key.
  *
  * Priority order matters — earlier strategies are stronger identity claims:
@@ -59,12 +83,12 @@ export function resolveKey(lead: ParsedLead): {
   strategy: DedupeStrategy
 } {
   if (lead.memberUrn) {
-    return { key: `li:lead:${lead.memberUrn}`, strategy: 'linkedin_url_canonical' }
+    return { key: hashedKey('li', lead.memberUrn), strategy: 'linkedin_url_canonical' }
   }
 
   if (lead.salesNavUrl) {
     const m = /\/sales\/lead\/([A-Za-z0-9_-]+)/.exec(lead.salesNavUrl)
-    if (m?.[1]) return { key: `li:lead:${m[1]}`, strategy: 'salesnav_id' }
+    if (m?.[1]) return { key: hashedKey('li', m[1]), strategy: 'salesnav_id' }
   }
 
   const name = slug(lead.fullName)
@@ -72,10 +96,13 @@ export function resolveKey(lead: ParsedLead): {
   const title = slug(lead.jobTitle)
 
   if (name && company && title) {
-    return { key: `nt:${name}|${title}|${company}`, strategy: 'name_title_company' }
+    return {
+      key: hashedKey('nt', `${name}|${title}|${company}`),
+      strategy: 'name_title_company',
+    }
   }
   if (name && company) {
-    return { key: `nc:${name}|${company}`, strategy: 'name_company' }
+    return { key: hashedKey('nc', `${name}|${company}`), strategy: 'name_company' }
   }
 
   // Always-available fallback. Hash of every non-null normalised field.
@@ -86,8 +113,7 @@ export function resolveKey(lead: ParsedLead): {
     .map((v) => (v ?? '').trim())
     .join('')
 
-  const hash = createHash('sha256').update(material).digest('hex').slice(0, 32)
-  return { key: `rh:${hash}`, strategy: 'row_hash' }
+  return { key: hashedKey('rh', material), strategy: 'row_hash' }
 }
 
 /** Strategies considered strong enough to call an EXACT duplicate. */

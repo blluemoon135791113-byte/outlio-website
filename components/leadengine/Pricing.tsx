@@ -4,17 +4,20 @@ import { CALENDLY_URL } from '@/app/lib/constants'
 import { BookingModal } from '@/components/leadengine/BookingModal'
 
 /**
- * Pricing — a CREDIT model.
+ * Pricing — a CREDIT model billed by LEAD.
  *
- * Credits buy EXTRACTION. One run costs ceil(files / files_per_credit), and
- * downloading the CSV is free. These numbers mirror `plans.limits` seeded in
- * migrations 0015 and 0027; if you change one, change the other. The app reads
- * limits from the database at runtime and never from this file.
+ * Credits buy EXTRACTION, and downloading the CSV is free. One run costs
+ * ceil(total_leads / leads_per_credit) with leads_per_credit = 25 on every
+ * plan, counted across the whole run rather than per file.
  *
- * Lead ceilings below are credits ÷ cost-of-a-full-batch × files × LEADS_PER_PAGE:
- *   starter       100 ÷ 2 =  50 runs × 10 files × 25 =  12,500
- *   professional  300 ÷ 3 = 100 runs × 30 files × 25 =  75,000
- *   custom       1000 ÷ 5 = 200 runs × 50 files × 25 = 250,000
+ * These numbers mirror `plans.limits` seeded in migration 0030; if you change
+ * one, change the other. The app reads limits from the database at runtime and
+ * never from this file.
+ *
+ * Lead ceilings are simply credits × 25:
+ *   starter       100 × 25 =  2,500
+ *   professional  300 × 25 =  7,500
+ *   custom       1000 × 25 = 25,000
  */
 
 type Tier = {
@@ -37,14 +40,14 @@ const TIERS: Tier[] = [
     key: 'starter',
     name: 'Lead Engine',
     blurb: 'For steady, weekly prospecting.',
-    price: '$38',
+    price: '$28',
     period: '/ month',
     credits: '100 credits',
-    leads: '12,500',
+    leads: '2,500',
     features: [
-      'Up to **100 extractions** a month',
-      '**10 files** per batch — 1 credit per 5 files',
-      'Roughly 25 leads per Sales Navigator page',
+      '**1 credit per 25 leads** — counted across the whole run',
+      'Charged by leads, **never by files**',
+      '**No daily limit** — extract as often as you like',
       'Duplicate removal across every upload',
       'Free CSV export — downloads never cost credits',
     ],
@@ -54,13 +57,13 @@ const TIERS: Tier[] = [
     key: 'professional',
     name: 'Pro',
     blurb: 'For teams running lists every day.',
-    price: '$73',
+    price: '$43',
     period: '/ month',
     credits: '300 credits',
-    leads: '75,000',
+    leads: '7,500',
     features: [
-      'Up to **300 extractions** a month',
-      '**30 files** per batch — 1 credit per 10 files',
+      '**1 credit per 25 leads** — the same rate, three times the volume',
+      '**30 files** per batch',
       'Everything in Lead Engine',
       'Longer export retention (90 days)',
       'Priority support',
@@ -73,13 +76,13 @@ const TIERS: Tier[] = [
     key: 'custom',
     name: 'Custom',
     blurb: 'For agencies and high-volume teams.',
-    price: '1000+',
-    period: 'credits',
+    price: '25,000+',
+    period: 'leads / month',
     credits: '1000+ credits',
-    leads: '250,000+',
+    leads: '25,000+',
     features: [
-      '**1000+ extractions** a month',
-      '**50 files** per batch — 1 credit per 10 files',
+      '**1 credit per 25 leads** — same rule, no ceiling we cannot raise',
+      '**50 files** per batch',
       'Everything in Pro',
       'Retention and limits set with you',
       'Direct line to the team',
@@ -118,8 +121,9 @@ export function Pricing() {
             Simple credits. Predictable cost.
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-            Credits buy extraction, and downloading your CSV is always free.
-            Start free, then choose a monthly allowance that matches your workflow.
+            One credit covers 25 leads, counted across the whole run — so you pay
+            for what you extract, not for how many files it arrived in.
+            Downloading your CSV is always free.
           </p>
         </div>
 
@@ -195,9 +199,11 @@ export function Pricing() {
         <BookingModal />
 
         <p className="mt-10 text-center text-sm text-muted">
-          Lead totals assume full batches at roughly 25 leads per saved page. The{' '}
+          Lead totals are your credits × 25, and a part-full page still costs one credit.
+          Credits are charged once a run is processed, so you always pay for the leads
+          actually found. The{' '}
           <strong className="font-semibold text-ink">3-day free trial</strong> includes
-          10 credits and 5 files per batch — no card required.
+          10 credits — 250 leads — and 5 files per batch, no card required.
         </p>
 
         <p className="mt-3 text-center text-sm text-muted">
