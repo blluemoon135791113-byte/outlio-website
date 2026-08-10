@@ -22,6 +22,8 @@ const nullableInt = z.number().int().nonnegative().nullable()
  */
 export const planLimitsSchema = z.object({
   files_per_extraction: nullableInt,
+  // Absent on legacy tiers seeded before 0027 — those bill a flat 1 credit.
+  files_per_credit: nullableInt.optional().default(null),
   extractions_per_day: nullableInt,
   extractions_per_month: nullableInt,
   records_per_extraction: nullableInt,

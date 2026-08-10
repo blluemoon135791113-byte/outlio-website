@@ -31,6 +31,7 @@ import { z } from 'zod'
 import { assertAccess } from '@/lib/auth/access'
 import { consume } from '@/lib/auth/rate-limit'
 import { isAppError } from '@/lib/errors/catalog'
+import { extractionCreditCost } from '@/lib/limits/credits'
 import { resolveUploadLimits } from '@/lib/upload/limits'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
 import { buildStorageKey, sanitizeDisplayFilename } from '@/lib/upload/storage-key'
@@ -270,12 +271,15 @@ export async function finalizeUploadAction(input: {
   }
 
   /*
-   * Finalize, spend the extraction credit, record usage, and enqueue in one
+   * Finalize, spend the extraction credits, record usage, and enqueue in one
    * database transaction. This makes retries and concurrent submissions
-   * idempotent: a job can never consume two credits or report success without
-   * a durable queue row.
+   * idempotent: a job can never be charged twice or report success without a
+   * durable queue row.
    *
-   * See migration 0017_atomic_job_finalization.sql.
+   * The charge is tiered by file count — see
+   * migrations 0017_atomic_job_finalization.sql and
+   * 0027_tiered_extraction_credits.sql. The database computes the cost; the
+   * value below is for messaging only.
    */
   const { data: finalizeStatus, error: finalizeError } = await supabase.rpc(
     'finalize_upload_job',
@@ -290,10 +294,17 @@ export async function finalizeUploadAction(input: {
   }
 
   if (finalizeStatus === 'insufficient_credits') {
+    const cost = extractionCreditCost(queued, ctx.plan?.limits ?? null)
+    const { data: balanceRows } = await supabase.rpc('credit_balance', {
+      p_user_id: ctx.userId!,
+    })
+    const left = Array.isArray(balanceRows) ? (balanceRows[0]?.remaining ?? 0) : 0
+
     return {
       ok: false,
       message:
-        "You're out of credits for this month. Upgrade your plan or wait for the reset.",
+        `This extraction costs ${cost} credit${cost === 1 ? '' : 's'} and you have ` +
+        `${left} left this month. Upload fewer files, upgrade your plan, or wait for the reset.`,
     }
   }
 

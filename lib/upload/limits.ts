@@ -29,6 +29,11 @@ export type ResolvedUploadLimits = {
   maxFileBytes: number
   /** `null` when the plan does not cap it. */
   maxRecordsPerExtraction: number | null
+  /**
+   * Files billed per credit. `null` means a flat 1 credit per extraction.
+   * Priced by `lib/limits/credits.ts`; charged by the database.
+   */
+  filesPerCredit: number | null
 }
 
 /**
@@ -47,6 +52,7 @@ export function resolveUploadLimits(
     maxFiles: planFiles === null ? serviceMaxFiles : Math.min(planFiles, serviceMaxFiles),
     maxFileBytes: serviceMaxBytes,
     maxRecordsPerExtraction: limits?.records_per_extraction ?? null,
+    filesPerCredit: limits?.files_per_credit ?? null,
   }
 }
 

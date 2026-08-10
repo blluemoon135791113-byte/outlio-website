@@ -85,6 +85,11 @@ export type UsageMetric =
  */
 export type PlanLimits = {
   files_per_extraction: number | null
+  /**
+   * Files per credit for one extraction: cost = ceil(files / this), min 1.
+   * `null` means a flat 1 credit per extraction.
+   */
+  files_per_credit: number | null
   extractions_per_day: number | null
   extractions_per_month: number | null
   records_per_extraction: number | null
@@ -500,6 +505,11 @@ export type Database = {
           p_period_end?: string
         }
         /** Remaining balance, or -1 when there were not enough credits. */
+        Returns: number
+      }
+      extraction_credit_cost: {
+        Args: { p_file_count: number; p_files_per_credit: number | null }
+        /** Credits one extraction of this size costs. Never below 1. */
         Returns: number
       }
       credit_balance: {

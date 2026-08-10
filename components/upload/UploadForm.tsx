@@ -9,6 +9,7 @@ import {
   finalizeUploadAction,
 } from '@/lib/upload/session'
 import { formatBytes } from '@/lib/upload/limits'
+import { creditsForFiles } from '@/lib/limits/credits'
 
 /**
  * Files are uploaded DIRECTLY to Supabase Storage using signed upload URLs.
@@ -35,9 +36,12 @@ const inputClass =
 export function UploadForm({
   maxFiles,
   maxFileBytes,
+  filesPerCredit,
 }: {
   maxFiles: number
   maxFileBytes: number
+  /** `null` when the plan charges a flat 1 credit per extraction. */
+  filesPerCredit: number | null
 }) {
   const router = useRouter()
   const [items, setItems] = useState<FileState[]>([])
@@ -137,6 +141,13 @@ export function UploadForm({
   const oversize = items.filter((i) => i.file.size > maxFileBytes)
   const uploadedCount = items.filter((i) => i.progress === 100).length
 
+  // Quoted here, charged by the database. Both use the same block arithmetic.
+  const creditCost = creditsForFiles(items.length, filesPerCredit)
+  const filesLeftInBlock =
+    filesPerCredit && items.length > 0
+      ? Math.min(creditCost * filesPerCredit, maxFiles) - items.length
+      : 0
+
   return (
     <div className="space-y-5">
       <div
@@ -188,6 +199,9 @@ export function UploadForm({
         </p>
         <p className="mt-1 text-xs text-muted">
           Up to {maxFiles} files, {formatBytes(maxFileBytes)} each.
+          {filesPerCredit
+            ? ` 1 credit per ${filesPerCredit} files in a run.`
+            : ' 1 credit per run.'}
         </p>
       </div>
 
@@ -198,8 +212,18 @@ export function UploadForm({
               {items.length} file{items.length === 1 ? '' : 's'} selected
               {status === 'uploading' ? ` · ${uploadedCount}/${items.length} uploaded` : ''}
             </p>
-            <p className="text-sm tabular-nums text-muted">{formatBytes(totalBytes)}</p>
+            <p className="text-sm tabular-nums text-muted">
+              {creditCost} credit{creditCost === 1 ? '' : 's'} · {formatBytes(totalBytes)}
+            </p>
           </div>
+
+          {filesLeftInBlock > 0 ? (
+            <p className="border-b border-border bg-surface-muted/45 px-4 py-2 text-xs text-muted">
+              {filesLeftInBlock} more file{filesLeftInBlock === 1 ? '' : 's'} fit in this
+              extraction for the same {creditCost} credit
+              {creditCost === 1 ? '' : 's'}.
+            </p>
+          ) : null}
           <ul className="divide-y divide-border">
             {items.map((item, i) => {
               const tooBig = item.file.size > maxFileBytes
@@ -314,7 +338,9 @@ export function UploadForm({
             ? `Uploading ${uploadedCount + 1} of ${items.length}…`
             : status === 'finalising'
               ? 'Queuing…'
-              : 'Start extraction'}
+              : items.length > 0
+                ? `Start extraction · ${creditCost} credit${creditCost === 1 ? '' : 's'}`
+                : 'Start extraction'}
       </button>
     </div>
   )
