@@ -44,6 +44,13 @@ const securityHeaders = [
       "base-uri 'self'",
       "form-action 'self'",
       "frame-ancestors 'none'",
+      /*
+        The Calendly scheduler is embedded as an iframe (components/leadengine/
+        BookingModal.tsx). Without this it falls back to default-src 'self' and
+        the modal renders empty. Framing only — Calendly runs no script on our
+        origin, so script-src stays closed.
+      */
+      'frame-src https://calendly.com https://*.calendly.com',
       "object-src 'none'",
       scriptSrc,
       "style-src 'self' 'unsafe-inline'",

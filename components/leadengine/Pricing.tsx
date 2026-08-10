@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { CALENDLY_URL } from '@/app/lib/constants'
+import { BookingModal } from '@/components/leadengine/BookingModal'
 
 /**
  * Pricing — a CREDIT model.
@@ -188,8 +189,11 @@ export function Pricing() {
         {/*
           The long credit explainer lived here. It now sits in the product, on
           the dashboard and the upload page, where a customer is actually
-          spending credits. The per-card lines carry what a prospect needs.
+          spending credits. The per-card lines carry what a prospect needs, and
+          this slot books a call instead.
         */}
+        <BookingModal />
+
         <p className="mt-10 text-center text-sm text-muted">
           Lead totals assume full batches at roughly 25 leads per saved page. The{' '}
           <strong className="font-semibold text-ink">3-day free trial</strong> includes
