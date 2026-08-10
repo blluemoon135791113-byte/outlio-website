@@ -11,6 +11,7 @@ import 'server-only'
  * `revoke_entitlement`) so the profile update, subscription row, request
  * resolution, and audit log either all apply or none do.
  */
+import { REFERRAL_REWARD_CREDITS } from '@/lib/referrals/constants'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type GrantEntitlementInput = {
@@ -42,6 +43,29 @@ export async function grantEntitlement(
   })
 
   if (error) throw new Error(`grantEntitlement failed: ${concise(error.message)}`)
+
+  /*
+   * Referral payout point.
+   *
+   * Approval is the trigger because it is a human decision — paying out at
+   * signup would let anyone farm credits from throwaway addresses. When real
+   * payments land, move this call to the payment path; the SQL is indifferent
+   * to what triggered it.
+   *
+   * Deliberately NOT inside grant_entitlement's transaction: a referral that
+   * fails to pay out must never roll back somebody's access. It is idempotent,
+   * so the next grant for the same user settles it.
+   */
+  try {
+    await supabase.rpc('reward_pending_referral', {
+      p_referred_user_id: input.userId,
+      p_amount: REFERRAL_REWARD_CREDITS,
+    })
+  } catch {
+    // Access is granted either way. The referral stays 'pending' and is
+    // retried on the next grant.
+  }
+
   return String(data)
 }
 

@@ -11,7 +11,7 @@ import { MIN_PASSWORD_LENGTH } from '@/lib/auth/password'
 
 const INITIAL: ActionState = { status: 'idle' }
 
-export function SignUpForm() {
+export function SignUpForm({ referralCode = '' }: { referralCode?: string }) {
   const [state, formAction] = useActionState(signUpAction, INITIAL)
 
   // React 19 resets uncontrolled fields once a form action completes, so the
@@ -22,6 +22,9 @@ export function SignUpForm() {
   return (
     <form action={formAction} className="space-y-4">
       <FormFeedback state={state} />
+
+      {/* Carried through the failed-submit round trip like every other field. */}
+      <input type="hidden" name="referral_code" value={referralCode} />
 
       <Field
         id="full_name"

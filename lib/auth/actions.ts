@@ -28,6 +28,7 @@ import {
   signupSecurityClaims,
 } from '@/lib/auth/signup-gate'
 import { isAppError } from '@/lib/errors/catalog'
+import { normalizeReferralCode } from '@/lib/referrals/constants'
 import { recordSecurityEvent } from '@/lib/security/events'
 import { SESSION_GUARD_COOKIE } from '@/lib/auth/session-guard'
 import { createClient } from '@/lib/supabase/server'
@@ -158,6 +159,9 @@ export async function signUpAction(
           full_name: nameResult.value,
           phone: phoneResult.value,
           linkedin_url: linkedInResult.value,
+          // Attribution only. A trigger records the referral and NEVER raises,
+          // so an unknown or tampered code cannot cost someone their signup.
+          referral_code: normalizeReferralCode(String(formData.get('referral_code') ?? '')),
           signup_reservation_token: reservation.token,
           signup_device_hash: securityClaims.deviceHash,
           signup_email_hash: securityClaims.emailHash,

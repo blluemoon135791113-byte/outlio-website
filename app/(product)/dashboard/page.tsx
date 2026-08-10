@@ -2,7 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { CreditsSummary } from '@/components/product/CreditsSummary'
+import { ReferralCard } from '@/components/product/ReferralCard'
 import { requireAccess } from '@/lib/auth/access'
+import { appOrigin } from '@/lib/auth/redirects'
+import { referralLink } from '@/lib/referrals/constants'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveUploadLimits } from '@/lib/upload/limits'
 
@@ -17,6 +20,10 @@ export default async function DashboardPage() {
   const { data: balanceRows } = await createAdminClient().rpc('credit_balance', {
     p_user_id: ctx.userId!,
   })
+  const { data: referralRows } = await createAdminClient().rpc('referral_summary', {
+    p_user_id: ctx.userId!,
+  })
+  const referral = Array.isArray(referralRows) ? referralRows[0] : null
   const balance = Array.isArray(balanceRows) ? balanceRows[0] : null
   const limits = ctx.plan?.limits
   const uploadLimits = resolveUploadLimits(limits ?? null)
@@ -189,6 +196,14 @@ export default async function DashboardPage() {
           filesPerCredit={uploadLimits.filesPerCredit}
           maxFiles={uploadLimits.maxFiles}
         />
+
+        {referral?.code ? (
+          <ReferralCard
+            link={referralLink(appOrigin(), referral.code)}
+            rewarded={referral.rewarded}
+            creditsEarned={referral.credits_earned}
+          />
+        ) : null}
         </div>
       </div>
     </div>

@@ -129,6 +129,8 @@ export type ProfileRow = {
   role: UserRole
   plan_id: string | null
   access_expires_at: string | null
+  /** This user's own code for inviting others. Allocated for every profile. */
+  referral_code: string | null
   suspended_at: string | null
   suspended_reason: string | null
   consent_accepted_at: string | null
@@ -526,7 +528,27 @@ export type Database = {
       }
       credit_balance: {
         Args: { p_user_id: string }
-        Returns: { allowance: number; used: number; remaining: number }[]
+        /** `allowance` already includes `granted` (referral and other bonuses). */
+        Returns: { allowance: number; used: number; remaining: number; granted: number }[]
+      }
+      record_referral: {
+        Args: { p_referred_user_id: string; p_code: string }
+        /** 'ok' | 'no_code' | 'unknown_code' | 'self_referral' | 'error' */
+        Returns: string
+      }
+      reward_pending_referral: {
+        Args: { p_referred_user_id: string; p_amount: number }
+        /** 'ok' | 'no_referral' | 'already_rewarded' | 'invalid_amount' */
+        Returns: string
+      }
+      referral_summary: {
+        Args: { p_user_id: string }
+        Returns: {
+          code: string | null
+          pending: number
+          rewarded: number
+          credits_earned: number
+        }[]
       }
       expired_export_paths: {
         Args: { p_limit?: number }
