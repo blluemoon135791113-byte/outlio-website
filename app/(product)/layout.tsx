@@ -2,7 +2,9 @@ import type { ReactNode } from 'react'
 
 import { ProductShell } from '@/components/product/ProductShell'
 import { requireUser } from '@/lib/auth/access'
+import { appOrigin } from '@/lib/auth/redirects'
 import { signedAvatarUrl } from '@/lib/profile/avatar'
+import { referralLink } from '@/lib/referrals/constants'
 
 /**
  * Authenticated shell.
@@ -18,6 +20,8 @@ import { signedAvatarUrl } from '@/lib/profile/avatar'
 export default async function ProductLayout({ children }: { children: ReactNode }) {
   const ctx = await requireUser()
   const avatarUrl = await signedAvatarUrl(ctx.userId!, ctx.profile?.avatar_path)
+  // Built here so the client never has to guess the canonical origin.
+  const code = ctx.profile?.referral_code ?? null
 
   return (
     <ProductShell
@@ -27,6 +31,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       isAdmin={ctx.isAdmin}
       canUseScraper={ctx.canUseScraper}
       avatarUrl={avatarUrl}
+      referralLink={code ? referralLink(appOrigin(), code) : null}
     >
       {children}
     </ProductShell>

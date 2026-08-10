@@ -8,6 +8,7 @@ type IconName =
   | 'admin'
   | 'dashboard'
   | 'extract'
+  | 'gift'
   | 'history'
   | 'lock'
   | 'settings'
@@ -124,6 +125,15 @@ export function ProductIcon({
         <circle cx="9" cy="7" r="4" />
         <path d="M19 8v6" />
         <path d="M22 11h-6" />
+      </>
+    ),
+    gift: (
+      <>
+        <rect x="3" y="9" width="18" height="12" rx="2" />
+        <path d="M3 13h18" />
+        <path d="M12 9v12" />
+        <path d="M12 9S9.5 9 8.2 7.8A2.4 2.4 0 0 1 11.6 4.4C12.8 5.6 12 9 12 9Z" />
+        <path d="M12 9s2.5 0 3.8-1.2a2.4 2.4 0 0 0-3.4-3.4C11.2 5.6 12 9 12 9Z" />
       </>
     ),
     website: (

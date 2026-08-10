@@ -7,6 +7,7 @@ import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 
 import { ProductIcon, ProductNav } from '@/components/product/ProductNav'
+import { SidebarReferral } from '@/components/product/SidebarReferral'
 import { signOutAction } from '@/lib/auth/actions'
 
 function pageLabel(pathname: string) {
@@ -27,10 +28,13 @@ function initials(name: string | null, email: string) {
 function SidebarContent({
   isAdmin,
   canUseScraper,
+  referralLink,
   onNavigate,
 }: {
   isAdmin: boolean
   canUseScraper: boolean
+  /** `null` until a profile has a code allocated. */
+  referralLink: string | null
   onNavigate?: () => void
 }) {
   return (
@@ -67,6 +71,12 @@ function SidebarContent({
         />
       </div>
 
+      {referralLink ? (
+        <div className="px-4 pb-4 pt-2">
+          <SidebarReferral link={referralLink} onNavigate={onNavigate} />
+        </div>
+      ) : null}
+
       <div className="border-t border-border px-4 py-4">
         <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/70">
           Outlio
@@ -92,6 +102,7 @@ export function ProductShell({
   isAdmin,
   canUseScraper,
   avatarUrl,
+  referralLink = null,
 }: {
   children: ReactNode
   email: string
@@ -100,6 +111,7 @@ export function ProductShell({
   isAdmin: boolean
   canUseScraper: boolean
   avatarUrl?: string | null
+  referralLink?: string | null
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -109,7 +121,7 @@ export function ProductShell({
   return (
     <div className="app-shell min-h-dvh bg-app text-ink">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-border bg-panel lg:flex">
-        <SidebarContent isAdmin={isAdmin} canUseScraper={canUseScraper} />
+        <SidebarContent isAdmin={isAdmin} canUseScraper={canUseScraper} referralLink={referralLink} />
       </aside>
 
       {mobileOpen ? (
@@ -132,6 +144,7 @@ export function ProductShell({
             <SidebarContent
               isAdmin={isAdmin}
               canUseScraper={canUseScraper}
+              referralLink={referralLink}
               onNavigate={() => setMobileOpen(false)}
             />
           </aside>
