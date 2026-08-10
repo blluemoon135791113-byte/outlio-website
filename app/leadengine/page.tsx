@@ -77,7 +77,7 @@ const HONEST = [
   },
   {
     title: 'You decide what is kept',
-    body: 'Download the CSV, then clear the data. We keep only an anonymous fingerprint for future duplicate checks. No names, companies or profile links remain.',
+    body: 'Download the CSV, then clear the data. All we keep is a one-way fingerprint so future uploads can still spot a duplicate. No names, companies or profile links remain.',
   },
 ]
 

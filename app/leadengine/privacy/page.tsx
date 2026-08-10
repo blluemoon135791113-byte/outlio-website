@@ -206,39 +206,42 @@ export default function LeadEnginePrivacy() {
             before. To do that after the underlying records are deleted, we keep one short key per
             record. <strong>These keys are retained for the life of your account.</strong>
           </p>
-          <p>Depending on what the source file contained, a key takes one of these forms:</p>
+          <p>
+            <strong>Every key is a one-way SHA-256 hash.</strong> Whichever details the source file
+            contained, they are hashed before storage and the original text is never written down:
+          </p>
           <Table
-            head={["When the file contained", "The stored key is", "Contains personal data?"]}
+            head={["What identified the person", "What we store", "Readable personal data?"]}
             rows={[
               [
                 "A LinkedIn member identifier",
-                <>a prefix plus that identifier</>,
-                <strong key="urn">Yes — a persistent identifier for one person</strong>,
+                <>a one-way hash of it</>,
+                <>No</>,
               ],
               [
                 "A name, job title, and employer",
-                <>a normalised name, title, and employer joined together</>,
-                <strong key="ntc">Yes — readable name and employer</strong>,
+                <>a one-way hash of the three together</>,
+                <>No</>,
               ],
               [
                 "A name and employer",
-                <>a normalised name and employer joined together</>,
-                <strong key="nc">Yes — readable name and employer</strong>,
+                <>a one-way hash of the two together</>,
+                <>No</>,
               ],
               [
                 "Neither of the above",
-                <>a one-way SHA-256 hash of the record</>,
-                <>No — not reversible</>,
+                <>a one-way hash of the whole record</>,
+                <>No</>,
               ],
             ]}
           />
           <Callout>
             <p>
-              <strong>We want to be exact about this, because it matters.</strong> Most of these
-              keys are <em>pseudonymous</em>, not anonymous. Under the GDPR, pseudonymous data is
-              still personal data. A key can identify that a specific person was previously
-              processed in your account, and in some forms it contains that person&apos;s name and
-              employer in readable form.
+              <strong>We want to be exact about this, because it matters.</strong> A hash carries no
+              readable name, employer or profile link, and cannot be turned back into one. But it is
+              still <em>pseudonymous</em>, not anonymous: the same person produces the same hash
+              every time, so it singles them out. Under the GDPR pseudonymous data is still personal
+              data, and we treat it that way rather than calling it anonymous.
             </p>
             <p className="mt-3">
               We keep them for one purpose only: telling you that you have seen someone before. They
