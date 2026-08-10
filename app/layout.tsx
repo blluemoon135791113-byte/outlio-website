@@ -75,14 +75,15 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary',
-    site: '@outlio',
-    title: 'OUTLIO',
-    description: 'Client acquisition is no more a problem.',
+    card: 'summary_large_image',
+    site: '@outlio.io',
+    title: 'Client acquisition is no more a bottleneck',
+    description:
+      'We scale B2B SaaS & Tech Startups with tailored outreach; Powered by our Lead-Engine',
     images: [
       {
-        url: 'https://cdn.imgchest.com/files/ba56a4b5767e.png',
-        alt: 'Sales appollo SAAS outlio appointment setting value agency picture',
+        url: 'https://i.ibb.co/3yKXgfGZ/Ivory-Charcoal-Color-Scheme-Update.png',
+        alt: 'Outlio — outbound sales systems for B2B SaaS and tech startups',
       },
     ],
   },
