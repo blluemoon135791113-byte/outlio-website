@@ -39,6 +39,7 @@ const TIERS: Tier[] = [
     credits: '100 credits',
     leads: '12,500',
     features: [
+      'Up to **100 extractions** a month',
       '**10 files** per batch — 1 credit per 5 files',
       'Roughly 25 leads per Sales Navigator page',
       'Duplicate removal across every upload',
@@ -55,6 +56,7 @@ const TIERS: Tier[] = [
     credits: '300 credits',
     leads: '75,000',
     features: [
+      'Up to **300 extractions** a month',
       '**30 files** per batch — 1 credit per 10 files',
       'Everything in Lead Engine',
       'Longer export retention (90 days)',
@@ -73,6 +75,7 @@ const TIERS: Tier[] = [
     credits: '1000+ credits',
     leads: '250,000+',
     features: [
+      '**1000+ extractions** a month',
       '**50 files** per batch — 1 credit per 10 files',
       'Everything in Pro',
       'Retention and limits set with you',

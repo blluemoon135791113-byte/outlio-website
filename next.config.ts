@@ -13,6 +13,29 @@ import type { NextConfig } from "next";
 */
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
+/*
+  React's DEVELOPMENT build calls eval() for debugging features such as
+  reconstructing callstacks across environments, so `next dev` throws a console
+  error under a policy without 'unsafe-eval'. React never calls eval() in
+  production, so the relaxation is scoped to dev and the shipped policy is
+  unchanged — do not lift this out of the conditional.
+*/
+const isDev = process.env.NODE_ENV !== 'production';
+
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+  : "script-src 'self' 'unsafe-inline'";
+
+/*
+  Turbopack's hot-reload channel is a WebSocket to the dev server. `'self'` does
+  not cover the ws: scheme, so under the shipped policy every HMR connection was
+  refused and edits only appeared after a manual reload. Dev only; production
+  talks to Supabase over wss: and nothing else.
+*/
+const connectSrc = isDev
+  ? "connect-src 'self' ws: wss: https://*.supabase.co wss://*.supabase.co"
+  : "connect-src 'self' https://*.supabase.co wss://*.supabase.co";
+
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
@@ -22,11 +45,11 @@ const securityHeaders = [
       "form-action 'self'",
       "frame-ancestors 'none'",
       "object-src 'none'",
-      "script-src 'self' 'unsafe-inline'",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self' data:",
       "img-src 'self' data: blob: https://*.supabase.co",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      connectSrc,
       "worker-src 'self' blob:",
       "manifest-src 'self'",
       'upgrade-insecure-requests',
