@@ -15,6 +15,8 @@ const FOOTER_NAV = [
 const LEGAL_NAV = [
   { label: "Terms and Conditions", href: "/terms" },
   { label: "Privacy Policy", href: "/privacy" },
+  { label: "Lead Engine Terms", href: "/leadengine/terms" },
+  { label: "Lead Engine Privacy", href: "/leadengine/privacy" },
 ];
 
 const SOCIALS = [
