@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { ExtensionSettings } from '@/components/extension/ExtensionSettings'
 import { AvatarSettings, DeleteAccountSettings, EmailSettings, MfaSettings, PasswordSettings, ProfileSettings, SubscriptionSettings } from '@/components/settings/SettingsForms'
 import { requireUser } from '@/lib/auth/access'
+import { listDevices } from '@/lib/extension/devices'
 import { signedAvatarUrl } from '@/lib/profile/avatar'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -27,6 +29,14 @@ export default async function SettingsPage({
     .limit(1)
     .maybeSingle()
   const initials = (ctx.profile?.full_name ?? ctx.email ?? 'O').split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
+  const devices = await listDevices(ctx.userId!)
+  // Null until a listing exists. The UI shows "coming soon" rather than a
+  // dead link, so nobody is sent to a 404 on a store we have not published to.
+  const stores = {
+    chrome: process.env.NEXT_PUBLIC_EXT_STORE_CHROME ?? null,
+    firefox: process.env.NEXT_PUBLIC_EXT_STORE_FIREFOX ?? null,
+    safari: process.env.NEXT_PUBLIC_EXT_STORE_SAFARI ?? null,
+  }
 
   return (
     <div className="space-y-6">
@@ -45,7 +55,7 @@ export default async function SettingsPage({
 
       <div className="grid gap-5 lg:grid-cols-[210px_minmax(0,1fr)]">
         <aside className="h-fit rounded-[var(--radius-xl)] border border-border bg-panel p-2 shadow-[var(--shadow-sm)] lg:sticky lg:top-24">
-          {['Profile', 'Email address', 'Security', 'Subscription and billing', 'Delete account'].map((label) => (
+          {['Profile', 'Email address', 'Security', 'Subscription and billing', 'Browser extension', 'Delete account'].map((label) => (
             <a key={label} href={`#${label.toLowerCase().replaceAll(' ', '-')}`} className="flex h-10 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-accent-soft/60 hover:text-accent">{label}</a>
           ))}
         </aside>
@@ -78,6 +88,9 @@ export default async function SettingsPage({
                 hasActiveSubscription={subscription?.status === 'active'}
               />
             </div>
+          </SettingsSection>
+          <SettingsSection id="browser-extension" title="Browser extension" description="Capture leads directly from your browser, and manage which browsers are connected.">
+            <ExtensionSettings devices={devices} stores={stores} />
           </SettingsSection>
           <SettingsSection id="delete-account" title="Delete account" description="Permanently remove your account and personal data from Outlio.">
             <DeleteAccountSettings isAdmin={ctx.isAdmin} />

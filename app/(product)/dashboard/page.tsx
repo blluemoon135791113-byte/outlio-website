@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { LiveCapture } from '@/components/extension/LiveCapture'
 import { CreditsSummary } from '@/components/product/CreditsSummary'
 import { ReferralCard } from '@/components/product/ReferralCard'
 import { requireAccess } from '@/lib/auth/access'
+import { getActiveSession } from '@/lib/extension/capture'
 import { appOrigin } from '@/lib/auth/redirects'
 import { referralLink } from '@/lib/referrals/constants'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -16,6 +18,10 @@ export const metadata: Metadata = {
 
 export default async function DashboardPage() {
   const ctx = await requireAccess()
+
+  // Rendered server-side so the widget is correct on first paint; Realtime
+  // takes over from there.
+  const activeCapture = await getActiveSession(ctx.userId!)
 
   const { data: balanceRows } = await createAdminClient().rpc('credit_balance', {
     p_user_id: ctx.userId!,
@@ -191,6 +197,8 @@ export default async function DashboardPage() {
           </div>
           <div aria-hidden className="absolute -bottom-12 -right-10 h-36 w-36 rounded-full bg-accent/10 blur-2xl" />
         </section>
+
+        <LiveCapture userId={ctx.userId!} initialSession={activeCapture} />
 
         <CreditsSummary
           leadsPerCredit={uploadLimits.leadsPerCredit}

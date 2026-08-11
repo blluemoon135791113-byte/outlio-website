@@ -10,6 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "ext:build": "node extensions/scripts/build.mjs --target=chrome && node extensions/scripts/build.mjs --target=firefox",
+    "ext:chrome": "node extensions/scripts/build.mjs --target=chrome",
+    "ext:firefox": "node extensions/scripts/build.mjs --target=firefox",
+    "ext:dev": "node extensions/scripts/build.mjs --target=chrome --dev",
     "db:types": "supabase gen types typescript --project-id ptewhpmxzenbmxlizxhu --schema public > types/database.ts"
   },
   "dependencies": {
@@ -36,6 +40,7 @@
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.10",
     "dotenv": "^17.4.2",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
