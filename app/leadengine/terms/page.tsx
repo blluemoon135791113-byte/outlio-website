@@ -134,15 +134,21 @@ export default function LeadEngineTerms() {
                 password, cookies, or session tokens, and has no ability to sign in as you.
               </li>
               <li>
-                The <strong>only</strong> input the Service ever reads is a file you select and
-                upload yourself.
+                The <strong>only</strong> input the Service ever reads is a page you opened
+                yourself — either a file you upload, or a page you capture with our browser
+                extension during a capture session you started.
+              </li>
+              <li>
+                The extension <strong>never navigates for you</strong>. It does not click, page
+                through results, open profiles, send messages, or change filters. You move between
+                pages yourself, and it only reads a page once you have chosen to capture.
               </li>
             </ul>
           </Callout>
           <p>
-            Saving a page you are already viewing, and uploading that file, are actions{" "}
-            <strong>you</strong> take on your own device using your own browser. The Service does
-            not perform them for you and cannot do so.
+            Opening a page, and choosing to upload or capture it, are actions <strong>you</strong>{" "}
+            take on your own device using your own browser. The Service does not perform them for
+            you and cannot do so. Outside an active capture session the extension reads nothing.
           </p>
         </Section>
 

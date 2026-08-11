@@ -55,6 +55,36 @@ export const RULES = {
     windowSeconds: 60 * 60,
     blockSeconds: 60 * 60,
   },
+  /*
+   * Browser extension. Pairing and refresh are credential paths and are held
+   * as tight as sign-in. Capture is per DEVICE rather than per IP: a whole
+   * office behind one address must not lock each other out, and the device is
+   * already an authenticated identity by the time we get here.
+   */
+  extensionPair: {
+    bucket: 'ext:pair',
+    maxAttempts: 5,
+    windowSeconds: 15 * 60,
+    blockSeconds: 15 * 60,
+  },
+  extensionRefresh: {
+    bucket: 'ext:refresh',
+    maxAttempts: 10,
+    windowSeconds: 5 * 60,
+    blockSeconds: 15 * 60,
+  },
+  extensionCapture: {
+    bucket: 'ext:capture',
+    maxAttempts: 30,
+    windowSeconds: 60,
+    blockSeconds: 5 * 60,
+  },
+  extensionSession: {
+    bucket: 'ext:session',
+    maxAttempts: 20,
+    windowSeconds: 60,
+    blockSeconds: 5 * 60,
+  },
 } as const satisfies Record<string, RateLimitRule>
 
 function windowStart(windowSeconds: number, now = Date.now()): Date {

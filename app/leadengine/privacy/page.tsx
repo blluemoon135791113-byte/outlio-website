@@ -107,7 +107,8 @@ export default function LeadEnginePrivacy() {
             <ul className="list-disc space-y-2 pl-5">
               <li>
                 We never connect to LinkedIn, and never ask for or hold your LinkedIn password,
-                cookies, or session. The only thing we read is a file you upload.
+                cookies, or session. We only read a page you opened yourself — uploaded as a file,
+                or captured with our extension during a session you started.
               </li>
               <li>
                 Your uploaded files and extracted records are deleted on a schedule set by your
@@ -198,6 +199,57 @@ export default function LeadEnginePrivacy() {
               when you clear them.
             </li>
           </ul>
+        </Section>
+
+        <Section title="4a. The Browser Extension">
+          <p>
+            The extension is an optional alternative to uploading files. It reads a page you have
+            already opened and sends it to the same processing pipeline. What it does and does not
+            do:
+          </p>
+          <Table
+            head={["Behaviour", "Detail"]}
+            rows={[
+              [
+                "Only while a session is active",
+                <>
+                  It reads nothing until you press Start Capture, and stops the moment you press
+                  Finish. A badge on the toolbar shows whenever a session is running.
+                </>,
+              ],
+              [
+                "Only supported pages",
+                <>Restricted to lead search-results pages. It has no access to any other site.</>,
+              ],
+              [
+                "Only page content",
+                <>
+                  The page HTML, its address, and a page number. <strong>Never</strong> your
+                  passwords, cookies, session tokens, saved logins, payment details, or browsing
+                  history.
+                </>,
+              ],
+              [
+                "It never navigates for you",
+                <>
+                  No automatic clicking, paging, messaging or filtering. You browse; it observes
+                  only the page you chose to capture.
+                </>,
+              ],
+              [
+                "Retention",
+                <>
+                  Captured pages follow the same schedule as uploaded files in Section 8, and you
+                  can clear them at any time.
+                </>,
+              ],
+            ]}
+          />
+          <p>
+            Disconnecting a browser under Settings → Browser Extension revokes its access
+            immediately. You can also delete the extension outright; neither affects leads you have
+            already exported.
+          </p>
         </Section>
 
         <Section title="5. Duplicate-Detection Keys — Read This One">

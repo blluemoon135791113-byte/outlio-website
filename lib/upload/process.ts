@@ -123,6 +123,12 @@ export async function createExtractionJob(
   userId: string,
   accepted: AcceptedFile[],
   dedupeMode: 'keep_all' | 'remove_exact' | 'remove_likely' | 'review',
+  /**
+   * Set when the job came from the browser extension rather than an HTML
+   * upload. NULL keeps source A behaving exactly as before — this is the only
+   * change the extension required in the existing ingestion path.
+   */
+  captureSessionId: string | null = null,
 ): Promise<{ jobId: string; duplicateWarnings: string[] }> {
   if (accepted.length === 0) {
     throw new AppError('ERR_FILE_FORMAT', 'createExtractionJob called with no files')
@@ -138,6 +144,7 @@ export async function createExtractionJob(
     user_id: userId,
     status: 'uploaded',
     dedupe_mode: dedupeMode,
+    capture_session_id: captureSessionId,
     file_count: accepted.length,
     total_bytes: totalBytes,
     progress_step: 'Uploading files',
