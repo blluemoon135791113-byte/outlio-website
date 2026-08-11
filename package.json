@@ -14,7 +14,9 @@
     "ext:chrome": "node extensions/scripts/build.mjs --target=chrome",
     "ext:firefox": "node extensions/scripts/build.mjs --target=firefox",
     "ext:dev": "node extensions/scripts/build.mjs --target=chrome --dev",
-    "db:types": "supabase gen types typescript --project-id ptewhpmxzenbmxlizxhu --schema public > types/database.ts"
+    "db:types": "supabase gen types typescript --project-id ptewhpmxzenbmxlizxhu --schema public > types/database.ts",
+    "ext:package": "node extensions/scripts/build.mjs --target=chrome && node extensions/scripts/package.mjs --target=chrome",
+    "ext:package:firefox": "node extensions/scripts/build.mjs --target=firefox && node extensions/scripts/package.mjs --target=firefox"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

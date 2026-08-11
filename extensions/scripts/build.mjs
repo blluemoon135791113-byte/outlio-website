@@ -114,17 +114,44 @@ await writeFile(join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null,
 
 const sourceIcon = join(repoRoot, 'app', 'icon.png')
 const sizes = [16, 32, 48, 128]
-let copiedIcons = false
+let iconNote = 'MISSING — add app/icon.png'
 
+/**
+ * Resized properly, not just copied.
+ *
+ * A 1080x1080 file declared as a 16x16 icon renders soft in the toolbar and
+ * gets flagged in Chrome Web Store review. `sips` ships with macOS; elsewhere
+ * we fall back to copying and say so loudly, because shipping unresized icons
+ * to a store is a rejection waiting to happen.
+ */
 if (existsSync(sourceIcon)) {
-  for (const size of sizes) {
-    await cp(sourceIcon, join(outDir, 'icons', `icon-${size}.png`))
+  let resized = false
+
+  try {
+    const { execFileSync } = await import('node:child_process')
+    execFileSync('sips', ['--version'], { stdio: 'ignore' })
+
+    for (const size of sizes) {
+      execFileSync(
+        'sips',
+        ['-z', String(size), String(size), sourceIcon, '--out', join(outDir, 'icons', `icon-${size}.png`)],
+        { stdio: 'ignore' },
+      )
+    }
+    resized = true
+  } catch {
+    for (const size of sizes) {
+      await cp(sourceIcon, join(outDir, 'icons', `icon-${size}.png`))
+    }
   }
-  copiedIcons = true
+
+  iconNote = resized
+    ? 'resized from app/icon.png'
+    : 'COPIED UNRESIZED — sips unavailable; resize before submitting to a store'
 }
 
 console.log(`Built ${target} → extensions/dist/${target}`)
 console.log(`  API base   ${API_BASE}`)
-console.log(`  Icons      ${copiedIcons ? 'copied from app/icon.png (not resized)' : 'MISSING — add before publishing'}`)
+console.log(`  Icons      ${iconNote}`)
 console.log('')
 console.log('Load it: chrome://extensions → Developer mode → Load unpacked → select the folder above.')
