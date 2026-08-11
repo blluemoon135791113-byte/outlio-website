@@ -24,8 +24,14 @@ It is a **file processor**, not a crawler.
 
 ## Hard rules — never violate
 
-1. **No LinkedIn automation.** No requests to `linkedin.com`, no headless browser,
-   no Playwright/Puppeteer/Selenium. The only input is a user-uploaded file.
+1. **No LinkedIn automation.** No requests to `linkedin.com` from our servers, no
+   headless browser, no Playwright/Puppeteer/Selenium, **no automated navigation
+   of any kind** — no clicking Next, opening profiles, messaging, connecting or
+   changing filters, and no anti-detection, stealth or CAPTCHA-bypass code.
+   **Revised 2026-08-11:** input is a page the user opened themselves, arriving
+   by one of exactly two routes — a file they upload, or a page captured by the
+   browser extension during a session they explicitly started. The extension
+   observes; the user navigates. Outside an active session it reads nothing.
 2. **No LinkedIn credentials or cookies** collected, stored, transmitted, or
    logged — ever. Strip them if present in uploaded HTML.
 3. **Never render uploaded HTML in a browser.** No `dangerouslySetInnerHTML`, no

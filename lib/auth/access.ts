@@ -76,18 +76,43 @@ export async function getAccessContext(): Promise<AccessContext> {
   if (!user) return UNAUTHENTICATED
 
   const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-  const mfaCurrentLevel = assurance?.currentLevel ?? null
-  const mfaNextLevel = assurance?.nextLevel ?? null
 
-  // Supabase marks this when the verification link is followed.
-  const emailVerified = Boolean(user.email_confirmed_at)
+  return resolveAccessFor({
+    userId: user.id,
+    email: user.email ?? null,
+    emailVerified: Boolean(user.email_confirmed_at),
+    mfaCurrentLevel: assurance?.currentLevel ?? null,
+    mfaNextLevel: assurance?.nextLevel ?? null,
+  })
+}
+
+/**
+ * The identity-agnostic half of the access decision.
+ *
+ * Split out so a caller that authenticated by something OTHER than a session
+ * cookie — currently the browser extension's bearer token — reaches the exact
+ * same verdict through the exact same code. Duplicating this logic for a
+ * second transport is how the two drift apart and one of them gets it wrong.
+ *
+ * ⚠️ `userId` must come from a VERIFIED credential. Never from a request body.
+ */
+export async function resolveAccessFor(identity: {
+  userId: string
+  email: string | null
+  emailVerified: boolean
+  mfaCurrentLevel?: string | null
+  mfaNextLevel?: string | null
+}): Promise<AccessContext> {
+  const { userId, email, emailVerified } = identity
+  const mfaCurrentLevel = identity.mfaCurrentLevel ?? null
+  const mfaNextLevel = identity.mfaNextLevel ?? null
 
   // Service role: RLS is bypassed, so scoping by id here is mandatory.
   const admin = createAdminClient()
   const { data: profileRow, error } = await admin
     .from('profiles')
     .select('*')
-    .eq('id', user.id)
+    .eq('id', userId)
     .maybeSingle()
 
   if (error) {
@@ -99,8 +124,8 @@ export async function getAccessContext(): Promise<AccessContext> {
   if (!profile || profile.deleted_at) {
     return {
       ...UNAUTHENTICATED,
-      userId: user.id,
-      email: user.email ?? null,
+      userId,
+      email,
       mfaCurrentLevel,
       mfaNextLevel,
     }
@@ -112,8 +137,8 @@ export async function getAccessContext(): Promise<AccessContext> {
     plan: Plan | null,
     usage: UsageSnapshot | null,
   ): Omit<AccessContext, 'canUseScraper' | 'reason'> => ({
-    userId: user.id,
-    email: user.email ?? null,
+    userId,
+    email,
     role: profile.role,
     isAdmin,
     plan,
@@ -137,7 +162,7 @@ export async function getAccessContext(): Promise<AccessContext> {
   }
 
   const plan = profile.plan_id ? await getPlanById(profile.plan_id) : null
-  const usage = await getUsageSnapshot(user.id)
+  const usage = await getUsageSnapshot(userId)
 
   return { ...base(plan, usage), ...decideLimits(plan?.limits ?? null, usage) }
 }

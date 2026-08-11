@@ -135,6 +135,8 @@ export type ProfileRow = {
   suspended_at: string | null
   suspended_reason: string | null
   consent_accepted_at: string | null
+  /** Admin kill-switch for the browser extension, independent of billing. */
+  extension_enabled: boolean
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -200,6 +202,10 @@ export type ExtractionJobRow = {
   user_id: string
   status: JobStatus
   dedupe_mode: DedupeMode
+  /** Set for extension captures; NULL for HTML uploads. See migration 0032. */
+  capture_session_id: string | null
+  /** Credits spent once the lead count was known. NULL until charged. */
+  credits_charged: number | null
   file_count: number
   total_bytes: number
   progress_step: string | null
@@ -376,9 +382,88 @@ type TableShape<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Relationships: []
 }
 
+/* ---------------------------------------------------------------------------
+ * Browser extension (migration 0032)
+ * ------------------------------------------------------------------------- */
+
+export type CaptureSessionStatus = 'active' | 'completed' | 'abandoned'
+
+export type CapturePageStatus =
+  | 'received'
+  | 'queued'
+  | 'processed'
+  | 'duplicate'
+  | 'failed'
+
+export type ExtensionDeviceRow = {
+  id: string
+  user_id: string
+  label: string
+  browser: string | null
+  platform: string | null
+  /** Keyed hash. The token itself is returned once and never stored. */
+  refresh_token_hash: string
+  /** Id of the currently valid access token; nulled on revoke. */
+  access_token_jti: string | null
+  enabled: boolean
+  created_at: string
+  last_active_at: string | null
+  revoked_at: string | null
+  revoked_by: string | null
+}
+
+export type ExtensionPairingRow = {
+  id: string
+  user_id: string
+  code_hash: string
+  state: string
+  label: string | null
+  browser: string | null
+  platform: string | null
+  expires_at: string
+  consumed_at: string | null
+  created_at: string
+}
+
+export type CaptureSessionRow = {
+  id: string
+  user_id: string
+  device_id: string | null
+  status: CaptureSessionStatus
+  source: string
+  browser: string | null
+  started_at: string
+  completed_at: string | null
+  pages_processed: number
+  leads_found: number
+  leads_imported: number
+  duplicates_skipped: number
+  created_at: string
+}
+
+export type CapturePageRow = {
+  id: string
+  capture_session_id: string
+  user_id: string
+  extraction_job_id: string | null
+  source_url: string | null
+  page_identifier: string | null
+  status: CapturePageStatus
+  leads_found: number
+  /** SHA-256 of the captured HTML. The duplicate authority. */
+  content_hash: string
+  error: string | null
+  created_at: string
+  processed_at: string | null
+}
+
 export type Database = {
   public: {
     Tables: {
+      extension_devices: TableShape<ExtensionDeviceRow>
+      extension_pairings: TableShape<ExtensionPairingRow>
+      capture_sessions: TableShape<CaptureSessionRow>
+      capture_pages: TableShape<CapturePageRow>
       plans: TableShape<PlanRow>
       profiles: TableShape<ProfileRow>
       access_requests: TableShape<AccessRequestRow>
@@ -521,6 +606,33 @@ export type Database = {
         Args: { p_user_id: string }
         /** 'ok' | 'no_subscription' | 'not_scheduled' | 'already_ended' */
         Returns: string
+      }
+      claim_capture_page: {
+        Args: {
+          p_session_id: string
+          p_user_id: string
+          p_content_hash: string
+          p_source_url: string | null
+          p_page_ident: string | null
+        }
+        /** 'claimed' | 'duplicate' | 'session_closed' | 'not_found' */
+        Returns: { status: string; page_id: string | null }[]
+      }
+      roll_capture_totals: {
+        Args: {
+          p_page_id: string
+          p_user_id: string
+          p_job_id: string | null
+          p_leads_found: number
+          p_leads_kept: number
+          p_status: CapturePageStatus
+          p_error?: string | null
+        }
+        Returns: undefined
+      }
+      revoke_extension_device: {
+        Args: { p_device_id: string; p_user_id: string; p_actor_id?: string | null }
+        Returns: boolean
       }
       lead_credit_cost: {
         Args: { p_lead_count: number; p_leads_per_credit: number | null }

@@ -73,7 +73,7 @@ const HONEST = [
   },
   {
     title: 'It never browses LinkedIn',
-    body: 'There is no bot and no extension. The only thing Lead Engine ever reads is a file you chose to upload from your own machine.',
+    body: 'There is no bot. Lead Engine only ever reads a page you opened yourself — either a file you upload, or a page you capture with our extension while you browse. It never navigates for you.',
   },
   {
     title: 'You decide what is kept',

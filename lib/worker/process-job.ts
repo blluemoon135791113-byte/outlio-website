@@ -78,7 +78,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
 
   const { data: job } = await supabase
     .from('extraction_jobs')
-    .select('id, user_id, dedupe_mode')
+    .select('id, user_id, dedupe_mode, capture_session_id')
     .eq('id', jobId)
     // Service role bypasses RLS — scoping by user_id is mandatory.
     .eq('user_id', userId)
@@ -333,6 +333,39 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     .eq('id', jobId)
 
   await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
+
+  /*
+   * Extension captures only: roll the per-page result into its capture
+   * session so the popup and the dashboard widget show live totals.
+   *
+   * Deliberately last, and deliberately non-fatal. The leads are already
+   * committed and the CSV is written by this point; a failure to update a
+   * progress counter must never fail a job whose real work succeeded.
+   */
+  if (job.capture_session_id) {
+    try {
+      const { data: page } = await supabase
+        .from('capture_pages')
+        .select('id')
+        .eq('extraction_job_id', jobId)
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (page) {
+        await supabase.rpc('roll_capture_totals', {
+          p_page_id: page.id,
+          p_user_id: userId,
+          p_job_id: jobId,
+          p_leads_found: report.totalParsed,
+          p_leads_kept: report.uniqueKept,
+          p_status: status === 'failed' ? 'failed' : 'processed',
+          p_error: null,
+        })
+      }
+    } catch {
+      // Counters are cosmetic; the lead data is the product.
+    }
+  }
 
   return {
     jobId,
