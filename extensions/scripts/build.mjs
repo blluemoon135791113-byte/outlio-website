@@ -32,8 +32,8 @@ const API_BASE = dev ? 'http://localhost:3000' : 'https://outlio.io'
 const srcDir = join(root, target)
 const outDir = join(root, 'dist', target)
 
-if (!existsSync(srcDir)) {
-  console.error(`No source directory for target "${target}" (looked in ${srcDir}).`)
+if (!existsSync(join(srcDir, 'manifest.json'))) {
+  console.error(`No manifest for target "${target}" (looked in ${srcDir}).`)
   process.exit(1)
 }
 
@@ -44,10 +44,18 @@ await mkdir(join(outDir, 'icons'), { recursive: true })
  * Bundle
  * ---------------------------------------------------------------------- */
 
+/*
+ * Every entry point is SHARED. Only the manifest differs per browser, which is
+ * the whole point of the layout: Chrome and Firefox both expose the `chrome.*`
+ * namespace under MV3, so the logic needs no per-browser branching. Safari's
+ * converter consumes the same output.
+ */
+const shared = join(root, 'shared')
+
 const entries = {
-  background: join(srcDir, 'background.ts'),
-  content: join(srcDir, 'content.ts'),
-  connect: join(srcDir, 'connect.ts'),
+  background: join(shared, 'background.ts'),
+  content: join(shared, 'content.ts'),
+  connect: join(shared, 'connect.ts'),
   popup: join(root, 'ui', 'popup', 'popup.ts'),
 }
 
