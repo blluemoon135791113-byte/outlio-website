@@ -65,12 +65,14 @@ export default function HeroHeadline() {
         <span className="inline-block hero-text-slide" style={{ animationDelay: "0.4s" }}>
           for
         </span>{" "}
-        <span className="relative inline-block whitespace-nowrap align-baseline" style={{ minWidth: '0' }}>
-          {/* width reserved by the longest word so the loop never causes layout shift */}
-          <span aria-hidden className="invisible inline-block">
-            tech startups.
-          </span>
-          <span key={index} className="absolute inset-0 flex items-baseline text-accent hero-word-fade">
+        {/*
+          Width is reserved by `.hero-word-slot::before` in globals.css, NOT by
+          a hidden span. A hidden span kept its text in the DOM, so the headline
+          was copied and indexed as "…for tech startups.tech startups." — only
+          one word may exist here.
+        */}
+        <span className="hero-word-slot whitespace-nowrap">
+          <span key={index} className="text-accent hero-word-fade">
             {WORDS[index]}.
           </span>
         </span>

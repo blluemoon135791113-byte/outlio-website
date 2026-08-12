@@ -164,7 +164,7 @@ const FAQS = [
   },
   {
     q: "What if you don't perform?",
-    a: "Refund, or the rest of the month free while we keep working. Your pick.",
+    a: "You're never locked in. The first week is paid separately, months after it are month-to-month, and every message we send is visible to you live in a shared CRM. If it isn't working you stop. We don't offer refunds on work that was delivered as agreed, and we'd rather say that plainly than promise one and argue about it later.",
   },
   {
     q: "How many clients can you actually bring in?",
@@ -316,7 +316,8 @@ export default function Home() {
                   </Link>
                 </div>
                 <p className="mt-4 text-sm text-muted">
-                  First week only, before any monthly commitment. If we underperform, you don't pay.
+                  One paid week before any monthly commitment. Watch every message land in a shared
+                  CRM before you commit further.
                 </p>
               </div>
             </div>
@@ -466,6 +467,47 @@ export default function Home() {
               </p>
             </Reveal>
 
+            {/*
+              Pricing, stated before the call rather than behind it.
+              Range and drivers live here so a visitor can self-qualify without
+              booking — the call is for scoping, not for finding out the number.
+            */}
+            <Reveal delay={80}>
+              <div className="mt-10 rounded-2xl border border-accent/20 bg-accent-soft/40 p-6 sm:p-8">
+                <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
+                  What it costs
+                </p>
+                <p className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+                  $1,500 – $3,000 <span className="text-xl font-medium text-muted">/ month</span>
+                </p>
+                <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">
+                  Where you land in that range depends on four things, and we&apos;ll tell you which
+                  before you book anything.
+                </p>
+
+                <dl className="mt-7 grid gap-x-10 gap-y-5 sm:grid-cols-2">
+                  {[
+                    ['Outreach volume', 'Around 50 prospects a day sits at the lower end. Higher daily volume and more sending accounts move it up.'],
+                    ['Channels', 'Email alone is the cheapest to run. LinkedIn, X and Instagram each add manual work per prospect.'],
+                    ['Research depth', 'A broad ICP is quick to source. Narrow, senior or hard-to-reach targets take real digging per lead.'],
+                    ['Creative', 'Explainer video and motion-design ad creative are add-ons, not part of the baseline outbound engine.'],
+                  ].map(([term, detail]) => (
+                    <div key={term} className="border-t border-accent/15 pt-3">
+                      <dt className="text-base font-semibold text-ink">{term}</dt>
+                      <dd className="mt-1 text-sm leading-relaxed text-muted">{detail}</dd>
+                    </div>
+                  ))}
+                </dl>
+
+                <p className="mt-7 border-t border-accent/15 pt-5 text-sm leading-relaxed text-muted">
+                  You start with one paid week at the same rate before any monthly commitment.{' '}
+                  <strong className="font-semibold text-ink">Growth Accelerator</strong> is scoped
+                  separately — it is an embedded team rather than a campaign, so it sits above this
+                  range.
+                </p>
+              </div>
+            </Reveal>
+
             {/* Full Services Display, 2 Side by Side Cards */}
             <div className="mt-16 grid gap-8 lg:grid-cols-2">
               {SERVICES.map((service, index) => (
@@ -608,7 +650,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== 6. GUARANTEE — deep minimal gradient band ========== */}
+        {/* ========== 6. HOW WE START — deep minimal gradient band ========== */}
         <section className="grad-band relative overflow-hidden text-cream">
           {/* soft glows so the band reads glassy, not flat */}
           <div
@@ -622,7 +664,7 @@ export default function Home() {
           <div className="relative mx-auto max-w-7xl px-6 py-28 sm:px-10 sm:py-40">
             <Reveal>
               <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-cream/55">
-                The guarantee
+                How we start
               </p>
               <h2 className="mt-6 text-5xl font-bold uppercase tracking-tight sm:text-7xl">
                 The one-week deal.
@@ -634,11 +676,12 @@ export default function Home() {
               </Reveal>
               <Reveal delay={160}>
                 <p className="text-cream/85">
-                  If we underperform: a refund, or the rest of the month free while we keep working.
+                  Every message we send is visible to you in a shared CRM, updated daily. You see
+                  the work as it happens, not in a report afterwards.
                 </p>
               </Reveal>
               <Reveal delay={240}>
-                <p className="font-semibold">Either way, we keep working.</p>
+                <p className="font-semibold">Then you decide whether month two happens.</p>
               </Reveal>
             </div>
             <Reveal delay={320}>
@@ -820,7 +863,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== 11. FINAL CTA — same deep gradient band as the guarantee ========== */}
+        {/* ========== 11. FINAL CTA — same deep gradient band as "How we start" ========== */}
         <section id="book" className="grad-band relative scroll-mt-24 overflow-hidden text-cream">
           <div
             aria-hidden
