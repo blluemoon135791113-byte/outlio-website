@@ -162,16 +162,113 @@ body{
   ${frame.body}
 </body></html>`
 
+/* -------------------------------------------------------------------------
+ * Promo tiles
+ *
+ * Different job from the screenshots. A tile is browsed at thumbnail size in a
+ * grid, so it carries brand and ONE idea — no popup, no UI, no paragraph. The
+ * small tile in particular is 440x280 and sits next to a dozen others.
+ *
+ * Palette is the site's own ivory-and-charcoal with the accent purple, so the
+ * listing looks like the product it links to.
+ * ---------------------------------------------------------------------- */
+
+const logoPath = join(resolve(root, '..'), 'public', 'outlio logo.png')
+const logoUrl = `file://${logoPath}`
+
+const tileShell = (inner, extraCss = '') => `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+:root{--ink:#1a1a1a;--muted:#6b6b6b;--accent:#6b4eff;--cream:#f5f2e8}
+*{box-sizing:border-box}
+/* height:100% on BOTH, or .stage resolves against an auto-height body and the
+   content sits at the top with the rest of the tile empty. */
+html,body{margin:0;padding:0;height:100%;overflow:hidden}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  color:var(--ink);
+  background:
+    radial-gradient(110% 130% at 100% 0%, rgba(107,78,255,.14) 0%, transparent 60%),
+    linear-gradient(140deg,#faf9fc 0%,#f1eefb 100%);
+  position:relative;
+}
+/* The dot grid from the site hero, so the tile reads as the same brand.
+   The mask fades to nothing well inside the edges — an ellipse that ends
+   abruptly leaves a visible seam across the artwork. */
+body::before{
+  content:"";position:absolute;inset:0;
+  background-image:radial-gradient(circle, rgba(26,26,26,.09) 1.1px, transparent 1.1px);
+  background-size:24px 24px;
+  -webkit-mask-image:radial-gradient(ellipse 90% 90% at 25% 50%, #000 0%, transparent 100%);
+  mask-image:radial-gradient(ellipse 90% 90% at 25% 50%, #000 0%, transparent 100%);
+}
+.stage{position:relative;height:100%;display:flex;align-items:center}
+.logo{border-radius:22%;display:block}
+.accent{color:var(--accent)}
+${extraCss}
+</style></head><body><div class="stage">${inner}</div></body></html>`
+
+const TILES = [
+  {
+    name: 'promo-small-440x280',
+    width: 440,
+    height: 280,
+    /*
+     * At 440x280 anything subtle disappears. One mark, one name, one line —
+     * the value proposition has to survive being 200px wide in a grid.
+     */
+    html: tileShell(
+      `<div class="pad">
+         <img class="logo" src="${logoUrl}" width="56" height="56" alt="">
+         <p class="name">Lead&nbsp;Capture</p>
+         <p class="line">Sales Navigator results<br><span class="accent">into a clean CSV.</span></p>
+       </div>`,
+      `.pad{padding:34px 36px}
+       .name{margin:18px 0 0;font-size:20px;font-weight:700;letter-spacing:-.01em}
+       .line{margin:10px 0 0;font-size:25px;line-height:1.2;font-weight:700;letter-spacing:-.02em}`,
+    ),
+  },
+  {
+    name: 'promo-marquee-1400x560',
+    width: 1400,
+    height: 560,
+    /*
+     * The marquee runs across the top of a category page, so it can carry a
+     * headline plus one supporting line. Still no UI — that is what the
+     * screenshots are for.
+     */
+    html: tileShell(
+      `<div class="pad">
+         <div class="row">
+           <img class="logo" src="${logoUrl}" width="86" height="86" alt="">
+           <div>
+             <p class="eyebrow">Outlio</p>
+             <p class="name">Lead Capture</p>
+           </div>
+         </div>
+         <h1 class="headline">Sales Navigator results,<br><span class="accent">straight into your dashboard.</span></h1>
+         <p class="sub">No saving pages. No downloading files. No uploading. Start a capture, browse the results yourself, and your leads are waiting.</p>
+       </div>`,
+      `.pad{padding:0 88px}
+       .row{display:flex;align-items:center;gap:22px}
+       .eyebrow{margin:0;font-size:14px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+       .name{margin:4px 0 0;font-size:30px;font-weight:700;letter-spacing:-.015em}
+       .headline{margin:34px 0 0;font-size:60px;line-height:1.08;letter-spacing:-.028em;font-weight:800}
+       .sub{margin:24px 0 0;max-width:800px;font-size:21px;line-height:1.5;color:var(--muted)}`,
+    ),
+  },
+]
+
 await rm(tmpDir, { recursive: true, force: true })
 await rm(outDir, { recursive: true, force: true })
 await mkdir(tmpDir, { recursive: true })
 await mkdir(outDir, { recursive: true })
 
-for (const frame of FRAMES) {
-  const htmlPath = join(tmpDir, `${frame.name}.html`)
-  const pngPath = join(outDir, `${frame.name}.png`)
+/** Renders one HTML string at an exact size and strips the alpha channel. */
+async function render(name, html, width, height) {
+  const htmlPath = join(tmpDir, `${name}.html`)
+  const pngPath = join(outDir, `${name}.png`)
 
-  await writeFile(htmlPath, shell(frame))
+  await writeFile(htmlPath, html)
 
   execFileSync(
     CHROME,
@@ -180,24 +277,38 @@ for (const frame of FRAMES) {
       '--disable-gpu',
       '--hide-scrollbars',
       '--force-device-scale-factor=1',
-      '--window-size=1280,800',
+      `--window-size=${width},${height}`,
       `--screenshot=${pngPath}`,
       `file://${htmlPath}`,
     ],
     { stdio: 'ignore' },
   )
 
-  // Chrome writes RGBA. The store rejects an alpha channel, so flatten it.
-  execFileSync('sips', ['-s', 'format', 'png', '--matchTo', '/System/Library/ColorSync/Profiles/sRGB Profile.icc', pngPath], { stdio: 'ignore' })
+  // Chrome writes RGBA. The store rejects an alpha channel on upload, so every
+  // asset is flattened here rather than discovered at submission time.
+  execFileSync(
+    'sips',
+    ['-s', 'format', 'png', '--matchTo', '/System/Library/ColorSync/Profiles/sRGB Profile.icc', pngPath],
+    { stdio: 'ignore' },
+  )
 
   const info = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', '-g', 'hasAlpha', pngPath], {
     encoding: 'utf8',
   })
-  const width = /pixelWidth:\s*(\d+)/.exec(info)?.[1]
-  const height = /pixelHeight:\s*(\d+)/.exec(info)?.[1]
+  const w = /pixelWidth:\s*(\d+)/.exec(info)?.[1]
+  const h = /pixelHeight:\s*(\d+)/.exec(info)?.[1]
   const alpha = /hasAlpha:\s*(\w+)/.exec(info)?.[1]
+  const ok = w === String(width) && h === String(height) && alpha === 'no'
 
-  console.log(`  ${frame.name}.png  ${width}x${height}  alpha=${alpha}`)
+  console.log(`  ${ok ? ' ' : '!'} ${name}.png  ${w}x${h}  alpha=${alpha}`)
+}
+
+for (const frame of FRAMES) {
+  await render(frame.name, shell(frame), 1280, 800)
+}
+
+for (const tile of TILES) {
+  await render(tile.name, tile.html, tile.width, tile.height)
 }
 
 await rm(tmpDir, { recursive: true, force: true })
