@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { ExtensionCard } from '@/components/extension/ExtensionCard'
 import { LiveCapture } from '@/components/extension/LiveCapture'
 import { CreditsSummary } from '@/components/product/CreditsSummary'
 import { ReferralCard } from '@/components/product/ReferralCard'
 import { requireAccess } from '@/lib/auth/access'
 import { getActiveSession } from '@/lib/extension/capture'
+import { countDevices } from '@/lib/extension/devices'
 import { appOrigin } from '@/lib/auth/redirects'
 import { referralLink } from '@/lib/referrals/constants'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -22,6 +24,7 @@ export default async function DashboardPage() {
   // Rendered server-side so the widget is correct on first paint; Realtime
   // takes over from there.
   const activeCapture = await getActiveSession(ctx.userId!)
+  const connectedDevices = await countDevices(ctx.userId!)
 
   const { data: balanceRows } = await createAdminClient().rpc('credit_balance', {
     p_user_id: ctx.userId!,
@@ -204,6 +207,8 @@ export default async function DashboardPage() {
           leadsPerCredit={uploadLimits.leadsPerCredit}
           maxFiles={uploadLimits.maxFiles}
         />
+
+        <ExtensionCard connectedDevices={connectedDevices} />
 
         {referral?.code ? (
           <ReferralCard
