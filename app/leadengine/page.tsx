@@ -84,7 +84,7 @@ const HONEST = [
 export default function LeadEnginePage() {
   return (
     <>
-      <Nav homePrefix="/" finalCta="sign-in" />
+      <Nav surface="leadengine" />
 
       <LeadEngineHero />
 

@@ -61,7 +61,7 @@ const PROCESS = [
 export default function Explainers() {
   return (
     <>
-      <Nav homePrefix="/" />
+      <Nav surface="motion" />
       <Breadcrumbs />
       <main>
         {/* ========== E1. HERO ========== */}
