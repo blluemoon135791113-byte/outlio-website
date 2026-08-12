@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { CALENDLY_URL } from "../lib/constants";
+import { CALENDLY_URL, CHROME_EXTENSION_URL } from "../lib/constants";
 
 /**
  * Surface-aware navigation.
@@ -22,7 +22,7 @@ import { CALENDLY_URL } from "../lib/constants";
  */
 export type NavSurface = "agency" | "leadengine" | "motion";
 
-type NavLink = { label: string; href: string };
+type NavLink = { label: string; href: string; external?: boolean };
 
 type NavCta = {
   label: string;
@@ -66,6 +66,7 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
       { label: "How it works", href: "/leadengine#how-it-works" },
       { label: "Product", href: "/leadengine#product-preview" },
       { label: "Pricing", href: "/leadengine#pricing" },
+      { label: "Download the extension", href: CHROME_EXTENSION_URL, external: true },
     ],
     servicesDropdown: false,
     ctas: [
@@ -97,8 +98,8 @@ export default function Nav({ surface = "agency" }: NavProps) {
   const config = SURFACES[surface];
   const closeMobile = () => setIsMobileMenuOpen(false);
 
-  const externalProps = (cta: NavCta) =>
-    cta.external ? { target: "_blank", rel: "noopener noreferrer" } : {};
+  const externalProps = (item: { external?: boolean }) =>
+    item.external ? { target: "_blank", rel: "noopener noreferrer" } : {};
 
   return (
     <header className="sticky top-0 z-50 bg-paper/90 backdrop-blur-md">
@@ -114,7 +115,12 @@ export default function Nav({ surface = "agency" }: NavProps) {
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-8 px-8 text-[15px] font-medium md:flex">
           {config.links.map((l) => (
-            <Link key={l.label} href={l.href} className="transition-colors hover:text-accent">
+            <Link
+              key={l.label}
+              href={l.href}
+              {...externalProps(l)}
+              className="transition-colors hover:text-accent"
+            >
               {l.label}
             </Link>
           ))}
@@ -228,6 +234,7 @@ export default function Nav({ surface = "agency" }: NavProps) {
                 <Link
                   key={l.label}
                   href={l.href}
+                  {...externalProps(l)}
                   className="block text-base font-medium transition-colors hover:text-accent"
                   onClick={closeMobile}
                 >
