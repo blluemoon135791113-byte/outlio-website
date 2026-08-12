@@ -64,7 +64,17 @@ for (const [name, entry] of Object.entries(entries)) {
     entryPoints: [entry],
     outfile: join(outDir, `${name}.js`),
     bundle: true,
-    format: 'esm',
+    /*
+     * Firefox gets IIFE, Chrome gets ESM.
+     *
+     * Chrome's MV3 background is a service worker declared `type: module`, so
+     * ESM is correct there. Firefox's MV3 background is an event page loaded
+     * via `background.scripts`, and module support there varies by version.
+     * A self-executing bundle loads as a classic script on every version, and
+     * nothing in the bundle needs module semantics — there are no exports and
+     * no top-level await.
+     */
+    format: target === 'firefox' ? 'iife' : 'esm',
     target: ['chrome116', 'firefox121', 'safari16'],
     platform: 'browser',
     minify: !dev,
