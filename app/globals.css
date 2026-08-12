@@ -218,6 +218,50 @@ h6 {
   animation: word-fade-in 0.8s ease-in-out both;
 }
 
+/*
+ * Rotating hero word.
+ *
+ * Width is reserved by a PSEUDO-ELEMENT, not a hidden span. A hidden span
+ * reserves width correctly but its text still lives in the DOM, so it is still
+ * copied, still crawled, and still shown in search snippets. That is how the
+ * headline shipped reading "…for tech startups.tech startups." — correct on
+ * screen, duplicated everywhere text is extracted.
+ *
+ * inline-grid stacks the pseudo-element and the live word in one cell, so the
+ * slot is always as wide as the longest word and the loop causes no layout
+ * shift. `content` is reserved for the widest string, not the first one.
+ */
+.hero-word-slot {
+  display: inline-grid;
+  vertical-align: baseline;
+}
+
+.hero-word-slot > *,
+.hero-word-slot::before {
+  grid-area: 1 / 1;
+}
+
+.hero-word-slot::before {
+  content: "SaaS startups.";
+  visibility: hidden;
+}
+
+/* Same pattern, same reason — see `.hero-word-slot`. */
+.service-word-slot {
+  display: inline-grid;
+  vertical-align: baseline;
+}
+
+.service-word-slot > *,
+.service-word-slot::before {
+  grid-area: 1 / 1;
+}
+
+.service-word-slot::before {
+  content: "OUTBOUND.";
+  visibility: hidden;
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;
