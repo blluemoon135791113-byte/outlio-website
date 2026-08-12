@@ -473,7 +473,10 @@ export default function Home() {
               booking — the call is for scoping, not for finding out the number.
             */}
             <Reveal delay={80}>
-              <div className="mt-10 rounded-2xl border border-accent/20 bg-accent-soft/40 p-6 sm:p-8">
+              <div
+                id="pricing"
+                className="mt-10 scroll-mt-24 rounded-2xl border border-accent/20 bg-accent-soft/40 p-6 sm:p-8"
+              >
                 <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
                   What it costs
                 </p>

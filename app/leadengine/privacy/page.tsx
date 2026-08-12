@@ -75,7 +75,7 @@ function Table({
 export default function LeadEnginePrivacy() {
   return (
     <>
-      <Nav homePrefix="/" />
+      <Nav surface="leadengine" />
       <main className="mx-auto w-full max-w-3xl px-6 py-20 sm:py-28">
         <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
           Outlio &middot; Lead Engine &middot; Legal
