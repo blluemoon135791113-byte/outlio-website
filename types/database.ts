@@ -79,6 +79,20 @@ export type UsageMetric =
   | 'exports'
   | 'storage_bytes'
 
+export type IntegrationConnectionStatus =
+  | 'not_connected'
+  | 'connecting'
+  | 'connected'
+  | 'reconnect_required'
+  | 'error'
+
+export type LeadExportJobStatus =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'partial'
+  | 'failed'
+
 /**
  * Shape of `plans.limits`. `null` means unlimited.
  * Read at runtime — never hardcode a limit in application code.
@@ -251,9 +265,11 @@ export type ExtractedLeadRow = {
   uploaded_file_id: string | null
   full_name: string | null
   linkedin_url: string | null
+  sales_navigator_url: string | null
   job_title: string | null
   company_name: string | null
   company_url: string | null
+  company_website_url: string | null
   location: string | null
   person_blurb: string | null
   tenure_in_role: string | null
@@ -265,6 +281,199 @@ export type ExtractedLeadRow = {
   is_duplicate: boolean
   duplicate_of_id: string | null
   raw_data: Json | null
+  /** Resolved company identity. NULL until the linking step runs. */
+  company_id: string | null
+  company_match_strategy: CompanyMatchStrategy | null
+  created_at: string
+  updated_at: string
+}
+
+/** Identity precedence: domain beats LinkedIn URL beats name (spec §9). */
+export type CompanyMatchStrategy = 'domain' | 'linkedin' | 'name'
+
+/**
+ * One row per distinct company per user — the unit of company-level research.
+ *
+ * `industry` / `employee_count` / `headquarters` are projections of the current
+ * best value. `research_evidence` holds the provenance and expiry.
+ */
+export type CompanyRow = {
+  id: string
+  user_id: string
+  name: string | null
+  normalized_name: string | null
+  domain: string | null
+  normalized_domain: string | null
+  linkedin_url: string | null
+  normalized_linkedin_url: string | null
+  industry: string | null
+  employee_count: number | null
+  headquarters: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Research intelligence (0044)
+// ---------------------------------------------------------------------------
+
+export type ResearchRunStatus =
+  | 'pending'
+  | 'planning'
+  | 'waiting_for_clarification'
+  | 'running'
+  | 'partially_complete'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export type ResearchEntityType = 'company' | 'person'
+
+export type ResearchSourceConfidence = 'high' | 'medium' | 'low'
+
+/** One user question. The debugging record for a system that spends money. */
+export type ResearchRunRow = {
+  id: string
+  user_id: string
+  status: ResearchRunStatus
+  query_text: string
+  scope: Json
+  /** The validated ResearchPlan. External research never runs without one. */
+  plan: Json | null
+  clarifications: Json
+  lead_count: number
+  company_count: number
+  qualified_count: number
+  tools_used: string[]
+  external_call_count: number
+  cache_hit_count: number
+  /** Integer micros. Never a float. */
+  estimated_cost_micros: number
+  actual_cost_micros: number
+  duration_ms: number | null
+  error_code: string | null
+  error_message: string | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** A researched fact with provenance and expiry. No row means unknown. */
+export type ResearchEvidenceRow = {
+  id: string
+  user_id: string
+  entity_type: ResearchEntityType
+  entity_id: string
+  field: string
+  value_json: Json
+  source_provider: string
+  source_url: string | null
+  source_confidence: ResearchSourceConfidence
+  confidence: number
+  retrieved_at: string
+  /** NULL means the fact does not go stale. */
+  expires_at: string | null
+  research_run_id: string | null
+  created_at: string
+}
+
+/** Per-external-call observability. Never holds secrets or raw responses. */
+export type ResearchToolCallRow = {
+  id: string
+  user_id: string
+  research_run_id: string | null
+  provider: string
+  tool: string
+  entity_type: ResearchEntityType | null
+  entity_id: string | null
+  status: 'success' | 'not_found' | 'error' | 'timeout' | 'skipped'
+  latency_ms: number | null
+  estimated_cost_micros: number
+  error_code: string | null
+  created_at: string
+}
+
+/** Safe metadata only. Provider credentials are stored in IntegrationSecretRow. */
+export type IntegrationConnectionRow = {
+  id: string
+  user_id: string
+  provider: string
+  status: IntegrationConnectionStatus
+  external_account_id: string | null
+  external_account_name: string | null
+  external_account_email: string | null
+  scopes: string[]
+  configuration: Json
+  secret_reference: string
+  token_expires_at: string | null
+  connected_at: string | null
+  last_used_at: string | null
+  last_tested_at: string | null
+  /** Client-safe summary only; raw provider errors must not be stored here. */
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Service-role only. `encrypted_payload` is an AES-256-GCM envelope. */
+export type IntegrationSecretRow = {
+  id: string
+  connection_id: string
+  encrypted_payload: string
+  created_at: string
+  updated_at: string
+}
+
+/** Service-role only, short-lived OAuth state and encrypted PKCE verifier. */
+export type IntegrationOAuthTransactionRow = {
+  id: string
+  user_id: string
+  provider: string
+  state_hash: string
+  encrypted_code_verifier: string | null
+  redirect_uri: string
+  return_to: string
+  expires_at: string
+  created_at: string
+}
+
+export type ExportJobRow = {
+  id: string
+  user_id: string
+  extraction_job_id: string | null
+  provider: string
+  status: LeadExportJobStatus
+  lead_count: number
+  successful_count: number
+  failed_count: number
+  destination_id: string | null
+  destination_url: string | null
+  options: Json
+  error_code: string | null
+  error_message: string | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ExportJobErrorRow = {
+  id: string
+  export_job_id: string
+  user_id: string
+  lead_id: string | null
+  error_code: string
+  error_message: string
+  created_at: string
+}
+
+export type IntegrationRecordLinkRow = {
+  id: string
+  user_id: string
+  connection_id: string
+  lead_id: string
+  provider_record_id: string
   created_at: string
   updated_at: string
 }
@@ -432,6 +641,7 @@ export type CaptureSessionRow = {
   status: CaptureSessionStatus
   source: string
   browser: string | null
+  dedupe_mode: DedupeMode
   started_at: string
   completed_at: string | null
   pages_processed: number
@@ -473,6 +683,16 @@ export type Database = {
       extraction_jobs: TableShape<ExtractionJobRow>
       uploaded_files: TableShape<UploadedFileRow>
       extracted_leads: TableShape<ExtractedLeadRow>
+      companies: TableShape<CompanyRow>
+      research_runs: TableShape<ResearchRunRow>
+      research_evidence: TableShape<ResearchEvidenceRow>
+      research_tool_calls: TableShape<ResearchToolCallRow>
+      integration_connections: TableShape<IntegrationConnectionRow>
+      integration_secrets: TableShape<IntegrationSecretRow>
+      integration_oauth_transactions: TableShape<IntegrationOAuthTransactionRow>
+      export_jobs: TableShape<ExportJobRow>
+      export_job_errors: TableShape<ExportJobErrorRow>
+      integration_record_links: TableShape<IntegrationRecordLinkRow>
       job_queue: TableShape<JobQueueRow>
       admin_audit_logs: TableShape<AdminAuditLogRow>
       system_events: TableShape<SystemEventRow>
@@ -488,6 +708,21 @@ export type Database = {
         Args: Record<string, never>
         Returns: boolean
       }
+      purge_expired_evidence: {
+        Args: { p_older_than_days?: number }
+        Returns: number
+      }
+      link_leads_to_companies: {
+        Args: {
+          p_user_id: string
+          p_leads: Json
+        }
+        Returns: Array<{
+          lead_id: string
+          company_id: string
+          match_strategy: CompanyMatchStrategy
+        }>
+      }
       increment_usage: {
         Args: {
           p_user_id: string
@@ -497,6 +732,116 @@ export type Database = {
           p_by?: number
         }
         Returns: number
+      }
+      save_clay_connection: {
+        Args: {
+          p_user_id: string
+          p_encrypted_payload: string
+          p_account_label: string
+        }
+        Returns: string
+      }
+      save_hubspot_connection: {
+        Args: {
+          p_user_id: string
+          p_encrypted_payload: string
+          p_external_account_id: string
+          p_external_account_name: string
+          p_scopes: string[]
+          p_token_expires_at: string
+        }
+        Returns: string
+      }
+      save_google_connection: {
+        Args: {
+          p_user_id: string
+          p_encrypted_payload: string
+          p_external_account_id: string
+          p_external_account_name: string
+          p_external_account_email: string
+          p_scopes: string[]
+          p_token_expires_at: string
+        }
+        Returns: string
+      }
+      update_google_tokens: {
+        Args: {
+          p_user_id: string
+          p_connection_id: string
+          p_expected_encrypted_payload: string
+          p_encrypted_payload: string
+          p_scopes: string[]
+          p_token_expires_at: string
+        }
+        Returns: boolean
+      }
+      save_ghl_connection: {
+        Args: {
+          p_user_id: string
+          p_encrypted_payload: string
+          p_location_id: string
+          p_location_name: string
+        }
+        Returns: string
+      }
+      update_hubspot_tokens: {
+        Args: {
+          p_user_id: string
+          p_connection_id: string
+          p_expected_encrypted_payload: string
+          p_encrypted_payload: string
+          p_scopes: string[]
+          p_token_expires_at: string
+        }
+        Returns: boolean
+      }
+      save_salesforce_connection: {
+        Args: {
+          p_user_id: string
+          p_encrypted_payload: string
+          p_external_account_id: string
+          p_external_account_name: string
+          p_scopes: string[]
+          p_token_expires_at: string
+        }
+        Returns: string
+      }
+      update_salesforce_tokens: {
+        Args: {
+          p_user_id: string
+          p_connection_id: string
+          p_expected_encrypted_payload: string
+          p_encrypted_payload: string
+          p_refresh_claim: string
+          p_scopes: string[]
+          p_token_expires_at: string
+        }
+        Returns: boolean
+      }
+      claim_salesforce_token_refresh: {
+        Args: {
+          p_user_id: string
+          p_connection_id: string
+          p_expected_encrypted_payload: string
+          p_refresh_claim: string
+          p_claim_expires_at: string
+        }
+        Returns: boolean
+      }
+      release_salesforce_token_refresh: {
+        Args: {
+          p_user_id: string
+          p_connection_id: string
+          p_refresh_claim: string
+        }
+        Returns: boolean
+      }
+      disconnect_integration: {
+        Args: {
+          p_user_id: string
+          p_provider: string
+        }
+        Returns: boolean
       }
       consume_rate_limit: {
         Args: {

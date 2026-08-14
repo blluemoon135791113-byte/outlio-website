@@ -4,6 +4,273 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-14 — Intelligence layer, Phases 1 + 2 (company identity + research infrastructure)
+
+First two phases of the Lead Engine → intelligence-layer build spec. **No AI, no
+search UI, no external provider calls.** This is the foundation the cost model
+rests on: companies exist as first-class entities, and researched facts have
+provenance, expiry, and a router that refuses to buy what we already own.
+
+Extraction, auth, billing, the extension, and every existing integration are
+untouched.
+
+### Built
+
+| File | Purpose |
+|---|---|
+| `supabase/migrations/0043_companies.sql` | `companies`, `extracted_leads.company_id` + `company_match_strategy`, and the atomic `link_leads_to_companies` RPC |
+| `supabase/migrations/0044_research_infrastructure.sql` | `research_runs`, `research_evidence`, `research_tool_calls`, `purge_expired_evidence` |
+| `lib/companies/normalize.ts` | **pure** domain / company-name / LinkedIn-company-URL normalization + `resolveCompanyIdentity` + `groupLeadsByCompany` |
+| `lib/companies/repository.ts` | service-role, user-scoped linking and company lookup |
+| `lib/companies/backfill.ts` | resumable backfill for leads extracted before 0043 |
+| `lib/intelligence/types.ts` | `IntelligenceProvider` contract (spec §36), field → category → entity map, evidence Zod schema |
+| `lib/intelligence/ttl.ts` | **the single** field → TTL map |
+| `lib/intelligence/evidence.ts` | **pure** freshness, §17 conflict resolution, evidence validation |
+| `lib/intelligence/evidence-store.ts` | service-role read/write + tool-call telemetry |
+| `lib/intelligence/registry.ts` | config-driven provider ordering (the waterfall) |
+| `lib/intelligence/router.ts` | **pure** `planToTasks` — company dedup, cache subtraction, minimum categories |
+| `lib/intelligence/execute.ts` | waterfall execution, per-task isolation, timeout, `unknown` on exhaustion |
+| `lib/intelligence/costs.ts` | integer-micros cost accounting |
+| `components/admin/CompanyBackfill.tsx` | admin control for the backfill |
+| 5 unit suites + 1 integration suite + `tests/stubs/intelligence-providers.ts` | 98 new tests |
+
+Modified: `lib/worker/process-job.ts` (non-fatal linking step after lead insert),
+`lib/admin/actions.ts` (`backfillCompaniesAction`, audited), `app/admin/page.tsx`,
+`lib/errors/catalog.ts` (3 codes), `types/database.ts`.
+
+### Design decisions
+
+**Tenancy stays `user_id`.** The spec assumes `workspace_id` on every new table,
+but Outlio has no workspace model — every existing table scopes to `auth.users`.
+Confirmed with the user before writing code. New tables use the same shape, so
+there is one tenancy model rather than two.
+
+**One `company_id` column, not a `lead_company_links` join table.** A captured
+lead row records exactly one current employer. A many-to-many table would add a
+join to every query and buy nothing. Deviation from spec §25, flagged.
+
+**Identity precedence is conditional, enforced by three PARTIAL unique indexes.**
+Domain → company LinkedIn URL → normalized name. The name index only governs
+rows carrying nothing stronger, so once a company has a domain its name stops
+being an identity and two same-named companies coexist correctly (spec §10).
+
+**Normalization lives only in TypeScript.** `link_leads_to_companies` receives
+already-normalized values. Re-implementing the rules in SQL would create the
+same two-sources-of-truth drift that `lib/limits/credits.ts` carries a warning
+about.
+
+**Linking is atomic in Postgres, not read-then-write in application code.**
+`after()` can process two jobs for one user concurrently. The RPC uses a
+select → adopt → insert-on-conflict retry loop. Verified with 8 parallel
+connections: exactly one company row.
+
+**Name-only companies are PROMOTED, not duplicated.** Captures are inconsistent —
+the same company arrives with a website on one page and only a name on another.
+A domain capture adopts the existing name-only row instead of creating a second
+company.
+
+**Evidence is insert-only and doubles as the cache.** A newer observation sits
+alongside the old one, so a disagreement between two providers stays
+inspectable. `resolveConflict` adjudicates: source confidence, then per-record
+confidence, then recency — and **a stale high-confidence record never beats a
+fresh weaker one**, or TTLs would be decorative.
+
+**Absence of evidence is `unknown`, never `false`.** Carried through the type
+system: `FieldKnowledge` is a discriminated union with a reason
+(`never_researched` / `expired` / `no_provider_configured` / `provider_unavailable`
+/ `not_found`).
+
+**Mock providers live in `tests/stubs/`, not `lib/`.** Shipped code contains no
+fake implementations (rule 7). The interfaces are real; Phase 3 adapters
+implement the same contract.
+
+**Research queue deferred to Phase 3.** A queue with no tools to run is a stub.
+It will be a copy of the proven `job_queue` pattern when there is work for it.
+
+**Money is integer micros everywhere.** Provider prices are fractions of a cent;
+summing 460 of them as floats produces a margin nobody can reconcile.
+
+### 🐛 Four defects found by testing, all fixed
+
+1. **`normalizeCompanyLinkedInUrl` did not check the host.**
+   `example.com/company/acme` matched the same path shape and was accepted as a
+   LinkedIn company identity. Any site could impersonate a company page.
+2. **`%2E%2E%2F` survived slug validation.** The trailing-slash strip ran
+   *before* the character check, so `../` became `..` and passed — the exact
+   decode-order trap that bit the sign-up LinkedIn validator in Phase 4.
+   Validation now runs on the decoded form, and `..` is rejected outright.
+3. **`Acme B.V.` normalized to `acme b v`.** Punctuation was collapsed to spaces
+   before legal-suffix stripping, splitting `B.V.` into two fragments matching
+   nothing. Periods are now removed rather than spaced, so `bv` is recognised.
+4. **🔴 `z.string().url()` accepts `javascript:alert(1)`.** `source_url` is
+   rendered as a clickable "view source" link, so a hostile provider response
+   was stored XSS. Now refined to http/https only.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **434 passed, 0 skipped** (was 326) against the live project |
+| `npm run lint` | ⚠️ 0 errors, 100 warnings — **all pre-existing** in `app/` and `extensions/dist/` |
+| `npm run build` | ✅ clean |
+| `npx eslint` on every changed file | ✅ zero problems |
+| 0043 + 0044 on throwaway Postgres 16 | ✅ apply clean, **idempotent on re-apply** |
+| RLS enabled on all 4 new tables | ✅ 4/4 |
+| **500 leads, one domain → 1 company** | ✅ 500 linked, 1 distinct company |
+| **8 parallel connections, same new domain** | ✅ **exactly 1 company**, all 8 linked |
+| Same name, different domains → 2 companies | ✅ never merged on name |
+| Name-only row promoted when a domain arrives | ✅ 1 company, not 2 |
+| Lead with no company identifier | ✅ left unlinked, never invented |
+| Alice reads own companies / evidence / runs | ✅ 1 / 1 / 1 |
+| **Bob reads Alice's companies / evidence / runs** | ✅ **0 / 0 / 0** |
+| Bob forges evidence | ✅ refused, `42501` |
+| Bob updates a company | ✅ refused, `42501`, row intact |
+| Bob calls `link_leads_to_companies` | ✅ refused, `42501` |
+| Acceptance Tests 1, 2, 5, 6, 7, 8 | ✅ asserted as task counts, not mocked call counts |
+
+RLS was verified by switching to the `authenticated` role inside a transaction
+with `request.jwt.claim.sub` set. **A first attempt used `SET LOCAL` outside a
+transaction, which silently no-ops** — the whole script ran as superuser and
+"passed" while proving nothing. Worth remembering for future RLS checks.
+
+### ✅ Migrations 0043 + 0044 applied live — 2026-08-15
+
+Applied to `ptewhpmxzenbmxlizxhu` by the user. The full suite was re-run against
+the live project immediately afterwards:
+
+**`npm test` → 434/434 passing, zero skipped.**
+
+That includes all ten live tenant-isolation and concurrency tests, which had
+been skipping themselves while the schema was absent:
+
+| Live check | Result |
+|---|---|
+| Alice reads her own company | ✅ |
+| Bob reads Alice's company / evidence / run | ✅ **0 rows each** |
+| Bob writes into Alice's company | ✅ refused, row intact |
+| Bob inserts evidence directly | ✅ refused |
+| 25 leads, one domain → one company row | ✅ |
+| 8 parallel RPCs racing one new domain | ✅ **exactly 1 company** |
+| Lead with no company identifier | ✅ left unlinked |
+| RPC called with the wrong user's id | ✅ refused, lead untouched |
+
+New extractions now link to companies automatically.
+
+### 🐛 Backfill skipped two accounts while reporting success — fixed
+
+The first live backfill run reported `hasMore: false` and `usersProcessed: 2`,
+but 50 perfectly linkable leads were still unlinked afterwards. Two separate
+defects in `lib/companies/backfill.ts`:
+
+**1. 🔴 `.limit(5000)` silently returned 1000 rows.** PostgREST caps every
+response at `db-max-rows` (1000 on Supabase) and says nothing when it truncates.
+`listUsersWithUnlinkedLeads` enumerated accounts by reading `user_id` from the
+unlinked leads — over 2,213 rows it saw only the first 1,000, which happened to
+contain just 2 of the 4 affected accounts. **The other two accounts, 25 leads
+each, were never processed, and the admin UI said the job had finished.**
+
+Fixed by paginating with `.range()` under an explicit ordering, and returning
+`{ userIds, truncated }` so a scan that stops early cannot be mistaken for a
+complete one. `backfillCompaniesAction` now seeds `hasMore` from `truncated`.
+
+**Rule worth keeping: never trust a bare `.limit()` above the row cap.** A short
+page is the only reliable end-of-table signal.
+
+**2. Per-user paging re-read leads that can never be linked.** Successfully
+linked leads drop out of the `company_id is null` filter, but unidentifiable
+ones stay in it and collect at the front of every page. The loop re-counted them
+each pass (`leadsUnidentified` reported 203 against 175 real), and a page that
+filled entirely with stuck rows would have stalled the run. Now it skips past
+the attempted-but-unlinked count with `.range()`, so every lead is examined
+exactly once.
+
+`tests/integration/company-backfill.test.ts` covers both: multi-page enumeration
+finds every account, a truncated scan admits it, and a user whose leads are half
+unlinkable is fully processed with each lead counted once.
+
+### ✅ Company backfill complete — 2026-08-15
+
+Two runs, both recorded in `admin_audit_logs`:
+
+| Run | usersProcessed | leadsLinked | leadsUnidentified |
+|---|---|---|---|
+| 1 (before the fix) | **2** | 2,038 | 203 (over-counted) |
+| 2 (after the fix) | **4** | 50 | 125 (exact) |
+
+The second run's `usersProcessed: 4` is the enumeration fix working — it found
+the two accounts the first run never saw — and `leadsUnidentified: 125` matching
+the true remainder exactly is the double-count fix working.
+
+Final state:
+
+| | |
+|---|---|
+| Leads total | 2,213 |
+| Leads linked | **2,088** |
+| Leads unlinked | 125 |
+| Companies | 1,993 |
+| **Unlinked leads still carrying a company field** | **0** ✅ |
+
+That last row is the invariant: every lead that carried anything capable of
+identifying a company now has one. The remaining 125 have no company name, no
+company page, and no website — nothing to match, and inventing one would violate
+rule 4.
+
+### ⚠️ Company deduplication on real data is 4.5%, not the ~63% the spec assumes
+
+Measured across the 2,088 linked leads:
+
+| | |
+|---|---|
+| Distinct companies | 1,993 |
+| Companies with exactly 1 lead | 1,911 |
+| Companies with more than 1 | 82 (largest: 10 leads) |
+| Leads sitting on a shared company | 177 |
+
+**Spec §53 assumes 5,000 leads collapse to ~1,850 companies and prices Phase 3
+on that.** This dataset collapses 2,088 → 1,993. The dedup machinery is working
+correctly — it is just that these saved searches return roughly one person per
+company, so there is very little to collapse.
+
+The cost consequence is direct: company-level research here costs ~0.95 calls
+per lead, not ~0.37. Company deduplication is still worth having (it is what
+makes the 82 shared companies free, and it compounds as more lists are imported
+for the same accounts), but **Phase 3 budgeting must not assume a 63% saving.**
+Re-measure per workspace before quoting a cost.
+
+Also observed: **every match came through the company LinkedIn page**
+(`strategy = linkedin`, 2,036 leads; `strategy = name`, 2; `strategy = domain`,
+**0**). `company_website_url` is only populated when the saved page happens to
+expose it. Domain is the strongest identity and the field most external
+providers key on, so Phase 3 will mostly be resolving companies by name plus
+LinkedIn URL. Worth weighing when choosing funding and tech-stack providers —
+several accept only a domain.
+
+### Next — Phase 3
+
+Funding, tech-stack, and web-research adapters against the existing
+`IntelligenceProvider` interface, plus `research_job_queue` copied from 0013.
+Provider credentials are still required; until they arrive the adapters have no
+real source to call.
+
+---
+
+## 2026-08-14 — Dashboard navigation feedback + readable extension captures
+
+- Added a 2px dashboard route-progress indicator with immediate click feedback,
+  a fast completion transition, and reduced-motion support.
+- Extension captures now carry the visible Sales Navigator list/search name and
+  page number through the authenticated API.
+- Captured files and extraction-history rows display as
+  `{lead list name} - Page {number}` instead of an opaque run identifier.
+- Storage keys remain server-generated; the human-readable name is sanitized
+  and used only as display metadata.
+- Chrome and Firefox extension packages rebuilt; focused tests, typecheck,
+  extension builds, and lint all pass.
+
+---
+
 ## 2026-08-06 — Phase 0 and Phase 1 complete
 
 ### Built
@@ -1033,6 +1300,242 @@ not reproduce.
 
 Requires DNS + Vercel domain config (user), then a `proxy.ts` rewrite and an
 auth-cookie domain decision (me). See the handover notes.
+
+---
+
+## 2026-08-14 — Lead export and CRM integrations, Phase 1
+
+### Built
+
+| File | Purpose |
+|---|---|
+| `supabase/migrations/0034_lead_exports_and_integrations.sql` | Provider-independent connection metadata, service-only encrypted secrets, OAuth transactions, export history/errors, CRM record links, RLS, and Sales Navigator URL persistence |
+| `lib/export/leads.ts` | Real database row → normalized LinkedIn/Sales Navigator `ExportLead` mapping |
+| `lib/integrations/types.ts` | Extensible integration/provider contracts and result types |
+| `lib/integrations/crypto.ts` | Versioned AES-256-GCM credential envelopes backed by `INTEGRATION_ENCRYPTION_KEY` |
+| `.env.example` | Server-only provider credential and callback environment contract |
+| `tests/unit/export-leads.test.ts` | Normalization and missing-data coverage |
+| `tests/unit/integration-crypto.test.ts` | Credential round-trip, nonce, wrong-key, tamper, and key-length coverage |
+
+The parser already emitted `salesNavUrl`, but `process-job.ts` did not persist it.
+Migration 0034 adds `extracted_leads.sales_navigator_url`, and new lead inserts now
+preserve the real value. No scraper selectors or extraction behavior changed.
+
+### Security model
+
+- `integration_connections` contains safe account/status metadata only.
+- OAuth tokens and Clay credentials are stored only as AES-256-GCM ciphertext in
+  `integration_secrets`, which has RLS enabled, no client policies, and no client
+  grants.
+- OAuth `state` is represented by a SHA-256 hash; PKCE verifiers have an encrypted
+  storage column and transactions expire.
+- Composite foreign keys prevent service-role writes from linking connections,
+  leads, export jobs, and errors across tenants.
+- CRM record links provide a deterministic deduplication/update path for later
+  provider adapters.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Full unit suite | ✅ 311 passed |
+| `npm run typecheck` | ✅ zero errors |
+| ESLint on every changed TS/TSX file | ✅ zero problems |
+| `git diff --check` | ✅ clean |
+| Migration applied twice to throwaway Postgres | ✅ zero errors / idempotent |
+| New integration tables with RLS enabled | ✅ 6/6 |
+| `npm run build` | ✅ production build completed |
+
+### Deployment status
+
+Migrations 0034 and 0035 are applied to the live Supabase project. The provider
+adapters, OAuth routes, canonical CSV fields, Settings UI, and selected-lead
+export UI are implemented. External connections still require an authenticated
+customer to complete each provider's interactive connection flow.
+
+## 2026-08-14 — Clay integration vertical slice
+
+### Built
+
+- Settings → Integrations now has a Clay connection card with Webhook URL,
+  optional Authentication Token, Connect, Test Connection, and Disconnect.
+- Connection credentials are tested before save, encrypted server-side, and
+  never displayed again. Disconnect atomically deletes the encrypted secret.
+- The latest-leads table now has accessible row selection and select-all-visible
+  controls without changing the existing table hierarchy or navigation.
+- Exporting selected leads re-authenticates, enforces existing access/rate limits,
+  reloads every lead by tenant-owned ID, batches webhook requests, records export
+  history and per-lead failures, and reports partial completion accurately.
+- Clay payloads use stable normalized fields and preserve unavailable values as
+  null rather than inventing data.
+
+### Verification
+
+- Clay adapter tests cover webhook allow-list validation, optional auth header,
+  safe 401 handling, payload mapping, and partial exports.
+- Migration save/disconnect RPCs were exercised on throwaway Postgres: one
+  encrypted secret existed after connect and zero remained after disconnect.
+- The supplied test webhook rejects both no token and the literal
+  `YOUR_AUTH_TOKEN_HERE` placeholder with HTTP 401. A real test token is still
+  required before the external Clay connection can be marked verified.
+- Full unit suite: 311 passed. TypeScript, changed-file ESLint, migration
+  idempotency, and the Next.js production build all pass.
+
+## 2026-08-14 — HubSpot multi-tenant OAuth integration
+
+### Built
+
+- Added POST connect/disconnect routes and the GET OAuth callback at
+  `/api/integrations/hubspot/*` using the fixed production callback
+  `https://app.outlio.io/api/integrations/hubspot/callback`.
+- The authorization URL is account-agnostic, so every Outlio user selects and
+  authorizes their own HubSpot account. No developer/test portal ID is present.
+- OAuth state is a 32-byte nonce stored only as a SHA-256 hash and atomically
+  consumed against the initiating `auth.uid()`.
+- Because authenticated product sessions may be host-only on `app.outlio.io`
+  while the required callback is on `outlio.io`, a ten-minute encrypted,
+  HttpOnly browser binding crosses only the Outlio subdomains. It contains no
+  Supabase session token and returns the user to the host where they started.
+- Current HubSpot `2026-03` endpoints exchange, refresh, and revoke OAuth
+  tokens. Access/refresh tokens are AES-256-GCM encrypted in the service-only
+  secret table; safe account ID, scopes, and expiry remain tenant metadata.
+- Migration 0035 atomically saves connections and rotates tokens with an
+  optimistic ciphertext check. Every service-role query is scoped by user ID
+  and provider.
+- Settings uses the existing integration-card visual language for Connect,
+  Reconnect, and Disconnect without changing the page structure.
+- Selected leads export through HubSpot's current contacts batch endpoints.
+  Existing tenant-scoped CRM record links are updated; unlinked leads are
+  created and linked for future deterministic updates.
+- The canonical lead fields map to first/last name, LinkedIn URL, job title,
+  company, website, and a Sales Navigator URL note. No broad HubSpot scope or
+  custom schema permission is required.
+
+### Verification
+
+- Full unit suite: 311 passed across 24 test files.
+- TypeScript and focused HubSpot ESLint: zero errors.
+- Production build includes all three dynamic HubSpot routes.
+- HubSpot CLI validation: `SUCCESS Project outlio-lead-engine is valid and ready
+  to upload` after replacing placeholder support metadata.
+- HubSpot CLI build 5 uploaded, built, and deployed successfully.
+- Vercel production deployment `dpl_8LFcD2NTHWpqNW42MUCbcoXDke6R` completed and
+  is aliased to `outlio.io`; `app.outlio.io` serves the deployed routes through
+  the configured proxy.
+- Live unauthenticated checks confirm invalid callback state is rejected and
+  connect/disconnect require an Outlio session. The final customer-authorized
+  OAuth round trip remains interactive and is not claimed complete.
+
+### Deployment configuration
+
+- Migrations 0034 and 0035 are applied.
+- Server-only `HUBSPOT_CLIENT_ID`, `HUBSPOT_CLIENT_SECRET`,
+  `HUBSPOT_REDIRECT_URI`, and `INTEGRATION_ENCRYPTION_KEY` are set in Vercel
+  Production.
+- The production redirect URI must remain
+  `https://app.outlio.io/api/integrations/hubspot/callback`.
+
+## 2026-08-14 — Salesforce multi-tenant OAuth and lead export
+
+### Built
+
+- Added authenticated connect, callback, and disconnect routes under
+  `/api/integrations/salesforce/*` plus the JSON export endpoint at
+  `/api/exports/salesforce`.
+- Uses Salesforce OAuth 2.0 Web Server authorization-code flow with a one-time
+  SHA-256-hashed state, S256 PKCE, an encrypted server-side verifier, and the
+  confidential client secret only in server token requests.
+- Stores each Supabase user's Salesforce organization ID, encrypted access and
+  refresh tokens, and validated `instance_url` in that tenant's connection.
+  API calls use the returned organization instance, never a developer org.
+- Refresh Token Rotation is race-safe across serverless instances: migration
+  0037 adds a short database lease, atomically swaps the encrypted replacement
+  refresh token, and makes competing requests reuse the saved winner.
+- Exports selected Outlio records as standard Salesforce `Lead` objects through
+  REST Composite API v67.0, then stores tenant-scoped record links so later
+  exports update the same Salesforce leads.
+- Salesforce Lead mapping splits First/Last Name, maps Company and Website,
+  and places LinkedIn Profile, LinkedIn Sales Navigator URL, and raw
+  location in Description. Missing LastName or Company produces a
+  per-lead validation error instead of fabricated CRM data.
+- `/api/exports/salesforce` returns `totalRequested`,
+  `successfullyExported`, `failed`, and safe per-lead `errors`; raw Salesforce
+  validation text is never returned or persisted.
+- Added the Salesforce card and export control using the existing Settings and
+  extraction-workspace visual language.
+
+### Deployment
+
+- Migrations 0034–0037 are registered and applied in the linked production
+  Supabase project.
+- Production contains server-only `SALESFORCE_CLIENT_ID`,
+  `SALESFORCE_CLIENT_SECRET`, `SALESFORCE_REDIRECT_URI`, and
+  `INTEGRATION_ENCRYPTION_KEY` environment entries.
+- Full suite: 320 tests across 26 files; TypeScript, focused ESLint, local
+  production build, Vercel production build, and diff checks pass.
+- Vercel deployment `dpl_H2sQj6n7N6Dn7s2XFf9j4rP9FBPi` is live. Smoke tests
+  confirm callback state rejection, Supabase authentication on connect and
+  disconnect, same-origin enforcement, and authentication on the export API.
+- The external client app must allow
+  `https://app.outlio.io/api/integrations/salesforce/callback`, scopes `api` and
+  `refresh_token`, PKCE, client-secret validation, and Refresh Token Rotation.
+
+### Canonical lead export fields
+
+The active CSV/sheet schema, Clay payload, CRM adapters, normalized export
+object, and dashboard lead table now use this exact order: **Name, LinkedIn
+Profile, Job Title, Company, Company URL, Location, Sales Navigator URL**. New
+extraction CSVs contain only these seven columns. Existing stored CSV objects
+are immutable and must be regenerated by a new extraction if the new format is
+required.
+
+## 2026-08-14 — Connector menu, Google exports, Clay pacing, and HighLevel MVP
+
+### Built
+
+- Replaced the separate CRM buttons and per-run Download CSV button with a
+  single logo-based export dropdown. It offers CSV, Google Sheets, Google
+  Drive, HubSpot, Salesforce, GoHighLevel, and Clay while preserving the
+  existing dashboard layout and selection behavior.
+- Added real connector marks to integration cards and export menus. Added a
+  combined Google Sheets & Drive settings card and a branded GoHighLevel card.
+- Implemented multi-tenant Google OAuth under `/api/integrations/google/*`.
+  Tokens are encrypted server-side per Supabase user, refreshed with an
+  optimistic compare-and-swap, and never returned to client JavaScript.
+- Google Sheets exports create a spreadsheet with the canonical seven columns;
+  Google Drive exports create a CSV file in the connected user's Drive using
+  the narrow `drive.file` scope.
+- Diagnosed Clay's production 22/24 partial export: all 24 failures were HTTP
+  429 rate limits. Clay exports are now paced sequentially and retry 429/5xx
+  responses with bounded exponential backoff and `Retry-After` support.
+- Added visible pending states to HubSpot and Salesforce connect buttons and
+  safe server telemetry for OAuth-start failure reasons. Quoted Vercel values
+  are normalized without ever logging credentials.
+- Made the extension prompt compact and moved it from the right sidebar into
+  the dashboard's left/main column.
+- Implemented GoHighLevel with per-user Private Integration Tokens (no
+  Marketplace OAuth): connect, test, update token, disconnect, selected/run
+  exports, and `/api/exports/ghl`. Tokens and Location IDs are encrypted in the
+  existing service-role-only secrets table. Contact exports map name, company,
+  website, and raw location, and use reusable optional custom fields for the
+  LinkedIn, Sales Navigator, and company profile URLs.
+
+### Verification
+
+- Production Clay export records confirm the prior failures were exactly 24
+  `CLAY_RATE_LIMITED` errors.
+- TypeScript, focused ESLint, and the Next.js production build pass.
+- Added six Google and HighLevel integration tests and strengthened the Clay
+  rate-limit test; the complete suite passes: 326 tests across 28 files,
+  including live tenant-isolation tests.
+- Google and HighLevel persistence works against the existing integration
+  tables without requiring the new helper functions; migrations 0038–0039 add
+  optional atomic database helpers for environments that apply repository
+  migrations automatically.
+- Vercel production deployment `dpl_J9sCpPWoSyMzxDAmnucvMBR3zCB4` is live on
+  both `outlio.io` and `app.outlio.io`. Public smoke tests confirm every OAuth
+  start route requires a Supabase session, invalid Google state is rejected,
+  and all HighLevel mutation/export routes return 401 without authentication.
 
 ---
 

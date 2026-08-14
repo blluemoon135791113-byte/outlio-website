@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 
+import { CompanyBackfill } from '@/components/admin/CompanyBackfill'
 import { UserRow, type AdminUser } from '@/components/admin/UserRow'
 import { requireAdmin } from '@/lib/auth/access'
 import { listActivePlans } from '@/lib/limits/plans'
@@ -124,6 +125,16 @@ export default async function AdminPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Maintenance</h2>
+        <p className="text-sm text-muted">
+          Resolve leads to companies so company-level research runs once per
+          company instead of once per lead. Safe to run repeatedly — leads that
+          already have a company are skipped.
+        </p>
+        <CompanyBackfill />
       </section>
 
       <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">

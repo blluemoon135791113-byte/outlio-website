@@ -15,7 +15,9 @@ import 'server-only'
  */
 import { createHash } from 'node:crypto'
 
+import { linkLeadsToCompanies } from '@/lib/companies/repository'
 import { toCsv, type CsvColumn } from '@/lib/export/sanitize'
+import { EXPORT_COLUMN_HEADERS } from '@/lib/export/leads'
 import { dedupeLeads, type DedupeMode, type KeyedLead } from '@/lib/leads/dedupe'
 import { ParseError, parseSearchResults } from '@/lib/leads/parse'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -48,16 +50,13 @@ export type ProcessOutcome = {
 
 /** CSV column order. `sanitizeCell` is applied by `toCsv` to every cell. */
 const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
-  { header: 'Name', value: (l) => l.fullName },
-  { header: 'LinkedIn Profile', value: (l) => l.linkedinUrl },
-  { header: 'Job Title', value: (l) => l.jobTitle },
-  { header: 'Company', value: (l) => l.companyName },
-  { header: 'Company URL', value: (l) => l.companyUrl },
-  { header: 'Location', value: (l) => l.location },
-  { header: 'Summary', value: (l) => l.personBlurb },
-  { header: 'Time in Role', value: (l) => l.tenureInRole },
-  { header: 'Time at Company', value: (l) => l.tenureInCompany },
-  { header: 'Sales Navigator URL', value: (l) => l.salesNavUrl },
+  { header: EXPORT_COLUMN_HEADERS.name, value: (l) => l.fullName },
+  { header: EXPORT_COLUMN_HEADERS.linkedinProfile, value: (l) => l.linkedinUrl },
+  { header: EXPORT_COLUMN_HEADERS.jobTitle, value: (l) => l.jobTitle },
+  { header: EXPORT_COLUMN_HEADERS.company, value: (l) => l.companyName },
+  { header: EXPORT_COLUMN_HEADERS.companyUrl, value: (l) => l.companyUrl },
+  { header: EXPORT_COLUMN_HEADERS.location, value: (l) => l.location },
+  { header: EXPORT_COLUMN_HEADERS.salesNavigatorUrl, value: (l) => l.salesNavUrl },
 ]
 
 /** Truncates upstream error text so an HTML error page never reaches a log. */
@@ -264,9 +263,11 @@ export async function processJob(jobId: string, userId: string): Promise<Process
       uploaded_file_id: (l as { uploadedFileId?: string }).uploadedFileId ?? null,
       full_name: l.fullName,
       linkedin_url: l.linkedinUrl,
+      sales_navigator_url: l.salesNavUrl,
       job_title: l.jobTitle,
       company_name: l.companyName,
       company_url: l.companyUrl,
+      company_website_url: l.companyWebsiteUrl,
       location: l.location,
       person_blurb: l.personBlurb,
       tenure_in_role: l.tenureInRole,
@@ -281,6 +282,39 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     for (let i = 0; i < rows.length; i += 500) {
       const { error } = await supabase.from('extracted_leads').insert(rows.slice(i, i + 500))
       if (error) throw new Error(`lead insert failed: ${concise(error.message)}`)
+    }
+  }
+
+  /*
+   * Resolve each lead to a company so company-level research runs once per
+   * company rather than once per employee.
+   *
+   * Deliberately non-fatal, for the same reason as the capture-totals roll-up
+   * below: the leads are already committed and the user's CSV is about to be
+   * written. A failure here costs a later backfill, not the run. Unlinked leads
+   * are exactly what `backfillCompaniesForUser` selects.
+   */
+  if (kept.length > 0) {
+    try {
+      const { data: insertedLeads } = await supabase
+        .from('extracted_leads')
+        .select('id, company_name, company_url, company_website_url')
+        .eq('extraction_job_id', jobId)
+        .eq('user_id', userId)
+
+      if (insertedLeads && insertedLeads.length > 0) {
+        await linkLeadsToCompanies(
+          userId,
+          insertedLeads.map((row) => ({
+            id: row.id,
+            companyName: row.company_name,
+            companyWebsiteUrl: row.company_website_url,
+            companyLinkedInUrl: row.company_url,
+          })),
+        )
+      }
+    } catch {
+      // Company linking is repairable after the fact; lead data is not.
     }
   }
 

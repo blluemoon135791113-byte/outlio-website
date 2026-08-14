@@ -90,6 +90,20 @@ export const ERROR_CATALOG = {
     message: "You don't have permission to do that.",
   },
 
+  // ---- research and enrichment ------------------------------------------
+  ERR_PROVIDER_UNAVAILABLE: {
+    status: 503,
+    message: "A data source wasn't reachable, so some fields are unknown.",
+  },
+  ERR_RESEARCH_FAILED: {
+    status: 500,
+    message: "We couldn't finish researching that. No usage was charged.",
+  },
+  ERR_RESEARCH_BUDGET: {
+    status: 429,
+    message: "This would exceed your research allowance for this period.",
+  },
+
   // ---- generic ----------------------------------------------------------
   ERR_RATE_LIMITED: {
     status: 429,
