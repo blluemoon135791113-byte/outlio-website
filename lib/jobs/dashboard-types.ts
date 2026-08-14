@@ -11,7 +11,7 @@ export const DASHBOARD_FILE_SELECT =
   'id, extraction_job_id, original_filename, byte_size, status, leads_found, error_message, processed_at, created_at' as const
 
 export const DASHBOARD_LEAD_SELECT =
-  'id, extraction_job_id, uploaded_file_id, full_name, linkedin_url, job_title, company_name, location, created_at' as const
+  'id, extraction_job_id, uploaded_file_id, full_name, linkedin_url, job_title, company_name, company_url, company_website_url, location, sales_navigator_url, created_at' as const
 
 export type DashboardJob = Pick<
   ExtractionJobRow,
@@ -57,7 +57,10 @@ export type DashboardLead = Pick<
   | 'linkedin_url'
   | 'job_title'
   | 'company_name'
+  | 'company_url'
+  | 'company_website_url'
   | 'location'
+  | 'sales_navigator_url'
   | 'created_at'
 >
 

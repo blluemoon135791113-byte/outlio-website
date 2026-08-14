@@ -145,7 +145,7 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
     }
 
     adapter
-      .capture()
+      .capture({ includeCompanyWebsites: message.includeCompanyWebsites === true })
       .then((captured) => {
         // Adopt the signature we just sent, so the re-render that usually
         // follows a capture is not treated as a new page.

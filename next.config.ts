@@ -23,8 +23,8 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 const isDev = process.env.NODE_ENV !== 'production';
 
 const scriptSrc = isDev
-  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-  : "script-src 'self' 'unsafe-inline'";
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com"
+  : "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com";
 
 /*
   Turbopack's hot-reload channel is a WebSocket to the dev server. `'self'` does
@@ -33,8 +33,8 @@ const scriptSrc = isDev
   talks to Supabase over wss: and nothing else.
 */
 const connectSrc = isDev
-  ? "connect-src 'self' ws: wss: https://*.supabase.co wss://*.supabase.co"
-  : "connect-src 'self' https://*.supabase.co wss://*.supabase.co";
+  ? "connect-src 'self' ws: wss: https://*.supabase.co wss://*.supabase.co https://www.googletagmanager.com https://*.google-analytics.com"
+  : "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.googletagmanager.com https://*.google-analytics.com";
 
 const securityHeaders = [
   {
@@ -50,12 +50,12 @@ const securityHeaders = [
         the modal renders empty. Framing only — Calendly runs no script on our
         origin, so script-src stays closed.
       */
-      'frame-src https://calendly.com https://*.calendly.com',
+      'frame-src https://calendly.com https://*.calendly.com https://www.googletagmanager.com',
       "object-src 'none'",
       scriptSrc,
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self' data:",
-      "img-src 'self' data: blob: https://*.supabase.co",
+      "img-src 'self' data: blob: https://*.supabase.co https://www.googletagmanager.com https://*.google-analytics.com",
       connectSrc,
       "worker-src 'self' blob:",
       "manifest-src 'self'",

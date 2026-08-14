@@ -14,6 +14,11 @@ import {
 } from '@/lib/jobs/dashboard-types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { claimAndProcessJob } from '@/lib/worker/process-job'
+import { getClayConnectionMetadata } from '@/lib/integrations/repository'
+import { getHubSpotConnectionMetadata } from '@/lib/integrations/hubspot-repository'
+import { getSalesforceConnectionMetadata } from '@/lib/integrations/salesforce-repository'
+import { getGoogleConnectionMetadata } from '@/lib/integrations/google-repository'
+import { getGhlConnectionMetadata } from '@/lib/integrations/ghl-repository'
 
 export const metadata: Metadata = {
   title: 'Extraction workspace | Outlio',
@@ -42,7 +47,7 @@ export default async function JobsPage() {
     // The dashboard can still read the last known state if a sweep fails.
   }
 
-  const [jobResult, fileResult, leadResult, balanceResult] = await Promise.all([
+  const [jobResult, fileResult, leadResult, balanceResult, clayConnection, googleConnection, ghlConnection, hubSpotConnection, salesforceConnection] = await Promise.all([
     supabase
       .from('extraction_jobs')
       .select(DASHBOARD_JOB_SELECT)
@@ -64,6 +69,11 @@ export default async function JobsPage() {
       .order('created_at', { ascending: false })
       .limit(100),
     supabase.rpc('credit_balance', { p_user_id: userId }),
+    getClayConnectionMetadata(userId),
+    getGoogleConnectionMetadata(userId),
+    getGhlConnectionMetadata(userId),
+    getHubSpotConnectionMetadata(userId),
+    getSalesforceConnectionMetadata(userId),
   ])
 
   const balanceRow = Array.isArray(balanceResult.data) ? balanceResult.data[0] : null
@@ -99,6 +109,11 @@ export default async function JobsPage() {
       initialLeads={(leadResult.data ?? []) as DashboardLead[]}
       credits={credits}
       planName={ctx.plan?.name ?? null}
+      clayConnected={clayConnection?.status === 'connected'}
+      googleConnected={googleConnection?.status === 'connected'}
+      ghlConnected={ghlConnection?.status === 'connected'}
+      hubSpotConnected={hubSpotConnection?.status === 'connected'}
+      salesforceConnected={salesforceConnection?.status === 'connected'}
     />
   )
 }

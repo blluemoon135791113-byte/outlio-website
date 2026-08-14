@@ -14,8 +14,8 @@ export function ExtensionCard({ connectedDevices }: { connectedDevices: number }
   const connected = connectedDevices > 0
 
   return (
-    <section className="rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
-      <div className="flex items-center gap-3">
+    <section className="flex flex-col gap-4 rounded-[var(--radius-xl)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border bg-surface-muted">
           <Image
             src="/outlio logo.png"
@@ -37,36 +37,18 @@ export function ExtensionCard({ connectedDevices }: { connectedDevices: number }
         </div>
       </div>
 
-      <p className="mt-3.5 text-xs leading-5 text-muted">
-        {connected
-          ? 'Add it to another browser, or reconnect one you have disconnected.'
-          : 'Skip saving and uploading HTML files. Start a capture, browse the results pages yourself, and leads land here automatically.'}
-      </p>
-
-      <a
-        href={CHROME_EXTENSION_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="product-gradient mt-4 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-3.5 text-xs font-semibold text-white transition-[filter] duration-150 hover:brightness-95"
-      >
-        {connected ? 'Add to another browser' : 'Download the extension'}
-        <svg
-          aria-hidden
-          viewBox="0 0 20 20"
-          className="size-3"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
+      <div className="flex shrink-0 items-center gap-3">
+        <a
+          href={CHROME_EXTENSION_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="product-gradient inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-3.5 text-xs font-semibold text-white transition-[filter,transform] duration-150 hover:brightness-95 active:scale-[0.97]"
         >
-          <path d="M4 10h11M11 5l5 5-5 5" />
-        </svg>
-      </a>
-
-      <p className="mt-2.5 text-center text-[11px] text-muted">
-        Chrome · free with your plan
-      </p>
+          {connected ? 'Add to another browser' : 'Get the extension'}
+          <svg aria-hidden viewBox="0 0 20 20" className="size-3" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M4 10h11M11 5l5 5-5 5" /></svg>
+        </a>
+        <span className="hidden text-[11px] text-muted sm:inline">Chrome · included</span>
+      </div>
     </section>
   )
 }

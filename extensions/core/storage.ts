@@ -8,11 +8,12 @@
  * The `chrome` global exists under the same name in Firefox (MV3) and Safari,
  * so this file needs no per-browser branching. Only the manifest differs.
  */
-import type { StoredAuth } from './types'
+import type { CaptureOptions, StoredAuth } from './types'
 
 const AUTH_KEY = 'outlio.auth'
 const SESSION_KEY = 'outlio.session'
 const STATE_KEY = 'outlio.pairingState'
+const CAPTURE_OPTIONS_KEY = 'outlio.captureOptions'
 
 declare const chrome: {
   storage: {
@@ -58,6 +59,16 @@ export async function writeSessionId(sessionId: string | null): Promise<void> {
     return
   }
   await chrome.storage.local.set({ [SESSION_KEY]: sessionId })
+}
+
+export async function readCaptureOptions(): Promise<CaptureOptions> {
+  const bag = await chrome.storage.local.get([CAPTURE_OPTIONS_KEY])
+  const value = bag[CAPTURE_OPTIONS_KEY] as Partial<CaptureOptions> | undefined
+  return { includeCompanyWebsites: value?.includeCompanyWebsites === true }
+}
+
+export async function writeCaptureOptions(options: CaptureOptions): Promise<void> {
+  await chrome.storage.local.set({ [CAPTURE_OPTIONS_KEY]: options })
 }
 
 /**

@@ -2,6 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { ExtensionSettings } from '@/components/extension/ExtensionSettings'
+import { ClaySettings } from '@/components/integrations/ClaySettings'
+import { GoogleSettings } from '@/components/integrations/GoogleSettings'
+import { GhlSettings } from '@/components/integrations/GhlSettings'
+import { HubSpotSettings } from '@/components/integrations/HubSpotSettings'
+import { SalesforceSettings } from '@/components/integrations/SalesforceSettings'
 import { AvatarSettings, DeleteAccountSettings, EmailSettings, MfaSettings, PasswordSettings, ProfileSettings, SubscriptionSettings } from '@/components/settings/SettingsForms'
 import { CHROME_EXTENSION_URL } from '@/app/lib/constants'
 import { requireUser } from '@/lib/auth/access'
@@ -9,16 +14,22 @@ import { listDevices } from '@/lib/extension/devices'
 import { signedAvatarUrl } from '@/lib/profile/avatar'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { getClayConnectionMetadata } from '@/lib/integrations/repository'
+import { getGoogleConnectionMetadata } from '@/lib/integrations/google-repository'
+import { getGhlConnectionMetadata } from '@/lib/integrations/ghl-repository'
+import { getHubSpotConnectionMetadata } from '@/lib/integrations/hubspot-repository'
+import { getSalesforceConnectionMetadata } from '@/lib/integrations/salesforce-repository'
 
 export const metadata: Metadata = { title: 'Settings | Outlio', robots: { index: false, follow: false } }
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ required_mfa?: string }>
+  searchParams: Promise<{ required_mfa?: string; google?: string; hubspot?: string; salesforce?: string }>
 }) {
   const ctx = await requireUser()
-  const adminMfaRequired = ctx.isAdmin && (await searchParams).required_mfa === '1'
+  const params = await searchParams
+  const adminMfaRequired = ctx.isAdmin && params.required_mfa === '1'
   const avatarUrl = await signedAvatarUrl(ctx.userId!, ctx.profile?.avatar_path)
   const { data: factors } = await (await createClient()).auth.mfa.listFactors()
   const initialFactorId = factors?.totp[0]?.id ?? null
@@ -30,7 +41,14 @@ export default async function SettingsPage({
     .limit(1)
     .maybeSingle()
   const initials = (ctx.profile?.full_name ?? ctx.email ?? 'O').split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
-  const devices = await listDevices(ctx.userId!)
+  const [devices, clayConnection, googleConnection, ghlConnection, hubSpotConnection, salesforceConnection] = await Promise.all([
+    listDevices(ctx.userId!),
+    getClayConnectionMetadata(ctx.userId!),
+    getGoogleConnectionMetadata(ctx.userId!),
+    getGhlConnectionMetadata(ctx.userId!),
+    getHubSpotConnectionMetadata(ctx.userId!),
+    getSalesforceConnectionMetadata(ctx.userId!),
+  ])
   // Chrome is published, so its URL is a constant. Firefox and Safari stay
   // null until they have listings — the UI shows "coming soon" rather than a
   // dead link, so nobody is sent to a 404 on a store we have not shipped to.
@@ -57,7 +75,7 @@ export default async function SettingsPage({
 
       <div className="grid gap-5 lg:grid-cols-[210px_minmax(0,1fr)]">
         <aside className="h-fit rounded-[var(--radius-xl)] border border-border bg-panel p-2 shadow-[var(--shadow-sm)] lg:sticky lg:top-24">
-          {['Profile', 'Email address', 'Security', 'Subscription and billing', 'Browser extension', 'Delete account'].map((label) => (
+          {['Profile', 'Email address', 'Security', 'Subscription and billing', 'Integrations', 'Browser extension', 'Delete account'].map((label) => (
             <a key={label} href={`#${label.toLowerCase().replaceAll(' ', '-')}`} className="flex h-10 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-accent-soft/60 hover:text-accent">{label}</a>
           ))}
         </aside>
@@ -89,6 +107,15 @@ export default async function SettingsPage({
                 cancelAt={subscription?.cancel_at ?? null}
                 hasActiveSubscription={subscription?.status === 'active'}
               />
+            </div>
+          </SettingsSection>
+          <SettingsSection id="integrations" title="Integrations" description="Connect the tools where you want to send your leads.">
+            <div className="space-y-4">
+              <GoogleSettings status={googleConnection?.status ?? null} accountLabel={googleConnection?.externalAccountEmail ?? googleConnection?.externalAccountName ?? null} feedback={params.google ?? null} />
+              <GhlSettings status={ghlConnection?.status ?? null} accountLabel={ghlConnection?.externalAccountName ?? null} />
+              <HubSpotSettings status={hubSpotConnection?.status ?? null} accountLabel={hubSpotConnection?.externalAccountName ?? null} feedback={params.hubspot ?? null} />
+              <SalesforceSettings status={salesforceConnection?.status ?? null} accountLabel={salesforceConnection?.externalAccountName ?? null} feedback={params.salesforce ?? null} />
+              <ClaySettings status={clayConnection?.status ?? null} accountLabel={clayConnection?.externalAccountName ?? null} />
             </div>
           </SettingsSection>
           <SettingsSection id="browser-extension" title="Browser extension" description="Capture leads directly from your browser, and manage which browsers are connected.">

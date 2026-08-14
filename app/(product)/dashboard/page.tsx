@@ -113,6 +113,7 @@ export default async function DashboardPage() {
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+        <div className="space-y-4">
         <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel p-6 shadow-[var(--shadow-sm)] sm:p-7">
           <div className="relative z-10 max-w-xl">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-accent-soft text-lg font-semibold text-accent">
@@ -149,6 +150,8 @@ export default async function DashboardPage() {
             className="absolute -bottom-10 right-16 h-32 w-32 rounded-full border border-accent/15"
           />
         </section>
+        <ExtensionCard connectedDevices={connectedDevices} />
+        </div>
 
         <div className="space-y-4">
         <section className="rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
@@ -207,8 +210,6 @@ export default async function DashboardPage() {
           leadsPerCredit={uploadLimits.leadsPerCredit}
           maxFiles={uploadLimits.maxFiles}
         />
-
-        <ExtensionCard connectedDevices={connectedDevices} />
 
         {referral?.code ? (
           <ReferralCard

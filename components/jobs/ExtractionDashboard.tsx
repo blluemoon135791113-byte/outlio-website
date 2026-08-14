@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { JobActions } from '@/components/jobs/JobActions'
+import { LeadExportMenu } from '@/components/integrations/LeadExportMenu'
+import { EXPORT_COLUMN_HEADERS } from '@/lib/export/leads'
 import {
   DASHBOARD_FILE_SELECT,
   DASHBOARD_JOB_SELECT,
@@ -47,7 +49,7 @@ function missing(value: string | null) {
   return value?.trim() || 'Not available'
 }
 
-function safeProfileUrl(value: string | null) {
+function safeExternalUrl(value: string | null) {
   if (!value) return null
 
   try {
@@ -58,7 +60,11 @@ function safeProfileUrl(value: string | null) {
   }
 }
 
-function jobLabel(job: DashboardJob) {
+function jobLabel(job: DashboardJob, files: readonly DashboardFile[] = []) {
+  const firstFile = files.find((file) => file.extraction_job_id === job.id)
+  if (firstFile?.original_filename) {
+    return firstFile.original_filename.replace(/\.html?$/i, '')
+  }
   return `Run ${job.id.slice(0, 8).toUpperCase()}`
 }
 
@@ -69,6 +75,11 @@ export function ExtractionDashboard({
   initialLeads,
   credits,
   planName,
+  clayConnected,
+  googleConnected,
+  ghlConnected,
+  hubSpotConnected,
+  salesforceConnected,
 }: {
   userId: string
   initialJobs: DashboardJob[]
@@ -76,6 +87,11 @@ export function ExtractionDashboard({
   initialLeads: DashboardLead[]
   credits: CreditSnapshot | null
   planName: string | null
+  clayConnected: boolean
+  googleConnected: boolean
+  ghlConnected: boolean
+  hubSpotConnected: boolean
+  salesforceConnected: boolean
 }) {
   const supabase = useMemo(() => createClient(), [])
   const [jobs, setJobs] = useState(initialJobs)
@@ -88,6 +104,7 @@ export function ExtractionDashboard({
   )
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
   const [leadSearch, setLeadSearch] = useState('')
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(() => new Set())
   const refreshing = useRef(false)
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -200,11 +217,6 @@ export function ExtractionDashboard({
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
     : []
 
-  const filesById = useMemo(
-    () => new Map(files.map((file) => [file.id, file.original_filename])),
-    [files],
-  )
-
   const filteredJobs = jobs.filter((job) => {
     if (historyFilter === 'active') return isActiveJob(job)
     if (historyFilter === 'completed') return FINISHED_JOB_STATUSES.has(job.status)
@@ -217,10 +229,39 @@ export function ExtractionDashboard({
   const normalizedSearch = leadSearch.trim().toLowerCase()
   const filteredLeads = leads.filter((lead) => {
     if (!normalizedSearch) return true
-    return [lead.full_name, lead.job_title, lead.company_name, lead.location].some((value) =>
+    return [lead.full_name, lead.job_title, lead.company_name].some((value) =>
       value?.toLowerCase().includes(normalizedSearch),
     )
   })
+
+  const availableLeadIds = useMemo(() => new Set(leads.map((lead) => lead.id)), [leads])
+  const availableSelectedLeadIds = useMemo(
+    () => new Set([...selectedLeadIds].filter((id) => availableLeadIds.has(id))),
+    [availableLeadIds, selectedLeadIds],
+  )
+
+  const toggleLead = useCallback((leadId: string) => {
+    setSelectedLeadIds((current) => {
+      const next = new Set(current)
+      if (next.has(leadId)) next.delete(leadId)
+      else next.add(leadId)
+      return next
+    })
+  }, [])
+
+  const toggleVisibleLeads = useCallback((leadIds: readonly string[]) => {
+    setSelectedLeadIds((current) => {
+      const next = new Set(current)
+      const allSelected = leadIds.length > 0 && leadIds.every((id) => next.has(id))
+      for (const id of leadIds) {
+        if (allSelected) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+  }, [])
+
+  const clearSelectedLeads = useCallback(() => setSelectedLeadIds(new Set()), [])
 
   const totals = jobs.reduce(
     (acc, job) => {
@@ -294,7 +335,7 @@ export function ExtractionDashboard({
         <EmptyState />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-          <section className="min-w-0 self-start overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
+          <section className="relative z-20 min-w-0 self-start overflow-visible rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
               <div>
                 <h2 className="text-base font-semibold text-ink">Extraction history</h2>
@@ -311,6 +352,12 @@ export function ExtractionDashboard({
                     job={job}
                     selected={selectedJob?.id === job.id}
                     onSelect={() => setSelectedJobId(job.id)}
+                    label={jobLabel(job, files)}
+                    clayConnected={clayConnected}
+                    googleConnected={googleConnected}
+                    ghlConnected={ghlConnected}
+                    hubSpotConnected={hubSpotConnected}
+                    salesforceConnected={salesforceConnected}
                   />
                 ))}
               </ul>
@@ -330,7 +377,15 @@ export function ExtractionDashboard({
         totalVisible={leads.length}
         search={leadSearch}
         onSearch={setLeadSearch}
-        filesById={filesById}
+        selectedLeadIds={availableSelectedLeadIds}
+        onToggleLead={toggleLead}
+        onToggleVisible={toggleVisibleLeads}
+        onExportSuccess={clearSelectedLeads}
+        clayConnected={clayConnected}
+        googleConnected={googleConnected}
+        ghlConnected={ghlConnected}
+        hubSpotConnected={hubSpotConnected}
+        salesforceConnected={salesforceConnected}
       />
     </div>
   )
@@ -515,12 +570,24 @@ function HistoryFilters({
 
 function JobHistoryRow({
   job,
+  label,
   selected,
   onSelect,
+  clayConnected,
+  googleConnected,
+  ghlConnected,
+  hubSpotConnected,
+  salesforceConnected,
 }: {
   job: DashboardJob
+  label: string
   selected: boolean
   onSelect: () => void
+  clayConnected: boolean
+  googleConnected: boolean
+  ghlConnected: boolean
+  hubSpotConnected: boolean
+  salesforceConnected: boolean
 }) {
   const percent = runProgress(job)
   const purged = (job.progress_step ?? '').toLowerCase().includes('data purged')
@@ -531,7 +598,7 @@ function JobHistoryRow({
         <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={job.status} />
-            <span className="text-sm font-semibold text-ink">{jobLabel(job)}</span>
+            <span className="text-sm font-semibold text-ink">{label}</span>
             <time dateTime={job.created_at} className="text-xs text-muted">
               {formatDate(job.created_at)}
             </time>
@@ -554,6 +621,11 @@ function JobHistoryRow({
             jobId={job.id}
             hasExport={Boolean(job.export_storage_path)}
             leadsRemaining={purged ? 0 : job.leads_kept}
+            clayConnected={clayConnected}
+            googleConnected={googleConnected}
+            ghlConnected={ghlConnected}
+            hubSpotConnected={hubSpotConnected}
+            salesforceConnected={salesforceConnected}
           />
         ) : null}
       </div>
@@ -570,7 +642,7 @@ function FilePipeline({ job, files }: { job: DashboardJob | null; files: Dashboa
       <div className="border-b border-border px-5 py-4">
         <h2 className="text-base font-semibold text-ink">File pipeline</h2>
         <p className="mt-0.5 text-sm text-muted">
-          {job ? jobLabel(job) : 'Select a run'}
+          {job ? jobLabel(job, files) : 'Select a run'}
         </p>
       </div>
 
@@ -652,14 +724,33 @@ function LeadPreview({
   totalVisible,
   search,
   onSearch,
-  filesById,
+  selectedLeadIds,
+  onToggleLead,
+  onToggleVisible,
+  onExportSuccess,
+  clayConnected,
+  googleConnected,
+  ghlConnected,
+  hubSpotConnected,
+  salesforceConnected,
 }: {
   leads: DashboardLead[]
   totalVisible: number
   search: string
   onSearch: (value: string) => void
-  filesById: Map<string, string>
+  selectedLeadIds: ReadonlySet<string>
+  onToggleLead: (leadId: string) => void
+  onToggleVisible: (leadIds: readonly string[]) => void
+  onExportSuccess: () => void
+  clayConnected: boolean
+  googleConnected: boolean
+  ghlConnected: boolean
+  hubSpotConnected: boolean
+  salesforceConnected: boolean
 }) {
+  const visibleIds = leads.map((lead) => lead.id)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedLeadIds.has(id))
+
   return (
     <section className="rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 py-4">
@@ -669,56 +760,126 @@ function LeadPreview({
             Showing the newest {totalVisible.toLocaleString()} retained lead rows.
           </p>
         </div>
-        <label className="w-full sm:w-72">
-          <span className="sr-only">Search latest leads</span>
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => onSearch(event.target.value)}
-            placeholder="Search name, title, company…"
-            className="w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 py-2 text-sm text-ink transition-colors duration-150 placeholder:text-muted hover:border-border-strong"
+        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-end">
+          <LeadExportMenu
+            selectedLeads={leads.filter((lead) => selectedLeadIds.has(lead.id))}
+            clayConnected={clayConnected}
+            googleConnected={googleConnected}
+            ghlConnected={ghlConnected}
+            hubSpotConnected={hubSpotConnected}
+            salesforceConnected={salesforceConnected}
+            onSuccess={onExportSuccess}
           />
-        </label>
+          <label className="w-full sm:w-72">
+            <span className="sr-only">Search latest leads</span>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => onSearch(event.target.value)}
+              placeholder="Search name, title, company…"
+              className="w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 py-2 text-sm text-ink transition-colors duration-150 placeholder:text-muted hover:border-border-strong"
+            />
+          </label>
+        </div>
       </div>
 
       {leads.length > 0 ? (
         <div className="overflow-x-auto" data-lenis-prevent-horizontal>
-          <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[1240px] border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-surface-muted/70 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-                <th className="px-5 py-3">Lead</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Company</th>
-                <th className="px-4 py-3">Location</th>
-                <th className="px-4 py-3">Source</th>
-                <th className="px-5 py-3 text-right">Profile</th>
+                <th className="w-12 px-5 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all visible leads"
+                    checked={allVisibleSelected}
+                    onChange={() => onToggleVisible(visibleIds)}
+                    className="h-4 w-4 accent-accent"
+                  />
+                </th>
+                <th className="px-5 py-3">{EXPORT_COLUMN_HEADERS.name}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.linkedinProfile}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.jobTitle}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.company}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyLinkedInUrl}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyUrl}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.location}</th>
+                <th className="px-5 py-3 text-right">{EXPORT_COLUMN_HEADERS.salesNavigatorUrl}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {leads.map((lead) => (
                 <tr key={lead.id} className="transition-colors duration-150 hover:bg-surface-muted/80">
+                  <td className="px-5 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${lead.full_name?.trim() || 'lead'}`}
+                      checked={selectedLeadIds.has(lead.id)}
+                      onChange={() => onToggleLead(lead.id)}
+                      className="h-4 w-4 accent-accent"
+                    />
+                  </td>
                   <td className="px-5 py-3 font-medium text-ink">{missing(lead.full_name)}</td>
+                  <td className="max-w-56 truncate px-4 py-3">
+                    {safeExternalUrl(lead.linkedin_url) ? (
+                      <a
+                        href={safeExternalUrl(lead.linkedin_url) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        className="font-semibold text-accent underline-offset-2 hover:underline"
+                      >
+                        Open profile
+                      </a>
+                    ) : (
+                      <span className="text-muted">Not available</span>
+                    )}
+                  </td>
                   <td className="max-w-56 truncate px-4 py-3 text-muted" title={lead.job_title ?? undefined}>
                     {missing(lead.job_title)}
                   </td>
                   <td className="max-w-48 truncate px-4 py-3 text-ink" title={lead.company_name ?? undefined}>
                     {missing(lead.company_name)}
                   </td>
-                  <td className="max-w-44 truncate px-4 py-3 text-muted" title={lead.location ?? undefined}>
-                    {missing(lead.location)}
-                  </td>
-                  <td className="max-w-48 truncate px-4 py-3 text-xs text-muted" title={lead.uploaded_file_id ? filesById.get(lead.uploaded_file_id) : undefined}>
-                    {lead.uploaded_file_id ? filesById.get(lead.uploaded_file_id) ?? 'Saved page' : 'Saved page'}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    {safeProfileUrl(lead.linkedin_url) ? (
+                  <td className="max-w-48 truncate px-4 py-3">
+                    {safeExternalUrl(lead.company_url) ? (
                       <a
-                        href={safeProfileUrl(lead.linkedin_url) ?? undefined}
+                        href={safeExternalUrl(lead.company_url) ?? undefined}
                         target="_blank"
                         rel="noopener noreferrer nofollow"
                         className="font-semibold text-accent underline-offset-2 hover:underline"
                       >
-                        Open
+                        Open company
+                      </a>
+                    ) : (
+                      <span className="text-muted">Not available</span>
+                    )}
+                  </td>
+                  <td className="max-w-48 truncate px-4 py-3">
+                    {safeExternalUrl(lead.company_website_url) ? (
+                      <a
+                        href={safeExternalUrl(lead.company_website_url) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        className="font-semibold text-accent underline-offset-2 hover:underline"
+                      >
+                        Open website
+                      </a>
+                    ) : (
+                      <span className="text-muted">Not available</span>
+                    )}
+                  </td>
+                  <td className="max-w-48 truncate px-4 py-3 text-muted" title={lead.location ?? undefined}>
+                    {missing(lead.location)}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    {safeExternalUrl(lead.sales_navigator_url) ? (
+                      <a
+                        href={safeExternalUrl(lead.sales_navigator_url) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        className="font-semibold text-accent underline-offset-2 hover:underline"
+                      >
+                        Open lead
                       </a>
                     ) : (
                       <span className="text-muted">Not available</span>
@@ -736,7 +897,7 @@ function LeadPreview({
           </h3>
           <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-muted">
             {search
-              ? 'Try a different name, title, company, or location.'
+              ? 'Try a different name, title, or company.'
               : 'Lead rows appear here after an extraction finishes. Downloaded CSV files remain available even after you clear lead data.'}
           </p>
         </div>

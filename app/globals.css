@@ -127,6 +127,35 @@ h6 {
   font-family: var(--font-body);
 }
 
+.route-progress {
+  opacity: 0;
+  transform: scaleX(0.08);
+  transition: opacity 100ms var(--ease-out-ui), transform 180ms var(--ease-out-ui);
+}
+
+.route-progress[data-phase="loading"] {
+  opacity: 1;
+  animation: route-progress-loading 1.4s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+.route-progress[data-phase="finishing"] {
+  opacity: 0;
+  transform: scaleX(1);
+}
+
+@keyframes route-progress-loading {
+  from { transform: scaleX(0.08); }
+  to { transform: scaleX(0.82); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-progress[data-phase="loading"] {
+    animation: none;
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
 .auth-glass-card {
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(249, 246, 255, 0.58));
   -webkit-backdrop-filter: blur(22px) saturate(130%);

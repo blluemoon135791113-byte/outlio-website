@@ -12,7 +12,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { CaptureSessionRow } from '@/types/database'
+import type { CaptureSessionRow, DedupeMode } from '@/types/database'
 
 export type ClaimOutcome =
   | { status: 'claimed'; pageId: string }
@@ -36,6 +36,7 @@ export async function startCaptureSession(input: {
   userId: string
   deviceId: string
   browser: string | null
+  dedupeMode: DedupeMode
 }): Promise<CaptureSessionRow> {
   const admin = createAdminClient()
 
@@ -56,6 +57,7 @@ export async function startCaptureSession(input: {
       browser: input.browser,
       status: 'active',
       source: 'salesnav',
+      dedupe_mode: input.dedupeMode,
     })
     .select('*')
     .single()

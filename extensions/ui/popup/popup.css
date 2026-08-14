@@ -178,6 +178,41 @@ body {
   color: var(--muted);
 }
 
+.capture-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.capture-option input { accent-color: var(--accent); }
+
+.field-option {
+  display: block;
+  margin: 0 0 12px;
+}
+
+.field-option__label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.field-option__select {
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+
 .error {
   margin: 0 0 12px;
   padding: 9px 10px;

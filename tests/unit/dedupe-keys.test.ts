@@ -27,6 +27,7 @@ function lead(over: Partial<ParsedLead>): ParsedLead {
     jobTitle: null,
     companyName: null,
     companyUrl: null,
+    companyWebsiteUrl: null,
     location: null,
     personBlurb: null,
     tenureInRole: null,

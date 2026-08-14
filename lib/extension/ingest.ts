@@ -22,6 +22,8 @@ import { claimAndProcessJob } from '@/lib/worker/process-job'
 import { maxUploadFileBytes } from '@/lib/upload/limits'
 import { createExtractionJob, validateFileBytes } from '@/lib/upload/process'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { extensionCaptureFilename } from '@/lib/extension/naming'
+import type { DedupeMode } from '@/types/database'
 
 export type IngestOutcome = {
   jobId: string
@@ -40,6 +42,7 @@ export async function ingestCapturedPage(input: {
   captureSessionId: string
   pageId: string
   html: string
+  pageName: string | null
   pageIdentifier: string | null
 }): Promise<IngestOutcome> {
   const bytes = new TextEncoder().encode(input.html)
@@ -47,9 +50,7 @@ export async function ingestCapturedPage(input: {
   // Step 1: identical validation to an uploaded file, including the 4 KB
   // content sniff. A page that would have been rejected as a file is rejected
   // here for the same reason.
-  const displayName = input.pageIdentifier
-    ? `capture-${input.pageIdentifier}.html`
-    : 'capture.html'
+  const displayName = extensionCaptureFilename(input.pageName, input.pageIdentifier)
 
   const validated = validateFileBytes(displayName, 'text/html', bytes, maxUploadFileBytes())
 
@@ -57,17 +58,27 @@ export async function ingestCapturedPage(input: {
     throw new AppError(validated.code, `capture rejected: ${validated.message}`)
   }
 
+  const admin = createAdminClient()
+  const { data: captureSession, error: sessionError } = await admin
+    .from('capture_sessions')
+    .select('dedupe_mode')
+    .eq('id', input.captureSessionId)
+    .eq('user_id', input.userId)
+    .single()
+  if (sessionError || !captureSession) {
+    throw new AppError('ERR_INTERNAL', 'capture session duplicate mode unavailable')
+  }
+
   // Step 2: same job creation, same server-generated storage key.
   const { jobId } = await createExtractionJob(
     input.userId,
     [validated],
-    'remove_exact',
+    captureSession.dedupe_mode as DedupeMode,
     input.captureSessionId,
   )
 
   // Link the page row to its job before anything can process it, so a crash
   // between here and the queue still leaves a traceable record.
-  const admin = createAdminClient()
   await admin
     .from('capture_pages')
     .update({ extraction_job_id: jobId, status: 'queued' })

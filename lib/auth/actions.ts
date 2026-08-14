@@ -173,6 +173,16 @@ export async function signUpAction(
 
     if (error || !data.user) {
       await releaseSignupIp(reservation)
+      await recordSecurityEvent({
+        event: 'auth.sign_up_failed',
+        level: 'warn',
+        subject: email,
+        context: {
+          provider_code: error?.code,
+          provider_status: error?.status,
+          user_returned: Boolean(data.user),
+        },
+      })
       // Do not distinguish "already registered" because that would leak
       // account existence.
       return reject('We could not complete sign-up. Please check your details and try again.')
@@ -183,12 +193,28 @@ export async function signUpAction(
     // network reservation or appearing to create a second account.
     if (!(await signupClaimsWereClaimed(reservation, data.user.id, securityClaims))) {
       await releaseSignupIp(reservation)
+      await recordSecurityEvent({
+        event: 'auth.sign_up_claim_verification_failed',
+        level: 'warn',
+        userId: data.user.id,
+        subject: email,
+      })
       return reject('We could not complete sign-up. Please check your details and try again.')
     }
-  } catch {
+  } catch (error) {
     await releaseSignupIp(reservation)
+    await recordSecurityEvent({
+      event: 'auth.sign_up_exception',
+      level: 'error',
+      subject: email,
+      context: {
+        error_type: error instanceof Error ? error.name : 'UnknownError',
+      },
+    })
     return reject('We could not complete sign-up. Please try again.')
   }
+
+  await recordSecurityEvent({ event: 'auth.sign_up_succeeded', subject: email })
 
   redirect('/verify-email?sent=1')
 }

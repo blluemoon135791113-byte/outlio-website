@@ -33,6 +33,7 @@ const bodySchema = z.object({
   sessionId: z.string().uuid(),
   html: z.string().min(1).max(MAX_HTML_BYTES),
   sourceUrl: z.string().url().max(2048).nullable().optional(),
+  pageName: z.string().trim().min(1).max(120).nullable().optional(),
   pageIdentifier: z.string().max(64).nullable().optional(),
   /** Client's hash, compared against ours to catch truncated transfers. */
   contentHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
@@ -109,6 +110,7 @@ export async function POST(request: Request) {
       captureSessionId: body.sessionId,
       pageId: claim.pageId,
       html: body.html,
+      pageName: body.pageName ?? null,
       pageIdentifier: body.pageIdentifier ?? null,
     })
 

@@ -7,6 +7,7 @@ import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 
 import { ProductIcon, ProductNav } from '@/components/product/ProductNav'
+import { NavigationProgress } from '@/components/product/NavigationProgress'
 import { SidebarReferral } from '@/components/product/SidebarReferral'
 import { signOutAction } from '@/lib/auth/actions'
 
@@ -120,6 +121,7 @@ export function ProductShell({
 
   return (
     <div className="app-shell min-h-dvh bg-app text-ink">
+      <NavigationProgress />
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-border bg-panel lg:flex">
         <SidebarContent isAdmin={isAdmin} canUseScraper={canUseScraper} referralLink={referralLink} />
       </aside>

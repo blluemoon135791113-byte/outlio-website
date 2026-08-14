@@ -27,10 +27,12 @@ import {
 } from '../core/api'
 import {
   clearAuth,
+  readCaptureOptions,
   readAuth,
   readSessionId,
   takePairingState,
   writePairingState,
+  writeCaptureOptions,
   writeSessionId,
 } from '../core/storage'
 
@@ -185,8 +187,12 @@ async function captureActivePage(): Promise<void> {
 
   busy = true
   try {
-    const reply = (await chrome.tabs.sendMessage(tab.id, { type: 'CAPTURE_NOW' })) as
-      | { ok: true; captured: { html: string; sourceUrl: string; pageIdentifier: string | null; contentHash: string } }
+    const options = await readCaptureOptions()
+    const reply = (await chrome.tabs.sendMessage(tab.id, {
+      type: 'CAPTURE_NOW',
+      includeCompanyWebsites: options.includeCompanyWebsites,
+    })) as
+      | { ok: true; captured: { html: string; sourceUrl: string; pageName: string; pageIdentifier: string | null; contentHash: string } }
       | { ok: false; error: string }
 
     if (!reply?.ok) {
@@ -198,6 +204,7 @@ async function captureActivePage(): Promise<void> {
       sessionId,
       html: reply.captured.html,
       sourceUrl: reply.captured.sourceUrl,
+      pageName: reply.captured.pageName,
       pageIdentifier: reply.captured.pageIdentifier,
       contentHash: reply.captured.contentHash,
     })
@@ -229,9 +236,13 @@ async function connect(): Promise<void> {
   await chrome.tabs.create({ url: `${API_BASE}/extension/connect?${params.toString()}` })
 }
 
-async function start(): Promise<SessionTotals | null> {
+async function start(
+  includeCompanyWebsites = false,
+  dedupeMode: 'remove_exact' | 'remove_likely' | 'review' | 'keep_all' = 'remove_exact',
+): Promise<SessionTotals | null> {
   try {
-    const session = await startSession()
+    await writeCaptureOptions({ includeCompanyWebsites })
+    const session = await startSession(dedupeMode)
     await writeSessionId(session.id)
     await setBadge(true)
     lastError = null
@@ -273,7 +284,12 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
         return
 
       case 'START_CAPTURE':
-        respond({ ok: Boolean(await start()) })
+        respond({
+          ok: Boolean(await start(
+            message.includeCompanyWebsites === true,
+            message.dedupeMode ?? 'remove_exact',
+          )),
+        })
         return
 
       case 'FINISH_CAPTURE': {

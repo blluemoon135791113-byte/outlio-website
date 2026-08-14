@@ -19,6 +19,9 @@ export type ParsedLead = {
   memberUrn: string | null
   jobTitle: string | null
   companyName: string | null
+  /** External company website, only when LinkedIn exposed it in the page UI. */
+  companyWebsiteUrl: string | null
+  /** Sales Navigator company page. */
   companyUrl: string | null
   location: string | null
   personBlurb: string | null
@@ -83,9 +86,22 @@ function extractMemberUrn(salesNavHref: string | null, scrollUrn: string | null)
  * This is construction from an extracted identifier, not inference: no part of
  * the URL is guessed.
  */
-function publicProfileUrl(memberUrn: string | null): string | null {
-  if (!memberUrn) return null
-  return `https://www.linkedin.com/in/${memberUrn}`
+function publicProfileUrl(href: string | null | undefined): string | null {
+  const absolute = absolutize(href)
+  if (!absolute) return null
+  try {
+    const parsed = new URL(absolute)
+    if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return null
+    return /^\/in\/[^/?#]+/i.test(parsed.pathname) ? absolute : null
+  } catch {
+    return null
+  }
+}
+
+function canonicalSalesNavUrl(href: string | null, memberUrn: string | null): string | null {
+  return absolutize(href) ?? (memberUrn
+    ? `https://www.linkedin.com/sales/lead/${memberUrn}`
+    : null)
 }
 
 /**
@@ -133,6 +149,26 @@ function absolutize(href: string | null | undefined): string | null {
   if (/^https?:\/\//i.test(t)) return t
   if (t.startsWith('/')) return `https://www.linkedin.com${t}`
   return t
+}
+
+/**
+ * Company URLs must identify a Sales Navigator company page. In the current
+ * table layout a company label can sit inside a broader anchor for the person;
+ * accepting the nearest arbitrary anchor silently writes the person's URL into
+ * Company URL.
+ */
+function companyProfileUrl(href: string | null | undefined): string | null {
+  const absolute = absolutize(href)
+  if (!absolute) return null
+
+  try {
+    const parsed = new URL(absolute)
+    if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return null
+    if (!/^\/sales\/company\/[^/?#]+/i.test(parsed.pathname)) return null
+    return absolute
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -187,6 +223,10 @@ export function parseSearchResults(html: string): ParseResult {
       null
 
     const memberUrn = extractMemberUrn(salesNavHref, scrollUrn)
+    const publicHref = row
+      .find('a[href^="/in/"], a[href*="linkedin.com/in/"]')
+      .first()
+      .attr('href')
 
     // No name AND no identity means nothing usable. Count it, do not invent it.
     if (!fullName && !memberUrn) {
@@ -217,11 +257,12 @@ export function parseSearchResults(html: string): ParseResult {
 
     // Company is an anchor in the card layout and a span in the table layout.
     const companyEl = row.find('[data-anonymize="company-name"]').first()
-    const companyAnchor = companyEl.is('a[href]')
+    const companyAnchor = companyEl.is('a[href*="/sales/company/"]')
       ? companyEl
-      : companyEl.closest('a[href]')
+      : companyEl.closest('a[href*="/sales/company/"]')
     let companyName = text(companyEl.text())
-    const companyUrl = absolutize(companyAnchor.attr('href') ?? null)
+    const companyUrl = companyProfileUrl(companyAnchor.attr('href') ?? null)
+    const companyWebsiteUrl = text(companyEl.attr('data-outlio-company-website'))
 
     // …otherwise the name is a BARE TEXT NODE in the subtitle. Without this
     // fallback we silently lose the company on ~20% of leads (1 of 5 on a real
@@ -244,12 +285,13 @@ export function parseSearchResults(html: string): ParseResult {
 
     leads.push({
       fullName,
-      linkedinUrl: publicProfileUrl(memberUrn),
-      salesNavUrl: absolutize(salesNavHref),
+      linkedinUrl: publicProfileUrl(publicHref),
+      salesNavUrl: canonicalSalesNavUrl(salesNavHref, memberUrn),
       memberUrn,
       jobTitle,
       companyName,
       companyUrl,
+      companyWebsiteUrl,
       location: text(row.find('[data-anonymize="location"]').first().text()),
       personBlurb: text(row.find('[data-anonymize="person-blurb"]').first().text()),
       tenureInRole,

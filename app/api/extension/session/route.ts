@@ -17,7 +17,11 @@ import { recordSecurityEvent } from '@/lib/security/events'
 export const runtime = 'nodejs'
 
 const bodySchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('start') }),
+  z.object({
+    action: z.literal('start'),
+    dedupeMode: z.enum(['remove_exact', 'remove_likely', 'review', 'keep_all'])
+      .default('remove_exact'),
+  }),
   z.object({ action: z.literal('finish'), sessionId: z.string().uuid() }),
 ])
 
@@ -48,12 +52,13 @@ export async function POST(request: Request) {
       userId,
       deviceId: device.id,
       browser: device.browser,
+      dedupeMode: body.dedupeMode,
     })
 
     await recordSecurityEvent({
       event: 'capture.started',
       userId,
-      context: { session_id: session.id, device_id: device.id },
+      context: { session_id: session.id, device_id: device.id, dedupe_mode: session.dedupe_mode },
     })
 
     return NextResponse.json({

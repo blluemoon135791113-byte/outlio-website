@@ -27,7 +27,7 @@
  * `ol.artdeco-list > li.artdeco-list__item`, so stripping them would break the
  * parser. Only volatile and executable content is removed.
  */
-import type { CapturedPage, PageAdapter } from '../core/types'
+import type { CaptureOptions, CapturedPage, PageAdapter } from '../core/types'
 
 /** Row anchors, in the order the backend parser tries them. */
 const LIST_ROW = 'li.artdeco-list__item'
@@ -36,6 +36,9 @@ const TABLE_ROW = 'tr[data-x--people-list--row]'
 const PERSON_NAME = '[data-anonymize="person-name"]'
 
 const CONTAINER_CANDIDATES = ['ol.artdeco-list', 'table', 'main']
+const SETTLE_QUIET_MS = 600
+const SETTLE_MAX_MS = 3_000
+const COMPANY_HOVER_SETTLE_MS = 250
 
 /** Elements that carry no parseable data and may carry secrets. */
 const DROP_ELEMENTS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'IMG', 'CANVAS', 'IFRAME'])
@@ -99,6 +102,87 @@ function resultsContainer(): Element | null {
   return null
 }
 
+function externalWebsiteFrom(root: ParentNode): string | null {
+  for (const anchor of Array.from(root.querySelectorAll<HTMLAnchorElement>('a[href]'))) {
+    try {
+      const url = new URL(anchor.href, window.location.href)
+      if (!['http:', 'https:'].includes(url.protocol)) continue
+      if (/(^|\.)linkedin\.com$/i.test(url.hostname)) continue
+      return url.toString()
+    } catch {
+      // Ignore malformed page-owned links.
+    }
+  }
+  return null
+}
+
+/**
+ * Sales Navigator lazy-renders some company hover cards. This opt-in pass only
+ * hovers already-visible company labels and reads an external URL if LinkedIn
+ * renders one; it never clicks, opens a page, or makes its own network request.
+ */
+async function revealCompanyWebsites(container: Element): Promise<void> {
+  const companies = Array.from(
+    container.querySelectorAll<HTMLElement>('[data-anonymize="company-name"]'),
+  )
+
+  for (const company of companies) {
+    let website = externalWebsiteFrom(company.closest('tr, li') ?? company)
+    if (!website) {
+      company.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }))
+      company.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, cancelable: true }))
+      await new Promise((resolve) => setTimeout(resolve, COMPANY_HOVER_SETTLE_MS))
+
+      const hoverContent = document.querySelector(
+        '[role="tooltip"], .artdeco-hoverable-content, .artdeco-hoverable-content__content',
+      )
+      if (hoverContent) website = externalWebsiteFrom(hoverContent)
+
+      company.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }))
+      company.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }))
+    }
+    if (website) company.dataset.outlioCompanyWebsite = website
+  }
+}
+
+/**
+ * Names render before some company cells on slower connections. Capture after
+ * a short quiet window so LinkedIn's own lazy rendering can finish. This only
+ * observes the page the user opened; it never hovers, scrolls, clicks, or
+ * initiates a request.
+ */
+function waitForResultsToSettle(container: Element): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false
+    let quietTimer: ReturnType<typeof setTimeout>
+
+    const finish = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(quietTimer)
+      clearTimeout(maxTimer)
+      observer.disconnect()
+      resolve()
+    }
+
+    const scheduleQuiet = () => {
+      clearTimeout(quietTimer)
+      quietTimer = setTimeout(finish, SETTLE_QUIET_MS)
+    }
+
+    const observer = new MutationObserver(scheduleQuiet)
+    observer.observe(container, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['href', 'data-anonymize'],
+    })
+
+    const maxTimer = setTimeout(finish, SETTLE_MAX_MS)
+    scheduleQuiet()
+  })
+}
+
 export const salesNavAdapter: PageAdapter = {
   id: 'salesnav',
 
@@ -138,9 +222,37 @@ export const salesNavAdapter: PageAdapter = {
     return null
   },
 
-  async capture(): Promise<CapturedPage> {
+  getPageName(): string {
+    const candidates = [
+      '[data-test-list-name]',
+      '[data-x--people-list--title]',
+      'main h1',
+      '[role="main"] h1',
+    ]
+
+    for (const selector of candidates) {
+      const value = document.querySelector(selector)?.textContent?.replace(/\s+/g, ' ').trim()
+      if (value && value.length <= 120) return value
+    }
+
+    const title = document.title
+      .replace(/\s*[|–—-]\s*Sales Navigator.*$/i, '')
+      .replace(/^Sales Navigator\s*[|–—-]\s*/i, '')
+      .trim()
+    return title && title.length <= 120 ? title : 'Sales Navigator lead list'
+  },
+
+  async capture(options?: CaptureOptions): Promise<CapturedPage> {
+    const initialContainer = resultsContainer()
+    if (!initialContainer) throw new Error('no results container on this page')
+
+    await waitForResultsToSettle(initialContainer)
+
+    // The SPA may replace the whole list while it settles, so reacquire it.
     const container = resultsContainer()
-    if (!container) throw new Error('no results container on this page')
+    if (!container) throw new Error('results disappeared before capture')
+
+    if (options?.includeCompanyWebsites) await revealCompanyWebsites(container)
 
     const cleaned = sanitize(container)
     if (!cleaned) throw new Error('results container could not be read')
@@ -155,7 +267,8 @@ export const salesNavAdapter: PageAdapter = {
     return {
       html,
       sourceUrl: window.location.href.split('#')[0]!,
-      pageIdentifier: salesNavAdapter.getPageIdentifier(),
+      pageName: salesNavAdapter.getPageName(),
+      pageIdentifier: salesNavAdapter.getPageIdentifier() ?? '1',
       contentHash: await sha256Hex(html),
     }
   },

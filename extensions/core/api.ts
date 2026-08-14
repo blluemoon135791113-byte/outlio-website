@@ -154,11 +154,13 @@ function totalsFrom(body: Json): SessionTotals {
   }
 }
 
-export async function startSession(): Promise<SessionTotals> {
+export async function startSession(
+  dedupeMode: 'remove_exact' | 'remove_likely' | 'review' | 'keep_all',
+): Promise<SessionTotals> {
   return totalsFrom(
     await authed('/api/extension/session', {
       method: 'POST',
-      body: JSON.stringify({ action: 'start' }),
+      body: JSON.stringify({ action: 'start', dedupeMode }),
     }),
   )
 }
@@ -182,6 +184,7 @@ export async function sendPage(input: {
   sessionId: string
   html: string
   sourceUrl: string
+  pageName: string
   pageIdentifier: string | null
   contentHash: string
 }): Promise<CaptureResponse> {

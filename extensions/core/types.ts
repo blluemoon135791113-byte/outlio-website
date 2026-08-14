@@ -42,9 +42,16 @@ export type StoredAuth = {
 export type CapturedPage = {
   html: string
   sourceUrl: string
+  pageName: string
   pageIdentifier: string | null
   contentHash: string
 }
+
+export type CaptureOptions = {
+  includeCompanyWebsites: boolean
+}
+
+export type DedupeMode = 'remove_exact' | 'remove_likely' | 'review' | 'keep_all'
 
 /**
  * Page-specific integration, isolated behind one interface.
@@ -60,15 +67,17 @@ export interface PageAdapter {
   isReady(): boolean
   /** Page number or equivalent, when the page exposes one. */
   getPageIdentifier(): string | null
+  /** Visible saved-list/search name used only for a human-readable filename. */
+  getPageName(): string
   /** Extract exactly what the backend parser needs. */
-  capture(): Promise<CapturedPage>
+  capture(options?: CaptureOptions): Promise<CapturedPage>
 }
 
 /** Messages between popup, background and content script. */
 export type ExtensionMessage =
   | { type: 'GET_STATE' }
   | { type: 'CONNECT' }
-  | { type: 'START_CAPTURE' }
+  | { type: 'START_CAPTURE'; includeCompanyWebsites?: boolean; dedupeMode?: DedupeMode }
   | { type: 'FINISH_CAPTURE' }
   | { type: 'RETRY' }
   | { type: 'OPEN_DASHBOARD' }
@@ -79,7 +88,7 @@ export type ExtensionMessage =
 
 export type ContentMessage =
   | { type: 'IS_SUPPORTED' }
-  | { type: 'CAPTURE_NOW' }
+  | { type: 'CAPTURE_NOW'; includeCompanyWebsites?: boolean }
 
 export type ContentReply =
   | { ok: true; supported: boolean; ready: boolean; pageIdentifier: string | null }

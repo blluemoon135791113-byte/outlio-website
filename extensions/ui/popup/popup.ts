@@ -9,7 +9,7 @@
  * DOM is built with createElement rather than innerHTML: extension pages run
  * with elevated privileges, so string-built markup is a habit worth not having.
  */
-import type { ExtensionMessage, ExtensionState, SessionTotals } from '../../core/types'
+import type { DedupeMode, ExtensionMessage, ExtensionState, SessionTotals } from '../../core/types'
 
 declare const chrome: {
   runtime: { sendMessage(message: ExtensionMessage): Promise<unknown> }
@@ -45,6 +45,34 @@ function statusLine(dot: 'ok' | 'idle' | 'live', text: string): HTMLElement {
   wrap.appendChild(el('span', `dot dot--${dot}`))
   wrap.appendChild(el('span', undefined, text))
   return wrap
+}
+
+function companyWebsiteOption(): HTMLLabelElement {
+  const label = el('label', 'capture-option')
+  const input = el('input')
+  input.type = 'checkbox'
+  input.id = 'include-company-websites'
+  label.append(input, el('span', undefined, 'Find company websites (slower)'))
+  return label
+}
+
+function duplicateHandlingOption(): HTMLLabelElement {
+  const label = el('label', 'field-option')
+  label.appendChild(el('span', 'field-option__label', 'Duplicate handling'))
+  const select = el('select', 'field-option__select')
+  select.id = 'dedupe-mode'
+  for (const [value, text] of [
+    ['remove_exact', 'Remove exact duplicates'],
+    ['remove_likely', 'Remove likely duplicates'],
+    ['review', 'Flag duplicates for review'],
+    ['keep_all', 'Keep everything'],
+  ] as const) {
+    const option = el('option', undefined, text)
+    option.value = value
+    select.appendChild(option)
+  }
+  label.appendChild(select)
+  return label
 }
 
 function stats(session: SessionTotals): HTMLElement {
@@ -146,9 +174,21 @@ function render(state: ExtensionState): void {
       }
 
       root.appendChild(statusLine('ok', 'Supported page detected'))
+      root.appendChild(duplicateHandlingOption())
+      root.appendChild(companyWebsiteOption())
       root.appendChild(
         button('Start Capture', 'primary', () => {
-          void send({ type: 'START_CAPTURE' }).then(refresh)
+          const includeCompanyWebsites = (
+            document.getElementById('include-company-websites') as HTMLInputElement | null
+          )?.checked === true
+          const dedupeMode = (
+            document.getElementById('dedupe-mode') as HTMLSelectElement | null
+          )?.value as DedupeMode | undefined
+          void send({
+            type: 'START_CAPTURE',
+            includeCompanyWebsites,
+            dedupeMode: dedupeMode ?? 'remove_exact',
+          }).then(refresh)
         }),
       )
       return
