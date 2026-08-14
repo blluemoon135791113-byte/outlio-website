@@ -378,6 +378,21 @@ export type ResearchEvidenceRow = {
   created_at: string
 }
 
+/** Service-role only, no policies — same shape as JobQueueRow. */
+export type ResearchJobQueueRow = {
+  id: string
+  research_run_id: string
+  status: QueueStatus
+  attempts: number
+  max_attempts: number
+  claimed_at: string | null
+  claimed_by: string | null
+  next_attempt_at: string
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
 /** Per-external-call observability. Never holds secrets or raw responses. */
 export type ResearchToolCallRow = {
   id: string
@@ -687,6 +702,7 @@ export type Database = {
       research_runs: TableShape<ResearchRunRow>
       research_evidence: TableShape<ResearchEvidenceRow>
       research_tool_calls: TableShape<ResearchToolCallRow>
+      research_job_queue: TableShape<ResearchJobQueueRow>
       integration_connections: TableShape<IntegrationConnectionRow>
       integration_secrets: TableShape<IntegrationSecretRow>
       integration_oauth_transactions: TableShape<IntegrationOAuthTransactionRow>
@@ -707,6 +723,22 @@ export type Database = {
       is_admin: {
         Args: Record<string, never>
         Returns: boolean
+      }
+      enqueue_research_run: {
+        Args: { p_run_id: string }
+        Returns: undefined
+      }
+      claim_research_run: {
+        Args: { p_run_id: string; p_user_id: string; p_claimed_by: string }
+        Returns: Array<{ research_run_id: string; user_id: string; attempts: number }>
+      }
+      claim_next_research_run: {
+        Args: { p_claimed_by: string }
+        Returns: Array<{ research_run_id: string; user_id: string; attempts: number }>
+      }
+      reap_stale_research_runs: {
+        Args: { p_timeout_seconds?: number }
+        Returns: number
       }
       purge_expired_evidence: {
         Args: { p_older_than_days?: number }

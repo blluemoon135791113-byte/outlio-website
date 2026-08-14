@@ -135,14 +135,73 @@ on purpose — a live API is not a stable fixture, and a smoke test that fails
 because a company had a quiet news week teaches nothing. Parsing correctness is
 proved offline.
 
-### Still to build for Phase 3
+### Added since — the research queue and runner
 
-- Website intelligence beyond PageSpeed: fetching public pages with `robots.txt`
+| File | Purpose |
+|---|---|
+| `supabase/migrations/0045_research_queue.sql` | `research_job_queue` + enqueue / claim / claim-next / reap, mirroring 0013 exactly |
+| `lib/intelligence/plan.ts` | the `ResearchPlan` schema — **the gate between a model's proposal and paid API calls** |
+| `lib/intelligence/run.ts` | the runner: scope → companies → cache → routing → execute → persist |
+| `tests/unit/research-plan.test.ts` | 13 tests over plan and scope validation |
+| `tests/integration/research-run.test.ts` | 6 end-to-end runner tests, **no network** |
+
+**The runner's order of operations is the cost model.** Resolve scope to leads,
+collapse to distinct companies, read existing evidence, route only the gaps,
+execute, persist. Steps 2 and 3 are where the money is saved.
+
+**Discovered domains are written back to `companies.domain`.** This closes the
+loop: a domain found once by Wikidata or discovery becomes the company's stored
+identity, so later runs and every website-dependent provider start from it
+instead of paying to rediscover it.
+
+**`all_leads` is an explicit scope, never a default.** A missing scope fails
+validation rather than quietly becoming "spend money on everything" (§31). A
+single run is capped at 10,000 leads.
+
+**A run is `completed` only when nothing was left unanswered.** Anything else is
+`partially_complete` — a status a user can act on, rather than a green tick over
+a table of blanks.
+
+### 🐛 The 0013 OUT-parameter trap, again
+
+`claim_research_run` failed at runtime with `column reference "user_id" is
+ambiguous`. `RETURNS TABLE` declares OUT parameters of the same names as the
+columns, so a bare reference in the function body is ambiguous — the identical
+bug `claim_next_job` hit with `attempts` in 0013. Both UPDATEs are now fully
+qualified, and the comment explaining why is in the migration so it is not
+rediscovered a third time. **Unreachable without executing the SQL.**
+
+### Verification (updated)
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **507 passed**, 12 skipped |
+| `npx eslint lib/intelligence tests/` | ✅ zero problems |
+| 0045 applied twice to throwaway Postgres 16 | ✅ clean, idempotent |
+| Claim sets `running` + `started_at` | ✅ |
+| **Second claim of the same run** | ✅ **0 rows — exactly one claimant** |
+| Claim with the wrong user id | ✅ 0 rows |
+| Reaper requeues with future backoff | ✅ |
+| Dead-letter past `max_attempts` | ✅ queue + run `failed`, `ERR_TIMEOUT` |
+
+### Still to build
+
+- Website intelligence beyond PageSpeed: public pages with `robots.txt`
   respected, for pricing and positioning signals
 - GitHub, GLEIF, Hacker News, Y Combinator providers
-- Migration 0045: `research_job_queue` + enqueue/claim/reap, and the runner that
-  executes a whole research run. **Until this exists there is no way to run
-  research from the product** — only from a test.
+- **Phase 4**: the LLM planner that produces a `ResearchPlan` from natural
+  language. The schema and the runner are ready for it; nothing generates a plan
+  automatically yet, so a run must currently be created with a hand-built plan.
+- **No UI.** `createResearchRun` is a library call. There is no search bar, no
+  API route, and no results table (Phase 7).
+
+### 🟡 Pending — apply migration 0045
+
+Not yet applied to `ptewhpmxzenbmxlizxhu`. Until it is,
+`tests/integration/research-run.test.ts` **skips itself with a loud warning** and
+the runner is unverified against the live schema. Queue semantics are proven on
+local Postgres 16.
 
 ### 🔴 Credentials pasted into chat must be rotated
 
