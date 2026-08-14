@@ -33,7 +33,9 @@ const DAY = 24 * HOUR
  * a TTL decision, because the omission is a compile error.
  */
 export const FIELD_TTL_SECONDS: Record<ResearchField, number | null> = {
-  // Slow-moving company facts.
+  // Slow-moving company facts. A company rarely changes domain, and when it
+  // does the old one usually redirects.
+  company_domain: 180 * DAY,
   employee_count: 30 * DAY,
   industry: 180 * DAY,
   headquarters: 180 * DAY,

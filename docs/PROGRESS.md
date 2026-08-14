@@ -4,6 +4,94 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Phase 3 IN PROGRESS: search, funding, and domain discovery
+
+**Not finished.** Built and tested so far; the rest is listed at the end.
+
+### Built
+
+| File | Purpose |
+|---|---|
+| `lib/intelligence/http.ts` | the only path providers take to the network — timeout, bounded backoff honouring `Retry-After`, per-host pacing, streamed size cap, redacted errors |
+| `lib/intelligence/providers/tavily.ts` | licensed search primitive |
+| `lib/intelligence/providers/gdelt.ts` | open news API — the free fallback in `web_research` |
+| `lib/intelligence/providers/domain-discovery.ts` | finds a company website from its name |
+| `lib/intelligence/providers/web-research.ts` | recent news, hiring signals, competitors (Tavily → GDELT) |
+| `lib/intelligence/providers/funding.ts` | funding derived from news, MEDIUM confidence (Tavily → GDELT) |
+| `tests/unit/provider-extraction.test.ts` | 30 tests over every pure extraction path |
+
+Added the `company_domain` research field. `.env.example` documents
+`GEMINI_API_KEY`, `GROQ_API_KEY`, `TAVILY_API_KEY`, `GITHUB_TOKEN`,
+`INTELLIGENCE_PROVIDER_ORDER`, `INTELLIGENCE_TTL_OVERRIDES`.
+
+### Decisions
+
+**No funding database exists in this stack.** No Crunchbase, no Harmonic. The
+`FundingProvider` reads round, amount, currency, date and investors out of
+sentences in retrieved articles. It is therefore capped at MEDIUM source
+confidence, always carries the source URL, and reports nothing when no article
+states a figure. It answers "has this company been reported as raising?", not
+"what is this company's funding history?" — coverage is whatever the press wrote
+about, which is thin for small and non-US companies. **Do not present it as
+authoritative.** Decision taken with the user after the gap was flagged.
+
+**Extraction is deterministic regex, never the LLM.** The LLM must never be the
+origin of a number (spec §5).
+
+**An amount with no currency marker is ignored.** "raised 5 million" could be
+any currency, and defaulting to USD would silently misprice every non-US
+company on a list.
+
+**Domain discovery returns `null` rather than a plausible guess.** A wrong
+domain becomes the company's primary identity — it outranks the LinkedIn URL in
+precedence — so a bad guess attaches another company's facts to these leads and
+can merge two real companies. Aggregators (Crunchbase, Glassdoor, LinkedIn, G2,
+YC…) are excluded outright, and two domains matching the name equally well are
+treated as unknown.
+
+**GDELT is second in both waterfalls** because it needs no key. When the paid
+search key is missing, throttled, or out of credit, research degrades to a free
+source instead of to `unknown`.
+
+### 🐛 Two defects found by testing, both fixed
+
+1. **Search ranking could break a domain tie.** `acme.com` and `acme.io` match
+   the name equally well, but the "first result" bonus silently elected the
+   top-ranked one. Being listed first is popularity, not ownership. Ambiguity is
+   now judged on the name-correspondence score alone, and a tie returns `null`.
+2. **Subsidiary rounds were attributed to the parent.** "Stripe Press raises
+   $8M" satisfied a word-boundary match on "Stripe". A company name followed by
+   a distinct-entity token (`press`, `labs`, `ventures`, `capital`…) that is not
+   part of the company's own name is now rejected.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **469 passed** (was 439) |
+| `npx eslint lib/intelligence` | ✅ zero problems |
+
+No live provider calls are made by the suite — every test runs against
+recorded-shape responses.
+
+### Still to build for Phase 3
+
+- Website intelligence + tech-stack detection from public markup (needs
+  `robots.txt` handling; blocked on nothing but time)
+- GitHub, GLEIF, Hacker News, Y Combinator providers
+- Live registry wired from `INTELLIGENCE_PROVIDER_ORDER` and available keys
+- Migration 0045: `research_job_queue` + enqueue/claim/reap, and the runner
+- An opt-in smoke script for real credentials
+
+### 🔴 Credentials pasted into chat must be rotated
+
+The Gemini, Groq, Tavily, and GitHub keys were shared in conversation and should
+be considered exposed. The GitHub token especially — a fine-grained token with
+**no scopes** is all this integration needs, since it reads only public data.
+
+---
+
 ## 2026-08-14 — Intelligence layer, Phases 1 + 2 (company identity + research infrastructure)
 
 First two phases of the Lead Engine → intelligence-layer build spec. **No AI, no

@@ -76,6 +76,7 @@ export type ToolCategory = (typeof TOOL_CATEGORIES)[number]
 
 export const RESEARCH_FIELDS = [
   // company_profile
+  'company_domain',
   'employee_count',
   'industry',
   'headquarters',
@@ -126,6 +127,9 @@ type FieldSpec = { category: ToolCategory; entity: EntityType }
  * compile error rather than a silent routing gap.
  */
 export const RESEARCH_FIELD_SPEC: Record<ResearchField, FieldSpec> = {
+  // Discovered when the captured lead carried no website. Everything that keys
+  // on a domain — website intelligence, tech-stack detection — depends on it.
+  company_domain: { category: 'company_profile', entity: 'company' },
   employee_count: { category: 'company_profile', entity: 'company' },
   industry: { category: 'company_profile', entity: 'company' },
   headquarters: { category: 'company_profile', entity: 'company' },
