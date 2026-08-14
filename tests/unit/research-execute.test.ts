@@ -15,6 +15,7 @@ import { executeTasks } from '@/lib/intelligence/execute'
 import { createRegistry, parseProviderOrder } from '@/lib/intelligence/registry'
 import { planToTasks } from '@/lib/intelligence/router'
 import type { CompanyEntity, PersonEntity, ResearchTask } from '@/lib/intelligence/types'
+import { eraseProviderType } from '@/lib/intelligence/types'
 import { stubProvider } from '../stubs/intelligence-providers'
 
 function company(n: number): CompanyEntity {
@@ -55,18 +56,18 @@ describe('Test 6 — a provider failure never fails the run', () => {
 
     const registry = createRegistry(
       [
-        stubProvider({
+        eraseProviderType(stubProvider({
           name: 'alpha',
           category: 'funding',
           behaviour: { kind: 'error' },
           counter: first,
-        }),
-        stubProvider({
+        })),
+        eraseProviderType(stubProvider({
           name: 'beta',
           category: 'funding',
           behaviour: { kind: 'answers', fields: ['funding_round', 'funding_amount'] },
           counter: second,
-        }),
+        })),
       ],
       { funding: ['alpha', 'beta'] },
     )
@@ -83,8 +84,8 @@ describe('Test 6 — a provider failure never fails the run', () => {
 
   it('leaves the field unknown — not false — when every provider fails', async () => {
     const registry = createRegistry([
-      stubProvider({ name: 'alpha', category: 'funding', behaviour: { kind: 'error' } }),
-      stubProvider({ name: 'beta', category: 'funding', behaviour: { kind: 'error' } }),
+      eraseProviderType(stubProvider({ name: 'alpha', category: 'funding', behaviour: { kind: 'error' } })),
+      eraseProviderType(stubProvider({ name: 'beta', category: 'funding', behaviour: { kind: 'error' } })),
     ])
 
     const report = await executeTasks([fundingTask()], { registry })
@@ -99,16 +100,16 @@ describe('Test 6 — a provider failure never fails the run', () => {
 
   it('continues the rest of the job when one task fails', async () => {
     const registry = createRegistry([
-      stubProvider({
+      eraseProviderType(stubProvider({
         name: 'funding-down',
         category: 'funding',
         behaviour: { kind: 'error' },
-      }),
-      stubProvider({
+      })),
+      eraseProviderType(stubProvider({
         name: 'tech-up',
         category: 'tech_stack',
         behaviour: { kind: 'answers', fields: ['tech_stack'] },
-      }),
+      })),
     ])
 
     const plan = planToTasks({
@@ -129,7 +130,7 @@ describe('Test 6 — a provider failure never fails the run', () => {
 
   it('reports not_found differently from unavailable', async () => {
     const registry = createRegistry([
-      stubProvider({ name: 'alpha', category: 'funding', behaviour: { kind: 'not_found' } }),
+      eraseProviderType(stubProvider({ name: 'alpha', category: 'funding', behaviour: { kind: 'not_found' } })),
     ])
 
     const report = await executeTasks([fundingTask()], { registry })
@@ -150,12 +151,12 @@ describe('Test 6 — a provider failure never fails the run', () => {
   it('times out a hanging provider and moves on', async () => {
     const registry = createRegistry(
       [
-        stubProvider({ name: 'slow', category: 'funding', behaviour: { kind: 'hang' } }),
-        stubProvider({
+        eraseProviderType(stubProvider({ name: 'slow', category: 'funding', behaviour: { kind: 'hang' } })),
+        eraseProviderType(stubProvider({
           name: 'fast',
           category: 'funding',
           behaviour: { kind: 'answers', fields: ['funding_round', 'funding_amount'] },
-        }),
+        })),
       ],
       { funding: ['slow', 'fast'] },
     )
@@ -169,11 +170,11 @@ describe('Test 6 — a provider failure never fails the run', () => {
 
   it('never leaks a provider message into the recorded error', async () => {
     const registry = createRegistry([
-      stubProvider({
+      eraseProviderType(stubProvider({
         name: 'alpha',
         category: 'funding',
         behaviour: { kind: 'error', message: 'https://api.vendor.com?key=sk-secret-123' },
-      }),
+      })),
     ])
 
     const report = await executeTasks([fundingTask()], { registry })
@@ -189,17 +190,17 @@ describe('the waterfall stops paying once a field is answered', () => {
 
     const registry = createRegistry(
       [
-        stubProvider({
+        eraseProviderType(stubProvider({
           name: 'alpha',
           category: 'contact_email',
           behaviour: { kind: 'answers', fields: ['work_email'] },
-        }),
-        stubProvider({
+        })),
+        eraseProviderType(stubProvider({
           name: 'beta',
           category: 'contact_email',
           behaviour: { kind: 'answers', fields: ['work_email'] },
           counter: second,
-        }),
+        })),
       ],
       { contact_email: ['alpha', 'beta'] },
     )
@@ -223,16 +224,16 @@ describe('the waterfall stops paying once a field is answered', () => {
   it('asks the next provider only for the fields still missing', async () => {
     const registry = createRegistry(
       [
-        stubProvider({
+        eraseProviderType(stubProvider({
           name: 'alpha',
           category: 'funding',
           behaviour: { kind: 'answers', fields: ['funding_round'] },
-        }),
-        stubProvider({
+        })),
+        eraseProviderType(stubProvider({
           name: 'beta',
           category: 'funding',
           behaviour: { kind: 'answers', fields: ['funding_round', 'funding_amount'] },
-        }),
+        })),
       ],
       { funding: ['alpha', 'beta'] },
     )
@@ -250,7 +251,7 @@ describe('the waterfall stops paying once a field is answered', () => {
 describe('provider output is untrusted input', () => {
   it('discards evidence about a different entity', async () => {
     const registry = createRegistry([
-      stubProvider({ name: 'confused', category: 'funding', behaviour: { kind: 'wrong_entity' } }),
+      eraseProviderType(stubProvider({ name: 'confused', category: 'funding', behaviour: { kind: 'wrong_entity' } })),
     ])
 
     const report = await executeTasks([fundingTask()], { registry })
@@ -261,7 +262,7 @@ describe('provider output is untrusted input', () => {
 
   it('rejects malformed evidence rather than storing it', async () => {
     const registry = createRegistry([
-      stubProvider({ name: 'broken', category: 'funding', behaviour: { kind: 'malformed' } }),
+      eraseProviderType(stubProvider({ name: 'broken', category: 'funding', behaviour: { kind: 'malformed' } })),
     ])
 
     const report = await executeTasks([fundingTask()], { registry })
@@ -289,8 +290,8 @@ describe('registry configuration', () => {
   it('puts unnamed providers after named ones instead of dropping them', () => {
     const registry = createRegistry(
       [
-        stubProvider({ name: 'unnamed', category: 'funding', behaviour: { kind: 'not_found' } }),
-        stubProvider({ name: 'named', category: 'funding', behaviour: { kind: 'not_found' } }),
+        eraseProviderType(stubProvider({ name: 'unnamed', category: 'funding', behaviour: { kind: 'not_found' } })),
+        eraseProviderType(stubProvider({ name: 'named', category: 'funding', behaviour: { kind: 'not_found' } })),
       ],
       { funding: ['named'] },
     )
@@ -300,7 +301,7 @@ describe('registry configuration', () => {
 
   it('reports which categories are actually available', () => {
     const registry = createRegistry([
-      stubProvider({ name: 'a', category: 'tech_stack', behaviour: { kind: 'not_found' } }),
+      eraseProviderType(stubProvider({ name: 'a', category: 'tech_stack', behaviour: { kind: 'not_found' } })),
     ])
 
     expect(registry.has('tech_stack')).toBe(true)

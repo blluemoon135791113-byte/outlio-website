@@ -316,3 +316,33 @@ export interface IntelligenceProvider<TOutput = unknown> {
    */
   normalize(output: TOutput, task: ResearchTask): NormalizedEvidence[]
 }
+
+/**
+ * A provider with its output type sealed away.
+ *
+ * `IntelligenceProvider<T>` is invariant in `T` — the type appears both as a
+ * return (`execute`) and as a parameter (`normalize`) — so a registry cannot
+ * hold providers with different output shapes without either `any` or a lie.
+ * Pairing the two calls behind `run` keeps `T` private to the adapter that
+ * authored it, and keeps the four-method contract above intact.
+ */
+export type AnyIntelligenceProvider = {
+  readonly name: string
+  readonly category: ToolCategory
+  canHandle(task: ResearchTask): boolean
+  estimateCost(task: ResearchTask): Promise<number>
+  run(task: ResearchTask): Promise<NormalizedEvidence[]>
+}
+
+/** Seals a provider's output type so it can be registered alongside others. */
+export function eraseProviderType<T>(
+  provider: IntelligenceProvider<T>,
+): AnyIntelligenceProvider {
+  return {
+    name: provider.name,
+    category: provider.category,
+    canHandle: (task) => provider.canHandle(task),
+    estimateCost: (task) => provider.estimateCost(task),
+    run: async (task) => provider.normalize(await provider.execute(task), task),
+  }
+}

@@ -17,7 +17,7 @@ import { validateEvidence } from '@/lib/intelligence/evidence'
 import type { ProviderRegistry } from '@/lib/intelligence/registry'
 import { sumMicros } from '@/lib/intelligence/costs'
 import type {
-  IntelligenceProvider,
+  AnyIntelligenceProvider,
   NormalizedEvidence,
   ResearchField,
   ResearchTask,
@@ -160,7 +160,7 @@ async function runOne(
 }
 
 async function attempt(
-  provider: IntelligenceProvider,
+  provider: AnyIntelligenceProvider,
   task: ResearchTask,
   timeoutMs: number,
 ): Promise<{ call: ToolCallRecord; evidence: NormalizedEvidence[] }> {
@@ -187,11 +187,11 @@ async function attempt(
   }
 
   try {
-    const output = await withTimeout(provider.execute(task), timeoutMs)
+    const output = await withTimeout(provider.run(task), timeoutMs)
 
     // Provider output is untrusted input, exactly like a request body. It is
     // validated before it can become a stored fact.
-    const { valid } = validateEvidence(provider.normalize(output, task))
+    const { valid } = validateEvidence(output)
     const evidence = acceptableEvidence(task, valid)
 
     return {

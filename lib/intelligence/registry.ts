@@ -10,16 +10,16 @@
  */
 import {
   TOOL_CATEGORIES,
-  type IntelligenceProvider,
+  type AnyIntelligenceProvider,
   type ResearchTask,
   type ToolCategory,
 } from '@/lib/intelligence/types'
 
 export type ProviderRegistry = {
   /** Providers for a category, in the order they should be tried. */
-  forCategory(category: ToolCategory): IntelligenceProvider[]
+  forCategory(category: ToolCategory): AnyIntelligenceProvider[]
   /** Providers that both cover the category and accept this specific task. */
-  forTask(task: ResearchTask): IntelligenceProvider[]
+  forTask(task: ResearchTask): AnyIntelligenceProvider[]
   /** Categories that have at least one provider configured. */
   availableCategories(): ToolCategory[]
   has(category: ToolCategory): boolean
@@ -34,10 +34,10 @@ export type ProviderRegistry = {
  * provider.
  */
 export function createRegistry(
-  providers: readonly IntelligenceProvider[],
+  providers: readonly AnyIntelligenceProvider[],
   order: Partial<Record<ToolCategory, readonly string[]>> = {},
 ): ProviderRegistry {
-  const byCategory = new Map<ToolCategory, IntelligenceProvider[]>()
+  const byCategory = new Map<ToolCategory, AnyIntelligenceProvider[]>()
 
   for (const category of TOOL_CATEGORIES) {
     const members = providers.filter((provider) => provider.category === category)

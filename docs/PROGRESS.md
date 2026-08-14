@@ -75,14 +75,74 @@ source instead of to `unknown`.
 No live provider calls are made by the suite — every test runs against
 recorded-shape responses.
 
+### Added since — Wikidata, PageSpeed, and the live registry
+
+| File | Purpose |
+|---|---|
+| `lib/intelligence/providers/wikidata.ts` | official website, industry, HQ, employee count — free, no key |
+| `lib/intelligence/providers/pagespeed.ts` | tech detection via Lighthouse stack packs |
+| `lib/intelligence/providers/index.ts` | the live registry and default waterfall order |
+| `tests/unit/provider-registry.test.ts` | 25 tests over Wikidata matching, stack-pack parsing, and waterfall order |
+| `tests/integration/providers-live.test.ts` | opt-in smoke test against real credentials |
+
+**Wikidata runs before domain discovery.** It states what a company's website
+IS; the discovery heuristic only notices that a host looks like the company's
+name. A stated fact beats an inferred one, so the heuristic now only sees
+companies Wikidata has never heard of — which, for a Sales Navigator list, will
+be most of them. Coverage is notability-based and thin for SMBs; that is
+expected, not a failure.
+
+**PageSpeed gives official-API tech detection, but a narrow kind.** Lighthouse
+stack packs name the CMS and framework (WordPress, Shopify, React, Magento…).
+They do NOT reveal the marketing and sales tools an ICP question usually asks
+about — it cannot tell you whether a company uses HubSpot, Intercom, or
+Salesforce. Evidence carries `coverage: 'cms_and_framework_only'` so no consumer
+can mistake it for a full stack scan. It also needs a domain, so it runs behind
+the Wikidata → discovery chain.
+
+### 🔧 Type variance forced a change to the provider contract
+
+`IntelligenceProvider<T>` is invariant in `T` — the type is both an `execute`
+return and a `normalize` parameter — so a registry could not hold providers with
+different output shapes without `any`. Added `AnyIntelligenceProvider` and
+`eraseProviderType()`, which pair the two calls behind one `run()` and keep `T`
+private to the adapter that authored it. The four-method contract from spec §36
+is unchanged; only the registry and executor see the sealed form.
+
+### One test expectation was wrong, not the code
+
+`pickWikidataEntity('Acme', [{ label: 'Acme Corporation' }])` was asserted to
+return null. It should match: stripping legal forms is the entire point of
+`normalizeCompanyName`. The case that must be refused is a disambiguated label
+like `Acme Corporation (film)`, which is now what the test checks.
+
+### Verification (updated)
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **494 passed**, 6 skipped (the opt-in live suite) |
+| `npx eslint lib/intelligence tests/` | ✅ zero problems |
+
+### Smoke-testing real credentials
+
+```
+RUN_LIVE_PROVIDERS=1 npx vitest run tests/integration/providers-live.test.ts
+```
+
+Skipped by default so `npm test` never spends API credit. Assertions are loose
+on purpose — a live API is not a stable fixture, and a smoke test that fails
+because a company had a quiet news week teaches nothing. Parsing correctness is
+proved offline.
+
 ### Still to build for Phase 3
 
-- Website intelligence + tech-stack detection from public markup (needs
-  `robots.txt` handling; blocked on nothing but time)
+- Website intelligence beyond PageSpeed: fetching public pages with `robots.txt`
+  respected, for pricing and positioning signals
 - GitHub, GLEIF, Hacker News, Y Combinator providers
-- Live registry wired from `INTELLIGENCE_PROVIDER_ORDER` and available keys
-- Migration 0045: `research_job_queue` + enqueue/claim/reap, and the runner
-- An opt-in smoke script for real credentials
+- Migration 0045: `research_job_queue` + enqueue/claim/reap, and the runner that
+  executes a whole research run. **Until this exists there is no way to run
+  research from the product** — only from a test.
 
 ### 🔴 Credentials pasted into chat must be rotated
 
