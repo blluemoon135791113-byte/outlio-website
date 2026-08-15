@@ -82,6 +82,12 @@ const OUTBOUND_OFFERS = [
     name: "Contained Outreach",
     price: "$1,000/mo",
     description: "A focused, human-led outbound operation across four channels.",
+    highlights: [
+      "40 touchpoints per day",
+      "200–240 weekly interactions",
+      "5 follow-ups per lead",
+      "2 dedicated sales reps",
+    ],
     clientProvides: [
       "Qualified lead lists with verified contact data, including Instagram, LinkedIn, X, and email.",
       "Personal brand operations, including regular posting and engagement, running in-house to support outbound.",
@@ -101,6 +107,12 @@ const OUTBOUND_OFFERS = [
     name: "Research-Led Outbound",
     price: "$1,700/mo",
     description: "Deeper research, higher volume, and personal-brand support built into execution.",
+    highlights: [
+      "60 qualified leads per day",
+      "300 weekly interactions",
+      "8 follow-ups per lead",
+      "4 dedicated sales reps",
+    ],
     clientProvides: [
       "Marketing and brand material for personal brand build-up.",
     ],
@@ -123,6 +135,12 @@ const OUTBOUND_OFFERS = [
     name: "Custom Plan",
     price: "Custom",
     description: "A scaled lead-generation and closing operation designed around your product and volume.",
+    highlights: [
+      "Lead engine and custom CRM",
+      "Uncapped follow-ups",
+      "5-day lead warm-up",
+      "Lead generation and closing team",
+    ],
     clientProvides: [],
     included: [
       "Everything in Tiers 1 and 2.",
@@ -604,108 +622,111 @@ export default function Home() {
         </section>
 
         {/* ========== OUTBOUND OFFERS ========== */}
-        <section id="offers" className="grad-band relative scroll-mt-24 overflow-hidden text-cream">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(50% 65% at 85% 10%, rgba(190, 174, 255, 0.28), transparent 70%), radial-gradient(45% 55% at 8% 95%, rgba(124, 92, 231, 0.2), transparent 70%)",
-            }}
-          />
-          <div className="relative mx-auto max-w-[1480px] px-5 py-20 sm:px-8 sm:py-28 lg:px-10 lg:py-32">
+        <section id="offers" className="scroll-mt-24 border-y border-ink/10 bg-white text-ink">
+          <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20 lg:px-10">
             <Reveal>
-              <p className="text-[12px] font-semibold uppercase tracking-[0.24em] text-cream/65">
-                Outlio outbound offers
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+                Outbound offers
               </p>
-              <h2 className="mt-5 max-w-4xl text-4xl font-bold uppercase leading-[0.98] tracking-tight sm:text-6xl lg:text-7xl">
-                Choose the operation that fits your growth stage.
+              <h2 className="mt-3 max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl">
+                Choose the support your team needs.
               </h2>
-              <p className="mt-6 max-w-2xl text-base leading-relaxed text-cream/75 sm:text-lg">
-                Human-led research, engagement, and follow-up—scaled to the level of support your team needs.
+              <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">
+                Three straightforward ways to run outbound with Outlio.
               </p>
             </Reveal>
 
-            <div className="mt-12 grid items-stretch gap-5 lg:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-9 grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3">
               {OUTBOUND_OFFERS.map((offer, index) => (
                 <Reveal
                   key={offer.name}
-                  delay={index * 90}
-                  className={`h-full ${index === 2 ? "lg:col-span-2 xl:col-span-1" : ""}`}
+                  delay={index * 70}
+                  className={`h-full ${index === 2 ? "md:col-span-2 lg:col-span-1" : ""}`}
                 >
                   <article
-                    className={`offer-glass-card flex h-full flex-col rounded-[1.75rem] border p-6 sm:p-8 ${
+                    className={`offer-card flex h-full flex-col rounded-2xl border bg-transparent p-5 sm:p-6 ${
                       offer.featured
-                        ? "border-white/35 bg-white/[0.16] shadow-2xl shadow-black/15"
-                        : "border-white/20 bg-white/[0.09]"
+                        ? "border-accent/35"
+                        : "border-ink/12"
                     }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-cream/60">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
                         {offer.tier}
                       </p>
                       {offer.featured && (
-                        <span className="rounded-full border border-white/25 bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-cream">
+                        <span className="rounded-full border border-accent/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-accent">
                           Full-service
                         </span>
                       )}
                     </div>
 
-                    <h3 className="mt-5 text-2xl font-bold tracking-tight sm:text-3xl">
+                    <h3 className="mt-4 text-xl font-bold tracking-tight sm:text-2xl">
                       {offer.name}
                     </h3>
-                    <p className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
+                    <p className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
                       {offer.price}
                     </p>
-                    <p className="mt-4 min-h-0 text-sm leading-relaxed text-cream/70 xl:min-h-[4.25rem]">
+                    <p className="mt-3 text-sm leading-relaxed text-muted">
                       {offer.description}
                     </p>
 
-                    {offer.clientProvides.length > 0 && (
-                      <div className="mt-7 border-t border-white/15 pt-6">
-                        <h4 className="text-[11px] font-bold uppercase tracking-[0.18em] text-cream/55">
-                          What you provide
-                        </h4>
-                        <ul className="mt-4 space-y-3">
-                          {offer.clientProvides.map((item) => (
-                            <li key={item} className="flex gap-3 text-sm leading-relaxed text-cream/80">
-                              <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-cream/50" />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    <div className="mt-7 border-t border-white/15 pt-6">
-                      <h4 className="text-[11px] font-bold uppercase tracking-[0.18em] text-cream/55">
-                        What&apos;s included
+                    <div className="mt-5 border-t border-ink/10 pt-5">
+                      <h4 className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                        At a glance
                       </h4>
-                      <ul className="mt-4 space-y-3">
-                        {offer.included.map((item) => (
-                          <li key={item} className="flex gap-3 text-sm leading-relaxed text-cream/90">
-                            <span
-                              aria-hidden
-                              className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border border-white/20 bg-white/10 text-[11px]"
-                            >
-                              ✓
-                            </span>
+                      <ul className="mt-3 space-y-2.5">
+                        {offer.highlights.map((item) => (
+                          <li key={item} className="flex gap-2.5 text-sm leading-snug text-ink/80">
+                            <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-accent" />
                             <span>{item}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
 
-                    <div className="mt-auto pt-8">
+                    <details className="group mt-5 border-t border-ink/10 pt-4">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-ink">
+                        Full plan details
+                        <span aria-hidden className="text-lg font-normal text-muted transition-transform group-open:rotate-45">+</span>
+                      </summary>
+                      <div className="pt-4">
+                        {offer.clientProvides.length > 0 && (
+                          <div>
+                            <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
+                              What you provide
+                            </h4>
+                            <ul className="mt-3 space-y-2">
+                              {offer.clientProvides.map((item) => (
+                                <li key={item} className="text-[13px] leading-relaxed text-muted">
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <div className={offer.clientProvides.length > 0 ? "mt-5" : ""}>
+                          <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
+                            What&apos;s included
+                          </h4>
+                          <ul className="mt-3 space-y-2">
+                            {offer.included.map((item) => (
+                              <li key={item} className="flex gap-2 text-[13px] leading-relaxed text-muted">
+                                <span aria-hidden className="text-accent">—</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </details>
+
+                    <div className="mt-auto pt-6">
                       <Link
                         href={CALENDLY_URL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`inline-flex min-h-12 w-full items-center justify-center rounded-full px-6 py-3 text-sm font-bold transition-colors focus-visible:outline-cream ${
-                          offer.featured
-                            ? "bg-cream text-ink hover:bg-white"
-                            : "border border-white/30 bg-white/10 text-cream hover:bg-white/20"
-                        }`}
+                        className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent"
                       >
                         Discuss this plan <span aria-hidden className="ml-2">&rarr;</span>
                       </Link>
