@@ -66,12 +66,15 @@ migration separately and names exactly what is missing.
 | Protected-characteristic criterion, **live project** | ✅ rejected by CHECK |
 | Cross-tenant profile read / delete | ✅ refused |
 
-### 🟡 Pending — apply migration 0047
+### ✅ Migration 0047 applied live — 2026-08-15
 
-Until it is applied the entire `research-run` suite skips: **13 tests**, covering
-the runner, the clarification round trip, and scoring. The guard now names 0047
-explicitly. Everything in it is verified on local Postgres 16, and 0043/0045/0046
-are confirmed live.
+All 13 previously-skipping tests now pass against `ptewhpmxzenbmxlizxhu`:
+the runner, the clarification round trip, and end-to-end scoring.
+
+**Full suite: 565 passed, 9 skipped** (only the opt-in live-provider suite).
+
+Migrations 0043–0047 are all applied. Phases 1–6 are complete and verified
+against the live project.
 
 ---
 
