@@ -3,7 +3,7 @@ import Link from "next/link";
 
 const FOOTER_NAV = [
   { label: "Services", href: "/#services" },
-  { label: "The Offer", href: "/#offer" },
+  { label: "Offers", href: "/#offers" },
   { label: "How it works", href: "/#how" },
   { label: "Results", href: "/#results" },
   { label: "Motion Graphic Ads", href: "/explainers" },

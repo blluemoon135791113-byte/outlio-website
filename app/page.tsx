@@ -2,20 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
 import Nav from "./components/Nav";
 import Footer from "./components/Footer";
 import Reveal from "./components/Reveal";
 import HeroHeadline from "./components/HeroHeadline";
-import CaseStudies from "./components/CaseStudies";
-import OfferModal from "./components/OfferModal";
 import TestimonialFlipCard from "./components/TestimonialFlipCard";
 import HeroScrollFade from "./components/HeroScrollFade";
 import InteractiveWorldMap from "./components/InteractiveWorldMap";
 import AnimatedArrow from "./components/AnimatedArrow";
 import HeroWidgets from "./components/HeroWidgets";
-import PinboardWidgetA from "./components/PinboardWidgetA";
-import PinboardWidgetB from "./components/PinboardWidgetB";
 import OrbitalCaseStudies from "./components/OrbitalCaseStudies";
 import Starfield from "./components/Starfield";
 import MeteorShower from "./components/MeteorShower";
@@ -81,41 +76,64 @@ const SERVICES = [
   },
 ];
 
-const OFFERS = [
+const OUTBOUND_OFFERS = [
   {
-    name: "Standard",
-    tagline: "The outbound engine, run by hand.",
-    features: [
-      "Around 50 hand-picked prospects a day, deliberately capped",
-      "Every message written by hand, A/B tested head-to-head",
-      "Account health protected: email, LinkedIn, X, Instagram",
-      "Reply rates we'll say out loud, 15-20% on low and mid-ticket",
-      "Fresh sales strategy as your market shifts",
-      "Live shared CRM, updated daily",
+    tier: "Tier 1",
+    name: "Contained Outreach",
+    price: "$1,000/mo",
+    description: "A focused, human-led outbound operation across four channels.",
+    clientProvides: [
+      "Qualified lead lists with verified contact data, including Instagram, LinkedIn, X, and email.",
+      "Personal brand operations, including regular posting and engagement, running in-house to support outbound.",
+    ],
+    included: [
+      "Personalized engagement across LinkedIn, Instagram, X, and email.",
+      "40 custom touchpoints per day across all four channels.",
+      "5 follow-ups per lead.",
+      "200–240 lead interactions per week.",
+      "15% average reply rate.",
+      "2 dedicated sales reps working exclusively on your operations.",
     ],
     featured: false,
   },
   {
-    name: "Premium",
-    tagline: "The whole growth engine, outbound, inbound, and creative.",
-    features: [
-      "Everything in Standard",
-      "Inbound handled, no lead sits cold in your inbox",
-      "Your socials managed: LinkedIn and X end to end, Instagram ideation",
-      "SaaS explainer video, produced start to finish",
-      "Motion-design ad creatives once outbound pays for itself",
+    tier: "Tier 2",
+    name: "Research-Led Outbound",
+    price: "$1,700/mo",
+    description: "Deeper research, higher volume, and personal-brand support built into execution.",
+    clientProvides: [
+      "Marketing and brand material for personal brand build-up.",
+    ],
+    included: [
+      "Deep ICP research by Outlio's client research department.",
+      "60 qualified leads sourced per day across LinkedIn, Instagram, email, and X.",
+      "A 2-day warm-up engagement cycle with each prospect before outreach begins.",
+      "60 tailored touchpoints per day across all channels, including email.",
+      "8 follow-ups per lead, sequenced across channels.",
+      "300 leads researched, engaged, and interacted with per week.",
+      "Personal brand building optimized to channel inbound attention toward closing.",
+      "2 outbound strategies shipped every 15 days for A/B testing and review with you.",
+      "15% average reply rate maintained.",
+      "4 dedicated sales reps working exclusively on your operations.",
     ],
     featured: true,
   },
   {
-    name: "Custom",
-    tagline: "Consultation and team growth, built around your stage.",
-    features: [
-      "Starts with a consultation, not a package",
-      "Any mix of Standard and Premium, tailored to fit",
-      "In-house sales training on our systems",
-      "We help you hire and build your own backend team",
-      "When you're ready, we hand over the keys",
+    tier: "Tier 3",
+    name: "Custom Plan",
+    price: "Custom",
+    description: "A scaled lead-generation and closing operation designed around your product and volume.",
+    clientProvides: [],
+    included: [
+      "Everything in Tiers 1 and 2.",
+      "ICP research and lead generation at scale, powered by Outlio's in-house lead engine.",
+      "Access to our lead engine dashboard and a custom CRM to track performance and refine strategy using past data.",
+      "Product launch and demo assets made for your startup.",
+      "Uncapped follow-ups, with every lead assessed and updated against your qualification criteria.",
+      "A 5-day engagement period per lead before outreach begins.",
+      "Closing support handled by our team of specialized closers.",
+      "A team of dedicated sales reps covering both lead generation and closing operations.",
+      "Deep product research feeding new outbound strategies and different weekly volumes for A/B testing.",
     ],
     featured: false,
   },
@@ -149,22 +167,14 @@ const STEPS = [
   },
 ];
 
-const STATS = [
-  { value: "$100K+ MRR", label: "Addx Studio, within 6 months" },
-  { value: "53+", label: "meetings booked, Addx Studio" },
-  { value: "23 calls + $10K", label: "in 2.5 months, Click Labs" },
-  { value: "~$500K", label: "closed revenue, Knowledge City, on $50K+ deals" },
-  { value: "$20,000", label: "in 2.5 months, Motionisr, from zero" },
-];
-
 const FAQS = [
   {
     q: "We've been burned by an agency before.",
-    a: "So have most of our clients. That's exactly why you pay for one week first and watch everything live in a shared CRM. We earn month two.",
+    a: "So have most of our clients. That's why every message, reply, and KPI stays visible to you in a shared CRM. You can see the operation as it happens instead of waiting for a polished report.",
   },
   {
     q: "What if you don't perform?",
-    a: "You're never locked in. The first week is paid separately, months after it are month-to-month, and every message we send is visible to you live in a shared CRM. If it isn't working you stop. We don't offer refunds on work that was delivered as agreed, and we'd rather say that plainly than promise one and argue about it later.",
+    a: "We agree the scope and success criteria before work starts, then keep every message and KPI visible in the shared CRM. If something is underperforming, you see it early and we adjust the targeting, messaging, or channel strategy with you.",
   },
   {
     q: "How many clients can you actually bring in?",
@@ -247,26 +257,10 @@ const TEAM = [
 ];
 
 export default function Home() {
-  const [selectedOffer, setSelectedOffer] = useState<typeof OFFERS[0] | null>(null);
-  const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
-
-  const openOfferModal = (offer: typeof OFFERS[0]) => {
-    setSelectedOffer(offer);
-    setIsOfferModalOpen(true);
-  };
-
   return (
     <>
       <FAQSchema faqs={FAQS} />
       <Nav />
-      <OfferModal
-        offer={selectedOffer}
-        isOpen={isOfferModalOpen}
-        onClose={() => {
-          setIsOfferModalOpen(false);
-          setSelectedOffer(null);
-        }}
-      />
       <main>
         {/* ========== 1. HERO ========== */}
         <section className="relative px-4 py-6 sm:px-6 lg:px-8">
@@ -285,7 +279,7 @@ export default function Home() {
             <HeroWidgets />
 
             {/* Main Content - CENTERED */}
-            <div className="relative z-20 flex min-h-[700px] items-center justify-center px-8 py-24 sm:px-12 lg:min-h-[800px] lg:px-16 lg:py-32">
+            <div className="relative z-20 flex min-h-[590px] items-center justify-center px-5 py-20 sm:min-h-[660px] sm:px-10 sm:py-24 lg:min-h-[760px] lg:px-16 lg:py-28 xl:min-h-[800px] xl:py-32">
               <div className="mx-auto max-w-5xl text-center">
                 <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
                   Outlio &middot; Hands-on growth accelerator
@@ -315,15 +309,15 @@ export default function Home() {
                     See the results
                   </Link>
                 </div>
-                <p className="mt-4 text-sm text-muted">
-                  One paid week before any monthly commitment. Watch every message land in a shared
-                  CRM before you commit further.
+                <p className="mx-auto mt-4 max-w-xl text-sm text-muted">
+                  Choose a contained, research-led, or custom outbound operation—and watch every
+                  message and KPI in a shared CRM.
                 </p>
               </div>
             </div>
 
             {/* Marquee strip at bottom */}
-            <div className="relative border-t border-gray-200/60 bg-purple-50/50 py-6 overflow-hidden" aria-hidden="true">
+            <div className="relative hidden overflow-hidden border-t border-gray-200/60 bg-purple-50/50 py-6 sm:block" aria-hidden="true">
               <div className="relative overflow-hidden">
                 <div className="marquee-track flex w-max items-center gap-12 px-12 text-sm font-semibold uppercase tracking-[0.18em]">
                   {Array.from({ length: 3 }).map((_, i) => (
@@ -332,7 +326,7 @@ export default function Home() {
                         "Research-first outbound",
                         "Every message written by hand",
                         "Live shared CRM",
-                        "The one-week deal",
+                        "Three ways to scale",
                         "No autopilot",
                       ].map((t) => (
                         <span key={t} className="flex items-center gap-12">
@@ -364,7 +358,7 @@ export default function Home() {
           <StarFieldCanvas />
 
           {/* Starfield with hero stars — bottom-left, feathered edges */}
-          <div className="absolute bottom-[15%] left-[3%] pointer-events-none" aria-hidden="true"
+          <div className="absolute bottom-[15%] left-[3%] hidden pointer-events-none md:block" aria-hidden="true"
             style={{
               maskImage: "radial-gradient(ellipse at center, black 30%, transparent 75%)",
               WebkitMaskImage: "radial-gradient(ellipse at center, black 30%, transparent 75%)",
@@ -467,52 +461,8 @@ export default function Home() {
               </p>
             </Reveal>
 
-            {/*
-              Pricing, stated before the call rather than behind it.
-              Range and drivers live here so a visitor can self-qualify without
-              booking — the call is for scoping, not for finding out the number.
-            */}
-            <Reveal delay={80}>
-              <div
-                id="pricing"
-                className="mt-10 scroll-mt-24 rounded-2xl border border-accent/20 bg-accent-soft/40 p-6 sm:p-8"
-              >
-                <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
-                  What it costs
-                </p>
-                <p className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-                  $1,500 – $3,000 <span className="text-xl font-medium text-muted">/ month</span>
-                </p>
-                <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">
-                  Where you land in that range depends on four things, and we&apos;ll tell you which
-                  before you book anything.
-                </p>
-
-                <dl className="mt-7 grid gap-x-10 gap-y-5 sm:grid-cols-2">
-                  {[
-                    ['Outreach volume', 'Around 50 prospects a day sits at the lower end. Higher daily volume and more sending accounts move it up.'],
-                    ['Channels', 'Email alone is the cheapest to run. LinkedIn, X and Instagram each add manual work per prospect.'],
-                    ['Research depth', 'A broad ICP is quick to source. Narrow, senior or hard-to-reach targets take real digging per lead.'],
-                    ['Creative', 'Explainer video and motion-design ad creative are add-ons, not part of the baseline outbound engine.'],
-                  ].map(([term, detail]) => (
-                    <div key={term} className="border-t border-accent/15 pt-3">
-                      <dt className="text-base font-semibold text-ink">{term}</dt>
-                      <dd className="mt-1 text-sm leading-relaxed text-muted">{detail}</dd>
-                    </div>
-                  ))}
-                </dl>
-
-                <p className="mt-7 border-t border-accent/15 pt-5 text-sm leading-relaxed text-muted">
-                  You start with one paid week at the same rate before any monthly commitment.{' '}
-                  <strong className="font-semibold text-ink">Growth Accelerator</strong> is scoped
-                  separately — it is an embedded team rather than a campaign, so it sits above this
-                  range.
-                </p>
-              </div>
-            </Reveal>
-
             {/* Full Services Display, 2 Side by Side Cards */}
-            <div className="mt-16 grid gap-8 lg:grid-cols-2">
+            <div className="mt-12 grid gap-8 lg:grid-cols-2">
               {SERVICES.map((service, index) => (
                 <Reveal key={service.name} delay={index * 150}>
                   <div
@@ -653,45 +603,117 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== 6. HOW WE START — deep minimal gradient band ========== */}
-        <section className="grad-band relative overflow-hidden text-cream">
-          {/* soft glows so the band reads glassy, not flat */}
+        {/* ========== OUTBOUND OFFERS ========== */}
+        <section id="offers" className="grad-band relative scroll-mt-24 overflow-hidden text-cream">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"
             style={{
               background:
-                "radial-gradient(50% 65% at 85% 10%, rgba(124, 121, 255, 0.22), transparent 70%), radial-gradient(45% 55% at 8% 95%, rgba(79, 75, 255, 0.16), transparent 70%)",
+                "radial-gradient(50% 65% at 85% 10%, rgba(190, 174, 255, 0.28), transparent 70%), radial-gradient(45% 55% at 8% 95%, rgba(124, 92, 231, 0.2), transparent 70%)",
             }}
           />
-          <div className="relative mx-auto max-w-7xl px-6 py-28 sm:px-10 sm:py-40">
+          <div className="relative mx-auto max-w-[1480px] px-5 py-20 sm:px-8 sm:py-28 lg:px-10 lg:py-32">
             <Reveal>
-              <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-cream/55">
-                How we start
+              <p className="text-[12px] font-semibold uppercase tracking-[0.24em] text-cream/65">
+                Outlio outbound offers
               </p>
-              <h2 className="mt-6 text-5xl font-bold uppercase tracking-tight sm:text-7xl">
-                The one-week deal.
+              <h2 className="mt-5 max-w-4xl text-4xl font-bold uppercase leading-[0.98] tracking-tight sm:text-6xl lg:text-7xl">
+                Choose the operation that fits your growth stage.
               </h2>
-            </Reveal>
-            <div className="mt-14 max-w-2xl space-y-6 text-2xl leading-snug sm:text-3xl">
-              <Reveal delay={80}>
-                <p>No monthly retainer upfront. You pay for one week.</p>
-              </Reveal>
-              <Reveal delay={160}>
-                <p className="text-cream/85">
-                  Every message we send is visible to you in a shared CRM, updated daily. You see
-                  the work as it happens, not in a report afterwards.
-                </p>
-              </Reveal>
-              <Reveal delay={240}>
-                <p className="font-semibold">Then you decide whether month two happens.</p>
-              </Reveal>
-            </div>
-            <Reveal delay={320}>
-              <p className="mt-14 text-base text-cream/55">
-                Most agencies ask for trust first and results later. We flipped the order.
+              <p className="mt-6 max-w-2xl text-base leading-relaxed text-cream/75 sm:text-lg">
+                Human-led research, engagement, and follow-up—scaled to the level of support your team needs.
               </p>
             </Reveal>
+
+            <div className="mt-12 grid items-stretch gap-5 lg:grid-cols-2 xl:grid-cols-3">
+              {OUTBOUND_OFFERS.map((offer, index) => (
+                <Reveal
+                  key={offer.name}
+                  delay={index * 90}
+                  className={`h-full ${index === 2 ? "lg:col-span-2 xl:col-span-1" : ""}`}
+                >
+                  <article
+                    className={`offer-glass-card flex h-full flex-col rounded-[1.75rem] border p-6 sm:p-8 ${
+                      offer.featured
+                        ? "border-white/35 bg-white/[0.16] shadow-2xl shadow-black/15"
+                        : "border-white/20 bg-white/[0.09]"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-cream/60">
+                        {offer.tier}
+                      </p>
+                      {offer.featured && (
+                        <span className="rounded-full border border-white/25 bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-cream">
+                          Full-service
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="mt-5 text-2xl font-bold tracking-tight sm:text-3xl">
+                      {offer.name}
+                    </h3>
+                    <p className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
+                      {offer.price}
+                    </p>
+                    <p className="mt-4 min-h-0 text-sm leading-relaxed text-cream/70 xl:min-h-[4.25rem]">
+                      {offer.description}
+                    </p>
+
+                    {offer.clientProvides.length > 0 && (
+                      <div className="mt-7 border-t border-white/15 pt-6">
+                        <h4 className="text-[11px] font-bold uppercase tracking-[0.18em] text-cream/55">
+                          What you provide
+                        </h4>
+                        <ul className="mt-4 space-y-3">
+                          {offer.clientProvides.map((item) => (
+                            <li key={item} className="flex gap-3 text-sm leading-relaxed text-cream/80">
+                              <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-cream/50" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="mt-7 border-t border-white/15 pt-6">
+                      <h4 className="text-[11px] font-bold uppercase tracking-[0.18em] text-cream/55">
+                        What&apos;s included
+                      </h4>
+                      <ul className="mt-4 space-y-3">
+                        {offer.included.map((item) => (
+                          <li key={item} className="flex gap-3 text-sm leading-relaxed text-cream/90">
+                            <span
+                              aria-hidden
+                              className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border border-white/20 bg-white/10 text-[11px]"
+                            >
+                              ✓
+                            </span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="mt-auto pt-8">
+                      <Link
+                        href={CALENDLY_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex min-h-12 w-full items-center justify-center rounded-full px-6 py-3 text-sm font-bold transition-colors focus-visible:outline-cream ${
+                          offer.featured
+                            ? "bg-cream text-ink hover:bg-white"
+                            : "border border-white/30 bg-white/10 text-cream hover:bg-white/20"
+                        }`}
+                      >
+                        Discuss this plan <span aria-hidden className="ml-2">&rarr;</span>
+                      </Link>
+                    </div>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
           </div>
         </section>
         {/* ========== 8. TESTIMONIALS ========== */}

@@ -104,6 +104,7 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
+  overflow-x: clip;
   text-rendering: optimizeLegibility;
 }
 
@@ -455,6 +456,30 @@ h6 {
   transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* Outbound offer cards — translucent on mobile, true backdrop glass on desktop. */
+.offer-glass-card {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 300ms ease,
+    background-color 300ms ease;
+}
+
+@media (min-width: 1024px) {
+  .offer-glass-card {
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    backdrop-filter: blur(22px) saturate(140%);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .offer-glass-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 255, 255, 0.42);
+    background-color: rgba(255, 255, 255, 0.18);
+  }
+}
+
 /* Dark glassmorphism for team cards */
 .glass-card-dark {
   background: rgba(255, 255, 255, 0.03);
@@ -571,6 +596,32 @@ details[open] .faq-mark {
   transform: rotateY(180deg);
 }
 
+@media (max-width: 1023px) {
+  .reveal {
+    transform: translateY(14px);
+    transition-duration: 600ms;
+    transition-delay: 0ms !important;
+  }
+
+  .hero-main,
+  .hero-text-slide {
+    animation: none;
+  }
+
+  .glass-card:hover,
+  .glass-card-dark:hover,
+  .offer-glass-card:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .hero-word-slot {
+    display: grid;
+    width: 100%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -580,12 +631,16 @@ details[open] .faq-mark {
     transform: none;
     transition: none;
   }
-  .hero-word,
-  .hero-land,
+  .hero-main,
+  .hero-text-slide,
+  .hero-word-fade,
   .marquee-track,
   .modal-backdrop,
   .modal-panel,
-  .pinboard-gentle-sway {
+  .pinboard-gentle-sway,
+  .float-animation,
+  .shimmer,
+  .animate-gradient {
     animation: none;
   }
   details .faq-mark {

@@ -12,6 +12,10 @@ export default function HeroScrollFade({ children, className = "" }: HeroScrollF
   const elementRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const compactViewport = window.matchMedia("(max-width: 1023px)").matches;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (compactViewport || reducedMotion) return;
+
     const handleScroll = () => {
       if (!elementRef.current) return;
 

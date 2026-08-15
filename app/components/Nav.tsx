@@ -50,7 +50,7 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
     links: [
       { label: "How it works", href: "/#how" },
       { label: "Results", href: "/#results" },
-      { label: "Pricing", href: "/#pricing" },
+      { label: "Offers", href: "/#offers" },
       { label: "Motion Graphic Ads", href: "/explainers" },
     ],
     servicesDropdown: true,

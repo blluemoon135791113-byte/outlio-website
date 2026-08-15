@@ -22,6 +22,10 @@ export default function HeroHeadline() {
   }, []);
 
   useEffect(() => {
+    const compactViewport = window.matchMedia("(max-width: 1023px)").matches;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (compactViewport || reducedMotion) return;
+
     const handleScroll = () => {
       if (!headlineRef.current) return;
 
