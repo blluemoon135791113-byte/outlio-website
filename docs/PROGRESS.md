@@ -4,6 +4,78 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Apollo added to the email waterfall
+
+### Built
+
+| File | Purpose |
+|---|---|
+| `lib/intelligence/providers/apollo.ts` | second email provider, plus its own company windfall |
+| `tests/unit/apollo.test.ts` | 16 tests |
+
+The email waterfall is now `prospeo-email → apollo-email`. Phone stays on
+Prospeo alone.
+
+### Apollo is EMAIL ONLY, deliberately
+
+`reveal_phone_number` requires a `webhook_url`: the enrichment response returns
+synchronously and phone numbers arrive **later, asynchronously**, at a public
+callback. That needs a webhook route, signature verification, and a way to match
+a callback back to a lead — none of which exists. Prospeo already returns mobile
+synchronously.
+
+Half-wiring it would produce a provider that appears to support phone numbers
+and silently never delivers one. It is left unimplemented, and a test asserts
+Apollo registers under `contact_email` only.
+
+### 🔴 A locked address is not an address
+
+Apollo returns `email_not_unlocked@domain.com` when it holds an address but will
+not release it on the current plan. Stored naively that becomes a
+deliverable-looking address on a lead, and the first anyone hears of it is a
+bounce. Matched on the local part, since the domain varies per company, and
+masked forms are rejected too — the same guard as Prospeo, for the same reason.
+
+### Two labels that stop a wrong filter
+
+- **`employee_count` is marked `isEstimate: true`.** Apollo's figure is
+  estimated; applying a `between 10 and 50` filter to it as though it came from
+  a filing excludes companies on a number nobody stands behind.
+- **`funding_amount` is marked `isTotalFunding: true`.** Apollo reports TOTAL
+  raised across all rounds, not the latest round. "Raised more than $5M" means
+  something different against each, and conflating them qualifies companies that
+  never had a $5M round.
+
+Prospeo's funding, by contrast, is a specific round with a date and stage — so
+where both answer, Prospeo's is the more precise fact.
+
+### Waterfall order is a starting assumption, not a finding
+
+`prospeo-email` first is a guess. Spec §52 requires the order to come from
+measured **cost per incremental valid result**, and
+`INTELLIGENCE_PROVIDER_ORDER` flips it without a deploy once a benchmark has
+run. That benchmark has not run.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **614 passed**, 9 skipped |
+| `npx eslint lib/ tests/` | ✅ zero problems |
+| `npm run build` | ✅ clean |
+| Locked and masked addresses rejected | ✅ |
+| No Apollo phone provider registered | ✅ |
+
+### 🟡 Pending
+
+- `PROSPEO_API_KEY` and `APOLLO_API_KEY` are not set. Both providers decline
+  through `canHandle`; contact fields return `unknown` at no cost.
+- **No live benchmark has run.** Match rate, incremental coverage and cost per
+  valid result are all unmeasured on real leads.
+
+---
+
 ## 2026-08-15 — Phase 8: Prospeo contact enrichment
 
 ### Built

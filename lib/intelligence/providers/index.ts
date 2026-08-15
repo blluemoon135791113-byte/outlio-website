@@ -28,6 +28,7 @@ import {
   type AnyIntelligenceProvider,
   type ToolCategory,
 } from '@/lib/intelligence/types'
+import { apolloEmailProvider } from './apollo'
 import { domainDiscoveryProvider } from './domain-discovery'
 import { gdeltFundingProvider, tavilyFundingProvider } from './funding'
 import { pageSpeedTechProvider } from './pagespeed'
@@ -46,6 +47,7 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(pageSpeedTechProvider),
   eraseProviderType(prospeoEmailProvider),
   eraseProviderType(prospeoPhoneProvider),
+  eraseProviderType(apolloEmailProvider),
 ]
 
 export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
@@ -53,7 +55,13 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
   funding: ['tavily-funding', 'gdelt-funding'],
   web_research: ['tavily-web', 'gdelt-web'],
   tech_stack: ['pagespeed-tech'],
-  contact_email: ['prospeo-email'],
+  /*
+   * The email waterfall. Prospeo first only as a starting assumption — spec §52
+   * says the order must come from measured cost per INCREMENTAL valid result,
+   * not from a guess, and `INTELLIGENCE_PROVIDER_ORDER` flips it without a
+   * deploy once the benchmark has run.
+   */
+  contact_email: ['prospeo-email', 'apollo-email'],
   contact_phone: ['prospeo-phone'],
 }
 
@@ -106,6 +114,8 @@ function isConfigured(name: string): boolean {
     case 'prospeo-email':
     case 'prospeo-phone':
       return Boolean(process.env.PROSPEO_API_KEY)
+    case 'apollo-email':
+      return Boolean(process.env.APOLLO_API_KEY)
     // Wikidata and GDELT are open APIs and need no credential.
     default:
       return true
