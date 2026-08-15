@@ -49,6 +49,12 @@ export interface LLMProvider {
 const GEMINI_HOST = 'generativelanguage.googleapis.com'
 const GROQ_HOST = 'api.groq.com'
 
+/**
+ * Pin the production default so planner behaviour cannot drift under an alias.
+ * Operators can still roll forward independently with `GEMINI_MODEL`.
+ */
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.6-flash'
+
 setHostPacing(GEMINI_HOST, 200)
 setHostPacing(GROQ_HOST, 200)
 
@@ -81,7 +87,7 @@ function describe(error: unknown): string {
 // ---------------------------------------------------------------------------
 
 export function createGeminiProvider(
-  model = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+  model = process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
 ): LLMProvider {
   return {
     vendor: 'gemini',
@@ -193,10 +199,50 @@ export function createGroqProvider(
 }
 
 /**
- * The provider this deployment uses.
+ * Tries the preferred configured provider, then a configured alternative when
+ * the first vendor is unavailable. An invalid completion stays with the same
+ * vendor so the planner's schema-feedback retry can correct it without buying
+ * an unnecessary second-vendor call.
+ */
+export function createFallbackLlmProvider(candidates: LLMProvider[]): LLMProvider {
+  const primary = candidates.find((provider) => provider.isConfigured()) ?? candidates[0]
+
+  if (!primary) {
+    throw new Error('createFallbackLlmProvider requires at least one provider')
+  }
+
+  return {
+    vendor: primary.vendor,
+    model: primary.model,
+    isConfigured: () => candidates.some((provider) => provider.isConfigured()),
+    generateJson: async (request) => {
+      let lastFailure: LlmResult = {
+        ok: false,
+        code: 'not_configured',
+        detail: 'No language model is configured',
+      }
+
+      for (const provider of candidates) {
+        if (!provider.isConfigured()) continue
+
+        const result = await provider.generateJson(request)
+        if (result.ok) return result
+
+        lastFailure = result
+        if (result.code === 'unparseable') return result
+      }
+
+      return lastFailure
+    },
+  }
+}
+
+/**
+ * The provider chain this deployment uses.
  *
- * Falls back to whichever vendor actually has a key rather than failing, so a
- * misconfigured `LLM_PROVIDER` degrades instead of taking planning down.
+ * Falls back both at configuration time and at request time. A configured but
+ * retired model, exhausted vendor, or transient outage therefore does not take
+ * planning down when the alternative vendor is available.
  */
 export function resolveLlmProvider(
   preferred: string | undefined = process.env.LLM_PROVIDER,
@@ -206,5 +252,5 @@ export function resolveLlmProvider(
       ? [createGroqProvider(), createGeminiProvider()]
       : [createGeminiProvider(), createGroqProvider()]
 
-  return candidates.find((provider) => provider.isConfigured()) ?? candidates[0]!
+  return createFallbackLlmProvider(candidates)
 }

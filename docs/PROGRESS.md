@@ -4,6 +4,52 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Fixed “The planner was unavailable”
+
+### Root cause
+
+The Intelligence UI and query route were healthy. The configured Gemini key
+was present, but the planner's pinned default was `gemini-2.5-flash`. Google
+returned HTTP 404 for that model to this API user and explicitly reported that
+it is no longer available to new users. The adapter correctly converted the
+vendor failure into the safe UI message and prevented research from starting.
+
+### Fixed
+
+- Updated the pinned default to `gemini-3.6-flash`, while retaining the
+  server-side `GEMINI_MODEL` override.
+- Added request-time Gemini/Groq fallback. A configured alternative now takes
+  over when the preferred vendor is unavailable, not merely when its key is
+  absent at startup.
+- An unparseable completion does **not** invoke the second vendor. The planner
+  gives the same model its schema-feedback retry, avoiding an unnecessary paid
+  call.
+- Documented the current default in `.env.example` and added focused regression
+  tests for the model pin, override, fallback, no-key skip, and minimum-call
+  behavior.
+
+Google recommends its newer Interactions API for new agentic workflows, but
+continues to support `generateContent`. Outlio's planner is a single stateless,
+schema-constrained classification call, so changing only the active model is
+the smaller and safer repair; migrating transport does not improve this path.
+
+### Live verification
+
+The exact planner request that failed was rerun through the real adapter with no
+model override. `gemini-3.6-flash` returned a validated funding ResearchPlan and
+the smoke test passed. No company research or enrichment provider ran during
+this check.
+
+| Check | Result |
+|---|---|
+| real Gemini planner smoke test | ✅ planned successfully |
+| `npm run typecheck` | ✅ zero errors |
+| focused ESLint | ✅ zero problems |
+| `npm test -- --run` | ✅ **619 passed**, 11 skipped |
+| `npm run build` | ✅ clean production build |
+
+---
+
 ## 2026-08-15 — Production company-domain backfill
 
 ### Result
