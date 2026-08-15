@@ -94,17 +94,49 @@ describeIf('domain discovery coverage', () => {
       )
       resolvedBy.set(provider.name, resolved)
 
+      /*
+       * ⚠️ STATUS BREAKDOWN IS NOT OPTIONAL.
+       *
+       * A provider whose every call was REJECTED reports the same
+       * `resolved: 0` as one that searched successfully and found nothing.
+       * The first is an outage or an exhausted plan; the second is a finding
+       * about the data. Reporting them identically sent this benchmark's first
+       * run to entirely the wrong conclusion.
+       */
+      const byStatus = new Map<string, number>()
+      for (const call of report.toolCalls) {
+        byStatus.set(call.status, (byStatus.get(call.status) ?? 0) + 1)
+      }
+
+      // Cost is counted for calls that actually returned something. A rejected
+      // request is not billed, and reporting it as spend overstates the price
+      // of a provider that never ran.
+      const billable = report.toolCalls.filter(
+        (call) => call.status === 'success' || call.status === 'not_found',
+      )
+      const spent = billable.reduce((sum, call) => sum + call.estimatedCostMicros, 0)
+
       const attempted = report.toolCalls.length
       const pct = ((resolved.size / companies.length) * 100).toFixed(1)
+      const statuses = [...byStatus.entries()].map(([s, n]) => `${s}=${n}`).join(' ')
 
       console.log(
         `\n--- ${provider.name} ---\n` +
           `  resolved       : ${resolved.size}/${companies.length} (${pct}%)\n` +
-          `  calls made     : ${attempted}\n` +
-          `  est. cost      : $${(report.estimatedCostMicros / 1_000_000).toFixed(4)}\n` +
+          `  calls attempted: ${attempted}\n` +
+          `  call statuses  : ${statuses || '(none)'}\n` +
+          `  est. cost      : $${(spent / 1_000_000).toFixed(4)} (billable calls only)\n` +
           `  wall time      : ${(elapsed / 1000).toFixed(1)}s\n` +
           `  avg per company: ${attempted > 0 ? (elapsed / attempted).toFixed(0) : 0}ms`,
       )
+
+      const failed = attempted - billable.length
+      if (attempted > 0 && failed === attempted) {
+        console.log(
+          `  ⚠️  EVERY CALL FAILED — this is an outage, an exhausted plan or a\n` +
+            `      bad key, NOT a finding about the data. Coverage is unmeasured.`,
+        )
+      }
     }
 
     // ---- incremental coverage (spec §52) ----------------------------------

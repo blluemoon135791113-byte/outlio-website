@@ -4,6 +4,78 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — The benchmark was lying about a provider outage
+
+### What happened
+
+With every key configured, the domain benchmark reported:
+
+```
+tavily-domain-discovery
+  resolved : 0/100 (0.0%)
+  est. cost: $0.1000
+```
+
+Read plainly: *we paid $0.10 and Tavily found nothing.* Both halves were wrong.
+
+Tavily was returning **HTTP 432 — "This request exceeds your plan's set usage
+limit"** on every single call. Nothing was searched and nothing was billed.
+
+### Why it read as a data finding
+
+`resolved: 0` is what a provider reports when it searched successfully and found
+nothing — and also what it reports when every request was rejected. One is a
+fact about the data; the other is an outage. The benchmark rendered them
+identically, and the first conclusion drawn from it was that these companies are
+simply unfindable. They are not: the sample contains names like *Network Optix*,
+which plainly has `networkoptix.com`.
+
+Cost was also summed across **all** attempts including failures, so a provider
+that never ran appeared to have been paid for.
+
+### Fixed
+
+The benchmark now prints a status breakdown per provider, counts cost for
+billable calls only, and shouts when every call failed:
+
+```
+--- tavily-domain-discovery ---
+  resolved       : 0/10 (0.0%)
+  call statuses  : error=10
+  est. cost      : $0.0000 (billable calls only)
+  ⚠️  EVERY CALL FAILED — this is an outage, an exhausted plan or a
+      bad key, NOT a finding about the data. Coverage is unmeasured.
+```
+
+Against the same sample, `wikidata` reports `not_found=10` — searched, found
+nothing — which is a genuine finding and now visibly different.
+
+**This is the third misleading diagnostic in this build**, after the backfill
+guard that named the wrong migration and the schema probe that silently skipped
+thirteen tests. The pattern is the same each time: a failure and an empty result
+rendered identically. Worth watching for in anything new.
+
+### Current domain coverage
+
+| | |
+|---|---|
+| Companies | 2,017 |
+| With a domain | **555 (27.5%)** |
+| Without | 1,462 |
+
+The 555 came from the earlier production backfill. Wikidata's contribution to
+the remaining tail is near zero, as the 4% sample predicted — these are SMBs it
+has never heard of.
+
+### 🟡 Blocked on Tavily quota
+
+Domain discovery for the remaining 1,462 companies cannot proceed until the
+Tavily plan has headroom. Everything keyed on a domain — the Apify Actor,
+PageSpeed, website intelligence, and the strongest contact-match path — stays
+behind it.
+
+---
+
 ## 2026-08-15 — Companies House intelligence provider
 
 ### Built
