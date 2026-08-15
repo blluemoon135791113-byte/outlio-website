@@ -111,6 +111,13 @@ export type ProviderRequest = {
   timeoutMs?: number
   /** Bytes. Website fetches raise this; JSON APIs do not need to. */
   maxBytes?: number
+  /**
+   * Runs immediately before EVERY network attempt, including retries.
+   * Providers with an account-wide or IP-wide quota use this to reserve a
+   * distributed request slot. A rejected hook aborts before `fetch` (fail
+   * closed), which is essential for hosts that block abusive clients.
+   */
+  beforeAttempt?: () => Promise<void>
 }
 
 /**
@@ -170,6 +177,7 @@ async function requestOnce(
   const maxBytes = request.maxBytes ?? MAX_RESPONSE_BYTES
 
   await paceHost(host)
+  await request.beforeAttempt?.()
 
   let response: Response
   try {

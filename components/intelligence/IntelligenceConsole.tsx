@@ -92,6 +92,20 @@ const COLUMN_LABELS: Record<string, string> = {
   accounts_overdue: 'Accounts overdue',
   confirmation_statement_overdue: 'Statement overdue',
   insolvency_history: 'Insolvency history',
+  sec_cik: 'SEC CIK',
+  sec_legal_name: 'SEC legal name',
+  sec_entity_type: 'SEC entity type',
+  sec_sic: 'SEC SIC',
+  sec_sic_description: 'SEC industry',
+  sec_ein: 'SEC EIN',
+  sec_lei: 'SEC LEI',
+  sec_tickers: 'Tickers',
+  sec_exchanges: 'Exchanges',
+  sec_state_of_incorporation: 'Incorporated in',
+  sec_business_address: 'SEC business address',
+  sec_website: 'SEC website',
+  sec_former_names: 'Former names',
+  sec_filing_history: 'Recent SEC filings',
   funding_round: 'Round',
   funding_amount: 'Amount',
   funding_currency: 'Currency',
@@ -125,6 +139,16 @@ function renderValue(value: unknown): string {
   if (typeof value === 'object' && !Array.isArray(value)) {
     const record = value as Record<string, unknown>
 
+    if (Array.isArray(record.filings)) {
+      return record.filings
+        .slice(0, 5)
+        .map((item) => {
+          if (!item || typeof item !== 'object') return String(item)
+          const filing = item as Record<string, unknown>
+          return [filing.form, filing.filingDate].filter(Boolean).join(' · ')
+        })
+        .join(', ')
+    }
     if ('value' in record) {
       if (Array.isArray(record.value)) return record.value.map(String).join(', ')
       if (typeof record.value === 'boolean') return record.value ? 'Yes' : 'No'
@@ -132,6 +156,20 @@ function renderValue(value: unknown): string {
     }
     if (typeof record.count === 'number') return record.count.toLocaleString()
     if (typeof record.domain === 'string') return record.domain
+    if (typeof record.url === 'string') return record.url
+    if (record.address && typeof record.address === 'object') {
+      const address = record.address as Record<string, unknown>
+      if (typeof address.formatted === 'string') return address.formatted
+    }
+    if (Array.isArray(record.names)) {
+      return record.names
+        .map((item) =>
+          item && typeof item === 'object' && 'name' in item
+            ? String((item as { name: unknown }).name)
+            : String(item),
+        )
+        .join(', ')
+    }
     if (typeof record.industry === 'string') return record.industry
     if (typeof record.headquarters === 'string') return record.headquarters
     if (typeof record.round === 'string') return record.round

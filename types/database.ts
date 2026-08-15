@@ -411,6 +411,24 @@ export type ResearchToolCallRow = {
   created_at: string
 }
 
+/** Global cache for reusable public provider indexes (0049). */
+export type ProviderCacheRow = {
+  provider: string
+  cache_key: string
+  value_json: Json
+  retrieved_at: string
+  expires_at: string
+  created_at: string
+  updated_at: string
+}
+
+/** Global provider request pacing state (0049). */
+export type ProviderRequestScheduleRow = {
+  provider: string
+  last_started_at: string | null
+  updated_at: string
+}
+
 // ---------------------------------------------------------------------------
 // Qualification (0046)
 // ---------------------------------------------------------------------------
@@ -769,6 +787,8 @@ export type Database = {
       research_evidence: TableShape<ResearchEvidenceRow>
       research_tool_calls: TableShape<ResearchToolCallRow>
       research_job_queue: TableShape<ResearchJobQueueRow>
+      provider_cache: TableShape<ProviderCacheRow>
+      provider_request_schedules: TableShape<ProviderRequestScheduleRow>
       qualification_profiles: TableShape<QualificationProfileRow>
       qualification_rules: TableShape<QualificationRuleRow>
       qualification_results: TableShape<QualificationResultRow>
@@ -812,6 +832,10 @@ export type Database = {
       purge_expired_evidence: {
         Args: { p_older_than_days?: number }
         Returns: number
+      }
+      await_provider_request_slot: {
+        Args: { p_provider: string; p_min_interval_ms: number }
+        Returns: string
       }
       link_leads_to_companies: {
         Args: {

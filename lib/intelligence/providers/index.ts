@@ -34,6 +34,7 @@ import { domainDiscoveryProvider } from './domain-discovery'
 import { gdeltFundingProvider, tavilyFundingProvider } from './funding'
 import { pageSpeedTechProvider } from './pagespeed'
 import { prospeoEmailProvider, prospeoPhoneProvider } from './prospeo'
+import { secEdgarProvider } from './sec-edgar'
 import { gdeltWebResearchProvider, tavilyWebResearchProvider } from './web-research'
 import { wikidataProvider } from './wikidata'
 
@@ -41,6 +42,7 @@ import { wikidataProvider } from './wikidata'
 export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(wikidataProvider),
   eraseProviderType(companiesHouseProvider),
+  eraseProviderType(secEdgarProvider),
   eraseProviderType(domainDiscoveryProvider),
   eraseProviderType(tavilyFundingProvider),
   eraseProviderType(gdeltFundingProvider),
@@ -53,7 +55,7 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
 ]
 
 export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
-  company_profile: ['wikidata', 'companies-house', 'tavily-domain-discovery'],
+  company_profile: ['wikidata', 'companies-house', 'sec-edgar', 'tavily-domain-discovery'],
   funding: ['tavily-funding', 'gdelt-funding'],
   web_research: ['tavily-web', 'gdelt-web'],
   tech_stack: ['pagespeed-tech'],

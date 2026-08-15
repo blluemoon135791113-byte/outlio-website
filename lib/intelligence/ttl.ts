@@ -54,6 +54,21 @@ export const FIELD_TTL_SECONDS: Record<ResearchField, number | null> = {
   accounts_overdue: 7 * DAY,
   confirmation_statement_overdue: 7 * DAY,
   insolvency_history: 7 * DAY,
+  // SEC identity fields are stable; ticker/exchange and filing activity move.
+  sec_cik: null,
+  sec_legal_name: 90 * DAY,
+  sec_entity_type: 365 * DAY,
+  sec_sic: 180 * DAY,
+  sec_sic_description: 180 * DAY,
+  sec_ein: 365 * DAY,
+  sec_lei: 365 * DAY,
+  sec_tickers: 30 * DAY,
+  sec_exchanges: 30 * DAY,
+  sec_state_of_incorporation: 365 * DAY,
+  sec_business_address: 90 * DAY,
+  sec_website: 90 * DAY,
+  sec_former_names: 180 * DAY,
+  sec_filing_history: 1 * DAY,
 
   // Funding. Long, because rounds are infrequent and expensive to look up.
   funding_round: 90 * DAY,

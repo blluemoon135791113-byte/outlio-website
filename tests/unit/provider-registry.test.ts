@@ -204,6 +204,7 @@ describe('the live registry', () => {
     expect(registry.forCategory('company_profile').map((p) => p.name)).toEqual([
       'wikidata',
       'companies-house',
+      'sec-edgar',
       'tavily-domain-discovery',
     ])
   })

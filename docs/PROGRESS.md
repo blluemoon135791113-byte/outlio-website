@@ -76,6 +76,58 @@ behind it.
 
 ---
 
+## 2026-08-15 — Official SEC EDGAR company metadata provider
+
+### Built
+
+- Added `SecEdgarService`: business name → cached official ticker/CIK list →
+  exact unambiguous identity match → public submissions JSON.
+- The clean metadata payload includes the ten-digit CIK, official legal name,
+  SEC entity type, SIC and description, EIN, LEI, tickers, exchanges, state of
+  incorporation, business address, SEC-reported websites, former names, and up
+  to 100 recent filings with official document links.
+- Added `sec-edgar` behind the existing company-profile provider abstraction.
+  All facts become high-authority evidence, while an SEC-reported website also
+  becomes reusable bonus `company_domain` evidence.
+- Added planner vocabulary, field-specific TTLs, result labels/rendering, and
+  qualification allow-list entries for the SEC business attributes.
+
+### SEC compliance controls
+
+- Public lookup uses `www.sec.gov/files/company_tickers.json` and
+  `data.sec.gov/submissions/CIK##########.json`; no API key or filer token is
+  used.
+- Every attempt, including a retry, declares exactly
+  `User-Agent: OUTLIO husnain@outlio.io` and
+  `Accept-Encoding: gzip, deflate`.
+- A Postgres advisory-lock scheduler coordinates every application instance and
+  both SEC hosts under one `sec.gov` bucket. It targets five request starts per
+  second—half the SEC maximum—and fails closed before network access when the
+  scheduler is unavailable.
+- The master list is cached globally in Postgres for 24 hours, with same-process
+  promise coalescing and memory reuse to prevent duplicate cold-start downloads.
+
+### Accuracy boundaries
+
+- SEC conformed-name annotations and legal suffixes are normalized, but fuzzy
+  matches are refused. One normalized name mapping to multiple CIKs is unknown.
+- The submissions CIK must equal the selected master-list CIK.
+- Malformed identifiers, dates, filings, and unsafe archive paths are dropped;
+  missing data never becomes `false` or a fabricated value.
+- The ticker master is not a universal list of every US private company. This
+  provider correctly returns unknown for businesses it cannot identify there.
+
+### Verification
+
+- 13 focused SEC/HTTP tests plus the related planner, registry, routing, and
+  qualification suites pass.
+- TypeScript, focused ESLint, the complete suite (**645 tests passed, 11
+  intentional skips**), and the Next.js production build are clean.
+- Migration `0049_sec_edgar_provider.sql` must be applied before live traffic;
+  until then the distributed limiter fails closed and no SEC call is made.
+
+---
+
 ## 2026-08-15 — Companies House intelligence provider
 
 ### Built
