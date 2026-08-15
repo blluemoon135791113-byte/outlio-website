@@ -4,6 +4,66 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Provider benchmark, and a hard finding about domain coverage
+
+### Built
+
+`tests/integration/provider-benchmark.test.ts` — opt-in, measurement only:
+
+```
+RUN_PROVIDER_BENCHMARK=1 BENCHMARK_SAMPLE=100 \
+  npx vitest run tests/integration/provider-benchmark.test.ts --disable-console-intercept
+```
+
+Each provider is measured **alone**, not through the waterfall. Run in sequence
+the second provider only ever sees what the first missed, so its raw coverage
+would be understated and the two could not be compared. Incremental coverage is
+computed afterwards from the sets (spec §52).
+
+It writes **nothing** to `research_evidence`. A benchmark that mutates
+production data cannot be re-run for comparison, and a provider would look
+better simply for having gone first and warmed the cache.
+
+### 🔴 Wikidata resolves 4 companies in 100
+
+Measured on 100 real companies with no domain:
+
+| Provider | Resolved | Incremental |
+|---|---|---|
+| wikidata | **4 / 100 (4.0%)** | +4 |
+| tavily-domain-discovery | 0 (no key configured) | +0 |
+| **combined** | **4 / 100** | **96 unresolved** |
+
+This is the notability problem, quantified. Wikidata knows large companies; a
+Sales Navigator prospect list is almost entirely SMBs it has never heard of.
+The provider is working correctly — the data simply is not there.
+
+**Consequence:** roughly **1,940 of the 2,017 companies would need a paid
+Tavily search** to get a domain. Everything downstream — the Apify Actor,
+PageSpeed tech detection, website intelligence, and the strongest Prospeo and
+Apollo match path — sits behind that spend.
+
+Wikidata also paced at ~453ms per company, so the free pass alone is about
+15 minutes over the full set.
+
+### Recommended sequencing
+
+Add `TAVILY_API_KEY` and **re-run the same 100-company benchmark**. That is ~96
+searches to learn the real hit rate before committing ~1,940. The discovery
+heuristic deliberately returns `null` on ambiguity, so its true yield is
+unknown and could be well below 100%.
+
+### 🟡 The Apify Actor is blocked
+
+`teodor_banea/b2b-lead-enrichment-free` takes a CSV with a **`domain` column**.
+With zero domains it cannot process a single row. Its input schema also offers
+*"generate email pattern candidates"* — guessed addresses, which rule 4 forbids
+and which would bounce. Decision taken: harvest only technographics and
+firmographics from it, reject anything it did not actually observe. Not built
+yet, because it cannot be exercised against any row in the database.
+
+---
+
 ## 2026-08-15 — Apollo added to the email waterfall
 
 ### Built
