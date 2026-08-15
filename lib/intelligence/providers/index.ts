@@ -29,6 +29,7 @@ import {
   type ToolCategory,
 } from '@/lib/intelligence/types'
 import { apolloEmailProvider } from './apollo'
+import { companiesHouseProvider } from './companies-house'
 import { domainDiscoveryProvider } from './domain-discovery'
 import { gdeltFundingProvider, tavilyFundingProvider } from './funding'
 import { pageSpeedTechProvider } from './pagespeed'
@@ -39,6 +40,7 @@ import { wikidataProvider } from './wikidata'
 /** Every provider that exists, regardless of whether it is configured. */
 export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(wikidataProvider),
+  eraseProviderType(companiesHouseProvider),
   eraseProviderType(domainDiscoveryProvider),
   eraseProviderType(tavilyFundingProvider),
   eraseProviderType(gdeltFundingProvider),
@@ -51,7 +53,7 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
 ]
 
 export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
-  company_profile: ['wikidata', 'tavily-domain-discovery'],
+  company_profile: ['wikidata', 'companies-house', 'tavily-domain-discovery'],
   funding: ['tavily-funding', 'gdelt-funding'],
   web_research: ['tavily-web', 'gdelt-web'],
   tech_stack: ['pagespeed-tech'],
@@ -116,6 +118,8 @@ function isConfigured(name: string): boolean {
       return Boolean(process.env.PROSPEO_API_KEY)
     case 'apollo-email':
       return Boolean(process.env.APOLLO_API_KEY)
+    case 'companies-house':
+      return Boolean(process.env.COMPANIES_HOUSE_API_KEY)
     // Wikidata and GDELT are open APIs and need no credential.
     default:
       return true

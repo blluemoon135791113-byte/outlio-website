@@ -82,6 +82,16 @@ const COLUMN_LABELS: Record<string, string> = {
   company_description: 'Description',
   business_model: 'Model',
   revenue_estimate: 'Revenue',
+  company_number: 'Company number',
+  company_status: 'Legal status',
+  company_type: 'Company type',
+  jurisdiction: 'Jurisdiction',
+  incorporation_date: 'Incorporated',
+  sic_codes: 'SIC codes',
+  registered_office: 'Registered office',
+  accounts_overdue: 'Accounts overdue',
+  confirmation_statement_overdue: 'Statement overdue',
+  insolvency_history: 'Insolvency history',
   funding_round: 'Round',
   funding_amount: 'Amount',
   funding_currency: 'Currency',
@@ -115,6 +125,11 @@ function renderValue(value: unknown): string {
   if (typeof value === 'object' && !Array.isArray(value)) {
     const record = value as Record<string, unknown>
 
+    if ('value' in record) {
+      if (Array.isArray(record.value)) return record.value.map(String).join(', ')
+      if (typeof record.value === 'boolean') return record.value ? 'Yes' : 'No'
+      if (record.value !== null && record.value !== undefined) return String(record.value)
+    }
     if (typeof record.count === 'number') return record.count.toLocaleString()
     if (typeof record.domain === 'string') return record.domain
     if (typeof record.industry === 'string') return record.industry

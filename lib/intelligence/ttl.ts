@@ -42,6 +42,18 @@ export const FIELD_TTL_SECONDS: Record<ResearchField, number | null> = {
   company_description: 180 * DAY,
   business_model: 180 * DAY,
   revenue_estimate: 60 * DAY,
+  // Registry identity and incorporation history are permanent. Status and
+  // compliance flags move quickly enough to warrant a short refresh window.
+  company_number: null,
+  company_status: 7 * DAY,
+  company_type: 365 * DAY,
+  jurisdiction: null,
+  incorporation_date: null,
+  sic_codes: 180 * DAY,
+  registered_office: 90 * DAY,
+  accounts_overdue: 7 * DAY,
+  confirmation_statement_overdue: 7 * DAY,
+  insolvency_history: 7 * DAY,
 
   // Funding. Long, because rounds are infrequent and expensive to look up.
   funding_round: 90 * DAY,

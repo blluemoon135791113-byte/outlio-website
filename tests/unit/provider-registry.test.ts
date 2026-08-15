@@ -203,6 +203,7 @@ describe('the live registry', () => {
     const registry = buildLiveRegistry(undefined)
     expect(registry.forCategory('company_profile').map((p) => p.name)).toEqual([
       'wikidata',
+      'companies-house',
       'tavily-domain-discovery',
     ])
   })

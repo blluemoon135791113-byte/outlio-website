@@ -36,6 +36,17 @@ const FIELD_DESCRIPTIONS: Record<ResearchField, string> = {
   company_description: 'what the company does, in prose',
   business_model: 'B2B, B2C, marketplace, agency, SaaS and similar',
   revenue_estimate: 'estimated annual revenue',
+  company_number: 'the official company registration number',
+  company_status: 'official legal status such as active, dissolved, or liquidation',
+  company_type: 'official legal company type such as limited company, PLC, or LLP',
+  jurisdiction: 'the legal registry jurisdiction in which the company is incorporated',
+  incorporation_date: 'the official date the company was incorporated',
+  sic_codes: 'official Standard Industrial Classification codes',
+  registered_office: 'the official registered office address, which is not necessarily HQ',
+  accounts_overdue: 'whether the official registry marks company accounts as overdue',
+  confirmation_statement_overdue:
+    'whether the official registry marks the confirmation statement as overdue',
+  insolvency_history: 'whether the official registry reports insolvency history',
 
   funding_round: 'the funding stage: Seed, Series A, Series B and so on',
   funding_amount: 'how much money was raised',

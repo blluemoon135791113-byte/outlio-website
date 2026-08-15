@@ -4,6 +4,48 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Companies House intelligence provider
+
+### Built
+
+- Added the official UK Companies House company-profile API behind Outlio's
+  existing provider abstraction. A lookup searches by the captured company
+  name, requires one exact normalized legal-name match, then retrieves the
+  requested `/company/{companyNumber}` profile.
+- Added evidence-backed fields for company number, legal status, company type,
+  jurisdiction, incorporation date, SIC codes, registered office, overdue
+  accounts, overdue confirmation statement, and insolvency history.
+- One successful profile request stores all returned registry facts as reusable
+  evidence. The result table still exposes only fields requested by the user.
+- Added centralized TTLs: permanent identity/incorporation facts, medium-lived
+  classification/address facts, and seven-day status/compliance facts.
+- Registered the free provider in the company-profile waterfall and added
+  server-only `COMPANIES_HOUSE_API_KEY` configuration.
+- Added migration `0048_companies_house_fields.sql` so the new professional and
+  business attributes can be used safely in saved qualification rules.
+
+### Accuracy and cost decisions
+
+- Ambiguous and near-name matches return `unknown`; they are never guessed.
+- The profile company number and legal name must agree with the search result
+  before evidence is accepted.
+- A registered office is stored separately from headquarters because it may be
+  an accountant or formation agent address.
+- Absent booleans remain `unknown`, not `false`.
+- The provider is paced at two requests per second to stay within the published
+  600-requests-per-five-minutes limit. Its provider cost is recorded as zero.
+
+### Verification
+
+- 13 focused tests cover identity ambiguity, malformed identifiers, defensive
+  response parsing, Basic authentication, request sequence, evidence metadata,
+  current-field preference, unknown booleans, and minimum-tool routing.
+- TypeScript and focused ESLint pass. The complete suite passes with **632
+  tests** and 11 intentional skips, and the Next.js production build is clean.
+- Live verification remains pending until `COMPANIES_HOUSE_API_KEY` is configured.
+
+---
+
 ## 2026-08-15 — Fixed “The planner was unavailable”
 
 ### Root cause
