@@ -14,7 +14,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { linkLeadsToCompanies } from '@/lib/companies/repository'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
-import { claimAndProcessResearchRun, createResearchRun } from '@/lib/intelligence/run'
+import {
+  answerClarifications,
+  claimAndProcessResearchRun,
+  createResearchRun,
+} from '@/lib/intelligence/run'
 import {
   adminClient,
   createAuthUser,
@@ -235,6 +239,157 @@ describeIf('processResearchRun', () => {
     try {
       const outcome = await claimAndProcessResearchRun(created.runId, intruder.id, 'worker-x')
       expect(outcome).toBeNull()
+    } finally {
+      await deleteTestUser(intruder.id)
+    }
+  })
+})
+
+describeIf('clarification round trip (spec §7)', () => {
+  let user: TestAuthUser
+  let leadIds: string[]
+
+  beforeAll(async () => {
+    user = await createAuthUser('research-clarify')
+    const jobId = await seedJob(user.id)
+
+    const { data, error } = await adminClient()
+      .from('extracted_leads')
+      .insert([
+        {
+          user_id: user.id,
+          extraction_job_id: jobId,
+          full_name: 'Fabricated Clarify Person',
+          company_name: 'Clarify Test Systems',
+          company_url: 'https://www.linkedin.com/sales/company/930001',
+          dedupe_key: `clarify-${user.id}-0`,
+          dedupe_strategy: 'row_hash' as const,
+        },
+      ])
+      .select('id')
+
+    if (error || !data) throw new Error(`lead seed failed: ${error?.message ?? 'no rows'}`)
+    leadIds = data.map((row) => row.id)
+  })
+
+  afterAll(async () => {
+    if (user) await deleteTestUser(user.id)
+  })
+
+  it('stores a clarification-pending run WITHOUT queueing it', async () => {
+    const created = await createResearchRun(user.id, {
+      queryText: 'Find recently funded companies.',
+      scope: { type: 'lead_ids', leadIds },
+      plan: {
+        requiredFields: ['funding_date'],
+        clarificationRequired: true,
+        clarificationQuestions: [
+          {
+            id: 'funding_window',
+            question: 'What should count as recently funded?',
+            options: ['3 months', '12 months'],
+          },
+        ],
+      },
+    })
+
+    expect(created.ok).toBe(true)
+    if (!created.ok || created.status !== 'waiting_for_clarification') {
+      throw new Error('expected the run to wait for clarification')
+    }
+
+    const { data: run } = await adminClient()
+      .from('research_runs')
+      .select('status')
+      .eq('id', created.runId)
+      .single()
+
+    expect(run?.status).toBe('waiting_for_clarification')
+
+    // NOTHING may be queued while the question is open — that is the entire
+    // point: an unanswered question must not spend money.
+    const { count } = await adminClient()
+      .from('research_job_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('research_run_id', created.runId)
+
+    expect(count).toBe(0)
+  })
+
+  it('queues the run once the question is answered, recording both halves', async () => {
+    const created = await createResearchRun(user.id, {
+      queryText: 'Find recently funded companies.',
+      scope: { type: 'lead_ids', leadIds },
+      plan: {
+        requiredFields: ['funding_date'],
+        clarificationRequired: true,
+        clarificationQuestions: [
+          { id: 'funding_window', question: 'How recent?', options: ['3 months', '12 months'] },
+        ],
+      },
+    })
+    if (!created.ok) throw new Error('run was not created')
+
+    const answered = await answerClarifications(user.id, created.runId, {
+      funding_window: '12 months',
+    })
+
+    expect(answered.ok).toBe(true)
+
+    const { data: run } = await adminClient()
+      .from('research_runs')
+      .select('status, plan, clarifications')
+      .eq('id', created.runId)
+      .single()
+
+    expect(run?.status).toBe('pending')
+
+    const plan = run?.plan as { clarificationRequired: boolean; filters: Record<string, unknown> }
+    expect(plan.clarificationRequired).toBe(false)
+    expect(plan.filters.funding_window).toBe('12 months')
+
+    // The exchange is on the record: what was asked, and what was chosen.
+    const history = run?.clarifications as unknown[]
+    expect(history).toHaveLength(2)
+
+    const { count } = await adminClient()
+      .from('research_job_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('research_run_id', created.runId)
+
+    expect(count).toBe(1)
+  })
+
+  it('refuses to answer a run that is not waiting', async () => {
+    const created = await createResearchRun(user.id, {
+      queryText: 'Already executable.',
+      scope: { type: 'lead_ids', leadIds },
+      plan: { requiredFields: ['industry'] },
+    })
+    if (!created.ok) throw new Error('run was not created')
+    expect(created.status).toBe('queued')
+
+    // A double-submitted form must not re-queue an already-running job.
+    const answered = await answerClarifications(user.id, created.runId, { anything: 'yes' })
+    expect(answered.ok).toBe(false)
+  })
+
+  it("refuses to answer another user's run", async () => {
+    const created = await createResearchRun(user.id, {
+      queryText: 'Find recently funded companies.',
+      scope: { type: 'lead_ids', leadIds },
+      plan: {
+        requiredFields: ['funding_date'],
+        clarificationRequired: true,
+        clarificationQuestions: [{ id: 'w', question: 'How recent?', options: [] }],
+      },
+    })
+    if (!created.ok) throw new Error('run was not created')
+
+    const intruder = await createAuthUser('research-clarify-intruder')
+    try {
+      const answered = await answerClarifications(intruder.id, created.runId, { w: '12 months' })
+      expect(answered.ok).toBe(false)
     } finally {
       await deleteTestUser(intruder.id)
     }

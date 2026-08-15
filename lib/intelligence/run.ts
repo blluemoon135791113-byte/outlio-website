@@ -23,11 +23,13 @@ import { getCompaniesForLeads } from '@/lib/companies/repository'
 import { executeTasks } from '@/lib/intelligence/execute'
 import { readEvidence, recordToolCalls, writeEvidence } from '@/lib/intelligence/evidence-store'
 import {
+  isExecutable,
   researchScopeSchema,
   validatePlan,
   type ResearchPlan,
   type ResearchScope,
 } from '@/lib/intelligence/plan'
+import { applyClarifications } from '@/lib/intelligence/planner'
 import { buildLiveRegistry } from '@/lib/intelligence/providers'
 import { planToTasks } from '@/lib/intelligence/router'
 import {
@@ -58,18 +60,36 @@ function concise(message: string): string {
   return stripped.length > 160 ? `${stripped.slice(0, 160)}…` : stripped
 }
 
+export type CreateRunResult =
+  | { ok: true; runId: string; status: 'queued' }
+  | {
+      ok: true
+      runId: string
+      status: 'waiting_for_clarification'
+      questions: ResearchPlan['clarificationQuestions']
+    }
+  | { ok: false; reason: string }
+
 /**
- * Creates a run and puts it on the queue.
+ * Creates a run.
  *
- * The plan is validated BEFORE the row exists, so an invalid plan can never
+ * A plan that still needs clarification is STORED BUT NOT ENQUEUED. That is the
+ * whole point of spec §7: while a question is open, nothing is researched and
+ * nothing is charged. The run sits in `waiting_for_clarification` until the
+ * user answers, and `answerClarifications` is the only thing that releases it.
+ *
+ * The plan is validated before the row exists, so an invalid plan can never
  * occupy the queue or appear in history as something that was attempted.
  */
 export async function createResearchRun(
   userId: string,
   input: { queryText: string; scope: ResearchScope; plan: unknown },
-): Promise<{ ok: true; runId: string } | { ok: false; reason: string }> {
+): Promise<CreateRunResult> {
   const validation = validatePlan(input.plan)
   if (!validation.ok) return { ok: false, reason: validation.reason }
+
+  const plan = validation.plan
+  const needsClarification = !isExecutable(plan)
 
   const supabase = createAdminClient()
 
@@ -77,12 +97,15 @@ export async function createResearchRun(
     .from('research_runs')
     .insert({
       user_id: userId,
-      status: 'pending',
+      status: needsClarification ? 'waiting_for_clarification' : 'pending',
       query_text: input.queryText,
       // Validated above, so serialising to jsonb is safe. The cast exists
       // because a Zod-inferred shape is structurally wider than `Json`.
       scope: input.scope as unknown as Json,
-      plan: validation.plan as unknown as Json,
+      plan: plan as unknown as Json,
+      clarifications: (needsClarification
+        ? [{ askedAt: new Date().toISOString(), questions: plan.clarificationQuestions }]
+        : []) as unknown as Json,
     })
     .select('id')
     .single()
@@ -91,10 +114,83 @@ export async function createResearchRun(
     return { ok: false, reason: concise(error?.message ?? 'run could not be created') }
   }
 
+  if (needsClarification) {
+    return {
+      ok: true,
+      runId: data.id,
+      status: 'waiting_for_clarification',
+      questions: plan.clarificationQuestions,
+    }
+  }
+
   const { error: queueError } = await supabase.rpc('enqueue_research_run', { p_run_id: data.id })
   if (queueError) return { ok: false, reason: concise(queueError.message) }
 
-  return { ok: true, runId: data.id }
+  return { ok: true, runId: data.id, status: 'queued' }
+}
+
+/**
+ * Folds the user's answers into a waiting run and releases it to the queue.
+ *
+ * Both halves of the exchange are appended to `clarifications`, so a run always
+ * records what was asked and what the user actually chose — which is the
+ * difference between a reproducible result and one nobody can explain later.
+ *
+ * Idempotent in the way that matters: a run that is not waiting is left alone
+ * rather than being re-queued, so a double-submitted form cannot run twice.
+ */
+export async function answerClarifications(
+  userId: string,
+  runId: string,
+  answers: Record<string, string>,
+): Promise<{ ok: true; runId: string } | { ok: false; reason: string }> {
+  const supabase = createAdminClient()
+
+  const { data: run, error } = await supabase
+    .from('research_runs')
+    .select('id, status, plan, clarifications')
+    .eq('id', runId)
+    // Service role bypasses RLS — scoping by user_id is mandatory.
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) return { ok: false, reason: concise(error.message) }
+  if (!run) return { ok: false, reason: 'That research run could not be found.' }
+
+  if (run.status !== 'waiting_for_clarification') {
+    return { ok: false, reason: 'That research run is not waiting for an answer.' }
+  }
+
+  const validation = validatePlan(run.plan)
+  if (!validation.ok) return { ok: false, reason: 'The stored plan was not valid.' }
+
+  const updated = applyClarifications(validation.plan, answers)
+  if (!isExecutable(updated)) {
+    return { ok: false, reason: 'That answer did not resolve the question.' }
+  }
+
+  const history = Array.isArray(run.clarifications) ? run.clarifications : []
+
+  const { error: updateError } = await supabase
+    .from('research_runs')
+    .update({
+      status: 'pending',
+      plan: updated as unknown as Json,
+      clarifications: [
+        ...history,
+        { answeredAt: new Date().toISOString(), answers },
+      ] as unknown as Json,
+    })
+    .eq('id', runId)
+    .eq('user_id', userId)
+    .eq('status', 'waiting_for_clarification')
+
+  if (updateError) return { ok: false, reason: concise(updateError.message) }
+
+  const { error: queueError } = await supabase.rpc('enqueue_research_run', { p_run_id: runId })
+  if (queueError) return { ok: false, reason: concise(queueError.message) }
+
+  return { ok: true, runId }
 }
 
 /** Resolves a scope to lead ids, paging properly. Always user-scoped. */

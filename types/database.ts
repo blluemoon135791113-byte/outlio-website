@@ -409,6 +409,70 @@ export type ResearchToolCallRow = {
   created_at: string
 }
 
+// ---------------------------------------------------------------------------
+// Qualification (0046)
+// ---------------------------------------------------------------------------
+
+export type QualificationKind = 'required' | 'preferred' | 'excluded'
+
+export type QualificationOperator =
+  | 'equals'
+  | 'not_equals'
+  | 'in'
+  | 'not_in'
+  | 'between'
+  | 'gte'
+  | 'lte'
+  | 'contains'
+  | 'not_contains'
+  | 'exists'
+
+export type QualificationProfileRow = {
+  id: string
+  user_id: string
+  name: string
+  description: string | null
+  /** Score at or above which a lead counts as qualified. Never hardcoded. */
+  qualify_at: number
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * `field` is CHECK-constrained to the research vocabulary, so a criterion on a
+ * protected characteristic cannot be stored at all (spec §44).
+ */
+export type QualificationRuleRow = {
+  id: string
+  user_id: string
+  profile_id: string
+  field: string
+  operator: QualificationOperator
+  value: Json | null
+  value_path: string | null
+  weight: number
+  kind: QualificationKind
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type QualificationResultRow = {
+  id: string
+  user_id: string
+  research_run_id: string | null
+  profile_id: string | null
+  entity_type: ResearchEntityType
+  entity_id: string
+  score: number
+  qualified: boolean
+  disqualified_by: string | null
+  unknown_count: number
+  breakdown: Json
+  created_at: string
+}
+
 /** Safe metadata only. Provider credentials are stored in IntegrationSecretRow. */
 export type IntegrationConnectionRow = {
   id: string
@@ -703,6 +767,9 @@ export type Database = {
       research_evidence: TableShape<ResearchEvidenceRow>
       research_tool_calls: TableShape<ResearchToolCallRow>
       research_job_queue: TableShape<ResearchJobQueueRow>
+      qualification_profiles: TableShape<QualificationProfileRow>
+      qualification_rules: TableShape<QualificationRuleRow>
+      qualification_results: TableShape<QualificationResultRow>
       integration_connections: TableShape<IntegrationConnectionRow>
       integration_secrets: TableShape<IntegrationSecretRow>
       integration_oauth_transactions: TableShape<IntegrationOAuthTransactionRow>

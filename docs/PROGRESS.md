@@ -4,6 +4,84 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Phases 5 and 6: clarification round trip and qualification
+
+### Built
+
+| File | Purpose |
+|---|---|
+| `lib/intelligence/run.ts` | `createResearchRun` now branches on clarification; `answerClarifications` resumes a waiting run |
+| `lib/qualification/score.ts` | **pure** deterministic ICP scoring, operators, required/preferred/excluded, explanation |
+| `supabase/migrations/0046_qualification.sql` | `qualification_profiles`, `qualification_rules`, `qualification_results` |
+| `tests/unit/qualification.test.ts` | 18 tests |
+| `tests/integration/research-run.test.ts` | +4 clarification round-trip tests |
+
+### Phase 5 — nothing is charged while a question is open
+
+A plan needing clarification is stored as `waiting_for_clarification` and
+**deliberately not enqueued**. `answerClarifications` folds the answers into the
+plan's `filters`, appends both halves of the exchange to `clarifications`, and
+only then enqueues — so a run always records what was asked and what the user
+chose. It refuses to act on a run that is not waiting, so a double-submitted
+form cannot start the same job twice.
+
+### Phase 6 — the score is arithmetic, not an opinion
+
+The LLM never produces the number. Providers supply facts, `scoreEntity`
+computes the score, and a model may only explain the result afterwards. Same
+evidence + same profile = same number, every time.
+
+**UNKNOWN IS NOT FAILURE.** A company we could not research has not failed a
+criterion:
+
+- an unknown **required** criterion does **not** disqualify — asserting it
+  failed would be fabricating a negative;
+- the score is **normalised over what could actually be evaluated**, not over
+  the whole profile. A company with 6 of 8 criteria researched is scored out of
+  those 6. Scoring it out of 8 would punish it for *our* missing data — which is
+  precisely how a good-fit company with a thin public footprint silently drops
+  off a list, and on Sales Navigator data that is most of them.
+- `unknownCount` is reported so a result can say "scored on 6 of 8" instead of a
+  falsely precise number.
+
+**Protected characteristics are impossible by schema.** `qualification_rules.field`
+is CHECK-constrained to the research vocabulary. Verified on Postgres 16: a
+`religion` criterion is rejected with `check_violation`; `employee_count` is
+accepted. Spec §44 enforced by the database, not by UI discipline.
+
+### 🐛 The spec's headline tech-stack query silently excluded nobody
+
+Tech-stack evidence is `{ detected: [...], coverage, scannedUrl }`, but
+`readObserved` did not know the `detected` key, so it compared against the whole
+wrapper object, matched nothing, and returned `not_met`. A rule like
+*"excluded: uses Salesforce"* therefore excluded **no one** — silently, on the
+exact query spec §54 leads with. Found by testing; `detected` and the other real
+provider payload keys are now in the lookup.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npx eslint lib/ tests/` | ✅ zero problems |
+| Qualification unit tests | ✅ 18 passed |
+| Clarification round trip, live | ✅ 10 passed |
+| 0046 applied twice to Postgres 16 | ✅ clean, idempotent, RLS 3/3 |
+| Protected-characteristic criterion | ✅ **rejected by CHECK** |
+
+### 🟡 Pending — apply migration 0046
+
+Not yet applied to `ptewhpmxzenbmxlizxhu`. The scoring engine is pure and fully
+tested without it; only profile persistence needs the tables.
+
+### Still to build
+
+- Wiring qualification into the runner (score after research, persist results)
+- **Phase 7**: the search bar and results table. Still no UI.
+- Website intelligence beyond PageSpeed; GitHub, GLEIF, Hacker News, YC.
+
+---
+
 ## 2026-08-15 — Phase 4: the LLM query planner
 
 Natural language → validated `ResearchPlan`. Phases 3 and 4 are now joined:
