@@ -426,9 +426,9 @@ export default function Home() {
             filter: "blur(2px)",
           }} />
 
-          <div className="relative z-10 mx-auto max-w-7xl px-6 pt-16 sm:px-10 sm:pt-20 pb-6 sm:pb-8">
+          <div className="relative z-10 mx-auto max-w-7xl px-6 pb-2 pt-10 sm:px-10 sm:pt-12">
             <Reveal>
-              <h2 className="max-w-3xl text-4xl font-black uppercase leading-tight tracking-tight sm:text-5xl text-white">
+              <h2 className="max-w-3xl text-3xl font-black uppercase leading-tight tracking-tight text-white sm:text-4xl">
                 You asked for the numbers, and so the numbers have spoken
               </h2>
             </Reveal>
@@ -440,14 +440,14 @@ export default function Home() {
         </section>
 
         {/* ========== 2. PROBLEM ========== */}
-        <section className="mx-auto max-w-7xl px-6 py-24 sm:px-10 sm:py-32">
+        <section className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
           <Reveal>
-            <h2 className="max-w-3xl text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
+            <h2 className="max-w-3xl text-3xl font-bold uppercase leading-tight tracking-tight sm:text-4xl">
               You know how to build. <span className="text-accent">Nobody taught you how to sell.</span>
             </h2>
           </Reveal>
-          <div className="mt-16 grid gap-12 lg:grid-cols-[1fr_1.1fr]">
-            <div className="space-y-8 text-lg leading-relaxed sm:text-xl">
+          <div className="mt-9 grid items-center gap-8 lg:grid-cols-[1fr_1.05fr]">
+            <div className="space-y-4 text-base leading-relaxed sm:text-lg">
               {[
                 "You shipped the product. Launched on Product Hunt. Got the upvotes.",
                 "Then, quiet.",
@@ -460,7 +460,7 @@ export default function Home() {
                 </Reveal>
               ))}
             </div>
-            <Reveal delay={200} className="lg:sticky lg:top-32 lg:self-start">
+            <Reveal delay={200}>
               <InteractiveWorldMap />
             </Reveal>
           </div>
@@ -469,23 +469,22 @@ export default function Home() {
 
         {/* ========== SERVICES ========== */}
         <section id="services" className="scroll-mt-24 border-t border-ink/10">
-          <div className="mx-auto max-w-7xl px-6 py-24 sm:px-10 sm:py-32">
+          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
             <Reveal>
-              <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-6xl">
+              <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-4xl">
                 Our <span className="text-accent">Services.</span>
               </h2>
-              <p className="mt-5 max-w-xl text-lg text-muted">
+              <p className="mt-3 max-w-xl text-base text-muted">
                 Everything we do is hands-on, human-driven, and built around one goal: getting you customers.
               </p>
             </Reveal>
 
-            {/* Full Services Display, 2 Side by Side Cards */}
-            <div className="mt-12 grid gap-8 lg:grid-cols-2">
+            <div className="mt-8 grid gap-4 lg:grid-cols-2">
               {SERVICES.map((service, index) => (
                 <Reveal key={service.name} delay={index * 150}>
                   <div
                     id={service.name.toLowerCase().replace(/\s+/g, '-')}
-                    className="scroll-mt-24 rounded-2xl border border-white/30 p-6 backdrop-blur-xl transition-all duration-500 hover:border-accent/30 hover:shadow-xl hover:shadow-accent/10"
+                    className="scroll-mt-24 rounded-2xl border border-white/30 p-5 backdrop-blur-xl transition-all duration-500 hover:border-accent/30 hover:shadow-xl hover:shadow-accent/10 sm:p-6"
                     style={{
                       background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.45) 100%)',
                       backdropFilter: 'blur(24px) saturate(180%)',
@@ -498,31 +497,20 @@ export default function Home() {
                       </span>
                     )}
 
-                    <h3 className="text-2xl font-bold tracking-tight">{service.name}</h3>
+                    <h3 className="text-xl font-bold tracking-tight sm:text-2xl">{service.name}</h3>
                     <p className="mt-2 text-base font-medium leading-relaxed text-ink">{service.tagline}</p>
                     <p className="mt-3 text-sm leading-relaxed text-muted">{service.description}</p>
 
-                    {/* All content in one strip */}
-                    <div className="mt-6 space-y-5">
-                      {/* What's Included */}
-                      <div>
-                        <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent mb-3">What's Included</h4>
-                        <ul className="space-y-2">
-                          {service.included.map((item) => (
-                            <li key={item} className="flex gap-2 text-[13px] leading-snug">
-                              <span aria-hidden className="mt-[4px] size-1 shrink-0 rounded-full bg-accent" />
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* How We Execute */}
-                      {service.execution && (
+                    <details className="group mt-5 border-t border-ink/10 pt-4">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-ink">
+                        View service details
+                        <span aria-hidden className="text-lg font-normal text-muted transition-transform group-open:rotate-45">+</span>
+                      </summary>
+                      <div className="space-y-5 pt-4">
                         <div>
-                          <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent mb-3">How We Execute</h4>
+                          <h4 className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-accent">What&apos;s Included</h4>
                           <ul className="space-y-2">
-                            {service.execution.map((item) => (
+                            {service.included.map((item) => (
                               <li key={item} className="flex gap-2 text-[13px] leading-snug">
                                 <span aria-hidden className="mt-[4px] size-1 shrink-0 rounded-full bg-accent" />
                                 {item}
@@ -530,31 +518,41 @@ export default function Home() {
                             ))}
                           </ul>
                         </div>
-                      )}
-
-                      {/* Perfect For */}
-                      <div>
-                        <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent mb-3">Perfect For</h4>
-                        <ul className="space-y-2">
-                          {service.perfectFor.map((item) => (
-                            <li key={item} className="flex gap-2 text-[13px] leading-snug">
-                              <span aria-hidden className="mt-[4px] size-1 shrink-0 rounded-full bg-accent" />
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
+                        {service.execution && (
+                          <div>
+                            <h4 className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-accent">How We Execute</h4>
+                            <ul className="space-y-2">
+                              {service.execution.map((item) => (
+                                <li key={item} className="flex gap-2 text-[13px] leading-snug">
+                                  <span aria-hidden className="mt-[4px] size-1 shrink-0 rounded-full bg-accent" />
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <div>
+                          <h4 className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-accent">Perfect For</h4>
+                          <ul className="space-y-2">
+                            {service.perfectFor.map((item) => (
+                              <li key={item} className="flex gap-2 text-[13px] leading-snug">
+                                <span aria-hidden className="mt-[4px] size-1 shrink-0 rounded-full bg-accent" />
+                                {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        {service.footer && (
+                          <p className="border-t border-ink/10 pt-4 text-xs font-medium italic leading-relaxed text-ink/80">
+                            {service.footer}
+                          </p>
+                        )}
                       </div>
-                    </div>
-
-                    {service.footer && (
-                      <p className="mt-6 border-t border-ink/10 pt-4 text-xs font-medium leading-relaxed text-ink/80 italic">
-                        {service.footer}
-                      </p>
-                    )}
+                    </details>
 
                     <Link
                       href="#book"
-                      className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink px-7 py-3.5 text-sm font-semibold text-cream transition-all hover:bg-accent hover:scale-105"
+                      className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-semibold text-cream transition-all hover:scale-105 hover:bg-accent"
                     >
                       Get started <span aria-hidden>&rarr;</span>
                     </Link>
@@ -566,18 +564,18 @@ export default function Home() {
             {/* signature statement */}
             <Reveal>
               <blockquote
-                className="mx-auto mt-32 max-w-4xl text-center p-10 rounded-3xl backdrop-blur-xl border border-white/30 shadow-xl transition-all duration-500 hover:border-accent/40 hover:shadow-2xl hover:shadow-accent/10"
+                className="mx-auto mt-8 max-w-4xl rounded-2xl border border-white/30 p-5 text-center shadow-lg backdrop-blur-xl transition-all duration-500 hover:border-accent/40 hover:shadow-xl hover:shadow-accent/10 sm:p-6"
                 style={{
                   background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.45) 100%)',
                   backdropFilter: 'blur(24px) saturate(180%)',
                   WebkitBackdropFilter: 'blur(24px) saturate(180%)'
                 }}
               >
-                <p className="text-3xl font-bold leading-snug tracking-tight sm:text-5xl">
+                <p className="text-xl font-bold leading-snug tracking-tight sm:text-2xl">
                   A human writing 50 personalized messages a day, will{" "}
                   <span className="text-accent">outpace, outlast, and outwin</span> an LLM writing 200
                 </p>
-                <p className="mt-6 text-lg text-muted">
+                <p className="mt-2 text-sm text-muted">
                   That's not theory. It's a game-plan.
                 </p>
               </blockquote>
@@ -587,21 +585,18 @@ export default function Home() {
 
         {/* ========== 4. HOW IT WORKS ========== */}
         <section id="how" className="scroll-mt-24 border-t border-ink/10 bg-panel/50">
-          <div className="mx-auto max-w-7xl px-6 py-24 sm:px-10 sm:py-32">
+          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
             <Reveal>
-              <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-6xl">
+              <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-4xl">
                 No mystery. <span className="text-accent">No 90-slide deck.</span>
               </h2>
             </Reveal>
-            <ol className="mt-16 max-w-3xl">
+            <ol className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {STEPS.map((s, i) => (
-                <Reveal key={s.n} delay={i * 80}>
-                  <li className="relative grid grid-cols-[auto_1fr] gap-6 pb-14 sm:gap-10 last:pb-0">
-                    {i < STEPS.length - 1 && (
-                      <span aria-hidden className="absolute left-6 top-14 h-full w-px bg-ink/15 sm:left-7" />
-                    )}
+                <Reveal key={s.n} delay={i * 60} className="h-full">
+                  <li className="h-full rounded-2xl border border-ink/10 bg-white/55 p-4">
                     <span
-                      className="grid size-12 shrink-0 place-items-center rounded-full border border-white/30 text-sm font-bold sm:size-14 backdrop-blur-xl transition-all duration-500 hover:border-accent/40 hover:shadow-lg hover:shadow-accent/10"
+                      className="grid size-9 shrink-0 place-items-center rounded-full border border-white/30 text-xs font-bold backdrop-blur-xl transition-all duration-500 hover:border-accent/40 hover:shadow-lg hover:shadow-accent/10"
                       style={{
                         background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.4) 100%)',
                         backdropFilter: 'blur(20px) saturate(180%)',
@@ -610,9 +605,9 @@ export default function Home() {
                     >
                       {s.n}
                     </span>
-                    <div className="pt-1.5 sm:pt-3">
-                      <h3 className="text-2xl font-semibold tracking-tight">{s.title}</h3>
-                      <p className="mt-3 max-w-xl leading-relaxed text-muted">{s.body}</p>
+                    <div className="mt-4">
+                      <h3 className="text-lg font-semibold tracking-tight">{s.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-muted">{s.body}</p>
                     </div>
                   </li>
                 </Reveal>
@@ -622,8 +617,8 @@ export default function Home() {
         </section>
 
         {/* ========== OUTBOUND OFFERS ========== */}
-        <section id="offers" className="scroll-mt-24 border-y border-ink/10 bg-white text-ink">
-          <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20 lg:px-10">
+        <section id="offers" className="scroll-mt-24 border-y border-ink/10 bg-white font-sans text-ink [&_h2]:font-sans [&_h3]:font-sans [&_h4]:font-sans">
+          <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
             <Reveal>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
                 Outbound offers
@@ -739,13 +734,13 @@ export default function Home() {
         </section>
         {/* ========== 8. TESTIMONIALS ========== */}
         <section className="border-t border-ink/10 bg-panel/50">
-          <div className="mx-auto max-w-7xl px-6 py-24 sm:px-10 sm:py-32">
+          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
             <Reveal>
-              <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-6xl">
+              <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-4xl">
                 Don't take <span className="text-accent">our word</span> for it.
               </h2>
             </Reveal>
-            <div className="mt-16 grid gap-6 md:grid-cols-2">
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
               {[
                 {
                   quote: "Liam Ottley closed, alhamdulillah.",
@@ -771,10 +766,10 @@ export default function Home() {
         </section>
 
         {/* ========== 9. FAQ ========== */}
-        <section id="faq" className="mx-auto max-w-7xl scroll-mt-24 px-6 py-24 sm:px-10 sm:py-32">
-          <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr]">
+        <section id="faq" className="mx-auto max-w-7xl scroll-mt-24 px-6 py-14 sm:px-10 sm:py-16">
+          <div className="grid gap-8 lg:grid-cols-[1fr_1.4fr]">
             <Reveal>
-              <h2 className="text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
+              <h2 className="text-3xl font-bold uppercase leading-tight tracking-tight sm:text-4xl">
                 The questions you're <span className="text-accent">already thinking.</span>
               </h2>
               <AnimatedArrow />
@@ -782,13 +777,13 @@ export default function Home() {
             <div className="divide-y divide-ink/10 border-y border-ink/10">
               {FAQS.map((f, i) => (
                 <details key={f.q} open={i === 0} className="group">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-6 text-lg font-semibold tracking-tight sm:text-xl">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-5 py-4 text-base font-semibold tracking-tight sm:text-lg">
                     {f.q}
                     <span aria-hidden className="faq-mark grid size-9 shrink-0 place-items-center rounded-full border border-ink text-xl leading-none">
                       +
                     </span>
                   </summary>
-                  <p className="max-w-2xl pb-7 leading-relaxed text-muted">{f.a}</p>
+                  <p className="max-w-2xl pb-5 text-sm leading-relaxed text-muted sm:text-base">{f.a}</p>
                 </details>
               ))}
             </div>
@@ -797,15 +792,15 @@ export default function Home() {
 
         {/* ========== 10. FOUNDER STORY ========== */}
         <section id="about" className="scroll-mt-24 border-t border-ink/10 bg-panel/50">
-          <div className="mx-auto max-w-7xl px-6 py-24 sm:px-10 sm:py-32">
-            <div className="grid gap-16 lg:grid-cols-[1.1fr_1fr]">
+          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
+            <div className="grid items-center gap-8 lg:grid-cols-[1.1fr_1fr] lg:gap-10">
               <div>
                 <Reveal>
-                  <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-6xl">
+                  <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-4xl">
                     Built <span className="text-accent">the hard way.</span>
                   </h2>
                 </Reveal>
-                <div className="mt-10 max-w-xl space-y-6 text-lg leading-relaxed">
+                <div className="mt-6 max-w-xl space-y-3 text-base leading-relaxed">
                   {[
                     "Our founder started at fifteen with nothing, no money, and at times no stable place to live.",
                     "E-commerce didn't take off. Trading the markets took a toll, but it taught him how markets, and startups, actually behave.",
@@ -819,7 +814,7 @@ export default function Home() {
                     </Reveal>
                   ))}
                 </div>
-                <div className="mt-12 space-y-3 text-2xl font-semibold tracking-tight sm:text-3xl">
+                <div className="mt-6 space-y-2 text-xl font-semibold tracking-tight sm:text-2xl">
                   {["Get a life.", "Stay humble, nobody knows everything.", "Say no, including to clients who aren't a fit."].map(
                     (v, i) => (
                       <Reveal key={v} delay={i * 80}>
@@ -834,8 +829,8 @@ export default function Home() {
                   )}
                 </div>
               </div>
-              <Reveal delay={150} className="lg:sticky lg:top-32 lg:self-start">
-                <div className="relative aspect-[4/5] overflow-hidden rounded-2xl">
+              <Reveal delay={150}>
+                <div className="relative mx-auto aspect-[4/5] w-full max-w-[390px] overflow-hidden rounded-2xl">
                   <Image
                     src="/office picture.png"
                     alt="Outlio team office"
@@ -851,14 +846,14 @@ export default function Home() {
         </section>
 
         {/* ========== TEAM ========== */}
-        <section id="team" className="relative scroll-mt-24 overflow-hidden border-t border-ink/10 bg-panel/50 py-24 sm:py-32">
+        <section id="team" className="relative scroll-mt-24 overflow-hidden border-t border-ink/10 bg-panel/50 py-14 sm:py-16">
           <div className="relative mx-auto max-w-7xl px-6 sm:px-10">
             <Reveal>
-              <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-5xl text-ink">
+              <h2 className="text-3xl font-bold uppercase tracking-tight text-ink sm:text-4xl">
                 The people <span className="text-accent">behind the engine.</span>
               </h2>
             </Reveal>
-            <div className="mt-16 grid gap-6 md:grid-cols-3">
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
               {TEAM.map((m, i) => {
                 return (
                   <Reveal key={m.name} delay={i * 120} className="h-full">
@@ -898,7 +893,7 @@ export default function Home() {
                             </a>
                           ))}
                         </div>
-                        <h3 className="mt-4 px-1 text-2xl font-semibold tracking-tight text-ink">{m.name}</h3>
+                        <h3 className="mt-3 px-1 text-xl font-semibold tracking-tight text-ink">{m.name}</h3>
                         <p className="mb-2 mt-1 px-1 text-sm text-muted">{m.role}</p>
                       </div>
                     </article>
@@ -919,24 +914,24 @@ export default function Home() {
                 "radial-gradient(55% 70% at 50% 0%, rgba(124, 121, 255, 0.2), transparent 70%)",
             }}
           />
-          <div className="relative mx-auto max-w-7xl px-6 py-28 text-center sm:px-10 sm:py-36">
+          <div className="relative mx-auto max-w-7xl px-6 py-16 text-center sm:px-10 sm:py-20">
             <Reveal>
-              <h2 className="text-5xl font-bold uppercase tracking-tight sm:text-7xl">
+              <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-5xl">
                 You've read enough.
               </h2>
-              <p className="mx-auto mt-8 max-w-xl text-xl leading-relaxed text-cream/75">
+              <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-cream/75 sm:text-lg">
                 One call. Fifteen minutes. No pitch, if we can't help you, we'll say so on the call.
               </p>
               <Link
                 href={CALENDLY_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-10 inline-block rounded-full bg-cream px-10 py-4 text-lg font-semibold text-ink transition-all hover:scale-105 hover:bg-white"
+                className="mt-6 inline-block rounded-full bg-cream px-8 py-3.5 text-base font-semibold text-ink transition-all hover:scale-105 hover:bg-white"
               >
                 Book a call
               </Link>
-              <p className="mt-6 text-sm text-cream/55">
-                First week billed before anything monthly. You'll see the results before you commit.
+              <p className="mt-4 text-sm text-cream/55">
+                Clear scope, visible execution, and a shared CRM from day one.
               </p>
             </Reveal>
           </div>

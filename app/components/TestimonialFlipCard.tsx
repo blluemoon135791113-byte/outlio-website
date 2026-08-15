@@ -16,7 +16,7 @@ export default function TestimonialFlipCard({ quote, who, proofImage }: Testimon
     <div
       className="perspective-1000"
       style={{
-        minHeight: "280px",
+        minHeight: "220px",
         height: "100%"
       }}
       onMouseEnter={() => setIsFlipped(true)}
@@ -27,13 +27,13 @@ export default function TestimonialFlipCard({ quote, who, proofImage }: Testimon
         style={{
           transformStyle: "preserve-3d",
           transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-          minHeight: "280px",
+          minHeight: "220px",
           height: "100%"
         }}
       >
         {/* Front Side */}
         <figure
-          className="absolute inset-0 flex h-full flex-col justify-between p-6 backdrop-blur-xl border border-white/30 rounded-2xl transition-all duration-500 hover:border-accent/40 hover:shadow-lg hover:shadow-accent/10 sm:p-8 backface-hidden"
+          className="absolute inset-0 flex h-full flex-col justify-between rounded-2xl border border-white/30 p-5 backdrop-blur-xl transition-all duration-500 backface-hidden hover:border-accent/40 hover:shadow-lg hover:shadow-accent/10 sm:p-6"
           style={{
             background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.45) 100%)',
             backdropFilter: 'blur(24px) saturate(180%)',

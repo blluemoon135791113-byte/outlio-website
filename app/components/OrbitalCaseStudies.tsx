@@ -122,7 +122,7 @@ export default function OrbitalCaseStudies() {
     <div className="relative w-full">
 
       {/* Centered orbital area */}
-      <div className="relative mx-auto w-full max-w-[750px] py-4" style={{ aspectRatio: "1 / 1" }}>
+      <div className="relative mx-auto w-full max-w-[560px] py-2" style={{ aspectRatio: "1 / 1" }}>
         {/* Orbital rings SVG */}
         <svg className="absolute inset-0 w-full h-full" viewBox={`0 0 ${SIZE} ${SIZE}`}>
           <defs>
