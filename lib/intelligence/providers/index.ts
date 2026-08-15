@@ -36,11 +36,13 @@ import { pageSpeedTechProvider } from './pagespeed'
 import { prospeoEmailProvider, prospeoPhoneProvider } from './prospeo'
 import { secEdgarProvider } from './sec-edgar'
 import { gdeltWebResearchProvider, tavilyWebResearchProvider } from './web-research'
+import { usaSpendingProvider } from './usaspending'
 import { wikidataProvider } from './wikidata'
 
 /** Every provider that exists, regardless of whether it is configured. */
 export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(wikidataProvider),
+  eraseProviderType(usaSpendingProvider),
   eraseProviderType(companiesHouseProvider),
   eraseProviderType(secEdgarProvider),
   eraseProviderType(domainDiscoveryProvider),
@@ -55,7 +57,19 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
 ]
 
 export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
-  company_profile: ['wikidata', 'companies-house', 'sec-edgar', 'tavily-domain-discovery'],
+  /*
+   * Stated facts first, inference last. `usaspending` sits at the end because
+   * it answers only federal-award fields and declines everything else through
+   * `canHandle` — its position costs nothing, but stating it beats relying on
+   * registration order.
+   */
+  company_profile: [
+    'wikidata',
+    'companies-house',
+    'sec-edgar',
+    'tavily-domain-discovery',
+    'usaspending',
+  ],
   funding: ['tavily-funding', 'gdelt-funding'],
   web_research: ['tavily-web', 'gdelt-web'],
   tech_stack: ['pagespeed-tech'],

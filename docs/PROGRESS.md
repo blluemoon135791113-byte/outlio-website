@@ -4,6 +4,75 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-16 — USAspending.gov federal award provider
+
+Free, official, no key. Spec §17 puts a government filing at HIGH confidence,
+and this is the primary record of what the US federal government obligated to a
+company. Four new fields: `federal_awards_total`, `federal_awards_count`,
+`federal_award_types`, `federal_recipient_name`.
+
+### Two defects found by LIVE testing, not by unit tests
+
+**1. Strict matching zeroed out every large contractor.** `pickRecipient`
+required exactly one name match. Booz Allen Hamilton files under five
+registrations (`… INC.`, `… INC`, `… HOLDING CORPORATION`, …), so it was refused
+as "ambiguous" and a company with **$91.6bn** in federal contracts reported
+none.
+
+Every candidate surviving the filter already normalizes to the same name, so
+extra rows are duplicate registrations of one company — not rival candidates.
+
+**2. 🔴 The fix for (1) made it worse, and only live testing caught it.**
+Passing all five registrations as `keywords` returned **52 awards and a NEGATIVE
+total**. Measured directly:
+
+| Keywords sent | Result |
+|---|---|
+| `["BOOZ ALLEN HAMILTON INC."]` | 128,168 awards / $91,565,378,997 |
+| `["BOOZ ALLEN HAMILTON INC"]` | 128,168 awards / $91,565,378,997 |
+| both together | **52 awards / −$1,505,882** |
+
+**`filters.keywords` is AND, not OR.** Nothing in the endpoint list says so.
+
+Final design: the strict name match is a **gate** (does a federal recipient with
+exactly this company's name exist?), and the query then uses **one** keyword —
+the *shortest* verified registration, because the search is a substring match so
+the shortest form is the most inclusive while still being the company's full
+name. `Palantir Technologies` resolves to 1,919 awards / $5.1bn; a bare
+`Palantir` is refused, since none of its five substring candidates *is*
+"Palantir".
+
+### Coverage expectation
+
+Narrow by design — only US federal contractors and grant recipients appear. On a
+Sales Navigator list of small B2B SaaS companies most will legitimately return
+nothing, and that is a fact about the company rather than a failure. It earns
+its place by being free and authoritative, not by hitting often. One company
+from the live lead list, *Thinklytics*, resolved to 3 awards / $15,000.
+
+### Also
+
+`company_profile` now names `usaspending` explicitly at the end of its
+waterfall — it answers only federal fields and declines the rest through
+`canHandle`, so its position costs nothing, but stating it beats relying on
+registration order. The registry test now asserts **relative** order rather than
+exact array equality: a test that breaks whenever a provider is added trains
+people to update it without reading it.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **666 passed**, 11 skipped |
+| `npx eslint lib/ tests/ components/` | ✅ zero problems |
+| `npm run build` | ✅ clean |
+| Live: Palantir Technologies | ✅ 1,919 awards / $5.1bn |
+| Live: Booz Allen Hamilton | ✅ 128,168 awards / $91.6bn |
+| Live: bare "Palantir" | ✅ refused |
+
+---
+
 ## 2026-08-15 — The benchmark was lying about a provider outage
 
 ### What happened

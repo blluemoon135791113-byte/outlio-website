@@ -70,6 +70,18 @@ export const FIELD_TTL_SECONDS: Record<ResearchField, number | null> = {
   sec_former_names: 180 * DAY,
   sec_filing_history: 1 * DAY,
 
+  /*
+   * Federal spending is published on a rolling basis and a company's award
+   * history only grows. A month-old total is still a true statement about the
+   * company; re-querying daily would spend courtesy on a free public service
+   * for no new information.
+   */
+  federal_awards_total: 30 * DAY,
+  federal_awards_count: 30 * DAY,
+  federal_award_types: 30 * DAY,
+  /** The matched recipient name does not change. */
+  federal_recipient_name: null,
+
   // Funding. Long, because rounds are infrequent and expensive to look up.
   funding_round: 90 * DAY,
   funding_amount: 90 * DAY,

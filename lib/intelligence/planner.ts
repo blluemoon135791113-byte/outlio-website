@@ -62,6 +62,10 @@ const FIELD_DESCRIPTIONS: Record<ResearchField, string> = {
   sec_former_names: 'former legal names reported in SEC EDGAR',
   sec_filing_history: 'recent SEC EDGAR filing forms, dates, identifiers, and document links',
 
+  federal_awards_total: 'total value of US federal government contracts or grants awarded to the company',
+  federal_awards_count: 'how many US federal awards the company has received',
+  federal_award_types: 'the kinds of US federal awards held: contracts, grants, loans, IDVs',
+  federal_recipient_name: 'the company\'s registered name in US federal award records',
   funding_round: 'the funding stage: Seed, Series A, Series B and so on',
   funding_amount: 'how much money was raised',
   funding_currency: 'the currency an amount was raised in',

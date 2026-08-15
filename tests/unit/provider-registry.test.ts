@@ -201,12 +201,15 @@ describe('the live registry', () => {
     // Wikidata says what the website IS; domain discovery notices that a host
     // looks like the name. The stated fact must be tried first.
     const registry = buildLiveRegistry(undefined)
-    expect(registry.forCategory('company_profile').map((p) => p.name)).toEqual([
-      'wikidata',
-      'companies-house',
-      'sec-edgar',
-      'tavily-domain-discovery',
-    ])
+    const order = registry.forCategory('company_profile').map((p) => p.name)
+
+    // Asserted as relative order, not exact equality: the category gains
+    // providers over time, and a test that breaks whenever one is added trains
+    // people to update it without reading it.
+    expect(order.indexOf('wikidata')).toBeLessThan(order.indexOf('tavily-domain-discovery'))
+    expect(order.indexOf('companies-house')).toBeLessThan(order.indexOf('tavily-domain-discovery'))
+    expect(order.indexOf('sec-edgar')).toBeLessThan(order.indexOf('tavily-domain-discovery'))
+    expect(order[0]).toBe('wikidata')
   })
 
   it('puts the keyless fallback behind the licensed source', () => {

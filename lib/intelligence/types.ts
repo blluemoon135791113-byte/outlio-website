@@ -118,6 +118,11 @@ export const RESEARCH_FIELDS = [
   'sec_website',
   'sec_former_names',
   'sec_filing_history',
+  // US federal award spending (USAspending.gov)
+  'federal_awards_total',
+  'federal_awards_count',
+  'federal_award_types',
+  'federal_recipient_name',
   // funding
   'funding_round',
   'funding_amount',
@@ -195,6 +200,11 @@ export const RESEARCH_FIELD_SPEC: Record<ResearchField, FieldSpec> = {
   sec_website: { category: 'company_profile', entity: 'company' },
   sec_former_names: { category: 'company_profile', entity: 'company' },
   sec_filing_history: { category: 'company_profile', entity: 'company' },
+
+  federal_awards_total: { category: 'company_profile', entity: 'company' },
+  federal_awards_count: { category: 'company_profile', entity: 'company' },
+  federal_award_types: { category: 'company_profile', entity: 'company' },
+  federal_recipient_name: { category: 'company_profile', entity: 'company' },
 
   funding_round: { category: 'funding', entity: 'company' },
   funding_amount: { category: 'funding', entity: 'company' },
