@@ -4,6 +4,68 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Qualification profiles can be built from the product
+
+Closes the dead end left by Phase 7: the "Score against" dropdown had no way to
+be filled.
+
+### Built
+
+| File | Purpose |
+|---|---|
+| `lib/qualification/parse.ts` | **pure** value parsing per operator |
+| `lib/qualification/actions.ts` | `assertAccess`-gated, rate-limited create and delete |
+| `components/qualification/ProfileManager.tsx` | the criterion builder |
+| `app/(product)/dashboard/intelligence/profiles/page.tsx` | the screen |
+| `tests/unit/qualification-parse.test.ts` | 12 tests |
+
+### Decisions
+
+**An unparseable value is an error, never a default.** Coercing "ten to fifty"
+into `[0, 0]` would produce a profile scoring confidently against criteria
+nobody expressed, and the first sign of trouble would be a wrong list weeks
+later. Every operator's parsing fails loudly instead.
+
+**Values are parsed on the server.** What a user typed is untrusted input like
+any other; the client only collects it.
+
+**Human numbers are accepted** — `$5M`, `5,000,000`, `50k`, `£2bn` — because
+that is what people paste out of a deck. Anything that is not a number returns
+`null` rather than a guess.
+
+**`tech_stack` criteria get `valuePath: 'detected'` automatically.** That
+payload nests its list, and without the path the comparison runs against the
+wrapper object and matches nothing — the same defect found in the scoring engine
+earlier today, prevented here at the point profiles are created.
+
+**Weights are relative, and the UI says so.** Otherwise the natural assumption
+is that they must total 100 before a profile is valid.
+
+**The empty dropdown now links to the builder.** A control with no way to fill
+it is a dead end.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **577 passed**, 9 skipped |
+| `npx eslint` on all new code | ✅ zero problems |
+| `npm run build` | ✅ both intelligence routes compiled |
+| Both screens signed out | ✅ 307 → `/sign-in?next=…` |
+
+One transient integration failure appeared in a single full run and did not
+reproduce in unit, integration, or a subsequent full run.
+
+### Still to build
+
+- Phase 8: contact enrichment — **no provider configured**, so the control is
+  deliberately absent rather than present and returning `unknown` for everyone.
+- Phases 9–10: cost analytics, circuit breakers, retention jobs.
+- Website intelligence beyond PageSpeed; GitHub, GLEIF, Hacker News, YC.
+
+---
+
 ## 2026-08-15 — Phase 7: the intelligence UI
 
 The pipeline is reachable from the product for the first time.

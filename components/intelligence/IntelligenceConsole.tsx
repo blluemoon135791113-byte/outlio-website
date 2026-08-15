@@ -410,6 +410,18 @@ export function IntelligenceConsole({
                 </option>
               ))}
             </select>
+            {/*
+              An empty dropdown with no way to fill it is a dead end. Point at
+              the screen that fixes it rather than leaving the control inert.
+            */}
+            {profiles.length === 0 ? (
+              <a
+                href="/dashboard/intelligence/profiles"
+                className="mt-1 inline-block text-[11px] text-accent underline-offset-2 hover:underline"
+              >
+                Create an ICP profile
+              </a>
+            ) : null}
           </div>
         </div>
 
