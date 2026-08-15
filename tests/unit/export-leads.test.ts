@@ -71,7 +71,7 @@ describe('normalizeExportLead', () => {
     expect(lead.location).toBeNull()
   })
 
-  it('converts legacy generated public URLs into exact Sales Navigator links', () => {
+  it('preserves member-ID profile URLs captured from Sales Navigator', () => {
     const lead = normalizeExportLead({
       id: '4d318a4c-63f2-43e3-ac00-9579442af6a9',
       full_name: 'Legacy Example',
@@ -84,9 +84,7 @@ describe('normalizeExportLead', () => {
       location: null,
     })
 
-    expect(lead.linkedinUrl).toBeNull()
-    expect(lead.salesNavigatorUrl).toBe(
-      'https://www.linkedin.com/sales/lead/ACwAALEGACY123',
-    )
+    expect(lead.linkedinUrl).toBe('https://www.linkedin.com/in/ACwAALEGACY123')
+    expect(lead.salesNavigatorUrl).toBeNull()
   })
 })

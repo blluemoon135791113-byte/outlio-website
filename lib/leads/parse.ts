@@ -86,16 +86,24 @@ function extractMemberUrn(salesNavHref: string | null, scrollUrn: string | null)
  * This is construction from an extracted identifier, not inference: no part of
  * the URL is guessed.
  */
-function publicProfileUrl(href: string | null | undefined): string | null {
+function publicProfileUrl(
+  href: string | null | undefined,
+  memberUrn: string | null,
+): string | null {
   const absolute = absolutize(href)
-  if (!absolute) return null
-  try {
-    const parsed = new URL(absolute)
-    if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return null
-    return /^\/in\/[^/?#]+/i.test(parsed.pathname) ? absolute : null
-  } catch {
-    return null
+  if (absolute) {
+    try {
+      const parsed = new URL(absolute)
+      if (
+        /(^|\.)linkedin\.com$/i.test(parsed.hostname)
+        && /^\/in\/[^/?#]+/i.test(parsed.pathname)
+      ) return absolute
+    } catch {
+      // Fall through to the stable member identifier captured from Sales Nav.
+    }
   }
+
+  return memberUrn ? `https://www.linkedin.com/in/${memberUrn}` : null
 }
 
 function canonicalSalesNavUrl(href: string | null, memberUrn: string | null): string | null {
@@ -208,7 +216,10 @@ export function parseSearchResults(html: string): ParseResult {
     // Sales Nav href: the anchor wrapping the name, else the headshot link.
     const nameAnchor = nameEl.closest('a[href]')
     const salesNavHref =
-      nameAnchor.attr('href') ??
+      row.find('a[href*="/sales/lead/"]').first().attr('href') ??
+      (/\/sales\/lead\//i.test(nameAnchor.attr('href') ?? '')
+        ? nameAnchor.attr('href')
+        : undefined) ??
       row
         .find('[data-anonymize="headshot-photo"]')
         .closest('a[href]')
@@ -259,7 +270,9 @@ export function parseSearchResults(html: string): ParseResult {
     const companyEl = row.find('[data-anonymize="company-name"]').first()
     const companyAnchor = companyEl.is('a[href*="/sales/company/"]')
       ? companyEl
-      : companyEl.closest('a[href*="/sales/company/"]')
+      : companyEl.closest('a[href*="/sales/company/"]').length > 0
+        ? companyEl.closest('a[href*="/sales/company/"]')
+        : row.find('a[href*="/sales/company/"]').first()
     let companyName = text(companyEl.text())
     const companyUrl = companyProfileUrl(companyAnchor.attr('href') ?? null)
     const companyWebsiteUrl = text(companyEl.attr('data-outlio-company-website'))
@@ -285,7 +298,7 @@ export function parseSearchResults(html: string): ParseResult {
 
     leads.push({
       fullName,
-      linkedinUrl: publicProfileUrl(publicHref),
+      linkedinUrl: publicProfileUrl(publicHref, memberUrn),
       salesNavUrl: canonicalSalesNavUrl(salesNavHref, memberUrn),
       memberUrn,
       jobTitle,

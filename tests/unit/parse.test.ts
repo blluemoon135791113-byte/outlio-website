@@ -25,9 +25,20 @@ describe('parseSearchResults — valid page', () => {
     expect(skippedRows).toBe(0)
   })
 
-  it('extracts the member URN without inventing a public profile URL', () => {
+  it('builds the public profile URL from the extracted member URN', () => {
+    /*
+     * CONSTRUCTION, NOT INFERENCE. The member URN is read from the saved page;
+     * LinkedIn accepts it in the `/in/` path, so the URL is assembled from data
+     * we already hold. Nothing is guessed and no request is made to
+     * linkedin.com — CLAUDE.md rule 1 and rule 4 both hold.
+     *
+     * This reverses the Phase 8 rollback, which nulled these URLs while it was
+     * unconfirmed whether they resolve. Confirmed by the user 2026-08-15.
+     */
     expect(leads[0]?.memberUrn).toBe('ACwAAFAKE0001AAAAAAAAAAAAAAAAAAAAAAAAAAA')
-    expect(leads[0]?.linkedinUrl).toBeNull()
+    expect(leads[0]?.linkedinUrl).toBe(
+      'https://www.linkedin.com/in/ACwAAFAKE0001AAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    )
   })
 
   it('keeps the Sales Navigator URL separately', () => {

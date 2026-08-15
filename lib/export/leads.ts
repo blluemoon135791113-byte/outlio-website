@@ -69,32 +69,17 @@ export type ExportLeadSource = Pick<
   | 'location'
 >
 
-function legacyGeneratedMemberId(value: string | null): string | null {
-  if (!value) return null
-  try {
-    const parsed = new URL(value)
-    if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return null
-    const match = /^\/in\/(ACw[A-Za-z0-9_-]+)\/?$/i.exec(parsed.pathname)
-    return match?.[1] ?? null
-  } catch {
-    return null
-  }
-}
-
 /** Maps one trusted database row into the only shape adapters may consume. */
 export function normalizeExportLead(row: ExportLeadSource): ExportLead {
-  const legacyMemberId = legacyGeneratedMemberId(row.linkedin_url)
   return {
     id: row.id,
     name: row.full_name,
-    linkedinUrl: legacyMemberId ? null : row.linkedin_url,
+    linkedinUrl: row.linkedin_url,
     jobTitle: row.job_title,
     companyName: row.company_name,
     companyUrl: row.company_website_url,
     companyLinkedInUrl: row.company_url,
-    salesNavigatorUrl: row.sales_navigator_url ?? (legacyMemberId
-      ? `https://www.linkedin.com/sales/lead/${legacyMemberId}`
-      : null),
+    salesNavigatorUrl: row.sales_navigator_url,
     location: row.location,
   }
 }
