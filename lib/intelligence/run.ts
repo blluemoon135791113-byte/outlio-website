@@ -357,8 +357,11 @@ export async function processResearchRun(
 
   // ---- 6. persist with provenance (spec §16) -----------------------------
   const written = await writeEvidence(userId, runId, report.evidence)
+  // Windfall facts are worth exactly as much as requested ones next time, and
+  // they were already paid for.
+  await writeEvidence(userId, runId, report.bonusEvidence)
   await recordToolCalls(userId, runId, report.toolCalls)
-  await persistDiscoveredDomains(userId, report.evidence)
+  await persistDiscoveredDomains(userId, [...report.evidence, ...report.bonusEvidence])
 
   // ---- 7. qualify (spec §19) ---------------------------------------------
   const qualifiedCount = await qualifyRun(
@@ -479,7 +482,7 @@ async function loadPeople(
   for (let i = 0; i < leadIds.length; i += 200) {
     const { data } = await supabase
       .from('extracted_leads')
-      .select('id, full_name, linkedin_url, job_title, company_name, company_website_url')
+      .select('id, full_name, linkedin_url, job_title, company_name, company_website_url, company_id')
       .eq('user_id', userId)
       .in('id', leadIds.slice(i, i + 200))
 
@@ -492,6 +495,7 @@ async function loadPeople(
         jobTitle: row.job_title,
         companyName: row.company_name,
         companyDomain: row.company_website_url,
+        companyId: row.company_id,
       })
     }
   }

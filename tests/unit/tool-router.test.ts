@@ -37,6 +37,7 @@ function person(n: number, companyIndex: number): PersonEntity {
     jobTitle: 'Founder',
     companyName: `Company ${companyIndex}`,
     companyDomain: `company-${companyIndex}.com`,
+    companyId: null,
   }
 }
 

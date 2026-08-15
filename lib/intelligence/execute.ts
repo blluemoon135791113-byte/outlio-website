@@ -45,6 +45,8 @@ export type UnknownReason =
 export type TaskResult = {
   task: ResearchTask
   evidence: NormalizedEvidence[]
+  /** Facts that came free with the paid call but nobody asked for. */
+  bonus: NormalizedEvidence[]
   /** Fields no provider could answer, with the reason they stayed unknown. */
   unknownFields: Array<{ field: ResearchField; reason: UnknownReason }>
   attempts: ToolCallRecord[]
@@ -53,6 +55,11 @@ export type TaskResult = {
 export type ExecutionReport = {
   results: TaskResult[]
   evidence: NormalizedEvidence[]
+  /**
+   * Windfall evidence. Stored so a later run does not pay again for facts
+   * already in hand, but never counted as answering this run's question.
+   */
+  bonusEvidence: NormalizedEvidence[]
   toolCalls: ToolCallRecord[]
   /** Provider invocations actually made. The number that costs money. */
   externalCallCount: number
@@ -87,23 +94,43 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
 }
 
 /**
- * Keeps only evidence this task actually asked for.
+ * Sorts a provider's output into what was asked for and what came free with it.
  *
- * A provider returning a field nobody requested, or evidence about a DIFFERENT
- * entity, is dropped rather than stored. Trusting an adapter to address the
- * right company is how one customer's data ends up attached to another's lead.
+ * `requested` satisfies the task's fields and stops the waterfall. `bonus` is a
+ * windfall: a person-level contact lookup often returns the employer's domain,
+ * headcount, funding and tech stack in the same paid response. Discarding that
+ * would mean paying again later for facts already in hand, so it is stored —
+ * but it never counts towards the task being answered, because nobody asked
+ * for it and it must not mask a field that genuinely failed.
+ *
+ * ⚠️ Evidence about an unrelated entity is DROPPED either way. Trusting an
+ * adapter to address the right company is how one customer's data ends up
+ * attached to another's lead.
  */
 function acceptableEvidence(
   task: ResearchTask,
   candidates: readonly NormalizedEvidence[],
-): NormalizedEvidence[] {
+): { requested: NormalizedEvidence[]; bonus: NormalizedEvidence[] } {
   const wanted = new Set<string>(task.fields)
-  return candidates.filter(
-    (item) =>
-      wanted.has(item.field) &&
-      item.entityId === task.entity.id &&
-      item.entityType === task.entity.type,
-  )
+  // A person task may legitimately return facts about that person's employer.
+  const companyId = task.entity.type === 'person' ? task.entity.companyId : null
+
+  const requested: NormalizedEvidence[] = []
+  const bonus: NormalizedEvidence[] = []
+
+  for (const item of candidates) {
+    const aboutTaskEntity =
+      item.entityId === task.entity.id && item.entityType === task.entity.type
+    const aboutTheirCompany =
+      companyId !== null && item.entityType === 'company' && item.entityId === companyId
+
+    if (!aboutTaskEntity && !aboutTheirCompany) continue
+
+    if (aboutTaskEntity && wanted.has(item.field)) requested.push(item)
+    else bonus.push(item)
+  }
+
+  return { requested, bonus }
 }
 
 async function runOne(
@@ -113,12 +140,14 @@ async function runOne(
   const providers = options.registry.forTask(task)
   const attempts: ToolCallRecord[] = []
   const collected: NormalizedEvidence[] = []
+  const windfall: NormalizedEvidence[] = []
   const satisfied = new Set<ResearchField>()
 
   if (providers.length === 0) {
     return {
       task,
       evidence: [],
+      bonus: [],
       unknownFields: task.fields.map((field) => ({
         field,
         reason: 'no_provider_configured' as const,
@@ -141,13 +170,13 @@ async function runOne(
     const record = await attempt(provider, { ...task, fields: outstanding }, options.timeoutMs)
     attempts.push(record.call)
 
-    if (record.evidence.length > 0) {
-      for (const item of record.evidence) {
-        if (satisfied.has(item.field)) continue
-        satisfied.add(item.field)
-        collected.push(item)
-      }
+    for (const item of record.evidence) {
+      if (satisfied.has(item.field)) continue
+      satisfied.add(item.field)
+      collected.push(item)
     }
+
+    windfall.push(...record.bonus)
 
     if (record.call.status === 'not_found') lastReason = 'not_found'
   }
@@ -156,14 +185,14 @@ async function runOne(
     .filter((field) => !satisfied.has(field))
     .map((field) => ({ field, reason: lastReason }))
 
-  return { task, evidence: collected, unknownFields, attempts }
+  return { task, evidence: collected, bonus: windfall, unknownFields, attempts }
 }
 
 async function attempt(
   provider: AnyIntelligenceProvider,
   task: ResearchTask,
   timeoutMs: number,
-): Promise<{ call: ToolCallRecord; evidence: NormalizedEvidence[] }> {
+): Promise<{ call: ToolCallRecord; evidence: NormalizedEvidence[]; bonus: NormalizedEvidence[] }> {
   const startedAt = Date.now()
 
   const base = {
@@ -192,17 +221,19 @@ async function attempt(
     // Provider output is untrusted input, exactly like a request body. It is
     // validated before it can become a stored fact.
     const { valid } = validateEvidence(output)
-    const evidence = acceptableEvidence(task, valid)
+    const { requested, bonus } = acceptableEvidence(task, valid)
 
     return {
       call: {
         ...base,
         estimatedCostMicros,
-        status: evidence.length > 0 ? 'success' : 'not_found',
+        // A provider that returned only bonus data did not answer the question.
+        status: requested.length > 0 ? 'success' : 'not_found',
         latencyMs: Date.now() - startedAt,
         errorCode: null,
       },
-      evidence,
+      evidence: requested,
+      bonus,
     }
   } catch (error) {
     const timedOut = error instanceof ProviderTimeoutError
@@ -217,6 +248,7 @@ async function attempt(
         errorCode: timedOut ? 'ERR_TIMEOUT' : 'ERR_PROVIDER_UNAVAILABLE',
       },
       evidence: [],
+      bonus: [],
     }
   }
 }
@@ -242,10 +274,12 @@ export async function executeTasks(
 
   const toolCalls = results.flatMap((result) => result.attempts)
   const evidence = results.flatMap((result) => result.evidence)
+  const bonusEvidence = results.flatMap((result) => result.bonus)
 
   return {
     results,
     evidence,
+    bonusEvidence,
     toolCalls,
     externalCallCount: toolCalls.length,
     estimatedCostMicros: sumMicros(toolCalls.map((call) => call.estimatedCostMicros)),

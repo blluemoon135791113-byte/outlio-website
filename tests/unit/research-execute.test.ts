@@ -37,6 +37,7 @@ function person(n: number): PersonEntity {
     jobTitle: 'Founder',
     companyName: 'Company 1',
     companyDomain: 'company-1.com',
+    companyId: null,
   }
 }
 
@@ -307,5 +308,82 @@ describe('registry configuration', () => {
     expect(registry.has('tech_stack')).toBe(true)
     expect(registry.has('funding')).toBe(false)
     expect(registry.availableCategories()).toEqual(['tech_stack'])
+  })
+})
+
+describe('a windfall is kept, but never counts as an answer', () => {
+  const COMPANY_ID = '00000000-0000-4000-8000-0000000000ff'
+
+  function personWithCompany(): PersonEntity {
+    return { ...person(1), companyId: COMPANY_ID }
+  }
+
+  function emailTask(): ResearchTask {
+    return {
+      id: 'contact:smoke',
+      category: 'contact_email',
+      entity: personWithCompany(),
+      fields: ['work_email'],
+    }
+  }
+
+  it('stores company facts returned by a person-level call', async () => {
+    // One paid contact lookup carries the employer's industry. Discarding it
+    // would mean paying again later for a fact already in hand.
+    const registry = createRegistry([
+      eraseProviderType(
+        stubProvider({
+          name: 'windfall-provider',
+          category: 'contact_email',
+          behaviour: { kind: 'windfall', fields: ['work_email'], companyId: COMPANY_ID },
+        }),
+      ),
+    ])
+
+    const report = await executeTasks([emailTask()], { registry })
+
+    expect(report.evidence.map((item) => item.field)).toEqual(['work_email'])
+    expect(report.bonusEvidence).toHaveLength(1)
+    expect(report.bonusEvidence[0]!.entityType).toBe('company')
+    expect(report.bonusEvidence[0]!.entityId).toBe(COMPANY_ID)
+  })
+
+  it('does NOT let a windfall mask a field that actually failed', async () => {
+    // The provider returns company data but no email. That is `not_found` for
+    // the question asked — a windfall must never look like success.
+    const registry = createRegistry([
+      eraseProviderType(
+        stubProvider({
+          name: 'windfall-only',
+          category: 'contact_email',
+          behaviour: { kind: 'windfall', fields: [], companyId: COMPANY_ID },
+        }),
+      ),
+    ])
+
+    const report = await executeTasks([emailTask()], { registry })
+
+    expect(report.evidence).toHaveLength(0)
+    expect(report.results[0]!.unknownFields.map((f) => f.field)).toEqual(['work_email'])
+    expect(report.toolCalls[0]!.status).toBe('not_found')
+    // Still stored, though.
+    expect(report.bonusEvidence).toHaveLength(1)
+  })
+
+  it('still drops evidence about an unrelated company', async () => {
+    const registry = createRegistry([
+      eraseProviderType(
+        stubProvider({
+          name: 'confused',
+          category: 'contact_email',
+          behaviour: { kind: 'wrong_entity' },
+        }),
+      ),
+    ])
+
+    const report = await executeTasks([emailTask()], { registry })
+
+    expect(report.evidence).toHaveLength(0)
+    expect(report.bonusEvidence).toHaveLength(0)
   })
 })

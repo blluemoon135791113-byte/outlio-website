@@ -25,41 +25,27 @@ import {
   createAuthUser,
   deleteTestUser,
   hasSupabaseEnv,
+  missingMigrations,
   seedJob,
   type TestAuthUser,
 } from './helpers'
 
-/**
- * Reports WHICH migration is missing, not merely that something is.
- *
- * A guard that names the wrong migration is worse than no guard: it sends
- * whoever reads it to re-apply something already applied.
- */
-async function missingMigrations(): Promise<string[]> {
-  if (!hasSupabaseEnv) return ['(no Supabase environment)']
+const missing = await missingMigrations([
+  { migration: '0043 (companies)', probe: async () => adminClient().from('companies').select('id').limit(1) },
+  {
+    migration: '0045 (research_job_queue)',
+    probe: async () => adminClient().from('research_job_queue').select('id').limit(1),
+  },
+  {
+    migration: '0046 (qualification)',
+    probe: async () => adminClient().from('qualification_profiles').select('id').limit(1),
+  },
+  {
+    migration: '0047 (research_runs.qualification_profile_id)',
+    probe: async () => adminClient().from('research_runs').select('qualification_profile_id').limit(1),
+  },
+])
 
-  const admin = adminClient()
-  const checks: Array<{ migration: string; probe: () => Promise<{ error: unknown }> }> = [
-    { migration: '0043 (companies)', probe: async () => admin.from('companies').select('id').limit(1) },
-    {
-      migration: '0045 (research_job_queue)',
-      probe: async () => admin.from('research_job_queue').select('id').limit(1),
-    },
-    {
-      migration: '0046 (qualification)',
-      probe: async () => admin.from('qualification_profiles').select('id').limit(1),
-    },
-    {
-      migration: '0047 (research_runs.qualification_profile_id)',
-      probe: async () => admin.from('research_runs').select('qualification_profile_id').limit(1),
-    },
-  ]
-
-  const results = await Promise.all(checks.map((check) => check.probe()))
-  return checks.filter((_, index) => results[index]!.error !== null).map((check) => check.migration)
-}
-
-const missing = await missingMigrations()
 const ready = missing.length === 0
 
 if (hasSupabaseEnv && !ready) {

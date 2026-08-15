@@ -46,6 +46,15 @@ export type PersonEntity = {
   jobTitle: string | null
   companyName: string | null
   companyDomain: string | null
+  /**
+   * The company this person works at.
+   *
+   * Carried so a person-level provider can attribute company facts it returns
+   * as a side effect — Prospeo answers "find this person's email" with the
+   * employer's domain, headcount, funding and tech stack attached. Without an
+   * id to file them against, that data would be discarded.
+   */
+  companyId: string | null
 }
 
 export type ResearchEntity = CompanyEntity | PersonEntity

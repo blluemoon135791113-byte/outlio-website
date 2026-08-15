@@ -17,18 +17,26 @@ import {
   saveResults,
 } from '@/lib/qualification/repository'
 import { scoreEntity } from '@/lib/qualification/score'
-import { adminClient, createAuthUser, deleteTestUser, hasSupabaseEnv, type TestAuthUser } from './helpers'
+import {
+  adminClient,
+  createAuthUser,
+  deleteTestUser,
+  hasSupabaseEnv,
+  missingMigrations,
+  type TestAuthUser,
+} from './helpers'
 
-async function schemaReady(): Promise<boolean> {
-  if (!hasSupabaseEnv) return false
-  const { error } = await adminClient().from('qualification_profiles').select('id').limit(1)
-  return error === null
-}
+const missing = await missingMigrations([
+  {
+    migration: '0046 (qualification)',
+    probe: async () => adminClient().from('qualification_profiles').select('id').limit(1),
+  },
+])
 
-const ready = await schemaReady()
+const ready = missing.length === 0
 
 if (hasSupabaseEnv && !ready) {
-  console.warn('[qualification] SKIPPED — migration 0046 is not applied to this project.')
+  console.warn(`[qualification] SKIPPED — not applied: ${missing.join(', ')}.`)
 }
 
 const describeIf = hasSupabaseEnv && ready ? describe : describe.skip

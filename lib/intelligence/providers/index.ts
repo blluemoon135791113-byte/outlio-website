@@ -31,6 +31,7 @@ import {
 import { domainDiscoveryProvider } from './domain-discovery'
 import { gdeltFundingProvider, tavilyFundingProvider } from './funding'
 import { pageSpeedTechProvider } from './pagespeed'
+import { prospeoEmailProvider, prospeoPhoneProvider } from './prospeo'
 import { gdeltWebResearchProvider, tavilyWebResearchProvider } from './web-research'
 import { wikidataProvider } from './wikidata'
 
@@ -43,6 +44,8 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(tavilyWebResearchProvider),
   eraseProviderType(gdeltWebResearchProvider),
   eraseProviderType(pageSpeedTechProvider),
+  eraseProviderType(prospeoEmailProvider),
+  eraseProviderType(prospeoPhoneProvider),
 ]
 
 export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
@@ -50,6 +53,8 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
   funding: ['tavily-funding', 'gdelt-funding'],
   web_research: ['tavily-web', 'gdelt-web'],
   tech_stack: ['pagespeed-tech'],
+  contact_email: ['prospeo-email'],
+  contact_phone: ['prospeo-phone'],
 }
 
 /**
@@ -98,6 +103,9 @@ function isConfigured(name: string): boolean {
       return Boolean(process.env.TAVILY_API_KEY)
     case 'pagespeed-tech':
       return Boolean(process.env.PAGESPEED_API_KEY)
+    case 'prospeo-email':
+    case 'prospeo-phone':
+      return Boolean(process.env.PROSPEO_API_KEY)
     // Wikidata and GDELT are open APIs and need no credential.
     default:
       return true

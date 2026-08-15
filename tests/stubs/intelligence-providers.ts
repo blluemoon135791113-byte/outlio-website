@@ -28,6 +28,11 @@ export type StubBehaviour =
   | { kind: 'wrong_entity' }
   /** Returns structurally invalid evidence — must be rejected, never stored. */
   | { kind: 'malformed' }
+  /**
+   * Answers the question AND returns unrequested facts about the person's
+   * employer — the Prospeo shape, where one paid call carries a windfall.
+   */
+  | { kind: 'windfall'; fields: readonly ResearchField[]; companyId: string }
 
 export type StubOptions = {
   name: string
@@ -90,6 +95,19 @@ export function stubProvider(options: StubOptions): IntelligenceProvider<unknown
           return options.behaviour.fields
             .filter((field) => wanted.has(field))
             .map((field) => build(field, task.entity.id))
+        }
+        case 'windfall': {
+          const wanted = new Set<string>(task.fields)
+          const answered = options.behaviour.fields
+            .filter((field) => wanted.has(field))
+            .map((field) => build(field, task.entity.id))
+
+          const extra: NormalizedEvidence = {
+            ...build('industry', options.behaviour.companyId),
+            entityType: 'company',
+          }
+
+          return [...answered, extra]
         }
         case 'wrong_entity':
           return task.fields.map((field) => build(field, OTHER_ENTITY))

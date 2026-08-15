@@ -4,6 +4,96 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Phase 8: Prospeo contact enrichment
+
+### Built
+
+| File | Purpose |
+|---|---|
+| `lib/intelligence/providers/prospeo.ts` | email + phone providers, and the company windfall |
+| `lib/intelligence/execute.ts` | splits provider output into requested vs bonus evidence |
+| `tests/unit/prospeo.test.ts` | 18 tests, masking guard first |
+
+### The two rules that cost money if broken
+
+**Masked is not a value.** Prospeo returns unrevealed contact details MASKED
+rather than absent — `eoghan.*****@intercom.com`, `+1 415-3**-****`, with
+`revealed: false`. Storing one as a contact detail would be fabricating lead
+data that looks exactly like a successful enrichment, and nobody would notice
+until someone tried to send to it. Every value is gated on `revealed === true`
+**and** the absence of a mask character: `revealed` is the contract, the mask is
+the observable proof, and a provider change must not slip one past the other.
+
+**Mobile costs 10× email.** `enrich_mobile` is set only when a plan explicitly
+asked for `mobile_phone`. Requesting it opportunistically would multiply every
+enrichment bill by ten for data nobody wanted.
+
+### Matching on this data
+
+Prospeo accepts a LinkedIn URL but **public profile URLs only — explicitly not
+member IDs or URNs**. Every LinkedIn URL in this product is the URN form built
+from Sales Navigator, so that path is unusable here. Matching goes through
+**name + company name**, which Prospeo accepts and which the captured data has
+on 94% of leads. The zero-domain problem is therefore not a blocker for Prospeo,
+and Prospeo *returns* the domain, which backfills everything downstream.
+
+### The windfall, and a change to the executor
+
+One paid contact call returns the employer's domain, industry, headcount,
+revenue band, funding events, technology list and open roles. Discarding that
+would mean paying again later for facts already in hand.
+
+`acceptableEvidence` now splits provider output in two:
+
+- **requested** — the task's fields, on the task's entity. Satisfies fields and
+  stops the waterfall.
+- **bonus** — facts about that person's employer. Stored, but **never counts as
+  answering the question**, so a windfall can never mask a field that genuinely
+  failed. A provider returning only bonus data is recorded as `not_found`.
+
+Evidence about an unrelated entity is still dropped outright.
+
+`PersonEntity` gained `companyId` so those facts have somewhere to be filed.
+
+### Provider quality note
+
+Prospeo's funding carries a real round date and stage with a Crunchbase link,
+which is better than the news-derived provider's announcement-date guess. Its
+technology list names actual SaaS tools, which Lighthouse stack packs cannot
+see. Both are still capped at MEDIUM — aggregated from a third party, not the
+company speaking.
+
+### 🐛 The skip guard was hiding thirteen tests
+
+`research-run` passed in isolation but skipped during full runs, reporting a
+green suite. The probe treated ANY error as "migration missing", so a transient
+hiccup under load silently disabled the runner, clarification and scoring tests
+— the exact "a skip is not a pass" failure the comments warn about.
+
+`missingMigrations` in `tests/integration/helpers.ts` now distinguishes
+PostgREST's genuine "table/column does not exist" from an unverifiable probe,
+and **throws** on the latter. An unreachable database fails the suite instead of
+quietly disabling it. Recovered 13 tests.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **598 passed**, 9 skipped |
+| `npx eslint lib/ tests/ components/` | ✅ zero problems |
+| `npm run build` | ✅ clean |
+| Masked email / phone rejected | ✅ |
+| Unknown funding stage not reported as a round | ✅ |
+| Windfall stored but not counted as an answer | ✅ |
+
+### 🟡 Pending — `PROSPEO_API_KEY`
+
+Not set. Until it is, both providers decline through `canHandle` and contact
+fields return `unknown` — no error, no cost.
+
+---
+
 ## 2026-08-15 — Qualification profiles can be built from the product
 
 Closes the dead end left by Phase 7: the "Score against" dropdown had no way to
