@@ -13,6 +13,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { linkLeadsToCompanies } from '@/lib/companies/repository'
+import { createProfile } from '@/lib/qualification/repository'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
 import {
   answerClarifications,
@@ -28,20 +29,42 @@ import {
   type TestAuthUser,
 } from './helpers'
 
-async function schemaReady(): Promise<boolean> {
-  if (!hasSupabaseEnv) return false
-  const [companies, queue] = await Promise.all([
-    adminClient().from('companies').select('id').limit(1),
-    adminClient().from('research_job_queue').select('id').limit(1),
-  ])
-  return companies.error === null && queue.error === null
+/**
+ * Reports WHICH migration is missing, not merely that something is.
+ *
+ * A guard that names the wrong migration is worse than no guard: it sends
+ * whoever reads it to re-apply something already applied.
+ */
+async function missingMigrations(): Promise<string[]> {
+  if (!hasSupabaseEnv) return ['(no Supabase environment)']
+
+  const admin = adminClient()
+  const checks: Array<{ migration: string; probe: () => Promise<{ error: unknown }> }> = [
+    { migration: '0043 (companies)', probe: async () => admin.from('companies').select('id').limit(1) },
+    {
+      migration: '0045 (research_job_queue)',
+      probe: async () => admin.from('research_job_queue').select('id').limit(1),
+    },
+    {
+      migration: '0046 (qualification)',
+      probe: async () => admin.from('qualification_profiles').select('id').limit(1),
+    },
+    {
+      migration: '0047 (research_runs.qualification_profile_id)',
+      probe: async () => admin.from('research_runs').select('qualification_profile_id').limit(1),
+    },
+  ]
+
+  const results = await Promise.all(checks.map((check) => check.probe()))
+  return checks.filter((_, index) => results[index]!.error !== null).map((check) => check.migration)
 }
 
-const ready = await schemaReady()
+const missing = await missingMigrations()
+const ready = missing.length === 0
 
 if (hasSupabaseEnv && !ready) {
   console.warn(
-    '[research-run] SKIPPED — migration 0045 is not applied to this project. ' +
+    `[research-run] SKIPPED — not applied to this project: ${missing.join(', ')}. ` +
       'The research runner is UNVERIFIED against the live schema.',
   )
 }
@@ -390,6 +413,196 @@ describeIf('clarification round trip (spec §7)', () => {
     try {
       const answered = await answerClarifications(intruder.id, created.runId, { w: '12 months' })
       expect(answered.ok).toBe(false)
+    } finally {
+      await deleteTestUser(intruder.id)
+    }
+  })
+})
+
+describeIf('qualification inside a run (spec §19)', () => {
+  let user: TestAuthUser
+  let leadIds: string[]
+  let companyId: string
+  let profileId: string
+
+  beforeAll(async () => {
+    user = await createAuthUser('research-qualify')
+    const jobId = await seedJob(user.id)
+    const admin = adminClient()
+
+    const { data, error } = await admin
+      .from('extracted_leads')
+      .insert([
+        {
+          user_id: user.id,
+          extraction_job_id: jobId,
+          full_name: 'Fabricated Qualify Person',
+          company_name: 'Qualify Test Systems',
+          company_url: 'https://www.linkedin.com/sales/company/940001',
+          dedupe_key: `qualify-${user.id}-0`,
+          dedupe_strategy: 'row_hash' as const,
+        },
+      ])
+      .select('id')
+
+    if (error || !data) throw new Error(`lead seed failed: ${error?.message ?? 'no rows'}`)
+    leadIds = data.map((row) => row.id)
+
+    await linkLeadsToCompanies(
+      user.id,
+      leadIds.map((id) => ({
+        id,
+        companyName: 'Qualify Test Systems',
+        companyWebsiteUrl: null,
+        companyLinkedInUrl: 'https://www.linkedin.com/sales/company/940001',
+      })),
+    )
+
+    const { data: company } = await admin
+      .from('companies')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('normalized_linkedin_url', 'linkedin.com/sales/company/940001')
+      .single()
+    companyId = company!.id
+
+    // Evidence the run will score against, already fresh so no provider runs.
+    const retrievedAt = new Date()
+    await admin.from('research_evidence').insert([
+      {
+        user_id: user.id,
+        entity_type: 'company',
+        entity_id: companyId,
+        field: 'employee_count',
+        value_json: { count: 34 },
+        source_provider: 'seeded',
+        source_url: 'https://example.com/evidence',
+        source_confidence: 'high',
+        confidence: 0.9,
+        retrieved_at: retrievedAt.toISOString(),
+        expires_at: expiresAtFor('employee_count', retrievedAt)?.toISOString() ?? null,
+      },
+      {
+        user_id: user.id,
+        entity_type: 'company',
+        entity_id: companyId,
+        field: 'industry',
+        value_json: { industry: 'software' },
+        source_provider: 'seeded',
+        source_url: 'https://example.com/evidence',
+        source_confidence: 'high',
+        confidence: 0.9,
+        retrieved_at: retrievedAt.toISOString(),
+        expires_at: expiresAtFor('industry', retrievedAt)?.toISOString() ?? null,
+      },
+    ])
+
+    const created = await createProfile(user.id, {
+      name: 'Runner ICP',
+      qualifyAt: 60,
+      criteria: [
+        { field: 'industry', operator: 'contains', value: 'software', weight: 20, kind: 'preferred' },
+        { field: 'employee_count', operator: 'between', value: [10, 50], weight: 15, kind: 'preferred' },
+      ],
+    })
+    if (!created.ok) throw new Error(`profile seed failed: ${created.reason}`)
+    profileId = created.profileId
+  })
+
+  afterAll(async () => {
+    if (user) await deleteTestUser(user.id)
+  })
+
+  it('scores the run and persists a qualified result', async () => {
+    const created = await createResearchRun(user.id, {
+      queryText: 'Which of these fit my ICP?',
+      scope: { type: 'lead_ids', leadIds },
+      plan: { requiredFields: ['industry', 'employee_count'] },
+      qualificationProfileId: profileId,
+    })
+    if (!created.ok) throw new Error('run was not created')
+
+    const outcome = await claimAndProcessResearchRun(created.runId, user.id, 'test-worker')
+
+    expect(outcome).not.toBeNull()
+    // Everything was already known, so nothing was bought.
+    expect(outcome!.externalCalls).toBe(0)
+    expect(outcome!.qualifiedCount).toBe(1)
+
+    const { data: results } = await adminClient()
+      .from('qualification_results')
+      .select('score, qualified, unknown_count, breakdown, profile_id')
+      .eq('research_run_id', created.runId)
+
+    expect(results).toHaveLength(1)
+    expect(results![0]!.score).toBe(100)
+    expect(results![0]!.qualified).toBe(true)
+    expect(results![0]!.profile_id).toBe(profileId)
+    // The breakdown is what makes "why qualified?" answerable.
+    expect((results![0]!.breakdown as unknown[]).length).toBe(2)
+
+    const { data: run } = await adminClient()
+      .from('research_runs')
+      .select('qualified_count, qualification_profile_id')
+      .eq('id', created.runId)
+      .single()
+
+    expect(run?.qualified_count).toBe(1)
+    expect(run?.qualification_profile_id).toBe(profileId)
+  })
+
+  it('runs research without scoring when no profile is attached', async () => {
+    const created = await createResearchRun(user.id, {
+      queryText: 'Just research, no scoring.',
+      scope: { type: 'lead_ids', leadIds },
+      plan: { requiredFields: ['industry'] },
+    })
+    if (!created.ok) throw new Error('run was not created')
+
+    const outcome = await claimAndProcessResearchRun(created.runId, user.id, 'test-worker')
+
+    // Null, not zero: nothing was scored, which is different from nothing
+    // qualifying.
+    expect(outcome!.qualifiedCount).toBeNull()
+
+    const { count } = await adminClient()
+      .from('qualification_results')
+      .select('id', { count: 'exact', head: true })
+      .eq('research_run_id', created.runId)
+
+    expect(count).toBe(0)
+  })
+
+  it("ignores another tenant's profile rather than scoring against it", async () => {
+    const intruder = await createAuthUser('research-qualify-intruder')
+    try {
+      const theirs = await createProfile(intruder.id, {
+        name: 'Someone else ICP',
+        criteria: [{ field: 'industry', operator: 'contains', value: 'construction', weight: 20, kind: 'required' }],
+      })
+      if (!theirs.ok) throw new Error('intruder profile not created')
+
+      const created = await createResearchRun(user.id, {
+        queryText: 'Cross-tenant profile.',
+        scope: { type: 'lead_ids', leadIds },
+        plan: { requiredFields: ['industry'] },
+        qualificationProfileId: theirs.profileId,
+      })
+
+      // Either the FK refuses the reference outright, or the run is created and
+      // getProfile — which scopes by user id — resolves nothing. Both are safe;
+      // what must never happen is scoring against another tenant's criteria.
+      if (created.ok) {
+        const outcome = await claimAndProcessResearchRun(created.runId, user.id, 'test-worker')
+        expect(outcome!.qualifiedCount).toBeNull()
+
+        const { count } = await adminClient()
+          .from('qualification_results')
+          .select('id', { count: 'exact', head: true })
+          .eq('research_run_id', created.runId)
+
+        expect(count).toBe(0)
+      }
     } finally {
       await deleteTestUser(intruder.id)
     }

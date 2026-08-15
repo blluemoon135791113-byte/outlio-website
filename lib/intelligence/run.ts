@@ -36,7 +36,10 @@ import {
   RESEARCH_FIELD_SPEC,
   type CompanyEntity,
   type PersonEntity,
+  type ResearchField,
 } from '@/lib/intelligence/types'
+import { getProfile, saveResults } from '@/lib/qualification/repository'
+import { scoreEntity, type QualificationResult } from '@/lib/qualification/score'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Json } from '@/types/database'
 
@@ -52,6 +55,8 @@ export type ResearchOutcome = {
   externalCalls: number
   evidenceWritten: number
   estimatedCostMicros: number
+  /** Entities that met the profile. Null when the run scored nothing. */
+  qualifiedCount: number | null
 }
 
 function concise(message: string): string {
@@ -83,7 +88,13 @@ export type CreateRunResult =
  */
 export async function createResearchRun(
   userId: string,
-  input: { queryText: string; scope: ResearchScope; plan: unknown },
+  input: {
+    queryText: string
+    scope: ResearchScope
+    plan: unknown
+    /** ICP to score against. NULL means research only, no scoring. */
+    qualificationProfileId?: string | null
+  },
 ): Promise<CreateRunResult> {
   const validation = validatePlan(input.plan)
   if (!validation.ok) return { ok: false, reason: validation.reason }
@@ -103,6 +114,7 @@ export async function createResearchRun(
       // because a Zod-inferred shape is structurally wider than `Json`.
       scope: input.scope as unknown as Json,
       plan: plan as unknown as Json,
+      qualification_profile_id: input.qualificationProfileId ?? null,
       clarifications: (needsClarification
         ? [{ askedAt: new Date().toISOString(), questions: plan.clarificationQuestions }]
         : []) as unknown as Json,
@@ -269,7 +281,7 @@ export async function processResearchRun(
 
   const { data: run } = await supabase
     .from('research_runs')
-    .select('id, user_id, scope, plan')
+    .select('id, user_id, scope, plan, qualification_profile_id')
     .eq('id', runId)
     .eq('user_id', userId)
     .maybeSingle()
@@ -348,6 +360,15 @@ export async function processResearchRun(
   await recordToolCalls(userId, runId, report.toolCalls)
   await persistDiscoveredDomains(userId, report.evidence)
 
+  // ---- 7. qualify (spec §19) ---------------------------------------------
+  const qualifiedCount = await qualifyRun(
+    userId,
+    runId,
+    run.qualification_profile_id,
+    companyEntities.map((entity) => ({ id: entity.id, type: 'company' as const })),
+    plan.requiredFields,
+  )
+
   /*
    * A run is `completed` only when nothing was left unanswered. Anything else
    * is `partially_complete` — an honest status a user can act on, rather than a
@@ -366,6 +387,7 @@ export async function processResearchRun(
       cache_hit_count: routing.cacheHits,
       estimated_cost_micros: report.estimatedCostMicros,
       actual_cost_micros: report.estimatedCostMicros,
+      qualified_count: qualifiedCount ?? 0,
       duration_ms: Date.now() - startedAt,
       completed_at: new Date().toISOString(),
     })
@@ -385,6 +407,58 @@ export async function processResearchRun(
     externalCalls: report.externalCallCount,
     evidenceWritten: written.written,
     estimatedCostMicros: report.estimatedCostMicros,
+    qualifiedCount,
+  }
+}
+
+/**
+ * Scores the run's entities against its profile, if it has one.
+ *
+ * ⚠️ EVIDENCE IS RE-READ HERE, AFTER the run's own findings were written.
+ * Scoring against the pre-research snapshot would ignore everything this run
+ * just paid for — every freshly researched company would score as `unknown`.
+ *
+ * Non-fatal: the evidence is already committed and is the durable product.
+ * A scoring failure costs a re-score, not the run.
+ */
+async function qualifyRun(
+  userId: string,
+  runId: string,
+  profileId: string | null,
+  entities: ReadonlyArray<{ id: string; type: 'company' }>,
+  researchedFields: readonly ResearchField[],
+): Promise<number | null> {
+  if (!profileId || entities.length === 0) return null
+
+  try {
+    const profile = await getProfile(userId, profileId)
+    // Scoped by user id, so another tenant's profile resolves to null rather
+    // than scoring this run against criteria its owner never configured.
+    if (!profile || profile.criteria.length === 0) return null
+
+    // The union of what the plan researched and what the profile asks about:
+    // a profile may score on facts a previous run already established.
+    const fields = [
+      ...new Set<ResearchField>([
+        ...researchedFields,
+        ...profile.criteria.map((criterion) => criterion.field),
+      ]),
+    ]
+
+    const knowledge = await readEvidence(userId, [
+      { entityType: 'company', entityIds: entities.map((entity) => entity.id), fields },
+    ])
+
+    const results: QualificationResult[] = entities.map((entity) =>
+      scoreEntity(profile, entity, knowledge, { qualifyAtOrAbove: profile.qualifyAt }),
+    )
+
+    await saveResults(userId, runId, profileId, results)
+
+    return results.filter((result) => result.qualified).length
+  } catch {
+    // Scoring is recomputable from stored evidence; the evidence is not.
+    return null
   }
 }
 
@@ -456,6 +530,7 @@ function emptyOutcome(runId: string, status: ResearchOutcome['status']): Researc
     externalCalls: 0,
     evidenceWritten: 0,
     estimatedCostMicros: 0,
+    qualifiedCount: null,
   }
 }
 

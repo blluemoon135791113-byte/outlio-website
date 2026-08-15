@@ -351,6 +351,8 @@ export type ResearchRunRow = {
   estimated_cost_micros: number
   actual_cost_micros: number
   duration_ms: number | null
+  /** The ICP this run was scored against. NULL means research only. */
+  qualification_profile_id: string | null
   error_code: string | null
   error_message: string | null
   started_at: string | null

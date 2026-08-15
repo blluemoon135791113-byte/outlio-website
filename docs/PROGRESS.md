@@ -4,6 +4,77 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Qualification wired into the runner
+
+A run can now research AND score. `createResearchRun` takes an optional
+`qualificationProfileId`; after evidence is written, the runner scores every
+company and persists `qualification_results` with the per-criterion breakdown.
+
+### Built
+
+| File | Purpose |
+|---|---|
+| `supabase/migrations/0047_run_qualification_profile.sql` | `research_runs.qualification_profile_id` |
+| `lib/qualification/repository.ts` | profile + rule persistence, result writes |
+| `lib/intelligence/run.ts` | `qualifyRun` step after evidence is persisted |
+| `tests/integration/qualification.test.ts` | 6 live tests |
+| `tests/integration/research-run.test.ts` | +3 end-to-end scoring tests |
+
+### Decisions
+
+**Evidence is re-read after the run's own findings are written.** Scoring
+against the pre-research snapshot would ignore everything the run just paid
+for — every freshly researched company would score as `unknown`.
+
+**Scoring failure is non-fatal.** Evidence is the durable product and is already
+committed; a score is recomputable from it. A scoring error costs a re-score,
+not the run.
+
+**`qualifiedCount` is `null`, not `0`, when no profile was attached.** Nothing
+was scored, which is a different statement from nothing qualifying.
+
+**A profile that fails to save is rolled back entirely.** A profile scoring on
+only the criteria that happened to be accepted would silently mean something
+different from what the user configured — worse than no profile.
+
+**0047 uses a single-column FK.** A composite `(profile_id, user_id)` reference
+would be the stricter tenant guard, but `ON DELETE SET NULL` nulls *every*
+referencing column including `user_id`, which is `NOT NULL`, so the delete would
+fail. The column-scoped form is Postgres 15+ only and this migration is pasted
+by hand. Cross-tenant safety comes from `getProfile(userId, …)` instead — the
+same rule every service-role query here follows. Verified on Postgres 16:
+deleting a profile nulls the reference and the run survives.
+
+### 🔧 The skip guard was lying
+
+`tests/integration/research-run.test.ts` reported *"migration 0045 is not
+applied"* whenever any probe failed — while 0045 was in fact applied and 0047
+was the gap. A guard that names the wrong migration is worse than none: it sends
+whoever reads it to re-apply something already deployed. It now probes each
+migration separately and names exactly what is missing.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npx eslint lib/ tests/` | ✅ zero problems |
+| Unit tests | ✅ **503 passed** |
+| Qualification persistence, live | ✅ 6 passed |
+| 0047 applied twice to Postgres 16 | ✅ clean, idempotent |
+| Deleting a profile nulls the ref, run survives | ✅ |
+| Protected-characteristic criterion, **live project** | ✅ rejected by CHECK |
+| Cross-tenant profile read / delete | ✅ refused |
+
+### 🟡 Pending — apply migration 0047
+
+Until it is applied the entire `research-run` suite skips: **13 tests**, covering
+the runner, the clarification round trip, and scoring. The guard now names 0047
+explicitly. Everything in it is verified on local Postgres 16, and 0043/0045/0046
+are confirmed live.
+
+---
+
 ## 2026-08-15 — Phases 5 and 6: clarification round trip and qualification
 
 ### Built
