@@ -4,6 +4,85 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Phase 7: the intelligence UI
+
+The pipeline is reachable from the product for the first time.
+
+### Built
+
+| File | Purpose |
+|---|---|
+| `lib/intelligence/results.ts` | assembles a run into the requested columns; pre-flight scope estimate |
+| `app/api/intelligence/query/route.ts` | plan → create run → hand to the queue via `after()` |
+| `app/api/intelligence/clarify/route.ts` | answer clarification questions and release the run |
+| `app/api/intelligence/runs/[id]/route.ts` | poll status and results; reaps stale runs first |
+| `components/intelligence/IntelligenceConsole.tsx` | search bar, scope selector, clarification prompt, dynamic table |
+| `app/(product)/dashboard/intelligence/page.tsx` | the screen, with designed empty states |
+
+Nav gained an **Intelligence** entry. `ACTION_LIMITS.research` limits the two
+write routes — research spends money, so it is capped harder than a read.
+
+### Decisions
+
+**Only the requested columns.** The table is driven by the plan's
+`requiredFields`. A funding question returns founder, company, amount and date —
+not a 40-column dump. Giant lead profiles are explicitly not the product (§2).
+
+**No ambiguous blanks.** Every researched cell renders as a value with a
+`source` link, or as *Unknown* in italics. "Does not use HubSpot" and "we could
+not find out" must not look identical (§49).
+
+**The estimate is shown before anything runs**, and the figure that matters is
+COMPANIES, because that is what gets researched and therefore what it costs
+(§31). `all_leads` is an explicit choice, never a default.
+
+**Polling, not waiting.** The route returns a run id immediately and the work
+happens in `after()`. Research over hundreds of companies takes minutes and must
+survive the tab closing; the queue row already exists, so a cut-short function
+is recovered by the reaper.
+
+**The status route is deliberately not rate-limited** like the write routes —
+it is what the open screen polls, and throttling it would make a long job look
+broken.
+
+### 🐛 Double-nested error envelope
+
+All three routes wrapped `toClientError(...)` in another `{ error: … }`, so
+clients received `{"error":{"status":401,"body":{"error":{…}}}}`. Caught by
+curling the routes unauthenticated rather than by a type — the shapes are both
+valid JSON. `toClientError` already returns the complete envelope.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **565 passed**, 9 skipped |
+| `npx eslint` on all new code | ✅ zero problems |
+| `npm run build` | ✅ all four routes compiled |
+| `/dashboard/intelligence` signed out | ✅ 307 → `/sign-in?next=…` |
+| All three API routes unauthenticated | ✅ `401 ERR_UNAUTHENTICATED`, single envelope |
+| Sign-in page renders, zero console errors | ✅ |
+
+### ⚠️ Not visually verified while signed in
+
+The console itself — search bar, scope selector, clarification prompt, results
+table — has **not been seen rendered with a real session**, because signing in
+requires a password and MFA. Compilation, route guards, and the signed-out path
+are verified; the authenticated layout is not.
+
+### Still to build
+
+- Phase 8: contact enrichment. **No provider is configured**, so an "enrich
+  contacts" control would return `unknown` for everyone. Deliberately absent
+  from the UI rather than present and broken.
+- Phases 9–10: cost analytics, circuit breakers, retention jobs.
+- A UI for creating qualification profiles — they can be created through
+  `lib/qualification/repository.ts` but not yet from the product.
+- Website intelligence beyond PageSpeed; GitHub, GLEIF, Hacker News, YC.
+
+---
+
 ## 2026-08-15 — Qualification wired into the runner
 
 A run can now research AND score. `createResearchRun` takes an optional

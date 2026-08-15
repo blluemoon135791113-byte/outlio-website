@@ -11,5 +11,8 @@ export const ACTION_LIMITS = {
   // Each attempt sends mail to an address the requester chose. Keep it tight so
   // the change-email flow cannot be used to send unsolicited mail.
   emailChange: { bucket: 'account:email-change', maxAttempts: 5, windowSeconds: 60 * 60, blockSeconds: 60 * 60 },
+  // Research spends money on external providers, so it is limited more tightly
+  // than a read. The planner call alone costs an LLM request per attempt.
+  research: { bucket: 'action:research', maxAttempts: 20, windowSeconds: 10 * 60, blockSeconds: 15 * 60 },
   subscriptionChange: { bucket: 'account:subscription', maxAttempts: 10, windowSeconds: 60 * 60, blockSeconds: 30 * 60 },
 } as const satisfies Record<string, RateLimitRule>

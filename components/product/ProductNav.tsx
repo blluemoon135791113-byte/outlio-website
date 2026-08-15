@@ -10,6 +10,7 @@ type IconName =
   | 'extract'
   | 'gift'
   | 'history'
+  | 'intelligence'
   | 'lock'
   | 'settings'
   | 'website'
@@ -23,6 +24,7 @@ const PRODUCT_LINKS: Array<{
   { href: '/dashboard', label: 'Overview', exact: true, icon: 'dashboard' },
   { href: '/dashboard/extract/new', label: 'New extraction', icon: 'extract' },
   { href: '/dashboard/jobs', label: 'Extractions', icon: 'history' },
+  { href: '/dashboard/intelligence', label: 'Intelligence', icon: 'intelligence' },
 ]
 
 const ACCESS_LINK = {
@@ -104,6 +106,14 @@ export function ProductIcon({
         <path d="M12 3v12" />
         <path d="m7 10 5 5 5-5" />
         <path d="M5 21h14" />
+      </>
+    ),
+    intelligence: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+        <path d="M11 8v6" />
+        <path d="M8 11h6" />
       </>
     ),
     history: (
