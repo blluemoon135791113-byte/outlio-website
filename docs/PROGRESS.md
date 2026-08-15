@@ -4,6 +4,84 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Production company-domain backfill
+
+### Result
+
+The opt-in production backfill ran through Outlio's normal research pipeline,
+tenant by tenant. It did not bypass evidence, usage, or cost tracking.
+
+| Metric | Result |
+|---|---:|
+| Companies evaluated | 2,017 |
+| Domains discovered and attached | **549 (27.2%)** |
+| Companies left unknown | 1,468 |
+| `company_domain` evidence rows | **549** |
+| Provider attempts | 3,987 |
+| Estimated provider cost | **$1.97** |
+
+Every populated `companies.normalized_domain` has a matching provenance row.
+No failed lookup became a false value, and no contact-enrichment provider ran.
+
+Provider outcomes explain the lower-than-benchmark aggregate coverage:
+
+| Provider outcome | Calls |
+|---|---:|
+| Wikidata success | 47 |
+| Wikidata not found | 1,970 |
+| Tavily success | 502 |
+| Tavily not found | 399 |
+| Tavily unavailable | 1,049 |
+| Tavily timeout | 20 |
+
+On Tavily calls that returned a real answer or a real no-match, discovery yield
+was 502 / 901 (**55.7%**), consistent with the 100-company benchmark. The
+remaining 1,069 failed Tavily attempts are preserved as provider unavailable or
+timeout and remain `unknown`; they were not silently treated as negative facts.
+The $1.97 figure is the cost ledger's estimate, not a claim about final provider
+billing for failed calls.
+
+### Built
+
+`tests/integration/domain-backfill-live.test.ts` is an explicit, credit-spending
+maintenance command. It:
+
+- processes tenants sequentially so provider concurrency does not multiply;
+- creates ordinary `research_runs`, tool-call telemetry, evidence and costs;
+- resumes the same pending run after a transient infrastructure failure;
+- retries a failed tenant only when it made zero external calls; and
+- skips terminal runs so a second invocation does not repurchase known misses.
+
+It is gated by `RUN_DOMAIN_BACKFILL=1` and skipped by normal `npm test` runs.
+
+### Fixed — large PostgREST `.in(...)` reads
+
+The first large tenant exposed a scale bug before making any paid call.
+`getCompaniesForLeads` put 500 UUIDs into a PostgREST GET query string; the URL
+could exceed the proxy limit and surfaced as `TypeError: fetch failed`.
+
+Read batches now use 100 UUIDs. Write/RPC batches remain at 500 because those
+IDs are carried in request bodies. The zero-call failed run was then safely
+replaced, and both large tenants completed.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| focused ESLint | ✅ zero problems |
+| `npm test -- --run` | ✅ **614 passed**, 11 skipped |
+| live backfill | ✅ 1 passed in 29m 7s |
+
+### Next operational decision
+
+Do not blindly rerun all 1,468 unknown companies: 399 already have a genuine
+Tavily no-match. If provider availability is restored, a follow-up command
+should target only the 1,069 unavailable/timeout entities, preserving the
+minimum-call rule.
+
+---
+
 ## 2026-08-15 — Provider benchmark, and a hard finding about domain coverage
 
 ### Built

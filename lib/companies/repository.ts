@@ -26,6 +26,15 @@ import { createAdminClient } from '@/lib/supabase/admin'
  */
 const LINK_BATCH_SIZE = 500
 
+/**
+ * UUIDs used by PostgREST `.in(...)` are encoded into the GET query string.
+ * Five hundred UUIDs can exceed a network/proxy URL limit on the way to
+ * Supabase, which only appeared once a tenant crossed a few hundred leads.
+ * Writes go in a POST body and safely keep the larger batch above; reads need
+ * this deliberately smaller ceiling.
+ */
+const QUERY_BATCH_SIZE = 100
+
 export type LinkableLead = CompanyIdentityInput & { id: string }
 
 export type LinkResult = {
@@ -134,13 +143,13 @@ export async function getCompaniesForLeads(
   const companyIdByLeadId = new Map<string, string>()
   const companyIds = new Set<string>()
 
-  for (let i = 0; i < leadIds.length; i += LINK_BATCH_SIZE) {
+  for (let i = 0; i < leadIds.length; i += QUERY_BATCH_SIZE) {
     const { data, error } = await supabase
       .from('extracted_leads')
       .select('id, company_id')
       // Service role bypasses RLS — scoping by user_id is mandatory.
       .eq('user_id', userId)
-      .in('id', leadIds.slice(i, i + LINK_BATCH_SIZE))
+      .in('id', leadIds.slice(i, i + QUERY_BATCH_SIZE))
 
     if (error) throw new Error(`getCompaniesForLeads failed: ${concise(error.message)}`)
 
@@ -154,12 +163,12 @@ export async function getCompaniesForLeads(
   const ids = [...companyIds]
   const companies: CompanyRecord[] = []
 
-  for (let i = 0; i < ids.length; i += LINK_BATCH_SIZE) {
+  for (let i = 0; i < ids.length; i += QUERY_BATCH_SIZE) {
     const { data, error } = await supabase
       .from('companies')
       .select('id, name, normalized_domain, normalized_linkedin_url, normalized_name')
       .eq('user_id', userId)
-      .in('id', ids.slice(i, i + LINK_BATCH_SIZE))
+      .in('id', ids.slice(i, i + QUERY_BATCH_SIZE))
 
     if (error) throw new Error(`getCompaniesForLeads failed: ${concise(error.message)}`)
 
