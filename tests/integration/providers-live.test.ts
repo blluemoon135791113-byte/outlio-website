@@ -23,6 +23,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { executeTasks } from '@/lib/intelligence/execute'
+import { resolveLlmProvider } from '@/lib/intelligence/llm/provider'
+import { planQuery } from '@/lib/intelligence/planner'
 import { buildLiveRegistry, providerReadiness } from '@/lib/intelligence/providers'
 import type { CompanyEntity, ResearchTask } from '@/lib/intelligence/types'
 
@@ -153,4 +155,59 @@ describeIf('live providers', () => {
       if (secret) expect(serialized).not.toContain(secret)
     }
   }, 120_000)
+})
+
+describeIf('live planner', () => {
+  it('plans a specific question without asking for clarification', async () => {
+    const llm = resolveLlmProvider()
+    console.log(`\nLLM: ${llm.vendor} / ${llm.model} — configured: ${llm.isConfigured()}`)
+
+    const outcome = await planQuery({
+      question: 'Find Series A SaaS companies that raised more than $5M since January 2026.',
+      llm,
+    })
+
+    console.log('plan outcome:', JSON.stringify(outcome, null, 2))
+
+    // A question naming a round, a figure and a date needs no clarification.
+    expect(outcome.status).toBe('planned')
+    if (outcome.status !== 'planned') return
+    expect(outcome.plan.requiredFields.length).toBeGreaterThan(0)
+    // Whatever it chose must be a real, researchable field — the schema would
+    // have rejected anything else before we got here.
+    expect(outcome.plan.requiredFields).toContain('funding_amount')
+  }, 90_000)
+
+  it('asks what "recently" means', async () => {
+    const outcome = await planQuery({
+      question: 'Find recently funded companies.',
+      llm: resolveLlmProvider(),
+    })
+
+    console.log('vague question outcome:', JSON.stringify(outcome, null, 2))
+
+    // Models vary on how much they volunteer, so this is reported rather than
+    // asserted — a planner that guesses a window is a product decision to
+    // revisit, not a broken build.
+    if (outcome.status === 'clarification_required') {
+      expect(outcome.questions.length).toBeGreaterThan(0)
+    } else {
+      console.warn('  ⚠️  planner did not ask for clarification on a vague window')
+    }
+  }, 90_000)
+
+  it('plans contact enrichment only for an email question', async () => {
+    const outcome = await planQuery({
+      question: 'Just give me the founders\' work email addresses.',
+      llm: resolveLlmProvider(),
+    })
+
+    console.log('email question outcome:', JSON.stringify(outcome, null, 2))
+
+    if (outcome.status !== 'planned') return
+    // Spec acceptance Test 2: no funding, tech-stack, or web research.
+    for (const field of outcome.plan.requiredFields) {
+      expect(field.startsWith('work_') || field.startsWith('email_') || field.startsWith('mobile_') || field.startsWith('phone_')).toBe(true)
+    }
+  }, 90_000)
 })

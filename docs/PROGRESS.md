@@ -4,6 +4,89 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-15 — Phase 4: the LLM query planner
+
+Natural language → validated `ResearchPlan`. Phases 3 and 4 are now joined:
+a question can be planned, and a plan can be executed.
+
+### Built
+
+| File | Purpose |
+|---|---|
+| `lib/intelligence/llm/provider.ts` | vendor-neutral `LLMProvider` + Gemini (default) and Groq adapters |
+| `lib/intelligence/planner.ts` | question → plan, the field catalog prompt, protected-characteristic refusal, clarification folding |
+| `tests/unit/planner.test.ts` | 19 tests, all against a stub model |
+
+**No new npm dependencies.** Both adapters go over the existing
+`lib/intelligence/http.ts`, so timeouts, bounded backoff, host pacing and error
+redaction apply to model calls exactly as they do to data providers.
+
+### Decisions
+
+**The model plans; it never answers.** It chooses which FIELDS a question needs.
+It never supplies a funding figure, headcount, technology, or date — those come
+from a provider with a source URL or stay `unknown` (spec §5, §16).
+
+**Its output is a proposal, not an instruction.** `researchPlanSchema` decides
+whether anything runs. A hallucinated field name is rejected and the model gets
+one retry with the shape error fed back — never its own previous output, which
+would let a bad completion steer the correction.
+
+**The model never sees lead records.** It gets the question and the catalog of
+researchable fields. A test asserts the prompt contains no `@` and no
+`linkedin.com`, so prospect data cannot drift into a vendor payload.
+
+**Gemini uses constrained decoding** (`responseMimeType` + `responseSchema`), so
+it cannot return prose at all. Groq's OpenAI-compatible API guarantees syntactic
+JSON but not shape, so the schema is repeated in the prompt — and in both cases
+Zod is still the thing that decides.
+
+**The API key travels in a header, never a query string.** A URL carrying a key
+ends up in logs and error messages.
+
+**Protected characteristics are refused before the model is called** (spec §44).
+Whether to filter people by religion or ethnicity is not a judgement to delegate
+to a model; the question is rejected with a plain explanation of what Outlio
+does qualify on.
+
+**A clarification request with no questions is treated as executable.** Otherwise
+a run would wait forever on a question nobody can answer.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **532 passed**, 9 skipped |
+| `npx eslint lib/intelligence tests/` | ✅ zero problems |
+| Spec acceptance Test 2 (emails only) | ✅ |
+| Spec acceptance Test 3 (asks what "recently" means) | ✅ |
+| Spec acceptance Test 4 (specific question runs straight through) | ✅ |
+| Hallucinated field rejected, corrected retry accepted | ✅ |
+| Prose or unreachable model → `failed`, nothing charged | ✅ |
+
+Live planner checks were added to the opt-in suite:
+
+```
+RUN_LIVE_PROVIDERS=1 npx vitest run tests/integration/providers-live.test.ts
+```
+
+### ✅ Migration 0045 applied live — 2026-08-15
+
+All six runner tests now pass against `ptewhpmxzenbmxlizxhu`, including
+single-claimant enforcement and cross-tenant refusal. Full suite: **532 passed**.
+
+### Still to build
+
+- **Phase 5**: persisting clarification answers on a run and resuming it.
+  `applyClarifications` exists; the round trip through `research_runs` does not.
+- **Phase 6**: qualification profiles, rules, and deterministic ICP scoring.
+- **Phase 7**: the search bar and results table. **There is still no UI** —
+  `planQuery` and `createResearchRun` are library calls.
+- Website intelligence beyond PageSpeed; GitHub, GLEIF, Hacker News, YC.
+
+---
+
 ## 2026-08-15 — Phase 3 IN PROGRESS: search, funding, and domain discovery
 
 **Not finished.** Built and tested so far; the rest is listed at the end.
