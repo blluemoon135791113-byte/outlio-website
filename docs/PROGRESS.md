@@ -4,6 +4,78 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-16 — Free DNS technology detection
+
+**The best value-per-cost provider in the system.** No API, no key, no account,
+no meaningful rate limit — Node's built-in resolver, ~50ms per company. It
+answers the question spec §54 leads with, *"uses HubSpot and Intercom but not
+Salesforce"*, better than the paid alternative.
+
+Two records do the work:
+
+- **MX** — who runs their mail: Google Workspace, Microsoft 365, Zoho, Proofpoint
+- **SPF** — every service authorised to send mail AS them. A company cannot send
+  through HubSpot, Mailchimp, Klaviyo or Salesforce without naming it there, so
+  the record is a **published inventory of their sales and marketing stack**
+
+Source confidence is HIGH and earned: these are published by the company in its
+own DNS zone. Not a third party's opinion, not a scraped inference — the company
+telling the internet which services act on its behalf. Spec §17's definition of
+an official company source.
+
+It runs **ahead of PageSpeed** in the `tech_stack` waterfall: free, faster, and
+it sees the CRM and marketing tools an ICP question actually asks about, where
+Lighthouse stack packs only name the CMS and framework.
+
+### Measured on 40 real customer domains
+
+| | |
+|---|---|
+| Stack detected | **17** |
+| Genuinely no records | 6 |
+| Lookup failed (reported as unknown) | 17 |
+| **Hit rate on successful lookups** | **74%** |
+
+Found: Google Workspace ×11, Microsoft 365 ×4, Zoho ×2, HubSpot ×1.
+
+### 🔴 The fourth "failure looks like empty" bug — this one mine
+
+The first version returned `[]` for both *"no such record"* and *"the lookup
+failed"*. A live probe therefore reported `soprasteria.com` and `mfs.com` as
+having no email stack. They run **Microsoft 365** and **Proofpoint** — both
+already fingerprinted in this very file. The measured hit rate looked like 50%;
+it is actually 74%.
+
+Only `ENOTFOUND` / `ENODATA` / `NXDOMAIN` now count as absence. Everything else —
+timeout, SERVFAIL, refused — throws, so the executor records `error` and the
+field stays `unknown`.
+
+**Four times in this build** a failure and an empty result have been rendered
+identically: the backfill guard that named the wrong migration, the schema probe
+that silently skipped thirteen tests, the benchmark that reported an exhausted
+Tavily plan as "found nothing", and now this. It is the single most recurrent
+defect shape here — worth checking first in anything new.
+
+### What it cannot see
+
+SPF only covers services that send email. A company using Salesforce purely as
+an internal CRM may never authorise it to send, so absence remains `unknown`
+rather than "not detected".
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ zero errors |
+| `npm test` | ✅ **677 passed**, 11 skipped |
+| `npx eslint lib/ tests/` | ✅ zero problems |
+| `npm run build` | ✅ clean |
+| Live: `hubjoy.co` | ✅ Google Workspace, HubSpot |
+| Live: `soprasteria.com` | ✅ Microsoft 365 |
+| Live: `mfs.com` | ✅ Proofpoint |
+
+---
+
 ## 2026-08-16 — USAspending.gov federal award provider
 
 Free, official, no key. Spec §17 puts a government filing at HIGH confidence,

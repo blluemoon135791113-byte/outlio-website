@@ -30,6 +30,7 @@ import {
 } from '@/lib/intelligence/types'
 import { apolloEmailProvider } from './apollo'
 import { companiesHouseProvider } from './companies-house'
+import { dnsTechProvider } from './dns-tech'
 import { domainDiscoveryProvider } from './domain-discovery'
 import { gdeltFundingProvider, tavilyFundingProvider } from './funding'
 import { pageSpeedTechProvider } from './pagespeed'
@@ -50,6 +51,7 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(gdeltFundingProvider),
   eraseProviderType(tavilyWebResearchProvider),
   eraseProviderType(gdeltWebResearchProvider),
+  eraseProviderType(dnsTechProvider),
   eraseProviderType(pageSpeedTechProvider),
   eraseProviderType(prospeoEmailProvider),
   eraseProviderType(prospeoPhoneProvider),
@@ -72,7 +74,12 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
   ],
   funding: ['tavily-funding', 'gdelt-funding'],
   web_research: ['tavily-web', 'gdelt-web'],
-  tech_stack: ['pagespeed-tech'],
+  /*
+   * DNS first: it is free, ~50ms, and sees the marketing and sales stack that
+   * matters to an ICP question. PageSpeed is slower, costs a rendered page, and
+   * only names the CMS and framework.
+   */
+  tech_stack: ['dns-tech', 'pagespeed-tech'],
   /*
    * The email waterfall. Prospeo first only as a starting assumption — spec §52
    * says the order must come from measured cost per INCREMENTAL valid result,
@@ -129,6 +136,9 @@ function isConfigured(name: string): boolean {
       return Boolean(process.env.TAVILY_API_KEY)
     case 'pagespeed-tech':
       return Boolean(process.env.PAGESPEED_API_KEY)
+    // No key exists for DNS — it uses the system resolver.
+    case 'dns-tech':
+      return true
     case 'prospeo-email':
     case 'prospeo-phone':
       return Boolean(process.env.PROSPEO_API_KEY)
