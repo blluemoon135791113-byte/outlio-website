@@ -4,6 +4,70 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-16 — 🔴 Admins were locked out of the extension pairing screen
+
+`/extension/connect` told an admin **"Active subscription required"** and hid
+the button, while the server action behind it would have issued them a code.
+
+### Root cause — a surface recomputing the decision
+
+```ts
+// app/(product)/extension/connect/page.tsx — WRONG
+const eligible = decideLimits(ctx.plan?.limits ?? null, ctx.usage).canUseScraper
+  && ctx.canUseScraper
+```
+
+`decideLimits` is the plan/usage **half** of the decision. Its own docstring
+says it is "only meaningful after `precheckAccess` returns `NEEDS_LIMITS`", and
+it denies with `payment_required` whenever limits are null.
+
+An admin never reaches that point. `getAccessContext` short-circuits on the
+pre-check — that is the admin bypass — and **never fetches a plan**, so
+`ctx.plan` and `ctx.usage` are both null. The half-decision therefore denied
+precisely the accounts the full decision allows.
+
+Non-admins were unaffected: they go down the `NEEDS_LIMITS` path, so the plan is
+populated and the second call merely repeats the first. That is why this
+survived — it was a no-op for everyone except the one role it broke.
+
+The fix is to read the decision instead of re-deriving it:
+
+```ts
+const eligible = ctx.canUseScraper
+```
+
+`actions.ts` was already correct — it calls `assertAccess()`. The authorization
+boundary held; only the UI lied, which is the right way round, but it still
+blocked the flow completely.
+
+### Why it was possible
+
+CLAUDE.md: *"All access decisions go through `lib/auth/access.ts`. Nothing else
+decides access."* This was the only violation in the codebase, and it took the
+form the rule anticipates — a surface deciding for itself and drifting from the
+real decision.
+
+Two guards added to `tests/unit/access-decision.test.ts`:
+
+1. An admin with **no plan and no usage** is allowed; the same admin past every
+   limit is allowed; `decideLimits(null, null)` denies — the trap asserted
+   directly. And an admin is **still** suspended and **still** expired: admin
+   bypasses limits, never the pre-checks.
+2. A boundary test failing if anything under `app/` or `components/` imports
+   from `lib/auth/decide` at all. It matches the **import**, not the words, so a
+   comment explaining the bug does not trip it.
+
+### Verification
+
+- Typecheck clean; build passes; eslint reports 0 errors (4 pre-existing
+  warnings, all in the landing page, which is read-only under rule 5).
+- 33 tests in `access-decision.test.ts`, up from 27.
+- ⚠️ **Not verified in a browser.** The pairing screen needs a signed-in admin
+  session, and signing in is not something I do. Confirmed by test and by
+  reading the decision path, not by screenshot.
+
+---
+
 ## 2026-08-16 — `person_social_profiles`, and a constraint that had drifted
 
 Prompted by a real query — **"Give me socials of individuals"** — which the

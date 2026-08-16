@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { decideAccess, withinLimit, type DecisionInput } from '@/lib/auth/decide'
+import { decideAccess, decideLimits, withinLimit, type DecisionInput } from '@/lib/auth/decide'
 import type { PlanLimits, UserRole } from '@/types/database'
 
 const LIMITS: PlanLimits = {
@@ -192,5 +192,85 @@ describe('withinLimit', () => {
   })
   it('handles a zero limit', () => {
     expect(withinLimit(0, 0)).toBe(false)
+  })
+})
+
+/**
+ * The half-decision must never be used as the decision.
+ *
+ * `decideLimits` answers "is this account within its plan's limits" and denies
+ * with `payment_required` whenever limits are null. It is only meaningful after
+ * `precheckAccess` returns `NEEDS_LIMITS`.
+ *
+ * An ADMIN never reaches that point: `getAccessContext` short-circuits on the
+ * pre-check and never fetches a plan, so `ctx.plan` and `ctx.usage` are both
+ * null. `app/(product)/extension/connect/page.tsx` called `decideLimits`
+ * directly and AND-ed it with the real decision, which denied every admin —
+ * the pairing screen told them they needed a subscription while the server
+ * action behind it would have issued them a code.
+ */
+describe('an admin is not subject to the plan half of the decision', () => {
+  const admin = {
+    role: 'admin' as const,
+    access_expires_at: null,
+    suspended_at: null,
+    deleted_at: null,
+  }
+
+  it('allows an admin who has no plan and no usage at all', () => {
+    const d = decideAccess(input({ profile: admin, limits: null, usage: null }))
+    expect(d).toEqual({ canUseScraper: true, reason: 'ok' })
+  })
+
+  it('allows an admin who is past every limit', () => {
+    const d = decideAccess(
+      input({
+        profile: admin,
+        usage: { extractionsToday: 1e6, extractionsThisMonth: 1e6, recordsThisMonth: 1e6 },
+      }),
+    )
+    expect(d.canUseScraper).toBe(true)
+  })
+
+  it('DENIES the same admin via the plan half alone — which is why it must not be called', () => {
+    // The trap, asserted directly: this is what the connect page was doing.
+    expect(decideLimits(null, null)).toEqual({
+      canUseScraper: false,
+      reason: 'payment_required',
+    })
+  })
+
+  it('still suspends an admin, and still expires one', () => {
+    // Admin bypasses limits. It has never bypassed suspension or expiry.
+    expect(
+      decideAccess(input({ profile: { ...admin, suspended_at: '2020-01-01T00:00:00Z' } })).reason,
+    ).toBe('suspended')
+
+    expect(
+      decideAccess(input({ profile: { ...admin, access_expires_at: '2020-01-01T00:00:00Z' } }))
+        .reason,
+    ).toBe('expired')
+  })
+})
+
+describe('nothing outside lib/auth decides access', () => {
+  // CLAUDE.md: "All access decisions go through lib/auth/access.ts. Nothing
+  // else decides access." A surface that recomputes it will drift from it.
+  it('no page or component imports the raw decision functions', async () => {
+    const { execSync } = await import('node:child_process')
+
+    // The import is the violation, not the word — this file's own explanation
+    // of the bug names those functions in prose, and so may a comment there.
+    const hits = execSync(
+      `grep -rln "from '@/lib/auth/decide'" app components || true`,
+      { encoding: 'utf8' },
+    )
+      .split('\n')
+      .filter(Boolean)
+
+    expect(
+      hits,
+      'Read ctx.canUseScraper from lib/auth/access.ts instead of recomputing it',
+    ).toEqual([])
   })
 })

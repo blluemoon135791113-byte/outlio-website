@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 
 import { ConnectPanel } from '@/components/extension/ConnectPanel'
 import { assertUser } from '@/lib/auth/access'
-import { decideLimits } from '@/lib/auth/decide'
 
 export const metadata: Metadata = {
   title: 'Connect the browser extension | Outlio',
@@ -36,8 +35,23 @@ export default async function ExtensionConnectPage({
   const browser = first(params.browser)
   const platform = first(params.platform)
 
-  const eligible = decideLimits(ctx.plan?.limits ?? null, ctx.usage).canUseScraper
-    && ctx.canUseScraper
+  /*
+   * ⚠️ THE DECISION, NOT A SECOND DERIVATION OF IT.
+   *
+   * This previously called `decideLimits(ctx.plan?.limits, ctx.usage)` and
+   * AND-ed the result with `ctx.canUseScraper`. That is the plan/usage HALF of
+   * the decision, run in isolation — and it denies with `payment_required`
+   * whenever limits are null.
+   *
+   * An admin has no plan row, because `getAccessContext` short-circuits on the
+   * pre-check and never fetches one. So the half-decision denied the very
+   * accounts the full decision allows, and admins were told they needed a
+   * subscription while `createPairingAction` would have issued them a code.
+   *
+   * `ctx.canUseScraper` is the composed decision, and it already accounts for
+   * role, suspension, expiry and limits. It is the only thing to read here.
+   */
+  const eligible = ctx.canUseScraper
 
   return (
     <div className="mx-auto w-full max-w-lg px-6 py-16">
