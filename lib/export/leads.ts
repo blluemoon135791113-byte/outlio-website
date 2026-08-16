@@ -1,3 +1,4 @@
+import { enrichmentCells } from '@/lib/intelligence/merge'
 import type { ExtractedLeadRow } from '@/types/database'
 
 /**
@@ -17,6 +18,17 @@ export type ExportLead = {
   companyLinkedInUrl?: string | null
   salesNavigatorUrl: string | null
   location: string | null
+  /*
+   * Intelligence values the user merged onto this lead, already flattened to
+   * strings and keyed by their column header.
+   *
+   * ⚠️ SEPARATE FROM THE CORE EIGHT, DELIBERATELY. The fields above are the
+   * contract every destination has always received; a customer's CRM field
+   * mapping is built on their names and their order. Merged data is additive
+   * and appended, so an account that never enriches anything exports exactly
+   * the file it exported before this existed.
+   */
+  enrichment?: Record<string, string>
 }
 
 export const EXPORT_COLUMN_HEADERS = {
@@ -43,8 +55,11 @@ export const EXPORT_COLUMN_ORDER = [
 
 export function toCanonicalExportRecord(
   lead: ExportLead,
-): Record<(typeof EXPORT_COLUMN_ORDER)[number], string | null> {
+): Record<string, string | null> {
   return {
+    // Merged columns first in the literal, so a research field that somehow
+    // collided with a core header could never overwrite one.
+    ...(lead.enrichment ?? {}),
     [EXPORT_COLUMN_HEADERS.name]: lead.name,
     [EXPORT_COLUMN_HEADERS.linkedinProfile]: lead.linkedinUrl,
     [EXPORT_COLUMN_HEADERS.jobTitle]: lead.jobTitle,
@@ -67,10 +82,12 @@ export type ExportLeadSource = Pick<
   | 'company_url'
   | 'company_website_url'
   | 'location'
->
+> & { enrichment?: unknown }
 
 /** Maps one trusted database row into the only shape adapters may consume. */
 export function normalizeExportLead(row: ExportLeadSource): ExportLead {
+  const cells = enrichmentCells(row.enrichment)
+
   return {
     id: row.id,
     name: row.full_name,
@@ -81,7 +98,28 @@ export function normalizeExportLead(row: ExportLeadSource): ExportLead {
     companyLinkedInUrl: row.company_url,
     salesNavigatorUrl: row.sales_navigator_url,
     location: row.location,
+    /*
+     * Omitted entirely when there is none, so a lead nobody enriched produces
+     * exactly the object this function produced before merging existed. That
+     * is the contract holding, not a formality: `tests/unit/export-leads.test.ts`
+     * asserts the whole shape, and it still passes untouched.
+     */
+    ...(Object.keys(cells).length > 0 ? { enrichment: cells } : {}),
   }
+}
+
+/**
+ * The merged columns present across a batch, in a stable order.
+ *
+ * A row missing a column that another row has gets an empty cell, so every row
+ * in one export has the same width — a ragged CSV is not a CSV.
+ */
+export function enrichmentHeaders(leads: readonly ExportLead[]): string[] {
+  const headers = new Set<string>()
+  for (const lead of leads) {
+    for (const header of Object.keys(lead.enrichment ?? {})) headers.add(header)
+  }
+  return [...headers].sort()
 }
 
 export function normalizeExportLeads(

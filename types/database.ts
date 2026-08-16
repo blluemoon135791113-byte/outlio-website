@@ -284,6 +284,14 @@ export type ExtractedLeadRow = {
   /** Resolved company identity. NULL until the linking step runs. */
   company_id: string | null
   company_match_strategy: CompanyMatchStrategy | null
+  /**
+   * Intelligence values the user merged onto this lead, keyed by research
+   * field, each carrying its own provenance. `{}` until a merge happens.
+   *
+   * A cache of a decision — `research_evidence` remains the record of what was
+   * found. See migration 0051.
+   */
+  enrichment: Json
   created_at: string
   updated_at: string
 }
@@ -1154,6 +1162,11 @@ export type Database = {
       purge_job_leads: {
         Args: { p_job_id: string; p_user_id: string }
         /** Number of lead rows deleted. */
+        Returns: number
+      }
+      merge_lead_enrichment: {
+        Args: { p_user_id: string; p_lead_ids: string[]; p_enrichment: Json }
+        /** Number of lead rows actually changed. */
         Returns: number
       }
     }

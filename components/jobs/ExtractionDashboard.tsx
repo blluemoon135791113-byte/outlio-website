@@ -7,6 +7,15 @@ import { JobActions } from '@/components/jobs/JobActions'
 import { LeadExportMenu } from '@/components/integrations/LeadExportMenu'
 import { EXPORT_COLUMN_HEADERS } from '@/lib/export/leads'
 import {
+  DEFAULT_LEAD_PAGE_SIZE,
+  LEAD_PAGE_SIZES,
+  leadSearchFilter,
+  pageNumbers,
+  pageView,
+  toPageSize,
+  type LeadPageSize,
+} from '@/lib/jobs/lead-pagination'
+import {
   DASHBOARD_FILE_SELECT,
   DASHBOARD_JOB_SELECT,
   DASHBOARD_LEAD_SELECT,
@@ -73,6 +82,7 @@ export function ExtractionDashboard({
   initialJobs,
   initialFiles,
   initialLeads,
+  initialLeadCount,
   credits,
   planName,
   clayConnected,
@@ -85,6 +95,7 @@ export function ExtractionDashboard({
   initialJobs: DashboardJob[]
   initialFiles: DashboardFile[]
   initialLeads: DashboardLead[]
+  initialLeadCount: number
   credits: CreditSnapshot | null
   planName: string | null
   clayConnected: boolean
@@ -104,7 +115,22 @@ export function ExtractionDashboard({
   )
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
   const [leadSearch, setLeadSearch] = useState('')
-  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(() => new Set())
+  const [leadPage, setLeadPage] = useState(0)
+  const [leadPageSize, setLeadPageSize] = useState<LeadPageSize>(DEFAULT_LEAD_PAGE_SIZE)
+  const [leadTotal, setLeadTotal] = useState(initialLeadCount)
+  const [leadsLoading, setLeadsLoading] = useState(false)
+  /*
+   * ⚠️ SELECTED LEAD RECORDS, NOT JUST IDS.
+   *
+   * Paging happens in Postgres, so leads chosen on page 1 are no longer in
+   * `leads` once the user reaches page 2 — and the export menu builds its
+   * payload from `leads`. Keeping the rows means a selection spanning pages
+   * exports every row the user ticked, instead of silently dropping the ones
+   * that scrolled out of the query.
+   */
+  const [selectedLeads, setSelectedLeads] = useState<Map<string, DashboardLead>>(
+    () => new Map(),
+  )
   const refreshing = useRef(false)
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -115,7 +141,7 @@ export function ExtractionDashboard({
     refreshing.current = true
 
     try {
-      const [jobResult, fileResult, leadResult] = await Promise.all([
+      const [jobResult, fileResult] = await Promise.all([
         supabase
           .from('extraction_jobs')
           .select(DASHBOARD_JOB_SELECT)
@@ -129,21 +155,16 @@ export function ExtractionDashboard({
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(500),
-        supabase
-          .from('extracted_leads')
-          .select(DASHBOARD_LEAD_SELECT)
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(100),
       ])
 
-      if (jobResult.error || fileResult.error || leadResult.error) {
+      if (jobResult.error || fileResult.error) {
         throw new Error('Dashboard refresh failed')
       }
 
       setJobs((jobResult.data ?? []) as DashboardJob[])
       setFiles((fileResult.data ?? []) as DashboardFile[])
-      setLeads((leadResult.data ?? []) as DashboardLead[])
+      // Leads are paged and searched separately — see `loadLeads`. Refetching
+      // them on the 2.5s job poll would fight the user's paging.
       setRefreshError(null)
     } catch {
       setRefreshError('Live data paused. We will keep retrying automatically.')
@@ -152,6 +173,97 @@ export function ExtractionDashboard({
       refreshing.current = false
     }
   }, [supabase, userId])
+
+  /**
+   * Loads one page of leads.
+   *
+   * ⚠️ SEARCH RUNS IN POSTGRES, NOT IN THE BROWSER. Filtering the 25 rows the
+   * client happens to hold would search one page and report "no matches" for a
+   * lead that exists — a wrong answer dressed as an empty one.
+   *
+   * The page is clamped by `pageView` before the range is built, because a
+   * deletion or a narrowed search can strand the user past the end, and
+   * PostgREST answers an out-of-range request with zero rows.
+   */
+  const loadLeads = useCallback(
+    async (page: number, pageSize: LeadPageSize, search: string) => {
+      setLeadsLoading(true)
+      try {
+        const filter = leadSearchFilter(search)
+
+        let query = supabase
+          .from('extracted_leads')
+          .select(DASHBOARD_LEAD_SELECT, { count: 'exact' })
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+
+        if (filter) query = query.or(filter)
+
+        // A first pass at page 0 establishes the count; the view then clamps.
+        const view = pageView({ page, pageSize, total: leadTotal })
+        const { data, count, error } = await query.range(view.from, view.to)
+
+        if (error) throw error
+
+        const total = count ?? 0
+        setLeadTotal(total)
+
+        // The clamp can only be applied once the true count is known. If the
+        // requested page turned out not to exist, land on the last real one
+        // rather than showing an empty table.
+        const clamped = pageView({ page, pageSize, total })
+        if (clamped.page !== page) {
+          setLeadPage(clamped.page)
+          return
+        }
+
+        setLeads((data ?? []) as DashboardLead[])
+      } catch {
+        setRefreshError('Could not load that page of leads. Retrying shortly.')
+      } finally {
+        setLeadsLoading(false)
+      }
+    },
+    // `leadTotal` is read only as a hint for the first range; the authoritative
+    // count comes back with the response, so it is intentionally not a dep.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [supabase, userId],
+  )
+
+  // Debounced: typing a nine-character company name should cost one query.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(leadSearch), 300)
+    return () => clearTimeout(timer)
+  }, [leadSearch])
+
+  /*
+   * A new search or page size invalidates the page number, so both handlers
+   * reset it. Doing this in an effect on `debouncedSearch` instead would be a
+   * cascading render — and would leave the user on page 5 for the 300ms until
+   * the debounce fired.
+   */
+  const changeSearch = useCallback((value: string) => {
+    setLeadSearch(value)
+    setLeadPage(0)
+  }, [])
+
+  const changePageSize = useCallback((size: LeadPageSize) => {
+    setLeadPageSize(size)
+    setLeadPage(0)
+  }, [])
+
+  const firstLeadLoad = useRef(true)
+  useEffect(() => {
+    // The server already rendered page 0 unsearched; refetching it on mount
+    // would be a wasted round trip and a visible flash.
+    if (firstLeadLoad.current && leadPage === 0 && debouncedSearch === '' && leadPageSize === DEFAULT_LEAD_PAGE_SIZE) {
+      firstLeadLoad.current = false
+      return
+    }
+    firstLeadLoad.current = false
+    void loadLeads(leadPage, leadPageSize, debouncedSearch)
+  }, [leadPage, leadPageSize, debouncedSearch, loadLeads])
 
   useEffect(() => {
     const scheduleRefresh = () => {
@@ -226,42 +338,38 @@ export function ExtractionDashboard({
     return true
   })
 
-  const normalizedSearch = leadSearch.trim().toLowerCase()
-  const filteredLeads = leads.filter((lead) => {
-    if (!normalizedSearch) return true
-    return [lead.full_name, lead.job_title, lead.company_name].some((value) =>
-      value?.toLowerCase().includes(normalizedSearch),
-    )
-  })
+  /*
+   * Selection is keyed on the lead RECORD, so it survives paging.
+   *
+   * The previous version intersected the selection with the rows currently
+   * loaded, which was correct when every lead was in the browser. With paging
+   * it would silently discard a page-1 selection the moment the user reached
+   * page 2, and the export would go out short without saying so.
+   */
+  const selectedLeadIds = useMemo(() => new Set(selectedLeads.keys()), [selectedLeads])
 
-  const availableLeadIds = useMemo(() => new Set(leads.map((lead) => lead.id)), [leads])
-  const availableSelectedLeadIds = useMemo(
-    () => new Set([...selectedLeadIds].filter((id) => availableLeadIds.has(id))),
-    [availableLeadIds, selectedLeadIds],
-  )
-
-  const toggleLead = useCallback((leadId: string) => {
-    setSelectedLeadIds((current) => {
-      const next = new Set(current)
-      if (next.has(leadId)) next.delete(leadId)
-      else next.add(leadId)
+  const toggleLead = useCallback((lead: DashboardLead) => {
+    setSelectedLeads((current) => {
+      const next = new Map(current)
+      if (next.has(lead.id)) next.delete(lead.id)
+      else next.set(lead.id, lead)
       return next
     })
   }, [])
 
-  const toggleVisibleLeads = useCallback((leadIds: readonly string[]) => {
-    setSelectedLeadIds((current) => {
-      const next = new Set(current)
-      const allSelected = leadIds.length > 0 && leadIds.every((id) => next.has(id))
-      for (const id of leadIds) {
-        if (allSelected) next.delete(id)
-        else next.add(id)
+  const toggleVisibleLeads = useCallback((visible: readonly DashboardLead[]) => {
+    setSelectedLeads((current) => {
+      const next = new Map(current)
+      const allSelected = visible.length > 0 && visible.every((lead) => next.has(lead.id))
+      for (const lead of visible) {
+        if (allSelected) next.delete(lead.id)
+        else next.set(lead.id, lead)
       }
       return next
     })
   }, [])
 
-  const clearSelectedLeads = useCallback(() => setSelectedLeadIds(new Set()), [])
+  const clearSelectedLeads = useCallback(() => setSelectedLeads(new Map()), [])
 
   const totals = jobs.reduce(
     (acc, job) => {
@@ -373,11 +481,16 @@ export function ExtractionDashboard({
       )}
 
       <LeadPreview
-        leads={filteredLeads}
-        totalVisible={leads.length}
+        leads={leads}
+        selectedLeadRecords={[...selectedLeads.values()]}
+        view={pageView({ page: leadPage, pageSize: leadPageSize, total: leadTotal })}
+        pageSize={leadPageSize}
+        onPageChange={setLeadPage}
+        onPageSizeChange={changePageSize}
+        loading={leadsLoading}
         search={leadSearch}
-        onSearch={setLeadSearch}
-        selectedLeadIds={availableSelectedLeadIds}
+        onSearch={changeSearch}
+        selectedLeadIds={selectedLeadIds}
         onToggleLead={toggleLead}
         onToggleVisible={toggleVisibleLeads}
         onExportSuccess={clearSelectedLeads}
@@ -721,7 +834,12 @@ function FileStatusDot({ status }: { status: DashboardFile['status'] }) {
 
 function LeadPreview({
   leads,
-  totalVisible,
+  selectedLeadRecords,
+  view,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  loading,
   search,
   onSearch,
   selectedLeadIds,
@@ -735,12 +853,18 @@ function LeadPreview({
   salesforceConnected,
 }: {
   leads: DashboardLead[]
-  totalVisible: number
+  /** Every selected lead, including ones on pages not currently loaded. */
+  selectedLeadRecords: DashboardLead[]
+  view: ReturnType<typeof pageView>
+  pageSize: LeadPageSize
+  onPageChange: (page: number) => void
+  onPageSizeChange: (size: LeadPageSize) => void
+  loading: boolean
   search: string
   onSearch: (value: string) => void
   selectedLeadIds: ReadonlySet<string>
-  onToggleLead: (leadId: string) => void
-  onToggleVisible: (leadIds: readonly string[]) => void
+  onToggleLead: (lead: DashboardLead) => void
+  onToggleVisible: (leads: readonly DashboardLead[]) => void
   onExportSuccess: () => void
   clayConnected: boolean
   googleConnected: boolean
@@ -748,21 +872,32 @@ function LeadPreview({
   hubSpotConnected: boolean
   salesforceConnected: boolean
 }) {
-  const visibleIds = leads.map((lead) => lead.id)
-  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedLeadIds.has(id))
+  const allVisibleSelected =
+    leads.length > 0 && leads.every((lead) => selectedLeadIds.has(lead.id))
 
   return (
     <section className="rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 py-4">
         <div>
-          <h2 className="text-base font-semibold text-ink">Latest extracted leads</h2>
+          <h2 className="text-base font-semibold text-ink">Extracted leads</h2>
           <p className="mt-0.5 text-sm text-muted">
-            Showing the newest {totalVisible.toLocaleString()} retained lead rows.
+            {view.lastRow === 0
+              ? 'No retained lead rows yet.'
+              : `Showing ${view.firstRow.toLocaleString()}–${view.lastRow.toLocaleString()} of ${view.total.toLocaleString()}${search.trim() ? ' matching' : ''} lead rows.`}
+            {selectedLeadRecords.length > 0 ? (
+              <>
+                {' '}
+                <span className="font-medium text-ink">
+                  {selectedLeadRecords.length.toLocaleString()} selected
+                </span>
+                {' across all pages.'}
+              </>
+            ) : null}
           </p>
         </div>
         <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-end">
           <LeadExportMenu
-            selectedLeads={leads.filter((lead) => selectedLeadIds.has(lead.id))}
+            selectedLeads={selectedLeadRecords}
             clayConnected={clayConnected}
             googleConnected={googleConnected}
             ghlConnected={ghlConnected}
@@ -793,7 +928,7 @@ function LeadPreview({
                     type="checkbox"
                     aria-label="Select all visible leads"
                     checked={allVisibleSelected}
-                    onChange={() => onToggleVisible(visibleIds)}
+                    onChange={() => onToggleVisible(leads)}
                     className="h-4 w-4 accent-accent"
                   />
                 </th>
@@ -815,7 +950,7 @@ function LeadPreview({
                       type="checkbox"
                       aria-label={`Select ${lead.full_name?.trim() || 'lead'}`}
                       checked={selectedLeadIds.has(lead.id)}
-                      onChange={() => onToggleLead(lead.id)}
+                      onChange={() => onToggleLead(lead)}
                       className="h-4 w-4 accent-accent"
                     />
                   </td>
@@ -902,7 +1037,117 @@ function LeadPreview({
           </p>
         </div>
       )}
+
+      <LeadPager
+        view={view}
+        pageSize={pageSize}
+        loading={loading}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+      />
     </section>
+  )
+}
+
+/**
+ * Page navigation and rows-per-page.
+ *
+ * Rendered even for a single page: the rows-per-page control is what a user
+ * reaches for when they want more on screen, and hiding it until there are
+ * enough rows to page hides it exactly when it is least discoverable.
+ */
+function LeadPager({
+  view,
+  pageSize,
+  loading,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  view: ReturnType<typeof pageView>
+  pageSize: LeadPageSize
+  loading: boolean
+  onPageChange: (page: number) => void
+  onPageSizeChange: (size: LeadPageSize) => void
+}) {
+  const numbers = pageNumbers(view.page, view.pageCount)
+
+  const stepButton =
+    'inline-flex h-8 items-center rounded-[var(--radius-md)] border border-border bg-paper px-3 text-sm font-medium text-ink transition-colors duration-150 hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40'
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
+      <label className="flex items-center gap-2 text-sm text-muted">
+        <span>Rows per page</span>
+        <select
+          value={pageSize}
+          onChange={(event) => onPageSizeChange(toPageSize(event.target.value))}
+          className="h-8 rounded-[var(--radius-md)] border border-border bg-paper px-2 text-sm text-ink"
+        >
+          {LEAD_PAGE_SIZES.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <nav aria-label="Lead pages" className="flex items-center gap-1.5">
+        {/*
+          * `aria-live` on the position, not the table: a screen reader should
+          * hear "page 3 of 12" after a jump, not all 25 rows again.
+          */}
+        <span className="sr-only" aria-live="polite">
+          {loading ? 'Loading page' : `Page ${view.page + 1} of ${view.pageCount}`}
+        </span>
+
+        <button
+          type="button"
+          onClick={() => onPageChange(view.page - 1)}
+          disabled={!view.hasPrevious || loading}
+          className={stepButton}
+        >
+          Previous
+        </button>
+
+        <div className="hidden items-center gap-1 sm:flex">
+          {numbers.map((number, index) =>
+            number === null ? (
+              <span key={`gap-${index}`} aria-hidden className="px-1 text-sm text-muted">
+                …
+              </span>
+            ) : (
+              <button
+                key={number}
+                type="button"
+                onClick={() => onPageChange(number)}
+                disabled={loading}
+                aria-current={number === view.page ? 'page' : undefined}
+                className={
+                  number === view.page
+                    ? 'inline-flex h-8 min-w-8 items-center justify-center rounded-[var(--radius-md)] bg-accent px-2 text-sm font-semibold text-white'
+                    : 'inline-flex h-8 min-w-8 items-center justify-center rounded-[var(--radius-md)] border border-border bg-paper px-2 text-sm text-ink transition-colors duration-150 hover:border-border-strong disabled:opacity-40'
+                }
+              >
+                {number + 1}
+              </button>
+            ),
+          )}
+        </div>
+
+        <span className="text-sm text-muted sm:hidden">
+          {view.page + 1} / {view.pageCount}
+        </span>
+
+        <button
+          type="button"
+          onClick={() => onPageChange(view.page + 1)}
+          disabled={!view.hasNext || loading}
+          className={stepButton}
+        >
+          Next
+        </button>
+      </nav>
+    </div>
   )
 }
 

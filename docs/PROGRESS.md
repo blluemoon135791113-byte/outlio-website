@@ -4,6 +4,102 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-16 — Lead table paging, merging intelligence, date-range scope
+
+Three requested changes to the product surfaces.
+
+### 1. Paging on the extracted-leads table
+
+25 rows by default, with 25 / 50 / 100 offered. Paging runs in **Postgres**
+(`.range()` + `count: 'exact'`), not by slicing an array the browser downloaded.
+
+The table previously read a flat `.limit(100)` and rendered every row in one
+list, so an account with 2,088 leads could never see past the newest hundred —
+and had to scroll the ones it could see.
+
+Three consequences that were not obvious:
+
+- **Search had to move to the server too.** Filtering the 25 rows the client
+  holds would search one page and report "no matches" for a lead that exists.
+  `leadSearchFilter()` builds the PostgREST `or=` filter, and
+  `escapeSearchTerm()` strips the characters that are grammar in that syntax —
+  a term like `a,id.gt.0` would otherwise append a condition nobody wrote. RLS
+  still scopes every row to the user, so this cannot cross tenants, but a filter
+  the user did not write returning rows they did not ask for is its own bug.
+- **Selection had to stop being ids.** `selectedLeads` is now a
+  `Map<string, DashboardLead>`. The old code intersected the selection with the
+  rows currently loaded — correct when every lead was in the browser, but with
+  paging it would silently drop a page-1 selection the moment the user reached
+  page 2, and the export would go out short without saying so.
+- **The page has to be clamped.** A deletion or a narrowed search can strand the
+  user past the end, and PostgREST answers an out-of-range request with zero
+  rows — an empty table on an account with thousands of leads.
+
+### 2. Merging intelligence into the extraction
+
+Migration **0051** adds an `enrichment` JSONB column plus
+`merge_lead_enrichment(p_user_id, p_lead_ids, p_enrichment)`.
+
+Chosen over a column per field (63 research fields, growing weekly) and over a
+join table. The **eight core export columns are untouched and always present**,
+so a CRM field mapping a customer already built keeps working; merged fields are
+appended after them. `normalizeExportLead` omits the key entirely when there is
+no enrichment, so an un-enriched lead produces exactly the object it did before —
+`tests/unit/export-leads.test.ts` asserts the whole shape and still passes
+untouched, which is the contract holding rather than a formality.
+
+Two rules carried through the whole path:
+
+- ⚠️ **Only `known` cells are merged.** An `unknown` written as an empty column
+  becomes "they don't have one" the moment it reaches a CRM. Unknowns are
+  counted and reported — "38 leads updated · 12 values not found" — never stored.
+- ⚠️ **A CSV cell is a string.** Evidence values are objects whose shape differs
+  per provider. `flattenEnrichmentValue` unwraps the single-meaningful-key case,
+  drops metadata keys that qualify a value rather than being one, and never
+  emits `[object Object]`. Columns are sorted, because a CSV whose columns
+  reorder between two exports breaks whatever the customer built on it.
+
+`merge_lead_enrichment` re-scopes by `user_id` in SQL. `getRunResults` already
+returns `null` for someone else's run, but the service role bypasses RLS and one
+check in TypeScript is not a boundary.
+
+### 3. Date-range scope in the intelligence console
+
+"All leads" / **"Select by date"** / "One extraction". Choosing by date opens a
+two-month calendar above the control — above, because the scope row sits high in
+the panel and a popover below it is clipped by the panel edge. No date-picker
+dependency; the range logic is in `lib/intelligence/date-range.ts`, unit-tested.
+
+⚠️ **The off-by-one-day trap.** A user picking "1 Aug to 14 Aug" means the whole
+of the 14th. Filtering `created_at <= '2026-08-14'` compares against midnight at
+the *start* of the 14th and silently drops a full day of leads. `dateRangeBounds`
+returns a half-open interval whose upper bound is the next midnight.
+
+Two more refusals, both about not spending money by accident:
+
+- An **unparseable range resolves to nothing**, never to every lead the account
+  owns, in both the resolver and the estimate.
+- A **half-picked range disables Research** and shows "Pick a start and an end
+  date" rather than an estimate over everything, which would describe a run the
+  user is not about to start.
+- A date range gets its **own company count** rather than the workspace-wide
+  figure, which would price one day's leads as the whole account.
+
+### Verification
+
+- `npm run typecheck`, `npx eslint lib components app tests` (0 errors; 4
+  pre-existing landing-page warnings), and `npm run build` all pass.
+- Full suite: **809 passed, 11 skipped across 62 files.**
+- 65 new unit tests across `lead-pagination`, `lead-merge` and `date-range`.
+- ⚠️ **Not verified in a browser.** These screens need a signed-in session.
+  Confirmed by test and by reading the query paths, not by screenshot.
+
+### ⚠️ Migration 0051 is not yet applied
+
+Until it is, merging fails and lead reads that select `enrichment` will error.
+
+---
+
 ## 2026-08-16 — 🔴 Admins were locked out of the extension pairing screen
 
 `/extension/connect` told an admin **"Active subscription required"** and hid

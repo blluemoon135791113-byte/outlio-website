@@ -3,6 +3,7 @@ import { after } from 'next/server'
 
 import { ExtractionDashboard } from '@/components/jobs/ExtractionDashboard'
 import { requireAccess } from '@/lib/auth/access'
+import { DEFAULT_LEAD_PAGE_SIZE } from '@/lib/jobs/lead-pagination'
 import {
   DASHBOARD_FILE_SELECT,
   DASHBOARD_JOB_SELECT,
@@ -62,12 +63,20 @@ export default async function JobsPage() {
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(500),
+    /*
+     * The FIRST PAGE only, with an exact count.
+     *
+     * This used to read a flat `.limit(100)` and render every row in one list,
+     * which meant an account with thousands of leads could never see past the
+     * newest hundred and had to scroll the ones it could see. The table pages
+     * in Postgres now; the client fetches subsequent pages itself.
+     */
     supabase
       .from('extracted_leads')
-      .select(DASHBOARD_LEAD_SELECT)
+      .select(DASHBOARD_LEAD_SELECT, { count: 'exact' })
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(100),
+      .range(0, DEFAULT_LEAD_PAGE_SIZE - 1),
     supabase.rpc('credit_balance', { p_user_id: userId }),
     getClayConnectionMetadata(userId),
     getGoogleConnectionMetadata(userId),
@@ -107,6 +116,7 @@ export default async function JobsPage() {
       initialJobs={jobs}
       initialFiles={(fileResult.data ?? []) as DashboardFile[]}
       initialLeads={(leadResult.data ?? []) as DashboardLead[]}
+      initialLeadCount={leadResult.count ?? 0}
       credits={credits}
       planName={ctx.plan?.name ?? null}
       clayConnected={clayConnection?.status === 'connected'}

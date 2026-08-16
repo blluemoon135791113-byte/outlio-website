@@ -20,6 +20,7 @@ import 'server-only'
  * into a £200 one.
  */
 import { getCompaniesForLeads } from '@/lib/companies/repository'
+import { dateRangeBounds } from '@/lib/intelligence/date-range'
 import { deriveAll, derivedEvidence } from '@/lib/intelligence/derive'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
 import { executeTasks } from '@/lib/intelligence/execute'
@@ -226,6 +227,16 @@ async function resolveScope(userId: string, scope: ResearchScope): Promise<strin
 
     if (scope.type === 'extraction_job') {
       query = query.eq('extraction_job_id', scope.extractionJobId)
+    }
+
+    if (scope.type === 'date_range') {
+      const bounds = dateRangeBounds(scope.from, scope.to)
+      // A range that will not parse must resolve to NOTHING, never to every
+      // lead the user owns — the difference is a large unintended spend.
+      if (!bounds) return []
+      query = query
+        .gte('created_at', bounds.fromInclusive)
+        .lt('created_at', bounds.toExclusive)
     }
 
     const { data, error } = await query

@@ -2,14 +2,30 @@ import 'server-only'
 
 import { randomBytes } from 'node:crypto'
 
-import { EXPORT_COLUMN_ORDER, toCanonicalExportRecord, type ExportLead } from '@/lib/export/leads'
+import {
+  EXPORT_COLUMN_ORDER,
+  enrichmentHeaders,
+  toCanonicalExportRecord,
+  type ExportLead,
+} from '@/lib/export/leads'
 import type { ExportResult } from '@/lib/integrations/types'
 
 const REQUEST_TIMEOUT_MS = 30_000
 
-function rowValues(lead: ExportLead): string[] {
+/**
+ * The columns for one export: the canonical eight, then merged intelligence.
+ *
+ * Computed across the whole batch so every row is the same width. A row that
+ * lacks a column another row has gets an empty cell — a ragged sheet is not a
+ * sheet, and Google will not accept one.
+ */
+function columnsFor(leads: readonly ExportLead[]): string[] {
+  return [...EXPORT_COLUMN_ORDER, ...enrichmentHeaders(leads)]
+}
+
+function rowValues(lead: ExportLead, columns: readonly string[]): string[] {
   const record = toCanonicalExportRecord(lead)
-  return EXPORT_COLUMN_ORDER.map((column) => record[column] ?? '')
+  return columns.map((column) => record[column] ?? '')
 }
 
 function safeTitle(value: string | undefined, suffix: string): string {
@@ -53,7 +69,8 @@ export async function exportLeadsToGoogleSheet(
     if (createResponse.status === 401) return failure(leads, 'GOOGLE_AUTH_REJECTED', 'Google authorization expired. Reconnect Google.')
     if (!createResponse.ok || !created?.spreadsheetId) return failure(leads, 'GOOGLE_SHEETS_CREATE_FAILED', 'Google Sheets could not create this spreadsheet.')
 
-    const values = [EXPORT_COLUMN_ORDER, ...leads.map(rowValues)]
+    const columns = columnsFor(leads)
+    const values = [columns, ...leads.map((lead) => rowValues(lead, columns))]
     const updateResponse = await googleRequest(
       `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(created.spreadsheetId)}/values/A1?valueInputOption=RAW`,
       accessToken,
@@ -81,7 +98,8 @@ export async function exportLeadsToGoogleDrive(
   leads: readonly ExportLead[],
   title?: string,
 ): Promise<ExportResult> {
-  const csv = [EXPORT_COLUMN_ORDER, ...leads.map(rowValues)]
+  const columns = columnsFor(leads)
+  const csv = [columns, ...leads.map((lead) => rowValues(lead, columns))]
     .map((row) => row.map((value) => csvCell(String(value))).join(','))
     .join('\r\n') + '\r\n'
   const boundary = `outlio_${randomBytes(16).toString('hex')}`

@@ -21,6 +21,21 @@ export const researchScopeSchema = z.discriminatedUnion('type', [
   /** Everything from one extraction run. */
   z.object({ type: z.literal('extraction_job'), extractionJobId: z.string().uuid() }),
   /**
+   * Leads extracted within a date range, inclusive of both ends.
+   *
+   * ⚠️ DATES ARE CALENDAR DAYS, NOT TIMESTAMPS. The user picks "1 August to
+   * 14 August" in a calendar; they mean the whole of the 14th. The resolver
+   * turns `to` into the following midnight rather than 00:00 on the 14th,
+   * which would silently exclude a day the user selected.
+   */
+  z.object({
+    type: z.literal('date_range'),
+    /** `YYYY-MM-DD`, inclusive. */
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    /** `YYYY-MM-DD`, inclusive. */
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  }),
+  /**
    * Every lead the user owns. Deliberately its own case rather than a default,
    * so a missing scope can never silently become "spend money on everything".
    */

@@ -12,6 +12,7 @@ import 'server-only'
  * HubSpot" and "we could not find out" must stay distinguishable all the way to
  * the screen (spec §49).
  */
+import { dateRangeBounds } from '@/lib/intelligence/date-range'
 import { readEvidence } from '@/lib/intelligence/evidence-store'
 import { evidenceKey } from '@/lib/intelligence/evidence'
 import { validatePlan } from '@/lib/intelligence/plan'
@@ -317,7 +318,7 @@ function formatValue(value: unknown): string {
  */
 export async function estimateScope(
   userId: string,
-  scope: { type: string; leadIds?: string[]; extractionJobId?: string },
+  scope: { type: string; leadIds?: string[]; extractionJobId?: string; from?: string; to?: string },
 ): Promise<{ leadCount: number; companyCount: number }> {
   const supabase = createAdminClient()
 
@@ -346,7 +347,50 @@ export async function estimateScope(
     leadQuery = leadQuery.eq('extraction_job_id', scope.extractionJobId)
   }
 
+  if (scope.type === 'date_range') {
+    const bounds = dateRangeBounds(scope.from ?? '', scope.to ?? '')
+    // Same rule as the resolver: an unusable range estimates ZERO, never
+    // everything. The estimate is what a user approves a spend against.
+    if (!bounds) return { leadCount: 0, companyCount: 0 }
+    leadQuery = leadQuery
+      .gte('created_at', bounds.fromInclusive)
+      .lt('created_at', bounds.toExclusive)
+  }
+
   const { count: leadCount } = await leadQuery
+
+  /*
+   * A date range needs its OWN company count.
+   *
+   * Falling through to the workspace-wide figure would tell a user that one
+   * day's leads cost the same as researching every company they own. The
+   * estimate is what a spend is approved against, so it counts the distinct
+   * companies actually inside the range.
+   */
+  if (scope.type === 'date_range') {
+    const bounds = dateRangeBounds(scope.from ?? '', scope.to ?? '')
+    if (!bounds) return { leadCount: 0, companyCount: 0 }
+
+    const companies = new Set<string>()
+    const PAGE = 1000
+
+    for (let from = 0; ; from += PAGE) {
+      const { data } = await supabase
+        .from('extracted_leads')
+        .select('company_id')
+        .eq('user_id', userId)
+        .gte('created_at', bounds.fromInclusive)
+        .lt('created_at', bounds.toExclusive)
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1)
+
+      const rows = data ?? []
+      for (const row of rows) if (row.company_id) companies.add(row.company_id)
+      if (rows.length < PAGE) break
+    }
+
+    return { leadCount: leadCount ?? 0, companyCount: companies.size }
+  }
 
   const companyQuery = supabase
     .from('companies')

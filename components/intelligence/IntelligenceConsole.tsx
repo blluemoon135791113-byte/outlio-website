@@ -18,6 +18,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { DateRangePicker } from '@/components/intelligence/DateRangePicker'
+import { dayCount, formatRange } from '@/lib/intelligence/date-range'
+
 type Cell =
   | { state: 'known'; value: unknown; sourceUrl: string | null; sourceProvider: string }
   | { state: 'unknown' }
@@ -57,7 +60,7 @@ type RunResults = {
   error: string | null
 }
 
-type ScopeChoice = 'all_leads' | 'extraction_job'
+type ScopeChoice = 'all_leads' | 'date_range' | 'extraction_job'
 
 export type IntelligenceConsoleProps = {
   totalLeads: number
@@ -226,6 +229,8 @@ export function IntelligenceConsole({
   const [question, setQuestion] = useState('')
   const [scopeChoice, setScopeChoice] = useState<ScopeChoice>('all_leads')
   const [jobId, setJobId] = useState(recentJobs[0]?.id ?? '')
+  const [rangeFrom, setRangeFrom] = useState<string | null>(null)
+  const [rangeTo, setRangeTo] = useState<string | null>(null)
   const [profileId, setProfileId] = useState('')
 
   const [phase, setPhase] = useState<'idle' | 'planning' | 'running' | 'done' | 'error'>('idle')
@@ -242,10 +247,27 @@ export function IntelligenceConsole({
   }, [])
 
   const scopeBody = useCallback(() => {
-    return scopeChoice === 'extraction_job' && jobId
-      ? { type: 'extraction_job' as const, extractionJobId: jobId }
-      : { type: 'all_leads' as const }
-  }, [scopeChoice, jobId])
+    if (scopeChoice === 'extraction_job' && jobId) {
+      return { type: 'extraction_job' as const, extractionJobId: jobId }
+    }
+
+    /*
+     * ⚠️ AN INCOMPLETE RANGE IS NOT "EVERYTHING".
+     *
+     * Falling back to `all_leads` when only one end is picked would turn a
+     * half-finished click into a run over every lead the account owns. The
+     * Research button is disabled until both ends exist; this is the second
+     * guard, for the same reason the schema has its own.
+     */
+    if (scopeChoice === 'date_range' && rangeFrom && rangeTo) {
+      return { type: 'date_range' as const, from: rangeFrom, to: rangeTo }
+    }
+
+    return { type: 'all_leads' as const }
+  }, [scopeChoice, jobId, rangeFrom, rangeTo])
+
+  /** A date range with only one end chosen cannot start a run. */
+  const rangeIncomplete = scopeChoice === 'date_range' && !(rangeFrom && rangeTo)
 
   const poll = useCallback((runId: string) => {
     const tick = async () => {
@@ -399,7 +421,7 @@ export function IntelligenceConsole({
           <button
             type="button"
             onClick={ask}
-            disabled={busy || question.trim().length < 3}
+            disabled={busy || question.trim().length < 3 || rangeIncomplete}
             aria-busy={busy}
             className="product-gradient inline-flex h-11 items-center justify-center rounded-[var(--radius-md)] px-5 text-sm font-semibold text-white transition-[filter,transform] duration-150 ease-out hover:brightness-95 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -434,9 +456,25 @@ export function IntelligenceConsole({
               className="mt-1 h-9 w-full rounded-[var(--radius-md)] border border-border bg-paper px-2 text-sm text-ink disabled:opacity-60"
             >
               <option value="all_leads">All leads</option>
+              <option value="date_range">Select by date</option>
               {recentJobs.length > 0 ? <option value="extraction_job">One extraction</option> : null}
             </select>
           </div>
+
+          {scopeChoice === 'date_range' ? (
+            <div>
+              <span className="text-xs font-medium text-muted">Extracted between</span>
+              <DateRangePicker
+                from={rangeFrom}
+                to={rangeTo}
+                disabled={busy}
+                onChange={(from, to) => {
+                  setRangeFrom(from)
+                  setRangeTo(to)
+                }}
+              />
+            </div>
+          ) : null}
 
           {scopeChoice === 'extraction_job' ? (
             <div>
@@ -496,15 +534,34 @@ export function IntelligenceConsole({
           The pre-flight number (spec §31). Companies is the figure that matters:
           it is what actually gets researched, and therefore what it costs.
         */}
-        <p className="mt-3 text-xs text-muted">
-          This will evaluate <strong className="text-ink">{scopeLeads.toLocaleString()}</strong> leads
-          {scopeChoice === 'all_leads' ? (
-            <>
-              {' '}across <strong className="text-ink">{totalCompanies.toLocaleString()}</strong> companies
-            </>
-          ) : null}
-          . Companies already researched are reused and cost nothing.
-        </p>
+        {scopeChoice === 'date_range' ? (
+          rangeFrom && rangeTo ? (
+            <p className="mt-3 text-xs text-muted">
+              Leads extracted{' '}
+              <strong className="text-ink">{formatRange(rangeFrom, rangeTo)}</strong> —{' '}
+              {dayCount(rangeFrom, rangeTo).toLocaleString()} day
+              {dayCount(rangeFrom, rangeTo) === 1 ? '' : 's'}, both ends included. The exact lead and
+              company counts are confirmed before anything runs.
+            </p>
+          ) : (
+            /*
+             * Explicitly NOT an estimate over everything. A half-picked range
+             * showing "2,088 leads" would be describing a run the user is not
+             * about to start.
+             */
+            <p className="mt-3 text-xs text-muted">Pick a start and an end date to continue.</p>
+          )
+        ) : (
+          <p className="mt-3 text-xs text-muted">
+            This will evaluate <strong className="text-ink">{scopeLeads.toLocaleString()}</strong> leads
+            {scopeChoice === 'all_leads' ? (
+              <>
+                {' '}across <strong className="text-ink">{totalCompanies.toLocaleString()}</strong> companies
+              </>
+            ) : null}
+            . Companies already researched are reused and cost nothing.
+          </p>
+        )}
       </section>
 
       {message ? (
@@ -598,6 +655,8 @@ function Results({ results }: { results: RunResults }) {
 
   return (
     <section className="space-y-3">
+      <MergeIntoExtraction results={results} />
+
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
         <span>{metadata.leadsEvaluated.toLocaleString()} leads evaluated</span>
         <span>{metadata.companiesResearched.toLocaleString()} companies</span>
@@ -712,5 +771,84 @@ function Results({ results }: { results: RunResults }) {
         </p>
       ) : null}
     </section>
+  )
+}
+
+/**
+ * Writes this run's answers back onto the leads they came from.
+ *
+ * ⚠️ THE HONEST REPORT IS THE POINT. "38 leads updated · 12 values not found"
+ * says both halves. Reporting only the successes would leave a user believing
+ * every lead now carries an email, and they would find out from a CRM.
+ */
+function MergeIntoExtraction({ results }: { results: RunResults }) {
+  const [state, setState] = useState<'idle' | 'merging' | 'done' | 'error'>('idle')
+  const [summary, setSummary] = useState<string | null>(null)
+
+  const merge = async () => {
+    setState('merging')
+    setSummary(null)
+
+    try {
+      const response = await fetch(`/api/intelligence/runs/${results.runId}/merge`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+
+      const data = (await response.json()) as {
+        leadsUpdated?: number
+        mergedCells?: number
+        unknownCells?: number
+        error?: { message?: string }
+      }
+
+      if (!response.ok) {
+        setState('error')
+        setSummary(data.error?.message ?? 'The merge could not be completed.')
+        return
+      }
+
+      const updated = data.leadsUpdated ?? 0
+      const unknown = data.unknownCells ?? 0
+
+      setState('done')
+      setSummary(
+        `${updated.toLocaleString()} lead${updated === 1 ? '' : 's'} updated` +
+          (unknown > 0
+            ? ` · ${unknown.toLocaleString()} value${unknown === 1 ? '' : 's'} not found, left blank`
+            : '') +
+          '. Exports now carry these columns.',
+      )
+    } catch {
+      setState('error')
+      setSummary('The merge could not be completed.')
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-border bg-surface-muted/40 px-4 py-3">
+      <div>
+        <p className="text-sm font-medium text-ink">Add these columns to your leads</p>
+        <p className="mt-0.5 text-xs text-muted">
+          {summary ??
+            'Merged values become part of each lead, so your next CSV or CRM push carries them without researching again.'}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => void merge()}
+        disabled={state === 'merging' || state === 'done'}
+        aria-busy={state === 'merging'}
+        className={
+          state === 'done'
+            ? 'inline-flex h-9 shrink-0 items-center rounded-[var(--radius-md)] border border-success/30 bg-success-soft px-4 text-sm font-semibold text-success'
+            : 'inline-flex h-9 shrink-0 items-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-accent-deep active:scale-[0.97] disabled:opacity-60'
+        }
+      >
+        {state === 'merging' ? 'Merging…' : state === 'done' ? 'Merged' : 'Merge into extraction'}
+      </button>
+    </div>
   )
 }
