@@ -20,6 +20,8 @@ import 'server-only'
  * into a £200 one.
  */
 import { getCompaniesForLeads } from '@/lib/companies/repository'
+import { deriveAll, derivedEvidence } from '@/lib/intelligence/derive'
+import { expiresAtFor } from '@/lib/intelligence/ttl'
 import { executeTasks } from '@/lib/intelligence/execute'
 import { readEvidence, recordToolCalls, writeEvidence } from '@/lib/intelligence/evidence-store'
 import {
@@ -35,6 +37,7 @@ import { planToTasks } from '@/lib/intelligence/router'
 import {
   RESEARCH_FIELD_SPEC,
   type CompanyEntity,
+  type EvidenceRecord,
   type PersonEntity,
   type ResearchField,
 } from '@/lib/intelligence/types'
@@ -363,6 +366,13 @@ export async function processResearchRun(
   await recordToolCalls(userId, runId, report.toolCalls)
   await persistDiscoveredDomains(userId, [...report.evidence, ...report.bonusEvidence])
 
+  // ---- 6b. derive, for free ----------------------------------------------
+  const derivedCount = await deriveForCompanies(
+    userId,
+    runId,
+    companyEntities.map((entity) => entity.id),
+  )
+
   // ---- 7. qualify (spec §19) ---------------------------------------------
   const qualifiedCount = await qualifyRun(
     userId,
@@ -408,9 +418,81 @@ export async function processResearchRun(
     companyCount: companyEntities.length,
     cacheHits: routing.cacheHits,
     externalCalls: report.externalCallCount,
-    evidenceWritten: written.written,
+    evidenceWritten: written.written + derivedCount,
     estimatedCostMicros: report.estimatedCostMicros,
     qualifiedCount,
+  }
+}
+
+/**
+ * Computes trend facts from evidence already held. Costs nothing.
+ *
+ * Runs AFTER this run's own findings are written, so a company researched for
+ * the first time today can still contribute its history to a derivation
+ * tomorrow. Non-fatal: a derived fact is recomputable at any time from the
+ * observations, which are the durable product.
+ */
+async function deriveForCompanies(
+  userId: string,
+  runId: string,
+  companyIds: readonly string[],
+): Promise<number> {
+  if (companyIds.length === 0) return 0
+
+  try {
+    const supabase = createAdminClient()
+    let written = 0
+
+    for (let i = 0; i < companyIds.length; i += 100) {
+      const batch = companyIds.slice(i, i + 100)
+
+      const { data } = await supabase
+        .from('research_evidence')
+        .select('id, entity_type, entity_id, field, value_json, source_provider, source_url, source_confidence, confidence, retrieved_at, expires_at, research_run_id')
+        // Service role bypasses RLS — scoping by user_id is mandatory.
+        .eq('user_id', userId)
+        .eq('entity_type', 'company')
+        .in('entity_id', batch)
+        .order('retrieved_at', { ascending: true })
+
+      const byCompany = new Map<string, EvidenceRecord[]>()
+      for (const row of data ?? []) {
+        const record: EvidenceRecord = {
+          id: row.id,
+          entityType: 'company',
+          entityId: row.entity_id,
+          field: row.field as EvidenceRecord['field'],
+          value: (row.value_json ?? {}) as Record<string, unknown>,
+          sourceProvider: row.source_provider,
+          sourceUrl: row.source_url,
+          sourceConfidence: row.source_confidence,
+          confidence: Number(row.confidence),
+          retrievedAt: row.retrieved_at,
+          expiresAt: row.expires_at,
+          researchRunId: row.research_run_id,
+        }
+        const bucket = byCompany.get(row.entity_id) ?? []
+        bucket.push(record)
+        byCompany.set(row.entity_id, bucket)
+      }
+
+      for (const [companyId, history] of byCompany) {
+        const facts = deriveAll(history)
+        if (facts.length === 0) continue
+
+        const evidence = derivedEvidence(facts, companyId, (field, at) =>
+          expiresAtFor(field, at),
+        )
+        const result = await writeEvidence(userId, runId, evidence)
+        written += result.written
+      }
+    }
+
+    return written
+  } catch {
+    // Derived facts are pure arithmetic over stored evidence and can always be
+    // recomputed. Never fail a run whose evidence is already committed.
+    return 0
   }
 }
 

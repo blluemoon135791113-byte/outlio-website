@@ -68,6 +68,12 @@ type ProspeoResponse = {
     full_name?: string
     email?: ProspeoContact
     mobile?: ProspeoContact
+    job_history?: Array<{
+      current?: boolean
+      seniority?: string
+      departments?: string[]
+      title?: string
+    }>
   }
   company?: {
     name?: string
@@ -93,6 +99,12 @@ type ProspeoResponse = {
       technology_list?: Array<{ name?: string; category?: string }>
     }
     job_postings?: { active_count?: number; active_titles?: string[] }
+    twitter_url?: string
+    facebook_url?: string
+    instagram_url?: string
+    youtube_url?: string
+    crunchbase_url?: string
+    linkedin_url?: string
   }
 }
 
@@ -202,6 +214,21 @@ export function prospeoEvidence(
     )
   }
 
+  /*
+   * Seniority and department, from the person's CURRENT role only.
+   *
+   * Spec §19 scores "founder seniority" as a weighted ICP criterion, and
+   * Prospeo returns it on a call already paid for. A past role would describe
+   * who they used to be.
+   */
+  const currentRole = response.person?.job_history?.find((role) => role.current === true)
+  if (currentRole?.seniority) {
+    push('person_seniority', 'person', person.id, { value: currentRole.seniority }, 'high', 0.85)
+  }
+  if (currentRole?.departments?.length) {
+    push('person_department', 'person', person.id, { value: currentRole.departments }, 'high', 0.8)
+  }
+
   // ---- company: the windfall ---------------------------------------------
   const company = response.company
   if (!company || !person.companyId) return evidence
@@ -296,6 +323,31 @@ export function prospeoEvidence(
       'medium',
       0.8,
     )
+  }
+
+  /*
+   * Social profiles — free, and the thing users actually asked for.
+   *
+   * Every one of these arrives on the same paid response. An earlier version of
+   * this adapter discarded them, and users asking "their Instagram and X" got a
+   * partial answer for data already in hand.
+   */
+  const socialCandidates: Array<[string, string | undefined]> = [
+    ['twitter', company.twitter_url],
+    ['instagram', company.instagram_url],
+    ['facebook', company.facebook_url],
+    ['youtube', company.youtube_url],
+    ['crunchbase', company.crunchbase_url],
+    ['linkedin', company.linkedin_url],
+  ]
+
+  const socials: Record<string, string> = {}
+  for (const [platform, url] of socialCandidates) {
+    if (typeof url === 'string' && url.trim().length > 0) socials[platform] = url.trim()
+  }
+
+  if (Object.keys(socials).length > 0) {
+    push('social_profiles', 'company', companyId, socials, 'medium', 0.85)
   }
 
   const postings = company.job_postings

@@ -14,6 +14,7 @@
  *      requested fields actually need are invoked. "Give me emails" must not
  *      run funding, tech-stack, or web research.
  */
+import { DERIVED_FIELDS } from '@/lib/intelligence/derive'
 import { evidenceKey, type FieldKnowledge } from '@/lib/intelligence/evidence'
 import {
   RESEARCH_FIELD_SPEC,
@@ -63,9 +64,16 @@ function taskId(category: ToolCategory, entity: ResearchEntity): string {
 export function planToTasks(input: RoutingInput): RoutingPlan {
   const knowledge = input.knowledge ?? new Map<string, FieldKnowledge>()
 
-  // De-duplicate the request itself: asking for `funding_amount` twice is one
-  // field, and asking about the same company twice is one company.
-  const fields = [...new Set(input.requiredFields)]
+  /*
+   * De-duplicate the request, and drop derived fields.
+   *
+   * ⚠️ A DERIVED FIELD MUST NEVER BE ROUTED. No provider answers `company_age`
+   * or `employee_growth` — they are computed from evidence history — so routing
+   * one would emit a task nothing can serve and report a spurious `unknown` for
+   * a fact we can work out ourselves.
+   */
+  const derived = new Set<string>(DERIVED_FIELDS)
+  const fields = [...new Set(input.requiredFields)].filter((field) => !derived.has(field))
   const companies = dedupeById(input.companies)
   const people = dedupeById(input.people)
 

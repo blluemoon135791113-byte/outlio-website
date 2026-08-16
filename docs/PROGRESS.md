@@ -4,6 +4,95 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-16 — The zero-cost intelligence block
+
+Three ways to get more out of the system without spending anything: compute what
+is already implied, harvest what is already paid for, and add providers that are
+free. **No new paid API calls. Total added marginal cost: $0.00.**
+
+### 1. Derived fields — `lib/intelligence/derive.ts`
+
+`research_evidence` is insert-only. That was done so two providers disagreeing
+stays inspectable, but it also makes the table a **time series** — and a trend
+falls out of data already bought. Four new fields, computed by pure arithmetic:
+
+| Field | From | Answers |
+|---|---|---|
+| `employee_growth` | two `employee_count` observations | "are they hiring?" |
+| `tech_churn` | two `tech_stack` observations | "did they just adopt HubSpot?" |
+| `company_age` | `incorporation_date` | "startup or incumbent?" |
+| `funding_recency` | `funding_date` | "raised in the last 3 months?" |
+
+**The refusals matter more than the calculations.** A single observation is a
+reading, not a trend — reporting it as 0% growth would invent a fact about a
+company nobody has watched. And growth is only computed **within one provider**:
+Apollo estimates headcount while Prospeo reports a figure, so a change between
+them measures our choice of vendor, not the company's hiring. Same rule for tech
+churn — DNS sees the sending stack, PageSpeed sees the CMS.
+
+Derived evidence is attributed to `outlio-derived` with a null `source_url`, and
+carries `basedOn` — the evidence IDs behind it, so the arithmetic can be
+re-checked. `sourceConfidence` is never above `medium`: the arithmetic is exact,
+its inputs are not.
+
+⚠️ **Derived fields are never routed.** No provider answers them, so
+`router.ts` strips them before planning (otherwise every query would produce a
+task nothing can serve and a spurious `unknown`), and `run.ts` computes them as
+step 6b — after the evidence write, before qualification, non-fatal.
+
+### 2. Harvested fields — data we were paying for and throwing away
+
+Three new fields (`social_profiles`, `person_seniority`, `person_department`)
+now come off responses already billed:
+
+- **Prospeo** — six social URLs, plus seniority and department from the
+  **current** role only. A past role describes who they used to be.
+- **Apollo** — socials, `annual_revenue`, `founded_year`, seniority,
+  departments.
+
+Users had been asking for "their Instagram and X" and getting a partial answer
+for data already in hand.
+
+⚠️ **A founding year is not an incorporation filing.** Apollo reports a year the
+company says about itself; Companies House reports a registry date. They share a
+field, but the Apollo value carries `precision: 'year'` at `low` confidence, and
+`deriveCompanyAge` subtracts years rather than parsing `"2011"` into 1 January —
+which would age a company founded that December by an extra year.
+
+### 3. Two free providers
+
+| Provider | Cost | Field | Signal |
+|---|---|---|---|
+| `github` | free (token raises 60/hr → 5,000/hr) | `github_presence` | do they build in the open, and how actively |
+| `hackernews` | free, no key | `product_launches` | did they launch; are they discussed |
+
+Both are **attribution problems, not parsing problems**, and that is where the
+code and the tests concentrate:
+
+- A GitHub org login is first-come-first-served. `github.com/acme` may be a
+  hobby project. `orgBelongsToCompany()` requires corroboration from the org's
+  own profile — a display name that normalizes to the company's, or a blog URL
+  on the company's domain. A matching login alone is refused.
+- Forks are excluded from the star count; they are somebody else's work.
+- HN search is full-text. `attributableStories()` requires the company name as a
+  **whole term**, so "Notional" is not attributed to Notion and "Stripe Press"
+  is not attributed to Stripe. Show HN / Launch HN posts are separated from
+  ordinary mentions — the two mean very different things to a seller.
+
+The GitHub token needs **no scopes**: only public data is read.
+
+### Verification
+
+- `npm run typecheck`, `npx eslint lib/ tests/ components/`, and
+  `npm run build` all pass.
+- Full suite: **727 passed, 11 skipped across 58 files** (the skips are the
+  live-tenant integration tests, correctly gated by `missingMigrations()`).
+- 39 new unit tests: `tests/unit/derive.test.ts` (21),
+  `tests/unit/free-providers.test.ts` (19, incl. the Notional/Notion and
+  hobby-org refusals), plus new Apollo and Prospeo harvest tests.
+
+---
+
 ## 2026-08-16 — Free DNS technology detection
 
 **The best value-per-cost provider in the system.** No API, no key, no account,

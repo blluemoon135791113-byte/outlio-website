@@ -82,6 +82,23 @@ export const FIELD_TTL_SECONDS: Record<ResearchField, number | null> = {
   /** The matched recipient name does not change. */
   federal_recipient_name: null,
 
+  /*
+   * Derived facts expire with the observations behind them. A growth figure
+   * recomputed from the same two readings is the same number, so the TTL only
+   * needs to outlive the inputs, not lead them.
+   */
+  employee_growth: 30 * DAY,
+  tech_churn: 30 * DAY,
+  /** Founding date does not move; the age recomputes from it on read. */
+  company_age: 180 * DAY,
+  funding_recency: 30 * DAY,
+
+  /** Social handles change rarely, and are free when they do. */
+  social_profiles: 180 * DAY,
+
+  person_seniority: 180 * DAY,
+  person_department: 180 * DAY,
+
   // Funding. Long, because rounds are infrequent and expensive to look up.
   funding_round: 90 * DAY,
   funding_amount: 90 * DAY,

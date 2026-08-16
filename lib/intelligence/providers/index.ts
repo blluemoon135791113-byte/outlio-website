@@ -32,6 +32,8 @@ import { apolloEmailProvider } from './apollo'
 import { companiesHouseProvider } from './companies-house'
 import { dnsTechProvider } from './dns-tech'
 import { domainDiscoveryProvider } from './domain-discovery'
+import { githubProvider } from './github'
+import { hackerNewsProvider } from './hackernews'
 import { gdeltFundingProvider, tavilyFundingProvider } from './funding'
 import { pageSpeedTechProvider } from './pagespeed'
 import { prospeoEmailProvider, prospeoPhoneProvider } from './prospeo'
@@ -44,6 +46,8 @@ import { wikidataProvider } from './wikidata'
 export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(wikidataProvider),
   eraseProviderType(usaSpendingProvider),
+  eraseProviderType(githubProvider),
+  eraseProviderType(hackerNewsProvider),
   eraseProviderType(companiesHouseProvider),
   eraseProviderType(secEdgarProvider),
   eraseProviderType(domainDiscoveryProvider),
@@ -86,6 +90,9 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
    * not from a guess, and `INTELLIGENCE_PROVIDER_ORDER` flips it without a
    * deploy once the benchmark has run.
    */
+  // Both free, and the only providers in their categories.
+  technical_presence: ['github'],
+  product_activity: ['hackernews'],
   contact_email: ['prospeo-email', 'apollo-email'],
   contact_phone: ['prospeo-phone'],
 }
@@ -138,6 +145,9 @@ function isConfigured(name: string): boolean {
       return Boolean(process.env.PAGESPEED_API_KEY)
     // No key exists for DNS — it uses the system resolver.
     case 'dns-tech':
+    // Free public APIs. GitHub works unauthenticated at a lower rate limit.
+    case 'github':
+    case 'hackernews':
       return true
     case 'prospeo-email':
     case 'prospeo-phone':

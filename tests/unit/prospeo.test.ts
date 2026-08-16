@@ -108,6 +108,43 @@ describe('prospeoEvidence — contact fields', () => {
   it('stores nothing at all for a NO_MATCH response', () => {
     expect(prospeoEvidence(output({ error: true, error_code: 'NO_MATCH' }), PERSON)).toEqual([])
   })
+
+  it('keeps seniority and department from the CURRENT role', () => {
+    const evidence = prospeoEvidence(
+      output({
+        person: {
+          email: { revealed: true, email: 'sam@acme.com', status: 'VERIFIED' },
+          job_history: [
+            { current: false, seniority: 'entry', departments: ['support'] },
+            { current: true, seniority: 'founder', departments: ['engineering', 'management'] },
+          ],
+        },
+      }),
+      PERSON,
+    )
+
+    // A past role describes who they used to be.
+    expect(evidence.find((item) => item.field === 'person_seniority')?.value).toEqual({
+      value: 'founder',
+    })
+    expect(evidence.find((item) => item.field === 'person_department')?.value).toEqual({
+      value: ['engineering', 'management'],
+    })
+  })
+
+  it('reports no seniority when no role is marked current', () => {
+    const evidence = prospeoEvidence(
+      output({
+        person: {
+          email: { revealed: true, email: 'sam@acme.com', status: 'VERIFIED' },
+          job_history: [{ current: false, seniority: 'entry' }],
+        },
+      }),
+      PERSON,
+    )
+
+    expect(evidence.find((item) => item.field === 'person_seniority')).toBeUndefined()
+  })
 })
 
 describe('prospeoEvidence — the company windfall', () => {
@@ -192,6 +229,37 @@ describe('prospeoEvidence — the company windfall', () => {
   it('flags sales hiring from the open roles', () => {
     const hiring = prospeoEvidence(FULL, PERSON).find((item) => item.field === 'hiring_signals')
     expect(hiring?.value).toMatchObject({ hiring: true, openRoles: 3, salesHiring: true })
+  })
+
+  it('keeps every social profile on the response', () => {
+    // These arrive on a call already paid for. An earlier version discarded
+    // them, and users asking for "their Instagram and X" got a partial answer
+    // for data already in hand.
+    const socials = output({
+      company: {
+        twitter_url: 'https://x.com/acme',
+        instagram_url: 'https://instagram.com/acme',
+        facebook_url: 'https://facebook.com/acme',
+        youtube_url: 'https://youtube.com/@acme',
+        crunchbase_url: 'https://crunchbase.com/organization/acme',
+        linkedin_url: 'https://linkedin.com/company/acme',
+      },
+    })
+
+    expect(prospeoEvidence(socials, PERSON).find((item) => item.field === 'social_profiles')?.value)
+      .toEqual({
+        twitter: 'https://x.com/acme',
+        instagram: 'https://instagram.com/acme',
+        facebook: 'https://facebook.com/acme',
+        youtube: 'https://youtube.com/@acme',
+        crunchbase: 'https://crunchbase.com/organization/acme',
+        linkedin: 'https://linkedin.com/company/acme',
+      })
+  })
+
+  it('reports no social profiles rather than an empty object', () => {
+    const evidence = prospeoEvidence(output({ company: { twitter_url: '  ' } }), PERSON)
+    expect(evidence.find((item) => item.field === 'social_profiles')).toBeUndefined()
   })
 
   it('drops the windfall when the person has no company to file it against', () => {

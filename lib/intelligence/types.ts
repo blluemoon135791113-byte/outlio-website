@@ -123,6 +123,13 @@ export const RESEARCH_FIELDS = [
   'federal_awards_count',
   'federal_award_types',
   'federal_recipient_name',
+  // Derived by Outlio from evidence history — no provider answers these.
+  'employee_growth',
+  'tech_churn',
+  'company_age',
+  'funding_recency',
+  // Social presence, harvested free from contact-enrichment responses.
+  'social_profiles',
   // funding
   'funding_round',
   'funding_amount',
@@ -147,6 +154,8 @@ export const RESEARCH_FIELDS = [
   // technical_presence
   'github_presence',
   // contact
+  'person_seniority',
+  'person_department',
   'work_email',
   'email_status',
   'mobile_phone',
@@ -228,8 +237,17 @@ export const RESEARCH_FIELD_SPEC: Record<ResearchField, FieldSpec> = {
 
   github_presence: { category: 'technical_presence', entity: 'company' },
 
+  // Computed, never routed — see lib/intelligence/derive.ts.
+  employee_growth: { category: 'company_profile', entity: 'company' },
+  tech_churn: { category: 'company_profile', entity: 'company' },
+  company_age: { category: 'company_profile', entity: 'company' },
+  funding_recency: { category: 'company_profile', entity: 'company' },
+  social_profiles: { category: 'company_profile', entity: 'company' },
+
   work_email: { category: 'contact_email', entity: 'person' },
   email_status: { category: 'contact_email', entity: 'person' },
+  person_seniority: { category: 'contact_email', entity: 'person' },
+  person_department: { category: 'contact_email', entity: 'person' },
   mobile_phone: { category: 'contact_phone', entity: 'person' },
   phone_status: { category: 'contact_phone', entity: 'person' },
 }

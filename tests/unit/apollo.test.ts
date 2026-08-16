@@ -185,6 +185,82 @@ describe('apolloEvidence', () => {
   })
 })
 
+describe('apolloEvidence — the fields that used to be thrown away', () => {
+  it('keeps seniority and department', () => {
+    const evidence = apolloEvidence(
+      output({ person: { email: 'sam@acme.com', seniority: 'founder', departments: ['engineering'] } }),
+      PERSON,
+    )
+
+    expect(evidence.find((item) => item.field === 'person_seniority')?.value).toEqual({
+      value: 'founder',
+    })
+    expect(evidence.find((item) => item.field === 'person_department')?.value).toEqual({
+      value: ['engineering'],
+    })
+  })
+
+  it('ignores blank seniority and empty departments', () => {
+    const evidence = apolloEvidence(
+      output({ person: { email: 'sam@acme.com', seniority: '   ', departments: [] } }),
+      PERSON,
+    )
+
+    expect(evidence.find((item) => item.field === 'person_seniority')).toBeUndefined()
+    expect(evidence.find((item) => item.field === 'person_department')).toBeUndefined()
+  })
+
+  it('keeps social profiles, which arrive free on a paid response', () => {
+    const evidence = apolloEvidence(
+      output({
+        person: {
+          organization: {
+            twitter_url: 'https://x.com/acme',
+            linkedin_url: 'https://linkedin.com/company/acme',
+            facebook_url: '   ',
+          },
+        },
+      }),
+      PERSON,
+    )
+
+    expect(evidence.find((item) => item.field === 'social_profiles')?.value).toEqual({
+      twitter: 'https://x.com/acme',
+      linkedin: 'https://linkedin.com/company/acme',
+    })
+  })
+
+  it('records annual revenue as an estimate, at LOW confidence', () => {
+    const revenue = apolloEvidence(
+      output({ person: { organization: { annual_revenue: 4_000_000 } } }),
+      PERSON,
+    ).find((item) => item.field === 'revenue_estimate')
+
+    expect(revenue?.value).toMatchObject({ min: 4_000_000, max: 4_000_000, isEstimate: true })
+    // A modelled figure is not a filing.
+    expect(revenue?.sourceConfidence).toBe('low')
+  })
+
+  it('marks a founding YEAR as year-precision, not a date', () => {
+    // Apollo reports a year; a registry reports a day. Storing "2011" as
+    // 1 January 2011 would age a December company by an extra year.
+    const founded = apolloEvidence(
+      output({ person: { organization: { founded_year: 2011 } } }),
+      PERSON,
+    ).find((item) => item.field === 'incorporation_date')
+
+    expect(founded?.value).toMatchObject({ year: 2011, precision: 'year', isFoundingYear: true })
+    expect(founded?.sourceConfidence).toBe('low')
+  })
+
+  it('refuses an impossible founding year', () => {
+    for (const year of [1600, 3000]) {
+      const evidence = apolloEvidence(output({ person: { organization: { founded_year: year } } }), PERSON)
+      expect(evidence.find((item) => item.field === 'incorporation_date'), String(year)).toBeUndefined()
+    }
+  })
+})
+
 describe('the email waterfall', () => {
   it('has two providers, in a configurable order', () => {
     expect(DEFAULT_PROVIDER_ORDER.contact_email).toEqual(['prospeo-email', 'apollo-email'])

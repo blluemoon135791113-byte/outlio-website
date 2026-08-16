@@ -57,6 +57,12 @@ type ApolloOrganization = {
   state?: string
   country?: string
   short_description?: string
+  annual_revenue?: number
+  founded_year?: number
+  twitter_url?: string | null
+  facebook_url?: string | null
+  linkedin_url?: string | null
+  crunchbase_url?: string | null
 }
 
 type ApolloResponse = {
@@ -67,6 +73,8 @@ type ApolloResponse = {
     email_status?: string | null
     linkedin_url?: string | null
     title?: string | null
+    seniority?: string | null
+    departments?: string[] | null
     organization?: ApolloOrganization
   }
 }
@@ -157,6 +165,24 @@ export function apolloEvidence(
     )
   }
 
+  /*
+   * Seniority and department — already on the response, previously discarded.
+   *
+   * Spec §19 weights seniority as an ICP criterion, and Apollo returns it on the
+   * match that was paid for anyway. Unlike Prospeo's, these describe the CURRENT
+   * role by construction: `people/match` resolves one person at one company.
+   */
+  if (typeof found.seniority === 'string' && found.seniority.trim()) {
+    push('person_seniority', 'person', person.id, { value: found.seniority.trim() }, 'medium', 0.75)
+  }
+
+  const departments = (found.departments ?? []).filter(
+    (name): name is string => typeof name === 'string' && name.trim().length > 0,
+  )
+  if (departments.length > 0) {
+    push('person_department', 'person', person.id, { value: departments }, 'medium', 0.7)
+  }
+
   const org = found.organization
   if (!org || !person.companyId) return evidence
 
@@ -244,6 +270,58 @@ export function apolloEvidence(
       'medium',
       0.75,
     )
+  }
+
+  if (typeof org.annual_revenue === 'number' && org.annual_revenue > 0) {
+    push(
+      'revenue_estimate',
+      'company',
+      companyId,
+      // A single modelled figure, not a range — recorded as both bounds so a
+      // range filter has something to compare, and labelled as an estimate.
+      { min: org.annual_revenue, max: org.annual_revenue, currency: 'USD', isEstimate: true },
+      'low',
+      0.5,
+    )
+  }
+
+  /*
+   * ⚠️ A FOUNDING YEAR IS NOT AN INCORPORATION FILING.
+   *
+   * Companies House and SEC give a registry date; Apollo gives a year the
+   * company reports about itself. Both answer "when did this company begin", so
+   * they share a field — but `precision: 'year'` is carried through so company
+   * age is not computed to a false day, and confidence is set well below a
+   * filing's so a registry date wins the waterfall.
+   */
+  if (
+    typeof org.founded_year === 'number' &&
+    org.founded_year > 1700 &&
+    org.founded_year <= retrievedAt.getUTCFullYear()
+  ) {
+    push(
+      'incorporation_date',
+      'company',
+      companyId,
+      { value: String(org.founded_year), year: org.founded_year, precision: 'year', isFoundingYear: true },
+      'low',
+      0.55,
+    )
+  }
+
+  // Free on a response already paid for. See the same harvest in `prospeo.ts`.
+  const socials: Record<string, string> = {}
+  for (const [platform, url] of [
+    ['twitter', org.twitter_url],
+    ['facebook', org.facebook_url],
+    ['linkedin', org.linkedin_url],
+    ['crunchbase', org.crunchbase_url],
+  ] as const) {
+    if (typeof url === 'string' && url.trim().length > 0) socials[platform] = url.trim()
+  }
+
+  if (Object.keys(socials).length > 0) {
+    push('social_profiles', 'company', companyId, socials, 'medium', 0.8)
   }
 
   return evidence
