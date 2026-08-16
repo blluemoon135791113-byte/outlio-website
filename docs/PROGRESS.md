@@ -91,10 +91,16 @@ pattern logged in this file, and the first found in a schema rather than in code
 - 12 new unit tests: personal-vs-company separation, the empty-object refusal,
   waterfall routing, and the vocabulary drift guard.
 
-### ⚠️ Migration 0050 is not yet applied
+### Migration 0050 applied and verified against the live project
 
-Run it in the Supabase SQL editor. Until then, a qualification rule on any of
-the twelve fields is rejected by the database.
+`tests/integration/qualification.test.ts` now builds a profile carrying **one
+rule per research field** and reads it back. It passes: the live constraint
+accepts all 63, `person_social_profiles` included.
+
+That test exists because the unit test is not enough on its own. The unit test
+proves the migration **file** matches `RESEARCH_FIELDS`; only this one proves the
+migration was **applied**. The drift 0050 repaired was invisible precisely
+because nothing ever asked the database.
 
 ---
 

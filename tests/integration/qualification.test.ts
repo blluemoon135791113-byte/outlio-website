@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { evidenceKey, type FieldKnowledge } from '@/lib/intelligence/evidence'
-import type { EvidenceRecord } from '@/lib/intelligence/types'
+import { RESEARCH_FIELDS, type EvidenceRecord } from '@/lib/intelligence/types'
 import {
   createProfile,
   deleteProfile,
@@ -142,6 +142,35 @@ describeIf('qualification profiles', () => {
     // from the arithmetic rather than reconstructed later.
     expect(Array.isArray(data?.breakdown)).toBe(true)
     expect((data?.breakdown as unknown[]).length).toBe(2)
+  })
+
+  it('ACCEPTS every field the research vocabulary defines', async () => {
+    /*
+     * ⚠️ THE LIVE CHECK CONSTRAINT, NOT THE TYPESCRIPT LIST.
+     *
+     * `tests/unit/qualification-vocabulary.test.ts` proves the migration file
+     * matches `RESEARCH_FIELDS`. Only this test proves the migration was
+     * actually APPLIED — the drift that migration 0050 repaired was invisible
+     * precisely because nothing ever asked the database.
+     *
+     * One rule per field, in one profile: a single insert that the constraint
+     * rejects fails the whole thing and names the offending field.
+     */
+    const created = await createProfile(user.id, {
+      name: 'Whole vocabulary',
+      criteria: RESEARCH_FIELDS.map((field) => ({
+        field,
+        operator: 'exists' as const,
+        weight: 1,
+        kind: 'preferred' as const,
+      })),
+    })
+
+    expect(created.ok, 'the live constraint rejected at least one research field').toBe(true)
+    if (!created.ok) return
+
+    const loaded = await getProfile(user.id, created.profileId)
+    expect(loaded?.criteria.map((criterion) => criterion.field)).toEqual([...RESEARCH_FIELDS])
   })
 
   it('REFUSES a criterion on a protected characteristic', async () => {
