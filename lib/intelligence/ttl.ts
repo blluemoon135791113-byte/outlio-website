@@ -98,6 +98,8 @@ export const FIELD_TTL_SECONDS: Record<ResearchField, number | null> = {
 
   person_seniority: 180 * DAY,
   person_department: 180 * DAY,
+  /** A person's own handles move even less than an employer's. */
+  person_social_profiles: 180 * DAY,
 
   // Funding. Long, because rounds are infrequent and expensive to look up.
   funding_round: 90 * DAY,

@@ -4,6 +4,100 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-16 — `person_social_profiles`, and a constraint that had drifted
+
+Prompted by a real query — **"Give me socials of individuals"** — which the
+system could not answer correctly.
+
+### The gap
+
+`social_profiles` is a **company** field. The only person-scoped fields were
+`work_email`, `email_status`, `person_seniority`, `person_department`,
+`mobile_phone`, `phone_status`. So the planner's options were to return nothing,
+or to hand back the employer's corporate X account in a column labelled as the
+individual's. **The second is worse** — a wrong answer that looks right.
+
+### Built
+
+`person_social_profiles` (person entity, `contact_email` category), fed from the
+person block of Apollo's `people/match` — `twitter_url`, `github_url`,
+`facebook_url`, `linkedin_url`. Zero added cost: it rides the call that was
+already paid for, the same windfall pattern as the company block.
+
+Apollo is the **only** source. Prospeo's person block carries email, mobile and
+job history and nothing else.
+
+`social_profiles` is now labelled "Company socials" and `person_social_profiles`
+"Personal socials". One label reading "Socials" on both columns would leave
+nobody able to tell whose account they were looking at, which is the same defect
+in the UI that the field split fixes in the data.
+
+### 🔴 The cost bug this would have introduced
+
+**The waterfall is per-field, and every attempt is billed.** `executeTasks`
+calls each provider with only the fields still outstanding — so a socials-only
+task would have bought a **Prospeo enrichment that could not possibly answer
+it**, then fallen through to Apollo. Every socials query would have carried a
+silent wasted charge.
+
+`canHandle` on both contact providers is now field-aware: each declares the
+fields it can answer and declines a task with none of them. Four tests cover the
+routing.
+
+### 🔴 The compliance constraint had drifted out of sync
+
+Found while adding the field. `qualification_rules.field` is CHECK-constrained
+in Postgres to the research vocabulary — that constraint **is** the spec §44
+compliance boundary, making a rule on a protected characteristic impossible by
+schema rather than merely discouraged.
+
+It and `RESEARCH_FIELDS` are two hand-maintained lists in different languages.
+**Eleven fields had shipped in TypeScript without reaching the constraint:**
+
+- 4 USAspending fields (`federal_awards_total`, `federal_awards_count`,
+  `federal_award_types`, `federal_recipient_name`)
+- 4 derived trend fields (`employee_growth`, `tech_churn`, `company_age`,
+  `funding_recency`)
+- 3 harvested fields (`social_profiles`, `person_seniority`,
+  `person_department`)
+
+The drift pointed the wrong way and was invisible. `ProfileManager.tsx` offers
+**every** research field in its dropdown, and `lib/qualification/actions.ts`
+validates with `z.enum(RESEARCH_FIELDS)` — so choosing any of the eleven passed
+validation and then died on a Postgres constraint violation the user could do
+nothing about.
+
+**Migration `0050_qualification_vocabulary_sync.sql`** restores the constraint to
+the full vocabulary (the 11 plus `person_social_profiles`). Widening a CHECK
+cannot invalidate an existing row, so no data migration is needed.
+
+`tests/unit/qualification-vocabulary.test.ts` now parses the **last** constraint
+definition across all migrations and asserts it matches `RESEARCH_FIELDS` in
+both directions, with no duplicates — and asserts the parse found something, so
+a regex that silently matched nothing cannot make the whole file vacuously pass.
+Adding a research field without a migration now fails loudly, at the point the
+field is added.
+
+This is the fifth instance of the recurring **"failure looks like empty"**
+pattern logged in this file, and the first found in a schema rather than in code.
+
+### Verification
+
+- `npm run typecheck`, `npx eslint lib/ tests/ components/`, `npm run build` pass.
+- Full suite: **749 tests, 11 skipped.** Two live-Supabase integration tests
+  (`invitations`, `research-run`) failed on the first full run with
+  `upstream returned HTML` — the hosted project returning a gateway page under
+  the suite's concurrency. Both pass on re-run; neither touches this change.
+- 12 new unit tests: personal-vs-company separation, the empty-object refusal,
+  waterfall routing, and the vocabulary drift guard.
+
+### ⚠️ Migration 0050 is not yet applied
+
+Run it in the Supabase SQL editor. Until then, a qualification rule on any of
+the twelve fields is rejected by the database.
+
+---
+
 ## 2026-08-16 — The zero-cost intelligence block
 
 Three ways to get more out of the system without spending anything: compute what

@@ -156,6 +156,8 @@ export const RESEARCH_FIELDS = [
   // contact
   'person_seniority',
   'person_department',
+  // The INDIVIDUAL's own profiles — distinct from the company's `social_profiles`.
+  'person_social_profiles',
   'work_email',
   'email_status',
   'mobile_phone',
@@ -248,6 +250,7 @@ export const RESEARCH_FIELD_SPEC: Record<ResearchField, FieldSpec> = {
   email_status: { category: 'contact_email', entity: 'person' },
   person_seniority: { category: 'contact_email', entity: 'person' },
   person_department: { category: 'contact_email', entity: 'person' },
+  person_social_profiles: { category: 'contact_email', entity: 'person' },
   mobile_phone: { category: 'contact_phone', entity: 'person' },
   phone_status: { category: 'contact_phone', entity: 'person' },
 }

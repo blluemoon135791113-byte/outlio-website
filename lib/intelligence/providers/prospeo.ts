@@ -419,12 +419,31 @@ async function safeCall(person: PersonEntity, wantMobile: boolean): Promise<Pros
   }
 }
 
+/**
+ * Fields this provider can actually answer about a person.
+ *
+ * ⚠️ THE WATERFALL IS PER-FIELD, AND EVERY ATTEMPT IS BILLED. `executeTasks`
+ * calls each provider in turn with only the fields still outstanding, so a task
+ * asking solely for `person_social_profiles` — which Prospeo's person block does
+ * not carry — would otherwise buy a Prospeo enrichment that cannot possibly
+ * answer it before falling through to Apollo. `canHandle` declines instead.
+ */
+const PROSPEO_PERSON_FIELDS: ReadonlySet<string> = new Set([
+  'work_email',
+  'email_status',
+  'mobile_phone',
+  'phone_status',
+  'person_seniority',
+  'person_department',
+])
+
 function canEnrich(task: ResearchTask): boolean {
   if (task.entity.type !== 'person') return false
   const person = task.entity
   return (
     Boolean(person.fullName) &&
     Boolean(person.companyName ?? person.companyDomain) &&
+    task.fields.some((field) => PROSPEO_PERSON_FIELDS.has(field)) &&
     hasProspeoCredentials()
   )
 }

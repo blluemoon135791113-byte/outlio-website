@@ -70,9 +70,15 @@ const FIELD_DESCRIPTIONS: Record<ResearchField, string> = {
   tech_churn: 'technologies the company recently started or stopped using',
   company_age: 'how many years the company has existed',
   funding_recency: 'how recently the company raised, in months',
-  social_profiles: 'the company\'s X/Twitter, Instagram, Facebook, YouTube and Crunchbase pages',
+  social_profiles:
+    "the COMPANY's own X/Twitter, Instagram, Facebook, YouTube and Crunchbase " +
+    'pages — not the profiles of the people who work there',
   person_seniority: 'how senior the person is: C-Suite, VP, Director, Founder',
   person_department: 'which function the person works in: Sales, Engineering, Marketing',
+  person_social_profiles:
+    "the INDIVIDUAL's own X/Twitter, GitHub, Facebook and LinkedIn profiles — " +
+    'use this, not social_profiles, when the question is about the people rather ' +
+    'than the companies they work for',
   funding_round: 'the funding stage: Seed, Series A, Series B and so on',
   funding_amount: 'how much money was raised',
   funding_currency: 'the currency an amount was raised in',

@@ -75,6 +75,9 @@ type ApolloResponse = {
     title?: string | null
     seniority?: string | null
     departments?: string[] | null
+    twitter_url?: string | null
+    github_url?: string | null
+    facebook_url?: string | null
     organization?: ApolloOrganization
   }
 }
@@ -112,6 +115,25 @@ export function usableEmail(raw: string | null | undefined): string | null {
   if (email.includes('*')) return null
 
   return email
+}
+
+/**
+ * Collects the non-empty profile URLs from a set of candidate fields.
+ *
+ * PURE. Returns `null` rather than `{}` when nothing is present — an empty
+ * object stored as evidence would read as "we looked and they have none",
+ * which is a stronger claim than "the response did not carry any".
+ */
+export function collectSocials(
+  candidates: ReadonlyArray<readonly [string, string | null | undefined]>,
+): Record<string, string> | null {
+  const socials: Record<string, string> = {}
+
+  for (const [platform, url] of candidates) {
+    if (typeof url === 'string' && url.trim().length > 0) socials[platform] = url.trim()
+  }
+
+  return Object.keys(socials).length > 0 ? socials : null
 }
 
 /**
@@ -181,6 +203,28 @@ export function apolloEvidence(
   )
   if (departments.length > 0) {
     push('person_department', 'person', person.id, { value: departments }, 'medium', 0.7)
+  }
+
+  /*
+   * The INDIVIDUAL's own profiles.
+   *
+   * ⚠️ Filed against the PERSON, and kept strictly separate from the company's
+   * `social_profiles`. Handing back Acme's corporate X account in a column
+   * labelled as someone's personal one is the kind of wrong answer that looks
+   * right, which is worse than no answer at all.
+   *
+   * Apollo is the only provider that carries these — Prospeo's person block has
+   * email, mobile and job history and nothing else.
+   */
+  const personSocials = collectSocials([
+    ['twitter', found.twitter_url],
+    ['github', found.github_url],
+    ['facebook', found.facebook_url],
+    ['linkedin', found.linkedin_url],
+  ])
+
+  if (personSocials) {
+    push('person_social_profiles', 'person', person.id, personSocials, 'medium', 0.8)
   }
 
   const org = found.organization
@@ -310,22 +354,34 @@ export function apolloEvidence(
   }
 
   // Free on a response already paid for. See the same harvest in `prospeo.ts`.
-  const socials: Record<string, string> = {}
-  for (const [platform, url] of [
+  const companySocials = collectSocials([
     ['twitter', org.twitter_url],
     ['facebook', org.facebook_url],
     ['linkedin', org.linkedin_url],
     ['crunchbase', org.crunchbase_url],
-  ] as const) {
-    if (typeof url === 'string' && url.trim().length > 0) socials[platform] = url.trim()
-  }
+  ])
 
-  if (Object.keys(socials).length > 0) {
-    push('social_profiles', 'company', companyId, socials, 'medium', 0.8)
+  if (companySocials) {
+    push('social_profiles', 'company', companyId, companySocials, 'medium', 0.8)
   }
 
   return evidence
 }
+
+/**
+ * Fields this provider can answer about a person.
+ *
+ * Apollo is the ONLY source of `person_social_profiles`; Prospeo declines those
+ * tasks so the waterfall reaches here without paying for a call that could not
+ * have answered. See the matching note in `prospeo.ts`.
+ */
+const APOLLO_PERSON_FIELDS: ReadonlySet<string> = new Set([
+  'work_email',
+  'email_status',
+  'person_seniority',
+  'person_department',
+  'person_social_profiles',
+])
 
 export function hasApolloCredentials(): boolean {
   return Boolean(process.env.APOLLO_API_KEY)
@@ -372,6 +428,7 @@ export const apolloEmailProvider: IntelligenceProvider<ApolloOutput> = {
     return (
       Boolean(person.fullName) &&
       Boolean(person.companyName ?? person.companyDomain) &&
+      task.fields.some((field) => APOLLO_PERSON_FIELDS.has(field)) &&
       hasApolloCredentials()
     )
   },

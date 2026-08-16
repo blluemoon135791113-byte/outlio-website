@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 
 import { apolloEvidence, usableEmail, type ApolloOutput } from '@/lib/intelligence/providers/apollo'
 import { ALL_PROVIDERS, DEFAULT_PROVIDER_ORDER } from '@/lib/intelligence/providers'
-import type { PersonEntity } from '@/lib/intelligence/types'
+import type { PersonEntity, ResearchField, ResearchTask } from '@/lib/intelligence/types'
 
 const PERSON: PersonEntity = {
   type: 'person',
@@ -210,6 +210,62 @@ describe('apolloEvidence — the fields that used to be thrown away', () => {
     expect(evidence.find((item) => item.field === 'person_department')).toBeUndefined()
   })
 
+  it("keeps the INDIVIDUAL's own profiles, against the person", () => {
+    const evidence = apolloEvidence(
+      output({
+        person: {
+          twitter_url: 'https://x.com/fabricated',
+          github_url: 'https://github.com/fabricated',
+          linkedin_url: 'https://linkedin.com/in/fabricated',
+          organization: { twitter_url: 'https://x.com/acme' },
+        },
+      }),
+      PERSON,
+    )
+
+    const personal = evidence.find((item) => item.field === 'person_social_profiles')
+    expect(personal?.entityType).toBe('person')
+    expect(personal?.entityId).toBe(PERSON.id)
+    expect(personal?.value).toEqual({
+      twitter: 'https://x.com/fabricated',
+      github: 'https://github.com/fabricated',
+      linkedin: 'https://linkedin.com/in/fabricated',
+    })
+  })
+
+  it('NEVER mixes the company account into the personal one', () => {
+    /*
+     * Handing back Acme's corporate X account in a column labelled as someone's
+     * personal profile is a wrong answer that looks right — worse than no
+     * answer. The two fields stay on two different entities.
+     */
+    const evidence = apolloEvidence(
+      output({
+        person: {
+          twitter_url: 'https://x.com/fabricated',
+          organization: { twitter_url: 'https://x.com/acme' },
+        },
+      }),
+      PERSON,
+    )
+
+    expect(evidence.find((item) => item.field === 'person_social_profiles')?.value).toEqual({
+      twitter: 'https://x.com/fabricated',
+    })
+    expect(evidence.find((item) => item.field === 'social_profiles')).toMatchObject({
+      entityType: 'company',
+      entityId: PERSON.companyId,
+      value: { twitter: 'https://x.com/acme' },
+    })
+  })
+
+  it('reports no personal socials rather than an empty object', () => {
+    // `{}` stored as evidence would read as "we looked and they have none",
+    // which is a stronger claim than "the response did not carry any".
+    const evidence = apolloEvidence(output({ person: { twitter_url: '   ' } }), PERSON)
+    expect(evidence.find((item) => item.field === 'person_social_profiles')).toBeUndefined()
+  })
+
   it('keeps social profiles, which arrive free on a paid response', () => {
     const evidence = apolloEvidence(
       output({
@@ -258,6 +314,43 @@ describe('apolloEvidence — the fields that used to be thrown away', () => {
       const evidence = apolloEvidence(output({ person: { organization: { founded_year: year } } }), PERSON)
       expect(evidence.find((item) => item.field === 'incorporation_date'), String(year)).toBeUndefined()
     }
+  })
+})
+
+describe('the contact waterfall pays only providers that could answer', () => {
+  /*
+   * ⚠️ THE WATERFALL IS PER-FIELD, AND EVERY ATTEMPT IS BILLED.
+   *
+   * `executeTasks` calls each provider in turn with the fields still
+   * outstanding. Apollo is the ONLY source of `person_social_profiles`, so
+   * without a field-aware `canHandle`, a socials-only task would buy a Prospeo
+   * enrichment that cannot possibly answer it before falling through.
+   */
+  const PROSPEO = ALL_PROVIDERS.find((provider) => provider.name === 'prospeo-email')!
+  const APOLLO = ALL_PROVIDERS.find((provider) => provider.name === 'apollo-email')!
+
+  function task(fields: ResearchField[]): ResearchTask {
+    return { id: 'contact:1', category: 'contact_email', entity: PERSON, fields }
+  }
+
+  it('does not send a socials-only task to Prospeo', () => {
+    // Prospeo's person block carries email, mobile and job history — no socials.
+    expect(PROSPEO.canHandle(task(['person_social_profiles']))).toBe(false)
+  })
+
+  it('does send a socials-only task to Apollo', () => {
+    process.env.APOLLO_API_KEY ??= 'test-key'
+    expect(APOLLO.canHandle(task(['person_social_profiles']))).toBe(true)
+  })
+
+  it('still sends an email task to Prospeo', () => {
+    process.env.PROSPEO_API_KEY ??= 'test-key'
+    expect(PROSPEO.canHandle(task(['work_email']))).toBe(true)
+  })
+
+  it('sends a mixed task to Prospeo, which answers the part it can', () => {
+    process.env.PROSPEO_API_KEY ??= 'test-key'
+    expect(PROSPEO.canHandle(task(['work_email', 'person_social_profiles']))).toBe(true)
   })
 })
 

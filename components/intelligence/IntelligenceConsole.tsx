@@ -114,9 +114,12 @@ const COLUMN_LABELS: Record<string, string> = {
   tech_churn: 'Tech changes',
   company_age: 'Age',
   funding_recency: 'Raised',
-  social_profiles: 'Socials',
+  // Two different things, so two different labels. "Socials" alone on both
+  // columns would leave nobody able to tell whose account they were looking at.
+  social_profiles: 'Company socials',
   person_seniority: 'Seniority',
   person_department: 'Department',
+  person_social_profiles: 'Personal socials',
   funding_round: 'Round',
   funding_amount: 'Amount',
   funding_currency: 'Currency',
