@@ -28,6 +28,7 @@
  * what stops one re-render from being captured twice.
  */
 import { adapterFor } from '../adapters/salesnav'
+import { isCompanyPage, readCompanyPage } from '../adapters/salesnav-company'
 import type { ContentMessage, ContentReply } from '../core/types'
 
 declare const chrome: {
@@ -67,7 +68,43 @@ function signature(): string {
   return `${rows.length}|${first}|${last}`
 }
 
+/**
+ * Company pages the user has already opened in this tab.
+ *
+ * Sales Navigator is a SPA and re-renders constantly; without this, one visit
+ * to a company page would report the same website on every mutation burst.
+ */
+const reportedCompanies = new Set<string>()
+
+/**
+ * Reports a website listed on a company page the USER opened.
+ *
+ * ⚠️ NOTHING HERE NAVIGATES. This fires only because the user is already on the
+ * page. The extension does not open company pages and must never learn how —
+ * see the header of `extensions/adapters/salesnav-company.ts`.
+ */
+function announceCompanyIfSeen(): void {
+  const url = window.location.href
+  if (!isCompanyPage(url)) return
+
+  const observation = readCompanyPage(document, url)
+  // No website on the page is not worth a message.
+  if (!observation) return
+
+  if (reportedCompanies.has(observation.companyId)) return
+  reportedCompanies.add(observation.companyId)
+
+  void chrome.runtime.sendMessage({
+    type: 'COMPANY_SEEN',
+    companyId: observation.companyId,
+    companyName: observation.companyName,
+    websiteUrl: observation.websiteUrl,
+  })
+}
+
 function announceIfChanged(): void {
+  announceCompanyIfSeen()
+
   const adapter = adapterFor(window.location.href)
   if (!adapter || !adapter.isReady()) return
 
@@ -162,7 +199,13 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
   return undefined
 })
 
-if (adapterFor(window.location.href)) {
+/*
+ * Watch results pages AND company pages. A company page has no results list, so
+ * `adapterFor` returns null for it — checking only that would mean the observer
+ * never starts and a company page visited mid-session goes unnoticed.
+ */
+if (adapterFor(window.location.href) || isCompanyPage(window.location.href)) {
   watch()
   lastSignature = signature()
+  announceCompanyIfSeen()
 }

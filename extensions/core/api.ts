@@ -200,6 +200,27 @@ export async function sendPage(input: {
   }
 }
 
+/**
+ * Reports a website read from a company page the user opened.
+ *
+ * Deliberately not `sendPage`: nothing is captured, nothing is billed, and a
+ * failure here must never disturb an active capture session — the caller
+ * swallows the error, because a missed website is a blank column and a broken
+ * session is lost work.
+ */
+export async function sendCompanyObservation(input: {
+  companyId: string
+  companyName: string | null
+  websiteUrl: string
+}): Promise<{ leadsUpdated: number }> {
+  const body = await authed('/api/extension/company', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+
+  return { leadsUpdated: typeof body.leadsUpdated === 'number' ? body.leadsUpdated : 0 }
+}
+
 /** Exchanges a pairing code. The only unauthenticated call we make. */
 export async function exchangePairingCode(
   code: string,

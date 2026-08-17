@@ -22,6 +22,7 @@ import {
   exchangePairingCode,
   fetchMe,
   finishSession,
+  sendCompanyObservation,
   sendPage,
   startSession,
 } from '../core/api'
@@ -314,6 +315,30 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
         if (await readSessionId()) await captureActivePage()
         respond({ ok: true })
         return
+
+      case 'COMPANY_SEEN': {
+        /*
+         * ⚠️ ONLY DURING AN ACTIVE SESSION, like every other read.
+         *
+         * Outside a session the extension observes nothing — CLAUDE.md rule 1.
+         * A company page the user browses on their own time is none of our
+         * business, and this returns without reading or sending anything.
+         */
+        if (await readSessionId()) {
+          try {
+            await sendCompanyObservation({
+              companyId: message.companyId,
+              companyName: message.companyName,
+              websiteUrl: message.websiteUrl,
+            })
+          } catch {
+            // A missed website is a blank column; a broken session is lost
+            // work. This must never disturb an in-flight capture.
+          }
+        }
+        respond({ ok: true })
+        return
+      }
 
       case 'PAIRING_CODE': {
         const expected = await takePairingState()

@@ -85,6 +85,17 @@ export type ExtensionMessage =
   | { type: 'PAGE_CHANGED'; url: string; pageIdentifier: string | null }
   /** Content script → background: pairing code found on the connect page. */
   | { type: 'PAIRING_CODE'; code: string; state: string }
+  /**
+   * Content script → background: the user opened a company page that lists a
+   * website. NOT a capture — no HTML, no leads, no credit. See
+   * `extensions/adapters/salesnav-company.ts`.
+   */
+  | {
+      type: 'COMPANY_SEEN'
+      companyId: string
+      companyName: string | null
+      websiteUrl: string
+    }
 
 export type ContentMessage =
   | { type: 'IS_SUPPORTED' }
