@@ -19,7 +19,7 @@ import 'server-only'
  */
 import { requestJson, setHostPacing, ProviderHttpError } from '@/lib/intelligence/http'
 
-export const LLM_VENDORS = ['gemini', 'groq'] as const
+export const LLM_VENDORS = ['gemini', 'groq', 'openrouter', 'cerebras', 'backboard'] as const
 export type LlmVendor = (typeof LLM_VENDORS)[number]
 
 export type LlmRequest = {
@@ -48,6 +48,9 @@ export interface LLMProvider {
 
 const GEMINI_HOST = 'generativelanguage.googleapis.com'
 const GROQ_HOST = 'api.groq.com'
+const OPENROUTER_HOST = 'openrouter.ai'
+const CEREBRAS_HOST = 'api.cerebras.ai'
+const BACKBOARD_HOST = 'app.backboard.io'
 
 /**
  * Pin the production default so planner behaviour cannot drift under an alias.
@@ -57,6 +60,9 @@ export const DEFAULT_GEMINI_MODEL = 'gemini-3.6-flash'
 
 setHostPacing(GEMINI_HOST, 200)
 setHostPacing(GROQ_HOST, 200)
+setHostPacing(OPENROUTER_HOST, 200)
+setHostPacing(CEREBRAS_HOST, 200)
+setHostPacing(BACKBOARD_HOST, 200)
 
 /** Long enough for a planning call, short enough not to stall a request. */
 const LLM_TIMEOUT_MS = 30_000
@@ -198,6 +204,176 @@ export function createGroqProvider(
   }
 }
 
+// ---------------------------------------------------------------------------
+// OpenRouter — the LLM router (OpenAI-compatible contract)
+// ---------------------------------------------------------------------------
+
+export function createOpenRouterProvider(
+  model = process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini',
+): LLMProvider {
+  return {
+    vendor: 'openrouter',
+    model,
+
+    isConfigured: () => Boolean(process.env.OPENROUTER_API_KEY),
+
+    generateJson: async (request) => {
+      const apiKey = process.env.OPENROUTER_API_KEY
+      if (!apiKey) {
+        return { ok: false, code: 'not_configured', detail: 'OPENROUTER_API_KEY is not set' }
+      }
+
+      try {
+        const response = await requestJson<{
+          choices?: Array<{ message?: { content?: string } }>
+        }>({
+          url: `https://${OPENROUTER_HOST}/api/v1/chat/completions`,
+          method: 'POST',
+          headers: { authorization: `Bearer ${apiKey}` },
+          timeoutMs: LLM_TIMEOUT_MS,
+          body: {
+            model,
+            temperature: request.temperature ?? 0,
+            max_tokens: request.maxOutputTokens ?? 2048,
+            // OpenAI-compatible JSON mode. The schema is still repeated in the
+            // prompt and Zod decides, exactly as with Groq.
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: request.system },
+              { role: 'user', content: request.user },
+            ],
+          },
+        })
+
+        const text = response.choices?.[0]?.message?.content
+        if (!text) return { ok: false, code: 'unparseable', detail: 'empty completion' }
+
+        const json = safeParse(text)
+        if (json === undefined) {
+          return { ok: false, code: 'unparseable', detail: 'completion was not JSON' }
+        }
+
+        return { ok: true, json, vendor: 'openrouter', model }
+      } catch (error) {
+        return { ok: false, code: 'unavailable', detail: describe(error) }
+      }
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cerebras — cloud inference (OpenAI-compatible contract)
+// ---------------------------------------------------------------------------
+
+export function createCerebrasProvider(
+  model = process.env.CEREBRAS_MODEL ?? 'llama-3.3-70b',
+): LLMProvider {
+  return {
+    vendor: 'cerebras',
+    model,
+
+    isConfigured: () => Boolean(process.env.CEREBRAS_API_KEY),
+
+    generateJson: async (request) => {
+      const apiKey = process.env.CEREBRAS_API_KEY
+      if (!apiKey) {
+        return { ok: false, code: 'not_configured', detail: 'CEREBRAS_API_KEY is not set' }
+      }
+
+      try {
+        const response = await requestJson<{
+          choices?: Array<{ message?: { content?: string } }>
+        }>({
+          url: `https://${CEREBRAS_HOST}/v1/chat/completions`,
+          method: 'POST',
+          headers: { authorization: `Bearer ${apiKey}` },
+          timeoutMs: LLM_TIMEOUT_MS,
+          body: {
+            model,
+            temperature: request.temperature ?? 0,
+            max_tokens: request.maxOutputTokens ?? 2048,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: request.system },
+              { role: 'user', content: request.user },
+            ],
+          },
+        })
+
+        const text = response.choices?.[0]?.message?.content
+        if (!text) return { ok: false, code: 'unparseable', detail: 'empty completion' }
+
+        const json = safeParse(text)
+        if (json === undefined) {
+          return { ok: false, code: 'unparseable', detail: 'completion was not JSON' }
+        }
+
+        return { ok: true, json, vendor: 'cerebras', model }
+      } catch (error) {
+        return { ok: false, code: 'unavailable', detail: describe(error) }
+      }
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Backboard — unified LLM + memory API
+//
+// Not OpenAI-compatible at the transport level: it authenticates with the
+// X-API-Key header and answers over POST /threads/messages. The planning
+// contract is the same — a system prompt, a user question, JSON output.
+// ---------------------------------------------------------------------------
+
+export function createBackboardProvider(
+  model = process.env.BACKBOARD_MODEL ?? 'gpt-4o',
+  provider = process.env.BACKBOARD_LLM_PROVIDER ?? 'openai',
+): LLMProvider {
+  return {
+    vendor: 'backboard',
+    model,
+
+    isConfigured: () => Boolean(process.env.BACKBOARD_API_KEY),
+
+    generateJson: async (request) => {
+      const apiKey = process.env.BACKBOARD_API_KEY
+      if (!apiKey) {
+        return { ok: false, code: 'not_configured', detail: 'BACKBOARD_API_KEY is not set' }
+      }
+
+      try {
+        const response = await requestJson<{ content?: string | null }>({
+          url: `https://${BACKBOARD_HOST}/api/threads/messages`,
+          method: 'POST',
+          headers: { 'x-api-key': apiKey },
+          timeoutMs: LLM_TIMEOUT_MS,
+          body: {
+            content: request.user,
+            system_prompt: request.system,
+            llm_provider: provider,
+            model_name: model,
+            json_output: true,
+            stream: false,
+            memory: 'off',
+            web_search: 'off',
+          },
+        })
+
+        const text = response.content
+        if (!text) return { ok: false, code: 'unparseable', detail: 'empty completion' }
+
+        const json = safeParse(text)
+        if (json === undefined) {
+          return { ok: false, code: 'unparseable', detail: 'completion was not JSON' }
+        }
+
+        return { ok: true, json, vendor: 'backboard', model }
+      } catch (error) {
+        return { ok: false, code: 'unavailable', detail: describe(error) }
+      }
+    },
+  }
+}
+
 /**
  * Tries the preferred configured provider, then a configured alternative when
  * the first vendor is unavailable. An invalid completion stays with the same
@@ -243,14 +419,33 @@ export function createFallbackLlmProvider(candidates: LLMProvider[]): LLMProvide
  * Falls back both at configuration time and at request time. A configured but
  * retired model, exhausted vendor, or transient outage therefore does not take
  * planning down when the alternative vendor is available.
+ *
+ * `LLM_PROVIDER` names the preferred vendor and is hoisted to the front of the
+ * chain; everything else stays in a fixed order. The fallback layer skips any
+ * vendor whose key is absent, so an unset key degrades instead of failing.
  */
 export function resolveLlmProvider(
   preferred: string | undefined = process.env.LLM_PROVIDER,
 ): LLMProvider {
-  const candidates: LLMProvider[] =
-    preferred === 'groq'
-      ? [createGroqProvider(), createGeminiProvider()]
-      : [createGeminiProvider(), createGroqProvider()]
+  const providers: Record<LlmVendor, LLMProvider> = {
+    gemini: createGeminiProvider(),
+    groq: createGroqProvider(),
+    openrouter: createOpenRouterProvider(),
+    cerebras: createCerebrasProvider(),
+    backboard: createBackboardProvider(),
+  }
+
+  const preferredVendor =
+    preferred !== undefined && preferred in providers ? (preferred as LlmVendor) : undefined
+
+  const candidates: LLMProvider[] = preferredVendor
+    ? [
+        providers[preferredVendor],
+        ...LLM_VENDORS.filter((vendor) => vendor !== preferredVendor).map(
+          (vendor) => providers[vendor],
+        ),
+      ]
+    : LLM_VENDORS.map((vendor) => providers[vendor])
 
   return createFallbackLlmProvider(candidates)
 }

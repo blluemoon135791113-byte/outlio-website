@@ -34,3 +34,44 @@ describe('parseSearchResults URL mapping', () => {
       .toBe('https://www.linkedin.com/in/ada-example/')
   })
 })
+
+/**
+ * The two company URLs must not be swapped.
+ *
+ * The names invite it. `ParsedLead.companyUrl` is the LinkedIn company page,
+ * while `EXPORT_COLUMN_HEADERS.companyUrl` is the header "Company Website URL".
+ * Pairing those two — which the worker did — produced a downloaded CSV with a
+ * column headed "Company Website URL" full of linkedin.com addresses, and left
+ * the real website out of the file entirely.
+ */
+describe('the export CSV keeps the two company URLs apart', () => {
+  it('maps each header to the field its name promises', async () => {
+    const { CSV_COLUMNS } = await import('@/lib/worker/process-job')
+    const { EXPORT_COLUMN_HEADERS, EXPORT_COLUMN_ORDER } = await import('@/lib/export/leads')
+
+    const lead = {
+      fullName: 'Fabricated Person',
+      linkedinUrl: 'https://www.linkedin.com/in/fabricated',
+      salesNavUrl: 'https://www.linkedin.com/sales/lead/fabricated-1',
+      jobTitle: 'Founder',
+      companyName: 'Fabricated Systems',
+      // The LinkedIn company page…
+      companyUrl: 'https://www.linkedin.com/sales/company/456',
+      // …and the company's own site. Different things.
+      companyWebsiteUrl: 'https://example.com/',
+      location: 'London, United Kingdom',
+    }
+
+    const byHeader = Object.fromEntries(
+      CSV_COLUMNS.map((column) => [column.header, column.value(lead as never)]),
+    )
+
+    expect(byHeader[EXPORT_COLUMN_HEADERS.companyLinkedInUrl]).toBe(
+      'https://www.linkedin.com/sales/company/456',
+    )
+    expect(byHeader[EXPORT_COLUMN_HEADERS.companyUrl]).toBe('https://example.com/')
+
+    // And the download has the same columns, in the same order, as a CRM push.
+    expect(CSV_COLUMNS.map((column) => column.header)).toEqual([...EXPORT_COLUMN_ORDER])
+  })
+})

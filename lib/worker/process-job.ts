@@ -48,13 +48,38 @@ export type ProcessOutcome = {
   filesFailed: number
 }
 
-/** CSV column order. `sanitizeCell` is applied by `toCsv` to every cell. */
-const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
+/**
+ * CSV column order. `sanitizeCell` is applied by `toCsv` to every cell.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ TWO DIFFERENT URLS, AND THE NAMES INVITE CONFUSING THEM.             ║
+ * ║                                                                          ║
+ * ║    ParsedLead.companyUrl         → the LinkedIn/Sales Navigator company  ║
+ * ║                                    page  (`/sales/company/123`)          ║
+ * ║    ParsedLead.companyWebsiteUrl  → the company's OWN external website    ║
+ * ║                                                                          ║
+ * ║  while on the export side the header keys read the other way round:      ║
+ * ║                                                                          ║
+ * ║    EXPORT_COLUMN_HEADERS.companyUrl         → "Company Website URL"      ║
+ * ║    EXPORT_COLUMN_HEADERS.companyLinkedInUrl → "Company LinkedIn URL"     ║
+ * ║                                                                          ║
+ * ║  This file previously paired `EXPORT_COLUMN_HEADERS.companyUrl` with     ║
+ * ║  `l.companyUrl`, so the downloaded CSV had a column headed "Company      ║
+ * ║  Website URL" full of linkedin.com addresses — and the real website,     ║
+ * ║  which the extension does extra work to capture, reached no CSV at all.  ║
+ * ║  `tests/unit/parse-leads.test.ts` pins the pairing now.                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * The order matches `EXPORT_COLUMN_ORDER`, so a downloaded CSV and a CRM push
+ * of the same leads have the same columns in the same places.
+ */
+export const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
   { header: EXPORT_COLUMN_HEADERS.name, value: (l) => l.fullName },
   { header: EXPORT_COLUMN_HEADERS.linkedinProfile, value: (l) => l.linkedinUrl },
   { header: EXPORT_COLUMN_HEADERS.jobTitle, value: (l) => l.jobTitle },
   { header: EXPORT_COLUMN_HEADERS.company, value: (l) => l.companyName },
-  { header: EXPORT_COLUMN_HEADERS.companyUrl, value: (l) => l.companyUrl },
+  { header: EXPORT_COLUMN_HEADERS.companyLinkedInUrl, value: (l) => l.companyUrl },
+  { header: EXPORT_COLUMN_HEADERS.companyUrl, value: (l) => l.companyWebsiteUrl },
   { header: EXPORT_COLUMN_HEADERS.location, value: (l) => l.location },
   { header: EXPORT_COLUMN_HEADERS.salesNavigatorUrl, value: (l) => l.salesNavUrl },
 ]
