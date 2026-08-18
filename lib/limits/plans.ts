@@ -32,6 +32,17 @@ export const planLimitsSchema = z.object({
   storage_bytes: nullableInt,
   exports_per_month: nullableInt,
   retention_days: nullableInt,
+  /*
+   * Contact lookups per month.
+   *
+   * ⚠️ THE ONLY THING STANDING BETWEEN AUTO-ENRICHMENT AND A RUNAWAY BILL.
+   * Every lookup costs real money at Prospeo or Apollo, and enrichment runs
+   * automatically after each extraction — so an account that uploads all day
+   * spends all day. `optional()` with a conservative default rather than
+   * `null`: absent must mean "a safe cap", never "unlimited". A plan that
+   * genuinely has no cap must say so with an explicit null.
+   */
+  contact_enrichments_per_month: nullableInt.catch(250).default(250),
 })
 
 export type Plan = {

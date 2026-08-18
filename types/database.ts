@@ -112,6 +112,14 @@ export type PlanLimits = {
   storage_bytes: number | null
   exports_per_month: number | null
   retention_days: number | null
+  /**
+   * Contact lookups per month.
+   *
+   * The only bound on automatic enrichment spend. `null` means genuinely
+   * unlimited; ABSENT means a safe default, never unlimited — see
+   * `planLimitsSchema`.
+   */
+  contact_enrichments_per_month: number | null
 }
 
 // ---------------------------------------------------------------------------

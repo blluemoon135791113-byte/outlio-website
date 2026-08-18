@@ -27,6 +27,8 @@ import {
   mapInConcurrentBatches,
   resolveFileConcurrency,
 } from '@/lib/worker/concurrency'
+import { enrichJobContacts } from '@/lib/worker/enrich-contacts'
+import { rebuildJobExport } from '@/lib/worker/rebuild-export'
 
 /**
  * Exports live in their OWN bucket, not alongside uploads.
@@ -408,6 +410,25 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     })
 
   if (uploadError) throw new Error(`export upload failed: ${concise(uploadError.message)}`)
+
+  /*
+   * ---- contact enrichment ------------------------------------------------
+   *
+   * Email and phone are not on a Sales Navigator page, so this is the only
+   * point at which a lead can acquire either. It runs AFTER the job is
+   * otherwise complete and its failures are swallowed: an enrichment outage
+   * must never make a successful extraction look failed.
+   *
+   * The CSV is rewritten afterwards because the file written above predates
+   * these values — without the rebuild the columns exist, the data exists in
+   * the database, and the one artefact the user downloads has neither.
+   */
+  try {
+    const enriched = await enrichJobContacts(jobId, userId)
+    if (enriched.attempted > 0) await rebuildJobExport(jobId, userId)
+  } catch {
+    // The extraction stands on its own. Contacts can be filled in later.
+  }
 
   // ---- finalise ----------------------------------------------------------
   const status: ProcessOutcome['status'] =

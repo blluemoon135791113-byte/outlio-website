@@ -28,6 +28,7 @@ function limits(over: Partial<PlanLimits>): PlanLimits {
     records_per_extraction: null,
     records_per_month: null,
     storage_bytes: null,
+    contact_enrichments_per_month: null,
     exports_per_month: null,
     retention_days: null,
     ...over,

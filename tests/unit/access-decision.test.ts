@@ -19,6 +19,7 @@ const LIMITS: PlanLimits = {
   storage_bytes: 1073741824,
   exports_per_month: 50,
   retention_days: 90,
+  contact_enrichments_per_month: 250,
 }
 
 const USAGE = { extractionsToday: 0, extractionsThisMonth: 0, recordsThisMonth: 0 }
