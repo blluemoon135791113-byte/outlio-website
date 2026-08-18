@@ -99,6 +99,20 @@ export function DateRangePicker({
         ? `${formatRange(from, from)} – …`
         : (allTimeLabel ?? 'Pick dates')
 
+  /*
+   * ⚠️ FORWARD STOPS AT THE PRESENT.
+   *
+   * Leads cannot be extracted in the future, so every day beyond today is
+   * already disabled. Without this the arrow happily walks into 2027, where the
+   * calendar is entirely dead and there is nothing to explain why. The left
+   * panel is the cursor and the right is cursor+1, so the stop is when the
+   * cursor reaches the current month.
+   */
+  const now = new Date()
+  const atPresent =
+    cursor.year > now.getUTCFullYear() ||
+    (cursor.year === now.getUTCFullYear() && cursor.month >= now.getUTCMonth())
+
   const months = [
     cursor,
     (() => {
@@ -140,24 +154,41 @@ export function DateRangePicker({
            * Above the trigger: the scope row sits near the top of the console
            * panel, and a popover below it is clipped by the panel edge.
            */
-          className="absolute bottom-full left-0 z-30 mb-2 w-[19rem] rounded-[var(--radius-lg)] border border-border bg-panel p-3 shadow-[var(--shadow-md)] sm:w-[34rem]"
+          /*
+           * ⚠️ ANCHORED RIGHT, AND CAPPED TO THE VIEWPORT.
+           *
+           * Anchored left it ran off the screen: the trigger sits at the right
+           * of the filter row, the panel is 34rem wide, and the NEXT-MONTH
+           * arrow — which lives at the panel's right edge — was rendered past
+           * the window. The calendar looked like it could only go backwards.
+           */
+          className="absolute bottom-full right-0 z-30 mb-2 w-[19rem] max-w-[calc(100vw-2rem)] rounded-[var(--radius-clay)] bg-clay-raised p-3 shadow-[var(--clay-shadow-lg)] sm:w-[34rem]"
         >
-          <div className="flex items-center justify-between px-1 pb-2">
+          <div className="flex items-center justify-between px-1 pb-2.5">
             <button
               type="button"
               onClick={() => shiftMonth(-1)}
               aria-label="Previous month"
-              className="cursor-pointer inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] border border-border text-sm text-ink hover:border-border-strong"
+              className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-clay-surface text-sm text-ink shadow-[var(--clay-shadow-chip)] transition-transform duration-150 ease-out hover:shadow-[var(--clay-shadow)] active:scale-[0.94] active:shadow-[var(--clay-shadow-inset)]"
             >
-              ‹
+              <span aria-hidden>‹</span>
             </button>
+
+            {/* Named here as well as per column: with two months on screen the
+                arrows are far apart, and the header says what they move. */}
+            <p className="text-xs font-medium text-muted sm:hidden">
+              {monthLabel(cursor.year, cursor.month)}
+            </p>
+
             <button
               type="button"
               onClick={() => shiftMonth(1)}
+              disabled={atPresent}
               aria-label="Next month"
-              className="cursor-pointer inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] border border-border text-sm text-ink hover:border-border-strong"
+              title={atPresent ? 'Leads cannot be extracted in the future' : undefined}
+              className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-clay-surface text-sm text-ink shadow-[var(--clay-shadow-chip)] transition-transform duration-150 ease-out hover:shadow-[var(--clay-shadow)] active:scale-[0.94] active:shadow-[var(--clay-shadow-inset)] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none disabled:active:scale-100"
             >
-              ›
+              <span aria-hidden>›</span>
             </button>
           </div>
 
