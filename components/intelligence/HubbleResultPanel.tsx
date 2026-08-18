@@ -55,7 +55,7 @@ export function HubbleResultPanel({
           type="button"
           onClick={onClose}
           aria-label="Close results"
-          className="shrink-0 rounded-full px-2 py-1 text-muted transition-colors duration-150 hover:text-ink"
+          className="cursor-pointer shrink-0 rounded-full px-2 py-1 text-muted transition-colors duration-150 hover:text-ink"
         >
           ✕
         </button>

@@ -147,7 +147,7 @@ export function DateRangePicker({
               type="button"
               onClick={() => shiftMonth(-1)}
               aria-label="Previous month"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] border border-border text-sm text-ink hover:border-border-strong"
+              className="cursor-pointer inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] border border-border text-sm text-ink hover:border-border-strong"
             >
               ‹
             </button>
@@ -155,7 +155,7 @@ export function DateRangePicker({
               type="button"
               onClick={() => shiftMonth(1)}
               aria-label="Next month"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] border border-border text-sm text-ink hover:border-border-strong"
+              className="cursor-pointer inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] border border-border text-sm text-ink hover:border-border-strong"
             >
               ›
             </button>
@@ -218,7 +218,7 @@ export function DateRangePicker({
             <button
               type="button"
               onClick={() => onChange(null, null)}
-              className="text-xs font-medium text-muted transition-colors duration-150 hover:text-ink"
+              className="cursor-pointer text-xs font-medium text-muted transition-colors duration-150 hover:text-ink"
             >
               Clear
             </button>

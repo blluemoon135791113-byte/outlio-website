@@ -40,17 +40,18 @@ export function initialsFor(name: string | null | undefined): string {
 /**
  * The monogram palette.
  *
- * Warm and low-saturation so a column of them reads as texture rather than
- * confetti. Values are HSL triples resolved in the component, not colour
- * literals in a style position — CLAUDE.md forbids those.
+ * ⚠️ WARM HUES ONLY — no violet, no blue. A column of avatars is texture, not
+ * confetti, and the product palette has no cool tones for them to sit beside.
+ * Values are resolved in the component rather than written as literals in a
+ * colour position, per CLAUDE.md.
  */
 export const MONOGRAM_TINTS = [
-  { bg: 'oklch(0.92 0.04 60)', fg: 'oklch(0.42 0.09 60)' },
-  { bg: 'oklch(0.92 0.04 145)', fg: 'oklch(0.40 0.08 145)' },
-  { bg: 'oklch(0.92 0.04 250)', fg: 'oklch(0.42 0.10 265)' },
-  { bg: 'oklch(0.92 0.04 320)', fg: 'oklch(0.42 0.10 330)' },
-  { bg: 'oklch(0.92 0.045 30)', fg: 'oklch(0.44 0.11 30)' },
-  { bg: 'oklch(0.92 0.04 195)', fg: 'oklch(0.40 0.08 200)' },
+  { bg: 'oklch(0.93 0.035 70)', fg: 'oklch(0.44 0.08 60)' },
+  { bg: 'oklch(0.93 0.032 145)', fg: 'oklch(0.42 0.07 150)' },
+  { bg: 'oklch(0.93 0.035 40)', fg: 'oklch(0.45 0.09 35)' },
+  { bg: 'oklch(0.93 0.030 195)', fg: 'oklch(0.42 0.07 200)' },
+  { bg: 'oklch(0.93 0.034 100)', fg: 'oklch(0.43 0.08 100)' },
+  { bg: 'oklch(0.93 0.030 25)', fg: 'oklch(0.45 0.08 20)' },
 ] as const
 
 /**

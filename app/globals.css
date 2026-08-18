@@ -85,10 +85,10 @@
   /* Warm paper, taken from the Hubble mockup. The page is CREAM and the cards
      are near-white — that contrast is what makes a card read as a card without
      needing a border. */
-  --clay-bg: #f7f5ef;
-  --clay-surface: #fdfcfa;
+  --clay-bg: #fbfaf4;
+  --clay-surface: #fefdfb;
   --clay-raised: #ffffff;
-  --clay-sunken: #f2efe7;
+  --clay-sunken: #f4f1e7;
 
   /* Paired shadows: dark below, light above. That pairing is what reads as
      extruded rather than dropped, and it is the whole of claymorphism. */
@@ -132,7 +132,8 @@
      it for the sweep left the bar looking barely changed while a query ran —
      the state has to be unmistakable from across a desk. */
   --gen-1: rgba(15, 138, 138, 0.42);
-  --gen-2: rgba(79, 75, 255, 0.30);
+  /* Teal into a warm amber, never violet. */
+  --gen-2: rgba(196, 148, 62, 0.30);
   --gen-3: rgba(15, 138, 138, 0.16);
 }
 
@@ -200,6 +201,27 @@ h6 {
 .app-shell {
   --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
   font-family: var(--font-body);
+
+  /* ==========================================================================
+     THE PRODUCT PALETTE — warm, no violet.
+     ==========================================================================
+     ⚠️ SCOPED TO `.app-shell`, NOT `:root`. The landing page uses the same
+     token names and is read-only under CLAUDE.md rule 5, so overriding here
+     changes every authenticated surface and nothing else.
+
+     The accent is a warm graphite rather than a hue: on ivory, a coloured
+     active state competes with the data, and TEAL is already spoken for — it
+     means "Hubble is working" and must not also mean "this nav item is
+     selected". A colour that means one thing is a colour users can read. */
+  --accent: #3f382d;
+  --accent-deep: #2a251c;
+  --accent-soft: #efeade;
+
+  /* Page and surfaces: ivory, a shade lighter than the first pass. */
+  --app: #fbfaf5;
+  --surface-muted: #f4f1e8;
+  --border: #e8e3d5;
+  --border-strong: #d8d1be;
 }
 
 .route-progress {
@@ -782,7 +804,9 @@ details[open] .faq-mark {
    surface the user is actually typing into.
    -------------------------------------------------------------------------- */
 .hubble-bar:focus-within {
-  outline: 2px solid var(--accent);
+  /* Warm and quiet, but still 2px and still offset — an indicator that only
+     appears for keyboard users is not an indicator. */
+  outline: 2px solid var(--border-strong);
   outline-offset: 3px;
 }
 

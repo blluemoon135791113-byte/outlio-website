@@ -79,7 +79,7 @@ export function HubbleLeadList({
           <button
             type="button"
             onClick={() => onOpenLead(lead)}
-            className="grid w-full grid-cols-[minmax(0,1fr)] items-center gap-4 px-5 py-4 text-left transition-colors duration-150 hover:bg-clay-sunken/60 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto]"
+            className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-4 px-5 py-4 text-left transition-colors duration-150 hover:bg-clay-sunken/60 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto]"
           >
             {/* Person */}
             <span className="flex min-w-0 items-center gap-3">

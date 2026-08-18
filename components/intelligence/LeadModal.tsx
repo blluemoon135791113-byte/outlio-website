@@ -140,7 +140,7 @@ export function LeadModal({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="shrink-0 rounded-full px-2 py-1 text-muted transition-colors duration-150 hover:text-ink"
+              className="cursor-pointer shrink-0 rounded-full px-2 py-1 text-muted transition-colors duration-150 hover:text-ink"
             >
               ✕
             </button>
@@ -214,7 +214,7 @@ export function LeadModal({
                 onClick={submit}
                 disabled={run.busy || question.trim().length < 3}
                 aria-label="Ask"
-                className="clay-raised inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink transition-transform duration-150 ease-out active:scale-[0.94] disabled:opacity-40"
+                className="cursor-pointer clay-raised inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink transition-transform duration-150 ease-out active:scale-[0.94] disabled:opacity-40"
               >
                 <span aria-hidden>→</span>
               </button>
@@ -334,7 +334,7 @@ function LinkRow({
       href={href}
       target="_blank"
       rel="noopener noreferrer nofollow"
-      className="clay flex items-center gap-3 px-3 py-2.5 transition-transform duration-150 ease-out hover:scale-[1.005] active:scale-[0.995]"
+      className="cursor-pointer clay flex items-center gap-3 px-3 py-2.5 transition-transform duration-150 ease-out hover:scale-[1.005] active:scale-[0.995]"
     >
       {content}
     </a>

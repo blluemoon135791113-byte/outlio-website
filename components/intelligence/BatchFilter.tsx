@@ -87,7 +87,7 @@ export function BatchFilter({
           disabled={disabled}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className="clay-sunken flex h-12 w-full items-center gap-3 px-4 text-left text-sm transition-colors duration-150 disabled:opacity-60"
+          className="clay-sunken flex h-12 w-full cursor-pointer items-center gap-3 px-4 text-left text-sm transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span aria-hidden className="text-muted">
             ⌕
@@ -110,7 +110,7 @@ export function BatchFilter({
                   onSelectBatch(null)
                 }
               }}
-              className="rounded-full px-1.5 text-muted transition-colors duration-150 hover:text-ink"
+              className="cursor-pointer rounded-full px-1.5 text-muted transition-colors duration-150 hover:text-ink"
             >
               ✕
             </span>

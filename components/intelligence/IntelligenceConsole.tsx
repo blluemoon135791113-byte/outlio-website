@@ -436,7 +436,7 @@ export function IntelligenceConsole({
               type="button"
               onClick={() => setQuestion(example)}
               disabled={busy}
-              className="rounded-full border border-border px-3 py-1 text-xs text-muted transition-colors duration-150 hover:border-accent/40 hover:text-ink disabled:opacity-60"
+              className="cursor-pointer rounded-full border border-border px-3 py-1 text-xs text-muted transition-colors duration-150 hover:border-accent/40 hover:text-ink disabled:opacity-60"
             >
               {example}
             </button>
@@ -522,7 +522,7 @@ export function IntelligenceConsole({
             {profiles.length === 0 ? (
               <a
                 href="/dashboard/intelligence/profiles"
-                className="mt-1 inline-block text-[11px] text-accent underline-offset-2 hover:underline"
+                className="cursor-pointer mt-1 inline-block text-[11px] text-accent underline-offset-2 hover:underline"
               >
                 Create an ICP profile
               </a>
@@ -615,7 +615,7 @@ export function IntelligenceConsole({
               busy ||
               results.clarification.questions.some((item) => !answers[item.id])
             }
-            className="product-gradient mt-4 inline-flex h-9 items-center rounded-[var(--radius-md)] px-4 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-60"
+            className="cursor-pointer product-gradient mt-4 inline-flex h-9 items-center rounded-[var(--radius-md)] px-4 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-60"
           >
             Continue
           </button>
@@ -719,7 +719,7 @@ function Results({ results }: { results: RunResults }) {
                               href={cell.sourceUrl}
                               target="_blank"
                               rel="noopener noreferrer nofollow"
-                              className="mt-0.5 block text-[11px] text-accent underline-offset-2 hover:underline"
+                              className="cursor-pointer mt-0.5 block text-[11px] text-accent underline-offset-2 hover:underline"
                             >
                               source
                             </a>
