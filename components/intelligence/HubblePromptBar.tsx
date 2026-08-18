@@ -125,7 +125,7 @@ export function HubblePromptBar({
               type="button"
               disabled={busy}
               onClick={() => onChange(suggestion)}
-              className="cursor-pointer rounded-[var(--radius-clay)] bg-clay-surface px-4 py-2.5 text-[13px] text-muted shadow-[var(--clay-shadow-chip)] transition-[transform,color,background-color,box-shadow] duration-150 ease-out hover:bg-teal-soft hover:text-teal active:scale-[0.97] active:shadow-[var(--clay-shadow-inset)]"
+              className="clay-interactive cursor-pointer rounded-[var(--radius-clay)] bg-clay-surface px-4 py-2.5 text-[13px] text-muted shadow-[var(--clay-shadow-chip)] hover:text-ink active:scale-[0.97]"
             >
               {suggestion}
             </button>

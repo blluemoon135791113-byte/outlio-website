@@ -158,6 +158,30 @@
     inset -4px -5px 12px -7px rgba(84, 72, 45, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 1);
 
+  /* ==========================================================================
+     HOVER AND PRESS — vivid ivory over teal.
+     ==========================================================================
+     A gradient rather than a flat tint: the ivory stays on top where the
+     content sits, so text keeps its contrast, and the teal gathers toward the
+     bottom-right where the clay shadow already falls. The surface looks lit
+     rather than repainted.
+
+     Press pushes the teal further up and in, so the same gesture reads as
+     deeper — the widget is being pressed INTO the page, not just recoloured. */
+  --ivory-vivid: #fefaea;
+  --grad-hover: linear-gradient(
+    155deg,
+    var(--ivory-vivid) 0%,
+    #f7f1d8 42%,
+    rgba(15, 138, 138, 0.20) 100%
+  );
+  --grad-press: linear-gradient(
+    155deg,
+    #faf4dd 0%,
+    rgba(15, 138, 138, 0.28) 48%,
+    rgba(15, 138, 138, 0.46) 100%
+  );
+
   --radius-clay: 1.15rem;
   --radius-clay-lg: 1.9rem;
 
@@ -921,5 +945,36 @@ details[open] .faq-mark {
   .hubble-generating::after {
     opacity: 0.6;
     transform: none;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   Interactive clay.
+
+   One class for every widget that responds to a cursor, so hover and press
+   look the same everywhere rather than being re-invented per component.
+   -------------------------------------------------------------------------- */
+.clay-interactive {
+  transition:
+    background-image 160ms var(--ease-out-ui, ease-out),
+    box-shadow 160ms var(--ease-out-ui, ease-out),
+    transform 140ms var(--ease-out-ui, ease-out),
+    color 140ms ease-out;
+}
+
+.clay-interactive:hover:not(:disabled) {
+  background-image: var(--grad-hover);
+}
+
+.clay-interactive:active:not(:disabled) {
+  background-image: var(--grad-press);
+  box-shadow: var(--clay-shadow-inset);
+}
+
+/* The gradient is the affordance; motion is a bonus nobody depends on. */
+@media (prefers-reduced-motion: reduce) {
+  .clay-interactive {
+    transition: background-image 100ms linear;
   }
 }

@@ -169,7 +169,7 @@ export function DateRangePicker({
               type="button"
               onClick={() => shiftMonth(-1)}
               aria-label="Previous month"
-              className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-clay-surface text-sm text-ink shadow-[var(--clay-shadow-chip)] transition-transform duration-150 ease-out hover:shadow-[var(--clay-shadow)] active:scale-[0.94] active:shadow-[var(--clay-shadow-inset)]"
+              className="clay-interactive inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-clay-surface text-sm text-ink shadow-[var(--clay-shadow-chip)] active:scale-[0.94]"
             >
               <span aria-hidden>‹</span>
             </button>
@@ -186,7 +186,7 @@ export function DateRangePicker({
               disabled={atPresent}
               aria-label="Next month"
               title={atPresent ? 'Leads cannot be extracted in the future' : undefined}
-              className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-clay-surface text-sm text-ink shadow-[var(--clay-shadow-chip)] transition-transform duration-150 ease-out hover:shadow-[var(--clay-shadow)] active:scale-[0.94] active:shadow-[var(--clay-shadow-inset)] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none disabled:active:scale-100"
+              className="clay-interactive inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-clay-surface text-sm text-ink shadow-[var(--clay-shadow-chip)] active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none disabled:active:scale-100"
             >
               <span aria-hidden>›</span>
             </button>
@@ -227,12 +227,12 @@ export function DateRangePicker({
                         disabled={isFuture}
                         aria-pressed={isEdge}
                         className={[
-                          'h-7 rounded-[var(--radius-sm)] text-xs transition-colors duration-150',
+                          'clay-interactive h-7 cursor-pointer rounded-[var(--radius-sm)] text-xs',
                           isEdge
                             ? 'bg-accent font-semibold text-white'
                             : inRange
                               ? 'bg-accent-soft text-ink'
-                              : 'text-ink hover:bg-surface-muted',
+                              : 'text-ink',
                           isFuture ? 'cursor-not-allowed text-muted opacity-40 hover:bg-transparent' : '',
                         ].join(' ')}
                       >
