@@ -50,10 +50,19 @@ describe('normalizeExportLead', () => {
       'Sales Navigator URL',
     ])
 
-    // And contact details are exported, since they are the point of enriching.
-    expect(EXPORT_COLUMN_ORDER).toContain('Work Email')
-    expect(EXPORT_COLUMN_ORDER).toContain('Mobile Phone')
+    // Everything the page carries is exported.
     expect(EXPORT_COLUMN_ORDER).toContain('Company Size')
+    expect(EXPORT_COLUMN_ORDER).toContain('Connection Degree')
+    expect(EXPORT_COLUMN_ORDER).toContain('Source List')
+
+    /*
+     * ⚠️ AND NOTHING THAT CANNOT BE OBTAINED. Email and phone are on neither
+     * LinkedIn nor Sales Navigator — a real saved page carries zero addresses
+     * and zero `tel:` links — so shipping the columns would promise a value no
+     * free path can ever fill.
+     */
+    expect(EXPORT_COLUMN_ORDER).not.toContain('Work Email')
+    expect(EXPORT_COLUMN_ORDER).not.toContain('Mobile Phone')
     expect(toCanonicalExportRecord(lead)).toMatchObject({
       Name: 'Áda Example',
       'LinkedIn Profile': 'https://www.linkedin.com/in/fabricated-1',

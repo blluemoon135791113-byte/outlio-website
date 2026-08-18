@@ -54,8 +54,14 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+/**
+ * ⚠️ ONE WORD FOR "WE HAVE NO VALUE", MATCHING THE CSV.
+ *
+ * The table said "Not available" while the export wrote `N/A`, so the same
+ * absent field read as two different things depending on where you looked.
+ */
 function missing(value: string | null) {
-  return value?.trim() || 'Not available'
+  return value?.trim() || 'N/A'
 }
 
 function safeExternalUrl(value: string | null) {
@@ -900,7 +906,7 @@ function LeadPreview({
 
       {leads.length > 0 ? (
         <div className="overflow-x-auto" data-lenis-prevent-horizontal>
-          <table className="w-full min-w-[1240px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[2100px] border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-surface-muted/70 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
                 <th className="w-12 px-5 py-3">
@@ -919,6 +925,21 @@ function LeadPreview({
                 <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyLinkedInUrl}</th>
                 <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyUrl}</th>
                 <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.location}</th>
+                {/*
+                  Everything the CSV carries, so the table and the file agree.
+                  Previously the table showed eight columns while the export had
+                  seventeen — a user checking their data on screen could not see
+                  what they were about to download.
+                */}
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.sourceList}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyIndustry}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companySize}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyHeadquarters}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.connectionDegree}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.reachable}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.listCount}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.lastActivity}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.addedToList}</th>
                 <th className="px-5 py-3 text-right">{EXPORT_COLUMN_HEADERS.salesNavigatorUrl}</th>
               </tr>
             </thead>
@@ -986,6 +1007,30 @@ function LeadPreview({
                   <td className="max-w-48 truncate px-4 py-3 text-muted" title={lead.location ?? undefined}>
                     {missing(lead.location)}
                   </td>
+                  <td className="max-w-40 truncate px-4 py-3 text-muted" title={lead.source_list ?? undefined}>
+                    {missing(lead.source_list)}
+                  </td>
+                  <td className="max-w-40 truncate px-4 py-3 text-muted">
+                    {missing(lead.company_industry)}
+                  </td>
+                  <td className="max-w-32 truncate px-4 py-3 text-muted">
+                    {missing(lead.company_size)}
+                  </td>
+                  <td className="max-w-40 truncate px-4 py-3 text-muted" title={lead.company_headquarters ?? undefined}>
+                    {missing(lead.company_headquarters)}
+                  </td>
+                  <td className="px-4 py-3 text-muted">{missing(lead.connection_degree)}</td>
+                  {/* `null` means the badge was absent, which is not "no". */}
+                  <td className="px-4 py-3 text-muted">
+                    {lead.is_reachable === true ? 'Yes' : 'N/A'}
+                  </td>
+                  <td className="px-4 py-3 text-muted">
+                    {lead.list_count === null ? 'N/A' : lead.list_count}
+                  </td>
+                  <td className="max-w-36 truncate px-4 py-3 text-muted">
+                    {missing(lead.last_activity)}
+                  </td>
+                  <td className="px-4 py-3 text-muted">{missing(lead.added_to_list_at)}</td>
                   <td className="px-5 py-3 text-right">
                     {safeExternalUrl(lead.sales_navigator_url) ? (
                       <a

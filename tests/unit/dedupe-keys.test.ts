@@ -37,6 +37,7 @@ function lead(over: Partial<ParsedLead>): ParsedLead {
     listCount: null,
     lastActivity: null,
     addedToListAt: null,
+    sourceList: null,
     companyIndustry: null,
     companySize: null,
     companyHeadquarters: null,

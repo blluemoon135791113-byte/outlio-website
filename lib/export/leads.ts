@@ -40,11 +40,8 @@ export type ExportLead = {
   lastActivity?: string | null
   addedToList?: string | null
 
-  /* ---- enrichment only ---------------------------------------------------- */
-  workEmail?: string | null
-  emailStatus?: string | null
-  mobilePhone?: string | null
-  phoneStatus?: string | null
+  /** Which Sales Navigator list or search the lead came from. */
+  sourceList?: string | null
 }
 
 export const EXPORT_COLUMN_HEADERS = {
@@ -67,11 +64,8 @@ export const EXPORT_COLUMN_HEADERS = {
   lastActivity: 'Last Activity',
   addedToList: 'Added To List',
 
-  /* Enrichment, never the parser: these are not on a Sales Navigator page. */
-  workEmail: 'Work Email',
-  emailStatus: 'Email Status',
-  mobilePhone: 'Mobile Phone',
-  phoneStatus: 'Phone Status',
+  /** Which Sales Navigator list or search the lead came from. */
+  sourceList: 'Source List',
 } as const
 
 /**
@@ -91,6 +85,7 @@ export const EXPORT_COLUMN_ORDER = [
   EXPORT_COLUMN_HEADERS.location,
   EXPORT_COLUMN_HEADERS.salesNavigatorUrl,
 
+  EXPORT_COLUMN_HEADERS.sourceList,
   EXPORT_COLUMN_HEADERS.companyIndustry,
   EXPORT_COLUMN_HEADERS.companySize,
   EXPORT_COLUMN_HEADERS.companyHeadquarters,
@@ -99,12 +94,17 @@ export const EXPORT_COLUMN_ORDER = [
   EXPORT_COLUMN_HEADERS.listCount,
   EXPORT_COLUMN_HEADERS.lastActivity,
   EXPORT_COLUMN_HEADERS.addedToList,
-
-  EXPORT_COLUMN_HEADERS.workEmail,
-  EXPORT_COLUMN_HEADERS.emailStatus,
-  EXPORT_COLUMN_HEADERS.mobilePhone,
-  EXPORT_COLUMN_HEADERS.phoneStatus,
 ] as const
+
+/**
+ * The value written when a field has no data.
+ *
+ * ⚠️ AN EMPTY CELL IS AMBIGUOUS. It reads as "this person has no job title" as
+ * easily as "we could not find one", and a spreadsheet gives no way to tell.
+ * `N/A` says a value was looked for and is not available — which is the honest
+ * claim, and the one CLAUDE.md rule 4 requires instead of a guess.
+ */
+export const NOT_AVAILABLE = 'N/A'
 
 export function toCanonicalExportRecord(
   lead: ExportLead,
@@ -122,10 +122,7 @@ export function toCanonicalExportRecord(
       lead.listCount === null || lead.listCount === undefined ? null : String(lead.listCount),
     [EXPORT_COLUMN_HEADERS.lastActivity]: lead.lastActivity ?? null,
     [EXPORT_COLUMN_HEADERS.addedToList]: lead.addedToList ?? null,
-    [EXPORT_COLUMN_HEADERS.workEmail]: lead.workEmail ?? null,
-    [EXPORT_COLUMN_HEADERS.emailStatus]: lead.emailStatus ?? null,
-    [EXPORT_COLUMN_HEADERS.mobilePhone]: lead.mobilePhone ?? null,
-    [EXPORT_COLUMN_HEADERS.phoneStatus]: lead.phoneStatus ?? null,
+    [EXPORT_COLUMN_HEADERS.sourceList]: lead.sourceList ?? null,
     [EXPORT_COLUMN_HEADERS.name]: lead.name,
     [EXPORT_COLUMN_HEADERS.linkedinProfile]: lead.linkedinUrl,
     [EXPORT_COLUMN_HEADERS.jobTitle]: lead.jobTitle,
@@ -165,10 +162,7 @@ export type ExportLeadSource = Pick<
       | 'list_count'
       | 'last_activity'
       | 'added_to_list_at'
-      | 'work_email'
-      | 'email_status'
-      | 'mobile_phone'
-      | 'phone_status'
+      | 'source_list'
     >
   > & { enrichment?: unknown }
 
@@ -221,10 +215,7 @@ export function normalizeExportLead(row: ExportLeadSource): ExportLead {
       listCount: row.list_count,
       lastActivity: row.last_activity,
       addedToList: row.added_to_list_at,
-      workEmail: row.work_email,
-      emailStatus: row.email_status,
-      mobilePhone: row.mobile_phone,
-      phoneStatus: row.phone_status,
+      sourceList: row.source_list,
     }),
   }
 }

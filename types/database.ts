@@ -301,6 +301,9 @@ export type ExtractedLeadRow = {
    */
   enrichment: Json
 
+  /** The Sales Navigator list or search the lead came from (migration 0053). */
+  source_list: string | null
+
   /* ---- also on the saved page (migration 0052) --------------------------- */
   connection_degree: string | null
   is_reachable: boolean | null

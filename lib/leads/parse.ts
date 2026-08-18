@@ -44,6 +44,8 @@ export type ParsedLead = {
   addedToListAt: string | null
 
   /* ---- from the company hover card, via the extension --------------------- */
+  /** The Sales Navigator list or search this page belonged to. */
+  sourceList: string | null
   companyIndustry: string | null
   /** A RANGE as rendered — "2-10 employees" — never parsed into a number. */
   companySize: string | null
@@ -201,6 +203,21 @@ function companyProfileUrl(href: string | null | undefined): string | null {
   }
 }
 
+/** The user's own name for the list, from the page title. */
+function extractSourceList($: cheerio.CheerioAPI): string | null {
+  const heading = text($('h1').first().text())
+  const title = text($('title').first().text())
+
+  const cleaned = (value: string | null): string | null => {
+    if (!value) return null
+    // Drop LinkedIn's own trailing sections; keep the user's name for the list.
+    const head = value.split(/\s*[|·]\s*/)[0]?.trim() ?? ''
+    return head && head.length <= 120 && !/^sales navigator$/i.test(head) ? head : null
+  }
+
+  return cleaned(heading) ?? cleaned(title)
+}
+
 /** "3rd degree connection" / "3rd" → "3rd". */
 function extractConnectionDegree(row: { text(): string }): string | null {
   const text = row.text().replace(/\s+/g, ' ')
@@ -261,6 +278,16 @@ function extractAddedDate(row: { text(): string }): string | null {
  */
 export function parseSearchResults(html: string): ParseResult {
   const $ = cheerio.load(html)
+
+  /*
+   * The list this page belonged to, read once for the whole file.
+   *
+   * `<title>` is "Tech Leads 4 | Lead Lists | Sales Navigator" — the suffixes
+   * are LinkedIn's chrome, not the user's name for the list, so they are
+   * stripped. Provenance survives the source file being deleted; without it,
+   * leads from three different searches are indistinguishable in one export.
+   */
+  const sourceList = extractSourceList($)
 
   // LinkedIn currently ships both the legacy card list and a newer people
   // table. Stable data attributes are used instead of generated CSS classes.
@@ -390,6 +417,7 @@ export function parseSearchResults(html: string): ParseResult {
       listCount: extractListCount(row),
       lastActivity: extractLastActivity(row),
       addedToListAt: extractAddedDate(row),
+      sourceList,
       companyIndustry,
       companySize,
       companyHeadquarters,

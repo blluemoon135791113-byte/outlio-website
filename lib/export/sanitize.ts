@@ -83,15 +83,31 @@ export type CsvColumn<T> = {
 export function toCsv<T>(
   rows: readonly T[],
   columns: readonly CsvColumn<T>[],
-  options: { bom?: boolean } = {},
+  options: { bom?: boolean; emptyValue?: string } = {},
 ): string {
-  const { bom = true } = options
+  /*
+   * ⚠️ AN EMPTY CELL IS AMBIGUOUS. It reads as "this person has no job title"
+   * as easily as "we could not find one", and a spreadsheet gives the reader no
+   * way to tell. `N/A` states that a value was looked for and is not available.
+   *
+   * Applied here rather than per column so no export path can forget it, and
+   * overridable because a machine-read file may want a true empty.
+   */
+  const { bom = true, emptyValue = 'N/A' } = options
 
   const lines: string[] = []
   lines.push(columns.map((c) => csvField(sanitizeCell(c.header))).join(','))
 
   for (const row of rows) {
-    lines.push(columns.map((c) => csvField(sanitizeCell(c.value(row)))).join(','))
+    lines.push(
+      columns
+        .map((column) => {
+          const cell = sanitizeCell(column.value(row))
+          // `0` and `false` are values, not absences.
+          return csvField(cell === null || cell === '' ? emptyValue : cell)
+        })
+        .join(','),
+    )
   }
 
   const body = lines.join('\r\n') + '\r\n'

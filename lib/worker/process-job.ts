@@ -92,6 +92,7 @@ export const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
    * every destination and every customer field-mapping is built on; a new
    * column inserted among them would silently shift someone's import.
    */
+  { header: EXPORT_COLUMN_HEADERS.sourceList, value: (l) => l.sourceList },
   { header: EXPORT_COLUMN_HEADERS.companyIndustry, value: (l) => l.companyIndustry },
   { header: EXPORT_COLUMN_HEADERS.companySize, value: (l) => l.companySize },
   { header: EXPORT_COLUMN_HEADERS.companyHeadquarters, value: (l) => l.companyHeadquarters },
@@ -104,22 +105,6 @@ export const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
   { header: EXPORT_COLUMN_HEADERS.listCount, value: (l) => l.listCount },
   { header: EXPORT_COLUMN_HEADERS.lastActivity, value: (l) => l.lastActivity },
   { header: EXPORT_COLUMN_HEADERS.addedToList, value: (l) => l.addedToListAt },
-
-  /*
-   * ⚠️ PRESENT BUT EMPTY AT EXTRACTION TIME.
-   *
-   * Email and phone are not on a Sales Navigator page — verified: a real saved
-   * page contains zero addresses and zero `tel:` links. They arrive from the
-   * enrichment providers afterwards.
-   *
-   * The columns are written anyway so this file has the SAME shape as every
-   * other export. A CSV whose columns depend on when it was generated is one
-   * nobody can build an import mapping against.
-   */
-  { header: EXPORT_COLUMN_HEADERS.workEmail, value: () => null },
-  { header: EXPORT_COLUMN_HEADERS.emailStatus, value: () => null },
-  { header: EXPORT_COLUMN_HEADERS.mobilePhone, value: () => null },
-  { header: EXPORT_COLUMN_HEADERS.phoneStatus, value: () => null },
 ]
 
 /** Truncates upstream error text so an HTML error page never reaches a log. */
@@ -331,6 +316,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
       company_name: l.companyName,
       company_url: l.companyUrl,
       company_website_url: l.companyWebsiteUrl,
+      source_list: l.sourceList,
       company_industry: l.companyIndustry,
       company_size: l.companySize,
       company_headquarters: l.companyHeadquarters,
