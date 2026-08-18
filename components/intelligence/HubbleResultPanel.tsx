@@ -167,13 +167,40 @@ export function HubbleResultPanel({
                 <Stat label="External calls" value={results.metadata.externalCalls} />
               </dl>
 
-              {results.status === 'partially_complete' ? (
-                /* The honest status, not a failure. Some fields simply could
-                   not be found, and the run says which. */
-                <p className="rounded-[var(--radius-lg)] bg-warning-soft px-3 py-2 text-xs text-warning">
-                  Some values could not be found. They are marked Unknown below, never guessed.
-                </p>
-              ) : null}
+              {(() => {
+                /*
+                 * If EVERY cell failed because its providers were unavailable,
+                 * say so once at the top. That is an operational problem — a
+                 * quota or a rate limit — and it is not the same message as
+                 * "these companies have no funding".
+                 */
+                const cells = results.rows.flatMap((row) =>
+                  results.columns.map((field) => row.fields[field]),
+                )
+                const unavailable = cells.filter(
+                  (cell) => cell?.state === 'unknown' && cell.reason === 'provider_unavailable',
+                ).length
+
+                if (unavailable > 0 && unavailable === cells.length) {
+                  return (
+                    <p className="rounded-[var(--radius-lg)] bg-danger-soft px-3 py-2 text-xs text-danger">
+                      No source could be reached for this question — every provider was
+                      unavailable, rate-limited or out of quota. Nothing here means these
+                      companies lack the data; it means we could not look.
+                    </p>
+                  )
+                }
+
+                if (results.status === 'partially_complete') {
+                  return (
+                    <p className="rounded-[var(--radius-lg)] bg-warning-soft px-3 py-2 text-xs text-warning">
+                      Some values could not be found. Each says why below, and none are guessed.
+                    </p>
+                  )
+                }
+
+                return null
+              })()}
 
               <ul className="space-y-2.5">
                 {results.rows.map((row) => (
@@ -193,9 +220,22 @@ export function HubbleResultPanel({
                             <dt className="w-28 shrink-0 text-muted">{columnLabel(field)}</dt>
                             <dd className="min-w-0 flex-1 text-ink">
                               {!cell || cell.state !== 'known' ? (
-                                /* "Unknown" and "does not have one" are
-                                   different facts and must look different. */
-                                <span className="text-muted/70">Unknown</span>
+                                /*
+                                 * ⚠️ THE REASON, NOT JUST "UNKNOWN". A field
+                                 * nobody could look up because the provider was
+                                 * out of quota is not a company without
+                                 * funding, and a wall of bare "Unknown" reads
+                                 * as the product being broken.
+                                 */
+                                <span className="text-muted/70">
+                                  {cell?.reason === 'provider_unavailable'
+                                    ? 'Source unavailable'
+                                    : cell?.reason === 'no_provider'
+                                      ? 'No source for this'
+                                      : cell?.reason === 'no_company'
+                                        ? 'No company linked'
+                                        : 'Not found'}
+                                </span>
                               ) : (
                                 renderCellValue(cell.value)
                               )}

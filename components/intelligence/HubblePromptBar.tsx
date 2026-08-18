@@ -107,14 +107,15 @@ export function HubblePromptBar({
           aria-label="Ask Hubble"
           aria-busy={busy}
           /*
-           * Jet, not teal — it follows the palette the rest of the page moved
-           * to. Colour still arrives only when the button is usable: a filled
-           * send button on an empty bar invites a click that does nothing.
+           * ⚠️ ONE APPEARANCE. A clay surface with a black arrow, in every
+           * state. It used to fill with colour once the bar had text, which
+           * made the control flicker between two identities as you typed.
+           * Availability is carried by opacity and the cursor alone.
            */
-          className={`clay-interactive inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-clay-surface text-ink shadow-[var(--clay-shadow-chip)] transition-[opacity,transform,box-shadow] duration-150 ease-out ${
             canSubmit
-              ? 'cursor-pointer bg-ink text-white'
-              : 'cursor-not-allowed bg-clay-sunken text-muted'
+              ? 'cursor-pointer active:scale-[0.94] active:shadow-[var(--clay-shadow-inset)]'
+              : 'cursor-not-allowed opacity-45'
           }`}
         >
           <svg

@@ -11,9 +11,16 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+/** Mirrors `UnknownReason` in `lib/intelligence/results.ts`. */
+export type RunUnknownReason =
+  | 'not_found'
+  | 'provider_unavailable'
+  | 'no_provider'
+  | 'no_company'
+
 export type RunCell =
   | { state: 'known'; value: unknown; sourceUrl: string | null; sourceProvider: string }
-  | { state: 'unknown' }
+  | { state: 'unknown'; reason?: RunUnknownReason }
 
 export type RunRow = {
   leadId: string

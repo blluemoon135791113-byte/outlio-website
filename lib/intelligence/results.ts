@@ -23,9 +23,20 @@ import type { ResearchRunStatus } from '@/types/database'
 /** Rows returned to the browser in one response. */
 const MAX_ROWS = 500
 
+/**
+ * ⚠️ AN UNKNOWN CARRIES ITS REASON.
+ *
+ * "We looked and found nothing" and "every provider for this field was rate
+ * limited or out of quota" are different facts, and a user who cannot tell them
+ * apart concludes the product does not work. It was reporting both as a bare
+ * `unknown`, which is how a run where Tavily was over its plan limit and GDELT
+ * was throttled rendered as a silent wall of Unknown.
+ */
+export type UnknownReason = 'not_found' | 'provider_unavailable' | 'no_provider' | 'no_company'
+
 export type ResultCell =
   | { state: 'known'; value: unknown; sourceUrl: string | null; sourceProvider: string }
-  | { state: 'unknown' }
+  | { state: 'unknown'; reason: UnknownReason }
 
 export type ResultRow = {
   leadId: string
@@ -167,6 +178,51 @@ function askedQuestions(
   return []
 }
 
+/**
+ * Maps each requested field to the reason it may be missing.
+ *
+ * Reads `research_tool_calls`, which the executor writes for every provider
+ * attempt with its status. A category where every attempt failed is
+ * `provider_unavailable`; one where providers ran and simply found nothing is
+ * `not_found`; one with no attempts at all had no provider configured.
+ */
+async function unknownReasons(
+  runId: string,
+  columns: readonly ResearchField[],
+): Promise<Map<ResearchField, UnknownReason>> {
+  const supabase = createAdminClient()
+  const reasons = new Map<ResearchField, UnknownReason>()
+
+  const { data } = await supabase
+    .from('research_tool_calls')
+    .select('tool, status')
+    .eq('research_run_id', runId)
+
+  const byCategory = new Map<string, { total: number; failed: number }>()
+  for (const call of data ?? []) {
+    const bucket = byCategory.get(call.tool) ?? { total: 0, failed: 0 }
+    bucket.total += 1
+    // `not_found` means the provider answered; the rest mean it never did.
+    if (call.status !== 'success' && call.status !== 'not_found') bucket.failed += 1
+    byCategory.set(call.tool, bucket)
+  }
+
+  for (const field of columns) {
+    const category = RESEARCH_FIELD_SPEC[field].category
+    const bucket = byCategory.get(category)
+
+    if (!bucket || bucket.total === 0) {
+      reasons.set(field, 'no_provider')
+    } else if (bucket.failed === bucket.total) {
+      reasons.set(field, 'provider_unavailable')
+    } else {
+      reasons.set(field, 'not_found')
+    }
+  }
+
+  return reasons
+}
+
 async function loadRows(
   userId: string,
   runId: string,
@@ -186,6 +242,16 @@ async function loadRows(
   if (scope.type === 'lead_ids' && scope.leadIds?.length) {
     query = query.in('id', scope.leadIds.slice(0, 1000))
   }
+
+  /*
+   * Why each field came back empty, read from the tool calls the run recorded.
+   *
+   * A provider that errored, timed out or was rate-limited means the field was
+   * never actually looked up — reporting that as "not found" tells the user
+   * these companies have no funding when what happened is that the funding
+   * providers were unavailable.
+   */
+  const reasonByField = await unknownReasons(runId, columns)
 
   const { data: leadRows } = await query
   const leads = leadRows ?? []
@@ -225,7 +291,9 @@ async function loadRows(
       const entityId = isCompanyField ? lead.company_id : lead.id
 
       if (!entityId) {
-        fields[field] = { state: 'unknown' }
+        // The lead was never linked to a company, so a company-level field had
+        // nothing to attach to. Not a provider failure.
+        fields[field] = { state: 'unknown', reason: 'no_company' }
         continue
       }
 
@@ -241,7 +309,7 @@ async function loadRows(
               sourceUrl: found.record.sourceUrl,
               sourceProvider: found.record.sourceProvider,
             }
-          : { state: 'unknown' }
+          : { state: 'unknown', reason: reasonByField.get(field) ?? 'not_found' }
     }
 
     return {

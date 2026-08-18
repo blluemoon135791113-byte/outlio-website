@@ -290,14 +290,21 @@ export function HubbleConsole({
         The list contracts rather than being covered when the panel opens, so a
         finding and the leads it is about stay on screen together.
       */}
+      {/*
+        ⚠️ `items-stretch`, NOT `items-start`.
+        With `items-start` the list kept its natural height while the panel grew
+        to the viewport beside it, leaving a large dead gap under a five-row
+        list. Both columns now share the row's height, and the list scrolls
+        inside it rather than ending early.
+      */}
       <div
         className={
           run.phase === 'idle'
             ? ''
-            : 'grid items-start gap-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(22rem,1fr)]'
+            : 'grid items-stretch gap-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(22rem,1fr)]'
         }
       >
-        <div className="space-y-3">
+        <div className={run.phase === 'idle' ? 'space-y-3' : 'flex min-h-0 flex-col gap-3'}>
           {loadError ? (
             <p
               role="alert"
@@ -312,6 +319,7 @@ export function HubbleConsole({
             loading={loading}
             emptyHint={emptyHint}
             onOpenLead={(lead) => setOpenLeadId(lead.id)}
+            fill={run.phase !== 'idle'}
           />
         </div>
 

@@ -35,11 +35,14 @@ export function HubbleLeadList({
   loading,
   onOpenLead,
   emptyHint,
+  fill = false,
 }: {
   leads: HubbleLead[]
   loading: boolean
   onOpenLead: (lead: HubbleLead) => void
   emptyHint: string
+  /** Match the result panel's height instead of ending at the last row. */
+  fill?: boolean
 }) {
   if (loading) {
     return (
@@ -73,7 +76,14 @@ export function HubbleLeadList({
   }
 
   return (
-    <ul className="clay divide-y divide-clay-sunken overflow-hidden">
+    <ul
+      /* `data-lenis-prevent`: Lenis owns the page scroll and would swallow this
+         container's own once the list is tall enough to need one. */
+      data-lenis-prevent
+      className={`clay divide-y divide-clay-sunken overflow-hidden ${
+        fill ? 'max-h-[calc(100vh-7rem)] overflow-y-auto' : ''
+      }`}
+    >
       {leads.map((lead) => (
         <li key={lead.id}>
           <button

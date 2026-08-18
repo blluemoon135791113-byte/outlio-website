@@ -20,7 +20,14 @@ const GDELT_URL = `https://${GDELT_HOST}/api/v2/doc/doc`
 
 // A free, shared, unauthenticated service. Pace it generously — being a good
 // citizen here costs one second per company and keeps the source available.
-setHostPacing(GDELT_HOST, 1_000)
+/*
+ * ⚠️ FIVE SECONDS, NOT ONE. GDELT's own 429 body says "Please limit requests to
+ * one every 5 seconds". Paced at 1s we were rate-limited on nearly every
+ * company in a 25-lead run, and because Tavily is the other funding provider —
+ * currently over its plan limit — that meant a whole run of Unknown with
+ * nothing on screen to say why.
+ */
+setHostPacing(GDELT_HOST, 5_000)
 
 type GdeltResponse = {
   articles?: Array<{

@@ -37,7 +37,7 @@ function row(leadId: string, fields: ResultRow['fields']): ResultRow {
 const known = (value: unknown, provider = 'prospeo') =>
   ({ state: 'known', value, sourceProvider: provider, sourceUrl: null }) as const
 
-const unknown = { state: 'unknown' } as const
+const unknown = { state: 'unknown', reason: 'not_found' } as const
 
 describe('buildMergePlan', () => {
   const results = {
