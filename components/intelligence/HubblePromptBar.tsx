@@ -46,7 +46,7 @@ export function HubblePromptBar({
         a child, which is what keeps it reading as a single object.
       */}
       <div
-        className={`hubble-bar flex items-center rounded-[var(--radius-clay-lg)] bg-clay-raised pr-2.5 shadow-[var(--clay-shadow-lg)] transition-shadow duration-200 focus-within:shadow-[var(--clay-shadow-focus)] ${
+        className={`hubble-bar flex items-center rounded-[var(--radius-clay-lg)] bg-clay-raised pr-3 shadow-[var(--clay-shadow-prompt)] transition-shadow duration-200 focus-within:shadow-[var(--clay-shadow-prompt-focus)] ${
           busy ? 'hubble-generating' : ''
         }`}
       >
