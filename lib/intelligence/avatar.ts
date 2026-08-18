@@ -40,18 +40,30 @@ export function initialsFor(name: string | null | undefined): string {
 /**
  * The monogram palette.
  *
- * ⚠️ WARM HUES ONLY — no violet, no blue. A column of avatars is texture, not
- * confetti, and the product palette has no cool tones for them to sit beside.
+ * ⚠️ SATURATED, BUT NOT VIOLET. An earlier pass sat at 0.03 chroma, which on
+ * ivory read as beige-on-beige — the avatars were the least visible thing in a
+ * row whose whole job is to be scannable. These carry real colour while staying
+ * inside the warm/green/teal range the product palette uses.
+ *
+ * Foregrounds are dark enough to clear 4.5:1 against their own background, so
+ * the initials are legible rather than decorative.
+ *
  * Values are resolved in the component rather than written as literals in a
  * colour position, per CLAUDE.md.
  */
 export const MONOGRAM_TINTS = [
-  { bg: 'oklch(0.93 0.035 70)', fg: 'oklch(0.44 0.08 60)' },
-  { bg: 'oklch(0.93 0.032 145)', fg: 'oklch(0.42 0.07 150)' },
-  { bg: 'oklch(0.93 0.035 40)', fg: 'oklch(0.45 0.09 35)' },
-  { bg: 'oklch(0.93 0.030 195)', fg: 'oklch(0.42 0.07 200)' },
-  { bg: 'oklch(0.93 0.034 100)', fg: 'oklch(0.43 0.08 100)' },
-  { bg: 'oklch(0.93 0.030 25)', fg: 'oklch(0.45 0.08 20)' },
+  // amber
+  { bg: 'oklch(0.87 0.115 78)', fg: 'oklch(0.40 0.11 62)' },
+  // green
+  { bg: 'oklch(0.87 0.105 150)', fg: 'oklch(0.38 0.10 155)' },
+  // coral
+  { bg: 'oklch(0.86 0.105 32)', fg: 'oklch(0.42 0.13 28)' },
+  // teal
+  { bg: 'oklch(0.87 0.095 195)', fg: 'oklch(0.38 0.09 200)' },
+  // olive
+  { bg: 'oklch(0.88 0.110 110)', fg: 'oklch(0.39 0.10 112)' },
+  // rust
+  { bg: 'oklch(0.86 0.100 48)', fg: 'oklch(0.41 0.12 42)' },
 ] as const
 
 /**

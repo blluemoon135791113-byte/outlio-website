@@ -86,7 +86,15 @@ export function HubblePromptBar({
           disabled={!canSubmit}
           aria-label="Ask Hubble"
           aria-busy={busy}
-          className="cursor-pointer inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-clay)] bg-clay-surface text-ink shadow-[var(--clay-shadow-chip)] transition-[transform,box-shadow] duration-150 ease-out hover:shadow-[var(--clay-shadow)] active:scale-[0.94] active:shadow-[var(--clay-shadow-inset)] disabled:opacity-40 disabled:active:scale-100"
+          /*
+           * Colour arrives only when the button is usable. A permanently teal
+           * send button on an empty bar invites a click that does nothing.
+           */
+          className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-clay)] shadow-[var(--clay-shadow-chip)] transition-[transform,background-color,color,box-shadow] duration-150 ease-out active:scale-[0.94] active:shadow-[var(--clay-shadow-inset)] ${
+            canSubmit
+              ? 'cursor-pointer bg-teal text-white'
+              : 'cursor-not-allowed bg-clay-surface text-muted opacity-60'
+          }`}
         >
           <span aria-hidden className="text-[17px] leading-none">
             {busy ? '•' : '↵'}
@@ -117,7 +125,7 @@ export function HubblePromptBar({
               type="button"
               disabled={busy}
               onClick={() => onChange(suggestion)}
-              className="cursor-pointer rounded-[var(--radius-clay)] bg-clay-surface px-4 py-2.5 text-[13px] text-muted shadow-[var(--clay-shadow-chip)] transition-[transform,color,box-shadow] duration-150 ease-out hover:text-ink hover:shadow-[var(--clay-shadow)] active:scale-[0.97] active:shadow-[var(--clay-shadow-inset)]"
+              className="cursor-pointer rounded-[var(--radius-clay)] bg-clay-surface px-4 py-2.5 text-[13px] text-muted shadow-[var(--clay-shadow-chip)] transition-[transform,color,background-color,box-shadow] duration-150 ease-out hover:bg-teal-soft hover:text-teal active:scale-[0.97] active:shadow-[var(--clay-shadow-inset)]"
             >
               {suggestion}
             </button>

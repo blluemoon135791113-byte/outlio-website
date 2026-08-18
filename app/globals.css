@@ -85,10 +85,12 @@
   /* Warm paper, taken from the Hubble mockup. The page is CREAM and the cards
      are near-white — that contrast is what makes a card read as a card without
      needing a border. */
-  --clay-bg: #fbfaf4;
-  --clay-surface: #fefdfb;
+  /* The page is warm ivory; surfaces sit brighter than it, so a widget reads
+     as a widget without needing a border. */
+  --clay-bg: #f7f4ea;
+  --clay-surface: #fefdfa;
   --clay-raised: #ffffff;
-  --clay-sunken: #f4f1e7;
+  --clay-sunken: #f0ecdf;
 
   /* Paired shadows: dark below, light above. That pairing is what reads as
      extruded rather than dropped, and it is the whole of claymorphism. */
@@ -140,11 +142,13 @@
   /* Focus deepens the same shape rather than adding a ring to it. */
   --clay-shadow-prompt-focus:
     0 2px 4px rgba(84, 72, 45, 0.05),
-    0 14px 32px rgba(84, 72, 45, 0.10),
-    0 34px 72px rgba(84, 72, 45, 0.08),
+    0 16px 36px rgba(84, 72, 45, 0.11),
+    0 38px 78px rgba(84, 72, 45, 0.09),
+    /* the teal bloom inside the rim — the focus indicator itself */
+    inset 0 0 0 1.5px rgba(15, 138, 138, 0.35),
+    inset 0 0 18px -4px rgba(15, 138, 138, 0.22),
     inset 0 12px 22px -10px rgba(255, 255, 255, 1),
-    inset -8px -10px 24px -12px rgba(84, 72, 45, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
+    inset -8px -10px 24px -12px rgba(84, 72, 45, 0.34);
 
   /* Small clay: the chip and the send button. Same idea, smaller radii. */
   --clay-shadow-chip:
@@ -838,16 +842,26 @@ details[open] .faq-mark {
    bar instead: same colour, same width, same offset, drawn around the whole
    surface the user is actually typing into.
    -------------------------------------------------------------------------- */
-.hubble-bar:focus-within {
-  /* Warm and quiet, but still 2px and still offset — an indicator that only
-     appears for keyboard users is not an indicator. */
-  outline: 2px solid var(--border-strong);
-  outline-offset: 3px;
+/*
+ * ⚠️ NO OUTLINE — THE BAR ITSELF IS THE INDICATOR.
+ *
+ * A ring around the bar reads as a box drawn on top of it, which is the
+ * opposite of the bar responding to you. Focus is expressed as the clay
+ * deepening and a teal glow blooming inside the rim, so the surface reacts
+ * rather than acquiring a border.
+ *
+ * This is still a visible, non-colour-only focus indicator: the shadow
+ * geometry changes and a new inner glow appears, so keyboard users are not
+ * left guessing. Deleting the indicator outright would have been an
+ * accessibility regression, not a style choice.
+ */
+.hubble-bar,
+.hubble-bar * {
+  outline: none !important;
 }
 
-.hubble-bar input:focus,
-.hubble-bar input:focus-visible {
-  outline: none;
+.hubble-bar:focus-within {
+  box-shadow: var(--clay-shadow-prompt-focus);
 }
 
 .hubble-generating {
