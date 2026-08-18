@@ -68,6 +68,42 @@
   --danger-soft: #fdecea;
   --info: #1f5fa8;
   --info-soft: #e8f1fb;
+
+  /* ==========================================================================
+     CLAY — the Hubble intelligence surface.
+     ==========================================================================
+     A warm, soft-extruded look: surfaces sit ON the background rather than
+     floating over it, so the elevation is carried by a paired shadow (dark
+     below, light above) instead of a border.
+
+     Scoped to Hubble on purpose. The extraction workspace keeps the flat
+     panels it already has — CLAUDE.md: the extraction board is where raw data
+     becomes export-ready, and it must not inherit visual churn from here.
+
+     NO backdrop-filter. CLAUDE.md forbids it on dashboard surfaces, and it is
+     especially wrong over a scrolling list. */
+  --clay-bg: #f7f4ec;
+  --clay-surface: #fbf9f3;
+  --clay-raised: #fefdfa;
+  --clay-sunken: #f1ede2;
+
+  /* Paired shadows are what make it read as extruded rather than dropped. */
+  --clay-shadow: 0 2px 4px rgba(93, 79, 45, 0.05), 0 8px 20px rgba(93, 79, 45, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --clay-shadow-lg: 0 4px 8px rgba(93, 79, 45, 0.06), 0 16px 40px rgba(93, 79, 45, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  /* Pressed: the light and dark swap sides. */
+  --clay-shadow-inset: inset 0 2px 5px rgba(93, 79, 45, 0.09),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.8);
+
+  --radius-clay: 1.25rem;
+  --radius-clay-lg: 1.75rem;
+
+  /* Teal — reserved for THINKING, and used nowhere else.
+     A colour that means one thing is a colour users can read at a glance. */
+  --teal: #0f8a8a;
+  --teal-soft: #dff2f1;
+  --teal-glow: rgba(15, 138, 138, 0.22);
 }
 
 /* FONT PLACEHOLDER — final display/body fonts TBD; swap the two vars below in one place */
@@ -94,6 +130,14 @@
   --color-danger-soft: var(--danger-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+
+  /* Clay — see :root above */
+  --color-clay-bg: var(--clay-bg);
+  --color-clay-surface: var(--clay-surface);
+  --color-clay-raised: var(--clay-raised);
+  --color-clay-sunken: var(--clay-sunken);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
 
   --font-sans: var(--font-body);
   --font-heading: var(--font-display);
@@ -635,5 +679,84 @@ details[open] .faq-mark {
   }
   details .faq-mark {
     transition: none;
+  }
+}
+
+
+/* ==========================================================================
+   HUBBLE — the intelligence surface
+   ==========================================================================
+   Claymorphic, warm, and scoped to this one screen. */
+
+.clay {
+  background: var(--clay-surface);
+  border-radius: var(--radius-clay);
+  box-shadow: var(--clay-shadow);
+}
+
+.clay-raised {
+  background: var(--clay-raised);
+  border-radius: var(--radius-clay);
+  box-shadow: var(--clay-shadow-lg);
+}
+
+/* Inputs read as pressed INTO the surface, which is what tells a user the
+   thing is for typing without needing a border to say so. */
+.clay-sunken {
+  background: var(--clay-sunken);
+  border-radius: var(--radius-clay);
+  box-shadow: var(--clay-shadow-inset);
+}
+
+/* --------------------------------------------------------------------------
+   The thinking state.
+
+   A travelling teal sheen around the prompt bar while a run is in flight.
+   Deliberately NOT an entrance animation — CLAUDE.md forbids those on product
+   tables and lists. This animates only while work is actually happening, and
+   stops the moment it is not, so the motion always means something.
+   -------------------------------------------------------------------------- */
+@keyframes hubble-sweep {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.hubble-thinking {
+  position: relative;
+}
+
+.hubble-thinking::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(var(--radius-clay) + 2px);
+  padding: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--teal-glow) 25%,
+    var(--teal) 50%,
+    var(--teal-glow) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: hubble-sweep 1.4s linear infinite;
+  /* Masks the fill so only the ring is painted. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Motion is decoration here; the status text carries the same information. */
+@media (prefers-reduced-motion: reduce) {
+  .hubble-thinking::after {
+    animation: none;
+    background: var(--teal-glow);
   }
 }

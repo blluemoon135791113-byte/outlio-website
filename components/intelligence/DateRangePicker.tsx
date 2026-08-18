@@ -34,11 +34,14 @@ export function DateRangePicker({
   to,
   onChange,
   disabled,
+  allTimeLabel,
 }: {
   from: string | null
   to: string | null
   onChange: (from: string | null, to: string | null) => void
   disabled?: boolean
+  /** Shown when no range is picked. "All time" on Hubble; a prompt elsewhere. */
+  allTimeLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const today = useMemo(() => toDateInput(new Date()), [])
@@ -89,7 +92,12 @@ export function DateRangePicker({
     })
   }
 
-  const label = from && to ? formatRange(from, to) : from ? `${formatRange(from, from)} – …` : 'Pick dates'
+  const label =
+    from && to
+      ? formatRange(from, to)
+      : from
+        ? `${formatRange(from, from)} – …`
+        : (allTimeLabel ?? 'Pick dates')
 
   const months = [
     cursor,
@@ -107,9 +115,18 @@ export function DateRangePicker({
         disabled={disabled}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="mt-1 flex h-9 w-full items-center justify-between rounded-[var(--radius-md)] border border-border bg-paper px-2 text-left text-sm text-ink transition-colors duration-150 hover:border-border-strong disabled:opacity-60"
+        className={
+          allTimeLabel
+            ? 'clay-sunken flex h-12 w-full items-center gap-2.5 px-4 text-left text-sm transition-colors duration-150 disabled:opacity-60'
+            : 'mt-1 flex h-9 w-full items-center justify-between rounded-[var(--radius-md)] border border-border bg-paper px-2 text-left text-sm text-ink transition-colors duration-150 hover:border-border-strong disabled:opacity-60'
+        }
       >
-        <span className={from ? 'text-ink' : 'text-muted'}>{label}</span>
+        {allTimeLabel ? (
+          <span aria-hidden className="text-muted">
+            ▦
+          </span>
+        ) : null}
+        <span className={from ? 'flex-1 text-ink' : 'flex-1 text-muted'}>{label}</span>
         <span aria-hidden className="ml-2 text-muted">
           ▾
         </span>
