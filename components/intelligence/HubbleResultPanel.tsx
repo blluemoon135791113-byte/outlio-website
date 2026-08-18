@@ -42,7 +42,8 @@ export function HubbleResultPanel({
   return (
     <aside
       aria-label="Hubble results"
-      className="clay-raised flex max-h-[calc(100vh-7rem)] flex-col overflow-hidden lg:sticky lg:top-6"
+      /* Height comes from the grid row it shares with the lead list. */
+      className="clay-raised flex h-full min-h-0 flex-col overflow-hidden"
     >
       <header className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
         <div className="min-w-0">

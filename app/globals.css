@@ -197,13 +197,6 @@
   --teal-soft: #ddf1f0;
   --teal-glow: rgba(15, 138, 138, 0.28);
 
-  /* Animation-only stops. The resting palette is deliberately pale, and reusing
-     it for the sweep left the bar looking barely changed while a query ran —
-     the state has to be unmistakable from across a desk. */
-  --gen-1: rgba(15, 138, 138, 0.42);
-  /* Teal into a warm amber, never violet. */
-  --gen-2: rgba(196, 148, 62, 0.30);
-  --gen-3: rgba(15, 138, 138, 0.16);
 }
 
 /* FONT PLACEHOLDER — final display/body fonts TBD; swap the two vars below in one place */
@@ -830,35 +823,71 @@ details[open] .faq-mark {
 }
 
 /* --------------------------------------------------------------------------
-   Generating.
+   Generating — Claude-style.
 
-   Colour RISES FROM THE LEFT: it enters at the left edge, climbs, and travels
-   across the bar. Two layers do it — a wash that sweeps horizontally and a
-   glow that lifts from the bottom edge — so the motion reads as rising rather
-   than merely sliding.
+   No colour wash across the bar. A gradient sweeping a mostly-empty white
+   surface read as a stain, and it said nothing about what was happening.
 
-   It is a fill BEHIND the text, not a ring around the bar, so the bar itself
-   changes state. Runs only while a query is in flight: motion that is always on
-   stops meaning anything.
+   Instead the STATUS TEXT shimmers: a light travels along the words, the way
+   Claude's own thinking line does. It is quieter, it sits where the eye already
+   is, and it scales — a long status reads as one moving line rather than a
+   whole panel changing colour.
    -------------------------------------------------------------------------- */
-@keyframes hubble-sweep {
+@keyframes hubble-shimmer {
   0% {
-    background-position: -60% 50%;
+    background-position: 180% 0;
   }
   100% {
-    background-position: 160% 50%;
+    background-position: -80% 0;
   }
 }
 
-@keyframes hubble-lift {
+.hubble-shimmer {
+  background: linear-gradient(
+    100deg,
+    var(--muted) 0%,
+    var(--muted) 36%,
+    var(--ink) 50%,
+    var(--muted) 64%,
+    var(--muted) 100%
+  );
+  background-size: 250% 100%;
+  /* Paints the gradient through the glyphs rather than behind them. */
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: hubble-shimmer 2.1s linear infinite;
+}
+
+/* The breathing dot beside it. Slow, so it reads as alive rather than urgent. */
+@keyframes hubble-pulse {
   0%,
   100% {
-    opacity: 0.45;
-    transform: translateY(45%) scaleY(0.6);
+    opacity: 0.25;
+    transform: scale(0.82);
   }
   50% {
     opacity: 1;
-    transform: translateY(0) scaleY(1.05);
+    transform: scale(1);
+  }
+}
+
+.hubble-pulse {
+  animation: hubble-pulse 1.6s ease-in-out infinite;
+}
+
+/* Motion is decoration; the words carry the state on their own. */
+@media (prefers-reduced-motion: reduce) {
+  .hubble-shimmer {
+    animation: none;
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+    color: var(--muted);
+  }
+  .hubble-pulse {
+    animation: none;
+    opacity: 0.7;
   }
 }
 
@@ -893,67 +922,6 @@ details[open] .faq-mark {
 .hubble-bar:focus-within {
   box-shadow: var(--clay-shadow-prompt-focus);
 }
-
-.hubble-generating {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-}
-
-/* The sweep: saturated enough to be unmistakably "working". */
-.hubble-generating::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  background: linear-gradient(
-    95deg,
-    transparent 0%,
-    var(--gen-3) 10%,
-    var(--gen-1) 26%,
-    var(--gen-2) 44%,
-    var(--gen-1) 62%,
-    var(--gen-3) 80%,
-    transparent 100%
-  );
-  background-size: 170% 100%;
-  background-repeat: no-repeat;
-  animation: hubble-sweep 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
-  pointer-events: none;
-}
-
-/* The rise: a glow lifting off the bottom-left, anchored left so the colour
-   always originates there. */
-.hubble-generating::after {
-  content: '';
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  height: 60%;
-  z-index: -1;
-  transform-origin: bottom left;
-  background: radial-gradient(
-    130% 115% at 6% 100%,
-    var(--gen-1) 0%,
-    var(--gen-2) 40%,
-    transparent 78%
-  );
-  animation: hubble-lift 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
-  pointer-events: none;
-}
-
-/* Motion is decoration; the status text carries the same information. */
-@media (prefers-reduced-motion: reduce) {
-  .hubble-generating::before,
-  .hubble-generating::after {
-    animation: none;
-  }
-  .hubble-generating::after {
-    opacity: 0.6;
-    transform: none;
-  }
-}
-
 
 /* --------------------------------------------------------------------------
    Interactive clay.

@@ -25,6 +25,7 @@ export function HubblePromptBar({
   onChange,
   onSubmit,
   busy,
+  busyLabel = 'Thinking…',
   modelName,
   placeholder = 'Ask Hubble…',
   suggestions = [],
@@ -33,6 +34,8 @@ export function HubblePromptBar({
   onChange: (value: string) => void
   onSubmit: () => void
   busy: boolean
+  /** What the shimmer reads while a query runs. */
+  busyLabel?: string
   modelName: string
   placeholder?: string
   suggestions?: string[]
@@ -53,10 +56,23 @@ export function HubblePromptBar({
          * through DEPTH instead: the clay lifts on hover and settles on focus.
          * Its controls carry the gradient; the writing surface stays clean.
          */
-        className={`hubble-bar flex cursor-text items-center rounded-[var(--radius-clay-lg)] bg-clay-raised pr-3 shadow-[var(--clay-shadow-prompt)] transition-shadow duration-200 hover:shadow-[var(--clay-shadow-prompt-focus)] focus-within:shadow-[var(--clay-shadow-prompt-focus)] ${
-          busy ? 'hubble-generating' : ''
-        }`}
+        className="hubble-bar flex cursor-text items-center rounded-[var(--radius-clay-lg)] bg-clay-raised pr-3 shadow-[var(--clay-shadow-prompt)] transition-shadow duration-200 hover:shadow-[var(--clay-shadow-prompt-focus)] focus-within:shadow-[var(--clay-shadow-prompt-focus)]"
       >
+        {/*
+          While a query runs the bar shows a shimmering status line instead of
+          the field. Claude-style: the light travels along the WORDS, where the
+          eye already is, rather than washing the whole surface with colour.
+        */}
+        {busy ? (
+          <span
+            role="status"
+            className="flex h-[68px] min-w-0 flex-1 items-center gap-2.5 px-7 text-[16px]"
+          >
+            <span aria-hidden className="hubble-pulse h-2 w-2 shrink-0 rounded-full bg-ink" />
+            <span className="hubble-shimmer font-medium">{busyLabel}</span>
+          </span>
+        ) : null}
+
         <input
           type="text"
           value={value}
@@ -72,7 +88,9 @@ export function HubblePromptBar({
            * the text sits on the bar's own baseline rather than inside a box
            * that happens to be on it.
            */
-          className="h-[68px] min-w-0 flex-1 border-0 bg-transparent px-7 text-[16px] leading-none text-ink outline-none placeholder:text-muted/80 disabled:opacity-70"
+          className={`h-[68px] min-w-0 flex-1 border-0 bg-transparent px-7 text-[16px] leading-none text-ink outline-none placeholder:text-muted/80 ${
+            busy ? 'hidden' : ''
+          }`}
         />
 
         {/*
@@ -132,11 +150,6 @@ export function HubblePromptBar({
           </svg>
         </button>
       </div>
-
-      {/* The state in words, for anyone the animation does not reach. */}
-      <span className="sr-only" aria-live="polite">
-        {busy ? 'Hubble is working' : ''}
-      </span>
 
       {/*
         ⚠️ KEPT MOUNTED WHILE BUSY. Removing them collapsed the row and jumped

@@ -188,9 +188,7 @@ export function LeadModal({
             push the prompt box off the bottom of the screen. */}
         <footer className="border-t border-clay-sunken p-4">
           <div
-            className={`hubble-bar rounded-[var(--radius-clay)] bg-clay-raised shadow-[var(--clay-shadow)] ${
-              run.busy ? 'hubble-generating' : ''
-            }`}
+            className="hubble-bar rounded-[var(--radius-clay)] bg-clay-raised shadow-[var(--clay-shadow)]"
           >
             <div className="flex items-center gap-2 p-2">
               <input

@@ -81,7 +81,8 @@ export function HubbleLeadList({
          container's own once the list is tall enough to need one. */
       data-lenis-prevent
       className={`clay divide-y divide-clay-sunken overflow-hidden ${
-        fill ? 'max-h-[calc(100vh-7rem)] overflow-y-auto' : ''
+        // The row sets the height; the list just fills it and scrolls.
+        fill ? 'h-full overflow-y-auto' : ''
       }`}
     >
       {leads.map((lead) => (

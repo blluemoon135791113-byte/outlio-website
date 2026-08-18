@@ -27,6 +27,15 @@ import { createClient } from '@/lib/supabase/client'
 /** One list is 25 leads. */
 const LIST_SIZE = 25
 
+/**
+ * The height both result columns share.
+ *
+ * Declared once and applied to the row, so the lead list and the generative
+ * strip are the same height by construction rather than by two numbers someone
+ * has to keep in step.
+ */
+const RESULT_PANE_HEIGHT = 'h-[calc(100dvh-13rem)] min-h-[32rem]'
+
 const SUGGESTIONS = [
   'Companies raising their Series A right now',
   'Which of these use HubSpot?',
@@ -291,17 +300,18 @@ export function HubbleConsole({
         finding and the leads it is about stay on screen together.
       */}
       {/*
-        ⚠️ `items-stretch`, NOT `items-start`.
-        With `items-start` the list kept its natural height while the panel grew
-        to the viewport beside it, leaving a large dead gap under a five-row
-        list. Both columns now share the row's height, and the list scrolls
-        inside it rather than ending early.
+        ⚠️ ONE HEIGHT FOR BOTH COLUMNS.
+        `RESULT_PANE_HEIGHT` is set here and handed to both children, so the
+        list and the strip cannot disagree. Each previously carried its own
+        max-height and `items-start`, so the list ended at its last row while
+        the panel ran to the viewport — the dead gap underneath.
+        Both fill the row and scroll internally.
       */}
       <div
         className={
           run.phase === 'idle'
             ? ''
-            : 'grid items-stretch gap-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(22rem,1fr)]'
+            : `grid items-stretch gap-5 ${RESULT_PANE_HEIGHT} lg:grid-cols-[minmax(0,1.65fr)_minmax(22rem,1fr)]`
         }
       >
         <div className={run.phase === 'idle' ? 'space-y-3' : 'flex min-h-0 flex-col gap-3'}>
