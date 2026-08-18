@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { HubbleConsole } from '@/components/intelligence/HubbleConsole'
 import { requireAccess } from '@/lib/auth/access'
 import type { LeadBatch } from '@/lib/intelligence/batches'
-import { availableModels } from '@/lib/intelligence/llm/catalog'
+import { hubbleModelStatus } from '@/lib/intelligence/llm/catalog'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const metadata: Metadata = {
@@ -60,14 +60,9 @@ export default async function HubblePage() {
   return (
     <HubbleConsole
       userId={userId}
-      // Resolved on the server: the browser must never be told which API keys
-      // exist, only which models it may choose between.
-      models={availableModels().map((model) => ({
-        id: model.id,
-        label: model.label,
-        model: model.model,
-        hint: model.hint,
-      }))}
+      // Only the NAME crosses to the browser. Which vendors we hold keys for
+      // is operational detail, not something to publish in a dashboard.
+      modelName={hubbleModelStatus().name}
       batches={batches}
     />
   )

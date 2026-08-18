@@ -20,7 +20,6 @@ import { useEffect, useRef, useState } from 'react'
 
 import { CompanyAvatar, PersonAvatar } from '@/components/intelligence/Avatar'
 import type { HubbleLead } from '@/components/intelligence/HubbleLeadList'
-import { ModelPicker, type ModelOption } from '@/components/intelligence/ModelPicker'
 import { columnLabel, renderCellValue } from '@/components/intelligence/render-value'
 import { useResearchRun } from '@/components/intelligence/useResearchRun'
 
@@ -41,16 +40,15 @@ function safeExternalUrl(value: string | null): string | null {
 export function LeadModal({
   lead,
   linkedinUrl,
-  models,
+  modelName,
   onClose,
 }: {
   lead: HubbleLead
   linkedinUrl: string | null
-  models: ModelOption[]
+  modelName: string
   onClose: () => void
 }) {
   const [question, setQuestion] = useState('')
-  const [modelId, setModelId] = useState(models[0]?.id ?? '')
   const [answers, setAnswers] = useState<Answer[]>([])
   const run = useResearchRun()
 
@@ -96,7 +94,7 @@ export function LeadModal({
 
     setAnswers((current) => [...current, { question: asked, runId: '' }])
     setQuestion('')
-    void run.ask(asked, { type: 'lead_ids', leadIds: [lead.id] }, modelId || null)
+    void run.ask(asked, { type: 'lead_ids', leadIds: [lead.id] }, null)
   }
 
   return (
@@ -116,7 +114,9 @@ export function LeadModal({
           expanded ? 'max-h-[85vh]' : 'max-h-[70vh]'
         }`}
       >
-        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto p-6">
+        {/* `data-lenis-prevent`: Lenis owns the page scroll and would swallow
+            this container's own. See HubbleResultPanel for the full note. */}
+        <div data-lenis-prevent ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto p-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-center gap-4">
               <PersonAvatar name={lead.fullName} size="lg" />
@@ -187,7 +187,11 @@ export function LeadModal({
         {/* Pinned outside the scroll area: asking a fifth question must not
             push the prompt box off the bottom of the screen. */}
         <footer className="border-t border-clay-sunken p-4">
-          <div className={run.busy ? 'hubble-thinking clay' : 'clay'}>
+          <div
+            className={`rounded-[var(--radius-clay)] bg-clay-raised shadow-[var(--clay-shadow)] ${
+              run.busy ? 'hubble-generating' : ''
+            }`}
+          >
             <div className="flex items-center gap-2 p-2">
               <input
                 type="text"
@@ -201,12 +205,10 @@ export function LeadModal({
                 aria-label="Ask Hubble about this lead"
                 className="min-w-0 flex-1 bg-transparent px-2.5 text-sm text-ink outline-none placeholder:text-muted disabled:opacity-70"
               />
-              <ModelPicker
-                models={models}
-                value={modelId}
-                onChange={setModelId}
-                disabled={run.busy}
-              />
+              <span className="hidden shrink-0 items-center gap-1.5 rounded-[var(--radius-clay)] bg-clay-surface px-3 py-2 text-xs font-medium text-ink shadow-[var(--clay-shadow)] sm:inline-flex">
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-teal" />
+                {modelName}
+              </span>
               <button
                 type="button"
                 onClick={submit}

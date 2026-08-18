@@ -1,110 +1,73 @@
 import 'server-only'
 
 /**
- * The models a user may choose between.
+ * Hubble Nova — the one model users see.
  *
- * ⚠️ DERIVED FROM WHAT IS ACTUALLY CONFIGURED, never a hardcoded menu. A picker
- * offering GPT-4o on a deployment with no OpenAI key would let a user select a
- * model, run a query, and be told the planner was unavailable — with nothing to
- * connect the two.
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ONE NAME, MANY ENGINES.                                                 ║
+ * ║                                                                          ║
+ * ║  There is no model picker. "Hubble Nova" is a chain, not a vendor:       ║
+ * ║  `resolveLlmProvider()` builds every vendor and                          ║
+ * ║  `createFallbackLlmProvider` tries each configured one in turn.          ║
+ * ║                                                                          ║
+ * ║  WHY THIS IS THE RIGHT DEFAULT: when one account's credits run out the   ║
+ * ║  call returns `unavailable`, and the chain moves to the next vendor      ║
+ * ║  rather than failing the user's question. A picker made that the user's  ║
+ * ║  problem to solve; they should never have had to know.                   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * `openrouter` is the reason this list can grow without new code: one key makes
- * GPT-4o, Claude, DeepSeek and the rest reachable through the OpenAI-compatible
- * contract `provider.ts` already speaks.
+ * Adding capacity is adding a key. No UI changes, no user action.
  */
 import {
-  DEFAULT_GEMINI_MODEL,
+  LLM_VENDORS,
   createBackboardProvider,
   createCerebrasProvider,
   createGeminiProvider,
   createGroqProvider,
   createOpenRouterProvider,
+  type LLMProvider,
   type LlmVendor,
 } from '@/lib/intelligence/llm/provider'
 
-export type ModelChoice = {
-  /** Sent back on a query; `resolveLlmProvider` understands it. */
-  id: LlmVendor
-  /** What the dropdown shows. */
-  label: string
-  /** The specific model behind the label, for the user who cares. */
-  model: string
-  /** A one-line reason to pick this one. */
-  hint: string
-  configured: boolean
+/** What the UI shows. Never a vendor name. */
+export const HUBBLE_MODEL_NAME = 'Hubble Nova'
+
+export type HubbleModelStatus = {
+  name: string
+  /** How many vendors currently back it. */
+  engineCount: number
+  /** True when at least one engine can answer. */
+  ready: boolean
+}
+
+function providerFor(vendor: LlmVendor): LLMProvider {
+  switch (vendor) {
+    case 'gemini':
+      return createGeminiProvider()
+    case 'groq':
+      return createGroqProvider()
+    case 'openrouter':
+      return createOpenRouterProvider()
+    case 'cerebras':
+      return createCerebrasProvider()
+    case 'backboard':
+      return createBackboardProvider()
+  }
 }
 
 /**
- * Every vendor, with its configured state resolved at request time.
+ * Whether Hubble Nova can answer, and how much redundancy is behind it.
  *
- * Order is deliberate: the fastest and cheapest first, because that is the
- * right default for a question a user is still refining.
+ * ⚠️ THE COUNT IS NEVER SHOWN AS A VENDOR LIST. Which providers we hold keys
+ * for is our operational business, not something to publish in a dropdown.
+ * The number is useful to a user only as "there is more than one".
  */
-export function modelCatalog(): ModelChoice[] {
-  const gemini = createGeminiProvider()
-  const groq = createGroqProvider()
-  const openrouter = createOpenRouterProvider()
-  const cerebras = createCerebrasProvider()
-  const backboard = createBackboardProvider()
+export function hubbleModelStatus(): HubbleModelStatus {
+  const engineCount = LLM_VENDORS.filter((vendor) => providerFor(vendor).isConfigured()).length
 
-  return [
-    {
-      id: 'gemini',
-      label: 'Gemini Flash',
-      model: process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
-      hint: 'Fast, and the only one with constrained decoding',
-      configured: gemini.isConfigured(),
-    },
-    {
-      id: 'groq',
-      label: 'Llama 3.3 70B',
-      model: process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile',
-      hint: 'Fastest to first token',
-      configured: groq.isConfigured(),
-    },
-    {
-      id: 'cerebras',
-      label: 'Cerebras',
-      model: cerebras.model,
-      hint: 'Wafer-scale inference, very low latency',
-      configured: cerebras.isConfigured(),
-    },
-    {
-      id: 'openrouter',
-      label: openRouterLabel(openrouter.model),
-      model: openrouter.model,
-      hint: 'Any model on OpenRouter, including GPT-4o and Claude',
-      configured: openrouter.isConfigured(),
-    },
-    {
-      id: 'backboard',
-      label: prettyModel(backboard.model),
-      model: backboard.model,
-      hint: 'Routed through Backboard',
-      configured: backboard.isConfigured(),
-    },
-  ]
-}
-
-/** `gpt-4o` → `GPT-4o`. Shared by the router-style vendors. */
-function prettyModel(model: string): string {
-  const name = model.split('/').pop() ?? model
-  return name
-    .split('-')
-    .map((part) =>
-      /^(gpt|ai|xl|hd|llm)$/i.test(part)
-        ? part.toUpperCase()
-        : part.charAt(0).toUpperCase() + part.slice(1),
-    )
-    .join('-')
-}
-
-/** `openai/gpt-4o-mini` → `GPT-4o-Mini`. Falls back to the raw id. */
-function openRouterLabel(model: string): string {
-  return prettyModel(model)
-}
-
-/** Only the models a query could actually use. */
-export function availableModels(): ModelChoice[] {
-  return modelCatalog().filter((choice) => choice.configured)
+  return {
+    name: HUBBLE_MODEL_NAME,
+    engineCount,
+    ready: engineCount > 0,
+  }
 }

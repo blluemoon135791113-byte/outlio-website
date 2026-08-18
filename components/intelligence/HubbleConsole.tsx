@@ -18,7 +18,6 @@ import { HubbleLeadList, type HubbleLead } from '@/components/intelligence/Hubbl
 import { HubblePromptBar } from '@/components/intelligence/HubblePromptBar'
 import { HubbleResultPanel } from '@/components/intelligence/HubbleResultPanel'
 import { LeadModal } from '@/components/intelligence/LeadModal'
-import type { ModelOption } from '@/components/intelligence/ModelPicker'
 import { columnLabel } from '@/components/intelligence/render-value'
 import { useResearchRun, type ResearchScope } from '@/components/intelligence/useResearchRun'
 import type { LeadBatch } from '@/lib/intelligence/batches'
@@ -35,8 +34,20 @@ const SUGGESTIONS = [
   'Find SaaS leads hiring SDRs',
 ]
 
-const LEAD_SELECT =
-  'id, full_name, job_title, company_name, company_website_url, linkedin_url, location, extraction_job_id, created_at, enrichment' as const
+/**
+ * ⚠️ TWO SELECTS, BECAUSE `enrichment` MAY NOT EXIST YET.
+ *
+ * Migration 0051 adds the column. Until it is applied, asking for it makes
+ * PostgREST reject the WHOLE query — and the first version of this screen
+ * swallowed that and rendered an empty list, so an account with 2,263 leads
+ * looked like an account with none. That is the fifth time this project has hit
+ * "failure looks like empty"; the fallback and the visible error are both here
+ * so it cannot be the sixth.
+ */
+const LEAD_SELECT_BASE =
+  'id, full_name, job_title, company_name, company_website_url, linkedin_url, location, extraction_job_id, created_at' as const
+
+const LEAD_SELECT_ENRICHED = `${LEAD_SELECT_BASE}, enrichment` as const
 
 type LeadRow = {
   id: string
@@ -46,7 +57,7 @@ type LeadRow = {
   company_website_url: string | null
   linkedin_url: string | null
   location: string | null
-  enrichment: unknown
+  enrichment?: unknown
 }
 
 /**
@@ -93,17 +104,17 @@ function toHubbleLead(row: LeadRow): HubbleLead {
 
 export function HubbleConsole({
   userId,
-  models,
+  modelName,
   batches,
 }: {
   userId: string
-  models: ModelOption[]
+  /** "Hubble Nova". One name over every configured engine. */
+  modelName: string
   batches: LeadBatch[]
 }) {
   const supabase = useMemo(() => createClient(), [])
 
   const [question, setQuestion] = useState('')
-  const [modelId, setModelId] = useState(models[0]?.id ?? '')
   const [openLeadId, setOpenLeadId] = useState<string | null>(null)
 
   const run = useResearchRun()
@@ -117,6 +128,7 @@ export function HubbleConsole({
   /** LinkedIn URLs, kept beside the list so the modal need not refetch. */
   const [linkedinById, setLinkedinById] = useState<Record<string, string | null>>({})
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const latestRequest = useRef(0)
 
   /**
@@ -130,44 +142,69 @@ export function HubbleConsole({
    * The first `await` also keeps the effect free of a synchronous setState,
    * which is what the cascading-render rule is about.
    */
-  const loadLeads = useCallback(async (requestId: number) => {
-    await Promise.resolve()
-    if (requestId !== latestRequest.current) return
-
-    setLoading(true)
-    try {
-      let query = supabase
-        .from('extracted_leads')
-        .select(LEAD_SELECT)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(LIST_SIZE)
-
-      if (batchId) {
-        query = query.eq('extraction_job_id', batchId)
-      } else if (from && to) {
-        /*
-         * With no list chosen, the calendar still scopes the leads shown, so
-         * the list under the filter always matches what the filter says.
-         */
-        const bounds = dateRangeBounds(from, to)
-        if (bounds) {
-          query = query
-            .gte('created_at', bounds.fromInclusive)
-            .lt('created_at', bounds.toExclusive)
-        }
-      }
-
-      const { data } = await query
+  const loadLeads = useCallback(
+    async (requestId: number) => {
+      await Promise.resolve()
       if (requestId !== latestRequest.current) return
 
-      const rows = (data ?? []) as LeadRow[]
-      setLeads(rows.map(toHubbleLead))
-      setLinkedinById(Object.fromEntries(rows.map((row) => [row.id, row.linkedin_url])))
-    } finally {
-      if (requestId === latestRequest.current) setLoading(false)
-    }
-  }, [supabase, userId, batchId, from, to])
+      setLoading(true)
+      setLoadError(null)
+
+      const build = (columns: string) => {
+        let query = supabase
+          .from('extracted_leads')
+          .select(columns)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(LIST_SIZE)
+
+        if (batchId) {
+          query = query.eq('extraction_job_id', batchId)
+        } else if (from && to) {
+          // With no list chosen the calendar still scopes the leads shown, so
+          // the list always matches what the filter above it claims.
+          const bounds = dateRangeBounds(from, to)
+          if (bounds) {
+            query = query
+              .gte('created_at', bounds.fromInclusive)
+              .lt('created_at', bounds.toExclusive)
+          }
+        }
+
+        return query
+      }
+
+      try {
+        let result = await build(LEAD_SELECT_ENRICHED)
+
+        // 42703 / PGRST204: the column is not there yet. Read what does exist
+        // rather than showing nothing.
+        if (result.error) {
+          result = await build(LEAD_SELECT_BASE)
+        }
+
+        if (requestId !== latestRequest.current) return
+
+        if (result.error) {
+          // Named, not swallowed. An empty table with no explanation is the
+          // failure mode this whole comment block exists to prevent.
+          setLoadError('Your leads could not be loaded. Refresh, or try again shortly.')
+          setLeads([])
+          return
+        }
+
+        const rows = (result.data ?? []) as unknown as LeadRow[]
+        setLeads(rows.map(toHubbleLead))
+        setLinkedinById(Object.fromEntries(rows.map((row) => [row.id, row.linkedin_url])))
+      } catch {
+        if (requestId !== latestRequest.current) return
+        setLoadError('Your leads could not be loaded. Refresh, or try again shortly.')
+      } finally {
+        if (requestId === latestRequest.current) setLoading(false)
+      }
+    },
+    [supabase, userId, batchId, from, to],
+  )
 
   useEffect(() => {
     void loadLeads((latestRequest.current += 1))
@@ -212,12 +249,17 @@ export function HubbleConsole({
       : 'Run an extraction and your leads will appear here, ready to research.'
 
   return (
-    <div className="space-y-5">
+    /*
+     * The cream page from the mockup. Applied with a negative bleed so it
+     * reaches the edges of the shell's content area, and scoped here so the
+     * extraction workspace keeps its own surface.
+     */
+    <div className="-mx-4 -my-6 min-h-[calc(100dvh-4rem)] space-y-6 bg-clay-bg px-4 py-6 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
       <header>
-        <h1 className="text-[34px] font-semibold leading-tight tracking-[-0.035em] text-ink">
+        <h1 className="text-[38px] font-semibold leading-[1.1] tracking-[-0.04em] text-ink">
           Hubble
         </h1>
-        <p className="mt-1.5 text-[15px] text-muted">
+        <p className="mt-2 text-[15px] leading-relaxed text-muted">
           Outlio&apos;s intelligence layer for micro and macro lead-data analytics.
         </p>
       </header>
@@ -225,11 +267,9 @@ export function HubbleConsole({
       <HubblePromptBar
         value={question}
         onChange={setQuestion}
-        onSubmit={() => void run.ask(question, scope(), modelId || null)}
+        onSubmit={() => void run.ask(question, scope(), null)}
         busy={busy}
-        models={models}
-        modelId={modelId}
-        onModelChange={setModelId}
+        modelName={modelName}
         suggestions={SUGGESTIONS}
       />
 
@@ -257,12 +297,23 @@ export function HubbleConsole({
             : 'grid items-start gap-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(22rem,1fr)]'
         }
       >
-        <HubbleLeadList
-          leads={leads}
-          loading={loading}
-          emptyHint={emptyHint}
-          onOpenLead={(lead) => setOpenLeadId(lead.id)}
-        />
+        <div className="space-y-3">
+          {loadError ? (
+            <p
+              role="alert"
+              className="rounded-[var(--radius-clay)] bg-danger-soft px-4 py-3 text-sm text-danger"
+            >
+              {loadError}
+            </p>
+          ) : null}
+
+          <HubbleLeadList
+            leads={leads}
+            loading={loading}
+            emptyHint={emptyHint}
+            onOpenLead={(lead) => setOpenLeadId(lead.id)}
+          />
+        </div>
 
         {run.phase !== 'idle' ? (
           <HubbleResultPanel
@@ -281,7 +332,7 @@ export function HubbleConsole({
         <LeadModal
           lead={openLead}
           linkedinUrl={linkedinById[openLead.id] ?? null}
-          models={models}
+          modelName={modelName}
           onClose={() => setOpenLeadId(null)}
         />
       ) : null}

@@ -82,28 +82,38 @@
 
      NO backdrop-filter. CLAUDE.md forbids it on dashboard surfaces, and it is
      especially wrong over a scrolling list. */
-  --clay-bg: #f7f4ec;
-  --clay-surface: #fbf9f3;
-  --clay-raised: #fefdfa;
-  --clay-sunken: #f1ede2;
+  /* Warm paper, taken from the Hubble mockup. The page is CREAM and the cards
+     are near-white — that contrast is what makes a card read as a card without
+     needing a border. */
+  --clay-bg: #f7f5ef;
+  --clay-surface: #fdfcfa;
+  --clay-raised: #ffffff;
+  --clay-sunken: #f2efe7;
 
-  /* Paired shadows are what make it read as extruded rather than dropped. */
-  --clay-shadow: 0 2px 4px rgba(93, 79, 45, 0.05), 0 8px 20px rgba(93, 79, 45, 0.06),
+  /* Paired shadows: dark below, light above. That pairing is what reads as
+     extruded rather than dropped, and it is the whole of claymorphism. */
+  --clay-shadow:
+    0 1px 2px rgba(84, 72, 45, 0.04),
+    0 6px 16px rgba(84, 72, 45, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --clay-shadow-lg: 0 4px 8px rgba(93, 79, 45, 0.06), 0 16px 40px rgba(93, 79, 45, 0.09),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --clay-shadow-lg:
+    0 2px 4px rgba(84, 72, 45, 0.05),
+    0 10px 28px rgba(84, 72, 45, 0.07),
+    0 24px 56px rgba(84, 72, 45, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
   /* Pressed: the light and dark swap sides. */
-  --clay-shadow-inset: inset 0 2px 5px rgba(93, 79, 45, 0.09),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.8);
+  --clay-shadow-inset:
+    inset 0 2px 5px rgba(84, 72, 45, 0.08),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
 
-  --radius-clay: 1.25rem;
-  --radius-clay-lg: 1.75rem;
+  --radius-clay: 1.15rem;
+  --radius-clay-lg: 1.6rem;
 
-  /* Teal — reserved for THINKING, and used nowhere else.
-     A colour that means one thing is a colour users can read at a glance. */
+  /* The generating sweep. Teal into the accent, so the motion resolves into a
+     colour the product already uses rather than introducing a second identity. */
   --teal: #0f8a8a;
-  --teal-soft: #dff2f1;
-  --teal-glow: rgba(15, 138, 138, 0.22);
+  --teal-soft: #ddf1f0;
+  --teal-glow: rgba(15, 138, 138, 0.28);
 }
 
 /* FONT PLACEHOLDER — final display/body fonts TBD; swap the two vars below in one place */
@@ -709,54 +719,79 @@ details[open] .faq-mark {
 }
 
 /* --------------------------------------------------------------------------
-   The thinking state.
+   Generating.
 
-   A travelling teal sheen around the prompt bar while a run is in flight.
-   Deliberately NOT an entrance animation — CLAUDE.md forbids those on product
-   tables and lists. This animates only while work is actually happening, and
-   stops the moment it is not, so the motion always means something.
+   Colour RISES FROM THE LEFT and travels across the bar, then settles. It is a
+   fill behind the content, not a ring: the bar itself changes state, which is
+   what makes it read as the bar working rather than a decoration attached to it.
+
+   Runs only while a query is actually in flight. Motion that is always on stops
+   meaning anything; motion that starts exactly when work does is a status.
    -------------------------------------------------------------------------- */
-@keyframes hubble-sweep {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
+@keyframes hubble-rise {
+  0% {
+    background-position: -140% 0;
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    background-position: 140% 0;
+    opacity: 0.55;
+  }
 }
 
-.hubble-thinking {
+.hubble-generating {
   position: relative;
+  isolation: isolate;
+  overflow: hidden;
 }
 
-.hubble-thinking::after {
+.hubble-generating::before {
   content: '';
   position: absolute;
-  inset: -2px;
-  border-radius: calc(var(--radius-clay) + 2px);
-  padding: 2px;
+  inset: 0;
+  z-index: -1;
   background: linear-gradient(
-    90deg,
+    100deg,
     transparent 0%,
-    var(--teal-glow) 25%,
-    var(--teal) 50%,
-    var(--teal-glow) 75%,
+    var(--teal-soft) 18%,
+    var(--teal-glow) 34%,
+    var(--accent-soft) 50%,
+    var(--teal-glow) 66%,
+    var(--teal-soft) 82%,
     transparent 100%
   );
-  background-size: 200% 100%;
-  animation: hubble-sweep 1.4s linear infinite;
-  /* Masks the fill so only the ring is painted. */
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: hubble-rise 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   pointer-events: none;
 }
 
-/* Motion is decoration here; the status text carries the same information. */
+/* A thin progress line along the bottom edge, travelling the same direction.
+   It carries the state for anyone who reads edges rather than fills. */
+.hubble-generating::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--teal), transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: hubble-rise 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+/* Motion is decoration; the status text carries the same information. */
 @media (prefers-reduced-motion: reduce) {
-  .hubble-thinking::after {
+  .hubble-generating::before,
+  .hubble-generating::after {
     animation: none;
-    background: var(--teal-glow);
+  }
+  .hubble-generating::before {
+    background: var(--teal-soft);
+    opacity: 0.6;
   }
 }

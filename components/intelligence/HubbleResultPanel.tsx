@@ -61,7 +61,12 @@ export function HubbleResultPanel({
         </button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+      {/*
+        ⚠️ `data-lenis-prevent` IS LOAD-BEARING. The app runs Lenis smooth
+        scroll, which hijacks the page scroll — without this attribute a nested
+        scroll container does not scroll at all.
+      */}
+      <div data-lenis-prevent className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
         {working ? (
           <div role="status" className="space-y-2.5 py-2">
             <p className="text-sm text-muted">

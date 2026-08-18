@@ -124,7 +124,10 @@ export function BatchFilter({
           <div
             role="listbox"
             aria-label="Lead lists"
-            className="clay-raised absolute left-0 right-0 top-full z-30 mt-2 max-h-80 overflow-y-auto p-1.5"
+            /* Lenis hijacks page scroll; without this the list of 61 batches
+               cannot be scrolled and only the first few are reachable. */
+            data-lenis-prevent
+            className="absolute left-0 right-0 top-full z-30 mt-2 max-h-80 overflow-y-auto rounded-[var(--radius-clay)] bg-clay-raised p-1.5 shadow-[var(--clay-shadow-lg)]"
           >
             <input
               type="search"
