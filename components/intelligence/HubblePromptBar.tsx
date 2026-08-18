@@ -46,7 +46,13 @@ export function HubblePromptBar({
         a child, which is what keeps it reading as a single object.
       */}
       <div
-        className={`hubble-bar flex items-center rounded-[var(--radius-clay-lg)] bg-clay-raised pr-3 shadow-[var(--clay-shadow-prompt)] transition-shadow duration-200 focus-within:shadow-[var(--clay-shadow-prompt-focus)] ${
+        /*
+         * The bar is interactive too: it takes the same ivory-to-jet gradient
+         * on hover and press as every other widget, so the surface the user
+         * types into responds like the rest of the page rather than sitting
+         * inert until focused.
+         */
+        className={`hubble-bar clay-interactive flex cursor-text items-center rounded-[var(--radius-clay-lg)] bg-clay-raised pr-3 shadow-[var(--clay-shadow-prompt)] focus-within:shadow-[var(--clay-shadow-prompt-focus)] ${
           busy ? 'hubble-generating' : ''
         }`}
       >

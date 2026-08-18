@@ -113,13 +113,10 @@ export function DateRangePicker({
     cursor.year > now.getUTCFullYear() ||
     (cursor.year === now.getUTCFullYear() && cursor.month >= now.getUTCMonth())
 
-  const months = [
-    cursor,
-    (() => {
-      const next = new Date(Date.UTC(cursor.year, cursor.month + 1, 1))
-      return { year: next.getUTCFullYear(), month: next.getUTCMonth() }
-    })(),
-  ]
+  // ONE month. Two filled the popover to 34rem, which is what pushed the
+  // next-month arrow off screen in the first place; a single month keeps the
+  // whole control inside the viewport at any width.
+  const months = [cursor]
 
   return (
     <div ref={containerRef} className="relative">
@@ -162,7 +159,7 @@ export function DateRangePicker({
            * arrow — which lives at the panel's right edge — was rendered past
            * the window. The calendar looked like it could only go backwards.
            */
-          className="absolute bottom-full right-0 z-30 mb-2 w-[19rem] max-w-[calc(100vw-2rem)] rounded-[var(--radius-clay)] bg-clay-raised p-3 shadow-[var(--clay-shadow-lg)] sm:w-[34rem]"
+          className="absolute bottom-full right-0 z-30 mb-2 w-[19rem] max-w-[calc(100vw-2rem)] rounded-[var(--radius-clay)] bg-clay-raised p-3 shadow-[var(--clay-shadow-lg)]"
         >
           <div className="flex items-center justify-between px-1 pb-2.5">
             <button
@@ -174,9 +171,7 @@ export function DateRangePicker({
               <span aria-hidden>‹</span>
             </button>
 
-            {/* Named here as well as per column: with two months on screen the
-                arrows are far apart, and the header says what they move. */}
-            <p className="text-xs font-medium text-muted sm:hidden">
+            <p className="text-sm font-semibold text-ink">
               {monthLabel(cursor.year, cursor.month)}
             </p>
 
@@ -192,13 +187,9 @@ export function DateRangePicker({
             </button>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {months.map(({ year, month }, index) => (
-              <div key={`${year}-${month}`} className={index === 1 ? 'hidden sm:block' : undefined}>
-                <p className="pb-1.5 text-center text-xs font-semibold text-ink">
-                  {monthLabel(year, month)}
-                </p>
-
+          <div className="grid gap-4">
+            {months.map(({ year, month }) => (
+              <div key={`${year}-${month}`}>
                 <div className="grid grid-cols-7 gap-0.5">
                   {WEEKDAYS.map((day, dayIndex) => (
                     <span

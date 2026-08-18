@@ -144,9 +144,9 @@
     0 2px 4px rgba(84, 72, 45, 0.05),
     0 16px 36px rgba(84, 72, 45, 0.11),
     0 38px 78px rgba(84, 72, 45, 0.09),
-    /* the teal bloom inside the rim — the focus indicator itself */
-    inset 0 0 0 1.5px rgba(15, 138, 138, 0.35),
-    inset 0 0 18px -4px rgba(15, 138, 138, 0.22),
+    /* ⚠️ NO RIM. An inset ring renders as an outline drawn on the bar, which
+       is the thing being removed. Focus is the clay deepening, and the caret
+       the browser puts in the field. */
     inset 0 12px 22px -10px rgba(255, 255, 255, 1),
     inset -8px -10px 24px -12px rgba(84, 72, 45, 0.34);
 
@@ -169,17 +169,23 @@
      Press pushes the teal further up and in, so the same gesture reads as
      deeper — the widget is being pressed INTO the page, not just recoloured. */
   --ivory-vivid: #fefaea;
+  /* Jet, held at alpha rather than laid down solid.
+     ⚠️ TEXT SITS ON THIS. A solid jet end would swallow the dark ink already
+     printed there — the right-hand side of a lead row would go unreadable on
+     hover. At these alphas the surface smokes rather than blackens, and the
+     ink keeps its contrast. */
+  --jet: 26, 26, 24;
   --grad-hover: linear-gradient(
     155deg,
     var(--ivory-vivid) 0%,
-    #f7f1d8 42%,
-    rgba(15, 138, 138, 0.20) 100%
+    #f6f1e0 44%,
+    rgba(var(--jet), 0.13) 100%
   );
   --grad-press: linear-gradient(
     155deg,
-    #faf4dd 0%,
-    rgba(15, 138, 138, 0.28) 48%,
-    rgba(15, 138, 138, 0.46) 100%
+    #f9f3da 0%,
+    rgba(var(--jet), 0.16) 48%,
+    rgba(var(--jet), 0.26) 100%
   );
 
   --radius-clay: 1.15rem;
@@ -956,11 +962,49 @@ details[open] .faq-mark {
    look the same everywhere rather than being re-invented per component.
    -------------------------------------------------------------------------- */
 .clay-interactive {
+  position: relative;
+  isolation: isolate;
   transition:
     background-image 160ms var(--ease-out-ui, ease-out),
     box-shadow 160ms var(--ease-out-ui, ease-out),
     transform 140ms var(--ease-out-ui, ease-out),
     color 140ms ease-out;
+}
+
+/*
+ * The click bloom.
+ *
+ * A soft radial light expands from the middle on press and settles back — the
+ * Gemini-style acknowledgement that something registered. Deliberately NOT a
+ * hard material ripple: on clay a sharp expanding disc looks stuck on, whereas
+ * a bloom reads as the surface catching the light as it deforms.
+ */
+.clay-interactive::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(var(--jet), 0.10) 55%,
+    transparent 72%
+  );
+  opacity: 0;
+  transform: scale(0.55);
+  pointer-events: none;
+  /* Slow on the way out, so the bloom lingers instead of snapping off. */
+  transition:
+    opacity 420ms var(--ease-out-ui, ease-out),
+    transform 420ms var(--ease-out-ui, ease-out);
+}
+
+.clay-interactive:active:not(:disabled)::after {
+  opacity: 1;
+  transform: scale(1);
+  /* Fast on the way in: the response has to feel simultaneous with the click. */
+  transition-duration: 110ms;
 }
 
 .clay-interactive:hover:not(:disabled) {
@@ -976,5 +1020,9 @@ details[open] .faq-mark {
 @media (prefers-reduced-motion: reduce) {
   .clay-interactive {
     transition: background-image 100ms linear;
+  }
+  /* The gradient already says "pressed"; the bloom is the part that moves. */
+  .clay-interactive::after {
+    display: none;
   }
 }
