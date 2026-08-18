@@ -12,6 +12,8 @@
  * footer action out from under the cursor. Height is pinned to the viewport and
  * the body scrolls inside it.
  */
+import { useState } from 'react'
+
 import { renderCellValue } from '@/components/intelligence/render-value'
 import type { RunPhase, RunResults } from '@/components/intelligence/useResearchRun'
 
@@ -21,6 +23,7 @@ export function HubbleResultPanel({
   results,
   merge,
   onEnrich,
+  onClarify,
   onClose,
   columnLabel,
 }: {
@@ -29,10 +32,12 @@ export function HubbleResultPanel({
   results: RunResults | null
   merge: { state: 'idle' | 'busy' | 'done'; summary: string | null }
   onEnrich: () => void
+  onClarify: (answers: Record<string, string>) => void
   onClose: () => void
   columnLabel: (field: string) => string
 }) {
   const working = phase === 'planning' || phase === 'running'
+  const [answers, setAnswers] = useState<Record<string, string>>({})
 
   return (
     <aside
@@ -42,7 +47,13 @@ export function HubbleResultPanel({
       <header className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-ink">
-            {working ? 'Hubble is working' : phase === 'error' ? 'Could not finish' : 'Result'}
+            {working
+              ? 'Hubble is working'
+              : phase === 'error'
+                ? 'Could not finish'
+                : phase === 'clarifying'
+                  ? 'One detail first'
+                  : 'Result'}
           </p>
           {results?.queryText ? (
             <p className="mt-0.5 truncate text-xs text-muted" title={results.queryText}>
@@ -89,15 +100,55 @@ export function HubbleResultPanel({
           </p>
         ) : null}
 
-        {results?.clarification && results.clarification.questions.length > 0 ? (
-          <div className="space-y-2">
-            {/* Nothing has been queued or charged at this point. */}
-            <p className="text-sm text-ink">{message ?? 'One more detail first.'}</p>
+        {phase === 'clarifying' && results?.clarification?.questions.length ? (
+          <div className="space-y-4">
+            {/*
+              ⚠️ NOTHING HAS BEEN QUEUED OR CHARGED YET. The clarification
+              exists so a vague question does not spend money guessing, which
+              is why the answers are pickable rather than merely displayed —
+              an unanswerable question is a dead end, and a dead end here looks
+              exactly like the product being broken.
+            */}
+            <p className="text-sm text-muted">{message ?? 'Pick an answer to continue.'}</p>
+
             {results.clarification.questions.map((question) => (
-              <p key={question.id} className="text-sm text-muted">
-                {question.question}
-              </p>
+              <fieldset key={question.id}>
+                <legend className="mb-2 text-sm font-medium text-ink">{question.question}</legend>
+
+                <div className="flex flex-wrap gap-2">
+                  {question.options.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() =>
+                        setAnswers((current) => ({ ...current, [question.id]: option }))
+                      }
+                      aria-pressed={answers[question.id] === option}
+                      className={`clay-interactive cursor-pointer rounded-[var(--radius-clay)] px-3.5 py-2 text-left text-xs ${
+                        answers[question.id] === option
+                          ? 'bg-ink font-medium text-white'
+                          : 'bg-clay-sunken text-ink'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
             ))}
+
+            <button
+              type="button"
+              onClick={() => onClarify(answers)}
+              disabled={
+                Object.keys(answers).length < results.clarification.questions.length
+              }
+              className="clay-interactive w-full cursor-pointer rounded-[var(--radius-clay)] bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {Object.keys(answers).length < results.clarification.questions.length
+                ? 'Answer every question to continue'
+                : 'Research this'}
+            </button>
           </div>
         ) : null}
 
@@ -189,7 +240,7 @@ export function HubbleResultPanel({
             className={
               merge.state === 'done'
                 ? 'w-full rounded-[var(--radius-lg)] bg-success-soft px-4 py-2.5 text-sm font-semibold text-success'
-                : 'w-full rounded-[var(--radius-lg)] bg-teal px-4 py-2.5 text-sm font-semibold text-white transition-transform duration-150 ease-out active:scale-[0.98] disabled:opacity-60'
+                : 'clay-interactive w-full cursor-pointer rounded-[var(--radius-clay)] bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60'
             }
           >
             {merge.state === 'busy'

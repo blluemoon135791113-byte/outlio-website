@@ -56,7 +56,15 @@ export type ResearchScope =
   | { type: 'extraction_job'; extractionJobId: string }
   | { type: 'date_range'; from: string; to: string }
 
-export type RunPhase = 'idle' | 'planning' | 'running' | 'done' | 'error'
+/**
+ * ⚠️ `clarifying` IS ITS OWN PHASE, NOT `idle`.
+ *
+ * It used to fall back to `idle`, and the console only opens the result panel
+ * when the phase is not idle — so a question the planner wanted one detail
+ * about produced NOTHING on screen. The bar stopped animating and that was the
+ * entire response. "The intelligence is not even working" was this.
+ */
+export type RunPhase = 'idle' | 'planning' | 'clarifying' | 'running' | 'done' | 'error'
 
 const POLL_MS = 2_500
 
@@ -150,8 +158,8 @@ export function useResearchRun() {
         }
 
         if (data.status === 'clarification_required') {
-          setPhase('idle')
-          setMessage('Hubble needs one more detail before it spends anything.')
+          setPhase('clarifying')
+          setMessage('One detail first — nothing has been queued or charged yet.')
           setResults({
             runId: data.researchRunId,
             status: 'waiting_for_clarification',
@@ -223,6 +231,44 @@ export function useResearchRun() {
     }
   }, [results])
 
+  /**
+   * Answers the planner's questions and releases the run to the queue.
+   *
+   * Nothing has been queued or charged until this returns — the clarification
+   * exists precisely so a vague question does not spend money guessing.
+   */
+  const clarify = useCallback(
+    async (answers: Record<string, string>) => {
+      if (!results) return
+
+      setPhase('planning')
+      setMessage(null)
+
+      try {
+        const response = await fetch('/api/intelligence/clarify', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ researchRunId: results.runId, answers }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          setPhase('error')
+          setMessage(data?.error?.message ?? 'That answer could not be submitted.')
+          return
+        }
+
+        setPhase('running')
+        poll(results.runId)
+      } catch {
+        setPhase('error')
+        setMessage('That answer could not be sent.')
+      }
+    },
+    [results, poll],
+  )
+
   const reset = useCallback(() => {
     if (pollRef.current) clearTimeout(pollRef.current)
     setPhase('idle')
@@ -237,6 +283,7 @@ export function useResearchRun() {
     results,
     merge,
     ask,
+    clarify,
     enrich,
     reset,
     busy: phase === 'planning' || phase === 'running',

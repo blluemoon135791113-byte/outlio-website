@@ -322,6 +322,7 @@ export function HubbleConsole({
             results={run.results}
             merge={run.merge}
             onEnrich={() => void run.enrich()}
+            onClarify={(answers) => void run.clarify(answers)}
             onClose={run.reset}
             columnLabel={columnLabel}
           />
