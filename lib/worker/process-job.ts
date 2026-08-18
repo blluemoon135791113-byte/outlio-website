@@ -27,7 +27,7 @@ import {
   mapInConcurrentBatches,
   resolveFileConcurrency,
 } from '@/lib/worker/concurrency'
-import { enrichJobContacts } from '@/lib/worker/enrich-contacts'
+import { enrichJobFree } from '@/lib/worker/enrich-free'
 import { rebuildJobExport } from '@/lib/worker/rebuild-export'
 
 /**
@@ -412,22 +412,27 @@ export async function processJob(jobId: string, userId: string): Promise<Process
   if (uploadError) throw new Error(`export upload failed: ${concise(uploadError.message)}`)
 
   /*
-   * ---- contact enrichment ------------------------------------------------
+   * ---- free enrichment -----------------------------------------------------
    *
-   * Email and phone are not on a Sales Navigator page, so this is the only
-   * point at which a lead can acquire either. It runs AFTER the job is
-   * otherwise complete and its failures are swallowed: an enrichment outage
-   * must never make a successful extraction look failed.
+   * FREE SOURCES ONLY. This runs on every extraction, so anything metered here
+   * would bill on every upload with nobody pressing a button. It fills company
+   * gaps the hover card missed and stands aside entirely if paid providers have
+   * been switched on.
+   *
+   * ⚠️ It cannot produce email or phone. Neither is on the page and no free
+   * source supplies verified work contacts; inventing one from a name and a
+   * domain would be fabricating lead data (CLAUDE.md rule 4).
    *
    * The CSV is rewritten afterwards because the file written above predates
-   * these values — without the rebuild the columns exist, the data exists in
-   * the database, and the one artefact the user downloads has neither.
+   * anything found here.
    */
   try {
-    const enriched = await enrichJobContacts(jobId, userId)
-    if (enriched.attempted > 0) await rebuildJobExport(jobId, userId)
+    const enriched = await enrichJobFree(jobId, userId)
+    if (enriched.domainsFound > 0 || enriched.industriesFound > 0) {
+      await rebuildJobExport(jobId, userId)
+    }
   } catch {
-    // The extraction stands on its own. Contacts can be filled in later.
+    // The extraction stands on its own.
   }
 
   // ---- finalise ----------------------------------------------------------

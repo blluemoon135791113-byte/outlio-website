@@ -108,10 +108,44 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
  * `canHandle`, which keeps the reason visible as "no provider could answer"
  * rather than making a category vanish from the configuration.
  */
+/**
+ * Providers that charge per call.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ EXCLUDED UNLESS PAID PROVIDERS ARE EXPLICITLY ENABLED.               ║
+ * ║                                                                          ║
+ * ║  This list is the single point where money can enter the system, and it  ║
+ * ║  is enforced at REGISTRY CONSTRUCTION — not at each call site. A new     ║
+ * ║  code path cannot spend by forgetting a check, because a disabled        ║
+ * ║  provider is never in the registry to be called.                         ║
+ * ║                                                                          ║
+ * ║  Default is OFF. Enabling costs money, so it must be a deliberate act    ║
+ * ║  (`OUTLIO_ALLOW_PAID_PROVIDERS=true`), never something inherited from a  ║
+ * ║  missing variable.                                                       ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export const PAID_PROVIDERS: ReadonlySet<string> = new Set([
+  'prospeo-email',
+  'prospeo-phone',
+  'apollo-email',
+  'tavily-funding',
+  'tavily-web',
+  'tavily-domain-discovery',
+])
+
+/** True only when an operator has explicitly opted in to metered providers. */
+export function paidProvidersEnabled(): boolean {
+  return process.env.OUTLIO_ALLOW_PAID_PROVIDERS === 'true'
+}
+
 export function buildLiveRegistry(
   env: string | undefined = process.env.INTELLIGENCE_PROVIDER_ORDER,
 ): ProviderRegistry {
-  return createRegistry(ALL_PROVIDERS, {
+  const usable = paidProvidersEnabled()
+    ? ALL_PROVIDERS
+    : ALL_PROVIDERS.filter((provider) => !PAID_PROVIDERS.has(provider.name))
+
+  return createRegistry(usable, {
     ...DEFAULT_PROVIDER_ORDER,
     ...parseProviderOrder(env),
   })

@@ -5,7 +5,7 @@
  * people, films, and towns sharing a company's name, and attaching a Greek
  * god's founding date to a lead is a worse outcome than knowing nothing.
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   extractTechnologies,
@@ -191,10 +191,34 @@ describe('extractTechnologies', () => {
 
 describe('the live registry', () => {
   const original = process.env.INTELLIGENCE_PROVIDER_ORDER
+  const originalPaid = process.env.OUTLIO_ALLOW_PAID_PROVIDERS
+
+  /*
+   * These assert WATERFALL ORDER, which is only observable when every provider
+   * is registered. Paid providers are excluded by default now, so the order
+   * tests opt in explicitly — and `paid providers are off by default` below
+   * pins the default itself, so enabling it here cannot hide a regression.
+   */
+  beforeEach(() => {
+    process.env.OUTLIO_ALLOW_PAID_PROVIDERS = 'true'
+  })
 
   afterEach(() => {
     if (original === undefined) delete process.env.INTELLIGENCE_PROVIDER_ORDER
     else process.env.INTELLIGENCE_PROVIDER_ORDER = original
+
+    if (originalPaid === undefined) delete process.env.OUTLIO_ALLOW_PAID_PROVIDERS
+    else process.env.OUTLIO_ALLOW_PAID_PROVIDERS = originalPaid
+  })
+
+  it('paid providers are OFF by default', () => {
+    // The default is the guard: automatic passes run on every extraction, and
+    // a metered provider reachable from one would bill without a click.
+    delete process.env.OUTLIO_ALLOW_PAID_PROVIDERS
+
+    const registry = buildLiveRegistry(undefined)
+    expect(registry.forCategory('contact_email').map((p) => p.name)).toEqual([])
+    expect(registry.forCategory('funding').map((p) => p.name)).toEqual(['gdelt-funding'])
   })
 
   it('prefers the stated fact over the inferred one for a company domain', () => {

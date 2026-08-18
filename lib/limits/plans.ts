@@ -35,12 +35,13 @@ export const planLimitsSchema = z.object({
   /*
    * Contact lookups per month.
    *
-   * ⚠️ THE ONLY THING STANDING BETWEEN AUTO-ENRICHMENT AND A RUNAWAY BILL.
-   * Every lookup costs real money at Prospeo or Apollo, and enrichment runs
-   * automatically after each extraction — so an account that uploads all day
-   * spends all day. `optional()` with a conservative default rather than
-   * `null`: absent must mean "a safe cap", never "unlimited". A plan that
-   * genuinely has no cap must say so with an explicit null.
+   * ⚠️ ONLY MEANINGFUL WHEN PAID PROVIDERS ARE EXPLICITLY ENABLED. Automatic
+   * enrichment is free-only and cannot produce a contact at all, so today this
+   * caps nothing. It stays because the moment someone sets
+   * OUTLIO_ALLOW_PAID_PROVIDERS this becomes the bound on a real bill, and a
+   * cap that has to be invented at that point is a cap nobody sets.
+   *
+   * Absent means a safe number, never unlimited. Unlimited has to be stated.
    */
   contact_enrichments_per_month: nullableInt.catch(250).default(250),
 })
