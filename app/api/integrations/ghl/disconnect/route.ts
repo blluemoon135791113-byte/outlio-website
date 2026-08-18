@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 import { consume } from '@/lib/auth/rate-limit'
 import { disconnectGhlConnection } from '@/lib/integrations/ghl-repository'
-import { isApprovedOutlioAppOrigin } from '@/lib/integrations/hubspot'
+import { isApprovedOutlioAppOrigin } from '@/lib/integrations/origin'
 import { ACTION_LIMITS } from '@/lib/security/action-limits'
 import { recordSecurityEvent } from '@/lib/security/events'
 import { createClient } from '@/lib/supabase/server'

@@ -16,8 +16,6 @@ import {
 import { createAdminClient } from '@/lib/supabase/admin'
 import { claimAndProcessJob } from '@/lib/worker/process-job'
 import { getClayConnectionMetadata } from '@/lib/integrations/repository'
-import { getHubSpotConnectionMetadata } from '@/lib/integrations/hubspot-repository'
-import { getSalesforceConnectionMetadata } from '@/lib/integrations/salesforce-repository'
 import { getGoogleConnectionMetadata } from '@/lib/integrations/google-repository'
 import { getGhlConnectionMetadata } from '@/lib/integrations/ghl-repository'
 
@@ -48,7 +46,7 @@ export default async function JobsPage() {
     // The dashboard can still read the last known state if a sweep fails.
   }
 
-  const [jobResult, fileResult, leadResult, balanceResult, clayConnection, googleConnection, ghlConnection, hubSpotConnection, salesforceConnection] = await Promise.all([
+  const [jobResult, fileResult, leadResult, balanceResult, clayConnection, googleConnection, ghlConnection] = await Promise.all([
     supabase
       .from('extraction_jobs')
       .select(DASHBOARD_JOB_SELECT)
@@ -81,8 +79,6 @@ export default async function JobsPage() {
     getClayConnectionMetadata(userId),
     getGoogleConnectionMetadata(userId),
     getGhlConnectionMetadata(userId),
-    getHubSpotConnectionMetadata(userId),
-    getSalesforceConnectionMetadata(userId),
   ])
 
   const balanceRow = Array.isArray(balanceResult.data) ? balanceResult.data[0] : null
@@ -122,8 +118,6 @@ export default async function JobsPage() {
       clayConnected={clayConnection?.status === 'connected'}
       googleConnected={googleConnection?.status === 'connected'}
       ghlConnected={ghlConnection?.status === 'connected'}
-      hubSpotConnected={hubSpotConnection?.status === 'connected'}
-      salesforceConnected={salesforceConnection?.status === 'connected'}
     />
   )
 }

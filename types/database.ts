@@ -874,17 +874,6 @@ export type Database = {
         }
         Returns: string
       }
-      save_hubspot_connection: {
-        Args: {
-          p_user_id: string
-          p_encrypted_payload: string
-          p_external_account_id: string
-          p_external_account_name: string
-          p_scopes: string[]
-          p_token_expires_at: string
-        }
-        Returns: string
-      }
       save_google_connection: {
         Args: {
           p_user_id: string
@@ -916,58 +905,6 @@ export type Database = {
           p_location_name: string
         }
         Returns: string
-      }
-      update_hubspot_tokens: {
-        Args: {
-          p_user_id: string
-          p_connection_id: string
-          p_expected_encrypted_payload: string
-          p_encrypted_payload: string
-          p_scopes: string[]
-          p_token_expires_at: string
-        }
-        Returns: boolean
-      }
-      save_salesforce_connection: {
-        Args: {
-          p_user_id: string
-          p_encrypted_payload: string
-          p_external_account_id: string
-          p_external_account_name: string
-          p_scopes: string[]
-          p_token_expires_at: string
-        }
-        Returns: string
-      }
-      update_salesforce_tokens: {
-        Args: {
-          p_user_id: string
-          p_connection_id: string
-          p_expected_encrypted_payload: string
-          p_encrypted_payload: string
-          p_refresh_claim: string
-          p_scopes: string[]
-          p_token_expires_at: string
-        }
-        Returns: boolean
-      }
-      claim_salesforce_token_refresh: {
-        Args: {
-          p_user_id: string
-          p_connection_id: string
-          p_expected_encrypted_payload: string
-          p_refresh_claim: string
-          p_claim_expires_at: string
-        }
-        Returns: boolean
-      }
-      release_salesforce_token_refresh: {
-        Args: {
-          p_user_id: string
-          p_connection_id: string
-          p_refresh_claim: string
-        }
-        Returns: boolean
       }
       disconnect_integration: {
         Args: {

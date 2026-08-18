@@ -88,8 +88,6 @@ export function ExtractionDashboard({
   clayConnected,
   googleConnected,
   ghlConnected,
-  hubSpotConnected,
-  salesforceConnected,
 }: {
   userId: string
   initialJobs: DashboardJob[]
@@ -101,8 +99,6 @@ export function ExtractionDashboard({
   clayConnected: boolean
   googleConnected: boolean
   ghlConnected: boolean
-  hubSpotConnected: boolean
-  salesforceConnected: boolean
 }) {
   const supabase = useMemo(() => createClient(), [])
   const [jobs, setJobs] = useState(initialJobs)
@@ -464,8 +460,6 @@ export function ExtractionDashboard({
                     clayConnected={clayConnected}
                     googleConnected={googleConnected}
                     ghlConnected={ghlConnected}
-                    hubSpotConnected={hubSpotConnected}
-                    salesforceConnected={salesforceConnected}
                   />
                 ))}
               </ul>
@@ -497,8 +491,6 @@ export function ExtractionDashboard({
         clayConnected={clayConnected}
         googleConnected={googleConnected}
         ghlConnected={ghlConnected}
-        hubSpotConnected={hubSpotConnected}
-        salesforceConnected={salesforceConnected}
       />
     </div>
   )
@@ -689,8 +681,6 @@ function JobHistoryRow({
   clayConnected,
   googleConnected,
   ghlConnected,
-  hubSpotConnected,
-  salesforceConnected,
 }: {
   job: DashboardJob
   label: string
@@ -699,8 +689,6 @@ function JobHistoryRow({
   clayConnected: boolean
   googleConnected: boolean
   ghlConnected: boolean
-  hubSpotConnected: boolean
-  salesforceConnected: boolean
 }) {
   const percent = runProgress(job)
   const purged = (job.progress_step ?? '').toLowerCase().includes('data purged')
@@ -737,8 +725,6 @@ function JobHistoryRow({
             clayConnected={clayConnected}
             googleConnected={googleConnected}
             ghlConnected={ghlConnected}
-            hubSpotConnected={hubSpotConnected}
-            salesforceConnected={salesforceConnected}
           />
         ) : null}
       </div>
@@ -849,8 +835,6 @@ function LeadPreview({
   clayConnected,
   googleConnected,
   ghlConnected,
-  hubSpotConnected,
-  salesforceConnected,
 }: {
   leads: DashboardLead[]
   /** Every selected lead, including ones on pages not currently loaded. */
@@ -869,8 +853,6 @@ function LeadPreview({
   clayConnected: boolean
   googleConnected: boolean
   ghlConnected: boolean
-  hubSpotConnected: boolean
-  salesforceConnected: boolean
 }) {
   const allVisibleSelected =
     leads.length > 0 && leads.every((lead) => selectedLeadIds.has(lead.id))
@@ -901,8 +883,6 @@ function LeadPreview({
             clayConnected={clayConnected}
             googleConnected={googleConnected}
             ghlConnected={ghlConnected}
-            hubSpotConnected={hubSpotConnected}
-            salesforceConnected={salesforceConnected}
             onSuccess={onExportSuccess}
           />
           <label className="w-full sm:w-72">

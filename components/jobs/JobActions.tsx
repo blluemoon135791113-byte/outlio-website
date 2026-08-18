@@ -14,8 +14,6 @@ import {
   exportSelectedLeadsToClayAction,
   exportSelectedLeadsToGoogleAction,
   exportSelectedLeadsToGhlAction,
-  exportSelectedLeadsToHubSpotAction,
-  exportSelectedLeadsToSalesforceAction,
   type LeadExportActionState,
 } from '@/lib/export/actions'
 
@@ -56,8 +54,6 @@ export function JobActions({
   clayConnected,
   googleConnected,
   ghlConnected,
-  hubSpotConnected,
-  salesforceConnected,
 }: {
   jobId: string
   hasExport: boolean
@@ -65,17 +61,13 @@ export function JobActions({
   clayConnected: boolean
   googleConnected: boolean
   ghlConnected: boolean
-  hubSpotConnected: boolean
-  salesforceConnected: boolean
 }) {
   const [download, downloadAction] = useActionState(getDownloadUrlAction, INITIAL)
   const [purge, purgeAction] = useActionState(purgeJobAction, INITIAL)
   const [clay, clayAction] = useActionState(exportSelectedLeadsToClayAction, EXPORT_INITIAL)
   const [google, googleAction] = useActionState(exportSelectedLeadsToGoogleAction, EXPORT_INITIAL)
   const [ghl, ghlAction] = useActionState(exportSelectedLeadsToGhlAction, EXPORT_INITIAL)
-  const [hubspot, hubspotAction] = useActionState(exportSelectedLeadsToHubSpotAction, EXPORT_INITIAL)
-  const [salesforce, salesforceAction] = useActionState(exportSelectedLeadsToSalesforceAction, EXPORT_INITIAL)
-  const exportFeedback = [clay, google, ghl, hubspot, salesforce].find((state) => state.status !== 'idle')
+  const exportFeedback = [clay, google, ghl].find((state) => state.status !== 'idle')
 
   /**
    * Signed URLs expire in ~60s, so we trigger the download immediately rather
@@ -99,8 +91,6 @@ export function JobActions({
               {leadsRemaining > 0 ? <>
                 <div className="my-1 border-t border-border" />
                 {googleConnected ? <><form action={googleAction}><input type="hidden" name="job_id" value={jobId} /><input type="hidden" name="destination" value="google_sheets" /><MenuSubmit logo="google_sheets" label="Google Sheets" /></form><form action={googleAction}><input type="hidden" name="job_id" value={jobId} /><input type="hidden" name="destination" value="google_drive" /><MenuSubmit logo="google_drive" label="Google Drive" /></form></> : <ConnectRow logo="google_sheets" label="Google" />}
-                {hubSpotConnected ? <form action={hubspotAction}><input type="hidden" name="job_id" value={jobId} /><MenuSubmit logo="hubspot" label="HubSpot" /></form> : <ConnectRow logo="hubspot" label="HubSpot" />}
-                {salesforceConnected ? <form action={salesforceAction}><input type="hidden" name="job_id" value={jobId} /><MenuSubmit logo="salesforce" label="Salesforce" /></form> : <ConnectRow logo="salesforce" label="Salesforce" />}
                 {ghlConnected ? <form action={ghlAction}><input type="hidden" name="job_id" value={jobId} /><MenuSubmit logo="ghl" label="GoHighLevel" /></form> : <ConnectRow logo="ghl" label="GoHighLevel" />}
                 {clayConnected ? <form action={clayAction}><input type="hidden" name="job_id" value={jobId} /><MenuSubmit logo="clay" label="Clay" /></form> : <ConnectRow logo="clay" label="Clay" />}
               </> : null}

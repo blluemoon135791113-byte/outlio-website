@@ -2,16 +2,12 @@ import Image from 'next/image'
 import {
   siGoogledrive,
   siGooglesheets,
-  siHubspot,
 } from 'simple-icons'
 
 import clayLogo from '@/app/clay-transparent.png'
 import ghlLogo from '@/app/gohighlevel.png'
-import salesforceLogo from '@/app/salesforce-logo-transparent.png'
 
 export type ConnectorLogoName =
-  | 'hubspot'
-  | 'salesforce'
   | 'clay'
   | 'google_sheets'
   | 'google_drive'
@@ -19,7 +15,6 @@ export type ConnectorLogoName =
   | 'ghl'
 
 const simpleIcons = {
-  hubspot: siHubspot,
   google_sheets: siGooglesheets,
   google_drive: siGoogledrive,
 } as const
@@ -45,14 +40,14 @@ export function ConnectorLogo({
     )
   }
 
-  if (name === 'salesforce' || name === 'clay' || name === 'ghl') {
-    const src = name === 'salesforce' ? salesforceLogo : name === 'clay' ? clayLogo : ghlLogo
+  if (name === 'clay' || name === 'ghl') {
+    const src = name === 'clay' ? clayLogo : ghlLogo
     return (
       <Image
         aria-hidden
         src={src}
         alt=""
-        className={`${className} object-contain${name === 'salesforce' ? ' scale-125' : ''}`}
+        className={`${className} object-contain`}
       />
     )
   }

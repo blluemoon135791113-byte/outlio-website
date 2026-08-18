@@ -5,8 +5,6 @@ import { ExtensionSettings } from '@/components/extension/ExtensionSettings'
 import { ClaySettings } from '@/components/integrations/ClaySettings'
 import { GoogleSettings } from '@/components/integrations/GoogleSettings'
 import { GhlSettings } from '@/components/integrations/GhlSettings'
-import { HubSpotSettings } from '@/components/integrations/HubSpotSettings'
-import { SalesforceSettings } from '@/components/integrations/SalesforceSettings'
 import { AvatarSettings, DeleteAccountSettings, EmailSettings, MfaSettings, PasswordSettings, ProfileSettings, SubscriptionSettings } from '@/components/settings/SettingsForms'
 import { CHROME_EXTENSION_URL } from '@/app/lib/constants'
 import { requireUser } from '@/lib/auth/access'
@@ -17,15 +15,13 @@ import { createClient } from '@/lib/supabase/server'
 import { getClayConnectionMetadata } from '@/lib/integrations/repository'
 import { getGoogleConnectionMetadata } from '@/lib/integrations/google-repository'
 import { getGhlConnectionMetadata } from '@/lib/integrations/ghl-repository'
-import { getHubSpotConnectionMetadata } from '@/lib/integrations/hubspot-repository'
-import { getSalesforceConnectionMetadata } from '@/lib/integrations/salesforce-repository'
 
 export const metadata: Metadata = { title: 'Settings | Outlio', robots: { index: false, follow: false } }
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ required_mfa?: string; google?: string; hubspot?: string; salesforce?: string }>
+  searchParams: Promise<{ required_mfa?: string; google?: string }>
 }) {
   const ctx = await requireUser()
   const params = await searchParams
@@ -41,13 +37,11 @@ export default async function SettingsPage({
     .limit(1)
     .maybeSingle()
   const initials = (ctx.profile?.full_name ?? ctx.email ?? 'O').split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
-  const [devices, clayConnection, googleConnection, ghlConnection, hubSpotConnection, salesforceConnection] = await Promise.all([
+  const [devices, clayConnection, googleConnection, ghlConnection] = await Promise.all([
     listDevices(ctx.userId!),
     getClayConnectionMetadata(ctx.userId!),
     getGoogleConnectionMetadata(ctx.userId!),
     getGhlConnectionMetadata(ctx.userId!),
-    getHubSpotConnectionMetadata(ctx.userId!),
-    getSalesforceConnectionMetadata(ctx.userId!),
   ])
   // Chrome is published, so its URL is a constant. Firefox and Safari stay
   // null until they have listings — the UI shows "coming soon" rather than a
@@ -113,8 +107,6 @@ export default async function SettingsPage({
             <div className="space-y-4">
               <GoogleSettings status={googleConnection?.status ?? null} accountLabel={googleConnection?.externalAccountEmail ?? googleConnection?.externalAccountName ?? null} feedback={params.google ?? null} />
               <GhlSettings status={ghlConnection?.status ?? null} accountLabel={ghlConnection?.externalAccountName ?? null} />
-              <HubSpotSettings status={hubSpotConnection?.status ?? null} accountLabel={hubSpotConnection?.externalAccountName ?? null} feedback={params.hubspot ?? null} />
-              <SalesforceSettings status={salesforceConnection?.status ?? null} accountLabel={salesforceConnection?.externalAccountName ?? null} feedback={params.salesforce ?? null} />
               <ClaySettings status={clayConnection?.status ?? null} accountLabel={clayConnection?.externalAccountName ?? null} />
             </div>
           </SettingsSection>

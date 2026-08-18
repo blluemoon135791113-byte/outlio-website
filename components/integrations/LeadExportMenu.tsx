@@ -10,8 +10,6 @@ import {
   exportSelectedLeadsToClayAction,
   exportSelectedLeadsToGoogleAction,
   exportSelectedLeadsToGhlAction,
-  exportSelectedLeadsToHubSpotAction,
-  exportSelectedLeadsToSalesforceAction,
   type LeadExportActionState,
 } from '@/lib/export/actions'
 
@@ -60,29 +58,23 @@ export function LeadExportMenu({
   clayConnected,
   googleConnected,
   ghlConnected,
-  hubSpotConnected,
-  salesforceConnected,
   onSuccess,
 }: {
   selectedLeads: readonly DashboardLead[]
   clayConnected: boolean
   googleConnected: boolean
   ghlConnected: boolean
-  hubSpotConnected: boolean
-  salesforceConnected: boolean
   onSuccess: () => void
 }) {
   const [clay, clayAction] = useActionState(exportSelectedLeadsToClayAction, INITIAL)
-  const [hubspot, hubspotAction] = useActionState(exportSelectedLeadsToHubSpotAction, INITIAL)
-  const [salesforce, salesforceAction] = useActionState(exportSelectedLeadsToSalesforceAction, INITIAL)
   const [google, googleAction] = useActionState(exportSelectedLeadsToGoogleAction, INITIAL)
   const [ghl, ghlAction] = useActionState(exportSelectedLeadsToGhlAction, INITIAL)
   const leadIds = JSON.stringify(selectedLeads.map((lead) => lead.id))
-  const feedback = [clay, hubspot, salesforce, google, ghl].find((state) => state.status !== 'idle')
+  const feedback = [clay, google, ghl].find((state) => state.status !== 'idle')
 
   useEffect(() => {
-    if ([clay, hubspot, salesforce, google, ghl].some((state) => state.status === 'success')) onSuccess()
-  }, [clay, ghl, google, hubspot, onSuccess, salesforce])
+    if ([clay, google, ghl].some((state) => state.status === 'success')) onSuccess()
+  }, [clay, ghl, google, onSuccess])
 
   return (
     <div className="space-y-2">
@@ -101,8 +93,6 @@ export function LeadExportMenu({
             <form action={googleAction}><input type="hidden" name="lead_ids" value={leadIds} /><input type="hidden" name="destination" value="google_sheets" /><MenuSubmit logo="google_sheets" label="Google Sheets" disabled={!selectedLeads.length} /></form>
             <form action={googleAction}><input type="hidden" name="lead_ids" value={leadIds} /><input type="hidden" name="destination" value="google_drive" /><MenuSubmit logo="google_drive" label="Google Drive" disabled={!selectedLeads.length} /></form>
           </> : <ConnectRow logo="google_sheets" label="Google" />}
-          {hubSpotConnected ? <form action={hubspotAction}><input type="hidden" name="lead_ids" value={leadIds} /><MenuSubmit logo="hubspot" label="HubSpot" disabled={!selectedLeads.length} /></form> : <ConnectRow logo="hubspot" label="HubSpot" />}
-          {salesforceConnected ? <form action={salesforceAction}><input type="hidden" name="lead_ids" value={leadIds} /><MenuSubmit logo="salesforce" label="Salesforce" disabled={!selectedLeads.length} /></form> : <ConnectRow logo="salesforce" label="Salesforce" />}
           {ghlConnected ? <form action={ghlAction}><input type="hidden" name="lead_ids" value={leadIds} /><MenuSubmit logo="ghl" label="GoHighLevel" disabled={!selectedLeads.length} /></form> : <ConnectRow logo="ghl" label="GoHighLevel" />}
           {clayConnected ? <form action={clayAction}><input type="hidden" name="lead_ids" value={leadIds} /><MenuSubmit logo="clay" label="Clay" disabled={!selectedLeads.length} /></form> : <ConnectRow logo="clay" label="Clay" />}
         </div>

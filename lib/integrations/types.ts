@@ -4,8 +4,6 @@ import type { IntegrationConnectionStatus, Json } from '@/types/database'
 export const INTEGRATION_PROVIDERS = [
   'google',
   'clay',
-  'hubspot',
-  'salesforce',
   'ghl',
   'microsoft',
   'dropbox',
@@ -18,8 +16,6 @@ export const EXPORT_DESTINATIONS = [
   'google_sheets',
   'google_drive',
   'clay',
-  'hubspot',
-  'salesforce',
   'ghl',
   'onedrive',
   'dropbox',
