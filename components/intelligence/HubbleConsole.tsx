@@ -16,7 +16,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BatchFilter } from '@/components/intelligence/BatchFilter'
 import { HubbleLeadList, type HubbleLead } from '@/components/intelligence/HubbleLeadList'
 import { HubblePromptBar } from '@/components/intelligence/HubblePromptBar'
+import { HubbleResultPanel } from '@/components/intelligence/HubbleResultPanel'
+import { LeadModal } from '@/components/intelligence/LeadModal'
 import type { ModelOption } from '@/components/intelligence/ModelPicker'
+import { columnLabel } from '@/components/intelligence/render-value'
+import { useResearchRun, type ResearchScope } from '@/components/intelligence/useResearchRun'
 import type { LeadBatch } from '@/lib/intelligence/batches'
 import { dateRangeBounds } from '@/lib/intelligence/date-range'
 import { createClient } from '@/lib/supabase/client'
@@ -32,7 +36,7 @@ const SUGGESTIONS = [
 ]
 
 const LEAD_SELECT =
-  'id, full_name, job_title, company_name, company_website_url, location, extraction_job_id, created_at, enrichment' as const
+  'id, full_name, job_title, company_name, company_website_url, linkedin_url, location, extraction_job_id, created_at, enrichment' as const
 
 type LeadRow = {
   id: string
@@ -40,6 +44,7 @@ type LeadRow = {
   job_title: string | null
   company_name: string | null
   company_website_url: string | null
+  linkedin_url: string | null
   location: string | null
   enrichment: unknown
 }
@@ -99,13 +104,18 @@ export function HubbleConsole({
 
   const [question, setQuestion] = useState('')
   const [modelId, setModelId] = useState(models[0]?.id ?? '')
-  const [busy] = useState(false)
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null)
+
+  const run = useResearchRun()
+  const busy = run.busy
 
   const [batchId, setBatchId] = useState<string | null>(null)
   const [from, setFrom] = useState<string | null>(null)
   const [to, setTo] = useState<string | null>(null)
 
   const [leads, setLeads] = useState<HubbleLead[]>([])
+  /** LinkedIn URLs, kept beside the list so the modal need not refetch. */
+  const [linkedinById, setLinkedinById] = useState<Record<string, string | null>>({})
   const [loading, setLoading] = useState(true)
   const latestRequest = useRef(0)
 
@@ -151,7 +161,9 @@ export function HubbleConsole({
       const { data } = await query
       if (requestId !== latestRequest.current) return
 
-      setLeads(((data ?? []) as LeadRow[]).map(toHubbleLead))
+      const rows = (data ?? []) as LeadRow[]
+      setLeads(rows.map(toHubbleLead))
+      setLinkedinById(Object.fromEntries(rows.map((row) => [row.id, row.linkedin_url])))
     } finally {
       if (requestId === latestRequest.current) setLoading(false)
     }
@@ -160,6 +172,38 @@ export function HubbleConsole({
   useEffect(() => {
     void loadLeads((latestRequest.current += 1))
   }, [loadLeads])
+
+  /*
+   * Reload once a merge lands, so the columns the user just paid for actually
+   * appear. Without this the list still reads "Not researched yet" beside a
+   * panel that says the leads were enriched — two truths on one screen.
+   */
+  const mergedOnce = useRef(false)
+  useEffect(() => {
+    if (run.merge.state !== 'done') {
+      if (run.merge.state === 'idle') mergedOnce.current = false
+      return
+    }
+    if (mergedOnce.current) return
+    mergedOnce.current = true
+    void loadLeads((latestRequest.current += 1))
+  }, [run.merge.state, loadLeads])
+
+  /**
+   * What a question applies to.
+   *
+   * ⚠️ MIRRORS THE FILTER EXACTLY. If the screen is showing one list, the run
+   * covers that list; if a date range is set, it covers that range. A prompt
+   * that silently researched every lead while the filter said otherwise would
+   * be an unbounded spend the user never approved.
+   */
+  const scope = (): ResearchScope => {
+    if (batchId) return { type: 'extraction_job', extractionJobId: batchId }
+    if (from && to) return { type: 'date_range', from, to }
+    return { type: 'all_leads' }
+  }
+
+  const openLead = leads.find((lead) => lead.id === openLeadId) ?? null
 
   const emptyHint = batchId
     ? 'That list has no leads. Pick another from the dropdown above.'
@@ -181,9 +225,7 @@ export function HubbleConsole({
       <HubblePromptBar
         value={question}
         onChange={setQuestion}
-        onSubmit={() => {
-          /* Wired to the run pipeline in the next phase. */
-        }}
+        onSubmit={() => void run.ask(question, scope(), modelId || null)}
         busy={busy}
         models={models}
         modelId={modelId}
@@ -204,14 +246,45 @@ export function HubbleConsole({
         disabled={busy}
       />
 
-      <HubbleLeadList
-        leads={leads}
-        loading={loading}
-        emptyHint={emptyHint}
-        onOpenLead={() => {
-          /* The per-lead modal lands in the next phase. */
-        }}
-      />
+      {/*
+        The list contracts rather than being covered when the panel opens, so a
+        finding and the leads it is about stay on screen together.
+      */}
+      <div
+        className={
+          run.phase === 'idle'
+            ? ''
+            : 'grid items-start gap-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(22rem,1fr)]'
+        }
+      >
+        <HubbleLeadList
+          leads={leads}
+          loading={loading}
+          emptyHint={emptyHint}
+          onOpenLead={(lead) => setOpenLeadId(lead.id)}
+        />
+
+        {run.phase !== 'idle' ? (
+          <HubbleResultPanel
+            phase={run.phase}
+            message={run.message}
+            results={run.results}
+            merge={run.merge}
+            onEnrich={() => void run.enrich()}
+            onClose={run.reset}
+            columnLabel={columnLabel}
+          />
+        ) : null}
+      </div>
+
+      {openLead ? (
+        <LeadModal
+          lead={openLead}
+          linkedinUrl={linkedinById[openLead.id] ?? null}
+          models={models}
+          onClose={() => setOpenLeadId(null)}
+        />
+      ) : null}
     </div>
   )
 }

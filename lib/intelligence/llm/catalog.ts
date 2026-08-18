@@ -14,6 +14,8 @@ import 'server-only'
  */
 import {
   DEFAULT_GEMINI_MODEL,
+  createBackboardProvider,
+  createCerebrasProvider,
   createGeminiProvider,
   createGroqProvider,
   createOpenRouterProvider,
@@ -42,6 +44,8 @@ export function modelCatalog(): ModelChoice[] {
   const gemini = createGeminiProvider()
   const groq = createGroqProvider()
   const openrouter = createOpenRouterProvider()
+  const cerebras = createCerebrasProvider()
+  const backboard = createBackboardProvider()
 
   return [
     {
@@ -59,28 +63,45 @@ export function modelCatalog(): ModelChoice[] {
       configured: groq.isConfigured(),
     },
     {
+      id: 'cerebras',
+      label: 'Cerebras',
+      model: cerebras.model,
+      hint: 'Wafer-scale inference, very low latency',
+      configured: cerebras.isConfigured(),
+    },
+    {
       id: 'openrouter',
       label: openRouterLabel(openrouter.model),
       model: openrouter.model,
       hint: 'Any model on OpenRouter, including GPT-4o and Claude',
       configured: openrouter.isConfigured(),
     },
+    {
+      id: 'backboard',
+      label: prettyModel(backboard.model),
+      model: backboard.model,
+      hint: 'Routed through Backboard',
+      configured: backboard.isConfigured(),
+    },
   ]
 }
 
-/** `openai/gpt-4o-mini` → `GPT-4o Mini`. Falls back to the raw id. */
-function openRouterLabel(model: string): string {
-  const name = model.split('/').pop()
-  if (!name) return model
-
+/** `gpt-4o` → `GPT-4o`. Shared by the router-style vendors. */
+function prettyModel(model: string): string {
+  const name = model.split('/').pop() ?? model
   return name
     .split('-')
     .map((part) =>
-      /^(gpt|ai|xl|hd)$/i.test(part)
+      /^(gpt|ai|xl|hd|llm)$/i.test(part)
         ? part.toUpperCase()
         : part.charAt(0).toUpperCase() + part.slice(1),
     )
-    .join(' ')
+    .join('-')
+}
+
+/** `openai/gpt-4o-mini` → `GPT-4o-Mini`. Falls back to the raw id. */
+function openRouterLabel(model: string): string {
+  return prettyModel(model)
 }
 
 /** Only the models a query could actually use. */

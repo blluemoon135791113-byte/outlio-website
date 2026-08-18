@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { assertAccess } from '@/lib/auth/access'
 import { consume } from '@/lib/auth/rate-limit'
+import { LLM_VENDORS, resolveLlmProvider } from '@/lib/intelligence/llm/provider'
 import { planQuery } from '@/lib/intelligence/planner'
 import { researchScopeSchema } from '@/lib/intelligence/plan'
 import { estimateScope } from '@/lib/intelligence/results'
@@ -30,6 +31,14 @@ const inputSchema = z.object({
    * "this will evaluate X leads / Y companies" confirmation possible (spec §31).
    */
   estimateOnly: z.boolean().optional(),
+  /*
+   * Which model plans the question.
+   *
+   * ⚠️ VALIDATED AGAINST THE VENDOR LIST, not passed through. This selects a
+   * code path that holds an API key; an unchecked string here would be a
+   * request from the browser deciding which credential the server reaches for.
+   */
+  model: z.enum(LLM_VENDORS).optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -60,7 +69,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { query, scope, qualificationProfileId, estimateOnly } = parsed.data
+  const { query, scope, qualificationProfileId, estimateOnly, model } = parsed.data
   const estimate = await estimateScope(userId, scope)
 
   // Nothing is planned or spent for an estimate.
@@ -75,7 +84,12 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const planned = await planQuery({ question: query })
+  const planned = await planQuery({
+    question: query,
+    // Falls back to the configured order when the client names nothing, so a
+    // stale tab that predates the picker still works.
+    llm: model ? resolveLlmProvider(model) : undefined,
+  })
 
   if (planned.status === 'refused') {
     return NextResponse.json({ status: 'refused', reason: planned.reason }, { status: 422 })
