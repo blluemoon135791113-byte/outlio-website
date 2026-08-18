@@ -284,3 +284,64 @@ it as a labelled field.
 **Not a capture.** No HTML is uploaded, no leads are created, no credit is
 consumed and the session page count does not move. A company page yields no
 leads; billing it as a capture would charge for nothing.
+
+---
+
+## 6. What a real page actually carries — census, 2026-08-19
+
+Measured against a real saved page (25 rows), then deleted. **Nothing below is
+inferred; each was seen rendered.**
+
+### `data-anonymize` census
+
+| Attribute | Count | Note |
+|---|---|---|
+| `location` | 26 | |
+| `headshot-photo` | 26 | `src` is a LOCAL saved-page asset, not a URL |
+| `company-name` | 26 | |
+| `person-name` | 25 | one per row |
+| `job-title` | 25 | **the real title on this layout** |
+| `industry` | 1 | company hover card only |
+| `company-size` | 1 | company hover card only |
+
+> ⚠️ **`data-anonymize="title"` DOES NOT EXIST on this layout.** §3 lists it as
+> the real job title. On the table layout the title is `job-title`, which §3 also
+> warns is tenure text on the *card* layout. Both are true, on different layouts,
+> and the parser branches on which it found.
+>
+> ⚠️ **`person-blurb` does not exist either.** `person_blurb`, `tenure_in_role`
+> and `tenure_in_company` were NULL on 400 of 400 real leads.
+
+### Also on the row, now extracted
+
+| Field | Rendered as |
+|---|---|
+| `connection_degree` | `3rd` / "Third-degree connection" |
+| `is_reachable` | a "Reachable" badge — **absent means unmarked, not false** |
+| `list_count` | `2 Lists` |
+| `last_activity` | `No activity` |
+| `added_to_list_at` | `8/6/2026` — **US `M/D/YYYY`**, pinned in the parser |
+
+### The company hover card
+
+The ONLY source of company industry, headcount and HQ. A results row carries the
+company's name and its LinkedIn URL and nothing more.
+
+```
+TrueSeal AI
+Software Development                 ← industry
+San Francisco, California, US        ← headquarters
+2-10 employees                       ← size, A RANGE
+0 Lists                              ← the USER's lists, not the company
+```
+
+Read by shape, never by position: headcount carries "employees", a location
+carries a comma, the industry is what remains. Position-based reading would
+silently return the wrong field after any LinkedIn redesign.
+
+### ⚠️ What is NOT on the page, at any layout
+
+**Email and phone.** Verified: zero addresses, zero `tel:` links. These come
+from the enrichment providers or they do not come at all. Any feature promising
+contact details from extraction alone is promising something the page cannot
+give.

@@ -31,7 +31,15 @@ describe('normalizeExportLead', () => {
       salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/fabricated-1',
       location: 'London, United Kingdom',
     })
-    expect(EXPORT_COLUMN_ORDER).toEqual([
+    /*
+     * ⚠️ THE FIRST EIGHT ARE FROZEN, IN THIS ORDER.
+     *
+     * Every destination and every customer field-mapping is built on them. New
+     * columns are appended; one inserted among these would shift a customer's
+     * import with no error to notice. The tail is allowed to grow, which is why
+     * this asserts a prefix rather than the whole list.
+     */
+    expect(EXPORT_COLUMN_ORDER.slice(0, 8)).toEqual([
       'Name',
       'LinkedIn Profile',
       'Job Title',
@@ -41,7 +49,12 @@ describe('normalizeExportLead', () => {
       'Location',
       'Sales Navigator URL',
     ])
-    expect(toCanonicalExportRecord(lead)).toEqual({
+
+    // And contact details are exported, since they are the point of enriching.
+    expect(EXPORT_COLUMN_ORDER).toContain('Work Email')
+    expect(EXPORT_COLUMN_ORDER).toContain('Mobile Phone')
+    expect(EXPORT_COLUMN_ORDER).toContain('Company Size')
+    expect(toCanonicalExportRecord(lead)).toMatchObject({
       Name: 'Áda Example',
       'LinkedIn Profile': 'https://www.linkedin.com/in/fabricated-1',
       'Job Title': 'Founder',

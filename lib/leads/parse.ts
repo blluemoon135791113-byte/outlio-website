@@ -27,6 +27,28 @@ export type ParsedLead = {
   personBlurb: string | null
   tenureInRole: string | null
   tenureInCompany: string | null
+
+  /* ---- also on the row, previously discarded ------------------------------
+   * Every one of these was verified present in an attribute census of a real
+   * saved page. See docs/SELECTOR_MAP.md §6. */
+
+  /** "1st" / "2nd" / "3rd". */
+  connectionDegree: string | null
+  /** LinkedIn's own "Reachable" badge. */
+  isReachable: boolean | null
+  /** How many of the user's saved lists already hold this lead. */
+  listCount: number | null
+  /** "No activity", "Posted 2d ago", … kept verbatim. */
+  lastActivity: string | null
+  /** ISO date the lead entered the list, from the page's own display. */
+  addedToListAt: string | null
+
+  /* ---- from the company hover card, via the extension --------------------- */
+  companyIndustry: string | null
+  /** A RANGE as rendered — "2-10 employees" — never parsed into a number. */
+  companySize: string | null
+  companyHeadquarters: string | null
+
   sourceRowIndex: number
 }
 
@@ -179,6 +201,57 @@ function companyProfileUrl(href: string | null | undefined): string | null {
   }
 }
 
+/** "3rd degree connection" / "3rd" → "3rd". */
+function extractConnectionDegree(row: { text(): string }): string | null {
+  const text = row.text().replace(/\s+/g, ' ')
+  const match = /\b(1st|2nd|3rd)\b/i.exec(text)
+  return match ? match[1]!.toLowerCase() : null
+}
+
+/**
+ * LinkedIn's "Reachable" badge.
+ *
+ * ⚠️ ABSENT IS NOT FALSE. The badge only renders when the lead IS reachable, so
+ * its absence means "not marked", not "unreachable" — returning `false` would
+ * be asserting something the page never said.
+ */
+function extractReachable(row: { text(): string }): boolean | null {
+  const text = row.text()
+  return /\breachable\b/i.test(text) ? true : null
+}
+
+/** "2 Lists" → 2. */
+function extractListCount(row: { text(): string }): number | null {
+  const match = /\b(\d{1,3})\s+Lists?\b/i.exec(row.text().replace(/\s+/g, ' '))
+  if (!match) return null
+  const value = Number.parseInt(match[1]!, 10)
+  return Number.isFinite(value) ? value : null
+}
+
+/** The activity cell, verbatim. */
+function extractLastActivity(row: { text(): string }): string | null {
+  const match = /\b(No activity|Posted [^|]{1,40}?ago|Shared [^|]{1,40}?ago)\b/i.exec(
+    row.text().replace(/\s+/g, ' '),
+  )
+  return match ? match[1]!.trim() : null
+}
+
+/**
+ * The date the lead was added to the list.
+ *
+ * ⚠️ The page renders it US-style, `M/D/YYYY`. Read as D/M it would turn
+ * 8 June into 6 August without complaining, so the order is pinned here rather
+ * than left to `Date.parse`.
+ */
+function extractAddedDate(row: { text(): string }): string | null {
+  const match = /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/.exec(row.text())
+  if (!match) return null
+
+  const [, month, day, year] = match
+  const iso = `${year}-${month!.padStart(2, '0')}-${day!.padStart(2, '0')}`
+  return Number.isNaN(Date.parse(`${iso}T00:00:00Z`)) ? null : iso
+}
+
 /**
  * Parses one saved search-results page.
  *
@@ -276,6 +349,9 @@ export function parseSearchResults(html: string): ParseResult {
     let companyName = text(companyEl.text())
     const companyUrl = companyProfileUrl(companyAnchor.attr('href') ?? null)
     const companyWebsiteUrl = text(companyEl.attr('data-outlio-company-website'))
+    const companyIndustry = text(companyEl.attr('data-outlio-company-industry'))
+    const companySize = text(companyEl.attr('data-outlio-company-size'))
+    const companyHeadquarters = text(companyEl.attr('data-outlio-company-hq'))
 
     // …otherwise the name is a BARE TEXT NODE in the subtitle. Without this
     // fallback we silently lose the company on ~20% of leads (1 of 5 on a real
@@ -309,6 +385,14 @@ export function parseSearchResults(html: string): ParseResult {
       personBlurb: text(row.find('[data-anonymize="person-blurb"]').first().text()),
       tenureInRole,
       tenureInCompany,
+      connectionDegree: extractConnectionDegree(row),
+      isReachable: extractReachable(row),
+      listCount: extractListCount(row),
+      lastActivity: extractLastActivity(row),
+      addedToListAt: extractAddedDate(row),
+      companyIndustry,
+      companySize,
+      companyHeadquarters,
       sourceRowIndex: index + 1,
     })
   })

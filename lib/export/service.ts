@@ -19,7 +19,7 @@ import {
 import { recordSecurityEvent } from '@/lib/security/events'
 import { createAdminClient } from '@/lib/supabase/admin'
 const EXPORT_LEAD_SELECT =
-  'id, extraction_job_id, full_name, linkedin_url, job_title, company_name, company_url, company_website_url, sales_navigator_url, location, enrichment' as const
+  'id, extraction_job_id, full_name, linkedin_url, job_title, company_name, company_url, company_website_url, sales_navigator_url, location, enrichment, company_industry, company_size, company_headquarters, connection_degree, is_reachable, list_count, last_activity, added_to_list_at, work_email, email_status, mobile_phone, phone_status' as const
 
 export type LeadExportServiceResult = {
   exportJobId: string

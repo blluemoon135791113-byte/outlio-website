@@ -108,6 +108,8 @@ function externalWebsiteFrom(root: ParentNode): string | null {
       const url = new URL(anchor.href, window.location.href)
       if (!['http:', 'https:'].includes(url.protocol)) continue
       if (/(^|\.)linkedin\.com$/i.test(url.hostname)) continue
+      // licdn is LinkedIn's own asset CDN, not the company's site.
+      if (/(^|\.)licdn\.com$/i.test(url.hostname)) continue
       return url.toString()
     } catch {
       // Ignore malformed page-owned links.
@@ -117,33 +119,100 @@ function externalWebsiteFrom(root: ParentNode): string | null {
 }
 
 /**
- * Sales Navigator lazy-renders some company hover cards. This opt-in pass only
- * hovers already-visible company labels and reads an external URL if LinkedIn
- * renders one; it never clicks, opens a page, or makes its own network request.
+ * The company facts LinkedIn renders in a hover card.
+ *
+ * ⚠️ MATCHED ON SHAPE, NOT POSITION. The card is a stack of unlabelled lines —
+ * industry, location, headcount, list count — in an order LinkedIn is free to
+ * change. Reading "the third line" would silently return the wrong field after
+ * any redesign, so each is recognised by what it looks like: headcount always
+ * carries the word "employees", a location carries a comma, and the industry is
+ * what remains.
  */
-async function revealCompanyWebsites(container: Element): Promise<void> {
+export function companyDetailsFrom(card: ParentNode): {
+  industry: string | null
+  size: string | null
+  headquarters: string | null
+} {
+  const lines = Array.from(card.querySelectorAll<HTMLElement>('span, div, p'))
+    .map((node) => (node.childElementCount === 0 ? (node.textContent ?? '') : ''))
+    .map((text) => text.replace(/\s+/g, ' ').trim().replace(/,$/, ''))
+    .filter((text) => text.length > 1 && text.length <= 120)
+
+  // The card repeats every value for screen readers.
+  const seen = new Set<string>()
+  const unique = lines.filter((line) => {
+    const key = line.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  const size = unique.find((line) => /\bemployees?\b/i.test(line)) ?? null
+
+  // "0 Lists" counts the USER's saved lists, not anything about the company.
+  const rest = unique.filter(
+    (line) => line !== size && !/\blists?\b/i.test(line) && !/^dismiss$/i.test(line),
+  )
+
+  const headquarters = rest.find((line) => /,/.test(line)) ?? null
+  const industry = rest.find((line) => line !== headquarters && !/,/.test(line)) ?? null
+
+  return { industry, size, headquarters }
+}
+
+/**
+ * Reads the company hover card for every company already on screen.
+ *
+ * ⚠️ NOTHING HERE NAVIGATES. It dispatches a hover on an element the user has
+ * already loaded and reads what LinkedIn renders in response. No clicking, no
+ * opening, no request of our own — CLAUDE.md rule 1 stands.
+ *
+ * This is the ONLY source of company industry, headcount and headquarters. A
+ * results row carries the company's NAME and its LinkedIn URL and nothing
+ * else — verified by an attribute census of a real saved page.
+ */
+async function revealCompanyDetails(container: Element): Promise<void> {
   const companies = Array.from(
     container.querySelectorAll<HTMLElement>('[data-anonymize="company-name"]'),
   )
 
   for (const company of companies) {
-    let website = externalWebsiteFrom(company.closest('tr, li') ?? company)
-    if (!website) {
-      company.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }))
-      company.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, cancelable: true }))
-      await new Promise((resolve) => setTimeout(resolve, COMPANY_HOVER_SETTLE_MS))
-
-      const hoverContent = document.querySelector(
-        '[role="tooltip"], .artdeco-hoverable-content, .artdeco-hoverable-content__content',
-      )
-      if (hoverContent) website = externalWebsiteFrom(hoverContent)
-
-      company.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }))
-      company.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }))
+    const row = company.closest('tr, li') ?? company
+    let website = externalWebsiteFrom(row)
+    let details: ReturnType<typeof companyDetailsFrom> = {
+      industry: null,
+      size: null,
+      headquarters: null,
     }
+
+    company.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }))
+    company.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, cancelable: true }))
+    await new Promise((resolve) => setTimeout(resolve, COMPANY_HOVER_SETTLE_MS))
+
+    const card = document.querySelector(
+      '[role="tooltip"], .artdeco-hoverable-content, .artdeco-hoverable-content__content, [id*="hovercard"]',
+    )
+
+    if (card) {
+      website = website ?? externalWebsiteFrom(card)
+      details = companyDetailsFrom(card)
+    }
+
+    company.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }))
+    company.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }))
+
+    /*
+     * Written onto the element so the SERVER parser reads them out of the saved
+     * markup like every other field. The extension extracts nothing itself; it
+     * only makes what LinkedIn rendered persist into the document.
+     */
     if (website) company.dataset.outlioCompanyWebsite = website
+    if (details.industry) company.dataset.outlioCompanyIndustry = details.industry
+    if (details.size) company.dataset.outlioCompanySize = details.size
+    if (details.headquarters) company.dataset.outlioCompanyHq = details.headquarters
   }
 }
+
 
 /**
  * Names render before some company cells on slower connections. Capture after
@@ -252,7 +321,13 @@ export const salesNavAdapter: PageAdapter = {
     const container = resultsContainer()
     if (!container) throw new Error('results disappeared before capture')
 
-    if (options?.includeCompanyWebsites) await revealCompanyWebsites(container)
+    /*
+     * ⚠️ ON BY DEFAULT. This pass was opt-in and effectively never used —
+     * `company_website_url` was NULL on 400 of 400 real leads — so the company
+     * data users ask for most was the data nobody ever got. The popup can
+     * still switch it off for a faster capture.
+     */
+    if (options?.includeCompanyWebsites !== false) await revealCompanyDetails(container)
 
     const cleaned = sanitize(container)
     if (!cleaned) throw new Error('results container could not be read')

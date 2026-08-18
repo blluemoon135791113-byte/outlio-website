@@ -292,6 +292,28 @@ export type ExtractedLeadRow = {
    * found. See migration 0051.
    */
   enrichment: Json
+
+  /* ---- also on the saved page (migration 0052) --------------------------- */
+  connection_degree: string | null
+  is_reachable: boolean | null
+  list_count: number | null
+  last_activity: string | null
+  added_to_list_at: string | null
+
+  /* ---- from the company hover card --------------------------------------- */
+  company_industry: string | null
+  /** A RANGE as LinkedIn rendered it, e.g. "2-10 employees". */
+  company_size: string | null
+  company_headquarters: string | null
+
+  /* ---- enrichment only; never on a Sales Navigator page ------------------- */
+  work_email: string | null
+  email_status: string | null
+  mobile_phone: string | null
+  phone_status: string | null
+  /** NULL means never looked; a timestamp with no email means none exists. */
+  contact_enriched_at: string | null
+
   created_at: string
   updated_at: string
 }

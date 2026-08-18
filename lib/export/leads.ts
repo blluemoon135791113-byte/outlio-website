@@ -29,6 +29,22 @@ export type ExportLead = {
    * the file it exported before this existed.
    */
   enrichment?: Record<string, string>
+
+  /* ---- also on the saved page --------------------------------------------- */
+  companyIndustry?: string | null
+  companySize?: string | null
+  companyHeadquarters?: string | null
+  connectionDegree?: string | null
+  reachable?: string | null
+  listCount?: number | null
+  lastActivity?: string | null
+  addedToList?: string | null
+
+  /* ---- enrichment only ---------------------------------------------------- */
+  workEmail?: string | null
+  emailStatus?: string | null
+  mobilePhone?: string | null
+  phoneStatus?: string | null
 }
 
 export const EXPORT_COLUMN_HEADERS = {
@@ -40,8 +56,31 @@ export const EXPORT_COLUMN_HEADERS = {
   companyUrl: 'Company Website URL',
   location: 'Location',
   salesNavigatorUrl: 'Sales Navigator URL',
+
+  /* Appended after the original eight — see the note in process-job.ts. */
+  companyIndustry: 'Company Industry',
+  companySize: 'Company Size',
+  companyHeadquarters: 'Company HQ',
+  connectionDegree: 'Connection Degree',
+  reachable: 'Reachable',
+  listCount: 'Saved Lists',
+  lastActivity: 'Last Activity',
+  addedToList: 'Added To List',
+
+  /* Enrichment, never the parser: these are not on a Sales Navigator page. */
+  workEmail: 'Work Email',
+  emailStatus: 'Email Status',
+  mobilePhone: 'Mobile Phone',
+  phoneStatus: 'Phone Status',
 } as const
 
+/**
+ * ⚠️ THE FIRST EIGHT ARE FROZEN.
+ *
+ * Every destination and every customer field-mapping is built on these names in
+ * this order. New columns are APPENDED; inserting one among them would shift a
+ * customer's import without any error to notice.
+ */
 export const EXPORT_COLUMN_ORDER = [
   EXPORT_COLUMN_HEADERS.name,
   EXPORT_COLUMN_HEADERS.linkedinProfile,
@@ -51,6 +90,20 @@ export const EXPORT_COLUMN_ORDER = [
   EXPORT_COLUMN_HEADERS.companyUrl,
   EXPORT_COLUMN_HEADERS.location,
   EXPORT_COLUMN_HEADERS.salesNavigatorUrl,
+
+  EXPORT_COLUMN_HEADERS.companyIndustry,
+  EXPORT_COLUMN_HEADERS.companySize,
+  EXPORT_COLUMN_HEADERS.companyHeadquarters,
+  EXPORT_COLUMN_HEADERS.connectionDegree,
+  EXPORT_COLUMN_HEADERS.reachable,
+  EXPORT_COLUMN_HEADERS.listCount,
+  EXPORT_COLUMN_HEADERS.lastActivity,
+  EXPORT_COLUMN_HEADERS.addedToList,
+
+  EXPORT_COLUMN_HEADERS.workEmail,
+  EXPORT_COLUMN_HEADERS.emailStatus,
+  EXPORT_COLUMN_HEADERS.mobilePhone,
+  EXPORT_COLUMN_HEADERS.phoneStatus,
 ] as const
 
 export function toCanonicalExportRecord(
@@ -60,6 +113,19 @@ export function toCanonicalExportRecord(
     // Merged columns first in the literal, so a research field that somehow
     // collided with a core header could never overwrite one.
     ...(lead.enrichment ?? {}),
+    [EXPORT_COLUMN_HEADERS.companyIndustry]: lead.companyIndustry ?? null,
+    [EXPORT_COLUMN_HEADERS.companySize]: lead.companySize ?? null,
+    [EXPORT_COLUMN_HEADERS.companyHeadquarters]: lead.companyHeadquarters ?? null,
+    [EXPORT_COLUMN_HEADERS.connectionDegree]: lead.connectionDegree ?? null,
+    [EXPORT_COLUMN_HEADERS.reachable]: lead.reachable ?? null,
+    [EXPORT_COLUMN_HEADERS.listCount]:
+      lead.listCount === null || lead.listCount === undefined ? null : String(lead.listCount),
+    [EXPORT_COLUMN_HEADERS.lastActivity]: lead.lastActivity ?? null,
+    [EXPORT_COLUMN_HEADERS.addedToList]: lead.addedToList ?? null,
+    [EXPORT_COLUMN_HEADERS.workEmail]: lead.workEmail ?? null,
+    [EXPORT_COLUMN_HEADERS.emailStatus]: lead.emailStatus ?? null,
+    [EXPORT_COLUMN_HEADERS.mobilePhone]: lead.mobilePhone ?? null,
+    [EXPORT_COLUMN_HEADERS.phoneStatus]: lead.phoneStatus ?? null,
     [EXPORT_COLUMN_HEADERS.name]: lead.name,
     [EXPORT_COLUMN_HEADERS.linkedinProfile]: lead.linkedinUrl,
     [EXPORT_COLUMN_HEADERS.jobTitle]: lead.jobTitle,
@@ -82,7 +148,38 @@ export type ExportLeadSource = Pick<
   | 'company_url'
   | 'company_website_url'
   | 'location'
-> & { enrichment?: unknown }
+> &
+  /*
+   * Optional so a caller that predates migration 0052 — or a test constructing
+   * a minimal row — still type-checks. Every one reads as absent, which is the
+   * same as the column being NULL.
+   */
+  Partial<
+    Pick<
+      ExtractedLeadRow,
+      | 'company_industry'
+      | 'company_size'
+      | 'company_headquarters'
+      | 'connection_degree'
+      | 'is_reachable'
+      | 'list_count'
+      | 'last_activity'
+      | 'added_to_list_at'
+      | 'work_email'
+      | 'email_status'
+      | 'mobile_phone'
+      | 'phone_status'
+    >
+  > & { enrichment?: unknown }
+
+/** Drops keys whose value is null or undefined. */
+function definedOnly<T extends Record<string, unknown>>(input: T): Partial<T> {
+  const out: Partial<T> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== null && value !== undefined) out[key as keyof T] = value as T[keyof T]
+  }
+  return out
+}
 
 /** Maps one trusted database row into the only shape adapters may consume. */
 export function normalizeExportLead(row: ExportLeadSource): ExportLead {
@@ -105,6 +202,30 @@ export function normalizeExportLead(row: ExportLeadSource): ExportLead {
      * asserts the whole shape, and it still passes untouched.
      */
     ...(Object.keys(cells).length > 0 ? { enrichment: cells } : {}),
+
+    /*
+     * ⚠️ OMITTED WHEN ABSENT, like `enrichment` above. A lead captured without
+     * the hovercard pass and never contact-enriched produces exactly the object
+     * this function produced before migration 0052 — which is why
+     * `tests/unit/export-leads.test.ts` still asserts the whole shape and still
+     * passes untouched. The CSV writer fills a missing key with an empty cell,
+     * so the file stays rectangular either way.
+     */
+    ...definedOnly({
+      companyIndustry: row.company_industry,
+      companySize: row.company_size,
+      companyHeadquarters: row.company_headquarters,
+      connectionDegree: row.connection_degree,
+      // `null` means the badge was absent, which is not the same as "no".
+      reachable: row.is_reachable === true ? 'Yes' : null,
+      listCount: row.list_count,
+      lastActivity: row.last_activity,
+      addedToList: row.added_to_list_at,
+      workEmail: row.work_email,
+      emailStatus: row.email_status,
+      mobilePhone: row.mobile_phone,
+      phoneStatus: row.phone_status,
+    }),
   }
 }
 
