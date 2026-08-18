@@ -106,6 +106,19 @@
     inset 0 2px 5px rgba(84, 72, 45, 0.08),
     inset 0 -1px 0 rgba(255, 255, 255, 0.9);
 
+  /* A chip on the bar is a smaller extrusion than the bar itself; reusing the
+     bar's shadow made them read as separate stacked bars. */
+  --clay-shadow-chip:
+    0 1px 1px rgba(84, 72, 45, 0.05),
+    0 2px 6px rgba(84, 72, 45, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+  /* Focus lifts the whole bar rather than ringing a child of it. */
+  --clay-shadow-focus:
+    0 2px 4px rgba(84, 72, 45, 0.05),
+    0 14px 34px rgba(84, 72, 45, 0.09),
+    0 28px 64px rgba(84, 72, 45, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+
   --radius-clay: 1.15rem;
   --radius-clay-lg: 1.6rem;
 
@@ -114,6 +127,13 @@
   --teal: #0f8a8a;
   --teal-soft: #ddf1f0;
   --teal-glow: rgba(15, 138, 138, 0.28);
+
+  /* Animation-only stops. The resting palette is deliberately pale, and reusing
+     it for the sweep left the bar looking barely changed while a query ran —
+     the state has to be unmistakable from across a desk. */
+  --gen-1: rgba(15, 138, 138, 0.42);
+  --gen-2: rgba(79, 75, 255, 0.30);
+  --gen-3: rgba(15, 138, 138, 0.16);
 }
 
 /* FONT PLACEHOLDER — final display/body fonts TBD; swap the two vars below in one place */
@@ -721,25 +741,54 @@ details[open] .faq-mark {
 /* --------------------------------------------------------------------------
    Generating.
 
-   Colour RISES FROM THE LEFT and travels across the bar, then settles. It is a
-   fill behind the content, not a ring: the bar itself changes state, which is
-   what makes it read as the bar working rather than a decoration attached to it.
+   Colour RISES FROM THE LEFT: it enters at the left edge, climbs, and travels
+   across the bar. Two layers do it — a wash that sweeps horizontally and a
+   glow that lifts from the bottom edge — so the motion reads as rising rather
+   than merely sliding.
 
-   Runs only while a query is actually in flight. Motion that is always on stops
-   meaning anything; motion that starts exactly when work does is a status.
+   It is a fill BEHIND the text, not a ring around the bar, so the bar itself
+   changes state. Runs only while a query is in flight: motion that is always on
+   stops meaning anything.
    -------------------------------------------------------------------------- */
-@keyframes hubble-rise {
+@keyframes hubble-sweep {
   0% {
-    background-position: -140% 0;
-    opacity: 0.55;
+    background-position: -60% 50%;
+  }
+  100% {
+    background-position: 160% 50%;
+  }
+}
+
+@keyframes hubble-lift {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateY(45%) scaleY(0.6);
   }
   50% {
     opacity: 1;
+    transform: translateY(0) scaleY(1.05);
   }
-  100% {
-    background-position: 140% 0;
-    opacity: 0.55;
-  }
+}
+
+/* --------------------------------------------------------------------------
+   The prompt bar as ONE object.
+
+   ⚠️ THE FOCUS RING MOVES; IT IS NOT REMOVED. The global `:focus-visible` rule
+   drew a 2px accent outline around the INPUT, which rendered as a search field
+   boxed inside the bar — two objects where there is one. Deleting the ring
+   would fix the look and break keyboard navigation, so it is relocated to the
+   bar instead: same colour, same width, same offset, drawn around the whole
+   surface the user is actually typing into.
+   -------------------------------------------------------------------------- */
+.hubble-bar:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.hubble-bar input:focus,
+.hubble-bar input:focus-visible {
+  outline: none;
 }
 
 .hubble-generating {
@@ -748,39 +797,45 @@ details[open] .faq-mark {
   overflow: hidden;
 }
 
+/* The sweep: saturated enough to be unmistakably "working". */
 .hubble-generating::before {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
   background: linear-gradient(
-    100deg,
+    95deg,
     transparent 0%,
-    var(--teal-soft) 18%,
-    var(--teal-glow) 34%,
-    var(--accent-soft) 50%,
-    var(--teal-glow) 66%,
-    var(--teal-soft) 82%,
+    var(--gen-3) 10%,
+    var(--gen-1) 26%,
+    var(--gen-2) 44%,
+    var(--gen-1) 62%,
+    var(--gen-3) 80%,
     transparent 100%
   );
-  background-size: 220% 100%;
+  background-size: 170% 100%;
   background-repeat: no-repeat;
-  animation: hubble-rise 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: hubble-sweep 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
   pointer-events: none;
 }
 
-/* A thin progress line along the bottom edge, travelling the same direction.
-   It carries the state for anyone who reads edges rather than fills. */
+/* The rise: a glow lifting off the bottom-left, anchored left so the colour
+   always originates there. */
 .hubble-generating::after {
   content: '';
   position: absolute;
   inset-inline: 0;
   bottom: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--teal), transparent);
-  background-size: 50% 100%;
-  background-repeat: no-repeat;
-  animation: hubble-rise 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  height: 60%;
+  z-index: -1;
+  transform-origin: bottom left;
+  background: radial-gradient(
+    130% 115% at 6% 100%,
+    var(--gen-1) 0%,
+    var(--gen-2) 40%,
+    transparent 78%
+  );
+  animation: hubble-lift 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
   pointer-events: none;
 }
 
@@ -790,8 +845,8 @@ details[open] .faq-mark {
   .hubble-generating::after {
     animation: none;
   }
-  .hubble-generating::before {
-    background: var(--teal-soft);
+  .hubble-generating::after {
     opacity: 0.6;
+    transform: none;
   }
 }

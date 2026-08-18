@@ -188,7 +188,7 @@ export function LeadModal({
             push the prompt box off the bottom of the screen. */}
         <footer className="border-t border-clay-sunken p-4">
           <div
-            className={`rounded-[var(--radius-clay)] bg-clay-raised shadow-[var(--clay-shadow)] ${
+            className={`hubble-bar rounded-[var(--radius-clay)] bg-clay-raised shadow-[var(--clay-shadow)] ${
               run.busy ? 'hubble-generating' : ''
             }`}
           >
