@@ -123,3 +123,91 @@ describe('normalizeExportLead', () => {
     expect(lead.salesNavigatorUrl).toBeNull()
   })
 })
+
+describe('publicCompanyUrl', () => {
+  it('rewrites the Sales Navigator company URL into the public one', async () => {
+    /*
+     * ⚠️ NO PAGE VISIT. LinkedIn resolves a numeric id on the public path and
+     * redirects to the slug, so this is a pure rewrite of a URL already on the
+     * row — the difference between filling this column for every lead with a
+     * company and filling it for none.
+     */
+    const { publicCompanyUrl } = await import('@/lib/leads/parse')
+
+    expect(publicCompanyUrl('https://www.linkedin.com/sales/company/106158339')).toBe(
+      'https://www.linkedin.com/company/106158339',
+    )
+    expect(publicCompanyUrl('https://www.linkedin.com/sales/company/1035/')).toBe(
+      'https://www.linkedin.com/company/1035',
+    )
+  })
+
+  it('refuses anything that is not a Sales Navigator company URL', async () => {
+    const { publicCompanyUrl } = await import('@/lib/leads/parse')
+
+    for (const url of [
+      null,
+      undefined,
+      '',
+      'https://www.linkedin.com/sales/lead/ACwAAA',
+      'https://www.linkedin.com/company/acme',
+      // A lookalike host ends with the string but is not the domain.
+      'https://linkedin.com.evil.test/sales/company/1035',
+      'not a url',
+    ]) {
+      expect(publicCompanyUrl(url), String(url)).toBeNull()
+    }
+  })
+})
+
+describe('a column that is empty on every row is dropped', () => {
+  it('omits it rather than writing a wall of N/A', async () => {
+    /*
+     * ⚠️ A COLUMN OF PURE "N/A" READS AS THE EXTRACTOR HAVING FAILED, when what
+     * it means is the field is not on the page that was captured. Its absence
+     * says the same thing without implying a fault.
+     */
+    const { toCsv } = await import('@/lib/export/sanitize')
+
+    const csv = toCsv(
+      [{ name: 'Ada', industry: null }],
+      [
+        { header: 'Name', value: (r: { name: string }) => r.name },
+        { header: 'Company Industry', value: (r: { industry: null }) => r.industry },
+      ],
+    )
+
+    expect(csv).toContain('Name')
+    expect(csv).not.toContain('Company Industry')
+    expect(csv).not.toContain('N/A')
+  })
+
+  it('KEEPS a column that any row fills, and marks the gaps', async () => {
+    const { toCsv } = await import('@/lib/export/sanitize')
+
+    const csv = toCsv([{ industry: 'Software' }, { industry: null }], [
+      { header: 'Company Industry', value: (r: { industry: string | null }) => r.industry },
+    ])
+
+    expect(csv).toContain('Company Industry')
+    expect(csv).toContain('Software')
+    // The empty one still says N/A — the column earned its place.
+    expect(csv).toContain('N/A')
+  })
+
+  it('pins the core columns even when the whole batch is empty', async () => {
+    // A file whose every column came and went would be unmappable. The spine
+    // stays so a CRM import mapping is buildable against something.
+    const { toCsv } = await import('@/lib/export/sanitize')
+
+    const csv = toCsv(
+      [{ name: null }],
+      [{ header: 'Name', value: (r: { name: null }) => r.name }],
+      { alwaysKeep: ['Name'] },
+    )
+
+    expect(csv).toContain('Name')
+    expect(csv).toContain('N/A')
+  })
+})
+

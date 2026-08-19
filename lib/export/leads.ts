@@ -130,6 +130,27 @@ export const EXPORT_COLUMN_ORDER = [
  */
 export const NOT_AVAILABLE = 'N/A'
 
+/**
+ * Columns that appear in every export, however sparse the batch.
+ *
+ * ⚠️ THE STABLE SPINE OF THE FILE. Everything else is dropped when no row has a
+ * value, so a sheet never shows a column of pure N/A — which reads as the
+ * extractor having failed rather than the field simply not being on the page.
+ *
+ * These stay because a CRM import mapping has to be buildable against
+ * something: a file whose every column came and went would be unmappable.
+ */
+export const ALWAYS_EXPORTED: readonly string[] = [
+  EXPORT_COLUMN_HEADERS.name,
+  EXPORT_COLUMN_HEADERS.linkedinProfile,
+  EXPORT_COLUMN_HEADERS.salesNavigatorUrl,
+  EXPORT_COLUMN_HEADERS.jobTitle,
+  EXPORT_COLUMN_HEADERS.location,
+  EXPORT_COLUMN_HEADERS.company,
+  EXPORT_COLUMN_HEADERS.companyLinkedInUrl,
+  EXPORT_COLUMN_HEADERS.companyPublicLinkedIn,
+]
+
 export function toCanonicalExportRecord(
   lead: ExportLead,
 ): Record<string, string | null> {

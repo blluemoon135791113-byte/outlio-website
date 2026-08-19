@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto'
 
 import { linkLeadsToCompanies } from '@/lib/companies/repository'
 import { toCsv, type CsvColumn } from '@/lib/export/sanitize'
-import { EXPORT_COLUMN_HEADERS } from '@/lib/export/leads'
+import { ALWAYS_EXPORTED, EXPORT_COLUMN_HEADERS } from '@/lib/export/leads'
 import { dedupeLeads, type DedupeMode, type KeyedLead } from '@/lib/leads/dedupe'
 import { ParseError, parseSearchResults } from '@/lib/leads/parse'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -87,12 +87,10 @@ export const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
   { header: EXPORT_COLUMN_HEADERS.company, value: (l) => l.companyName },
   { header: EXPORT_COLUMN_HEADERS.companyLinkedInUrl, value: (l) => l.companyUrl },
   /*
-   * Company-page fields. Empty here and filled by `recordCompanyObservation`
-   * when the user opens the company's page, after which `rebuildJobExport`
-   * rewrites this file. Present from the start so the CSV has ONE shape
-   * regardless of when it was generated.
+   * Derived from the Sales Navigator company URL already on the row — a pure
+   * rewrite, no page visit. The COUNTS below are the page-only ones.
    */
-  { header: EXPORT_COLUMN_HEADERS.companyPublicLinkedIn, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyPublicLinkedIn, value: (l) => l.companyPublicLinkedInUrl },
   { header: EXPORT_COLUMN_HEADERS.companyUrl, value: (l) => l.companyWebsiteUrl },
   { header: EXPORT_COLUMN_HEADERS.companyIndustry, value: (l) => l.companyIndustry },
   { header: EXPORT_COLUMN_HEADERS.companySize, value: (l) => l.companySize },
@@ -326,6 +324,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
       company_url: l.companyUrl,
       company_website_url: l.companyWebsiteUrl,
       source_list: l.sourceList,
+      company_public_linkedin_url: l.companyPublicLinkedInUrl,
       company_industry: l.companyIndustry,
       company_size: l.companySize,
       company_headquarters: l.companyHeadquarters,
@@ -390,7 +389,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     .update({ progress_step: 'Generating export' })
     .eq('id', jobId)
 
-  const csv = toCsv(kept, CSV_COLUMNS)
+  const csv = toCsv(kept, CSV_COLUMNS, { alwaysKeep: ALWAYS_EXPORTED })
   const exportPath = `${userId}/${jobId}/leads.csv`
 
   const { error: uploadError } = await supabase.storage

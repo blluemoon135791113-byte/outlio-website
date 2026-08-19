@@ -15,6 +15,7 @@ import 'server-only'
  * reflects what the rows currently hold.
  */
 import {
+  ALWAYS_EXPORTED,
   EXPORT_COLUMN_HEADERS,
   EXPORT_COLUMN_ORDER,
   normalizeExportLead,
@@ -94,7 +95,7 @@ export async function rebuildJobExport(jobId: string, userId: string): Promise<b
 
   const { error: uploadError } = await supabase.storage
     .from(EXPORT_BUCKET)
-    .upload(`${userId}/${jobId}/leads.csv`, new TextEncoder().encode(toCsv(records, columns)), {
+    .upload(`${userId}/${jobId}/leads.csv`, new TextEncoder().encode(toCsv(records, columns, { alwaysKeep: ALWAYS_EXPORTED })), {
       // No `; charset=utf-8`: Supabase matches the content type against the
       // bucket's allowed_mime_types as a whole string. The BOM signals encoding.
       contentType: 'text/csv',

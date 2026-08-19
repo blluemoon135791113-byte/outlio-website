@@ -46,6 +46,8 @@ export type ParsedLead = {
   /* ---- from the company hover card, via the extension --------------------- */
   /** The Sales Navigator list or search this page belonged to. */
   sourceList: string | null
+  /** The public `linkedin.com/company/<id>` page, derived from `companyUrl`. */
+  companyPublicLinkedInUrl: string | null
   companyIndustry: string | null
   /** A RANGE as rendered — "2-10 employees" — never parsed into a number. */
   companySize: string | null
@@ -198,6 +200,37 @@ function companyProfileUrl(href: string | null | undefined): string | null {
     if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return null
     if (!/^\/sales\/company\/[^/?#]+/i.test(parsed.pathname)) return null
     return absolute
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The PUBLIC company page, derived from the Sales Navigator one.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  `/sales/company/106158339` → `/company/106158339`                        ║
+ * ║                                                                          ║
+ * ║  LinkedIn resolves a numeric id on the public path and redirects to the  ║
+ * ║  slug, so this needs no page visit and no lookup — it is a pure rewrite  ║
+ * ║  of a URL already on the row. That is the difference between filling     ║
+ * ║  this column for every lead with a company and filling it for none.      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Returns null for anything that is not a Sales Navigator company URL, so a
+ * malformed href becomes an absent value rather than a broken link.
+ */
+export function publicCompanyUrl(salesNavUrl: string | null | undefined): string | null {
+  if (!salesNavUrl) return null
+
+  try {
+    const parsed = new URL(salesNavUrl)
+    if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return null
+
+    const match = /^\/sales\/company\/(\d{1,20})/i.exec(parsed.pathname)
+    if (!match) return null
+
+    return `https://www.linkedin.com/company/${match[1]}`
   } catch {
     return null
   }
@@ -418,6 +451,7 @@ export function parseSearchResults(html: string): ParseResult {
       lastActivity: extractLastActivity(row),
       addedToListAt: extractAddedDate(row),
       sourceList,
+      companyPublicLinkedInUrl: publicCompanyUrl(companyUrl),
       companyIndustry,
       companySize,
       companyHeadquarters,
