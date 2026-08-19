@@ -1,0 +1,144 @@
+/**
+ * Chunking and retrieval.
+ *
+ * ⚠️ EVERYTHING HERE RUNS WITH NOTHING INSTALLED. No Ollama, no vector
+ * database, no network. That is the point: embeddings are an upgrade to the
+ * ranker, never a dependency of it.
+ */
+import { describe, expect, it } from 'vitest'
+
+import { chunkText, cosineSimilarity, diversify, retrieve, scoreLexical, tokenize } from '@/lib/hubble/retrieve'
+
+function chunk(id: string, content: string, embedding?: number[]) {
+  return { pageId: id, url: `https://${id}.example/`, title: id, ordinal: 0, content, embedding }
+}
+
+describe('chunkText', () => {
+  it('keeps short text as one chunk', () => {
+    expect(chunkText('A short paragraph about the company.')).toHaveLength(1)
+  })
+
+  it('splits long text and keeps every chunk substantial', () => {
+    const text = Array.from({ length: 40 }, (_, i) => `Paragraph ${i} about funding and hiring at the company.`).join('\n\n')
+    const chunks = chunkText(text)
+
+    expect(chunks.length).toBeGreaterThan(1)
+    for (const value of chunks) expect(value.length).toBeGreaterThan(100)
+  })
+
+  it('splits a single huge paragraph on sentences', () => {
+    const text = Array.from({ length: 80 }, (_, i) => `Sentence number ${i} describes something.`).join(' ')
+    const chunks = chunkText(text)
+
+    expect(chunks.length).toBeGreaterThan(1)
+    // Sentence boundaries, not mid-word.
+    for (const value of chunks) expect(value).not.toMatch(/\bSent$|\bnumbe$/)
+  })
+
+  it('returns nothing for empty text', () => {
+    expect(chunkText('')).toEqual([])
+    expect(chunkText('   \n\n  ')).toEqual([])
+  })
+})
+
+describe('tokenize', () => {
+  it('drops stopwords, which carry no topical signal', () => {
+    expect(tokenize('what is the funding of the company')).toEqual(['funding', 'company'])
+  })
+
+  it('keeps numbers and hyphenated product names', () => {
+    expect(tokenize('raised $12m in 2024 for go-to-market')).toContain('12m')
+    expect(tokenize('raised $12m in 2024 for go-to-market')).toContain('go-to-market')
+  })
+})
+
+describe('scoreLexical', () => {
+  it('ranks the chunk that answers the question first', () => {
+    const results = scoreLexical('how much funding did they raise', [
+      chunk('a', 'Our office has a great kitchen and a table tennis table for staff.'),
+      chunk('b', 'The company raised a $12m Series A funding round led by an investor.'),
+      chunk('c', 'We are hiring engineers across the platform team this quarter.'),
+    ]).sort((x, y) => y.score - x.score)
+
+    expect(results[0]!.pageId).toBe('b')
+  })
+
+  it('DISCOUNTS a term every chunk contains', () => {
+    /*
+     * Every page on a company site says the company's name. If that term
+     * scored, retrieval would rank by verbosity rather than relevance.
+     */
+    const chunks = [
+      chunk('a', 'Acme Acme Acme Acme Acme is a company that makes things.'),
+      chunk('b', 'Acme announced Series B funding of forty million dollars today.'),
+    ]
+    const results = scoreLexical('acme funding', chunks).sort((x, y) => y.score - x.score)
+
+    expect(results[0]!.pageId).toBe('b')
+  })
+
+  it('scores zero when nothing matches', () => {
+    const results = scoreLexical('quantum cryptography', [chunk('a', 'We sell gardening tools online.')])
+    expect(results[0]!.score).toBe(0)
+  })
+})
+
+describe('cosineSimilarity', () => {
+  it('is 1 for identical vectors and 0 for orthogonal ones', () => {
+    expect(cosineSimilarity([1, 0, 0], [1, 0, 0])).toBeCloseTo(1)
+    expect(cosineSimilarity([1, 0], [0, 1])).toBeCloseTo(0)
+  })
+
+  it('is 0 for mismatched or empty vectors rather than throwing', () => {
+    expect(cosineSimilarity([1, 2, 3], [1, 2])).toBe(0)
+    expect(cosineSimilarity([], [])).toBe(0)
+    expect(cosineSimilarity([0, 0], [0, 0])).toBe(0)
+  })
+})
+
+describe('retrieve', () => {
+  it('WORKS WITH NO EMBEDDINGS AT ALL', () => {
+    // The whole fallback contract: Ollama absent, retrieval still ranks.
+    const results = retrieve('funding round', [
+      chunk('a', 'We make gardening tools for the home.'),
+      chunk('b', 'The funding round closed at twelve million dollars.'),
+    ], null, 5)
+
+    expect(results).toHaveLength(1)
+    expect(results[0]!.pageId).toBe('b')
+  })
+
+  it('blends vector and lexical scores when embeddings exist', () => {
+    const results = retrieve('funding', [
+      chunk('a', 'Gardening tools for the home.', [0, 1]),
+      chunk('b', 'The funding round closed.', [1, 0]),
+    ], [1, 0], 5)
+
+    expect(results[0]!.pageId).toBe('b')
+  })
+
+  it('respects the limit', () => {
+    const chunks = Array.from({ length: 20 }, (_, i) => chunk(`p${i}`, `funding round number ${i} closed`))
+    expect(retrieve('funding', chunks, null, 3)).toHaveLength(3)
+  })
+})
+
+describe('diversify', () => {
+  it('STOPS ONE PAGE FROM FILLING EVERY SLOT', () => {
+    /*
+     * Without this, one verbose page answers every question: corroboration
+     * becomes impossible because a second source can never get in.
+     */
+    const scored = [
+      { ...chunk('same', 'one'), score: 0.9 },
+      { ...chunk('same', 'two'), score: 0.8 },
+      { ...chunk('same', 'three'), score: 0.7 },
+      { ...chunk('other', 'four'), score: 0.6 },
+    ]
+
+    const kept = diversify(scored, 2, 10)
+    expect(kept).toHaveLength(3)
+    expect(kept.filter((c) => c.pageId === 'same')).toHaveLength(2)
+    expect(kept.some((c) => c.pageId === 'other')).toBe(true)
+  })
+})

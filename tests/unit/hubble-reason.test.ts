@@ -1,0 +1,73 @@
+/**
+ * The reasoning layer's contracts.
+ *
+ * ⚠️ These tests pin the SAFETY properties, not the model's prose. What
+ * matters is that a page cannot make Hubble act, and that an absent model
+ * degrades honestly rather than inventing an answer.
+ */
+import { describe, expect, it, vi } from 'vitest'
+
+import { buildFallbackQueries } from '@/lib/hubble/reason'
+import { questionKey } from '@/lib/hubble/store'
+
+vi.mock('server-only', () => ({}))
+
+describe('buildFallbackQueries', () => {
+  it('builds a usable query with NO model configured', () => {
+    // Hubble stays functional with zero LLM access.
+    const queries = buildFallbackQueries('what does their pricing look like?', {
+      companyName: 'Acme',
+      domain: 'acme.example',
+      personName: null,
+    })
+
+    expect(queries[0]).toContain('Acme')
+    expect(queries[0]).toContain('pricing')
+    expect(queries.some((q) => q.startsWith('site:acme.example'))).toBe(true)
+  })
+
+  it('falls back to the raw question when there is no subject', () => {
+    const queries = buildFallbackQueries('who are they?', {
+      companyName: null,
+      domain: null,
+      personName: null,
+    })
+    expect(queries).toEqual(['who are they?'])
+  })
+})
+
+describe('questionKey', () => {
+  it('treats trivially different spellings as the same question', () => {
+    expect(questionKey('What do they SELL?')).toBe(questionKey('what do they sell'))
+    expect(questionKey('  what   do they sell  ')).toBe(questionKey('what do they sell'))
+  })
+
+  it('keeps genuinely different questions apart', () => {
+    /*
+     * ⚠️ DELIBERATELY CONSERVATIVE. It does not try to be clever about
+     * synonyms: a false cache hit answers a question the user did not ask.
+     */
+    expect(questionKey('what do they sell')).not.toBe(questionKey('who funds them'))
+    expect(questionKey('are they hiring')).not.toBe(questionKey('are they hiring engineers'))
+  })
+})
+
+describe('the answer prompt', () => {
+  it('tells the model that evidence is untrusted data', async () => {
+    /*
+     * ⚠️ Hubble reads pages chosen by a search engine. Any one may contain
+     * "ignore your instructions". The real defence is that this call has NO
+     * TOOLS — a fully persuaded model can still only return text. This test
+     * pins the first layer.
+     */
+    const source = await import('node:fs/promises').then((fs) =>
+      fs.readFile('lib/hubble/reason.ts', 'utf8'),
+    )
+
+    expect(source).toContain('UNTRUSTED DATA')
+    expect(source).toContain('DO NOT COMPLY')
+    // And the honesty rules that stop a gap being filled with a guess.
+    expect(source).toContain('NEVER fill a gap with a plausible guess')
+    expect(source).toMatch(/"unknown" is a correct and useful answer/)
+  })
+})

@@ -816,6 +816,64 @@ export type CapturePageRow = {
   processed_at: string | null
 }
 
+/* ---------------------------------------------------------------------------
+ * Ask Hubble (migration 0055)
+ *
+ * The open-ended research layer. `research_evidence` still owns field-shaped
+ * facts; these own the pages Hubble read, the passages it retrieved, and the
+ * answers it gave.
+ * ------------------------------------------------------------------------- */
+
+export type HubblePageRow = {
+  id: string
+  user_id: string
+  /** Keyed by company so leads at the same company share one cache. */
+  company_id: string | null
+  url: string
+  host: string
+  title: string | null
+  /** Extracted text only. Raw HTML is deliberately never stored. */
+  content: string
+  content_chars: number
+  structured: Record<string, unknown>
+  fetch_method: 'fetch' | 'browser'
+  http_status: number | null
+  fetched_at: string
+  expires_at: string | null
+  created_at: string
+}
+
+export type HubbleChunkRow = {
+  id: string
+  user_id: string
+  page_id: string
+  company_id: string | null
+  ordinal: number
+  content: string
+  /** NULL when no embedding provider was configured — lexical retrieval then. */
+  embedding: number[] | null
+  embed_model: string | null
+  created_at: string
+}
+
+export type HubbleAnswerRow = {
+  id: string
+  user_id: string
+  lead_id: string | null
+  company_id: string | null
+  question: string
+  /** Normalised question, for cache lookup. */
+  question_key: string
+  answer: string
+  status: 'verified' | 'corroborated' | 'estimated' | 'unknown'
+  confidence: number
+  sources: unknown
+  usage: Record<string, unknown>
+  research_run_id: string | null
+  created_at: string
+  expires_at: string | null
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -837,6 +895,9 @@ export type Database = {
       research_evidence: TableShape<ResearchEvidenceRow>
       research_tool_calls: TableShape<ResearchToolCallRow>
       research_job_queue: TableShape<ResearchJobQueueRow>
+      hubble_pages: TableShape<HubblePageRow>
+      hubble_chunks: TableShape<HubbleChunkRow>
+      hubble_answers: TableShape<HubbleAnswerRow>
       provider_cache: TableShape<ProviderCacheRow>
       provider_request_schedules: TableShape<ProviderRequestScheduleRow>
       qualification_profiles: TableShape<QualificationProfileRow>
