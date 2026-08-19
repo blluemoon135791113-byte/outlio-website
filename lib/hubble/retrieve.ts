@@ -207,6 +207,8 @@ export function retrieve(
    * Optional: retrieval still works without it, just without the promotion.
    */
   companyDomain: string | null = null,
+  /** Recovers `primary` when no domain is stored — see source-quality.ts. */
+  companyName: string | null = null,
 ): ScoredChunk[] {
   const lexical = scoreLexical(query, chunks)
 
@@ -222,7 +224,7 @@ export function retrieve(
      * so they out-score the primary source that simply states the fact. See
      * source-quality.ts for the real case that motivated this.
      */
-    const weight = sourceWeight(chunk.url, companyDomain)
+    const weight = sourceWeight(chunk.url, companyDomain, companyName)
 
     if (!queryEmbedding || !chunk.embedding || chunk.embedding.length === 0) {
       return { ...chunk, score: lexicalScore * weight }

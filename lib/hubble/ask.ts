@@ -236,6 +236,7 @@ export async function askHubble(
     queryEmbedding,
     budget.maxChunksToModel * 3,
     subject.domain,
+    subject.companyName,
   )
   // At most 3 passages from any one page, so a single verbose site cannot
   // fill the evidence set and make corroboration impossible.
@@ -247,6 +248,7 @@ export async function askHubble(
     evidence,
     subject.known,
     subject.domain,
+    subject.companyName,
   )
   usage.llmCalls += answerCalls
   usage.elapsedMs = Date.now() - started

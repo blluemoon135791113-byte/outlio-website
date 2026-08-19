@@ -204,6 +204,7 @@ export async function answerFromEvidence(
   chunks: readonly ScoredChunk[],
   leadContext: string,
   companyDomain: string | null = null,
+  companyName: string | null = null,
 ): Promise<{ answer: HubbleAnswer; llmCalls: number }> {
   const llm = resolveLlmProvider()
 
@@ -256,23 +257,60 @@ export async function answerFromEvidence(
     )
     .join('\n\n')
 
-  const result = await llm.generateJson({
+  /*
+   * ╔══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ RETRIED ONCE, BECAUSE THIS IS THE WORST CALL IN THE SYSTEM TO LOSE.  ║
+   * ║                                                                          ║
+   * ║  By the time we reach here, 40+ seconds of real searching and fetching   ║
+   * ║  have already happened. Throwing all of it away because a free-tier      ║
+   * ║  rate limit throttled one request is the most expensive possible         ║
+   * ║  failure — and it is observed, not theoretical: a live run returned      ║
+   * ║  "the language model was unavailable" after successfully reading four    ║
+   * ║  pages, purely because several questions had been asked in quick         ║
+   * ║  succession.                                                             ║
+   * ║                                                                          ║
+   * ║  ONE retry, not a loop. If the vendor is genuinely down, the honest      ║
+   * ║  degraded answer below is the right outcome; hammering it is not.        ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  const request = {
     system: ANSWER_SYSTEM,
     user: `QUESTION: ${question}\n\nCRM RECORD:\n${leadContext}\n\nEVIDENCE:\n${evidence}`,
     schema: ANSWER_SCHEMA as unknown as Record<string, unknown>,
     temperature: 0.2,
     maxOutputTokens: 1200,
-  })
+  }
+
+  let result = await llm.generateJson(request)
+  let llmCallsMade = 1
+
+  // `not_configured` will not fix itself; only a transient failure is retried.
+  if (!result.ok && result.code !== 'not_configured') {
+    await new Promise((resolve) => setTimeout(resolve, 2_000))
+    result = await llm.generateJson(request)
+    llmCallsMade = 2
+  }
 
   if (!result.ok) {
     return {
       answer: {
-        answer: 'The language model was unavailable, so I could not synthesise an answer.',
+        /*
+         * Degraded, but not empty: the research already happened and the
+         * passages are real. Handing back the evidence with its sources is
+         * more useful than an error, and more honest than a summary written
+         * without a model.
+         */
+        answer:
+          'I could not reach the language model to write this up, so here is the ' +
+          `evidence I retrieved:\n\n${chunks
+            .slice(0, 3)
+            .map((chunk, index) => `${index + 1}. ${chunk.content.slice(0, 400)}`)
+            .join('\n\n')}`,
         status: 'unknown',
         confidence: 0,
         sources: toSources(chunks.slice(0, 3)),
       },
-      llmCalls: 1,
+      llmCalls: llmCallsMade,
     }
   }
 
@@ -317,7 +355,8 @@ export async function answerFromEvidence(
    * acquires false authority.
    */
   const finalStatus: AnswerStatus =
-    status === 'corroborated' && !canCorroborate(used.map((chunk) => chunk.url), companyDomain)
+    status === 'corroborated' &&
+    !canCorroborate(used.map((chunk) => chunk.url), companyDomain, companyName)
       ? 'verified'
       : status
 
@@ -326,7 +365,7 @@ export async function answerFromEvidence(
    * sounds. A confident answer built entirely on SEO content farms is exactly
    * the case the denylist cannot catch by name.
    */
-  const ceiling = confidenceCeiling(used.map((chunk) => chunk.url), companyDomain)
+  const ceiling = confidenceCeiling(used.map((chunk) => chunk.url), companyDomain, companyName)
 
   return {
     answer: {
@@ -342,7 +381,7 @@ export async function answerFromEvidence(
           : Math.min(confidence, ceiling),
       sources: toSources(used),
     },
-    llmCalls: 1,
+    llmCalls: llmCallsMade,
   }
 }
 

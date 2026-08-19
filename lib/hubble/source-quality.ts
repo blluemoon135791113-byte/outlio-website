@@ -84,13 +84,58 @@ const FORUMS = [/(^|\.)reddit\.com$/i, /(^|\.)quora\.com$/i, /(^|\.)medium\.com$
 
 export type SourceTier = 'primary' | 'official' | 'reputable' | 'unknown' | 'forum' | 'broker'
 
+/** Legal suffixes and filler that are not part of a company's identity. */
+const NAME_NOISE =
+  /\b(inc|incorporated|llc|l\.l\.c|ltd|limited|plc|corp|corporation|gmbh|bv|nv|sa|ag|pty|co|company|holdings|group|labs|technologies|technology|the)\b/gi
+
+/** `Atlas AI Solutions` → `atlasaisolutions`. */
+function compress(value: string): string {
+  return value.replace(NAME_NOISE, ' ').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * Whether a host is plausibly the company's own site, judged by NAME.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ WITHOUT THIS, MOST ANSWERS ARE UNDER-CONFIDENT.                      ║
+ * ║                                                                          ║
+ * ║  A real run answered "what does this company do" entirely from           ║
+ * ║  atlasai.co — the company's own website — and reported 0.6 confidence,   ║
+ * ║  because the lead had no `company_website_url` stored, so nothing could  ║
+ * ║  tell that atlasai.co WAS them. Most extracted leads have no domain      ║
+ * ║  until enrichment runs, so that was nearly every answer.                 ║
+ * ║                                                                          ║
+ * ║  Comparing the compressed name to the registrable label recovers it:     ║
+ * ║  "Atlas AI Solutions" → `atlasaisolutions`, host `atlasai.co` → NN       ║
+ * ║  `atlasai`, one a prefix of the other. Bounded at 5 characters so short  ║
+ * ║  names cannot collide their way to `primary`.                            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export function looksLikeOwnDomain(host: string, companyName: string | null): boolean {
+  if (!companyName) return false
+
+  const name = compress(companyName)
+  // Short names ("Bun", "Arc") collide with unrelated domains far too easily.
+  if (name.length < 5) return false
+
+  const label = compress(host.replace(/^www\./, '').split('.')[0] ?? '')
+  if (label.length < 5) return false
+
+  return name.startsWith(label) || label.startsWith(name)
+}
+
 /**
  * Which tier a URL belongs to.
  *
  * `companyDomain` promotes the company's OWN site to `primary`: for "what do
  * they sell" or "what does it cost", nobody outranks the company itself.
  */
-export function classifySource(url: string, companyDomain: string | null): SourceTier {
+export function classifySource(
+  url: string,
+  companyDomain: string | null,
+  /** Falls back to name matching when no domain is stored on the lead. */
+  companyName: string | null = null,
+): SourceTier {
   let host: string
   try {
     host = new URL(url).hostname.toLowerCase().replace(/^www\./, '')
@@ -101,6 +146,15 @@ export function classifySource(url: string, companyDomain: string | null): Sourc
   if (companyDomain) {
     const own = companyDomain.toLowerCase().replace(/^www\./, '')
     if (host === own || host.endsWith(`.${own}`)) return 'primary'
+  }
+
+  /*
+   * ⚠️ Checked AFTER the known domain but BEFORE every other tier — except
+   * the broker list, which still wins: a broker page carrying the company's
+   * name in its host is not the company.
+   */
+  if (!BROKERS.some((pattern) => pattern.test(host)) && looksLikeOwnDomain(host, companyName)) {
+    return 'primary'
   }
 
   if (OFFICIAL.some((pattern) => pattern.test(host))) return 'official'
@@ -132,8 +186,12 @@ export const TIER_WEIGHT: Record<SourceTier, number> = {
   broker: 0.4,
 }
 
-export function sourceWeight(url: string, companyDomain: string | null): number {
-  return TIER_WEIGHT[classifySource(url, companyDomain)]
+export function sourceWeight(
+  url: string,
+  companyDomain: string | null,
+  companyName: string | null = null,
+): number {
+  return TIER_WEIGHT[classifySource(url, companyDomain, companyName)]
 }
 
 /**
@@ -154,10 +212,14 @@ export function sourceWeight(url: string, companyDomain: string | null): number 
  * ║  are not told it is near-certain when nothing credible backs it.         ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-export function confidenceCeiling(urls: readonly string[], companyDomain: string | null): number {
+export function confidenceCeiling(
+  urls: readonly string[],
+  companyDomain: string | null,
+  companyName: string | null = null,
+): number {
   if (urls.length === 0) return 0.3
 
-  const tiers = urls.map((url) => classifySource(url, companyDomain))
+  const tiers = urls.map((url) => classifySource(url, companyDomain, companyName))
 
   if (tiers.some((tier) => tier === 'primary' || tier === 'official')) return 1
   if (tiers.some((tier) => tier === 'reputable')) return 0.9
@@ -175,11 +237,15 @@ export function confidenceCeiling(urls: readonly string[], companyDomain: string
  * same scraped record echoed twice — corroboration between them is not
  * corroboration at all.
  */
-export function canCorroborate(urls: readonly string[], companyDomain: string | null): boolean {
+export function canCorroborate(
+  urls: readonly string[],
+  companyDomain: string | null,
+  companyName: string | null = null,
+): boolean {
   const hosts = new Set<string>()
 
   for (const url of urls) {
-    if (classifySource(url, companyDomain) === 'broker') continue
+    if (classifySource(url, companyDomain, companyName) === 'broker') continue
     try {
       hosts.add(new URL(url).hostname.toLowerCase().replace(/^www\./, ''))
     } catch {

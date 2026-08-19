@@ -171,3 +171,47 @@ describe('confidenceCeiling', () => {
     expect(confidenceCeiling([], null)).toBe(0.3)
   })
 })
+
+describe('looksLikeOwnDomain — recovering primary without a stored domain', () => {
+  it('MATCHES the real case that was under-confident', async () => {
+    /*
+     * ⚠️ A real run answered entirely from atlasai.co — the company's own site
+     * — and reported 0.6 confidence, because the lead had no
+     * company_website_url so nothing could tell that atlasai.co WAS them.
+     * Most extracted leads have no domain until enrichment runs.
+     */
+    const { looksLikeOwnDomain, classifySource, confidenceCeiling } = await import(
+      '@/lib/hubble/source-quality'
+    )
+
+    expect(looksLikeOwnDomain('www.atlasai.co', 'Atlas AI Solutions')).toBe(true)
+    expect(classifySource('https://www.atlasai.co/about', null, 'Atlas AI Solutions')).toBe('primary')
+    expect(confidenceCeiling(['https://www.atlasai.co/about'], null, 'Atlas AI Solutions')).toBe(1)
+  })
+
+  it('ignores legal suffixes and punctuation', async () => {
+    const { looksLikeOwnDomain } = await import('@/lib/hubble/source-quality')
+
+    expect(looksLikeOwnDomain('zenith-ai.com', 'Zenith AI Ltd')).toBe(true)
+    expect(looksLikeOwnDomain('konversa.io', 'AI Konversa, Inc.')).toBe(false)
+  })
+
+  it('REFUSES short names, which collide far too easily', async () => {
+    const { looksLikeOwnDomain } = await import('@/lib/hubble/source-quality')
+
+    expect(looksLikeOwnDomain('arc.dev', 'Arc')).toBe(false)
+    expect(looksLikeOwnDomain('bun.com', 'Bun')).toBe(false)
+  })
+
+  it('does not match an unrelated site that merely writes about them', async () => {
+    const { looksLikeOwnDomain, classifySource } = await import('@/lib/hubble/source-quality')
+
+    expect(looksLikeOwnDomain('techcrunch.com', 'Atlas AI Solutions')).toBe(false)
+    expect(classifySource('https://techcrunch.com/x', null, 'Atlas AI Solutions')).toBe('reputable')
+  })
+
+  it('a BROKER carrying the name in its host is still not the company', async () => {
+    const { classifySource } = await import('@/lib/hubble/source-quality')
+    expect(classifySource('https://zoominfo.com/c/atlas-ai', null, 'ZoomInfo Data')).toBe('broker')
+  })
+})
