@@ -71,3 +71,38 @@ describe('the answer prompt', () => {
     expect(source).toMatch(/"unknown" is a correct and useful answer/)
   })
 })
+
+describe('embedding availability', () => {
+  it('is NOT usable when no URL is configured', async () => {
+    const { OllamaEmbeddingProvider } = await import('@/lib/hubble/providers/embedding')
+    const previous = process.env.OLLAMA_URL
+    delete process.env.OLLAMA_URL
+
+    const provider = new OllamaEmbeddingProvider()
+    expect(provider.isConfigured()).toBe(false)
+    await expect(provider.isUsable()).resolves.toBe(false)
+    // Null rather than a throw: absent embeddings are a supported outcome.
+    await expect(provider.embed(['x'])).resolves.toBeNull()
+
+    if (previous) process.env.OLLAMA_URL = previous
+  })
+
+  it('SEPARATES configured from usable', async () => {
+    /*
+     * ⚠️ A URL pointing at a running Ollama with no embedding model pulled is
+     * configured but not usable. Conflating them makes every question pay a
+     * doomed request while the operator believes vectors are on.
+     */
+    const { OllamaEmbeddingProvider } = await import('@/lib/hubble/providers/embedding')
+    const previous = process.env.OLLAMA_URL
+    // A port nothing is listening on: configured, definitively not usable.
+    process.env.OLLAMA_URL = 'http://127.0.0.1:1'
+
+    const provider = new OllamaEmbeddingProvider()
+    expect(provider.isConfigured()).toBe(true)
+    await expect(provider.isUsable()).resolves.toBe(false)
+
+    if (previous) process.env.OLLAMA_URL = previous
+    else delete process.env.OLLAMA_URL
+  })
+})

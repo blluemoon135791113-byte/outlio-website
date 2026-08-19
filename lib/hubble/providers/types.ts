@@ -85,6 +85,14 @@ export interface EmbeddingProvider {
   readonly dimensions: number
   isConfigured(): boolean
   /**
+   * Whether the model is actually pulled and answering.
+   *
+   * ⚠️ SEPARATE FROM `isConfigured()` ON PURPOSE. A URL pointing at a running
+   * Ollama with no embedding model pulled is configured but not usable, and
+   * treating the two as one makes every question pay a doomed request.
+   */
+  isUsable(): Promise<boolean>
+  /**
    * Embeds a batch. Returns null when unavailable.
    *
    * ⚠️ NULL IS A SUPPORTED OUTCOME, NOT A FAILURE. Ollama may not be

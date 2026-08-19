@@ -18,6 +18,8 @@ import 'server-only'
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 
+import { sourceWeight } from '@/lib/hubble/source-quality'
+
 export type Chunk = {
   /** Which page it came from, so a retrieved passage can be cited. */
   pageId: string
@@ -200,6 +202,11 @@ export function retrieve(
   chunks: readonly Chunk[],
   queryEmbedding: number[] | null,
   limit: number,
+  /**
+   * The company's own domain, so its site outranks commentary about it.
+   * Optional: retrieval still works without it, just without the promotion.
+   */
+  companyDomain: string | null = null,
 ): ScoredChunk[] {
   const lexical = scoreLexical(query, chunks)
 
@@ -208,12 +215,21 @@ export function retrieve(
     // Normalised so the two scores are comparable before weighting.
     const lexicalScore = maxLexical > 0 ? chunk.score / maxLexical : 0
 
+    /*
+     * ⚠️ RELEVANCE IS NOT CREDIBILITY.
+     *
+     * Contact brokers auto-generate FAQ blocks echoing the question verbatim,
+     * so they out-score the primary source that simply states the fact. See
+     * source-quality.ts for the real case that motivated this.
+     */
+    const weight = sourceWeight(chunk.url, companyDomain)
+
     if (!queryEmbedding || !chunk.embedding || chunk.embedding.length === 0) {
-      return { ...chunk, score: lexicalScore }
+      return { ...chunk, score: lexicalScore * weight }
     }
 
     const vectorScore = cosineSimilarity(queryEmbedding, chunk.embedding)
-    return { ...chunk, score: 0.5 * lexicalScore + 0.5 * vectorScore }
+    return { ...chunk, score: (0.5 * lexicalScore + 0.5 * vectorScore) * weight }
   })
 
   return scored

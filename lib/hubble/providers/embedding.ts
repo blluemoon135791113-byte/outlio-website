@@ -59,6 +59,54 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     return this.baseUrl !== null
   }
 
+  /**
+   * Whether the embedding MODEL is actually pulled.
+   *
+   * ╔══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ CONFIGURED IS NOT THE SAME AS USABLE, AND CONFLATING THEM COSTS.     ║
+   * ║                                                                          ║
+   * ║  Setting OLLAMA_URL against a running Ollama with no embedding model     ║
+   * ║  pulled makes `isConfigured()` true while every `embed()` fails. The     ║
+   * ║  fallback still answers, so nothing looks broken — the operator simply   ║
+   * ║  never learns that the vectors they think they enabled are not running,  ║
+   * ║  and every question pays a doomed request first.                         ║
+   * ║                                                                          ║
+   * ║  Resolved ONCE per process and cached: this is a deployment fact, not a  ║
+   * ║  per-request one, and re-probing on every question is the cost this      ║
+   * ║  exists to avoid.                                                        ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  private available: Promise<boolean> | null = null
+
+  async isUsable(): Promise<boolean> {
+    const base = this.baseUrl
+    if (!base) return false
+
+    this.available ??= (async () => {
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 3_000)
+        const response = await fetch(`${base}/api/tags`, { signal: controller.signal })
+        clearTimeout(timer)
+
+        if (!response.ok) return false
+
+        const payload = (await response.json()) as { models?: Array<{ name?: string }> }
+        const wanted = this.model
+
+        // Ollama reports `nomic-embed-text:latest` for `nomic-embed-text`.
+        return (payload.models ?? []).some((entry) => {
+          const name = entry.name ?? ''
+          return name === wanted || name.split(':')[0] === wanted.split(':')[0]
+        })
+      } catch {
+        return false
+      }
+    })()
+
+    return this.available
+  }
+
   async embed(texts: readonly string[]): Promise<number[][] | null> {
     const base = this.baseUrl
     if (!base || texts.length === 0) return null

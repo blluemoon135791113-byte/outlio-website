@@ -125,6 +125,13 @@ export async function askHubble(
     }
   }
 
+  /*
+   * Resolved once, before any work: whether vectors are genuinely available.
+   * `isConfigured()` only says a URL was set — see the note on `isUsable`.
+   */
+  const embedder = resolveEmbeddingProvider()
+  const vectorsUsable = await embedder.isUsable()
+
   /* ---- 2. What we already hold: previously fetched pages for this company. */
   const chunks: Chunk[] = await loadCachedChunks(userId, subject.companyId)
   const alreadyFetched = await knownUrls(userId, subject.companyId)
@@ -173,8 +180,6 @@ export async function askHubble(
       if (toFetch.length >= budget.maxPagesFetched) break
     }
 
-    const embedder = resolveEmbeddingProvider()
-
     const fetched = await pooled(toFetch, budget.concurrency, async (url) => {
       if (Date.now() > deadline) return null
       const page = await httpPageFetcher.fetchPage(url)
@@ -193,7 +198,7 @@ export async function askHubble(
        * Embeddings when available, null when not. `savePage` stores null
        * happily and retrieval falls back to lexical scoring.
        */
-      const embeddings = embedder.isConfigured() ? await embedder.embed(pieces) : null
+      const embeddings = vectorsUsable ? await embedder.embed(pieces) : null
 
       const pageId = await savePage({
         userId,
@@ -223,18 +228,26 @@ export async function askHubble(
   }
 
   /* ---- 5. Retrieve. --------------------------------------------------- */
-  const embedder = resolveEmbeddingProvider()
-  const queryEmbedding = embedder.isConfigured()
-    ? (await embedder.embed([question]))?.[0] ?? null
-    : null
+  const queryEmbedding = vectorsUsable ? (await embedder.embed([question]))?.[0] ?? null : null
 
-  const ranked = retrieve(question, chunks, queryEmbedding, budget.maxChunksToModel * 3)
+  const ranked = retrieve(
+    question,
+    chunks,
+    queryEmbedding,
+    budget.maxChunksToModel * 3,
+    subject.domain,
+  )
   // At most 3 passages from any one page, so a single verbose site cannot
   // fill the evidence set and make corroboration impossible.
   const evidence = diversify(ranked, 3, budget.maxChunksToModel)
 
   /* ---- 6. Answer. ----------------------------------------------------- */
-  const { answer, llmCalls: answerCalls } = await answerFromEvidence(question, evidence, subject.known)
+  const { answer, llmCalls: answerCalls } = await answerFromEvidence(
+    question,
+    evidence,
+    subject.known,
+    subject.domain,
+  )
   usage.llmCalls += answerCalls
   usage.elapsedMs = Date.now() - started
 

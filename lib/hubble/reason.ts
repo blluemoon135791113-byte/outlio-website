@@ -23,6 +23,7 @@ import 'server-only'
  */
 import type { AnswerSource, AnswerStatus, SearchHit } from '@/lib/hubble/providers/types'
 import type { ScoredChunk } from '@/lib/hubble/retrieve'
+import { canCorroborate, confidenceCeiling } from '@/lib/hubble/source-quality'
 import { resolveLlmProvider } from '@/lib/intelligence/llm/provider'
 
 /* -------------------------------------------------------------------------- *
@@ -202,6 +203,7 @@ export async function answerFromEvidence(
   question: string,
   chunks: readonly ScoredChunk[],
   leadContext: string,
+  companyDomain: string | null = null,
 ): Promise<{ answer: HubbleAnswer; llmCalls: number }> {
   const llm = resolveLlmProvider()
 
@@ -303,16 +305,42 @@ export async function answerFromEvidence(
       ? Math.min(1, Math.max(0, parsed.confidence))
       : 0.5
 
+  const used = cited.length > 0 ? cited : chunks.slice(0, 3)
+
+  /*
+   * ⚠️ "CORROBORATED" IS VERIFIED BY CODE, NOT ACCEPTED FROM THE MODEL.
+   *
+   * A model asked to self-report corroboration will claim it from two passages
+   * of the same page, or from two contact brokers echoing one scraped record.
+   * `canCorroborate` requires two distinct non-broker hosts. Downgrading is
+   * the only safe direction: overstating agreement is how a wrong fact
+   * acquires false authority.
+   */
+  const finalStatus: AnswerStatus =
+    status === 'corroborated' && !canCorroborate(used.map((chunk) => chunk.url), companyDomain)
+      ? 'verified'
+      : status
+
+  /*
+   * ⚠️ CAPPED BY WHERE THE EVIDENCE CAME FROM, not by how sure the model
+   * sounds. A confident answer built entirely on SEO content farms is exactly
+   * the case the denylist cannot catch by name.
+   */
+  const ceiling = confidenceCeiling(used.map((chunk) => chunk.url), companyDomain)
+
   return {
     answer: {
       answer:
         typeof parsed.answer === 'string' && parsed.answer.trim()
           ? parsed.answer.trim()
           : 'The model returned no answer.',
-      status,
+      status: finalStatus,
       // An "unknown" answer cannot also be high-confidence.
-      confidence: status === 'unknown' ? Math.min(confidence, 0.3) : confidence,
-      sources: toSources(cited.length > 0 ? cited : chunks.slice(0, 3)),
+      confidence:
+        finalStatus === 'unknown'
+          ? Math.min(confidence, 0.3)
+          : Math.min(confidence, ceiling),
+      sources: toSources(used),
     },
     llmCalls: 1,
   }
