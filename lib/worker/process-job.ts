@@ -76,26 +76,31 @@ export type ProcessOutcome = {
  * of the same leads have the same columns in the same places.
  */
 export const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
+  // The person, and both of their links together.
   { header: EXPORT_COLUMN_HEADERS.name, value: (l) => l.fullName },
   { header: EXPORT_COLUMN_HEADERS.linkedinProfile, value: (l) => l.linkedinUrl },
+  { header: EXPORT_COLUMN_HEADERS.salesNavigatorUrl, value: (l) => l.salesNavUrl },
   { header: EXPORT_COLUMN_HEADERS.jobTitle, value: (l) => l.jobTitle },
+  { header: EXPORT_COLUMN_HEADERS.location, value: (l) => l.location },
+
+  // The company, and all of its links together.
   { header: EXPORT_COLUMN_HEADERS.company, value: (l) => l.companyName },
   { header: EXPORT_COLUMN_HEADERS.companyLinkedInUrl, value: (l) => l.companyUrl },
-  { header: EXPORT_COLUMN_HEADERS.companyUrl, value: (l) => l.companyWebsiteUrl },
-  { header: EXPORT_COLUMN_HEADERS.location, value: (l) => l.location },
-  { header: EXPORT_COLUMN_HEADERS.salesNavigatorUrl, value: (l) => l.salesNavUrl },
-
   /*
-   * Everything else the page carries.
-   *
-   * ⚠️ APPENDED, NEVER INTERLEAVED. The eight columns above are the contract
-   * every destination and every customer field-mapping is built on; a new
-   * column inserted among them would silently shift someone's import.
+   * Company-page fields. Empty here and filled by `recordCompanyObservation`
+   * when the user opens the company's page, after which `rebuildJobExport`
+   * rewrites this file. Present from the start so the CSV has ONE shape
+   * regardless of when it was generated.
    */
-  { header: EXPORT_COLUMN_HEADERS.sourceList, value: (l) => l.sourceList },
+  { header: EXPORT_COLUMN_HEADERS.companyPublicLinkedIn, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyUrl, value: (l) => l.companyWebsiteUrl },
   { header: EXPORT_COLUMN_HEADERS.companyIndustry, value: (l) => l.companyIndustry },
   { header: EXPORT_COLUMN_HEADERS.companySize, value: (l) => l.companySize },
-  { header: EXPORT_COLUMN_HEADERS.companyHeadquarters, value: (l) => l.companyHeadquarters },
+  { header: EXPORT_COLUMN_HEADERS.companyEmployeeCount, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyDecisionMakers, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyInvestors, value: () => null },
+
+  // The relationship.
   { header: EXPORT_COLUMN_HEADERS.connectionDegree, value: (l) => l.connectionDegree },
   {
     header: EXPORT_COLUMN_HEADERS.reachable,
@@ -105,6 +110,10 @@ export const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
   { header: EXPORT_COLUMN_HEADERS.listCount, value: (l) => l.listCount },
   { header: EXPORT_COLUMN_HEADERS.lastActivity, value: (l) => l.lastActivity },
   { header: EXPORT_COLUMN_HEADERS.addedToList, value: (l) => l.addedToListAt },
+
+  // Provenance.
+  { header: EXPORT_COLUMN_HEADERS.leadSource, value: () => 'search' },
+  { header: EXPORT_COLUMN_HEADERS.sourceList, value: (l) => l.sourceList },
 ]
 
 /** Truncates upstream error text so an HTML error page never reaches a log. */

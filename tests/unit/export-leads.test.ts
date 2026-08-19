@@ -32,23 +32,36 @@ describe('normalizeExportLead', () => {
       location: 'London, United Kingdom',
     })
     /*
-     * ⚠️ THE FIRST EIGHT ARE FROZEN, IN THIS ORDER.
+     * ⚠️ THIS ORDER CHANGED DELIBERATELY, AND IT IS A BREAKING CHANGE.
      *
-     * Every destination and every customer field-mapping is built on them. New
-     * columns are appended; one inserted among these would shift a customer's
-     * import with no error to notice. The tail is allowed to grow, which is why
-     * this asserts a prefix rather than the whole list.
+     * The first eight columns were previously frozen precisely so a customer's
+     * CRM field-mapping would keep working. They were reordered on request:
+     * the two person URLs now sit together and the two company URLs after them,
+     * because reading one lead's links meant scrolling past six unrelated
+     * fields. `Company HQ` was dropped for duplicating `Location`.
+     *
+     * Anyone with an existing import mapping has to remap. Reordering again
+     * without that being a conscious decision is what this test prevents.
      */
-    expect(EXPORT_COLUMN_ORDER.slice(0, 8)).toEqual([
+    expect(EXPORT_COLUMN_ORDER.slice(0, 9)).toEqual([
       'Name',
       'LinkedIn Profile',
+      'Sales Navigator URL',
       'Job Title',
+      'Location',
       'Company',
       'Company LinkedIn URL',
+      'Company LinkedIn Profile',
       'Company Website URL',
-      'Location',
-      'Sales Navigator URL',
     ])
+
+    // The person's two links are adjacent, and so are the company's.
+    const order = [...EXPORT_COLUMN_ORDER]
+    expect(order.indexOf('Sales Navigator URL') - order.indexOf('LinkedIn Profile')).toBe(1)
+    expect(order.indexOf('Company Website URL') - order.indexOf('Company LinkedIn URL')).toBe(2)
+
+    // HQ is gone: it duplicated Location on almost every row.
+    expect(order).not.toContain('Company HQ')
 
     // Everything the page carries is exported.
     expect(EXPORT_COLUMN_ORDER).toContain('Company Size')

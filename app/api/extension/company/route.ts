@@ -18,6 +18,26 @@ import { resolveExtensionAuth } from '@/lib/extension/auth'
 
 export const runtime = 'nodejs'
 
+/*
+ * ⚠️ `z.string().url()` ALONE ACCEPTS `javascript:alert(1)`.
+ *
+ * Every URL here is stored and later rendered as a clickable link, so the
+ * protocol refinement is the guard — the same one that protects evidence
+ * `source_url`.
+ */
+const httpUrl = z
+  .string()
+  .url()
+  .max(2048)
+  .refine((value) => {
+    try {
+      const protocol = new URL(value).protocol
+      return protocol === 'http:' || protocol === 'https:'
+    } catch {
+      return false
+    }
+  }, 'must be an http or https URL')
+
 const bodySchema = z.object({
   /** Sales Navigator's numeric company id. */
   companyId: z.string().regex(/^\d{1,20}$/),
@@ -27,18 +47,28 @@ const bodySchema = z.object({
    * is stored and later rendered as a link. The protocol refinement is the
    * guard — the same one that protects evidence `source_url`.
    */
-  websiteUrl: z
-    .string()
-    .url()
-    .max(2048)
-    .refine((value) => {
-      try {
-        const protocol = new URL(value).protocol
-        return protocol === 'http:' || protocol === 'https:'
-      } catch {
-        return false
-      }
-    }, 'websiteUrl must be http or https'),
+  websiteUrl: httpUrl.nullable().optional(),
+  publicLinkedinUrl: httpUrl.nullable().optional(),
+  employeeCount: z.number().int().min(0).max(50_000_000).nullable().optional(),
+  decisionMakerCount: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  investorCount: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  /*
+   * People listed on the page. Capped: a company page shows a handful, and an
+   * unbounded array here would be an unauthenticated-shaped write amplifier.
+   */
+  people: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(200),
+        salesNavUrl: httpUrl.nullable().optional(),
+        linkedinUrl: httpUrl.nullable().optional(),
+        jobTitle: z.string().trim().max(200).nullable().optional(),
+        role: z.enum(['decision_maker', 'investor']),
+      }),
+    )
+    .max(100)
+    .optional()
+    .default([]),
 })
 
 export async function POST(request: Request) {
@@ -69,14 +99,27 @@ export async function POST(request: Request) {
     const outcome = await recordCompanyObservation(userId, {
       companyId: body.companyId,
       companyName: body.companyName ?? null,
-      websiteUrl: body.websiteUrl,
+      websiteUrl: body.websiteUrl ?? null,
+      publicLinkedinUrl: body.publicLinkedinUrl ?? null,
+      employeeCount: body.employeeCount ?? null,
+      decisionMakerCount: body.decisionMakerCount ?? null,
+      investorCount: body.investorCount ?? null,
+      people: (body.people ?? []).map((person) => ({
+        name: person.name,
+        salesNavUrl: person.salesNavUrl ?? null,
+        linkedinUrl: person.linkedinUrl ?? null,
+        jobTitle: person.jobTitle ?? null,
+        role: person.role,
+      })),
     })
 
     return NextResponse.json({
       // Honest either way: zero means the user has no leads at this company
-      // yet, or they already had a website. Both are worth showing.
+      // yet, or the fields were already filled. Both are worth showing.
       leadsUpdated: outcome.leadsUpdated,
       companyUpdated: outcome.companyUpdated,
+      peopleAdded: outcome.peopleAdded,
+      peopleAlreadyKnown: outcome.peopleAlreadyKnown,
     })
   } catch {
     return NextResponse.json({ error: 'OBSERVATION_FAILED' }, { status: 500 })

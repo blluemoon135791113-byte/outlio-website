@@ -934,7 +934,9 @@ function LeadPreview({
                 <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.sourceList}</th>
                 <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyIndustry}</th>
                 <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companySize}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyHeadquarters}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyEmployeeCount}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyDecisionMakers}</th>
+                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyInvestors}</th>
                 <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.connectionDegree}</th>
                 <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.reachable}</th>
                 <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.listCount}</th>
@@ -1016,8 +1018,14 @@ function LeadPreview({
                   <td className="max-w-32 truncate px-4 py-3 text-muted">
                     {missing(lead.company_size)}
                   </td>
-                  <td className="max-w-40 truncate px-4 py-3 text-muted" title={lead.company_headquarters ?? undefined}>
-                    {missing(lead.company_headquarters)}
+                  <td className="px-4 py-3 text-muted">
+                    {lead.company_employee_count ?? 'N/A'}
+                  </td>
+                  <td className="px-4 py-3 text-muted">
+                    {lead.company_decision_maker_count ?? 'N/A'}
+                  </td>
+                  <td className="px-4 py-3 text-muted">
+                    {lead.company_investor_count ?? 'N/A'}
                   </td>
                   <td className="px-4 py-3 text-muted">{missing(lead.connection_degree)}</td>
                   {/* `null` means the badge was absent, which is not "no". */}

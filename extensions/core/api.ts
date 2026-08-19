@@ -208,11 +208,9 @@ export async function sendPage(input: {
  * swallows the error, because a missed website is a blank column and a broken
  * session is lost work.
  */
-export async function sendCompanyObservation(input: {
-  companyId: string
-  companyName: string | null
-  websiteUrl: string
-}): Promise<{ leadsUpdated: number }> {
+export async function sendCompanyObservation(
+  input: import('./types').CompanyObservationMessage,
+): Promise<{ leadsUpdated: number }> {
   const body = await authed('/api/extension/company', {
     method: 'POST',
     body: JSON.stringify(input),

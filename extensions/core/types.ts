@@ -47,6 +47,24 @@ export type CapturedPage = {
   contentHash: string
 }
 
+/** Everything a company page yielded. See adapters/salesnav-company.ts. */
+export type CompanyObservationMessage = {
+  companyId: string
+  companyName: string | null
+  websiteUrl: string | null
+  publicLinkedinUrl: string | null
+  employeeCount: number | null
+  decisionMakerCount: number | null
+  investorCount: number | null
+  people: Array<{
+    name: string
+    salesNavUrl: string | null
+    linkedinUrl: string | null
+    jobTitle: string | null
+    role: 'decision_maker' | 'investor'
+  }>
+}
+
 export type CaptureOptions = {
   includeCompanyWebsites: boolean
 }
@@ -90,12 +108,7 @@ export type ExtensionMessage =
    * website. NOT a capture — no HTML, no leads, no credit. See
    * `extensions/adapters/salesnav-company.ts`.
    */
-  | {
-      type: 'COMPANY_SEEN'
-      companyId: string
-      companyName: string | null
-      websiteUrl: string
-    }
+  | ({ type: 'COMPANY_SEEN' } & CompanyObservationMessage)
 
 export type ContentMessage =
   | { type: 'IS_SUPPORTED' }

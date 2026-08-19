@@ -326,11 +326,8 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
          */
         if (await readSessionId()) {
           try {
-            await sendCompanyObservation({
-              companyId: message.companyId,
-              companyName: message.companyName,
-              websiteUrl: message.websiteUrl,
-            })
+            const { type: _type, ...observation } = message
+            await sendCompanyObservation(observation)
           } catch {
             // A missed website is a blank column; a broken session is lost
             // work. This must never disturb an in-flight capture.

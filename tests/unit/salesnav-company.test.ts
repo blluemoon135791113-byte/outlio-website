@@ -162,18 +162,19 @@ describe('readCompanyPage', () => {
       </section></main>
     `)
 
-    expect(readCompanyPage(document, PAGE)).toEqual({
+    expect(readCompanyPage(document, PAGE)).toMatchObject({
       companyId: '1035',
       companyName: 'Acme Systems',
       websiteUrl: 'https://acme.example/',
     })
   })
 
-  it('sends NOTHING when there is no website', () => {
+  it('sends NOTHING when the page yielded nothing at all', () => {
     /*
      * An empty observation would let a later read mistake "we saw nothing" for
      * "we looked and there is none" — and it would spend a request saying so.
      */
+    // No website, no counts, no people — nothing worth a request.
     const document = doc('<main><section><h1>Acme Systems</h1></section></main>')
     expect(readCompanyPage(document, PAGE)).toBeNull()
   })

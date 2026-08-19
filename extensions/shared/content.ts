@@ -94,12 +94,7 @@ function announceCompanyIfSeen(): void {
   if (reportedCompanies.has(observation.companyId)) return
   reportedCompanies.add(observation.companyId)
 
-  void chrome.runtime.sendMessage({
-    type: 'COMPANY_SEEN',
-    companyId: observation.companyId,
-    companyName: observation.companyName,
-    websiteUrl: observation.websiteUrl,
-  })
+  void chrome.runtime.sendMessage({ type: 'COMPANY_SEEN', ...observation })
 }
 
 function announceIfChanged(): void {

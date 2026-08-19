@@ -85,6 +85,17 @@ export function normaliseWebsite(href: string | null | undefined, base?: string)
 
 type Doc = Pick<Document, 'querySelectorAll' | 'querySelector'>
 
+/*
+ * ⚠️ THESE SELECTORS ARE UNVALIDATED AGAINST A REAL COMPANY PAGE.
+ *
+ * Every other selector in this codebase was confirmed by a census of a real
+ * saved page. No company page has been captured yet, so the counts and people
+ * here are read by SHAPE — a labelled number, a `/sales/lead/` link — rather
+ * than by a class or position. Shape-matching degrades to null on a layout it
+ * does not recognise, which is the safe direction. `docs/SELECTOR_MAP.md` §3
+ * records what happens when a selector is assumed instead of measured.
+ */
+
 /**
  * The company's website, read from its own page.
  *
@@ -137,10 +148,94 @@ export function readCompanyName(doc: Doc): string | null {
   return null
 }
 
+/** A person listed on a company page. */
+export type CompanyPerson = {
+  name: string
+  /** Sales Navigator lead URL, when the page links one. */
+  salesNavUrl: string | null
+  /** Public LinkedIn profile, when the page links one. */
+  linkedinUrl: string | null
+  jobTitle: string | null
+  role: 'decision_maker' | 'investor'
+}
+
 export type CompanyObservation = {
   companyId: string
   companyName: string | null
-  websiteUrl: string
+  websiteUrl: string | null
+  /** `linkedin.com/company/<slug>` — the public page. */
+  publicLinkedinUrl: string | null
+  /** EXACT headcount, distinct from the hover card's "2-10" range. */
+  employeeCount: number | null
+  decisionMakerCount: number | null
+  investorCount: number | null
+  people: CompanyPerson[]
+}
+
+/**
+ * A count rendered beside a label — "Decision makers (7)", "12 employees".
+ *
+ * ⚠️ MATCHED ON THE LABEL, NOT ON POSITION. A company page is a stack of
+ * unlabelled counters whose order LinkedIn is free to change; reading "the
+ * second number" would silently start returning the wrong one after any
+ * redesign. Returns null rather than 0 when nothing matches — "we did not find
+ * a count" and "this company has none" are different claims.
+ */
+export function readCount(text: string, label: RegExp): number | null {
+  const flat = text.replace(/\s+/g, ' ')
+
+  for (const pattern of [
+    new RegExp(`([\\d,]+)\\s*(?:\\+\\s*)?${label.source}`, 'i'),
+    new RegExp(`${label.source}[^\\d]{0,24}?([\\d,]+)`, 'i'),
+  ]) {
+    const match = pattern.exec(flat)
+    if (!match) continue
+    const value = Number.parseInt((match[1] ?? '').replace(/,/g, ''), 10)
+    if (Number.isFinite(value)) return value
+  }
+
+  return null
+}
+
+/** `/sales/lead/ACwAA…` and `/in/…` links, paired with the name beside them. */
+export function readPeople(
+  card: Doc,
+  role: CompanyPerson['role'],
+): CompanyPerson[] {
+  const people: CompanyPerson[] = []
+  const seen = new Set<string>()
+
+  for (const anchor of Array.from(card.querySelectorAll('a[href]'))) {
+    const href = anchor.getAttribute('href') ?? ''
+    if (!/\/sales\/lead\/|\/in\//.test(href)) continue
+
+    const name = (anchor.textContent ?? '').replace(/\s+/g, ' ').trim()
+    // An avatar link carries no text; the named link for the same person does.
+    if (!name || name.length > 120) continue
+
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const isSalesNav = href.includes('/sales/lead/')
+    people.push({
+      name,
+      salesNavUrl: isSalesNav ? absolute(href) : null,
+      linkedinUrl: isSalesNav ? null : absolute(href),
+      jobTitle: null,
+      role,
+    })
+  }
+
+  return people
+}
+
+function absolute(href: string): string | null {
+  try {
+    return new URL(href, 'https://www.linkedin.com').toString()
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -154,8 +249,39 @@ export function readCompanyPage(doc: Doc, url: string): CompanyObservation | nul
   const companyId = companyIdFromUrl(url)
   if (!companyId) return null
 
-  const websiteUrl = readCompanyWebsite(doc, url)
-  if (!websiteUrl) return null
+  const text = (doc.querySelector('main') ?? doc.querySelector('body'))?.textContent ?? ''
 
-  return { companyId, companyName: readCompanyName(doc), websiteUrl }
+  const publicLinkedinUrl =
+    Array.from(doc.querySelectorAll('a[href]'))
+      .map((anchor) => anchor.getAttribute('href') ?? '')
+      .find((href) => /linkedin\.com\/company\/[^/?#]+/i.test(href)) ?? null
+
+  const observation: CompanyObservation = {
+    companyId,
+    companyName: readCompanyName(doc),
+    websiteUrl: readCompanyWebsite(doc, url),
+    publicLinkedinUrl: publicLinkedinUrl ? absolute(publicLinkedinUrl) : null,
+    employeeCount: readCount(text, /employees?/),
+    decisionMakerCount: readCount(text, /decision makers?/),
+    investorCount: readCount(text, /investors?/),
+    people: [
+      ...readPeople(doc, 'decision_maker'),
+      ...readPeople(doc, 'investor'),
+    ],
+  }
+
+  /*
+   * Nothing worth sending is nothing worth a request. An observation with no
+   * website, no counts and no people would let a later read mistake "we saw
+   * nothing" for "we looked and there is none".
+   */
+  const empty =
+    !observation.websiteUrl &&
+    !observation.publicLinkedinUrl &&
+    observation.employeeCount === null &&
+    observation.decisionMakerCount === null &&
+    observation.investorCount === null &&
+    observation.people.length === 0
+
+  return empty ? null : observation
 }

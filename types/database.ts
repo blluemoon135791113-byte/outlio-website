@@ -304,6 +304,15 @@ export type ExtractedLeadRow = {
   /** The Sales Navigator list or search the lead came from (migration 0053). */
   source_list: string | null
 
+  /* ---- from a company page the user opened (migration 0054) --------------- */
+  company_public_linkedin_url: string | null
+  /** EXACT headcount. `company_size` is the hover card's range instead. */
+  company_employee_count: number | null
+  company_decision_maker_count: number | null
+  company_investor_count: number | null
+  /** 'search' | 'decision_maker' | 'investor'. */
+  lead_source: string | null
+
   /* ---- also on the saved page (migration 0052) --------------------------- */
   connection_degree: string | null
   is_reachable: boolean | null

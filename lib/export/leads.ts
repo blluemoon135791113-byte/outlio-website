@@ -33,7 +33,11 @@ export type ExportLead = {
   /* ---- also on the saved page --------------------------------------------- */
   companyIndustry?: string | null
   companySize?: string | null
-  companyHeadquarters?: string | null
+  companyPublicLinkedIn?: string | null
+  companyEmployeeCount?: number | null
+  companyDecisionMakers?: number | null
+  companyInvestors?: number | null
+  leadSource?: string | null
   connectionDegree?: string | null
   reachable?: string | null
   listCount?: number | null
@@ -57,7 +61,14 @@ export const EXPORT_COLUMN_HEADERS = {
   /* Appended after the original eight — see the note in process-job.ts. */
   companyIndustry: 'Company Industry',
   companySize: 'Company Size',
-  companyHeadquarters: 'Company HQ',
+  /** `linkedin.com/company/<slug>` — the public page, not the Sales Nav one. */
+  companyPublicLinkedIn: 'Company LinkedIn Profile',
+  /** An exact number from the company page, unlike the "2-10" range. */
+  companyEmployeeCount: 'Company Employees',
+  companyDecisionMakers: 'Decision Makers',
+  companyInvestors: 'Investors',
+  /** How this row entered the database: a search row, or a company page. */
+  leadSource: 'Lead Source',
   connectionDegree: 'Connection Degree',
   reachable: 'Reachable',
   listCount: 'Saved Lists',
@@ -76,24 +87,37 @@ export const EXPORT_COLUMN_HEADERS = {
  * customer's import without any error to notice.
  */
 export const EXPORT_COLUMN_ORDER = [
+  /*
+   * ⚠️ THE TWO PERSON URLS SIT TOGETHER, and the two company URLs after them.
+   * They were columns B and H, so reading one lead's two links meant scrolling
+   * past six unrelated fields. Related values belong beside each other.
+   *
+   * `Company HQ` is gone: it duplicated `Location` on almost every row and
+   * carried nothing the location column did not already say.
+   */
   EXPORT_COLUMN_HEADERS.name,
   EXPORT_COLUMN_HEADERS.linkedinProfile,
+  EXPORT_COLUMN_HEADERS.salesNavigatorUrl,
   EXPORT_COLUMN_HEADERS.jobTitle,
+  EXPORT_COLUMN_HEADERS.location,
+
   EXPORT_COLUMN_HEADERS.company,
   EXPORT_COLUMN_HEADERS.companyLinkedInUrl,
+  EXPORT_COLUMN_HEADERS.companyPublicLinkedIn,
   EXPORT_COLUMN_HEADERS.companyUrl,
-  EXPORT_COLUMN_HEADERS.location,
-  EXPORT_COLUMN_HEADERS.salesNavigatorUrl,
-
-  EXPORT_COLUMN_HEADERS.sourceList,
   EXPORT_COLUMN_HEADERS.companyIndustry,
   EXPORT_COLUMN_HEADERS.companySize,
-  EXPORT_COLUMN_HEADERS.companyHeadquarters,
+  EXPORT_COLUMN_HEADERS.companyEmployeeCount,
+  EXPORT_COLUMN_HEADERS.companyDecisionMakers,
+  EXPORT_COLUMN_HEADERS.companyInvestors,
+
   EXPORT_COLUMN_HEADERS.connectionDegree,
   EXPORT_COLUMN_HEADERS.reachable,
   EXPORT_COLUMN_HEADERS.listCount,
   EXPORT_COLUMN_HEADERS.lastActivity,
   EXPORT_COLUMN_HEADERS.addedToList,
+  EXPORT_COLUMN_HEADERS.leadSource,
+  EXPORT_COLUMN_HEADERS.sourceList,
 ] as const
 
 /**
@@ -115,7 +139,20 @@ export function toCanonicalExportRecord(
     ...(lead.enrichment ?? {}),
     [EXPORT_COLUMN_HEADERS.companyIndustry]: lead.companyIndustry ?? null,
     [EXPORT_COLUMN_HEADERS.companySize]: lead.companySize ?? null,
-    [EXPORT_COLUMN_HEADERS.companyHeadquarters]: lead.companyHeadquarters ?? null,
+    [EXPORT_COLUMN_HEADERS.companyPublicLinkedIn]: lead.companyPublicLinkedIn ?? null,
+    [EXPORT_COLUMN_HEADERS.companyEmployeeCount]:
+      lead.companyEmployeeCount === null || lead.companyEmployeeCount === undefined
+        ? null
+        : String(lead.companyEmployeeCount),
+    [EXPORT_COLUMN_HEADERS.companyDecisionMakers]:
+      lead.companyDecisionMakers === null || lead.companyDecisionMakers === undefined
+        ? null
+        : String(lead.companyDecisionMakers),
+    [EXPORT_COLUMN_HEADERS.companyInvestors]:
+      lead.companyInvestors === null || lead.companyInvestors === undefined
+        ? null
+        : String(lead.companyInvestors),
+    [EXPORT_COLUMN_HEADERS.leadSource]: lead.leadSource ?? null,
     [EXPORT_COLUMN_HEADERS.connectionDegree]: lead.connectionDegree ?? null,
     [EXPORT_COLUMN_HEADERS.reachable]: lead.reachable ?? null,
     [EXPORT_COLUMN_HEADERS.listCount]:
@@ -156,7 +193,11 @@ export type ExportLeadSource = Pick<
       ExtractedLeadRow,
       | 'company_industry'
       | 'company_size'
-      | 'company_headquarters'
+      | 'company_public_linkedin_url'
+      | 'company_employee_count'
+      | 'company_decision_maker_count'
+      | 'company_investor_count'
+      | 'lead_source'
       | 'connection_degree'
       | 'is_reachable'
       | 'list_count'
@@ -208,7 +249,11 @@ export function normalizeExportLead(row: ExportLeadSource): ExportLead {
     ...definedOnly({
       companyIndustry: row.company_industry,
       companySize: row.company_size,
-      companyHeadquarters: row.company_headquarters,
+      companyPublicLinkedIn: row.company_public_linkedin_url,
+      companyEmployeeCount: row.company_employee_count,
+      companyDecisionMakers: row.company_decision_maker_count,
+      companyInvestors: row.company_investor_count,
+      leadSource: row.lead_source,
       connectionDegree: row.connection_degree,
       // `null` means the badge was absent, which is not the same as "no".
       reachable: row.is_reachable === true ? 'Yes' : null,
