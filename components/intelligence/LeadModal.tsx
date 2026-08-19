@@ -12,19 +12,24 @@
  * ║  screen, which is what an ever-growing modal does.                       ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * The scope is `lead_ids` with a single id, so this is the same pipeline the
- * list uses — planned, validated, queued and billed identically. There is no
- * second, looser path for one lead.
+ * ⚠️ THIS IS THE MICRO PATH — open-ended Ask Hubble, not the batch pipeline.
+ *
+ * The console still does macro: batches, the fixed provider catalog, and SQL
+ * aggregation across companies. Here a question is answered from retrieved web
+ * evidence, so it is not limited to fields the catalog happens to name. Every
+ * answer carries its sources and how far it can be trusted.
  */
 import { useEffect, useRef, useState } from 'react'
 
 import { CompanyAvatar, PersonAvatar } from '@/components/intelligence/Avatar'
 import type { HubbleLead } from '@/components/intelligence/HubbleLeadList'
-import { columnLabel, renderCellValue } from '@/components/intelligence/render-value'
-import { useResearchRun } from '@/components/intelligence/useResearchRun'
-
-/** Answers already produced in this modal, newest last. */
-type Answer = { question: string; runId: string }
+import {
+  STATUS_CLASS,
+  STATUS_HINT,
+  STATUS_LABEL,
+  useAskHubble,
+  type AskAnswer,
+} from '@/components/intelligence/useAskHubble'
 
 function safeExternalUrl(value: string | null): string | null {
   if (!value) return null
@@ -49,15 +54,15 @@ export function LeadModal({
   onClose: () => void
 }) {
   const [question, setQuestion] = useState('')
-  const [answers, setAnswers] = useState<Answer[]>([])
-  const run = useResearchRun()
+  const hubble = useAskHubble()
+  const { answers, busy } = hubble
 
   const dialogRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
   // Expanded once the first question is asked, and never contracts again —
   // a modal that resizes between answers is harder to read than a tall one.
-  const expanded = answers.length > 0 || run.busy || run.phase === 'error'
+  const expanded = answers.length > 0 || busy || hubble.error !== null
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -82,19 +87,18 @@ export function LeadModal({
   // A finished answer scrolls itself into view, so the user does not have to
   // hunt for what they just asked for.
   useEffect(() => {
-    if (run.phase === 'done') bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight })
-  }, [run.phase])
+    if (!busy) bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight })
+  }, [busy, answers.length])
 
   const website = safeExternalUrl(lead.companyDomain)
   const linkedin = safeExternalUrl(linkedinUrl)
 
   const submit = () => {
     const asked = question.trim()
-    if (asked.length < 3) return
+    if (asked.length < 3 || busy) return
 
-    setAnswers((current) => [...current, { question: asked, runId: '' }])
     setQuestion('')
-    void run.ask(asked, { type: 'lead_ids', leadIds: [lead.id] }, null)
+    void hubble.ask(lead.id, asked)
   }
 
   return (
@@ -160,26 +164,25 @@ export function LeadModal({
           <div className="clay-sunken mt-5 p-4">
             <p className="text-sm font-medium text-ink">About this lead</p>
 
-            {answers.length === 0 && !run.busy ? (
+            {answers.length === 0 && !busy ? (
               <p className="mt-1.5 text-sm text-muted">
                 Ask anything about this person or their company. Hubble researches only what it
                 does not already hold.
               </p>
             ) : null}
 
-            <div className="mt-3 space-y-3">
+            <div className="mt-3 space-y-4">
               {answers.map((answer, index) => (
-                <div key={`${answer.question}-${index}`}>
-                  <p className="text-xs font-medium text-muted">{answer.question}</p>
-
-                  {/* Only the newest question has a live run behind it. */}
-                  {index === answers.length - 1 ? (
-                    <AnswerBody run={run} />
-                  ) : (
-                    <p className="mt-1 text-xs text-muted/70">Answered above.</p>
-                  )}
-                </div>
+                <AnswerBlock key={`${answer.question}-${index}`} answer={answer} />
               ))}
+
+              {busy ? <ResearchingSkeleton /> : null}
+
+              {hubble.error ? (
+                <p role="alert" className="text-sm text-danger">
+                  {hubble.error}
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -198,7 +201,7 @@ export function LeadModal({
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') submit()
                 }}
-                disabled={run.busy}
+                disabled={busy}
                 placeholder="Ask Hubble…"
                 aria-label="Ask Hubble about this lead"
                 className="min-w-0 flex-1 bg-transparent px-2.5 text-sm text-ink outline-none placeholder:text-muted disabled:opacity-70"
@@ -210,7 +213,7 @@ export function LeadModal({
               <button
                 type="button"
                 onClick={submit}
-                disabled={run.busy || question.trim().length < 3}
+                disabled={busy || question.trim().length < 3}
                 aria-label="Ask"
                 className="cursor-pointer clay-raised inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink transition-transform duration-150 ease-out active:scale-[0.94] disabled:opacity-40"
               >
@@ -224,50 +227,90 @@ export function LeadModal({
   )
 }
 
-function AnswerBody({ run }: { run: ReturnType<typeof useResearchRun> }) {
-  if (run.busy) {
-    return (
-      <div role="status" className="mt-2 space-y-1.5">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <span key={index} className="block h-2.5 rounded-full bg-clay-bg" />
-        ))}
-        <span className="sr-only">Researching this lead</span>
-      </div>
-    )
-  }
-
-  if (run.phase === 'error') {
-    return <p className="mt-1.5 text-sm text-danger">{run.message}</p>
-  }
-
-  if (run.phase !== 'done' || !run.results) return null
-
-  const row = run.results.rows[0]
-  if (!row) {
-    return <p className="mt-1.5 text-sm text-muted">Nothing was found for this lead.</p>
-  }
-
+/** Three bars while research runs. No entrance animation — CLAUDE.md. */
+function ResearchingSkeleton() {
   return (
-    <dl className="mt-2 space-y-1.5">
-      {run.results.columns.map((field) => {
-        const cell = row.fields[field]
-        return (
-          <div key={field} className="flex gap-2 text-sm">
-            <dt className="w-32 shrink-0 text-muted">{columnLabel(field)}</dt>
-            <dd className="min-w-0 flex-1 text-ink">
-              {!cell || cell.state !== 'known' ? (
-                /* Never a blank: "we could not find out" and "they do not have
-                   one" are different facts. */
-                <span className="text-muted/70">Unknown</span>
-              ) : (
-                renderCellValue(cell.value)
-              )}
-            </dd>
-          </div>
-        )
-      })}
-    </dl>
+    <div role="status" className="space-y-1.5">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <span key={index} className="block h-2.5 rounded-full bg-clay-bg" />
+      ))}
+      <span className="sr-only">Researching this lead</span>
+    </div>
   )
+}
+
+/**
+ * One question and its answer.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THE STATUS AND THE SOURCES ARE NOT DECORATION.                       ║
+ * ║                                                                          ║
+ * ║  Someone is about to put this in an email to a stranger. An estimate     ║
+ * ║  that looks like a fact is the failure this whole layer exists to        ║
+ * ║  prevent, so `estimated` is coloured differently from `verified` and     ║
+ * ║  says in words that it was inferred. The sources are listed so "where    ║
+ * ║  did that come from?" is one click, not an act of faith.                 ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function AnswerBlock({ answer }: { answer: AskAnswer }) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-muted">{answer.question}</p>
+
+      <p className="mt-1.5 text-sm leading-relaxed whitespace-pre-wrap text-ink">{answer.answer}</p>
+
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <span
+          title={STATUS_HINT[answer.status]}
+          className={`inline-flex items-center rounded-[var(--radius-clay)] px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[answer.status]}`}
+        >
+          {STATUS_LABEL[answer.status]}
+        </span>
+
+        {/* Only shown when a real answer exists: "12% confident we found
+            nothing" is noise, not information. */}
+        {answer.status !== 'unknown' ? (
+          <span className="text-xs text-muted">{Math.round(answer.confidence * 100)}% confidence</span>
+        ) : null}
+
+        {answer.fromCache ? (
+          <span className="text-xs text-muted" title="Answered from earlier research on this company">
+            · from earlier research
+          </span>
+        ) : answer.usage ? (
+          <span className="text-xs text-muted">
+            · {answer.usage.pagesFetched} page{answer.usage.pagesFetched === 1 ? '' : 's'} read
+          </span>
+        ) : null}
+      </div>
+
+      {answer.sources.length > 0 ? (
+        <ul className="mt-2 space-y-1">
+          {answer.sources.map((source) => (
+            <li key={source.url} className="truncate text-xs">
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                title={source.quote ?? undefined}
+                className="text-muted underline decoration-clay-sunken underline-offset-2 transition-colors duration-150 hover:text-ink"
+              >
+                {source.title ?? hostOf(source.url)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
 }
 
 function Glyph({ children, label }: { children: string; label: string }) {
