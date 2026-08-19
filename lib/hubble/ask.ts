@@ -17,6 +17,7 @@ import 'server-only'
  * upload is exactly the unbounded work the budget exists to prevent — batch
  * analysis stays with the existing provider pipeline and SQL aggregation.
  */
+import { learnDomainFromSources, resolveCompanyDomain, siteScopedQuery } from '@/lib/hubble/domain'
 import { httpPageFetcher } from '@/lib/hubble/fetch/fetcher'
 import { resolveEmbeddingProvider } from '@/lib/hubble/providers/embedding'
 import { resolveSearchProvider } from '@/lib/hubble/providers/search'
@@ -136,12 +137,26 @@ export async function askHubble(
   const chunks: Chunk[] = await loadCachedChunks(userId, subject.companyId)
   const alreadyFetched = await knownUrls(userId, subject.companyId)
 
+  /*
+   * ⚠️ THE DOMAIN, BEFORE PLANNING — it is what makes the queries precise.
+   *
+   * Without it a question about "Atlas AI Solutions" returned atlasai.uk and
+   * atlasaisolutions.org, which are different companies. Read from
+   * `companies.domain` when stored, discovered and saved when not, so this
+   * cost is paid once per company rather than once per question.
+   */
+  const resolved = subject.domain
+    ? { domain: subject.domain, origin: 'stored' as const }
+    : await resolveCompanyDomain(userId, subject.companyId, subject.companyName)
+
+  const domain = resolved?.domain ?? null
+
   /* ---- 3. Plan. ------------------------------------------------------- */
   const { plan, llmCalls } = await planResearch(
     question,
     {
       companyName: subject.companyName,
-      domain: subject.domain,
+      domain,
       personName: subject.personName,
       known: subject.known,
     },
@@ -163,7 +178,17 @@ export async function askHubble(
     const search = resolveSearchProvider()
     const candidates: SearchHit[] = []
 
-    for (const query of plan.queries) {
+    /*
+     * One site-scoped query alongside the planner's, when a domain is known.
+     * It finds what the company says about itself — authoritative for
+     * products, pricing and people, useless for funding or news, which is why
+     * it supplements the unscoped queries rather than replacing them.
+     */
+    const queries = domain
+      ? [siteScopedQuery(question, domain), ...plan.queries].slice(0, budget.maxQueriesPerRound + 1)
+      : plan.queries
+
+    for (const query of queries) {
       if (Date.now() > deadline) break
       const hits = await search.search(query, 6)
       usage.searches += 1
@@ -235,7 +260,7 @@ export async function askHubble(
     chunks,
     queryEmbedding,
     budget.maxChunksToModel * 3,
-    subject.domain,
+    domain,
     subject.companyName,
   )
   // At most 3 passages from any one page, so a single verbose site cannot
@@ -247,11 +272,27 @@ export async function askHubble(
     question,
     evidence,
     subject.known,
-    subject.domain,
+    domain,
     subject.companyName,
   )
   usage.llmCalls += answerCalls
   usage.elapsedMs = Date.now() - started
+
+  /*
+   * ⚠️ LEARN THE DOMAIN FROM WHAT WAS ACTUALLY CITED.
+   *
+   * Being cited is better evidence of ownership than ranking first in a
+   * search. Only fills a gap — never overwrites a known domain — and makes
+   * every future question about this company site-scoped and precise.
+   */
+  if (!domain) {
+    await learnDomainFromSources(
+      userId,
+      subject.companyId,
+      subject.companyName,
+      answer.sources.map((source) => source.url),
+    )
+  }
 
   /* ---- 7. Save, so the next question reuses it. ------------------------ */
   await saveAnswer({

@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
   const { data: lead } = await supabase
     .from('extracted_leads')
     .select(
-      'id, full_name, job_title, location, company_name, company_id, company_website_url, company_url, company_industry, company_size, company_employee_count',
+      'id, full_name, job_title, location, company_name, company_id, company_website_url, company_url, company_industry, company_size, company_employee_count, companies(domain)',
     )
     .eq('user_id', userId)
     .eq('id', body.leadId)
@@ -80,14 +80,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 })
   }
 
-  const domain = (() => {
-    if (!lead.company_website_url) return null
-    try {
-      return new URL(lead.company_website_url).hostname.replace(/^www\./, '')
-    } catch {
-      return null
-    }
-  })()
+  /*
+   * ⚠️ `companies.domain` IS THE REAL SOURCE, not the lead column.
+   *
+   * On production data `company_website_url` is null for all 1,074 leads,
+   * while 557 of 2,094 companies already carry a domain. Reading only the
+   * lead threw away every one of them. When neither has it, `askHubble`
+   * discovers it and writes it back to the company.
+   */
+  const companyDomain = (lead.companies as unknown as { domain: string | null } | null)?.domain ?? null
+
+  const domain =
+    companyDomain ??
+    (() => {
+      if (!lead.company_website_url) return null
+      try {
+        return new URL(lead.company_website_url).hostname.replace(/^www\./, '')
+      } catch {
+        return null
+      }
+    })()
 
   /*
    * What the CRM already holds, as context. The model is shown this ONE lead

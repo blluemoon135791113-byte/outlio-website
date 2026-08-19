@@ -24,7 +24,19 @@ import 'server-only'
 import type { AnswerSource, AnswerStatus, SearchHit } from '@/lib/hubble/providers/types'
 import type { ScoredChunk } from '@/lib/hubble/retrieve'
 import { canCorroborate, confidenceCeiling } from '@/lib/hubble/source-quality'
+import { LlmWaterfall, OllamaLlmProvider } from '@/lib/hubble/providers/ollama-llm'
 import { resolveLlmProvider } from '@/lib/intelligence/llm/provider'
+
+/**
+ * The model Hubble reasons with: local Ollama first, hosted second.
+ *
+ * ⚠️ ONLY HUBBLE'S PATH CHANGES. `resolveLlmProvider` still serves the batch
+ * pipeline unchanged — swapping the model under an already-working system for
+ * a weaker local one would be a regression nobody asked for.
+ */
+function resolveHubbleLlm() {
+  return new LlmWaterfall(new OllamaLlmProvider(), resolveLlmProvider())
+}
 
 /* -------------------------------------------------------------------------- *
  * Planning
@@ -70,7 +82,7 @@ export async function planResearch(
   context: { companyName: string | null; domain: string | null; personName: string | null; known: string },
   maxQueries: number,
 ): Promise<{ plan: ResearchPlan; llmCalls: number }> {
-  const llm = resolveLlmProvider()
+  const llm = resolveHubbleLlm()
 
   const fallback: ResearchPlan = {
     intent: question,
@@ -206,7 +218,7 @@ export async function answerFromEvidence(
   companyDomain: string | null = null,
   companyName: string | null = null,
 ): Promise<{ answer: HubbleAnswer; llmCalls: number }> {
-  const llm = resolveLlmProvider()
+  const llm = resolveHubbleLlm()
 
   if (chunks.length === 0) {
     return {
