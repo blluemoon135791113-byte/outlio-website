@@ -119,6 +119,78 @@ export class SearxngSearchProvider implements SearchProvider {
   }
 }
 
+/**
+ * Brave Search — a real search index, on a free tier, with nothing to host.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  WHY THIS EXISTS ALONGSIDE SEARXNG.                                      ║
+ * ║                                                                          ║
+ * ║  SearXNG is free but is a SERVER: it has to be deployed, kept alive, and ║
+ * ║  protected, because an unauthenticated public instance gets its IP       ║
+ * ║  blocked by the very engines it proxies. Brave has none of that — one    ║
+ * ║  key, 2,000 queries a month, and it runs on Vercel unchanged.            ║
+ * ║                                                                          ║
+ * ║  ⚠️ 2,000/MONTH IS ~66/DAY. Each Hubble question spends 3-4 of them, so  ║
+ * ║  that is roughly 15-20 questions a day before the tier is exhausted.     ║
+ * ║  The cache is what makes that workable: a repeat question costs zero,    ║
+ * ║  and company research is shared across every lead at that company.       ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export class BraveSearchProvider implements SearchProvider {
+  readonly name = 'brave'
+
+  private get apiKey(): string | null {
+    return process.env.BRAVE_API_KEY?.trim() || null
+  }
+
+  isConfigured(): boolean {
+    return this.apiKey !== null
+  }
+
+  async search(query: string, limit: number): Promise<SearchHit[]> {
+    const apiKey = this.apiKey
+    if (!apiKey) return []
+
+    const url = new URL('https://api.search.brave.com/res/v1/web/search')
+    url.searchParams.set('q', query.slice(0, 400))
+    // Brave caps at 20; asking for more is an error, not a bigger page.
+    url.searchParams.set('count', String(Math.min(Math.max(limit, 1), 20)))
+    url.searchParams.set('result_filter', 'web')
+    url.searchParams.set('safesearch', 'off')
+
+    // One request per second on the free tier; exceeding it returns 429.
+    setHostPacing('api.search.brave.com', 1_100)
+
+    try {
+      const payload = await requestJson<{
+        web?: { results?: Array<{ url?: string; title?: string; description?: string; age?: string }> }
+      }>({
+        url: url.toString(),
+        headers: {
+          accept: 'application/json',
+          'accept-encoding': 'gzip',
+          'x-subscription-token': apiKey,
+        },
+      })
+
+      return (payload.web?.results ?? [])
+        .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
+        .slice(0, limit)
+        .map((result) => ({
+          url: result.url,
+          title: result.title?.trim() || null,
+          // Brave's description is a snippet, and may carry HTML emphasis tags.
+          snippet: result.description?.replace(/<[^>]+>/g, '').trim() || null,
+          publishedDate: result.age ?? null,
+        }))
+    } catch {
+      // Never throws: a search engine being down lowers confidence, it does
+      // not turn the user's question into a 500.
+      return []
+    }
+  }
+}
+
 /** Tavily, adapted to the same interface. Already configured in this project. */
 export class TavilySearchProvider implements SearchProvider {
   readonly name = 'tavily'
@@ -156,8 +228,16 @@ export class SearchWaterfall implements SearchProvider {
   readonly name = 'waterfall'
 
   constructor(
+    /*
+     * ⚠️ ORDER IS COST, CHEAPEST FIRST.
+     *
+     * SearXNG is unmetered when someone has deployed one. Brave is free to
+     * 2,000/month. Tavily is paid. Standing up SearXNG later demotes Brave
+     * automatically, and neither needs a code change — only an env var.
+     */
     private readonly providers: readonly SearchProvider[] = [
       new SearxngSearchProvider(),
+      new BraveSearchProvider(),
       new TavilySearchProvider(),
     ],
   ) {}

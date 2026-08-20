@@ -287,3 +287,39 @@ describe('SearXNG auth', () => {
 
   afterAll(() => reset('http://127.0.0.1:8080'))
 })
+
+describe('BraveSearchProvider', () => {
+  it('is not configured without a key', async () => {
+    const { BraveSearchProvider } = await import('@/lib/hubble/providers/search')
+    const previous = process.env.BRAVE_API_KEY
+    delete process.env.BRAVE_API_KEY
+
+    const provider = new BraveSearchProvider()
+    expect(provider.isConfigured()).toBe(false)
+    // Empty array, never a throw: a dead search engine lowers confidence, it
+    // does not turn the user's question into a 500.
+    await expect(provider.search('anything', 5)).resolves.toEqual([])
+
+    if (previous) process.env.BRAVE_API_KEY = previous
+  })
+})
+
+describe('the search waterfall is ordered by cost', () => {
+  it('prefers unmetered SearXNG, then free Brave, then paid Tavily', async () => {
+    /*
+     * ⚠️ Standing up a SearXNG instance later must demote Brave automatically,
+     * and adding Brave must not displace an existing SearXNG. Neither should
+     * need a code change — only an environment variable.
+     */
+    const source = await import('node:fs/promises').then((fs) =>
+      fs.readFile('lib/hubble/providers/search.ts', 'utf8'),
+    )
+
+    const order = ['SearxngSearchProvider()', 'BraveSearchProvider()', 'TavilySearchProvider()']
+      .map((name) => source.lastIndexOf(name))
+
+    expect(order[0]).toBeGreaterThan(-1)
+    expect(order[1]).toBeGreaterThan(order[0]!)
+    expect(order[2]).toBeGreaterThan(order[1]!)
+  })
+})

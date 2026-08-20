@@ -2,6 +2,12 @@
 
 Free web search for Ask Hubble, replacing metered Tavily calls.
 
+> **You may not need this.** `BraveSearchProvider` gives 2,000 searches a month
+> on one API key with nothing to deploy, and the waterfall already prefers
+> SearXNG whenever `SEARXNG_URL` is set. Host this when Brave's free tier stops
+> being enough — roughly 15-20 Hubble questions a day — not before. A server
+> you operate is a real cost even when the software is free.
+
 ## Why it is behind an auth proxy
 
 SearXNG has **no authentication of its own**. A public instance is a free
