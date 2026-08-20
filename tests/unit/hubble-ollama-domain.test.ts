@@ -305,21 +305,74 @@ describe('BraveSearchProvider', () => {
 })
 
 describe('the search waterfall is ordered by cost', () => {
-  it('prefers unmetered SearXNG, then free Brave, then paid Tavily', async () => {
+  it('goes unmetered → free-no-card → free-with-card → paid', async () => {
     /*
-     * ⚠️ Standing up a SearXNG instance later must demote Brave automatically,
-     * and adding Brave must not displace an existing SearXNG. Neither should
-     * need a code change — only an environment variable.
+     * ⚠️ GETTING THIS BACKWARDS SPENDS MONEY WHILE A FREE PROVIDER SITS IDLE.
+     *
+     * Brave sits below Google CSE deliberately: its free tier requires a card
+     * on file, which is not free in the way that matters to someone choosing
+     * a provider. Deploying SearXNG later must demote all of them, and none
+     * of it should need a code change — only an environment variable.
      */
     const source = await import('node:fs/promises').then((fs) =>
       fs.readFile('lib/hubble/providers/search.ts', 'utf8'),
     )
 
-    const order = ['SearxngSearchProvider()', 'BraveSearchProvider()', 'TavilySearchProvider()']
-      .map((name) => source.lastIndexOf(name))
+    const order = [
+      'SearxngSearchProvider()',
+      'GoogleCseSearchProvider()',
+      'BraveSearchProvider()',
+      'TavilySearchProvider()',
+    ].map((name) => source.lastIndexOf(name))
 
     expect(order[0]).toBeGreaterThan(-1)
-    expect(order[1]).toBeGreaterThan(order[0]!)
-    expect(order[2]).toBeGreaterThan(order[1]!)
+    for (let i = 1; i < order.length; i += 1) {
+      expect(order[i]).toBeGreaterThan(order[i - 1]!)
+    }
+  })
+})
+
+describe('GoogleCseSearchProvider', () => {
+  it('needs BOTH a key and an engine id', async () => {
+    /*
+     * ⚠️ A key without a `cx` can only ever return 400s. Counting it as
+     * configured would spend a waterfall slot on a provider guaranteed to
+     * fail, ahead of ones that would have worked.
+     */
+    const { GoogleCseSearchProvider } = await import('@/lib/hubble/providers/search')
+    const prevKey = process.env.GOOGLE_CSE_API_KEY
+    const prevMaps = process.env.GOOGLE_MAPS_API_KEY
+    const prevId = process.env.GOOGLE_CSE_ID
+
+    process.env.GOOGLE_CSE_API_KEY = 'key'
+    delete process.env.GOOGLE_CSE_ID
+    expect(new GoogleCseSearchProvider().isConfigured()).toBe(false)
+
+    process.env.GOOGLE_CSE_ID = 'engine'
+    expect(new GoogleCseSearchProvider().isConfigured()).toBe(true)
+
+    delete process.env.GOOGLE_CSE_API_KEY
+    delete process.env.GOOGLE_MAPS_API_KEY
+    expect(new GoogleCseSearchProvider().isConfigured()).toBe(false)
+
+    if (prevKey) process.env.GOOGLE_CSE_API_KEY = prevKey
+    else delete process.env.GOOGLE_CSE_API_KEY
+    if (prevMaps) process.env.GOOGLE_MAPS_API_KEY = prevMaps
+    if (prevId) process.env.GOOGLE_CSE_ID = prevId
+    else delete process.env.GOOGLE_CSE_ID
+  })
+
+  it('reuses the Maps key when no dedicated key is set', async () => {
+    // Same Google Cloud project; one key can serve both APIs.
+    const { GoogleCseSearchProvider } = await import('@/lib/hubble/providers/search')
+    const prevKey = process.env.GOOGLE_CSE_API_KEY
+    delete process.env.GOOGLE_CSE_API_KEY
+    process.env.GOOGLE_MAPS_API_KEY = 'maps-key'
+    process.env.GOOGLE_CSE_ID = 'engine'
+
+    expect(new GoogleCseSearchProvider().isConfigured()).toBe(true)
+
+    if (prevKey) process.env.GOOGLE_CSE_API_KEY = prevKey
+    delete process.env.GOOGLE_CSE_ID
   })
 })

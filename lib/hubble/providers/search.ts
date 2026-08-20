@@ -120,6 +120,88 @@ export class SearxngSearchProvider implements SearchProvider {
 }
 
 /**
+ * Google Programmable Search — free, no card, and it reuses a project you have.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  THE ONLY GENUINELY FREE OPTION THAT NEEDS NO SERVER AND NO CARD.        ║
+ * ║                                                                          ║
+ * ║  Brave's "free" tier requires a card on file. SearXNG is free but is a   ║
+ * ║  server you must deploy and defend. Google's Custom Search JSON API is   ║
+ * ║  100 queries a day at no cost, no billing account, and it runs on        ║
+ * ║  Vercel unchanged.                                                       ║
+ * ║                                                                          ║
+ * ║  ⚠️ 100/DAY IS THE REAL CONSTRAINT. A Hubble question spends 3-4         ║
+ * ║  searches, so that is roughly 25-30 questions a day. Enough to build     ║
+ * ║  and demo on; NOT enough for customer load. The cache is what stretches  ║
+ * ║  it — a repeat question costs zero searches, and research is shared      ║
+ * ║  across every lead at the same company.                                  ║
+ * ║                                                                          ║
+ * ║  Two settings, both free: enable the Custom Search API on the project,   ║
+ * ║  and create a search engine set to search the entire web. A `cx` scoped  ║
+ * ║  to specific sites returns almost nothing and looks like a broken key.   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export class GoogleCseSearchProvider implements SearchProvider {
+  readonly name = 'google-cse'
+
+  /** Falls back to the Maps key: same project, and one key can serve both. */
+  private get apiKey(): string | null {
+    return process.env.GOOGLE_CSE_API_KEY?.trim() || process.env.GOOGLE_MAPS_API_KEY?.trim() || null
+  }
+
+  private get engineId(): string | null {
+    return process.env.GOOGLE_CSE_ID?.trim() || null
+  }
+
+  isConfigured(): boolean {
+    // ⚠️ BOTH are required. A key without an engine id is not a usable
+    // configuration, and treating it as one would spend a waterfall slot on a
+    // provider that can only ever return 400s.
+    return this.apiKey !== null && this.engineId !== null
+  }
+
+  async search(query: string, limit: number): Promise<SearchHit[]> {
+    const apiKey = this.apiKey
+    const engineId = this.engineId
+    if (!apiKey || !engineId) return []
+
+    const url = new URL('https://www.googleapis.com/customsearch/v1')
+    url.searchParams.set('key', apiKey)
+    url.searchParams.set('cx', engineId)
+    url.searchParams.set('q', query.slice(0, 400))
+    // Google caps `num` at 10 and errors above it.
+    url.searchParams.set('num', String(Math.min(Math.max(limit, 1), 10)))
+
+    setHostPacing('www.googleapis.com', 300)
+
+    try {
+      const payload = await requestJson<{
+        items?: Array<{ link?: string; title?: string; snippet?: string }>
+      }>({ url: url.toString(), headers: { accept: 'application/json' } })
+
+      return (payload.items ?? [])
+        .filter((item): item is { link: string } & typeof item => typeof item.link === 'string')
+        .slice(0, limit)
+        .map((item) => ({
+          url: item.link,
+          title: item.title?.trim() || null,
+          snippet: item.snippet?.trim() || null,
+          // Google's JSON API does not return a publication date.
+          publishedDate: null,
+        }))
+    } catch {
+      /*
+       * Includes the daily quota being spent, which returns 429. Silence is
+       * correct here — the waterfall moves on — but it is also why the quota
+       * note above matters: an exhausted tier looks exactly like a company
+       * nobody has written about.
+       */
+      return []
+    }
+  }
+}
+
+/**
  * Brave Search — a real search index, on a free tier, with nothing to host.
  *
  * ╔══════════════════════════════════════════════════════════════════════════╗
@@ -231,12 +313,14 @@ export class SearchWaterfall implements SearchProvider {
     /*
      * ⚠️ ORDER IS COST, CHEAPEST FIRST.
      *
-     * SearXNG is unmetered when someone has deployed one. Brave is free to
-     * 2,000/month. Tavily is paid. Standing up SearXNG later demotes Brave
-     * automatically, and neither needs a code change — only an env var.
+     * SearXNG is unmetered when someone has deployed one. Google CSE is free
+     * with no card. Brave is free only with a card on file. Tavily is paid.
+     * Standing up SearXNG later demotes the rest automatically, and none of
+     * it needs a code change — only an env var.
      */
     private readonly providers: readonly SearchProvider[] = [
       new SearxngSearchProvider(),
+      new GoogleCseSearchProvider(),
       new BraveSearchProvider(),
       new TavilySearchProvider(),
     ],
