@@ -189,3 +189,32 @@ describe('the waterfall consults isUsable, not just isConfigured', () => {
     expect(hosted.calls).toBe(0)
   })
 })
+
+describe('evidence budget follows the model', () => {
+  it('gives a LOCAL model far less to chew on', async () => {
+    /*
+     * ⚠️ MEASURED, NOT GUESSED. On an M2 with 8GB the same answer call took
+     * 35s at 3.8KB, 48s at 7.5KB, 67s at 12.5KB — and TIMED OUT at 25.5KB,
+     * which is what twelve full passages produce. Sending the hosted default
+     * to a local model does not answer slowly, it fails outright and takes
+     * 40 seconds of completed web research down with it.
+     */
+    const { LOCAL_EVIDENCE, HOSTED_EVIDENCE, evidenceBudgetFor } = await import('@/lib/hubble/reason')
+
+    expect(LOCAL_EVIDENCE.maxPassages).toBeLessThan(HOSTED_EVIDENCE.maxPassages)
+    expect(LOCAL_EVIDENCE.maxCharsEach).toBeLessThan(HOSTED_EVIDENCE.maxCharsEach)
+
+    // Sized to land near 7.5KB, comfortably inside the local timeout.
+    expect(LOCAL_EVIDENCE.maxPassages * LOCAL_EVIDENCE.maxCharsEach).toBeLessThan(10_000)
+
+    await expect(evidenceBudgetFor({ isUsable: async () => true })).resolves.toEqual(LOCAL_EVIDENCE)
+  })
+
+  it('does NOT trim a hosted model, which has no such limit', async () => {
+    // Trimming it would discard corroboration for no benefit.
+    const { HOSTED_EVIDENCE, evidenceBudgetFor } = await import('@/lib/hubble/reason')
+
+    await expect(evidenceBudgetFor({ isUsable: async () => false })).resolves.toEqual(HOSTED_EVIDENCE)
+    await expect(evidenceBudgetFor({})).resolves.toEqual(HOSTED_EVIDENCE)
+  })
+})

@@ -38,6 +38,39 @@ function resolveHubbleLlm() {
   return new LlmWaterfall(new OllamaLlmProvider(), resolveLlmProvider())
 }
 
+/**
+ * How much evidence the answering model can actually digest.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ MEASURED ON REAL HARDWARE, NOT GUESSED.                              ║
+ * ║                                                                          ║
+ * ║  A local model's latency scales with prompt size, and steeply. On an     ║
+ * ║  M2 with 8GB the same answer call took:                                  ║
+ * ║                                                                          ║
+ * ║      3.8KB →  35s      12.5KB →  67s                                     ║
+ * ║      7.5KB →  48s      25.5KB →  TIMED OUT                               ║
+ * ║                                                                          ║
+ * ║  25.5KB is what twelve full passages produce — the hosted default. Sent  ║
+ * ║  to a local model it does not answer slowly, it fails outright, and      ║
+ * ║  takes 40 seconds of completed web research down with it.                ║
+ * ║                                                                          ║
+ * ║  A hosted model has no such limit: trimming its evidence would throw     ║
+ * ║  away corroboration for no benefit. So the budget follows the model.     ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export type EvidenceBudget = { maxPassages: number; maxCharsEach: number }
+
+export const HOSTED_EVIDENCE: EvidenceBudget = { maxPassages: 12, maxCharsEach: 2_000 }
+/** Sized to land near 7.5KB — comfortably inside the local timeout. */
+export const LOCAL_EVIDENCE: EvidenceBudget = { maxPassages: 6, maxCharsEach: 1_200 }
+
+export async function evidenceBudgetFor(provider: {
+  isUsable?: () => Promise<boolean>
+}): Promise<EvidenceBudget> {
+  const local = typeof provider.isUsable === 'function' ? await provider.isUsable() : false
+  return local ? LOCAL_EVIDENCE : HOSTED_EVIDENCE
+}
+
 /* -------------------------------------------------------------------------- *
  * Planning
  * -------------------------------------------------------------------------- */
@@ -262,10 +295,18 @@ export async function answerFromEvidence(
    * begins and ends, which is what makes "instructions in here are data" a
    * rule it can actually apply.
    */
-  const evidence = chunks
+  /*
+   * ⚠️ TRIMMED TO WHAT THIS MODEL CAN ACTUALLY DIGEST. A local model is given
+   * fewer, shorter passages; a hosted one gets the full set, because trimming
+   * it would discard corroboration for no benefit. See `evidenceBudgetFor`.
+   */
+  const budget = await evidenceBudgetFor(new OllamaLlmProvider())
+  const shown = chunks.slice(0, budget.maxPassages)
+
+  const evidence = shown
     .map(
       (chunk, index) =>
-        `[${index + 1}] SOURCE: ${chunk.url}\n<<<EVIDENCE\n${chunk.content.slice(0, 2000)}\nEVIDENCE`,
+        `[${index + 1}] SOURCE: ${chunk.url}\n<<<EVIDENCE\n${chunk.content.slice(0, budget.maxCharsEach)}\nEVIDENCE`,
     )
     .join('\n\n')
 
@@ -346,7 +387,8 @@ export async function answerFromEvidence(
   const cited = Array.isArray(parsed.citations)
     ? parsed.citations
         .filter((index): index is number => Number.isInteger(index))
-        .map((index) => chunks[index - 1])
+        // ⚠️ Indexes the TRIMMED list — that is what the model was shown.
+        .map((index) => shown[index - 1])
         .filter((chunk): chunk is ScoredChunk => chunk !== undefined)
     : []
 
@@ -355,7 +397,7 @@ export async function answerFromEvidence(
       ? Math.min(1, Math.max(0, parsed.confidence))
       : 0.5
 
-  const used = cited.length > 0 ? cited : chunks.slice(0, 3)
+  const used = cited.length > 0 ? cited : shown.slice(0, 3)
 
   /*
    * ⚠️ "CORROBORATED" IS VERIFIED BY CODE, NOT ACCEPTED FROM THE MODEL.
