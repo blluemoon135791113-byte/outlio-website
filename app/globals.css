@@ -994,3 +994,52 @@ details[open] .faq-mark {
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Ask Hubble — the "researching" shimmer.
+ *
+ * ⚠️ A LOADING STATE, NOT AN ENTRANCE ANIMATION. CLAUDE.md forbids entrance
+ * animation on product surfaces and caps motion at 150ms; both rules are about
+ * content arriving. This is the opposite case: a question takes 40-90 seconds
+ * of real network work, and a static grey bar for that long reads as frozen.
+ * The movement is the only signal that anything is still happening.
+ * ------------------------------------------------------------------------- */
+
+@keyframes hubble-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.hubble-shimmer {
+  /* Sweeps a lighter band across the sunken bar. Tokens only — no hex. */
+  background-image: linear-gradient(
+    90deg,
+    var(--color-clay-bg) 0%,
+    var(--color-clay-surface) 40%,
+    var(--color-clay-surface) 60%,
+    var(--color-clay-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: hubble-shimmer 1.8s linear infinite;
+}
+
+/* Staggered so the three bars read as one sweep rather than three blinks. */
+.hubble-shimmer:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.hubble-shimmer:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Still visibly "busy", but without the sweep. */
+  .hubble-shimmer {
+    animation: none;
+    background-image: none;
+    background-color: var(--color-clay-bg);
+  }
+}

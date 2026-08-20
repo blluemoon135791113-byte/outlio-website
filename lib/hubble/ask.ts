@@ -46,6 +46,23 @@ export type AskSubject = {
   known: string
 }
 
+/**
+ * What Hubble is doing right now.
+ *
+ * ⚠️ REAL PHASES, REPORTED AS THEY HAPPEN — never a timer pretending to be
+ * progress. A question takes 40-90 seconds of genuine network work; the user
+ * is owed the truth about which part is slow, and a fake sequence would
+ * eventually claim "reading 4 pages" when nothing was fetched at all.
+ */
+export type AskPhase =
+  | { phase: 'cache' }
+  | { phase: 'planning' }
+  | { phase: 'searching'; query: string; index: number; total: number }
+  | { phase: 'reading'; count: number }
+  | { phase: 'thinking'; passages: number }
+
+export type AskProgress = (update: AskPhase) => void
+
 export type AskResult = {
   answer: string
   status: AnswerStatus
@@ -105,12 +122,14 @@ export async function askHubble(
   subject: AskSubject,
   question: string,
   budget: ResearchBudget = DEFAULT_BUDGET,
+  onProgress: AskProgress = () => {},
 ): Promise<AskResult> {
   const started = Date.now()
   const usage = emptyUsage()
   const deadline = started + budget.maxTotalMs
 
   /* ---- 1. Cache. Before anything else, always. ------------------------- */
+  onProgress({ phase: 'cache' })
   const cached = await findCachedAnswer(userId, subject.companyId, question)
   if (cached) {
     usage.cacheHits = 1
@@ -152,6 +171,7 @@ export async function askHubble(
   const domain = resolved?.domain ?? null
 
   /* ---- 3. Plan. ------------------------------------------------------- */
+  onProgress({ phase: 'planning' })
   const { plan, llmCalls } = await planResearch(
     question,
     {
@@ -188,8 +208,9 @@ export async function askHubble(
       ? [siteScopedQuery(question, domain), ...plan.queries].slice(0, budget.maxQueriesPerRound + 1)
       : plan.queries
 
-    for (const query of queries) {
+    for (const [index, query] of queries.entries()) {
       if (Date.now() > deadline) break
+      onProgress({ phase: 'searching', query, index: index + 1, total: queries.length })
       const hits = await search.search(query, 6)
       usage.searches += 1
       candidates.push(...hits)
@@ -204,6 +225,8 @@ export async function askHubble(
       toFetch.push(hit.url)
       if (toFetch.length >= budget.maxPagesFetched) break
     }
+
+    if (toFetch.length > 0) onProgress({ phase: 'reading', count: toFetch.length })
 
     const fetched = await pooled(toFetch, budget.concurrency, async (url) => {
       if (Date.now() > deadline) return null
@@ -268,6 +291,7 @@ export async function askHubble(
   const evidence = diversify(ranked, 3, budget.maxChunksToModel)
 
   /* ---- 6. Answer. ----------------------------------------------------- */
+  onProgress({ phase: 'thinking', passages: evidence.length })
   const { answer, llmCalls: answerCalls } = await answerFromEvidence(
     question,
     evidence,

@@ -128,19 +128,63 @@ export async function POST(request: NextRequest) {
     known,
   }
 
-  try {
-    const result = await askHubble(userId, subject, body.question)
+  /*
+   * ╔══════════════════════════════════════════════════════════════════════════╗
+   * ║  STREAMED AS NDJSON, ONE OBJECT PER LINE.                                ║
+   * ║                                                                          ║
+   * ║  ⚠️ THE POINT IS HONESTY, NOT DECORATION. A question takes 40-90 seconds ║
+   * ║  of real network work, and a single silent POST for that long is         ║
+   * ║  indistinguishable from a hang. The phases below are emitted as they     ║
+   * ║  actually occur — never a timer pretending to be progress, which would   ║
+   * ║  eventually claim "reading 4 pages" when nothing was fetched.            ║
+   * ║                                                                          ║
+   * ║  NDJSON rather than SSE: the client only needs to read lines, and the    ║
+   * ║  final line is the same object the non-streaming version returned.       ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  const encoder = new TextEncoder()
 
-    return NextResponse.json({
-      answer: result.answer,
-      status: result.status,
-      confidence: result.confidence,
-      sources: result.sources,
-      usage: result.usage,
-      fromCache: result.fromCache,
-    })
-  } catch {
-    // Never leak a stack, a query, or a storage path to the client.
-    return NextResponse.json({ error: 'RESEARCH_FAILED' }, { status: 500 })
-  }
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (value: unknown) => {
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(value)}\n`))
+        } catch {
+          // The client disconnected; the research below still completes and is
+          // still cached, so the work is not wasted.
+        }
+      }
+
+      try {
+        const result = await askHubble(userId, subject, body.question, undefined, (update) =>
+          send({ type: 'progress', ...update }),
+        )
+
+        send({
+          type: 'answer',
+          answer: result.answer,
+          status: result.status,
+          confidence: result.confidence,
+          sources: result.sources,
+          usage: result.usage,
+          fromCache: result.fromCache,
+        })
+      } catch {
+        // Never leak a stack, a query, or a storage path to the client.
+        send({ type: 'error', error: 'RESEARCH_FAILED' })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'content-type': 'application/x-ndjson; charset=utf-8',
+      'cache-control': 'no-store, no-transform',
+      // Without this some proxies buffer the whole response and the streaming
+      // is invisible — the exact problem this exists to solve.
+      'x-accel-buffering': 'no',
+    },
+  })
 }

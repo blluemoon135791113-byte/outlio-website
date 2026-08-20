@@ -29,6 +29,7 @@ import {
   STATUS_LABEL,
   useAskHubble,
   type AskAnswer,
+  type Phase,
 } from '@/components/intelligence/useAskHubble'
 
 function safeExternalUrl(value: string | null): string | null {
@@ -176,7 +177,7 @@ export function LeadModal({
                 <AnswerBlock key={`${answer.question}-${index}`} answer={answer} />
               ))}
 
-              {busy ? <ResearchingSkeleton /> : null}
+              {busy ? <ResearchingSkeleton phase={hubble.phase} /> : null}
 
               {hubble.error ? (
                 <p role="alert" className="text-sm text-danger">
@@ -227,14 +228,42 @@ export function LeadModal({
   )
 }
 
-/** Three bars while research runs. No entrance animation — CLAUDE.md. */
-function ResearchingSkeleton() {
+/**
+ * The waiting state.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ A STATIC BAR FOR 40-90 SECONDS READS AS FROZEN.                      ║
+ * ║                                                                          ║
+ * ║  CLAUDE.md forbids entrance animation and caps motion at 150ms — both    ║
+ * ║  rules are about content ARRIVING. This is the opposite case: real       ║
+ * ║  network work is happening for a long time, and movement is the only     ║
+ * ║  signal that the thing has not hung.                                     ║
+ * ║                                                                          ║
+ * ║  The phase label is the substance, though. It comes from actual server   ║
+ * ║  events, so it says "Reading 4 pages" only when four pages are genuinely ║
+ * ║  being fetched. A timer faking the same sequence would eventually lie,   ║
+ * ║  and a user cannot tell a slow question from a dishonest one.            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function ResearchingSkeleton({ phase }: { phase: Phase | null }) {
   return (
-    <div role="status" className="space-y-1.5">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <span key={index} className="block h-2.5 rounded-full bg-clay-bg" />
-      ))}
-      <span className="sr-only">Researching this lead</span>
+    <div role="status" aria-live="polite">
+      {phase ? (
+        <p className="mb-2 flex items-center gap-2 text-xs text-muted">
+          <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal" />
+          <span className="font-medium text-ink">{phase.label}</span>
+          {phase.detail ? <span className="truncate">· {phase.detail}</span> : null}
+        </p>
+      ) : null}
+
+      <div className="space-y-1.5">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <span key={index} className="hubble-shimmer block h-2.5 rounded-full" />
+        ))}
+      </div>
+
+      {/* The visual bars mean nothing to a screen reader; the label does. */}
+      <span className="sr-only">{phase?.label ?? 'Researching this lead'}</span>
     </div>
   )
 }

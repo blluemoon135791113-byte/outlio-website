@@ -43,10 +43,48 @@ export type AskAnswer = {
   } | null
 }
 
+/** What Hubble is doing right now, in words a salesperson can read. */
+export type Phase = { label: string; detail: string | null }
+
+/**
+ * ⚠️ DERIVED FROM REAL SERVER EVENTS, never a timer.
+ *
+ * A fake sequence would eventually claim "reading 4 pages" during a question
+ * where nothing was fetched — which is worse than no progress at all, because
+ * the user cannot tell a slow question from a lying one.
+ */
+function toPhase(event: Record<string, unknown>): Phase | null {
+  switch (event.phase) {
+    case 'cache':
+      return { label: 'Checking what I already know', detail: null }
+    case 'planning':
+      return { label: 'Working out what to research', detail: null }
+    case 'searching':
+      return {
+        label: `Searching the web (${event.index as number}/${event.total as number})`,
+        detail: typeof event.query === 'string' ? event.query : null,
+      }
+    case 'reading': {
+      const count = event.count as number
+      return { label: `Reading ${count} page${count === 1 ? '' : 's'}`, detail: null }
+    }
+    case 'thinking': {
+      const passages = event.passages as number
+      return {
+        label: 'Writing the answer',
+        detail: passages > 0 ? `from ${passages} relevant passage${passages === 1 ? '' : 's'}` : null,
+      }
+    }
+    default:
+      return null
+  }
+}
+
 export function useAskHubble() {
   const [answers, setAnswers] = useState<AskAnswer[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [phase, setPhase] = useState<Phase | null>(null)
 
   /*
    * A request that outlives its modal would set state on a component that is
@@ -66,6 +104,7 @@ export function useAskHubble() {
 
     setBusy(true)
     setError(null)
+    setPhase({ label: 'Starting', detail: null })
 
     try {
       const response = await fetch('/api/hubble/ask', {
@@ -91,18 +130,70 @@ export function useAskHubble() {
         return
       }
 
-      const payload = (await response.json()) as Omit<AskAnswer, 'question'>
-      if (!alive.current) return
+      /*
+       * NDJSON: one object per line, progress events then the answer. Read
+       * incrementally so a phase appears the moment the server reaches it.
+       */
+      const reader = response.body?.getReader()
+      if (!reader) {
+        setError('Hubble returned no response.')
+        return
+      }
 
-      setAnswers((current) => [...current, { ...payload, question: asked }])
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        if (!alive.current) {
+          // Stop reading, but do NOT abort the request: the server finishes
+          // the research and caches it, so nothing is wasted.
+          void reader.cancel()
+          return
+        }
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // The last element is a partial line until the next chunk arrives.
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+
+          let event: Record<string, unknown>
+          try {
+            event = JSON.parse(line) as Record<string, unknown>
+          } catch {
+            continue
+          }
+
+          if (event.type === 'progress') {
+            const next = toPhase(event)
+            if (next) setPhase(next)
+          } else if (event.type === 'answer') {
+            const { type: _type, ...payload } = event
+            setAnswers((current) => [
+              ...current,
+              { ...(payload as Omit<AskAnswer, 'question'>), question: asked },
+            ])
+          } else if (event.type === 'error') {
+            setError('Hubble could not complete the research. Try again.')
+          }
+        }
+      }
     } catch {
       if (alive.current) setError('Could not reach Hubble. Check your connection.')
     } finally {
-      if (alive.current) setBusy(false)
+      if (alive.current) {
+        setBusy(false)
+        setPhase(null)
+      }
     }
   }, [])
 
-  return { answers, busy, error, ask }
+  return { answers, busy, error, phase, ask }
 }
 
 /**

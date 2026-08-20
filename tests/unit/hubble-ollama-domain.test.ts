@@ -376,3 +376,71 @@ describe('GoogleCseSearchProvider', () => {
     delete process.env.GOOGLE_CSE_ID
   })
 })
+
+describe('the search circuit breaker', () => {
+  it('STOPS RE-PAYING A DEAD PROVIDER\'S TIMEOUT', async () => {
+    /*
+     * ⚠️ MEASURED: a SearXNG whose container is stopped takes 3.5 SECONDS to
+     * fail, because the HTTP layer retries with backoff — right for a flaky
+     * host, wasteful for one that is gone. A question runs 3-4 queries, so
+     * that was ~14 seconds per question spent on a provider that cannot
+     * answer, before the one that can was even tried.
+     */
+    const { SearchWaterfall, resetSearchCircuitBreaker } = await import('@/lib/hubble/providers/search')
+    resetSearchCircuitBreaker()
+
+    let calls = 0
+    const dead = {
+      name: 'dead',
+      isConfigured: () => true,
+      async search() {
+        calls += 1
+        return []
+      },
+    }
+    const alive = {
+      name: 'alive',
+      isConfigured: () => true,
+      async search() {
+        return [{ url: 'https://example.com', title: null, snippet: null, publishedDate: null }]
+      },
+    }
+
+    const waterfall = new SearchWaterfall([dead, alive])
+
+    for (let i = 0; i < 4; i += 1) {
+      const hits = await waterfall.search(`query ${i}`, 5)
+      expect(hits).toHaveLength(1)
+    }
+
+    // Asked once, then skipped without a request for the remaining queries.
+    expect(calls).toBe(1)
+    resetSearchCircuitBreaker()
+  })
+
+  it('lets a recovered provider back in', async () => {
+    const { SearchWaterfall, resetSearchCircuitBreaker } = await import('@/lib/hubble/providers/search')
+    resetSearchCircuitBreaker()
+
+    let healthy = false
+    const flaky = {
+      name: 'flaky',
+      isConfigured: () => true,
+      async search() {
+        return healthy ? [{ url: 'https://ok.example', title: null, snippet: null, publishedDate: null }] : []
+      },
+    }
+
+    const waterfall = new SearchWaterfall([flaky])
+    expect(await waterfall.search('a', 5)).toHaveLength(0)
+
+    // Within the cooldown it is skipped even though it now works.
+    healthy = true
+    expect(await waterfall.search('b', 5)).toHaveLength(0)
+
+    // After a reset (as the cooldown expiry does) it is tried again.
+    resetSearchCircuitBreaker()
+    expect(await waterfall.search('c', 5)).toHaveLength(1)
+    resetSearchCircuitBreaker()
+  })
+})

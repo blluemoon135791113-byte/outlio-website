@@ -306,6 +306,42 @@ export class TavilySearchProvider implements SearchProvider {
  * Order is deliberate: the free one first. An operator who stands up SearXNG
  * stops paying Tavily without touching code.
  */
+/**
+ * When a provider last failed, so we stop paying for it repeatedly.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ A DEAD PROVIDER IS NOT FREE TO ASK. IT IS THE MOST EXPENSIVE ONE.    ║
+ * ║                                                                          ║
+ * ║  Measured: a SearXNG whose container is stopped takes 3.5 SECONDS to     ║
+ * ║  fail, because the HTTP layer retries with backoff — correct behaviour   ║
+ * ║  for a flaky host, wasteful for one that is simply gone. A question runs ║
+ * ║  3-4 queries, so that is ~14 seconds per question spent on a provider    ║
+ * ║  that cannot answer, before the one that can is even tried.              ║
+ * ║                                                                          ║
+ * ║  Module-level so the cooldown outlives a single request. Short, because  ║
+ * ║  a restarted container should be picked up again quickly, not after an   ║
+ * ║  hour of unnecessary fallback to a paid provider.                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+const FAILED_AT = new Map<string, number>()
+const COOLDOWN_MS = 60_000
+
+function isCoolingDown(name: string): boolean {
+  const failedAt = FAILED_AT.get(name)
+  if (failedAt === undefined) return false
+
+  if (Date.now() - failedAt > COOLDOWN_MS) {
+    FAILED_AT.delete(name)
+    return false
+  }
+  return true
+}
+
+/** Exported for tests; resets what is otherwise process-lifetime state. */
+export function resetSearchCircuitBreaker(): void {
+  FAILED_AT.clear()
+}
+
 export class SearchWaterfall implements SearchProvider {
   readonly name = 'waterfall'
 
@@ -334,8 +370,25 @@ export class SearchWaterfall implements SearchProvider {
   async searchWithSource(query: string, limit: number): Promise<{ hits: SearchHit[]; provider: string | null }> {
     for (const provider of this.providers) {
       if (!provider.isConfigured()) continue
+      // Skipped without a request: the point is to not pay the timeout again.
+      if (isCoolingDown(provider.name)) continue
+
       const hits = await provider.search(query, limit)
-      if (hits.length > 0) return { hits, provider: provider.name }
+
+      if (hits.length > 0) {
+        // Recovered — clear any earlier failure rather than wait out the cooldown.
+        FAILED_AT.delete(provider.name)
+        return { hits, provider: provider.name }
+      }
+
+      /*
+       * ⚠️ ZERO HITS IS TREATED AS A FAILURE, and that is a deliberate
+       * over-reach. A genuinely obscure query can return nothing from a
+       * healthy provider, and this will briefly sideline it. That costs one
+       * minute of using the next provider down; the alternative costs 3.5
+       * seconds on every query for as long as a host stays down.
+       */
+      FAILED_AT.set(provider.name, Date.now())
     }
     return { hits: [], provider: null }
   }
