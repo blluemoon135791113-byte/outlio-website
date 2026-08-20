@@ -218,3 +218,32 @@ describe('evidence budget follows the model', () => {
     await expect(evidenceBudgetFor({})).resolves.toEqual(HOSTED_EVIDENCE)
   })
 })
+
+describe('the local LLM is opt-IN, by name', () => {
+  it('is DORMANT when OLLAMA_LLM_MODEL is unset, even with a URL and a model installed', async () => {
+    /*
+     * ⚠️ THE BUG THIS PREVENTS. A hardcoded default model used to sit here and
+     * silently defeat the only way to turn Ollama off. Unsetting the variable
+     * to move to a hosted vendor left the default in force; the model was
+     * still installed, so isUsable() said true, and a question took 167
+     * SECONDS on a machine that cannot run it — instead of 5 on the hosted
+     * vendor that had been explicitly configured.
+     */
+    const prevUrl = process.env.OLLAMA_URL
+    const prevModel = process.env.OLLAMA_LLM_MODEL
+    process.env.OLLAMA_URL = 'http://127.0.0.1:11434'
+    delete process.env.OLLAMA_LLM_MODEL
+
+    const provider = new OllamaLlmProvider()
+    expect(provider.model).toBe('')
+    expect(provider.isConfigured()).toBe(false)
+    await expect(provider.isUsable()).resolves.toBe(false)
+
+    const result = await provider.generateJson({ system: 's', user: 'u', schema: {} })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.code).toBe('not_configured')
+
+    if (prevUrl) process.env.OLLAMA_URL = prevUrl
+    if (prevModel) process.env.OLLAMA_LLM_MODEL = prevModel
+  })
+})

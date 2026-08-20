@@ -24,7 +24,19 @@ import 'server-only'
  */
 import type { LlmRequest, LlmResult, LLMProvider, LlmVendor } from '@/lib/intelligence/llm/provider'
 
-const DEFAULT_MODEL = 'qwen2.5:7b-instruct'
+/**
+ * ⚠️ NO DEFAULT MODEL. THE ABSENCE OF THIS VARIABLE MEANS "DO NOT USE OLLAMA".
+ *
+ * There used to be a hardcoded fallback here, and it silently defeated the
+ * only way to turn the local model off. Unsetting OLLAMA_LLM_MODEL to move to
+ * a hosted vendor left the default in force; because the model was still
+ * installed, `isUsable()` returned true and a question took 167 SECONDS on a
+ * machine that cannot run it, instead of 5 on the hosted one that was
+ * explicitly configured.
+ *
+ * An operator removing a setting must get the behaviour they asked for. This
+ * provider is opt-IN, by name, every time.
+ */
 
 /**
  * Local inference is slow. A 7B model on CPU can take 30s+ for a long
@@ -55,7 +67,7 @@ export class OllamaLlmProvider implements LLMProvider {
   readonly vendor: LlmVendor = 'openrouter'
 
   get model(): string {
-    return process.env.OLLAMA_LLM_MODEL?.trim() || DEFAULT_MODEL
+    return process.env.OLLAMA_LLM_MODEL?.trim() ?? ''
   }
 
   private get baseUrl(): string | null {
@@ -72,7 +84,7 @@ export class OllamaLlmProvider implements LLMProvider {
   isConfigured(): boolean {
     // ⚠️ A cloud-suffixed model counts as NOT configured: falling through to
     // the hosted waterfall is honest, silently proxying to ollama.com is not.
-    return this.baseUrl !== null && isLocalModel(this.model)
+    return this.baseUrl !== null && this.model !== '' && isLocalModel(this.model)
   }
 
   private available: Promise<boolean> | null = null
@@ -94,7 +106,7 @@ export class OllamaLlmProvider implements LLMProvider {
    */
   async isUsable(): Promise<boolean> {
     const base = this.baseUrl
-    if (!base || !isLocalModel(this.model)) return false
+    if (!base || this.model === '' || !isLocalModel(this.model)) return false
 
     this.available ??= (async () => {
       try {
@@ -119,6 +131,10 @@ export class OllamaLlmProvider implements LLMProvider {
   async generateJson(request: LlmRequest): Promise<LlmResult> {
     const base = this.baseUrl
     if (!base) return { ok: false, code: 'not_configured', detail: 'OLLAMA_URL is not set' }
+
+    if (this.model === '') {
+      return { ok: false, code: 'not_configured', detail: 'OLLAMA_LLM_MODEL is not set' }
+    }
 
     if (!isLocalModel(this.model)) {
       return {
