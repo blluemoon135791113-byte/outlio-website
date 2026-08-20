@@ -41,13 +41,47 @@ export class SearxngSearchProvider implements SearchProvider {
     }
   }
 
+  private get authToken(): string | null {
+    return process.env.SEARXNG_AUTH_TOKEN?.trim() || null
+  }
+
+  /**
+   * A remote instance MUST carry a token; a loopback one need not.
+   *
+   * ╔══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ REFUSING TO CALL AN UNAUTHENTICATED PUBLIC INSTANCE IS THE POINT.    ║
+   * ║                                                                          ║
+   * ║  SearXNG has no authentication of its own. If `SEARXNG_URL` points at a  ║
+   * ║  public host and no token is set, either the instance is open to the     ║
+   * ║  world — a free search API for whoever finds it — or it will reject      ║
+   * ║  every one of our requests. Both are worth failing loudly at config      ║
+   * ║  time rather than discovering through empty results, because a search    ║
+   * ║  provider that returns nothing looks exactly like a company nobody has   ║
+   * ║  written about.                                                          ║
+   * ║                                                                          ║
+   * ║  Loopback is exempt: a developer's own container on 127.0.0.1 is not     ║
+   * ║  reachable by anyone else.                                               ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  private get isLoopback(): boolean {
+    const base = this.baseUrl
+    if (!base) return false
+    try {
+      const host = new URL(base).hostname
+      return host === '127.0.0.1' || host === 'localhost' || host === '::1'
+    } catch {
+      return false
+    }
+  }
+
   isConfigured(): boolean {
-    return this.baseUrl !== null
+    if (this.baseUrl === null) return false
+    return this.isLoopback || this.authToken !== null
   }
 
   async search(query: string, limit: number): Promise<SearchHit[]> {
     const base = this.baseUrl
-    if (!base) return []
+    if (!base || !this.isConfigured()) return []
 
     const url = new URL('/search', base)
     url.searchParams.set('q', query)
@@ -61,7 +95,10 @@ export class SearxngSearchProvider implements SearchProvider {
     try {
       const payload = await requestJson<{
         results?: Array<{ url?: string; title?: string; content?: string; publishedDate?: string }>
-      }>({ url: url.toString() })
+      }>({
+        url: url.toString(),
+        headers: this.authToken ? { authorization: `Bearer ${this.authToken}` } : undefined,
+      })
 
       return (payload.results ?? [])
         .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')

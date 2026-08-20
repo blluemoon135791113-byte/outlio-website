@@ -1,7 +1,7 @@
 /**
  * The local LLM provider, and the domain that makes search precise.
  */
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 
 import { isLocalModel, LlmWaterfall, OllamaLlmProvider } from '@/lib/hubble/providers/ollama-llm'
 import { siteScopedQuery } from '@/lib/hubble/domain'
@@ -246,4 +246,44 @@ describe('the local LLM is opt-IN, by name', () => {
     if (prevUrl) process.env.OLLAMA_URL = prevUrl
     if (prevModel) process.env.OLLAMA_LLM_MODEL = prevModel
   })
+})
+
+describe('SearXNG auth', () => {
+  const reset = (url?: string, token?: string) => {
+    if (url) process.env.SEARXNG_URL = url
+    else delete process.env.SEARXNG_URL
+    if (token) process.env.SEARXNG_AUTH_TOKEN = token
+    else delete process.env.SEARXNG_AUTH_TOKEN
+  }
+
+  it('REFUSES a public instance with no token', async () => {
+    /*
+     * ⚠️ SearXNG has no auth of its own. A public URL with no token means
+     * either an open search API for whoever finds it, or every request
+     * rejected — and a search provider returning nothing looks exactly like a
+     * company nobody has written about. Fail at config time, not silently.
+     */
+    const { SearxngSearchProvider } = await import('@/lib/hubble/providers/search')
+    reset('https://outlio-searxng.fly.dev')
+
+    const provider = new SearxngSearchProvider()
+    expect(provider.isConfigured()).toBe(false)
+    await expect(provider.search('anything', 3)).resolves.toEqual([])
+  })
+
+  it('accepts a public instance WITH a token', async () => {
+    const { SearxngSearchProvider } = await import('@/lib/hubble/providers/search')
+    reset('https://outlio-searxng.fly.dev', 'secret-token')
+
+    expect(new SearxngSearchProvider().isConfigured()).toBe(true)
+  })
+
+  it('exempts loopback — nobody else can reach a dev container', async () => {
+    const { SearxngSearchProvider } = await import('@/lib/hubble/providers/search')
+    reset('http://127.0.0.1:8080')
+
+    expect(new SearxngSearchProvider().isConfigured()).toBe(true)
+  })
+
+  afterAll(() => reset('http://127.0.0.1:8080'))
 })

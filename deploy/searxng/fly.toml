@@ -1,0 +1,27 @@
+# Fly.io. The free-ish tier comfortably runs this: SearXNG is a thin proxy
+# over other engines and needs no GPU, no disk, and very little memory.
+app = "outlio-searxng"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # ⚠️ NOT scaled to zero. A cold start adds seconds to every question, and
+  # Hubble's budget is already the tightest part of the pipeline.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
