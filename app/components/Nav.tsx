@@ -35,14 +35,8 @@ type NavCta = {
 type SurfaceConfig = {
   links: NavLink[];
   /** The agency surface alone has enough services to warrant a dropdown. */
-  servicesDropdown: boolean;
   ctas: NavCta[];
 };
-
-const SERVICES = [
-  { name: "Outbound", tagline: "Multi-channel client acquisition" },
-  { name: "Growth Accelerator", tagline: "Custom growth strategy" },
-];
 
 const SURFACES: Record<NavSurface, SurfaceConfig> = {
   /* The hub. Keeps cross-links to both products. */
@@ -53,7 +47,6 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
       { label: "Offers", href: "/#offers" },
       { label: "Motion Graphic Ads", href: "/explainers" },
     ],
-    servicesDropdown: true,
     ctas: [
       { label: "Try Outlio's Lead Engine", href: "/leadengine", primary: true },
       { label: "Book a call", href: CALENDLY_URL, external: true },
@@ -68,7 +61,6 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
       { label: "Pricing", href: "/leadengine/pricing" },
       { label: "Download the extension", href: CHROME_EXTENSION_URL, external: true },
     ],
-    servicesDropdown: false,
     ctas: [
       { label: "Start free trial", href: "/leadengine/pricing", primary: true },
       { label: "Sign In", href: "/sign-in" },
@@ -79,9 +71,7 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
   motion: {
     links: [
       { label: "Our work", href: "/explainers#work" },
-      { label: "Outbound", href: "/#services" },
     ],
-    servicesDropdown: false,
     ctas: [{ label: "Book a call", href: CALENDLY_URL, external: true, primary: true }],
   },
 };
@@ -125,50 +115,6 @@ export default function Nav({ surface = "agency" }: NavProps) {
             </Link>
           ))}
 
-          {config.servicesDropdown && (
-            <div
-              className="relative group"
-              onMouseEnter={() => setIsDropdownOpen(true)}
-              onMouseLeave={() => setIsDropdownOpen(false)}
-            >
-              <Link
-                href="/#services"
-                className="flex items-center gap-1 transition-colors hover:text-accent"
-              >
-                Services
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </Link>
-
-              {isDropdownOpen && (
-                <div className="absolute left-0 top-full pt-2">
-                  <div
-                    className="w-72 rounded-2xl border border-white/30 shadow-xl backdrop-blur-xl"
-                    style={{
-                      background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.65) 100%)',
-                      backdropFilter: 'blur(24px) saturate(180%)',
-                      WebkitBackdropFilter: 'blur(24px) saturate(180%)'
-                    }}
-                  >
-                    <div className="p-2">
-                      {SERVICES.map((service) => (
-                        <Link
-                          key={service.name}
-                          href={`/#${service.name.toLowerCase().replace(/\s+/g, '-')}`}
-                          onClick={() => setIsDropdownOpen(false)}
-                          className="block w-full text-left rounded-xl p-4 transition-all hover:bg-white/40"
-                        >
-                          <div className="font-semibold text-ink">{service.name}</div>
-                          <div className="mt-1 text-xs text-muted">{service.tagline}</div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </nav>
 
         {/* Desktop CTAs */}
@@ -242,21 +188,6 @@ export default function Nav({ surface = "agency" }: NavProps) {
                 </Link>
               ))}
 
-              {config.servicesDropdown && (
-                <div className="border-t border-ink/10 pt-4">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted">Services</p>
-                  {SERVICES.map((service) => (
-                    <Link
-                      key={service.name}
-                      href={`/#${service.name.toLowerCase().replace(/\s+/g, '-')}`}
-                      className="block py-2 text-base font-medium transition-colors hover:text-accent"
-                      onClick={closeMobile}
-                    >
-                      {service.name}
-                    </Link>
-                  ))}
-                </div>
-              )}
 
               {config.ctas.map((cta) => (
                 <Link

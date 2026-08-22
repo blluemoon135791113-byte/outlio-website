@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 
 const FOOTER_NAV = [
-  { label: "Services", href: "/#services" },
   { label: "Offers", href: "/#offers" },
   { label: "How it works", href: "/#how" },
   { label: "Results", href: "/#results" },
