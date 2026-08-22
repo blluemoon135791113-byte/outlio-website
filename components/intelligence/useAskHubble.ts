@@ -202,32 +202,3 @@ export function useAskHubble() {
 
   return { answers, busy, error, phase, ask }
 }
-
-/**
- * How a status should read to a salesperson about to act on it.
- *
- * ⚠️ `estimated` MUST LOOK DIFFERENT FROM `verified`. Someone is about to put
- * this in an email. A guess presented like a fact is the failure this whole
- * layer exists to prevent (CLAUDE.md rule 4).
- */
-export const STATUS_LABEL: Record<AnswerStatus, string> = {
-  verified: 'Verified',
-  corroborated: 'Corroborated',
-  estimated: 'Estimated',
-  unknown: 'Not found',
-}
-
-export const STATUS_HINT: Record<AnswerStatus, string> = {
-  verified: 'A source states this directly.',
-  corroborated: 'Two independent sources agree.',
-  estimated: 'Inferred, not stated. Treat as a working assumption.',
-  unknown: 'Research ran and could not confirm this.',
-}
-
-/** Token classes only — no hardcoded colours anywhere in the product. */
-export const STATUS_CLASS: Record<AnswerStatus, string> = {
-  verified: 'bg-success-soft text-success',
-  corroborated: 'bg-success-soft text-success',
-  estimated: 'bg-warning-soft text-warning',
-  unknown: 'bg-surface-muted text-muted',
-}

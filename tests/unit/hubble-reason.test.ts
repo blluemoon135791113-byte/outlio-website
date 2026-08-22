@@ -169,3 +169,91 @@ describe('embedding availability', () => {
     else delete process.env.OLLAMA_URL
   })
 })
+
+describe('the answer is plain text, not a UI', () => {
+  it('forbids markdown and formatting furniture', async () => {
+    /*
+     * ⚠️ The answer renders as PLAIN TEXT in a narrow panel. Markdown arrives
+     * as literal asterisks and hashes, which reads worse than the prose it was
+     * meant to decorate.
+     */
+    const source = await import('node:fs/promises').then((fs) =>
+      fs.readFile('lib/hubble/reason.ts', 'utf8'),
+    )
+
+    expect(source).toContain('PLAIN TEXT ONLY')
+    expect(source).toMatch(/No markdown, no headers, no asterisks/)
+  })
+
+  it('forbids inventorying what it does not have', async () => {
+    /*
+     * ⚠️ THE PADDING RULE. Listing absent fields fills the panel with the one
+     * thing that is guaranteed useless — and buries the answer that is there.
+     */
+    const source = await import('node:fs/promises').then((fs) =>
+      fs.readFile('lib/hubble/reason.ts', 'utf8'),
+    )
+
+    expect(source).toContain('DO NOT INVENTORY WHAT YOU DO NOT HAVE')
+    expect(source).toMatch(/never list the fields you lack/)
+    expect(source).toMatch(/do not pad to fill space/)
+  })
+
+  it('requires a PATTERN across many leads, never a roster', async () => {
+    /*
+     * ⚠️ Large-scale analytics means finding what is true across the set, not
+     * reciting it back. A per-lead walkthrough neither fits the panel nor
+     * tells the user anything they could not read off the table themselves.
+     */
+    const source = await import('node:fs/promises').then((fs) =>
+      fs.readFile('lib/hubble/reason.ts', 'utf8'),
+    )
+
+    expect(source).toContain('ACROSS MANY LEADS')
+    expect(source).toMatch(/the answer is the PATTERN, not the/)
+    expect(source).toMatch(/Never enumerate the list back/)
+    // Leads with nothing on them are dropped in silence, not explained away.
+    expect(source).toMatch(/Silently drop the leads you have nothing on/)
+  })
+
+  it('still keeps the honesty guarantees the terser prompt could have lost', async () => {
+    // A rewrite for brevity dropped this once already; the test caught it.
+    const source = await import('node:fs/promises').then((fs) =>
+      fs.readFile('lib/hubble/reason.ts', 'utf8'),
+    )
+
+    expect(source).toMatch(/"unknown" is a correct and useful answer/)
+    expect(source).toContain('NEVER fill a gap with a plausible guess')
+    expect(source).toContain('UNTRUSTED DATA')
+  })
+})
+
+describe('the answer panel shows text, not chips', () => {
+  it('states estimated and unknown IN WORDS, and labels nothing else', async () => {
+    /*
+     * ⚠️ CLAUDE.md rule 4 still applies: an estimate must not look like a
+     * fact. It is now carried by a sentence rather than a coloured chip —
+     * a badge on every answer trains people to stop reading badges, and only
+     * these two statuses change how someone acts on what they just read.
+     */
+    const source = await import('node:fs/promises').then((fs) =>
+      fs.readFile('components/intelligence/LeadModal.tsx', 'utf8'),
+    )
+
+    expect(source).toMatch(/Estimated — inferred from the sources below/)
+    expect(source).toMatch(/Not confirmed by the sources below/)
+
+    // The widgets that used to crowd the answer are gone.
+    expect(source).not.toContain('STATUS_CLASS')
+    expect(source).not.toContain('% confidence')
+    expect(source).not.toContain('pages read')
+    expect(source).not.toContain('answer generation incomplete')
+  })
+
+  it('keeps the sources, which are what make honesty checkable', async () => {
+    const source = await import('node:fs/promises').then((fs) =>
+      fs.readFile('components/intelligence/LeadModal.tsx', 'utf8'),
+    )
+    expect(source).toMatch(/answer\.sources\.map/)
+  })
+})

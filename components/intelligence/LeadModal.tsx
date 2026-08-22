@@ -24,9 +24,6 @@ import { useEffect, useRef, useState } from 'react'
 import { CompanyAvatar, PersonAvatar } from '@/components/intelligence/Avatar'
 import type { HubbleLead } from '@/components/intelligence/HubbleLeadList'
 import {
-  STATUS_CLASS,
-  STATUS_HINT,
-  STATUS_LABEL,
   useAskHubble,
   type AskAnswer,
   type Phase,
@@ -282,59 +279,50 @@ function ResearchingSkeleton({ phase }: { phase: Phase | null }) {
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 function AnswerBlock({ answer }: { answer: AskAnswer }) {
+  /*
+   * ⚠️ ONLY SHOWN WHEN IT CHANGES WHAT THE USER SHOULD DO.
+   *
+   * `verified` and `corroborated` need no label — the sources below say it,
+   * and a green chip on every answer trains people to stop reading chips.
+   * `estimated` and `unknown` DO change how someone acts on the sentence they
+   * just read, so they are stated in words (CLAUDE.md rule 4).
+   */
+  const caveat =
+    answer.status === 'estimated'
+      ? 'Estimated — inferred from the sources below, not stated by them.'
+      : answer.status === 'unknown'
+        ? 'Not confirmed by the sources below.'
+        : null
+
   return (
     <div>
       <p className="text-xs font-medium text-muted">{answer.question}</p>
 
       <p className="mt-1.5 text-sm leading-relaxed whitespace-pre-wrap text-ink">{answer.answer}</p>
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-2">
-        <span
-          title={STATUS_HINT[answer.status]}
-          className={`inline-flex items-center rounded-[var(--radius-clay)] px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[answer.status]}`}
-        >
-          {STATUS_LABEL[answer.status]}
-        </span>
+      {caveat ? <p className="mt-1.5 text-xs text-muted">{caveat}</p> : null}
 
-        {/* Only shown when a real answer exists: "12% confident we found
-            nothing" is noise, not information. */}
-        {answer.status !== 'unknown' ? (
-          <span className="text-xs text-muted">{Math.round(answer.confidence * 100)}% confidence</span>
-        ) : null}
-
-        {answer.fromCache ? (
-          <span className="text-xs text-muted" title="Answered from earlier research on this company">
-            · from earlier research
-          </span>
-        ) : answer.usage ? (
-          <span className="text-xs text-muted">
-            · {answer.usage.pagesFetched} page{answer.usage.pagesFetched === 1 ? '' : 's'} read
-          </span>
-        ) : null}
-
-        {answer.synthesis !== 'completed' && answer.synthesis !== 'no_evidence' ? (
-          <span className="text-xs text-muted">
-            · answer generation incomplete
-          </span>
-        ) : null}
-      </div>
-
+      {/*
+        Sources stay. They are not decoration: they are how a reader checks a
+        claim before putting it in an email, and the one thing that makes
+        "never present a guess as fact" verifiable rather than a promise.
+      */}
       {answer.sources.length > 0 ? (
-        <ul className="mt-2 space-y-1">
-          {answer.sources.map((source) => (
-            <li key={source.url} className="truncate text-xs">
+        <p className="mt-1.5 text-xs leading-relaxed text-muted">
+          {answer.sources.map((source, index) => (
+            <span key={source.url}>
+              {index > 0 ? ', ' : ''}
               <a
                 href={source.url}
                 target="_blank"
                 rel="noopener noreferrer nofollow"
-                title={source.quote ?? undefined}
-                className="text-muted underline decoration-clay-sunken underline-offset-2 transition-colors duration-150 hover:text-ink"
+                className="underline decoration-clay-sunken underline-offset-2 transition-colors duration-150 hover:text-ink"
               >
-                {source.title ?? hostOf(source.url)}
+                {hostOf(source.url)}
               </a>
-            </li>
+            </span>
           ))}
-        </ul>
+        </p>
       ) : null}
     </div>
   )
