@@ -14,7 +14,6 @@
  */
 import { useState } from 'react'
 
-import { renderCellValue } from '@/components/intelligence/render-value'
 import type { RunPhase, RunResults, RunSummary } from '@/components/intelligence/useResearchRun'
 
 export function HubbleResultPanel({
@@ -206,93 +205,19 @@ export function HubbleResultPanel({
                   )
                 }
 
-                if (results.status === 'partially_complete') {
-                  return (
-                    <p className="rounded-[var(--radius-lg)] bg-warning-soft px-3 py-2 text-xs text-warning">
-                      Some values could not be found. Each says why below, and none are guessed.
-                    </p>
-                  )
-                }
+                /*
+                 * ⚠️ THE "some values could not be found" BANNER IS GONE.
+                 *
+                 * It stated, in a coloured box, exactly what the coverage line
+                 * under the finding already says in plain words — and its
+                 * promise that "each says why below" pointed at a per-lead
+                 * list that no longer exists. Two statements of one fact, the
+                 * louder of them now untrue.
+                 */
 
                 return null
               })()}
 
-              {/*
-                The per-lead detail still exists — it is what `Enrich List
-                Data` writes into the export, and someone verifying a claim
-                needs it. It is COLLAPSED because reading twenty cards is not
-                how anyone consumes a finding.
-              */}
-              <details className="group">
-                <summary className="cursor-pointer list-none text-xs text-muted underline decoration-clay-sunken underline-offset-2 hover:text-ink">
-                  Show the {results.rows.length.toLocaleString()} row
-                  {results.rows.length === 1 ? '' : 's'} behind this
-                </summary>
-
-              <ul className="mt-2.5 space-y-2.5">
-                {results.rows.map((row) => (
-                  <li key={row.leadId} className="clay-sunken px-3.5 py-3">
-                    <p className="truncate text-sm font-medium text-ink">
-                      {row.personName ?? 'Unnamed lead'}
-                      {row.companyName ? (
-                        <span className="font-normal text-muted"> · {row.companyName}</span>
-                      ) : null}
-                    </p>
-
-                    <dl className="mt-1.5 space-y-1">
-                      {results.columns.map((field) => {
-                        const cell = row.fields[field]
-                        return (
-                          <div key={field} className="flex gap-2 text-xs">
-                            <dt className="w-28 shrink-0 text-muted">{columnLabel(field)}</dt>
-                            <dd className="min-w-0 flex-1 text-ink">
-                              {!cell || cell.state !== 'known' ? (
-                                /*
-                                 * ⚠️ THE REASON, NOT JUST "UNKNOWN". A field
-                                 * nobody could look up because the provider was
-                                 * out of quota is not a company without
-                                 * funding, and a wall of bare "Unknown" reads
-                                 * as the product being broken.
-                                 */
-                                <span className="text-muted/70">
-                                  {cell?.reason === 'provider_unavailable'
-                                    ? 'Source unavailable'
-                                    : cell?.reason === 'no_provider'
-                                      ? 'No source for this'
-                                      : cell?.reason === 'no_company'
-                                        ? 'No company linked'
-                                        : 'Not found'}
-                                </span>
-                              ) : (
-                                <>
-                                  <span>{renderCellValue(cell.value)}</span>
-                                  {cell.sourceUrl ? (
-                                    <a
-                                      href={cell.sourceUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer nofollow"
-                                      className="ml-1.5 text-[11px] text-ink underline-offset-2 hover:underline"
-                                    >
-                                      source
-                                    </a>
-                                  ) : null}
-                                </>
-                              )}
-                            </dd>
-                          </div>
-                        )
-                      })}
-                    </dl>
-                  </li>
-                ))}
-              </ul>
-
-              {results.truncated ? (
-                <p className="mt-2 text-xs text-muted">
-                  Showing the first {results.rows.length} rows. Narrow the list to see the rest.
-                </p>
-              ) : null}
-              </details>
             </div>
           )
         ) : null}

@@ -162,7 +162,7 @@ export function useResearchRun() {
     }
 
     pollRef.current = setTimeout(tick, 1_200)
-  }, [])
+  }, [loadSummary])
 
   const ask = useCallback(
     async (question: string, scope: ResearchScope, model: string | null) => {

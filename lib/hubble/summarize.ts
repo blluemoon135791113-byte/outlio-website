@@ -78,6 +78,12 @@ recommend further research. Someone else states the coverage.
 
 Never state a number that is not in the rows or in the computed figures.
 
+⚠️ NEVER TURN ABSENCE INTO A NUMBER. If no amount was found, the total is
+NOT zero and NOT "$0" — it is unknown, and the honest sentence is that no
+amounts could be found. Zero means a company raised nothing, which is a
+claim about the world; missing means nobody could look it up. Confusing the
+two puts a false figure in front of someone about to quote it.
+
 ═══ FORMAT ═══
 PLAIN TEXT. No markdown, no headers, no asterisks, no bullet characters, no
 tables, no emoji. Two to four sentences. Stop when the finding is stated —
@@ -117,6 +123,23 @@ function computeFigures(rows: readonly ResultRow[], columns: readonly string[]):
         continue
       }
       if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) dates.push(raw.slice(0, 10))
+    }
+
+    /*
+     * ⚠️ SAYING NOTHING HERE IS WHAT LETS THE MODEL SAY "$0".
+     *
+     * A reported run answered "the total funding secured amounts to $0"
+     * across 25 companies. No amount had been found for ANY of them — the
+     * rows carried only announcement dates. Silence about a missing column
+     * reads to a model as licence to infer, and the inference it reached was
+     * a number, stated as fact, in a tool whose promise is that it does not
+     * do that. Absence must be stated as loudly as presence.
+     */
+    if (numbers.length === 0 && rows.some((row) => row.fields[field] !== undefined)) {
+      lines.push(
+        `${field}: NO VALUES FOUND. Do not state a total, a sum or a zero for this. ` +
+          `Absence of a figure is not a figure.`,
+      )
     }
 
     if (numbers.length > 1) {

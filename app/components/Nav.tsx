@@ -82,7 +82,6 @@ interface NavProps {
 }
 
 export default function Nav({ surface = "agency" }: NavProps) {
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const config = SURFACES[surface];

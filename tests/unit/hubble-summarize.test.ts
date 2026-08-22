@@ -58,6 +58,26 @@ describe('arithmetic is done in code, never by the model', () => {
   })
 })
 
+describe('absence is never rendered as a number', () => {
+  it('states outright when a column has NO values', async () => {
+    /*
+     * ⚠️ A REPORTED RUN ANSWERED "the total funding secured amounts to $0"
+     * across 25 companies. No amount had been found for ANY of them — the
+     * rows carried only announcement dates. Silence about a missing column
+     * reads to a model as licence to infer, and the inference was a number
+     * stated as fact.
+     *
+     * Zero means a company raised nothing, which is a claim about the world.
+     * Missing means nobody could look it up. They are not the same sentence.
+     */
+    const s = await source()
+    expect(s).toContain('NO VALUES FOUND')
+    expect(s).toMatch(/Do not state a total, a sum or a zero for this/)
+    expect(s).toContain('NEVER TURN ABSENCE INTO A NUMBER')
+    expect(s).toMatch(/the total is\nNOT zero and NOT "\$0"/)
+  })
+})
+
 describe('the finding is a pattern in plain text', () => {
   it('bans vague quantifiers by name', async () => {
     /*
@@ -100,8 +120,18 @@ describe('the panel states coverage as a number, not a roll-call', () => {
     // The telemetry tiles that used to open the panel are gone.
     expect(panel).not.toContain('label="Reused from cache"')
     expect(panel).not.toContain('label="External calls"')
-    // The roster still exists for verification, but collapsed.
-    expect(panel).toMatch(/<details/)
-    expect(panel).toMatch(/Show the \{results\.rows\.length\.toLocaleString\(\)\} row/)
+    /*
+     * ⚠️ THE ROSTER IS GONE ENTIRELY, not merely collapsed. Seventy-five lead
+     * cards reading "No company linked" and "Source unavailable" is not
+     * supporting detail — it is the absence of detail, rendered at length.
+     * The per-lead values still reach the user through Enrich List Data,
+     * which writes them into the export.
+     */
+    expect(panel).not.toContain('<details')
+    expect(panel).not.toContain('rows behind this')
+    expect(panel).not.toContain('renderCellValue')
+
+    // And the banner that duplicated the coverage line in colour.
+    expect(panel).not.toContain('Some values could not be found')
   })
 })
