@@ -290,7 +290,7 @@ function AccountRow({ label, value }: { label: string; value: string }) {
 }
 
 function nextPlan(key: string | undefined): string | null {
-  if (!key || key === 'trial') return 'Starter'
+  if (!key || key === 'trial') return 'Lead Engine'
   if (key === 'starter') return 'Professional'
   if (key === 'professional') return 'Agency'
   return null

@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { ProfileManager } from '@/components/qualification/ProfileManager'
-import { requireAccess } from '@/lib/auth/access'
+import { requireHubbleAccess } from '@/lib/auth/access'
 import { listProfiles } from '@/lib/qualification/repository'
 
 export const metadata: Metadata = {
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic'
 
 export default async function ProfilesPage() {
-  const ctx = await requireAccess()
+  const ctx = await requireHubbleAccess()
   const profiles = await listProfiles(ctx.userId!)
 
   return (

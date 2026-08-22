@@ -7,6 +7,7 @@ const FOOTER_NAV = [
   { label: "How it works", href: "/#how" },
   { label: "Results", href: "/#results" },
   { label: "Motion Graphic Ads", href: "/explainers" },
+  { label: "Lead Engine Pricing", href: "/leadengine/pricing" },
   { label: "About", href: "/#about" },
   { label: "FAQ", href: "/#faq" },
   { label: "Book a call", href: "#book" },
@@ -15,6 +16,12 @@ const FOOTER_NAV = [
 const LEGAL_NAV = [
   { label: "Terms and Conditions", href: "/terms" },
   { label: "Privacy Policy", href: "/privacy" },
+  { label: "Lead Engine Terms", href: "/leadengine/terms" },
+  { label: "Lead Engine Privacy", href: "/leadengine/privacy" },
+  { label: "Refund Policy", href: "/leadengine/refund-policy" },
+];
+
+const LEAD_ENGINE_LEGAL_NAV = [
   { label: "Lead Engine Terms", href: "/leadengine/terms" },
   { label: "Lead Engine Privacy", href: "/leadengine/privacy" },
   { label: "Refund Policy", href: "/leadengine/refund-policy" },
@@ -34,7 +41,22 @@ const SOCIALS = [
   },
 ];
 
-export default function Footer() {
+type FooterProps = {
+  surface?: "main" | "leadengine";
+};
+
+const LEAD_ENGINE_NAV = [
+  { label: "Product", href: "/leadengine" },
+  { label: "How it works", href: "/leadengine#how-it-works" },
+  { label: "Pricing", href: "/leadengine/pricing" },
+  { label: "Sign in", href: "/sign-in" },
+];
+
+export default function Footer({ surface = "main" }: FooterProps) {
+  const productLinks = surface === "leadengine" ? LEAD_ENGINE_NAV : FOOTER_NAV.slice(0, 6);
+  const moreLinks = surface === "leadengine" ? [] : FOOTER_NAV.slice(6);
+  const legalLinks = surface === "leadengine" ? LEAD_ENGINE_LEGAL_NAV : LEGAL_NAV;
+
   return (
     <footer className="bg-panel">
       <div className="mx-auto max-w-7xl px-6 pb-8 pt-12 sm:px-10 sm:pt-16">
@@ -45,9 +67,11 @@ export default function Footer() {
 
         <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest">Outlio</p>
+            <p className="text-xs font-semibold uppercase tracking-widest">
+              {surface === "leadengine" ? "Lead Engine software" : "Outlio"}
+            </p>
             <ul className="mt-4 space-y-2 text-sm text-muted">
-              {FOOTER_NAV.slice(0, 5).map((l) => (
+              {productLinks.map((l) => (
                 <li key={l.label}>
                   <Link href={l.href} className="transition-colors hover:text-ink">
                     {l.label}
@@ -57,19 +81,23 @@ export default function Footer() {
             </ul>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest">More</p>
+            {moreLinks.length ? (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-widest">More</p>
+                <ul className="mt-4 space-y-2 text-sm text-muted">
+                  {moreLinks.map((l) => (
+                    <li key={l.label}>
+                      <Link href={l.href} className="transition-colors hover:text-ink">
+                        {l.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            <p className={moreLinks.length ? "mt-6 text-xs font-semibold uppercase tracking-widest" : "text-xs font-semibold uppercase tracking-widest"}>Legal</p>
             <ul className="mt-4 space-y-2 text-sm text-muted">
-              {FOOTER_NAV.slice(5).map((l) => (
-                <li key={l.label}>
-                  <Link href={l.href} className="transition-colors hover:text-ink">
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-6 text-xs font-semibold uppercase tracking-widest">Legal</p>
-            <ul className="mt-4 space-y-2 text-sm text-muted">
-              {LEGAL_NAV.map((l) => (
+              {legalLinks.map((l) => (
                 <li key={l.label}>
                   <Link href={l.href} className="transition-colors hover:text-ink">
                     {l.label}
@@ -79,14 +107,26 @@ export default function Footer() {
             </ul>
           </div>
           <div>
-            <p className="text-sm text-muted">Growth, done by hand.</p>
+            {surface === "leadengine" ? (
+              <p className="max-w-sm text-sm leading-6 text-muted">
+                Lead Engine is self-serve software. Paddle checkout is used only
+                for software subscriptions and never for Outlio&apos;s separately
+                contracted human services.
+              </p>
+            ) : (
+              <p className="text-sm text-muted">Growth, done by hand.</p>
+            )}
           </div>
         </div>
 
         <div className="mt-10 flex flex-col gap-3 border-t border-ink/10 pt-5 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p>&copy; Outlio. All rights reserved.</p>
-            <p className="mt-0.5">Human-written outreach since day one. No autopilot.</p>
+            <p className="mt-0.5">
+              {surface === "leadengine"
+                ? "Self-serve software subscriptions. No managed outreach included."
+                : "Human-written outreach since day one. No autopilot."}
+            </p>
           </div>
           <div className="flex gap-2.5">
             {SOCIALS.map((s) => (

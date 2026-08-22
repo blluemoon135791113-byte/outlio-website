@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 
-import { assertAccess } from '@/lib/auth/access'
+import { assertHubbleAccess } from '@/lib/auth/access'
 import { getRunResults } from '@/lib/intelligence/results'
 import { toClientError } from '@/lib/errors/catalog'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -23,7 +23,7 @@ export async function GET(
 ) {
   let userId: string
   try {
-    const ctx = await assertAccess()
+    const ctx = await assertHubbleAccess()
     userId = ctx.userId!
   } catch (error) {
     // `toClientError` already returns the full client-safe envelope; wrapping it

@@ -76,7 +76,7 @@ export function LeadEngineHero() {
             style={{ animation: `fade-in 0.7s ${EASE} 0.18s both` }}
           >
             <Link
-              href="/sign-up"
+              href="/leadengine/pricing"
               className="rounded-full bg-ink px-7 py-3.5 text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent"
             >
               Convert your first list free
@@ -93,7 +93,7 @@ export function LeadEngineHero() {
             className="mt-4 text-sm text-muted"
             style={{ animation: `fade-in 0.7s ${EASE} 0.24s both` }}
           >
-            3-day free trial · 10 credits · No card required
+            3-day free trial · 10 credits · No charge until the trial ends
           </p>
         </div>
 

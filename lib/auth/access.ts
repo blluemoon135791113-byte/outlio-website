@@ -222,6 +222,31 @@ export async function requireUser(): Promise<AccessContext> {
   return ctx
 }
 
+async function hasHubbleEntitlement(ctx: AccessContext): Promise<boolean> {
+  if (ctx.isAdmin || ctx.plan?.key === 'custom') return true
+  if (!ctx.userId) return false
+
+  // A Pro + Hubble trial intentionally uses the generic 10-credit trial plan,
+  // so the originating Paddle tier remains the source for feature access.
+  const { data, error } = await createAdminClient()
+    .from('paddle_subscriptions')
+    .select('subscription_id')
+    .eq('user_id', ctx.userId)
+    .eq('plan_key', 'custom')
+    .in('status', ['active', 'trialing'])
+    .limit(1)
+
+  if (error) throw new Error(`Hubble entitlement lookup failed: ${error.message}`)
+  return Boolean(data?.length)
+}
+
+/** Page guard for the Pro + Hubble feature boundary. */
+export async function requireHubbleAccess(): Promise<AccessContext> {
+  const ctx = await requireAccess()
+  if (await hasHubbleEntitlement(ctx)) return ctx
+  redirect('/leadengine/pricing?upgrade=hubble')
+}
+
 /** For admin pages. Admin status comes from `profiles.role`, never a claim. */
 export async function requireAdmin(): Promise<AccessContext> {
   const ctx = await getAccessContext()
@@ -250,6 +275,13 @@ export async function assertUser(): Promise<AccessContext> {
     throw new AppError('ERR_FORBIDDEN', 'Action requires an AAL2 session')
   }
   return ctx
+}
+
+/** Route/action guard for the Pro + Hubble feature boundary. */
+export async function assertHubbleAccess(): Promise<AccessContext> {
+  const ctx = await assertAccess()
+  if (await hasHubbleEntitlement(ctx)) return ctx
+  throw new AppError('ERR_FORBIDDEN', 'Hubble is available on the Pro + Hubble plan')
 }
 
 export async function assertAdmin(): Promise<AccessContext> {

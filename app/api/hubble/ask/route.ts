@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 
-import { assertAccess } from '@/lib/auth/access'
+import { assertHubbleAccess } from '@/lib/auth/access'
 import { consume } from '@/lib/auth/rate-limit'
 import { ACTION_LIMITS } from '@/lib/security/action-limits'
 import { toClientError } from '@/lib/errors/catalog'
@@ -35,7 +35,7 @@ const inputSchema = z.object({
 export async function POST(request: NextRequest) {
   let userId: string
   try {
-    const ctx = await assertAccess()
+    const ctx = await assertHubbleAccess()
     userId = ctx.userId!
   } catch (error) {
     const safe = toClientError(error)

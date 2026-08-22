@@ -190,7 +190,72 @@ export type SubscriptionRow = {
   cancelled_at: string | null
   /** The profile expiry before a cancellation was scheduled, so resume restores it. */
   access_expires_at_before_cancel: string | null
+  paddle_customer_id: string | null
+  paddle_price_id: string | null
+  paddle_product_id: string | null
+  scheduled_change_action: string | null
+  scheduled_change_at: string | null
+  paddle_event_at: string | null
   granted_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type PaddleWebhookEventRow = {
+  event_id: string
+  event_type: string
+  occurred_at: string
+  processed_at: string
+}
+
+export type PaddleCustomerRow = {
+  customer_id: string
+  user_id: string | null
+  email: string | null
+  name: string | null
+  status: string
+  marketing_consent: boolean
+  custom_data: Json | null
+  paddle_created_at: string | null
+  paddle_updated_at: string | null
+  last_event_at: string
+  created_at: string
+  updated_at: string
+}
+
+export type PaddleSubscriptionRow = {
+  subscription_id: string
+  customer_id: string
+  user_id: string | null
+  status: string
+  price_id: string
+  product_id: string
+  plan_key: string | null
+  scheduled_change_action: string | null
+  scheduled_change_at: string | null
+  current_period_start: string | null
+  current_period_end: string | null
+  canceled_at: string | null
+  paused_at: string | null
+  custom_data: Json | null
+  last_event_at: string
+  created_at: string
+  updated_at: string
+}
+
+export type PaddleTransactionRow = {
+  transaction_id: string
+  customer_id: string | null
+  subscription_id: string | null
+  user_id: string | null
+  status: string
+  price_id: string | null
+  product_id: string | null
+  currency_code: string
+  total: string | null
+  custom_data: Json | null
+  billed_at: string | null
+  last_event_at: string
   created_at: string
   updated_at: string
 }
@@ -885,6 +950,10 @@ export type Database = {
       profiles: TableShape<ProfileRow>
       access_requests: TableShape<AccessRequestRow>
       subscriptions: TableShape<SubscriptionRow>
+      paddle_webhook_events: TableShape<PaddleWebhookEventRow>
+      paddle_customers: TableShape<PaddleCustomerRow>
+      paddle_subscriptions: TableShape<PaddleSubscriptionRow>
+      paddle_transactions: TableShape<PaddleTransactionRow>
       usage_counters: TableShape<UsageCounterRow>
       invitation_codes: TableShape<InvitationCodeRow>
       extraction_jobs: TableShape<ExtractionJobRow>
@@ -1070,6 +1139,61 @@ export type Database = {
           p_reason?: string
         }
         Returns: undefined
+      }
+      sync_paddle_customer: {
+        Args: {
+          p_event_id: string
+          p_event_type: string
+          p_occurred_at: string
+          p_customer_id: string
+          p_email: string
+          p_name: string | null
+          p_status: string
+          p_marketing_consent: boolean
+          p_custom_data: Json | null
+          p_paddle_created_at: string
+          p_paddle_updated_at: string
+        }
+        Returns: boolean
+      }
+      sync_paddle_subscription: {
+        Args: {
+          p_event_id: string
+          p_event_type: string
+          p_occurred_at: string
+          p_subscription_id: string
+          p_customer_id: string
+          p_status: string
+          p_price_id: string
+          p_product_id: string
+          p_plan_key: string | null
+          p_scheduled_change_action: string | null
+          p_scheduled_change_at: string | null
+          p_current_period_start: string | null
+          p_current_period_end: string | null
+          p_canceled_at: string | null
+          p_paused_at: string | null
+          p_custom_data: Json | null
+        }
+        Returns: boolean
+      }
+      sync_paddle_transaction: {
+        Args: {
+          p_event_id: string
+          p_event_type: string
+          p_occurred_at: string
+          p_transaction_id: string
+          p_customer_id: string | null
+          p_subscription_id: string | null
+          p_status: string
+          p_price_id: string | null
+          p_product_id: string | null
+          p_currency_code: string
+          p_total: string | null
+          p_custom_data: Json | null
+          p_billed_at: string | null
+        }
+        Returns: boolean
       }
       redeem_invitation_code: {
         Args: { p_code: string; p_user_id: string }

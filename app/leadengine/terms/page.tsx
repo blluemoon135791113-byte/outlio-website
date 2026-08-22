@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description:
     "The terms governing use of Outlio Lead Engine, the software that turns saved Sales Navigator results pages into structured CSV files.",
   alternates: {
-    canonical: "https://outlio.io/leadengine/terms",
+    canonical: "https://app.outlio.io/leadengine/terms",
   },
   robots: {
     index: true,
@@ -257,7 +257,7 @@ export default function LeadEngineTerms() {
             <li>
               Plans are prepaid and allocate a number of Credits per billing period. Current plans,
               prices, and Credit allocations are shown on our{" "}
-              <Link href="/leadengine#pricing" className="font-medium text-accent">
+              <Link href="/leadengine/pricing" className="font-medium text-accent">
                 pricing page
               </Link>{" "}
               and are incorporated into these Terms.
@@ -306,7 +306,9 @@ export default function LeadEngineTerms() {
           <ul className="list-disc space-y-2 pl-5">
             <li>
               The free trial grants a limited number of Credits for a limited number of days, as
-              shown at sign-up. No payment card is required.
+              shown at checkout. A payment method is required. Unless you cancel
+              before the trial ends, the subscription automatically begins and
+              Paddle charges the monthly or annual price shown at checkout.
             </li>
             <li>
               <strong>One trial per person, business, and network.</strong> To enforce this we
@@ -593,7 +595,7 @@ export default function LeadEngineTerms() {
           </p>
         </Section>
       </main>
-      <Footer />
+      <Footer surface="leadengine" />
     </>
   );
 }

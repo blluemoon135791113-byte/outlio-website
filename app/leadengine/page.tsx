@@ -11,10 +11,10 @@ export const metadata: Metadata = {
   title: 'Sales Navigator CSV Export | Outlio Lead Engine',
   description:
     'Turn a saved LinkedIn Sales Navigator results page into a clean CSV. Extract names, titles, companies and profile links without sharing your LinkedIn login or installing an extension.',
-  alternates: { canonical: 'https://outlio.io/leadengine' },
+  alternates: { canonical: 'https://app.outlio.io/leadengine' },
   openGraph: {
     type: 'website',
-    url: 'https://outlio.io/leadengine',
+    url: 'https://app.outlio.io/leadengine',
     siteName: 'Outlio',
     title: 'Sales Navigator CSV Export | Outlio Lead Engine',
     description:
@@ -89,6 +89,19 @@ export default function LeadEnginePage() {
       <LeadEngineHero />
 
       <DashboardPreview />
+
+      <section className="bg-paper px-4 pb-8 pt-10">
+        <div className="mx-auto max-w-5xl rounded-[var(--radius-lg)] border border-border bg-panel p-6 sm:p-8">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.2em] text-accent">
+            Software subscription only
+          </p>
+          <p className="mt-3 max-w-3xl text-base leading-7 text-muted">
+            Lead Engine is self-serve software that converts files you choose to provide into
+            structured data. A subscription does not include advertising, managed outreach,
+            appointment setting, consulting, or any other human-delivered marketing service.
+          </p>
+        </div>
+      </section>
 
       {/* ---- The problem --------------------------------------------------- */}
       <section className="bg-cream px-4 py-20 sm:py-28">
@@ -231,12 +244,13 @@ export default function LeadEnginePage() {
             Your next list, in a spreadsheet
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
-            Try the complete workflow with 10 credits for three days. No card is
-            required, and your LinkedIn credentials are never requested.
+            Try the complete workflow with 10 credits for three days. A payment
+            method is required, but there is no charge until the trial ends, and
+            your LinkedIn credentials are never requested.
           </p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
             <Link
-              href="/sign-up"
+              href="/leadengine/pricing"
               className="rounded-full bg-ink px-8 py-4 text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent"
             >
               Convert your first list free
@@ -251,7 +265,7 @@ export default function LeadEnginePage() {
         </div>
       </section>
 
-      <Footer />
+      <Footer surface="leadengine" />
     </>
   )
 }

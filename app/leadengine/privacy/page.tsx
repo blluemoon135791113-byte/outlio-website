@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description:
     "How Outlio Lead Engine handles account data, uploaded files, and the personal data of individuals whose details appear in them.",
   alternates: {
-    canonical: "https://outlio.io/leadengine/privacy",
+    canonical: "https://app.outlio.io/leadengine/privacy",
   },
   robots: {
     index: true,
@@ -386,7 +386,7 @@ export default function LeadEnginePrivacy() {
                 "Uploaded files and extracted records",
                 <>
                   Deleted on your plan&apos;s schedule — 3 days on the free trial, 30 days on Lead
-                  Engine, 90 days on Pro, 365 days on Custom — or immediately when you clear them.
+                  Engine, 90 days on Pro, 365 days on Pro + Hubble — or immediately when you clear them.
                 </>,
               ],
               [
@@ -612,7 +612,7 @@ export default function LeadEnginePrivacy() {
           </p>
         </Section>
       </main>
-      <Footer />
+      <Footer surface="leadengine" />
     </>
   );
 }

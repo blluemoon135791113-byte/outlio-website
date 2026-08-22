@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description:
     "Outlio Lead Engine offers a free trial before purchase. Paid subscription fees and Credits are non-refundable, subject to applicable law.",
   alternates: {
-    canonical: "https://outlio.io/leadengine/refund-policy",
+    canonical: "https://app.outlio.io/leadengine/refund-policy",
   },
   robots: {
     index: true,
@@ -58,14 +58,17 @@ export default function LeadEngineRefundPolicy() {
           </p>
           <Callout>
             <strong>Paid fees are non-refundable.</strong> We provide a 3-day free trial with 10
-            Credits and no payment card required so you can evaluate the Service before purchasing.
+            Credits so you can evaluate the Service before its first paid billing period.
           </Callout>
         </div>
 
         <Section title="1. Free Trial">
           <ul className="list-disc space-y-2 pl-5">
             <li>The free trial lasts 3 days and includes 10 Credits.</li>
-            <li>No payment card is required, and the trial does not automatically become a paid plan.</li>
+            <li>
+              A payment method is required. Unless you cancel before the trial ends, the subscription
+              automatically begins and Paddle charges the monthly or annual price shown at checkout.
+            </li>
             <li>
               The trial is limited to one per person, business, and network, as described in the{" "}
               <Link href="/leadengine/terms" className="font-medium text-accent">
@@ -161,7 +164,7 @@ export default function LeadEngineRefundPolicy() {
           </p>
         </Section>
       </main>
-      <Footer />
+      <Footer surface="leadengine" />
     </>
   );
 }

@@ -50,6 +50,7 @@ const APP_HOST = process.env.NEXT_PUBLIC_APP_HOST ?? 'app.outlio.io'
 
 /** Paths the app subdomain serves. Everything else there redirects to the app. */
 const APP_SUBDOMAIN_PATHS = [
+  '/leadengine',
   '/dashboard',
   '/admin',
   '/sign-in',
@@ -97,10 +98,11 @@ export async function proxy(request: NextRequest) {
   }
 
   if (host === APP_HOST) {
-    // Bare subdomain root goes straight to the product.
+    // The bare app domain is the reviewable software storefront. It explains
+    // the product, pricing and legal terms before asking anyone to sign in.
     if (rawPath === '/') {
       const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
+      url.pathname = '/leadengine'
       return NextResponse.redirect(url)
     }
 

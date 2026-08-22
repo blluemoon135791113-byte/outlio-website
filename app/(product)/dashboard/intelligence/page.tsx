@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 import { HubbleConsole } from '@/components/intelligence/HubbleConsole'
-import { requireAccess } from '@/lib/auth/access'
+import { requireHubbleAccess } from '@/lib/auth/access'
 import type { LeadBatch } from '@/lib/intelligence/batches'
 import { hubbleModelStatus } from '@/lib/intelligence/llm/catalog'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic'
 
 export default async function HubblePage() {
-  const ctx = await requireAccess()
+  const ctx = await requireHubbleAccess()
   const userId = ctx.userId!
   const supabase = createAdminClient()
 

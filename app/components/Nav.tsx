@@ -65,12 +65,12 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
     links: [
       { label: "How it works", href: "/leadengine#how-it-works" },
       { label: "Product", href: "/leadengine#product-preview" },
-      { label: "Pricing", href: "/leadengine#pricing" },
+      { label: "Pricing", href: "/leadengine/pricing" },
       { label: "Download the extension", href: CHROME_EXTENSION_URL, external: true },
     ],
     servicesDropdown: false,
     ctas: [
-      { label: "Start free trial", href: "/sign-up", primary: true },
+      { label: "Start free trial", href: "/leadengine/pricing", primary: true },
       { label: "Sign In", href: "/sign-in" },
     ],
   },

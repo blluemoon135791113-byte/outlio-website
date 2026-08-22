@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getClayConnectionMetadata } from '@/lib/integrations/repository'
 import { getGoogleConnectionMetadata } from '@/lib/integrations/google-repository'
 import { getGhlConnectionMetadata } from '@/lib/integrations/ghl-repository'
+import { openPaddleCustomerPortal } from '@/lib/paddle/portal'
 
 export const metadata: Metadata = { title: 'Settings | Outlio', robots: { index: false, follow: false } }
 
@@ -31,7 +32,7 @@ export default async function SettingsPage({
   const initialFactorId = factors?.totp[0]?.id ?? null
   const { data: subscription } = await createAdminClient()
     .from('subscriptions')
-    .select('status, provider, current_period_end, cancel_at')
+    .select('status, provider, provider_ref, current_period_end, cancel_at')
     .eq('user_id', ctx.userId!)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -84,7 +85,7 @@ export default async function SettingsPage({
           <SettingsSection id="security" title="Security" description="Use a strong password and require a second factor for new sessions.">
             <div className="space-y-7"><MfaSettings initialFactorId={initialFactorId} returnToAdmin={adminMfaRequired} /><div className="border-t border-border pt-6"><PasswordSettings /></div></div>
           </SettingsSection>
-          <SettingsSection id="subscription-and-billing" title="Subscription and billing" description="Your plan data is live. Checkout controls will connect here when the billing API is ready.">
+          <SettingsSection id="subscription-and-billing" title="Subscription and billing" description="Review your current plan or open Paddle's secure billing portal.">
             <div className="grid gap-4 sm:grid-cols-2">
               <Info label="Current plan" value={ctx.plan?.name ?? 'No active plan'} />
               <Info label="Subscription status" value={subscription?.status ?? 'Manual access'} />
@@ -92,16 +93,27 @@ export default async function SettingsPage({
               <Info label="Next billing date" value={subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString('en-GB') : 'Available after checkout setup'} />
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Link href="/dashboard/access?intent=upgrade" className="inline-flex h-10 items-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-deep">View upgrade options</Link>
-              <button type="button" disabled title="Connect your billing API to enable this" className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-border px-4 text-sm font-semibold text-muted opacity-65">Manage billing</button>
+              <Link href="/leadengine/pricing" className="inline-flex h-10 items-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-deep">View plans</Link>
+              {subscription?.provider === 'paddle' && subscription.provider_ref ? (
+                <form action={openPaddleCustomerPortal}>
+                  <button type="submit" className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-border px-4 text-sm font-semibold text-ink hover:border-accent/40">Manage billing</button>
+                </form>
+              ) : null}
             </div>
-            <div className="mt-6 border-t border-border pt-6">
-              <SubscriptionSettings
-                planName={ctx.plan?.name ?? 'Your plan'}
-                cancelAt={subscription?.cancel_at ?? null}
-                hasActiveSubscription={subscription?.status === 'active'}
-              />
-            </div>
+            {subscription?.provider === 'paddle' ? (
+              <p className="mt-6 border-t border-border pt-6 text-sm leading-6 text-muted">
+                Paddle securely handles payment methods, invoices, and cancellations. A scheduled
+                cancellation does not remove access before your current paid period ends.
+              </p>
+            ) : (
+              <div className="mt-6 border-t border-border pt-6">
+                <SubscriptionSettings
+                  planName={ctx.plan?.name ?? 'Your plan'}
+                  cancelAt={subscription?.cancel_at ?? null}
+                  hasActiveSubscription={subscription?.status === 'active'}
+                />
+              </div>
+            )}
           </SettingsSection>
           <SettingsSection id="integrations" title="Integrations" description="Connect the tools where you want to send your leads.">
             <div className="space-y-4">

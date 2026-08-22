@@ -1,6 +1,5 @@
 import Link from 'next/link'
 
-import { CALENDLY_URL } from '@/app/lib/constants'
 import { BookingModal } from '@/components/leadengine/BookingModal'
 
 /**
@@ -40,8 +39,8 @@ const TIERS: Tier[] = [
     key: 'starter',
     name: 'Lead Engine',
     blurb: 'For steady, weekly prospecting.',
-    price: '$28',
-    period: '/ month',
+    price: '$28/month',
+    period: 'or $245/year',
     credits: '100 credits',
     leads: '2,500',
     features: [
@@ -51,14 +50,14 @@ const TIERS: Tier[] = [
       'Duplicate removal across every upload',
       'Free CSV export — downloads never cost credits',
     ],
-    cta: { label: 'Convert your first list free', href: '/sign-up' },
+    cta: { label: 'See monthly & yearly prices', href: '/leadengine/pricing' },
   },
   {
     key: 'professional',
     name: 'Pro',
     blurb: 'For teams running lists every day.',
-    price: '$43',
-    period: '/ month',
+    price: '$43/month',
+    period: 'or $380/year',
     credits: '300 credits',
     leads: '7,500',
     features: [
@@ -68,26 +67,26 @@ const TIERS: Tier[] = [
       'Longer export retention (90 days)',
       'Priority support',
     ],
-    cta: { label: 'Get Pro plan', href: '/sign-up?plan=professional' },
+    cta: { label: 'See monthly & yearly prices', href: '/leadengine/pricing' },
     featured: true,
     badge: 'Most popular',
   },
   {
     key: 'custom',
-    name: 'Custom',
+    name: 'Pro + Hubble',
     blurb: 'For agencies and high-volume teams.',
-    price: '25,000+',
-    period: 'leads / month',
+    price: '$69/month',
+    period: 'or $612/year',
     credits: '1000+ credits',
     leads: '25,000+',
     features: [
       '**1 credit per 25 leads** — same rule, no ceiling we cannot raise',
       '**50 files** per batch',
-      'Everything in Pro',
+      'Everything in Pro plus Hubble intelligence',
       'Retention and limits set with you',
       'Direct line to the team',
     ],
-    cta: { label: 'Contact us', href: CALENDLY_URL, external: true },
+    cta: { label: 'See monthly & yearly prices', href: '/leadengine/pricing' },
   },
 ]
 
@@ -147,7 +146,7 @@ export function Pricing() {
               <p className="mt-1.5 text-sm text-muted">{tier.blurb}</p>
 
               <p className="mt-6 flex items-baseline gap-2">
-                <span className="text-5xl font-black tracking-tight">{tier.price}</span>
+                <span className="text-3xl font-black tracking-tight">{tier.price}</span>
                 <span className="text-base font-medium text-muted">{tier.period}</span>
               </p>
 
@@ -203,7 +202,8 @@ export function Pricing() {
           Credits are charged once a run is processed, so you always pay for the leads
           actually found. The{' '}
           <strong className="font-semibold text-ink">3-day free trial</strong> includes
-          10 credits — 250 leads — and 5 files per batch, no card required.
+          10 credits — 250 leads — and 5 files per batch. A payment method is
+          required, but you are not charged until the trial ends.
         </p>
 
         <p className="mt-3 text-center text-sm text-muted">
