@@ -349,6 +349,13 @@ export default function LeadEngineTerms() {
               refund.
             </li>
           </ul>
+          <p>
+            Read the standalone{" "}
+            <Link href="/leadengine/refund-policy" className="font-medium text-accent">
+              Lead Engine Refund Policy
+            </Link>{" "}
+            for the complete billing and refund rules.
+          </p>
         </Section>
 
         <Section title="10. Ownership of Your Data">
