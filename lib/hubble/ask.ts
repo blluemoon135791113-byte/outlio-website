@@ -27,6 +27,7 @@ import {
   DEFAULT_BUDGET,
   emptyUsage,
   isFetchFailure,
+  retrievalDeadline,
   type AnswerSource,
   type AnswerStatus,
   type ResearchBudget,
@@ -34,7 +35,13 @@ import {
   type SearchHit,
 } from '@/lib/hubble/providers/types'
 import { answerFromEvidence, planResearch } from '@/lib/hubble/reason'
-import { chunkText, diversify, retrieve, type Chunk } from '@/lib/hubble/retrieve'
+import {
+  chunkText,
+  diversify,
+  hasReusableEvidence,
+  retrieve,
+  type Chunk,
+} from '@/lib/hubble/retrieve'
 import { findCachedAnswer, knownUrls, loadCachedChunks, savePage, saveAnswer } from '@/lib/hubble/store'
 
 export type AskSubject = {
@@ -74,6 +81,7 @@ export type AskResult = {
   /** True when served entirely from a previous answer. */
   fromCache: boolean
   intent: string
+  synthesis: import('@/lib/hubble/reason').SynthesisState
 }
 
 /** Hosts that never yield readable evidence, so fetching them wastes budget. */
@@ -129,6 +137,7 @@ export async function askHubble(
   const started = Date.now()
   const usage = emptyUsage()
   const deadline = started + budget.maxTotalMs
+  const researchDeadline = retrievalDeadline(started, budget)
 
   /* ---- 1. Cache. Before anything else, always. ------------------------- */
   onProgress({ phase: 'cache' })
@@ -144,6 +153,7 @@ export async function askHubble(
       usage,
       fromCache: true,
       intent: question,
+      synthesis: 'completed',
     }
   }
 
@@ -152,7 +162,7 @@ export async function askHubble(
    * `isConfigured()` only says a URL was set — see the note on `isUsable`.
    */
   const embedder = resolveEmbeddingProvider()
-  const vectorsUsable = await embedder.isUsable({ deadlineAt: deadline })
+  const vectorsUsable = await embedder.isUsable({ deadlineAt: researchDeadline })
 
   /* ---- 2. What we already hold: previously fetched pages for this company. */
   const chunks: Chunk[] = await loadCachedChunks(userId, subject.companyId)
@@ -168,7 +178,7 @@ export async function askHubble(
    */
   const resolved = subject.domain
     ? { domain: subject.domain, origin: 'stored' as const }
-    : await resolveCompanyDomain(userId, subject.companyId, subject.companyName)
+    : await resolveCompanyDomain(userId, subject.companyId, subject.companyName, researchDeadline)
 
   const domain = resolved?.domain ?? null
 
@@ -183,7 +193,7 @@ export async function askHubble(
       known: subject.known,
     },
     budget.maxQueriesPerRound,
-    deadline,
+    researchDeadline,
     budget.maxLlmCalls > 0,
   )
   usage.llmCalls += llmCalls
@@ -196,7 +206,10 @@ export async function askHubble(
    * the planner's opinion that evidence exists.
    */
   const shouldSearch =
-    !plan.sufficient && budget.maxSearchRounds > 0 && Date.now() < deadline
+    !plan.sufficient &&
+    !hasReusableEvidence(question, chunks, domain, subject.companyName) &&
+    budget.maxSearchRounds > 0 &&
+    Date.now() < researchDeadline
 
   /* ---- 4. Search, then fetch. ----------------------------------------- */
   if (shouldSearch) {
@@ -214,9 +227,9 @@ export async function askHubble(
       : plan.queries
 
     for (const [index, query] of queries.entries()) {
-      if (Date.now() > deadline) break
+      if (Date.now() > researchDeadline) break
       onProgress({ phase: 'searching', query, index: index + 1, total: queries.length })
-      const hits = await search.search(query, 6, { deadlineAt: deadline })
+      const hits = await search.search(query, 6, { deadlineAt: researchDeadline })
       usage.searches += 1
       candidates.push(...hits)
     }
@@ -234,8 +247,8 @@ export async function askHubble(
     if (toFetch.length > 0) onProgress({ phase: 'reading', count: toFetch.length })
 
     const fetched = await pooled(toFetch, budget.concurrency, async (url) => {
-      if (Date.now() > deadline) return null
-      const direct = await httpPageFetcher.fetchPage(url, { deadlineAt: deadline })
+      if (Date.now() > researchDeadline) return null
+      const direct = await httpPageFetcher.fetchPage(url, { deadlineAt: researchDeadline })
       if (!isFetchFailure(direct)) return direct
 
       // Browser rendering is reserved for pages plain HTTP could not read and
@@ -246,7 +259,7 @@ export async function askHubble(
       ) return null
 
       usage.browserFetches += 1
-      const rendered = await crawl4AiPageFetcher.fetchPage(url, { deadlineAt: deadline })
+      const rendered = await crawl4AiPageFetcher.fetchPage(url, { deadlineAt: researchDeadline })
       return isFetchFailure(rendered) ? null : rendered
     })
 
@@ -256,7 +269,7 @@ export async function askHubble(
 
       // Solr is an acceleration layer, never the source of truth. Indexing is
       // best-effort and cannot block saving the evidence in Hubble's database.
-      await indexPageInSolr(page, { deadlineAt: deadline })
+      await indexPageInSolr(page, { deadlineAt: researchDeadline })
 
       const pieces = chunkText(page.content)
       if (pieces.length === 0) continue
@@ -266,7 +279,7 @@ export async function askHubble(
        * happily and retrieval falls back to lexical scoring.
        */
       const embeddings = vectorsUsable
-        ? await embedder.embed(pieces, { deadlineAt: deadline })
+        ? await embedder.embed(pieces, { deadlineAt: researchDeadline })
         : null
 
       const pageId = await savePage({
@@ -298,7 +311,9 @@ export async function askHubble(
 
   /* ---- 5. Retrieve. --------------------------------------------------- */
   const queryEmbedding = vectorsUsable
-    ? (await embedder.embed([question], { deadlineAt: deadline }))?.[0] ?? null
+    ? Date.now() < researchDeadline
+      ? (await embedder.embed([question], { deadlineAt: researchDeadline }))?.[0] ?? null
+      : null
     : null
 
   const ranked = retrieve(
@@ -364,5 +379,6 @@ export async function askHubble(
     usage,
     fromCache: false,
     intent: plan.intent,
+    synthesis: answer.synthesis,
   }
 }

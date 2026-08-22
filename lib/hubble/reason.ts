@@ -114,6 +114,8 @@ RULES:
 - You do NOT answer the question. You only decide what to search for.
 - Never invent facts. You have none; you are choosing queries.
 - Queries must be specific and include the company name or domain when known.
+- Correct obvious spelling errors in search terms, but never alter a company,
+  person, product, or domain name.
 - Prefer queries that would surface primary sources: the company's own site,
   filings, official announcements, reputable press.
 - Never write a query intended to reach a login, paywall, or private database.
@@ -214,6 +216,28 @@ export type HubbleAnswer = {
   status: AnswerStatus
   confidence: number
   sources: AnswerSource[]
+  synthesis: SynthesisState
+}
+
+export type SynthesisState =
+  | 'completed'
+  | 'no_evidence'
+  | 'not_configured'
+  | 'budget_exhausted'
+  | 'provider_unavailable'
+  | 'invalid_output'
+
+export function degradedSynthesisMessage(state: Exclude<SynthesisState, 'completed' | 'no_evidence'>): string {
+  switch (state) {
+    case 'not_configured':
+      return 'Hubble found relevant sources, but no answer-writing model is configured for this deployment.'
+    case 'budget_exhausted':
+      return 'Hubble found relevant sources, but research used the available time before the answer could be written.'
+    case 'invalid_output':
+      return 'Hubble found relevant sources, but the answer-writing model returned an unusable response.'
+    case 'provider_unavailable':
+      return 'Hubble found relevant sources, but the answer-writing service was temporarily unavailable.'
+  }
 }
 
 const ANSWER_SCHEMA = {
@@ -228,18 +252,38 @@ const ANSWER_SCHEMA = {
   required: ['answer', 'status', 'confidence', 'citations'],
 } as const
 
-function validHubbleAnswer(value: unknown): boolean {
+export function validHubbleAnswer(value: unknown, evidenceCount = Number.POSITIVE_INFINITY): boolean {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Record<string, unknown>
-  return (
+  if (!(
     typeof candidate.answer === 'string' &&
+    candidate.answer.trim().length >= 20 &&
+    candidate.answer.length <= 8_000 &&
     typeof candidate.status === 'string' &&
     ['verified', 'corroborated', 'estimated', 'unknown'].includes(candidate.status) &&
     typeof candidate.confidence === 'number' &&
     Number.isFinite(candidate.confidence) &&
     Array.isArray(candidate.citations) &&
-    candidate.citations.every((citation) => Number.isInteger(citation))
-  )
+    candidate.citations.every(
+      (citation) => Number.isInteger(citation) && citation >= 1 && citation <= evidenceCount,
+    )
+  )) return false
+
+  if (candidate.status !== 'unknown' && candidate.citations.length === 0) return false
+  if (/<<<EVIDENCE|```json|\{\s*"answer"/i.test(candidate.answer)) return false
+  return true
+}
+
+/** Presentation cleanup only. It never changes words, numbers, or claims. */
+export function normalizeAnswerProse(value: string): string {
+  return value
+    .normalize('NFKC')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .split(/\n/)
+    .map((line) => line.replace(/[ \t]+/g, ' ').replace(/\s+([,.;:!?])/g, '$1').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 const ANSWER_SYSTEM = `You answer questions for a B2B sales researcher using ONLY the numbered evidence provided.
@@ -271,7 +315,9 @@ Cite by returning the INDEX NUMBERS of the passages you used.
 ═══ STYLE ═══
 Answer directly, in prose, for a salesperson about to make contact. Lead with
 the answer. Be specific: names, numbers, dates. No preamble, no restating the
-question, no bullet lists unless genuinely enumerating.`
+question, no bullet lists unless genuinely enumerating. Use standard spelling
+and complete sentences. Do not copy misspellings, navigation labels, cookie
+text, or broken sentence fragments from the evidence.`
 
 export async function answerFromEvidence(
   question: string,
@@ -293,6 +339,7 @@ export async function answerFromEvidence(
         status: 'unknown',
         confidence: 0,
         sources: [],
+        synthesis: 'no_evidence',
       },
       llmCalls: 0,
     }
@@ -305,17 +352,14 @@ export async function answerFromEvidence(
      * genuinely useful degraded mode; inventing a summary without a model
      * would not be.
      */
+    const synthesis: SynthesisState = !llm.isConfigured() ? 'not_configured' : 'budget_exhausted'
     return {
       answer: {
-        answer:
-          `${maxLlmCalls <= 0 ? 'The research budget ended before synthesis' : 'No language model is configured'}, so I cannot summarise. Here are the ` +
-          `most relevant passages I retrieved:\n\n${chunks
-            .slice(0, 3)
-            .map((chunk, index) => `${index + 1}. ${chunk.content.slice(0, 400)}`)
-            .join('\n\n')}`,
+        answer: `${degradedSynthesisMessage(synthesis)} The sources are listed below; try again to rerun answer generation.`,
         status: 'unknown',
         confidence: 0.2,
         sources: toSources(chunks.slice(0, 3)),
+        synthesis,
       },
       llmCalls: 0,
     }
@@ -364,7 +408,7 @@ export async function answerFromEvidence(
     temperature: 0.2,
     maxOutputTokens: 1200,
     deadlineAt,
-    validate: validHubbleAnswer,
+    validate: (value: unknown) => validHubbleAnswer(value, shown.length),
   }
 
   let result = await llm.generateJson(request)
@@ -383,6 +427,23 @@ export async function answerFromEvidence(
   }
 
   if (!result.ok) {
+    const synthesis: SynthesisState =
+      result.code === 'not_configured'
+        ? 'not_configured'
+        : result.code === 'unparseable'
+          ? 'invalid_output'
+          : deadlineAt !== undefined && deadlineAt <= Date.now()
+            ? 'budget_exhausted'
+            : 'provider_unavailable'
+
+    console.warn('[hubble:synthesis]', {
+      state: synthesis,
+      code: result.code,
+      detail: result.detail,
+      evidenceCount: shown.length,
+      attempts: result.attempts,
+    })
+
     return {
       answer: {
         /*
@@ -391,15 +452,11 @@ export async function answerFromEvidence(
          * more useful than an error, and more honest than a summary written
          * without a model.
          */
-        answer:
-          'I could not reach the language model to write this up, so here is the ' +
-          `evidence I retrieved:\n\n${chunks
-            .slice(0, 3)
-            .map((chunk, index) => `${index + 1}. ${chunk.content.slice(0, 400)}`)
-            .join('\n\n')}`,
+        answer: `${degradedSynthesisMessage(synthesis)} The sources are listed below; try again to rerun answer generation.`,
         status: 'unknown',
         confidence: 0,
         sources: toSources(chunks.slice(0, 3)),
+        synthesis,
       },
       llmCalls: llmCallsMade,
     }
@@ -459,11 +516,20 @@ export async function answerFromEvidence(
    */
   const ceiling = confidenceCeiling(used.map((chunk) => chunk.url), companyDomain, companyName)
 
+  console.info('[hubble:synthesis]', {
+    state: 'completed',
+    vendor: result.vendor,
+    model: result.model,
+    evidenceCount: shown.length,
+    citedCount: used.length,
+    attempts: result.attempts,
+  })
+
   return {
     answer: {
       answer:
         typeof parsed.answer === 'string' && parsed.answer.trim()
-          ? parsed.answer.trim()
+          ? normalizeAnswerProse(parsed.answer)
           : 'The model returned no answer.',
       status: finalStatus,
       // An "unknown" answer cannot also be high-confidence.
@@ -472,6 +538,7 @@ export async function answerFromEvidence(
           ? Math.min(confidence, 0.3)
           : Math.min(confidence, ceiling),
       sources: toSources(used),
+      synthesis: 'completed',
     },
     llmCalls: llmCallsMade,
   }

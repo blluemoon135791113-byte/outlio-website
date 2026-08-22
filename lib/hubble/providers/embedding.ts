@@ -16,6 +16,7 @@ import 'server-only'
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 import type { DeadlineOptions, EmbeddingProvider } from '@/lib/hubble/providers/types'
+import { ollamaConfig } from '@/lib/hubble/providers/ollama-config'
 
 /** Small, fast, and good enough for passage ranking. */
 const DEFAULT_MODEL = 'nomic-embed-text'
@@ -42,14 +43,7 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
   }
 
   private get baseUrl(): string | null {
-    const value = process.env.OLLAMA_URL?.trim()
-    if (!value) return null
-    try {
-      const url = new URL(value)
-      return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : null
-    } catch {
-      return null
-    }
+    return ollamaConfig()?.baseUrl ?? null
   }
 
   /**
@@ -92,7 +86,10 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
       try {
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), timeoutFor(options, 3_000))
-        const response = await fetch(`${base}/api/tags`, { signal: controller.signal })
+        const response = await fetch(`${base}/api/tags`, {
+          signal: controller.signal,
+          headers: ollamaConfig()?.headers,
+        })
         clearTimeout(timer)
 
         if (!response.ok) return false
@@ -128,7 +125,7 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
       const response = await fetch(`${base}/api/embed`, {
         method: 'POST',
         signal: controller.signal,
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...ollamaConfig()?.headers },
         body: JSON.stringify({ model: this.model, input: [...texts] }),
       })
 

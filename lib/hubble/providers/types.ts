@@ -126,6 +126,8 @@ export type ResearchBudget = {
   maxChunksToModel: number
   /** Wall-clock ceiling for the whole question. */
   maxTotalMs: number
+  /** Time protected from crawling so the answer model always gets a turn. */
+  synthesisReserveMs: number
   /** Simultaneous fetches. Politeness to the sites being read. */
   concurrency: number
 }
@@ -138,7 +140,18 @@ export const DEFAULT_BUDGET: ResearchBudget = {
   maxLlmCalls: 3,
   maxChunksToModel: 12,
   maxTotalMs: 90_000,
+  synthesisReserveMs: 25_000,
   concurrency: 3,
+}
+
+/**
+ * Retrieval must stop before the request deadline. Without a protected tail,
+ * slow search and browser rendering can consume the entire request and leave
+ * the answer model a 1ms timeout.
+ */
+export function retrievalDeadline(startedAt: number, budget: ResearchBudget): number {
+  const reserve = Math.max(0, Math.min(budget.synthesisReserveMs, budget.maxTotalMs))
+  return startedAt + budget.maxTotalMs - reserve
 }
 
 /** What a question actually consumed. Recorded on every answer. */

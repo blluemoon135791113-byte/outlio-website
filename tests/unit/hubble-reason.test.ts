@@ -7,7 +7,13 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
-import { buildFallbackQueries } from '@/lib/hubble/reason'
+import {
+  buildFallbackQueries,
+  degradedSynthesisMessage,
+  normalizeAnswerProse,
+  validHubbleAnswer,
+} from '@/lib/hubble/reason'
+import { DEFAULT_BUDGET, retrievalDeadline } from '@/lib/hubble/providers/types'
 import { cacheEntryFresh, questionKey } from '@/lib/hubble/store'
 
 vi.mock('server-only', () => ({}))
@@ -33,6 +39,52 @@ describe('buildFallbackQueries', () => {
       personName: null,
     })
     expect(queries).toEqual(['who are they?'])
+  })
+})
+
+describe('research budget reserves answer-writing time', () => {
+  it('stops retrieval before the overall deadline', () => {
+    const started = 1_000
+    expect(retrievalDeadline(started, DEFAULT_BUDGET)).toBe(
+      started + DEFAULT_BUDGET.maxTotalMs - DEFAULT_BUDGET.synthesisReserveMs,
+    )
+    expect(retrievalDeadline(started, DEFAULT_BUDGET)).toBeLessThan(
+      started + DEFAULT_BUDGET.maxTotalMs,
+    )
+  })
+})
+
+describe('degraded synthesis copy', () => {
+  it('does not expose raw scraped passages as a finished answer', () => {
+    for (const state of [
+      'not_configured',
+      'budget_exhausted',
+      'provider_unavailable',
+      'invalid_output',
+    ] as const) {
+      const message = degradedSynthesisMessage(state)
+      expect(message).toContain('relevant sources')
+      expect(message).not.toContain('passages I retrieved')
+    }
+  })
+})
+
+describe('synthesis quality gate', () => {
+  it('requires citations for factual answers and rejects out-of-range citations', () => {
+    const base = {
+      answer: 'The company announced a Series A funding round.',
+      status: 'verified',
+      confidence: 0.8,
+    }
+    expect(validHubbleAnswer({ ...base, citations: [] }, 2)).toBe(false)
+    expect(validHubbleAnswer({ ...base, citations: [3] }, 2)).toBe(false)
+    expect(validHubbleAnswer({ ...base, citations: [1] }, 2)).toBe(true)
+  })
+
+  it('removes control characters and broken punctuation spacing without rewriting facts', () => {
+    expect(normalizeAnswerProse('  Acme raised $12M \u0007 , in 2026.  ')).toBe(
+      'Acme raised $12M, in 2026.',
+    )
   })
 })
 

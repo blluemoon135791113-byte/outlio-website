@@ -241,6 +241,25 @@ export function retrieve(
 }
 
 /**
+ * Decides whether fresh company-level cache already contains enough relevant,
+ * independent evidence to avoid repeating live search on a synthesis retry.
+ * Two URLs are required: one coincidental keyword match must not suppress a
+ * needed web search.
+ */
+export function hasReusableEvidence(
+  query: string,
+  chunks: readonly Chunk[],
+  companyDomain: string | null = null,
+  companyName: string | null = null,
+): boolean {
+  const ranked = retrieve(query, chunks, null, 8, companyDomain, companyName)
+  if ((ranked[0]?.score ?? 0) < 0.45) return false
+
+  const urls = new Set(ranked.filter((chunk) => chunk.score >= 0.25).map((chunk) => chunk.url))
+  return urls.size >= 2
+}
+
+/**
  * Caps how much of one page can dominate the evidence set.
  *
  * ⚠️ WITHOUT THIS, ONE VERBOSE PAGE ANSWERS EVERY QUESTION. Its chunks fill

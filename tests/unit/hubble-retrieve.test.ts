@@ -7,7 +7,15 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { chunkText, cosineSimilarity, diversify, retrieve, scoreLexical, tokenize } from '@/lib/hubble/retrieve'
+import {
+  chunkText,
+  cosineSimilarity,
+  diversify,
+  hasReusableEvidence,
+  retrieve,
+  scoreLexical,
+  tokenize,
+} from '@/lib/hubble/retrieve'
 
 function chunk(id: string, content: string, embedding?: number[]) {
   return { pageId: id, url: `https://${id}.example/`, title: id, ordinal: 0, content, embedding }
@@ -120,6 +128,26 @@ describe('retrieve', () => {
   it('respects the limit', () => {
     const chunks = Array.from({ length: 20 }, (_, i) => chunk(`p${i}`, `funding round number ${i} closed`))
     expect(retrieve('funding', chunks, null, 3)).toHaveLength(3)
+  })
+})
+
+describe('hasReusableEvidence', () => {
+  it('reuses relevant evidence from two independent pages', () => {
+    expect(
+      hasReusableEvidence('Series A funding', [
+        chunk('a', 'The company announced its Series A funding round.'),
+        chunk('b', 'Investors participated in the Series A funding round.'),
+      ]),
+    ).toBe(true)
+  })
+
+  it('does not let one matching page suppress fresh research', () => {
+    expect(
+      hasReusableEvidence('Series A funding', [
+        chunk('a', 'The company announced its Series A funding round.'),
+        { ...chunk('a', 'More details about the same Series A funding event.'), ordinal: 1 },
+      ]),
+    ).toBe(false)
   })
 })
 

@@ -55,6 +55,24 @@ describe('OllamaLlmProvider', () => {
     if (prevModel) process.env.OLLAMA_LLM_MODEL = prevModel
     else delete process.env.OLLAMA_LLM_MODEL
   })
+
+  it('refuses an unauthenticated remote Ollama endpoint', () => {
+    const prevUrl = process.env.OLLAMA_URL
+    const prevToken = process.env.OLLAMA_AUTH_TOKEN
+    const prevModel = process.env.OLLAMA_LLM_MODEL
+    process.env.OLLAMA_URL = 'https://ollama.example.com'
+    process.env.OLLAMA_LLM_MODEL = 'llama3.1:8b'
+    delete process.env.OLLAMA_AUTH_TOKEN
+
+    expect(new OllamaLlmProvider().isConfigured()).toBe(false)
+
+    if (prevUrl) process.env.OLLAMA_URL = prevUrl
+    else delete process.env.OLLAMA_URL
+    if (prevToken) process.env.OLLAMA_AUTH_TOKEN = prevToken
+    else delete process.env.OLLAMA_AUTH_TOKEN
+    if (prevModel) process.env.OLLAMA_LLM_MODEL = prevModel
+    else delete process.env.OLLAMA_LLM_MODEL
+  })
 })
 
 /** A provider that fails a set number of times, then succeeds. */
@@ -70,6 +88,19 @@ function stubProvider(failures: number, name: string): LLMProvider & { calls: nu
         return { ok: false, code: 'unavailable', detail: 'down' }
       }
       return { ok: true, json: { from: name }, vendor: 'openrouter', model: name }
+    },
+  }
+}
+
+function deadlineAwareLocal(): LLMProvider & { deadlines: Array<number | undefined> } {
+  return {
+    vendor: 'openrouter',
+    model: 'local-deadline-probe',
+    deadlines: [],
+    isConfigured: () => true,
+    async generateJson(request) {
+      this.deadlines.push(request.deadlineAt)
+      return { ok: false, code: 'unavailable', detail: 'slow local model' }
     },
   }
 }
@@ -109,6 +140,7 @@ describe('LlmWaterfall', () => {
 
     expect(local.calls).toBe(2)
     expect(result.ok && result.json).toEqual({ from: 'hosted' })
+    expect(result.attempts?.map((attempt) => attempt.model)).toEqual(['local', 'local', 'hosted'])
   })
 
   it('returns the local failure when there is no hosted fallback configured', async () => {
@@ -117,6 +149,24 @@ describe('LlmWaterfall', () => {
 
     const result = await new LlmWaterfall(local, hosted).generateJson({ system: 's', user: 'u', schema: {} })
     expect(result.ok).toBe(false)
+  })
+
+  it('protects time for hosted fallback instead of giving local the whole deadline', async () => {
+    const local = deadlineAwareLocal()
+    const hosted = stubProvider(0, 'hosted')
+    const overallDeadline = Date.now() + 30_000
+
+    const result = await new LlmWaterfall(local, hosted).generateJson({
+      system: 's',
+      user: 'u',
+      schema: {},
+      deadlineAt: overallDeadline,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(local.deadlines[0]).toBeLessThan(overallDeadline)
+    expect((local.deadlines[0] ?? overallDeadline) - Date.now()).toBeLessThanOrEqual(8_000)
+    expect(hosted.calls).toBe(1)
   })
 })
 

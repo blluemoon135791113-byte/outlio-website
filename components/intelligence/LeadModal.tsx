@@ -311,6 +311,12 @@ function AnswerBlock({ answer }: { answer: AskAnswer }) {
             · {answer.usage.pagesFetched} page{answer.usage.pagesFetched === 1 ? '' : 's'} read
           </span>
         ) : null}
+
+        {answer.synthesis !== 'completed' && answer.synthesis !== 'no_evidence' ? (
+          <span className="text-xs text-muted">
+            · answer generation incomplete
+          </span>
+        ) : null}
       </div>
 
       {answer.sources.length > 0 ? (

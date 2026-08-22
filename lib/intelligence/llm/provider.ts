@@ -43,8 +43,22 @@ export type LlmRequest = {
 }
 
 export type LlmResult =
-  | { ok: true; json: unknown; vendor: LlmVendor; model: string }
-  | { ok: false; code: 'not_configured' | 'unavailable' | 'unparseable'; detail: string }
+  | { ok: true; json: unknown; vendor: LlmVendor; model: string; attempts?: LlmAttempt[] }
+  | {
+      ok: false
+      code: 'not_configured' | 'unavailable' | 'unparseable'
+      detail: string
+      attempts?: LlmAttempt[]
+    }
+
+export type LlmAttempt = {
+  vendor: LlmVendor
+  model: string
+  outcome: 'success' | 'not_configured' | 'unavailable' | 'unparseable'
+  durationMs: number
+  /** Sanitized operational detail; never contains a key or request body. */
+  detail: string | null
+}
 
 export interface LLMProvider {
   readonly vendor: LlmVendor
@@ -488,6 +502,7 @@ export function createFallbackLlmProvider(candidates: LLMProvider[]): LLMProvide
     model: primary.model,
     isConfigured: () => candidates.some((provider) => provider.isConfigured()),
     generateJson: async (request) => {
+      const attempts: LlmAttempt[] = []
       let lastFailure: LlmResult = {
         ok: false,
         code: 'not_configured',
@@ -502,13 +517,28 @@ export function createFallbackLlmProvider(candidates: LLMProvider[]): LLMProvide
             code: 'unavailable',
             detail: 'Configured language models are cooling down after an upstream failure',
           }
+          attempts.push({
+            vendor: provider.vendor,
+            model: provider.model,
+            outcome: 'unavailable',
+            durationMs: 0,
+            detail: 'circuit breaker cooling down',
+          })
           continue
         }
         if (request.deadlineAt !== undefined && request.deadlineAt <= Date.now()) {
           return { ok: false, code: 'unavailable', detail: 'LLM deadline exceeded' }
         }
 
+        const attemptStarted = Date.now()
         const result = await provider.generateJson(request)
+        attempts.push({
+          vendor: provider.vendor,
+          model: provider.model,
+          outcome: result.ok ? 'success' : result.code,
+          durationMs: Date.now() - attemptStarted,
+          detail: result.ok ? null : result.detail,
+        })
         if (result.ok) {
           if (request.validate && !request.validate(result.json)) {
             lastFailure = {
@@ -519,7 +549,7 @@ export function createFallbackLlmProvider(candidates: LLMProvider[]): LLMProvide
             continue
           }
           LLM_FAILED_AT.delete(providerKey(provider))
-          return result
+          return { ...result, attempts }
         }
 
         lastFailure = result
@@ -528,7 +558,7 @@ export function createFallbackLlmProvider(candidates: LLMProvider[]): LLMProvide
         }
       }
 
-      return lastFailure
+      return { ...lastFailure, attempts }
     },
   }
 }

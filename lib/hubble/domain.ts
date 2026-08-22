@@ -43,6 +43,7 @@ export async function resolveCompanyDomain(
   userId: string,
   companyId: string | null,
   companyName: string | null,
+  deadlineAt?: number,
 ): Promise<ResolvedDomain | null> {
   if (!companyId || !companyName) return null
 
@@ -69,7 +70,7 @@ export async function resolveCompanyDomain(
    * The company's name, plus the words a company's own site carries and a
    * directory listing usually does not.
    */
-  const hits = await search.search(`${companyName} official website`, 8)
+  const hits = await search.search(`${companyName} official website`, 8, { deadlineAt })
   if (hits.length === 0) return null
 
   const candidate = pickCompanyDomain(

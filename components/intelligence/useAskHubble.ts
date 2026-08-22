@@ -34,6 +34,13 @@ export type AskAnswer = {
   sources: AskSource[]
   /** True when served from a previous answer rather than fresh research. */
   fromCache: boolean
+  synthesis:
+    | 'completed'
+    | 'no_evidence'
+    | 'not_configured'
+    | 'budget_exhausted'
+    | 'provider_unavailable'
+    | 'invalid_output'
   usage: {
     searches: number
     pagesFetched: number

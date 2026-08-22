@@ -22,7 +22,14 @@ import 'server-only'
  * The schema validation and the source-tier confidence ceiling are what keep a
  * weaker model honest, and they matter MORE here, not less.
  */
-import type { LlmRequest, LlmResult, LLMProvider, LlmVendor } from '@/lib/intelligence/llm/provider'
+import type {
+  LlmAttempt,
+  LlmRequest,
+  LlmResult,
+  LLMProvider,
+  LlmVendor,
+} from '@/lib/intelligence/llm/provider'
+import { ollamaConfig } from '@/lib/hubble/providers/ollama-config'
 
 /**
  * ⚠️ NO DEFAULT MODEL. THE ABSENCE OF THIS VARIABLE MEANS "DO NOT USE OLLAMA".
@@ -44,6 +51,9 @@ import type { LlmRequest, LlmResult, LLMProvider, LlmVendor } from '@/lib/intell
  * it — the expensive part of the request.
  */
 const TIMEOUT_MS = 120_000
+/** A local attempt may be slow, but it may not consume the hosted fallback. */
+const LOCAL_WATERFALL_SLICE_MS = 8_000
+const HOSTED_FALLBACK_RESERVE_MS = 8_000
 
 function requestTimeout(request: LlmRequest): number {
   if (request.deadlineAt === undefined) return TIMEOUT_MS
@@ -76,14 +86,7 @@ export class OllamaLlmProvider implements LLMProvider {
   }
 
   private get baseUrl(): string | null {
-    const value = process.env.OLLAMA_URL?.trim()
-    if (!value) return null
-    try {
-      const url = new URL(value)
-      return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : null
-    } catch {
-      return null
-    }
+    return ollamaConfig()?.baseUrl ?? null
   }
 
   isConfigured(): boolean {
@@ -117,7 +120,10 @@ export class OllamaLlmProvider implements LLMProvider {
       try {
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), 3_000)
-        const response = await fetch(`${base}/api/tags`, { signal: controller.signal })
+        const response = await fetch(`${base}/api/tags`, {
+          signal: controller.signal,
+          headers: ollamaConfig()?.headers,
+        })
         clearTimeout(timer)
         if (!response.ok) return false
 
@@ -161,7 +167,7 @@ export class OllamaLlmProvider implements LLMProvider {
       const response = await fetch(`${base}/api/chat`, {
         method: 'POST',
         signal: controller.signal,
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...ollamaConfig()?.headers },
         body: JSON.stringify({
           model: this.model,
           stream: false,
@@ -258,21 +264,57 @@ export class LlmWaterfall implements LLMProvider {
       this.local.isConfigured() &&
       (typeof probe.isUsable === 'function' ? await probe.isUsable() : true)
 
+    const localAttempts: LlmAttempt[] = []
+    const runLocal = async (): Promise<LlmResult> => {
+      const started = Date.now()
+      const localDeadline = Math.min(
+        request.deadlineAt ?? Number.POSITIVE_INFINITY,
+        started + LOCAL_WATERFALL_SLICE_MS,
+      )
+      const result = await this.local.generateJson({ ...request, deadlineAt: localDeadline })
+      localAttempts.push({
+        vendor: this.local.vendor,
+        model: this.local.model,
+        outcome: result.ok ? 'success' : result.code,
+        durationMs: Date.now() - started,
+        detail: result.ok ? null : result.detail,
+      })
+      return result
+    }
+
     if (localReady) {
-      const first = await this.local.generateJson(request)
-      if (accepted(first)) return first
+      const first = await runLocal()
+      if (accepted(first)) return { ...first, attempts: localAttempts }
 
       // A cold model load often fails once and succeeds immediately after.
-      if (request.deadlineAt === undefined || request.deadlineAt > Date.now()) {
-        const second = await this.local.generateJson(request)
-        if (accepted(second)) return second
+      const enoughTimeForRetry =
+        request.deadlineAt === undefined ||
+        request.deadlineAt - Date.now() >= LOCAL_WATERFALL_SLICE_MS + HOSTED_FALLBACK_RESERVE_MS
 
-        if (!this.hosted.isConfigured()) return asFailure(second)
+      if (enoughTimeForRetry) {
+        const second = await runLocal()
+        if (accepted(second)) return { ...second, attempts: localAttempts }
+
+        if (!this.hosted.isConfigured()) return { ...asFailure(second), attempts: localAttempts }
       } else if (!this.hosted.isConfigured()) {
-        return asFailure(first)
+        return { ...asFailure(first), attempts: localAttempts }
       }
     }
 
-    return this.hosted.generateJson(request)
+    const hostedStarted = Date.now()
+    const hosted = await this.hosted.generateJson(request)
+    const hostedAttempts = hosted.attempts ?? [
+      {
+        vendor: this.hosted.vendor,
+        model: this.hosted.model,
+        outcome: hosted.ok ? ('success' as const) : hosted.code,
+        durationMs: Date.now() - hostedStarted,
+        detail: hosted.ok ? null : hosted.detail,
+      },
+    ]
+    return {
+      ...hosted,
+      attempts: [...localAttempts, ...hostedAttempts],
+    }
   }
 }

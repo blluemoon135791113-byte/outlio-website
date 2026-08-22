@@ -206,6 +206,8 @@ RULES
 5. Ask at most two clarification questions, each with concrete options.
 6. "outputFields" are the columns to display. They never widen what is
    researched.
+7. Interpret obvious spelling mistakes from context, but preserve company,
+   person, product, and domain names exactly as the user wrote them.
 
 Reply with JSON only.`
 }

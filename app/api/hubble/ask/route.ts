@@ -168,6 +168,7 @@ export async function POST(request: NextRequest) {
           sources: result.sources,
           usage: result.usage,
           fromCache: result.fromCache,
+          synthesis: result.synthesis,
         })
       } catch {
         // Never leak a stack, a query, or a storage path to the client.
