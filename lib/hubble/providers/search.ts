@@ -4,10 +4,11 @@ import 'server-only'
  * Web search, behind one interface.
  *
  * ╔══════════════════════════════════════════════════════════════════════════╗
- * ║  SEARXNG WHEN IT EXISTS, TAVILY WHEN IT DOES NOT.                        ║
+ * ║  SOLR CACHE FIRST, THEN LIVE SEARCH.                                     ║
  * ║                                                                          ║
- * ║  SearXNG is the free, self-hosted, no-API-key option and is preferred    ║
- * ║  whenever `SEARXNG_URL` is set. It is not installed on every machine,    ║
+ * ║  Solr reuses pages Hubble has already crawled. SearXNG is the free,       ║
+ * ║  self-hosted live-search option whenever `SEARXNG_URL` is set. Neither   ║
+ * ║  service is installed on every machine,                                  ║
  * ║  and a Hubble that cannot search until someone runs Docker is a Hubble   ║
  * ║  nobody can try. Tavily is already configured in this project, so the    ║
  * ║  waterfall makes the feature work today and go free later WITHOUT a      ║
@@ -17,6 +18,7 @@ import 'server-only'
 import type { DeadlineOptions, SearchHit, SearchProvider } from '@/lib/hubble/providers/types'
 import { requestJson, setHostPacing } from '@/lib/intelligence/http'
 import { hasTavilyCredentials, tavilySearch } from '@/lib/intelligence/providers/tavily'
+import { SolrSearchProvider } from '@/lib/hubble/providers/solr'
 
 type SearxngConfig = {
   baseUrl: string
@@ -342,8 +344,8 @@ export class TavilySearchProvider implements SearchProvider {
 /**
  * Tries each configured provider in order and returns the first with results.
  *
- * Order is deliberate: the free one first. An operator who stands up SearXNG
- * stops paying Tavily without touching code.
+ * Order is deliberate: reusable local knowledge first, then free live search.
+ * An operator who stands up Solr and SearXNG stops paying Tavily without code.
  */
 /**
  * When a provider last failed, so we stop paying for it repeatedly.
@@ -388,12 +390,13 @@ export class SearchWaterfall implements SearchProvider {
     /*
      * ⚠️ ORDER IS COST, CHEAPEST FIRST.
      *
-     * SearXNG is unmetered when someone has deployed one. Google CSE is free
-     * with no card. Brave is free only with a card on file. Tavily is paid.
-     * Standing up SearXNG later demotes the rest automatically, and none of
-     * it needs a code change — only an env var.
+     * Solr reuses already-crawled evidence and is cheapest. SearXNG is
+     * unmetered when deployed. Google CSE is free with no card, Brave is free
+     * only with a card on file, and Tavily is paid. Enabling either operator
+     * service changes the order automatically through environment variables.
      */
     private readonly providers: readonly SearchProvider[] = [
+      new SolrSearchProvider(),
       new SearxngSearchProvider(),
       new GoogleCseSearchProvider(),
       new BraveSearchProvider(),

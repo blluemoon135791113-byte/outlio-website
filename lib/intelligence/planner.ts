@@ -284,6 +284,34 @@ function deterministicFundingPlan(question: string): ResearchPlan | null {
 }
 
 /**
+ * A narrowly explicit email request needs no model interpretation. Keeping
+ * this deterministic prevents a planner from adding seniority or other paid
+ * fields to "just give me their work emails".
+ */
+function deterministicEmailPlan(question: string): ResearchPlan | null {
+  const lower = question.toLowerCase()
+  if (!/\b(?:work|business|professional|corporate)\s+email(?: address)?(?:es)?\b/.test(lower)) {
+    return null
+  }
+
+  const otherResearchIntent =
+    /\b(?:fund(?:ing|ed)?|rais(?:e|ed|es|ing)|headcount|employees?|industry|revenue|technolog(?:y|ies)|tech stack|hiring|news|competitors?|pricing|reviews?|phone|mobile)\b/
+  if (otherResearchIntent.test(lower)) return null
+
+  const fields: ResearchField[] = ['work_email']
+  if (/\b(?:verified|valid|deliverable|status)\b/.test(lower)) fields.push('email_status')
+
+  return {
+    entityScope: 'people',
+    requiredFields: fields,
+    outputFields: fields,
+    filters: {},
+    clarificationRequired: false,
+    clarificationQuestions: [],
+  }
+}
+
+/**
  * Turns a question into a validated plan.
  *
  * Never throws. A model that is unreachable, misconfigured, or producing
@@ -310,7 +338,9 @@ export async function planQuery(options: PlanQueryOptions): Promise<PlannerOutco
     }
   }
 
-  const deterministic = deterministicFundingPlan(question)
+  const emailPlan = deterministicEmailPlan(question)
+  const deterministic = emailPlan ?? deterministicFundingPlan(question)
+  const deterministicModel = emailPlan ? 'email-rules-v1' : 'funding-rules-v1'
   if (deterministic) {
     if (deterministic.clarificationRequired) {
       return {
@@ -318,7 +348,7 @@ export async function planQuery(options: PlanQueryOptions): Promise<PlannerOutco
         plan: deterministic,
         questions: deterministic.clarificationQuestions,
         vendor: 'deterministic',
-        model: 'funding-rules-v1',
+        model: deterministicModel,
       }
     }
 
@@ -326,7 +356,7 @@ export async function planQuery(options: PlanQueryOptions): Promise<PlannerOutco
       status: 'planned',
       plan: deterministic,
       vendor: 'deterministic',
-      model: 'funding-rules-v1',
+      model: deterministicModel,
     }
   }
 

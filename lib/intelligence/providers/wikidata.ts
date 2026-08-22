@@ -102,10 +102,22 @@ export function pickWikidataEntity(
     (candidate) => candidate.id && normalizeCompanyName(candidate.label ?? '') === target,
   )
 
-  // Exactly one entity may carry this name. Two equally-named items mean the
-  // name is ambiguous, and picking either would be a guess.
-  if (matches.length !== 1) return null
-  return matches[0]!.id ?? null
+  if (matches.length === 1) return matches[0]!.id ?? null
+
+  /*
+   * Wikidata commonly returns an organisation, a person and a fictional
+   * character with the same exact label ("Stripe" is a live example). Its
+   * search description is useful only as a disambiguator here; the fetched
+   * entity still has to pass the authoritative P31 organisation gate below.
+   * Refuse if descriptions leave more than one plausible organisation.
+   */
+  const organisationDescription =
+    /\b(?:company|corporation|business|enterprise|organisation|organization|firm|startup|bank|manufacturer|retailer|university|nonprofit)\b/i
+  const describedOrganisations = matches.filter((candidate) =>
+    organisationDescription.test(candidate.description ?? ''),
+  )
+
+  return describedOrganisations.length === 1 ? (describedOrganisations[0]!.id ?? null) : null
 }
 
 function statementContents(item: ItemResponse, property: string): unknown[] {

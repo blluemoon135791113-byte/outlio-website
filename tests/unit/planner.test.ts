@@ -167,6 +167,26 @@ describe('planQuery — happy paths', () => {
     expect(outcome.plan.requiredFields).toEqual(['work_email'])
   })
 
+  it('does not let a model widen an explicit work-email-only request', async () => {
+    const llm = stubLlm([
+      replied({
+        entityScope: 'people',
+        requiredFields: ['person_seniority', 'work_email'],
+        clarificationRequired: false,
+      }),
+    ])
+
+    const outcome = await planQuery({
+      question: "Just give me the founders' work email addresses.",
+      llm,
+    })
+
+    expect(outcome.status).toBe('planned')
+    if (outcome.status !== 'planned') return
+    expect(outcome.plan.requiredFields).toEqual(['work_email'])
+    expect(outcome.vendor).toBe('deterministic')
+  })
+
   it('preserves SaaS and SDR hiring constraints even when the model drops them', async () => {
     const llm = stubLlm([
       replied({ requiredFields: ['hiring_signals'], filters: {}, clarificationRequired: false }),

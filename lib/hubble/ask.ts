@@ -18,9 +18,11 @@ import 'server-only'
  * analysis stays with the existing provider pipeline and SQL aggregation.
  */
 import { learnDomainFromSources, resolveCompanyDomain, siteScopedQuery } from '@/lib/hubble/domain'
+import { crawl4AiPageFetcher } from '@/lib/hubble/fetch/crawl4ai'
 import { httpPageFetcher } from '@/lib/hubble/fetch/fetcher'
 import { resolveEmbeddingProvider } from '@/lib/hubble/providers/embedding'
 import { resolveSearchProvider } from '@/lib/hubble/providers/search'
+import { indexPageInSolr } from '@/lib/hubble/providers/solr'
 import {
   DEFAULT_BUDGET,
   emptyUsage,
@@ -233,14 +235,28 @@ export async function askHubble(
 
     const fetched = await pooled(toFetch, budget.concurrency, async (url) => {
       if (Date.now() > deadline) return null
-      const page = await httpPageFetcher.fetchPage(url, { deadlineAt: deadline })
-      if (isFetchFailure(page)) return null
-      return page
+      const direct = await httpPageFetcher.fetchPage(url, { deadlineAt: deadline })
+      if (!isFetchFailure(direct)) return direct
+
+      // Browser rendering is reserved for pages plain HTTP could not read and
+      // is bounded across the whole question, regardless of fetch concurrency.
+      if (
+        usage.browserFetches >= budget.maxBrowserFetches ||
+        (direct.code !== 'empty' && direct.code !== 'http_error')
+      ) return null
+
+      usage.browserFetches += 1
+      const rendered = await crawl4AiPageFetcher.fetchPage(url, { deadlineAt: deadline })
+      return isFetchFailure(rendered) ? null : rendered
     })
 
     for (const page of fetched) {
       if (!page) continue
       usage.pagesFetched += 1
+
+      // Solr is an acceleration layer, never the source of truth. Indexing is
+      // best-effort and cannot block saving the evidence in Hubble's database.
+      await indexPageInSolr(page, { deadlineAt: deadline })
 
       const pieces = chunkText(page.content)
       if (pieces.length === 0) continue

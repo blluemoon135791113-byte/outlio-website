@@ -312,13 +312,15 @@ describe('the search waterfall is ordered by cost', () => {
      * Brave sits below Google CSE deliberately: its free tier requires a card
      * on file, which is not free in the way that matters to someone choosing
      * a provider. Deploying SearXNG later must demote all of them, and none
-     * of it should need a code change — only an environment variable.
+     * of it should need a code change — only an environment variable. Solr is
+     * first because reusing Hubble's indexed evidence is cheaper than a search.
      */
     const source = await import('node:fs/promises').then((fs) =>
       fs.readFile('lib/hubble/providers/search.ts', 'utf8'),
     )
 
     const order = [
+      'SolrSearchProvider()',
       'SearxngSearchProvider()',
       'GoogleCseSearchProvider()',
       'BraveSearchProvider()',

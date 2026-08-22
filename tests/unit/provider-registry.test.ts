@@ -73,6 +73,25 @@ describe('pickWikidataEntity', () => {
     ).toBeNull()
   })
 
+  it('uses an organisation description to disambiguate identical labels', () => {
+    expect(
+      pickWikidataEntity('Stripe', [
+        { id: 'Q1', label: 'Stripe', description: 'Irish-American payment technology company' },
+        { id: 'Q2', label: 'Stripe', description: 'fictional character' },
+        { id: 'Q3', label: 'Stripe', description: 'South African progamer' },
+      ]),
+    ).toBe('Q1')
+  })
+
+  it('still refuses two identically named organisations', () => {
+    expect(
+      pickWikidataEntity('Acme', [
+        { id: 'Q1', label: 'Acme', description: 'software company' },
+        { id: 'Q2', label: 'Acme', description: 'manufacturing company' },
+      ]),
+    ).toBeNull()
+  })
+
   it('returns null for no candidates or no name', () => {
     expect(pickWikidataEntity('Acme', [])).toBeNull()
     expect(pickWikidataEntity(null, [{ id: 'Q1', label: 'Acme' }])).toBeNull()
