@@ -15,12 +15,14 @@
 import { useState } from 'react'
 
 import { renderCellValue } from '@/components/intelligence/render-value'
-import type { RunPhase, RunResults } from '@/components/intelligence/useResearchRun'
+import type { RunPhase, RunResults, RunSummary } from '@/components/intelligence/useResearchRun'
 
 export function HubbleResultPanel({
   phase,
   message,
   results,
+  summary,
+  summaryPending,
   merge,
   onEnrich,
   onClarify,
@@ -30,6 +32,8 @@ export function HubbleResultPanel({
   phase: RunPhase
   message: string | null
   results: RunResults | null
+  summary: RunSummary | null
+  summaryPending: boolean
   merge: { state: 'idle' | 'busy' | 'done'; summary: string | null }
   onEnrich: () => void
   onClarify: (answers: Record<string, string>) => void
@@ -160,16 +164,23 @@ export function HubbleResultPanel({
             <EmptyResearchResult results={results} columnLabel={columnLabel} />
           ) : (
             <div className="space-y-3">
-              <dl className="grid grid-cols-2 gap-2">
-                <Stat label="Matches" value={results.rows.length} />
-                <Stat label="Companies checked" value={results.metadata.companiesResearched} />
-                <Stat label="Reused from cache" value={results.metadata.cachedResultsUsed} />
-                <Stat label="External calls" value={results.metadata.externalCalls} />
-              </dl>
+              {/*
+                ⚠️ THE FINDING COMES FIRST, AND IT IS PROSE.
 
-              <p className="text-sm font-medium text-ink">
-                Found {results.rows.length.toLocaleString()} matching compan{results.rows.length === 1 ? 'y' : 'ies'}.
-              </p>
+                This panel used to open with four telemetry tiles — matches,
+                companies checked, cache reuse, external calls — none of which
+                the person asking the question wanted to know. Below them came
+                every lead in the run, most reading "Not found". The few
+                companies that HAD an answer were buried among them.
+
+                A question about twenty companies is a question about what is
+                true across them. That is a sentence.
+              */}
+              <SummaryBlock
+                summary={summary}
+                pending={summaryPending}
+                rowCount={results.rows.length}
+              />
 
               {(() => {
                 /*
@@ -206,7 +217,19 @@ export function HubbleResultPanel({
                 return null
               })()}
 
-              <ul className="space-y-2.5">
+              {/*
+                The per-lead detail still exists — it is what `Enrich List
+                Data` writes into the export, and someone verifying a claim
+                needs it. It is COLLAPSED because reading twenty cards is not
+                how anyone consumes a finding.
+              */}
+              <details className="group">
+                <summary className="cursor-pointer list-none text-xs text-muted underline decoration-clay-sunken underline-offset-2 hover:text-ink">
+                  Show the {results.rows.length.toLocaleString()} row
+                  {results.rows.length === 1 ? '' : 's'} behind this
+                </summary>
+
+              <ul className="mt-2.5 space-y-2.5">
                 {results.rows.map((row) => (
                   <li key={row.leadId} className="clay-sunken px-3.5 py-3">
                     <p className="truncate text-sm font-medium text-ink">
@@ -265,10 +288,11 @@ export function HubbleResultPanel({
               </ul>
 
               {results.truncated ? (
-                <p className="text-xs text-muted">
+                <p className="mt-2 text-xs text-muted">
                   Showing the first {results.rows.length} rows. Narrow the list to see the rest.
                 </p>
               ) : null}
+              </details>
             </div>
           )
         ) : null}
@@ -308,6 +332,62 @@ export function HubbleResultPanel({
         </footer>
       ) : null}
     </aside>
+  )
+}
+
+/**
+ * The written finding, and one honest line about coverage.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ COVERAGE IS A NUMBER, NEVER A ROLL-CALL.                             ║
+ * ║                                                                          ║
+ * ║  "4 of 20 had a public record" tells the user everything the old wall of ║
+ * ║  "Not found" cards told them, in nine words, without burying the four    ║
+ * ║  that did. Naming the sixteen would be listing what we do not have —     ║
+ * ║  which is exactly what the user cannot act on.                           ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function SummaryBlock({
+  summary,
+  pending,
+  rowCount,
+}: {
+  summary: RunSummary | null
+  pending: boolean
+  rowCount: number
+}) {
+  if (pending) {
+    return (
+      <div role="status" className="space-y-1.5">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <span key={index} className="hubble-shimmer block h-2.5 rounded-full" />
+        ))}
+        <span className="sr-only">Working out what these results show</span>
+      </div>
+    )
+  }
+
+  if (!summary) {
+    /*
+     * No finding: nothing was found, or no model is configured. Say it plainly
+     * rather than leave a gap where a paragraph should be.
+     */
+    return (
+      <p className="text-sm text-muted">
+        Nothing was found for this question across the {rowCount.toLocaleString()} compan
+        {rowCount === 1 ? 'y' : 'ies'} checked.
+      </p>
+    )
+  }
+
+  return (
+    <div>
+      <p className="text-sm leading-relaxed whitespace-pre-wrap text-ink">{summary.text}</p>
+      <p className="mt-1.5 text-xs text-muted">
+        Based on {summary.withData} of {(summary.withData + summary.withoutData).toLocaleString()}{' '}
+        compan{summary.withData + summary.withoutData === 1 ? 'y' : 'ies'} with a public record.
+      </p>
+    </div>
   )
 }
 

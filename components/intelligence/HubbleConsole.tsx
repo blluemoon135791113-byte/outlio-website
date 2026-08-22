@@ -348,6 +348,8 @@ export function HubbleConsole({
             phase={run.phase}
             message={run.message}
             results={run.results}
+            summary={run.summary}
+            summaryPending={run.summaryPending}
             merge={run.merge}
             onEnrich={() => void run.enrich()}
             onClarify={(answers) => void run.clarify(answers)}

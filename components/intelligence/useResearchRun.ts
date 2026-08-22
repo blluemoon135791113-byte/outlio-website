@@ -85,8 +85,13 @@ export type RunPhase = 'idle' | 'planning' | 'clarifying' | 'running' | 'done' |
 
 const POLL_MS = 2_500
 
+/** The written finding for a completed run. Null until it arrives. */
+export type RunSummary = { text: string; withData: number; withoutData: number }
+
 export function useResearchRun() {
   const [phase, setPhase] = useState<RunPhase>('idle')
+  const [summary, setSummary] = useState<RunSummary | null>(null)
+  const [summaryPending, setSummaryPending] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [results, setResults] = useState<RunResults | null>(null)
   const [merge, setMerge] = useState<{ state: 'idle' | 'busy' | 'done'; summary: string | null }>({
@@ -101,6 +106,22 @@ export function useResearchRun() {
   useEffect(() => {
     return () => {
       if (pollRef.current) clearTimeout(pollRef.current)
+    }
+  }, [])
+
+  const loadSummary = useCallback(async (runId: string) => {
+    setSummaryPending(true)
+    try {
+      const response = await fetch(`/api/intelligence/runs/${runId}/summary`, { method: 'POST' })
+      if (!response.ok) return
+
+      const data = (await response.json()) as { summary: RunSummary | null }
+      setSummary(data.summary)
+    } catch {
+      // A missing finding is not an error worth showing: the rows are already
+      // on screen and the panel simply omits the paragraph.
+    } finally {
+      setSummaryPending(false)
     }
   }, [])
 
@@ -119,6 +140,12 @@ export function useResearchRun() {
 
         if (data.status === 'completed' || data.status === 'partially_complete') {
           setPhase('done')
+          /*
+           * ⚠️ FIRED ONCE, HERE — not inside the poll body above it. Asking
+           * for the finding on every tick would spend an LLM call every two
+           * seconds, most of them over rows that are still arriving.
+           */
+          void loadSummary(runId)
           return
         }
         if (data.status === 'failed' || data.status === 'cancelled') {
@@ -291,6 +318,8 @@ export function useResearchRun() {
     setPhase('idle')
     setMessage(null)
     setResults(null)
+    setSummary(null)
+    setSummaryPending(false)
     setMerge({ state: 'idle', summary: null })
   }, [])
 
@@ -298,6 +327,8 @@ export function useResearchRun() {
     phase,
     message,
     results,
+    summary,
+    summaryPending,
     merge,
     ask,
     clarify,

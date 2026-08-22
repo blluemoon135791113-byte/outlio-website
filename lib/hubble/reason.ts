@@ -34,7 +34,7 @@ import { resolveLlmProvider } from '@/lib/intelligence/llm/provider'
  * pipeline unchanged — swapping the model under an already-working system for
  * a weaker local one would be a regression nobody asked for.
  */
-function resolveHubbleLlm() {
+export function resolveHubbleLlm() {
   return new LlmWaterfall(new OllamaLlmProvider(), resolveLlmProvider())
 }
 
