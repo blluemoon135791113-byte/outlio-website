@@ -15,7 +15,7 @@ import 'server-only'
  * ║  failed answer, and no caller should treat null as an error.             ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-import type { EmbeddingProvider } from '@/lib/hubble/providers/types'
+import type { DeadlineOptions, EmbeddingProvider } from '@/lib/hubble/providers/types'
 
 /** Small, fast, and good enough for passage ranking. */
 const DEFAULT_MODEL = 'nomic-embed-text'
@@ -23,6 +23,11 @@ const DEFAULT_DIMENSIONS = 768
 
 /** Local inference on CPU is not fast; this is generous but bounded. */
 const TIMEOUT_MS = 20_000
+
+function timeoutFor(options: DeadlineOptions, cap: number): number {
+  if (options.deadlineAt === undefined) return cap
+  return Math.max(1, Math.min(cap, options.deadlineAt - Date.now()))
+}
 
 export class OllamaEmbeddingProvider implements EmbeddingProvider {
   readonly name = 'ollama'
@@ -78,14 +83,15 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
    */
   private available: Promise<boolean> | null = null
 
-  async isUsable(): Promise<boolean> {
+  async isUsable(options: DeadlineOptions = {}): Promise<boolean> {
     const base = this.baseUrl
     if (!base) return false
+    if (options.deadlineAt !== undefined && options.deadlineAt <= Date.now()) return false
 
     this.available ??= (async () => {
       try {
         const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 3_000)
+        const timer = setTimeout(() => controller.abort(), timeoutFor(options, 3_000))
         const response = await fetch(`${base}/api/tags`, { signal: controller.signal })
         clearTimeout(timer)
 
@@ -107,12 +113,16 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     return this.available
   }
 
-  async embed(texts: readonly string[]): Promise<number[][] | null> {
+  async embed(
+    texts: readonly string[],
+    options: DeadlineOptions = {},
+  ): Promise<number[][] | null> {
     const base = this.baseUrl
     if (!base || texts.length === 0) return null
+    if (options.deadlineAt !== undefined && options.deadlineAt <= Date.now()) return null
 
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const timer = setTimeout(() => controller.abort(), timeoutFor(options, TIMEOUT_MS))
 
     try {
       const response = await fetch(`${base}/api/embed`, {

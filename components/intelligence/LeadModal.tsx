@@ -208,7 +208,7 @@ export function LeadModal({
                 className="min-w-0 flex-1 bg-transparent px-2.5 text-sm text-ink outline-none placeholder:text-muted disabled:opacity-70"
               />
               <span className="hidden shrink-0 items-center gap-1.5 rounded-[var(--radius-clay)] bg-clay-surface px-3 py-2 text-xs font-medium text-ink shadow-[var(--clay-shadow)] sm:inline-flex">
-                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-teal" />
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-ink" />
                 {modelName}
               </span>
               <button
@@ -250,7 +250,7 @@ function ResearchingSkeleton({ phase }: { phase: Phase | null }) {
     <div role="status" aria-live="polite">
       {phase ? (
         <p className="mb-2 flex items-center gap-2 text-xs text-muted">
-          <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal" />
+          <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-ink" />
           <span className="font-medium text-ink">{phase.label}</span>
           {phase.detail ? <span className="truncate">· {phase.detail}</span> : null}
         </p>

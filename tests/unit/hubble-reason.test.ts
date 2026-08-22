@@ -8,7 +8,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { buildFallbackQueries } from '@/lib/hubble/reason'
-import { questionKey } from '@/lib/hubble/store'
+import { cacheEntryFresh, questionKey } from '@/lib/hubble/store'
 
 vi.mock('server-only', () => ({}))
 
@@ -49,6 +49,17 @@ describe('questionKey', () => {
      */
     expect(questionKey('what do they sell')).not.toBe(questionKey('who funds them'))
     expect(questionKey('are they hiring')).not.toBe(questionKey('are they hiring engineers'))
+  })
+})
+
+describe('RAG cache freshness', () => {
+  it('keeps only unexpired page chunks eligible for retrieval', () => {
+    const now = Date.parse('2026-08-21T12:00:00.000Z')
+
+    expect(cacheEntryFresh(null, now)).toBe(true)
+    expect(cacheEntryFresh('2026-08-21T12:00:01.000Z', now)).toBe(true)
+    expect(cacheEntryFresh('2026-08-21T11:59:59.000Z', now)).toBe(false)
+    expect(cacheEntryFresh('not-a-date', now)).toBe(false)
   })
 })
 

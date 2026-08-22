@@ -23,6 +23,7 @@ import 'server-only'
  * the origin of a number (spec §5: it must not fabricate funding).
  */
 import { normalizeCompanyName } from '@/lib/companies/normalize'
+import { searxngTimeRange } from '@/lib/intelligence/filters'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
 import type {
   CompanyEntity,
@@ -30,6 +31,7 @@ import type {
   NormalizedEvidence,
   ResearchTask,
 } from '@/lib/intelligence/types'
+import { hasSearxngCredentials, searxngSearch } from '@/lib/hubble/providers/search'
 import { gdeltSearch } from './gdelt'
 import { hasTavilyCredentials, tavilySearch, type SearchResult } from './tavily'
 
@@ -83,6 +85,46 @@ export type FundingFacts = {
   investors: string[]
   sourceUrl: string
   sourceTitle: string
+}
+
+/** Search result publication date, kept conservative and deterministic. */
+export function extractAnnouncementDate(
+  document: Pick<SearchResult, 'title' | 'content' | 'url' | 'publishedDate'>,
+  now: Date = new Date(),
+): string | null {
+  if (document.publishedDate) {
+    const parsed = Date.parse(document.publishedDate)
+    if (Number.isFinite(parsed)) return new Date(parsed).toISOString()
+  }
+
+  const text = `${document.title} ${document.content}`
+  // Relative ages are trustworthy only when the search engine prefixes the
+  // snippet with them. An arbitrary "three days ago" inside article prose may
+  // describe the funding event rather than the publication date.
+  const relative = /^\s*(\d{1,3})\s+(hour|day|week)s?\s+ago\b/i.exec(document.content)
+  if (relative) {
+    const amount = Number.parseInt(relative[1]!, 10)
+    const date = new Date(now)
+    date.setUTCHours(
+      date.getUTCHours() - amount * (relative[2]!.toLowerCase() === 'week' ? 168 : relative[2]!.toLowerCase() === 'day' ? 24 : 1),
+    )
+    return date.toISOString()
+  }
+
+  const absolute = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},\s+20\d{2}\b/i.exec(text)
+  if (absolute) {
+    // Date-only search snippets have no timezone. Treating them as the server's
+    // local midnight moves the day backwards in UTC on positive offsets.
+    const parsed = Date.parse(`${absolute[0]} UTC`)
+    if (Number.isFinite(parsed)) return new Date(parsed).toISOString()
+  }
+
+  const urlDate = /\/(20\d{2})\/(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])(?:\/|$)/.exec(
+    document.url,
+  )
+  if (urlDate) return `${urlDate[1]}-${urlDate[2]}-${urlDate[3]}T00:00:00.000Z`
+
+  return null
 }
 
 function looksLikeFundingNews(text: string): boolean {
@@ -217,7 +259,10 @@ export function extractInvestors(text: string): string[] {
 export function extractFunding(
   companyName: string | null,
   documents: readonly SearchResult[],
+  wantedFields: readonly ResearchTask['fields'][number][] = [],
 ): FundingFacts | null {
+  let best: { facts: FundingFacts; score: number } | null = null
+
   for (const doc of documents) {
     const text = `${doc.title}. ${doc.content}`.trim()
     if (!looksLikeFundingNews(text)) continue
@@ -225,23 +270,37 @@ export function extractFunding(
 
     const round = extractRound(text)
     const money = extractAmount(text)
+    const investors = extractInvestors(text)
+    const announcedAt = extractAnnouncementDate(doc)
 
-    // Neither a round nor an amount means this is funding-adjacent chatter, not
-    // an announcement worth recording.
-    if (!round && !money) continue
+    // An investor-only task may find a sourced participant list in an article
+    // whose headline does not repeat the amount or stage.
+    if (!round && !money && investors.length === 0) continue
 
-    return {
+    const facts: FundingFacts = {
       round,
       amount: money?.amount ?? null,
       currency: money?.currency ?? null,
-      announcedAt: doc.publishedDate,
-      investors: extractInvestors(text),
+      announcedAt,
+      investors,
       sourceUrl: doc.url,
       sourceTitle: doc.title,
     }
+
+    const wanted = new Set(wantedFields)
+    const score =
+      (wanted.has('funding_round') && facts.round ? 1 : 0) +
+      (wanted.has('funding_amount') && facts.amount !== null ? 1 : 0) +
+      (wanted.has('funding_currency') && facts.currency ? 1 : 0) +
+      (wanted.has('funding_date') && facts.announcedAt ? 1 : 0) +
+      (wanted.has('funding_investors') && facts.investors.length > 0 ? 1 : 0)
+
+    // No field preference preserves the original first-valid-document API.
+    if (wanted.size === 0) return facts
+    if (!best || score > best.score) best = { facts, score }
   }
 
-  return null
+  return best?.facts ?? null
 }
 
 function toEvidence(
@@ -309,7 +368,43 @@ function toEvidence(
   return evidence
 }
 
-const FUNDING_QUERY = (name: string) => `${name} raises funding round investment`
+function fundingQuery(task: ResearchTask): string {
+  const company = task.entity as CompanyEntity
+  const parts = [`"${(company.name ?? '').replace(/"/g, '')}"`]
+  const round = task.filters?.funding_round
+  if (typeof round === 'string') parts.push(`"${round.replace(/"/g, '')}"`)
+  parts.push(task.fields.includes('funding_investors') ? 'funding investors' : 'raises funding')
+  return parts.join(' ')
+}
+
+export const searxngFundingProvider: IntelligenceProvider<FundingFacts | null> = {
+  name: 'searxng-funding',
+  category: 'funding',
+
+  canHandle: (task) =>
+    task.entity.type === 'company' &&
+    Boolean((task.entity as CompanyEntity).name) &&
+    hasSearxngCredentials(),
+
+  estimateCost: async () => 0,
+
+  execute: async (task) => {
+    const company = task.entity as CompanyEntity
+    const hits = await searxngSearch(fundingQuery(task), 10, {
+      timeRange: searxngTimeRange(task.filters ?? {}),
+    })
+    const documents: SearchResult[] = hits.map((hit) => ({
+      title: hit.title ?? '',
+      url: hit.url,
+      content: hit.snippet ?? '',
+      score: 0,
+      publishedDate: hit.publishedDate,
+    }))
+    return extractFunding(company.name, documents, task.fields)
+  },
+
+  normalize: (facts, task) => toEvidence('searxng-funding', task, facts),
+}
 
 export const tavilyFundingProvider: IntelligenceProvider<FundingFacts | null> = {
   name: 'tavily-funding',
@@ -325,11 +420,11 @@ export const tavilyFundingProvider: IntelligenceProvider<FundingFacts | null> = 
   execute: async (task) => {
     const company = task.entity as CompanyEntity
     const documents = await tavilySearch({
-      query: FUNDING_QUERY(company.name ?? ''),
+      query: fundingQuery(task),
       maxResults: 8,
       depth: 'advanced',
     })
-    return extractFunding(company.name, documents)
+    return extractFunding(company.name, documents, task.fields)
   },
 
   normalize: (facts, task) => toEvidence('tavily-funding', task, facts),
@@ -340,7 +435,11 @@ export const gdeltFundingProvider: IntelligenceProvider<FundingFacts | null> = {
   category: 'funding',
 
   canHandle: (task) =>
-    task.entity.type === 'company' && Boolean((task.entity as CompanyEntity).name),
+    task.entity.type === 'company' &&
+    Boolean((task.entity as CompanyEntity).name) &&
+    // GDELT is paced at one request per five seconds and is unsuitable for a
+    // list-wide run when the operator-owned search service is available.
+    !hasSearxngCredentials(),
 
   estimateCost: async () => 0,
 
@@ -351,7 +450,7 @@ export const gdeltFundingProvider: IntelligenceProvider<FundingFacts | null> = {
       maxResults: 25,
       timespan: '24months',
     })
-    return extractFunding(company.name, documents)
+    return extractFunding(company.name, documents, task.fields)
   },
 
   normalize: (facts, task) => toEvidence('gdelt-funding', task, facts),

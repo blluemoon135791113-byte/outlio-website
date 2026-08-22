@@ -21,7 +21,7 @@ import 'server-only'
  * ║  Defence 2 is the one that actually holds. Never give this call tools.   ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-import type { AnswerSource, AnswerStatus, SearchHit } from '@/lib/hubble/providers/types'
+import type { AnswerSource, AnswerStatus } from '@/lib/hubble/providers/types'
 import type { ScoredChunk } from '@/lib/hubble/retrieve'
 import { canCorroborate, confidenceCeiling } from '@/lib/hubble/source-quality'
 import { LlmWaterfall, OllamaLlmProvider } from '@/lib/hubble/providers/ollama-llm'
@@ -94,6 +94,17 @@ const PLAN_SCHEMA = {
   required: ['intent', 'queries', 'sufficient'],
 } as const
 
+function validResearchPlan(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Record<string, unknown>
+  return (
+    typeof candidate.intent === 'string' &&
+    Array.isArray(candidate.queries) &&
+    candidate.queries.every((query) => typeof query === 'string') &&
+    typeof candidate.sufficient === 'boolean'
+  )
+}
+
 const PLANNER_SYSTEM = `You plan web research for a B2B sales tool.
 
 Given a question about a company or person, produce SEARCH QUERIES that would
@@ -114,6 +125,8 @@ export async function planResearch(
   question: string,
   context: { companyName: string | null; domain: string | null; personName: string | null; known: string },
   maxQueries: number,
+  deadlineAt?: number,
+  llmAllowed = true,
 ): Promise<{ plan: ResearchPlan; llmCalls: number }> {
   const llm = resolveHubbleLlm()
 
@@ -124,7 +137,7 @@ export async function planResearch(
     sufficient: false,
   }
 
-  if (!llm.isConfigured()) return { plan: fallback, llmCalls: 0 }
+  if (!llmAllowed || !llm.isConfigured()) return { plan: fallback, llmCalls: 0 }
 
   const user = [
     `QUESTION: ${question}`,
@@ -143,6 +156,8 @@ export async function planResearch(
     user,
     schema: PLAN_SCHEMA as unknown as Record<string, unknown>,
     temperature: 0.1,
+    deadlineAt,
+    validate: validResearchPlan,
   })
 
   if (!result.ok) return { plan: fallback, llmCalls: 1 }
@@ -213,6 +228,20 @@ const ANSWER_SCHEMA = {
   required: ['answer', 'status', 'confidence', 'citations'],
 } as const
 
+function validHubbleAnswer(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Record<string, unknown>
+  return (
+    typeof candidate.answer === 'string' &&
+    typeof candidate.status === 'string' &&
+    ['verified', 'corroborated', 'estimated', 'unknown'].includes(candidate.status) &&
+    typeof candidate.confidence === 'number' &&
+    Number.isFinite(candidate.confidence) &&
+    Array.isArray(candidate.citations) &&
+    candidate.citations.every((citation) => Number.isInteger(citation))
+  )
+}
+
 const ANSWER_SYSTEM = `You answer questions for a B2B sales researcher using ONLY the numbered evidence provided.
 
 ═══ SECURITY ═══
@@ -250,6 +279,8 @@ export async function answerFromEvidence(
   leadContext: string,
   companyDomain: string | null = null,
   companyName: string | null = null,
+  deadlineAt?: number,
+  maxLlmCalls = 2,
 ): Promise<{ answer: HubbleAnswer; llmCalls: number }> {
   const llm = resolveHubbleLlm()
 
@@ -267,7 +298,7 @@ export async function answerFromEvidence(
     }
   }
 
-  if (!llm.isConfigured()) {
+  if (!llm.isConfigured() || maxLlmCalls <= 0) {
     /*
      * ⚠️ NO MODEL MEANS NO SYNTHESIS — AND NO PRETENDING OTHERWISE. The
      * retrieved passages are returned as-is with their sources. That is a
@@ -277,7 +308,7 @@ export async function answerFromEvidence(
     return {
       answer: {
         answer:
-          'No language model is configured, so I cannot summarise. Here are the ' +
+          `${maxLlmCalls <= 0 ? 'The research budget ended before synthesis' : 'No language model is configured'}, so I cannot summarise. Here are the ` +
           `most relevant passages I retrieved:\n\n${chunks
             .slice(0, 3)
             .map((chunk, index) => `${index + 1}. ${chunk.content.slice(0, 400)}`)
@@ -332,13 +363,20 @@ export async function answerFromEvidence(
     schema: ANSWER_SCHEMA as unknown as Record<string, unknown>,
     temperature: 0.2,
     maxOutputTokens: 1200,
+    deadlineAt,
+    validate: validHubbleAnswer,
   }
 
   let result = await llm.generateJson(request)
   let llmCallsMade = 1
 
   // `not_configured` will not fix itself; only a transient failure is retried.
-  if (!result.ok && result.code !== 'not_configured') {
+  if (
+    !result.ok &&
+    result.code !== 'not_configured' &&
+    maxLlmCalls > 1 &&
+    (deadlineAt === undefined || deadlineAt - Date.now() > 2_000)
+  ) {
     await new Promise((resolve) => setTimeout(resolve, 2_000))
     result = await llm.generateJson(request)
     llmCallsMade = 2

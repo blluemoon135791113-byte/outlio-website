@@ -352,6 +352,8 @@ export type ResearchTask = {
   category: ToolCategory
   entity: ResearchEntity
   fields: ResearchField[]
+  /** Canonical user constraints that help a provider make a precise request. */
+  filters?: Record<string, unknown>
 }
 
 export type TaskOutcome =

@@ -19,6 +19,7 @@ import 'server-only'
  * prospects (spec §5).
  */
 import { validatePlan, type ResearchPlan } from '@/lib/intelligence/plan'
+import { preserveExplicitConstraints } from '@/lib/intelligence/filters'
 import { resolveLlmProvider, type LLMProvider } from '@/lib/intelligence/llm/provider'
 import { RESEARCH_FIELDS, type ResearchField } from '@/lib/intelligence/types'
 
@@ -229,6 +230,60 @@ export type PlanQueryOptions = {
 }
 
 /**
+ * Common funding questions do not need a model to repeat words the user
+ * already supplied. This path is intentionally narrow: it handles explicit
+ * round/date or investor-count requests and leaves open-ended research to the
+ * LLM router.
+ */
+function deterministicFundingPlan(question: string): ResearchPlan | null {
+  const lower = question.toLowerCase()
+  const fundingIntent = /\b(fund(?:ing|ed)?|rais(?:e|ed|es|ing)|series\s+[a-j]|investors?)\b/i.test(
+    question,
+  )
+  if (!fundingIntent) return null
+
+  // Absolute natural-language dates belong to the model-backed parser. The
+  // fast path only handles relative windows it can normalize without guessing.
+  if (/\b(after|since|before)\b/i.test(question)) return null
+
+  // Amount comparisons need currency/number parsing beyond this narrow path.
+  if (/[$€£¥]|\b(?:usd|eur|gbp|cad|aud|inr)\b|\b(?:over|under|more than|less than)\s+[$€£¥]?\d/i.test(question) && !/more than\s+(?:one|two|three|four|five|six|seven|eight|nine|ten)\s+investors?/i.test(question)) {
+    return null
+  }
+
+  const required = new Set<ResearchField>()
+  if (/\binvestors?\b/.test(lower)) required.add('funding_investors')
+  if (/\b(series\s+[a-j]|round|stage)\b/.test(lower)) required.add('funding_round')
+  if (/\b(this week|past\s+\d+|last\s+\d+|recent|recently|when|date|latest)\b/.test(lower)) {
+    required.add('funding_date')
+  }
+
+  if (required.size === 0) return null
+
+  const vagueRecent = /\b(recent|recently|right now)\b/.test(lower) &&
+    !/\b(this week|past\s+\d+\s+(?:day|week|month)s?|last\s+\d+\s+(?:day|week|month)s?|after|since)\b/.test(lower)
+
+  const base: ResearchPlan = {
+    entityScope: 'companies',
+    requiredFields: [...required],
+    outputFields: [...required],
+    filters: {},
+    clarificationRequired: vagueRecent,
+    clarificationQuestions: vagueRecent
+      ? [
+          {
+            id: 'funding_window',
+            question: 'What should count as recently funded?',
+            options: ['1 month', '3 months', '6 months', '12 months'],
+          },
+        ]
+      : [],
+  }
+
+  return preserveExplicitConstraints(question, base)
+}
+
+/**
  * Turns a question into a validated plan.
  *
  * Never throws. A model that is unreachable, misconfigured, or producing
@@ -255,6 +310,26 @@ export async function planQuery(options: PlanQueryOptions): Promise<PlannerOutco
     }
   }
 
+  const deterministic = deterministicFundingPlan(question)
+  if (deterministic) {
+    if (deterministic.clarificationRequired) {
+      return {
+        status: 'clarification_required',
+        plan: deterministic,
+        questions: deterministic.clarificationQuestions,
+        vendor: 'deterministic',
+        model: 'funding-rules-v1',
+      }
+    }
+
+    return {
+      status: 'planned',
+      plan: deterministic,
+      vendor: 'deterministic',
+      model: 'funding-rules-v1',
+    }
+  }
+
   const llm = options.llm ?? resolveLlmProvider()
   if (!llm.isConfigured()) {
     return { status: 'failed', reason: 'No language model is configured.' }
@@ -272,7 +347,12 @@ export async function planQuery(options: PlanQueryOptions): Promise<PlannerOutco
           // would let a bad completion steer the retry.
           `${question}\n\nYour previous reply was rejected: ${lastReason}\nReturn valid JSON matching the schema.`
 
-    const result = await llm.generateJson({ system, user, schema: PLAN_RESPONSE_SCHEMA })
+    const result = await llm.generateJson({
+      system,
+      user,
+      schema: PLAN_RESPONSE_SCHEMA,
+      validate: (candidate) => validatePlan(candidate).ok,
+    })
 
     if (!result.ok) {
       lastReason =
@@ -289,7 +369,7 @@ export async function planQuery(options: PlanQueryOptions): Promise<PlannerOutco
       continue
     }
 
-    const plan = validation.plan
+    const plan = preserveExplicitConstraints(question, validation.plan)
 
     if (plan.clarificationRequired && plan.clarificationQuestions.length > 0) {
       return {

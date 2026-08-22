@@ -109,6 +109,16 @@ export type ProviderRequest = {
   headers?: Record<string, string>
   body?: unknown
   timeoutMs?: number
+  /**
+   * Absolute wall-clock deadline for the whole caller operation.
+   *
+   * Unlike `timeoutMs`, this survives retries: every attempt recomputes the
+   * time left, so four individually bounded requests cannot overrun Hubble's
+   * one-question budget.
+   */
+  deadlineAt?: number
+  /** Override the shared retry policy. LLM routing usually prefers failover. */
+  maxRetries?: number
   /** Bytes. Website fetches raise this; JSON APIs do not need to. */
   maxBytes?: number
   /**
@@ -176,8 +186,21 @@ async function requestOnce(
   const host = hostOf(request.url)
   const maxBytes = request.maxBytes ?? MAX_RESPONSE_BYTES
 
+  if (request.deadlineAt !== undefined && request.deadlineAt <= Date.now()) {
+    return { ok: false, error: new ProviderHttpError('ERR_TIMEOUT', host) }
+  }
+
   await paceHost(host)
   await request.beforeAttempt?.()
+
+  const remainingMs =
+    request.deadlineAt === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, request.deadlineAt - Date.now())
+  const timeoutMs = Math.max(
+    1,
+    Math.min(request.timeoutMs ?? DEFAULT_TIMEOUT_MS, remainingMs),
+  )
 
   let response: Response
   try {
@@ -190,7 +213,7 @@ async function requestOnce(
         ...request.headers,
       },
       body: request.body === undefined ? undefined : JSON.stringify(request.body),
-      signal: AbortSignal.timeout(request.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       cache: 'no-store',
       redirect: 'follow',
     })
@@ -241,14 +264,21 @@ async function requestOnce(
 /** Raw text, for HTML and non-JSON endpoints. Throws `ProviderHttpError`. */
 export async function requestText(request: ProviderRequest): Promise<string> {
   let lastError: ProviderHttpError | null = null
+  const maxRetries = Math.max(0, request.maxRetries ?? MAX_RETRIES)
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     const result = await requestOnce(request, attempt)
     if (result.ok) return result.text
 
     lastError = result.error
-    if (result.retryMs === undefined || attempt === MAX_RETRIES) break
-    await sleep(result.retryMs)
+    if (result.retryMs === undefined || attempt === maxRetries) break
+
+    const retryMs =
+      request.deadlineAt === undefined
+        ? result.retryMs
+        : Math.min(result.retryMs, Math.max(0, request.deadlineAt - Date.now()))
+    if (request.deadlineAt !== undefined && request.deadlineAt <= Date.now()) break
+    await sleep(retryMs)
   }
 
   throw lastError ?? new ProviderHttpError('ERR_PROVIDER_UNAVAILABLE', hostOf(request.url))

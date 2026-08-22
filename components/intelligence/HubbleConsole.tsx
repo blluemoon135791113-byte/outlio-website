@@ -22,6 +22,7 @@ import { columnLabel } from '@/components/intelligence/render-value'
 import { useResearchRun, type ResearchScope } from '@/components/intelligence/useResearchRun'
 import type { LeadBatch } from '@/lib/intelligence/batches'
 import { dateRangeBounds } from '@/lib/intelligence/date-range'
+import { researchScopeForView } from '@/lib/intelligence/view-scope'
 import { createClient } from '@/lib/supabase/client'
 
 /** One list is 25 leads. */
@@ -34,12 +35,11 @@ const LIST_SIZE = 25
  * strip are the same height by construction rather than by two numbers someone
  * has to keep in step.
  */
-const RESULT_PANE_HEIGHT = 'h-[calc(100dvh-13rem)] min-h-[32rem]'
+const RESULT_PANE_HEIGHT = 'lg:h-[calc(100dvh-13rem)] lg:min-h-[32rem]'
 
 const SUGGESTIONS = [
-  'Companies raising their Series A right now',
+  'Companies that announced a Series A in the last 3 months',
   'Which of these use HubSpot?',
-  'Head-count of each company',
   'Find SaaS leads hiring SDRs',
 ]
 
@@ -243,11 +243,13 @@ export function HubbleConsole({
    * that silently researched every lead while the filter said otherwise would
    * be an unbounded spend the user never approved.
    */
-  const scope = (): ResearchScope => {
-    if (batchId) return { type: 'extraction_job', extractionJobId: batchId }
-    if (from && to) return { type: 'date_range', from, to }
-    return { type: 'all_leads' }
-  }
+  const scope = (): ResearchScope | null =>
+    researchScopeForView({
+      batchId,
+      from,
+      to,
+      visibleLeadIds: leads.map((lead) => lead.id),
+    })
 
   const openLead = leads.find((lead) => lead.id === openLeadId) ?? null
 
@@ -259,13 +261,13 @@ export function HubbleConsole({
 
   return (
     /*
-     * The cream page from the mockup. Applied with a negative bleed so it
+     * The neutral Hubble page. Applied with a negative bleed so it
      * reaches the edges of the shell's content area, and scoped here so the
      * extraction workspace keeps its own surface.
      */
-    <div className="-mx-4 -my-6 min-h-[calc(100dvh-4rem)] space-y-6 bg-clay-bg px-4 py-6 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+    <div className="hubble-page -mx-4 -my-6 min-h-[calc(100dvh-4rem)] space-y-7 bg-clay-bg px-4 py-6 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
       <header>
-        <h1 className="text-[38px] font-semibold leading-[1.1] tracking-[-0.04em] text-ink">
+        <h1 className="text-[34px] font-semibold leading-[1.1] tracking-[-0.04em] text-ink">
           Hubble
         </h1>
         <p className="mt-2 text-[15px] leading-relaxed text-muted">
@@ -276,9 +278,17 @@ export function HubbleConsole({
       <HubblePromptBar
         value={question}
         onChange={setQuestion}
-        onSubmit={() => void run.ask(question, scope(), null)}
+        onSubmit={() => {
+          const selectedScope = scope()
+          if (selectedScope) void run.ask(question, selectedScope, null)
+        }}
         busy={busy}
-        modelName={modelName}
+        shimmer={run.phase === 'planning'}
+        busyLabel={
+          run.phase === 'planning'
+            ? 'Generating the research plan…'
+            : 'Searching and verifying sources…'
+        }
         suggestions={SUGGESTIONS}
       />
 

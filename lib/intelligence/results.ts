@@ -16,6 +16,7 @@ import { dateRangeBounds } from '@/lib/intelligence/date-range'
 import { readEvidence } from '@/lib/intelligence/evidence-store'
 import { evidenceKey } from '@/lib/intelligence/evidence'
 import { validatePlan } from '@/lib/intelligence/plan'
+import { dedupeRowsForPlan, shapeRowsForPlan } from '@/lib/intelligence/result-match'
 import { RESEARCH_FIELD_SPEC, type ResearchField } from '@/lib/intelligence/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ResearchRunStatus } from '@/types/database'
@@ -74,11 +75,53 @@ export type RunResults = {
     cachedResultsUsed: number
     externalCalls: number
     durationMs: number | null
+    /** Coverage before filters hide rows, so an empty result can explain why. */
+    fieldCoverage: Partial<Record<ResearchField, FieldCoverage>>
   }
   clarification: {
     questions: Array<{ id: string; question: string; options: string[] }>
   } | null
   error: string | null
+}
+
+export type FieldCoverage = {
+  known: number
+  notFound: number
+  providerUnavailable: number
+  noProvider: number
+  noCompany: number
+}
+
+function summarizeFieldCoverage(
+  rows: readonly ResultRow[],
+  columns: readonly ResearchField[],
+): Partial<Record<ResearchField, FieldCoverage>> {
+  return Object.fromEntries(
+    columns.map((field) => {
+      const summary: FieldCoverage = {
+        known: 0,
+        notFound: 0,
+        providerUnavailable: 0,
+        noProvider: 0,
+        noCompany: 0,
+      }
+
+      for (const row of rows) {
+        const cell = row.fields[field]
+        if (cell?.state === 'known') {
+          summary.known += 1
+          continue
+        }
+
+        if (cell?.reason === 'provider_unavailable') summary.providerUnavailable += 1
+        else if (cell?.reason === 'no_provider') summary.noProvider += 1
+        else if (cell?.reason === 'no_company') summary.noCompany += 1
+        else summary.notFound += 1
+      }
+
+      return [field, summary]
+    }),
+  )
 }
 
 /**
@@ -122,6 +165,7 @@ export async function getRunResults(
       cachedResultsUsed: run.cache_hit_count,
       externalCalls: run.external_call_count,
       durationMs: run.duration_ms,
+      fieldCoverage: {},
     },
     clarification: null,
     error: run.error_message,
@@ -136,9 +180,21 @@ export async function getRunResults(
   if (run.status !== 'completed' && run.status !== 'partially_complete') return base
 
   const scope = run.scope as { type?: string; leadIds?: string[] }
-  const rows = await loadRows(userId, run.id, scope, columns, Boolean(run.qualification_profile_id))
+  const loaded = await loadRows(userId, run.id, scope, columns, Boolean(run.qualification_profile_id))
+  const candidates = validation.ok
+    ? dedupeRowsForPlan(loaded.rows, validation.plan)
+    : loaded.rows
+  const rows = validation.ok ? shapeRowsForPlan(loaded.rows, validation.plan) : loaded.rows
 
-  return { ...base, rows: rows.rows, truncated: rows.truncated }
+  return {
+    ...base,
+    rows,
+    truncated: loaded.truncated,
+    metadata: {
+      ...base.metadata,
+      fieldCoverage: summarizeFieldCoverage(candidates, columns),
+    },
+  }
 }
 
 /**

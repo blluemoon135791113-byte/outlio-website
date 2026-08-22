@@ -33,6 +33,8 @@ export type RoutingInput = {
   people: readonly PersonEntity[]
   /** Fields the plan says it needs. Order is irrelevant. */
   requiredFields: readonly ResearchField[]
+  /** User criteria forwarded to providers; never used to widen the task list. */
+  filters?: Readonly<Record<string, unknown>>
   /** What Outlio already knows, from `readEvidence`. */
   knowledge?: ReadonlyMap<string, FieldKnowledge>
 }
@@ -110,6 +112,7 @@ export function planToTasks(input: RoutingInput): RoutingPlan {
           category: spec.category,
           entity,
           fields: [field],
+          filters: input.filters ? { ...input.filters } : undefined,
         })
       }
     }

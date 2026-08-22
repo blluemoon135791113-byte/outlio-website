@@ -28,17 +28,19 @@ import {
   type AnyIntelligenceProvider,
   type ToolCategory,
 } from '@/lib/intelligence/types'
+import { hasSearxngCredentials } from '@/lib/hubble/providers/search'
 import { apolloEmailProvider } from './apollo'
 import { companiesHouseProvider } from './companies-house'
 import { dnsTechProvider } from './dns-tech'
 import { domainDiscoveryProvider } from './domain-discovery'
 import { githubProvider } from './github'
 import { hackerNewsProvider } from './hackernews'
-import { gdeltFundingProvider, tavilyFundingProvider } from './funding'
+import { gdeltFundingProvider, searxngFundingProvider, tavilyFundingProvider } from './funding'
 import { pageSpeedTechProvider } from './pagespeed'
 import { prospeoEmailProvider, prospeoPhoneProvider } from './prospeo'
 import { secEdgarProvider } from './sec-edgar'
-import { gdeltWebResearchProvider, tavilyWebResearchProvider } from './web-research'
+import { gdeltWebResearchProvider, searxngWebResearchProvider, tavilyWebResearchProvider } from './web-research'
+import { searxngCompanyProfileProvider } from './search-profile'
 import { usaSpendingProvider } from './usaspending'
 import { wikidataProvider } from './wikidata'
 
@@ -51,9 +53,12 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(companiesHouseProvider),
   eraseProviderType(secEdgarProvider),
   eraseProviderType(domainDiscoveryProvider),
+  eraseProviderType(searxngCompanyProfileProvider),
+  eraseProviderType(searxngFundingProvider),
   eraseProviderType(tavilyFundingProvider),
   eraseProviderType(gdeltFundingProvider),
   eraseProviderType(tavilyWebResearchProvider),
+  eraseProviderType(searxngWebResearchProvider),
   eraseProviderType(gdeltWebResearchProvider),
   eraseProviderType(dnsTechProvider),
   eraseProviderType(pageSpeedTechProvider),
@@ -73,11 +78,12 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
     'wikidata',
     'companies-house',
     'sec-edgar',
+    'searxng-company-profile',
     'tavily-domain-discovery',
     'usaspending',
   ],
-  funding: ['tavily-funding', 'gdelt-funding'],
-  web_research: ['tavily-web', 'gdelt-web'],
+  funding: ['searxng-funding', 'tavily-funding', 'gdelt-funding'],
+  web_research: ['searxng-web', 'tavily-web', 'gdelt-web'],
   /*
    * DNS first: it is free, ~50ms, and sees the marketing and sales stack that
    * matters to an ICP question. PageSpeed is slower, costs a rendered page, and
@@ -175,6 +181,10 @@ function isConfigured(name: string): boolean {
     case 'tavily-funding':
     case 'tavily-web':
       return Boolean(process.env.TAVILY_API_KEY)
+    case 'searxng-funding':
+    case 'searxng-web':
+    case 'searxng-company-profile':
+      return hasSearxngCredentials()
     case 'pagespeed-tech':
       return Boolean(process.env.PAGESPEED_API_KEY)
     // No key exists for DNS — it uses the system resolver.

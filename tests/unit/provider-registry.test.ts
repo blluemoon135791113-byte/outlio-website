@@ -192,6 +192,7 @@ describe('extractTechnologies', () => {
 describe('the live registry', () => {
   const original = process.env.INTELLIGENCE_PROVIDER_ORDER
   const originalPaid = process.env.OUTLIO_ALLOW_PAID_PROVIDERS
+  const originalSearxngUrl = process.env.SEARXNG_URL
 
   /*
    * These assert WATERFALL ORDER, which is only observable when every provider
@@ -200,6 +201,10 @@ describe('the live registry', () => {
    * pins the default itself, so enabling it here cannot hide a regression.
    */
   beforeEach(() => {
+    // Default-order assertions must not inherit a developer machine's
+    // deployment override. Individual override tests pass their configuration
+    // directly to buildLiveRegistry below.
+    delete process.env.INTELLIGENCE_PROVIDER_ORDER
     process.env.OUTLIO_ALLOW_PAID_PROVIDERS = 'true'
   })
 
@@ -209,6 +214,9 @@ describe('the live registry', () => {
 
     if (originalPaid === undefined) delete process.env.OUTLIO_ALLOW_PAID_PROVIDERS
     else process.env.OUTLIO_ALLOW_PAID_PROVIDERS = originalPaid
+
+    if (originalSearxngUrl === undefined) delete process.env.SEARXNG_URL
+    else process.env.SEARXNG_URL = originalSearxngUrl
   })
 
   it('paid providers are OFF by default', () => {
@@ -218,7 +226,10 @@ describe('the live registry', () => {
 
     const registry = buildLiveRegistry(undefined)
     expect(registry.forCategory('contact_email').map((p) => p.name)).toEqual([])
-    expect(registry.forCategory('funding').map((p) => p.name)).toEqual(['gdelt-funding'])
+    expect(registry.forCategory('funding').map((p) => p.name)).toEqual([
+      'searxng-funding',
+      'gdelt-funding',
+    ])
   })
 
   it('prefers the stated fact over the inferred one for a company domain', () => {
@@ -236,13 +247,15 @@ describe('the live registry', () => {
     expect(order[0]).toBe('wikidata')
   })
 
-  it('puts the keyless fallback behind the licensed source', () => {
+  it('puts operator-owned search before licensed and shared fallbacks', () => {
     const registry = buildLiveRegistry(undefined)
     expect(registry.forCategory('funding').map((p) => p.name)).toEqual([
+      'searxng-funding',
       'tavily-funding',
       'gdelt-funding',
     ])
     expect(registry.forCategory('web_research').map((p) => p.name)).toEqual([
+      'searxng-web',
       'tavily-web',
       'gdelt-web',
     ])
@@ -253,6 +266,7 @@ describe('the live registry', () => {
     expect(registry.forCategory('funding').map((p) => p.name)).toEqual([
       'gdelt-funding',
       'tavily-funding',
+      'searxng-funding',
     ])
   })
 
@@ -260,6 +274,7 @@ describe('the live registry', () => {
     // Naming one category must not silently disable the others.
     const registry = buildLiveRegistry('funding=gdelt-funding')
     expect(registry.forCategory('web_research').map((p) => p.name)).toEqual([
+      'searxng-web',
       'tavily-web',
       'gdelt-web',
     ])
@@ -268,8 +283,31 @@ describe('the live registry', () => {
   it('ignores a malformed override instead of failing closed', () => {
     const registry = buildLiveRegistry('nonsense,,=,funding=')
     expect(registry.forCategory('funding').map((p) => p.name)).toEqual([
+      'searxng-funding',
       'tavily-funding',
       'gdelt-funding',
+    ])
+  })
+
+  it('does not fan out to rate-limited GDELT when SearXNG is configured', () => {
+    process.env.SEARXNG_URL = 'http://127.0.0.1:8080'
+    const registry = buildLiveRegistry(undefined)
+    const providers = registry.forTask({
+      id: 'funding:company:00000000-0000-4000-8000-000000000001',
+      category: 'funding',
+      entity: {
+        type: 'company',
+        id: '00000000-0000-4000-8000-000000000001',
+        name: 'Acme',
+        domain: null,
+        linkedinUrl: null,
+      },
+      fields: ['funding_round'],
+    })
+
+    expect(providers.map((provider) => provider.name)).toEqual([
+      'searxng-funding',
+      'tavily-funding',
     ])
   })
 

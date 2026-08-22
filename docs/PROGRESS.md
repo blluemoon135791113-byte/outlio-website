@@ -4,6 +4,153 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-22 — Hubble search answers instead of directories
+
+Two post-fix runs exposed the remaining failure precisely. Search time had
+dropped from 4m33s to 20–34s, but an investor query produced no evidence and a
+Series A query stored 15 rounds without dates. The result panel then rendered
+all 99 lead rows, including duplicates and unknowns, rather than the companies
+that matched the question.
+
+### Fixed
+
+- With no batch/date filter, Hubble now researches the 25 leads visibly on
+  screen instead of silently expanding the request to every lead in the account.
+- Explicit criteria in the user's words are preserved deterministically after
+  LLM planning: funding round, date window, and minimum investor count.
+- Canonical filters travel with provider tasks, make SearXNG queries more
+  precise, and constrain SearXNG's own time range.
+- Funding extraction checks every returned document for the requested field
+  instead of stopping at the first funding-adjacent headline. Search-result
+  dates are recovered from absolute dates, relative dates, and dated URLs when
+  SearXNG has no publication metadata.
+- Filtered answers omit non-matches and company questions deduplicate several
+  people at the same company.
+- The result strip leads with match count and researched facts, and every known
+  fact exposes its source link.
+- Funding-only SearXNG work uses eight paced workers; other providers retain the
+  conservative concurrency of four.
+- Explicit funding/date/investor questions take a narrow deterministic planner
+  path and skip the 11–15 second LLM planning call. Vague "recently" requests
+  receive an immediate timeframe choice instead of silently inventing one.
+- The filter bar now names its unfiltered state **All leads**. A selected list
+  or date range sends at most the 25 IDs visibly shown; it cannot expand to
+  hidden rows. Only explicit All leads resolves the account-wide scope, and its
+  provider work is processed sequentially in groups of 25.
+
+### Verification
+
+- A 25-company, eight-way live benchmark against the Oracle SearXNG instance:
+  25/25 successful in 6 seconds.
+- Focused planner, routing, extraction, result-shaping, registry, and executor
+  suites: 116 passed.
+- Filter-boundary and All-leads chunking suites: 23 passed.
+- Unit suite: 910 passed across 62 files.
+- TypeScript and changed-file ESLint: clean.
+- Production build: clean.
+- The broad suite reached 966 passes, then the known external Supabase path
+  stalled again: unrelated `companies-rls` cleanup and two invitation tests
+  exceeded their timeouts. No changed module is on those paths.
+
+---
+
+## 2026-08-22 — Core Intelligence funding search unblocked
+
+The first local run after moving search to Oracle completed only after 4m33s
+and returned no evidence. Its stored tool-call ledger made the cause explicit:
+all 71 company lookups were routed to `gdelt-funding`, and all 71 timed out at
+roughly 15 seconds. The authenticated SearXNG service was healthy, but only the
+Hubble answer path knew how to use it.
+
+### Fixed
+
+- SearXNG configuration and its throwing request primitive are now shared with
+  core Intelligence, preserving the distinction between no matches and a dead
+  provider.
+- Added the free `searxng-funding` adapter and placed it first in the funding
+  waterfall.
+- When SearXNG is configured, the five-second-paced public GDELT fallback
+  declines list-wide funding tasks instead of multiplying one outage across
+  every company.
+- Provider readiness and the free-provider guard now include SearXNG funding.
+
+### Verification
+
+- The hosted SearXNG endpoint returned 32 results in 1.62s for a funding query.
+- Live authenticated provider smoke completed in 2.29s.
+- Focused provider suites: 90 tests passed.
+- Full suite: 959 passed, 11 skipped across 70 files.
+- TypeScript and changed-file ESLint: clean.
+- Production build: clean.
+
+---
+
+## 2026-08-21 — Hubble RAG and LLM router takeover
+
+Claude's eleven local RAG/router commits were already present on
+`nav-per-surface`; this phase integrated and hardened them rather than copying a
+second implementation over the same files.
+
+### Reproduced in the configured environment
+
+- The Hubble migration is live: `hubble_pages`, `hubble_chunks`, and
+  `hubble_answers` are queryable and contain 12, 99, and 6 rows respectively.
+- Stored usage disproved the advertised 90-second wall-clock budget: one answer
+  recorded **164,573 ms**.
+- Cerebras was preferred but the pinned public model returned `model_not_found`.
+  The current public model is `gpt-oss-120b`; this account presently returns
+  `payment_required` for it, so Cerebras is capacity that is configured but not
+  usable until billing is restored.
+- Local Ollama is healthy and has `nomic-embed-text`; local LLM synthesis remains
+  correctly opt-in because `OLLAMA_LLM_MODEL` is unset.
+- Local SearXNG is configured but unreachable. The existing search circuit
+  breaker moves to Tavily after the first failure.
+- OpenRouter can return syntactically valid JSON that does not satisfy Hubble's
+  plan schema. Before this phase that could pin both planner retries to the same
+  engine.
+
+### Fixed
+
+- The HTTP, search, fetch, embedding, local-LLM, hosted-LLM, and failover layers
+  now share one absolute deadline. Provider retries recompute remaining time,
+  so individually bounded calls cannot add up past Hubble's request budget.
+- The search-pass and logical LLM-call caps are now enforced; the default no
+  longer claims a second refinement pass that the orchestrator never ran.
+- LLM calls disable transport-level retries and let the vendor router fail over;
+  a process-level circuit breaker prevents a dead preferred engine from being
+  paid again during the answer call.
+- The router accepts a domain validator with each request. Valid JSON with the
+  wrong shape now falls through to the next engine, while the outer planner still
+  performs its existing Zod validation and schema-feedback retry.
+- OpenRouter and Cerebras use JSON Schema response formats. Strict constrained
+  decoding is enabled only for schemas where making every property required and
+  rejecting extras preserves meaning; free-form planner filters use best-effort
+  schema mode and remain protected by runtime validation.
+- Cerebras defaults to the current public `gpt-oss-120b` model instead of the
+  retired `llama-3.3-70b` endpoint.
+- Expired page chunks are excluded from RAG retrieval. Previously `knownUrls`
+  respected page expiry while `loadCachedChunks` still admitted stale evidence.
+- `.env.example` now documents every Hubble search, embedding, and local-model
+  setting needed by a new deployment.
+
+### Verification
+
+- TypeScript: clean.
+- Changed-file ESLint: clean.
+- Unit suite: **895 passed across 60 files**.
+- Focused Hubble/router tests: green, including deadline, cooldown, stale-cache,
+  constrained-schema, and wrong-shape failover coverage.
+- Live planner smoke: succeeds through the configured provider chain; malformed
+  OpenRouter output falls through to Gemini and produces a validated plan.
+- Production build: clean, including `/api/hubble/ask`.
+- The full integration suite is not claimed green: the pre-existing
+  `companies-rls` cross-tenant link test failed and then stalled in Supabase for
+  roughly 18 minutes. A focused `research-run` integration also stalled on the
+  same external database path. Both were stopped; neither touches the changed
+  RAG/router modules.
+
+---
+
 ## 2026-08-16 — Lead table paging, merging intelligence, date-range scope
 
 Three requested changes to the product surfaces.

@@ -290,3 +290,35 @@ export async function executeTasks(
     tasksUnresolved: results.filter((r) => r.evidence.length === 0).length,
   }
 }
+
+/**
+ * Runs a large explicit scope in bounded groups.
+ *
+ * `executeTasks` already limits simultaneous calls; this outer boundary keeps
+ * an All-leads run from materialising hundreds of provider operations as one
+ * logical wave. Each group finishes before the next 25 begins.
+ */
+export async function executeTasksInChunks(
+  tasks: readonly ResearchTask[],
+  options: ExecuteOptions,
+  chunkSize = 25,
+): Promise<ExecutionReport> {
+  const size = Math.max(1, Math.floor(chunkSize))
+  const reports: ExecutionReport[] = []
+
+  for (let start = 0; start < tasks.length; start += size) {
+    reports.push(await executeTasks(tasks.slice(start, start + size), options))
+  }
+
+  return {
+    results: reports.flatMap((report) => report.results),
+    evidence: reports.flatMap((report) => report.evidence),
+    bonusEvidence: reports.flatMap((report) => report.bonusEvidence),
+    toolCalls: reports.flatMap((report) => report.toolCalls),
+    externalCallCount: reports.reduce((total, report) => total + report.externalCallCount, 0),
+    estimatedCostMicros: reports.reduce((total, report) => total + report.estimatedCostMicros, 0),
+    tasksCompleted: reports.reduce((total, report) => total + report.tasksCompleted, 0),
+    tasksPartial: reports.reduce((total, report) => total + report.tasksPartial, 0),
+    tasksUnresolved: reports.reduce((total, report) => total + report.tasksUnresolved, 0),
+  }
+}

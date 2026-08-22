@@ -17,6 +17,7 @@ const LEGAL_NAV = [
   { label: "Privacy Policy", href: "/privacy" },
   { label: "Lead Engine Terms", href: "/leadengine/terms" },
   { label: "Lead Engine Privacy", href: "/leadengine/privacy" },
+  { label: "Refund Policy", href: "/leadengine/refund-policy" },
 ];
 
 const SOCIALS = [

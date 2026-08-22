@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { executeTasks } from '@/lib/intelligence/execute'
+import { executeTasks, executeTasksInChunks } from '@/lib/intelligence/execute'
 import { createRegistry, parseProviderOrder } from '@/lib/intelligence/registry'
 import { planToTasks } from '@/lib/intelligence/router'
 import type { CompanyEntity, PersonEntity, ResearchTask } from '@/lib/intelligence/types'
@@ -49,6 +49,33 @@ function fundingTask(n = 1): ResearchTask {
     fields: ['funding_round', 'funding_amount'],
   }
 }
+
+describe('explicit All-leads chunking', () => {
+  it('preserves one report while processing more than 25 tasks', async () => {
+    const counter = { calls: 0 }
+    const registry = createRegistry([
+      eraseProviderType(
+        stubProvider({
+          name: 'batch-provider',
+          category: 'funding',
+          behaviour: { kind: 'answers', fields: ['funding_round', 'funding_amount'] },
+          counter,
+        }),
+      ),
+    ])
+
+    const report = await executeTasksInChunks(
+      Array.from({ length: 31 }, (_, index) => fundingTask(index + 1)),
+      { registry, concurrency: 8 },
+      25,
+    )
+
+    expect(counter.calls).toBe(31)
+    expect(report.results).toHaveLength(31)
+    expect(report.tasksCompleted).toBe(31)
+    expect(report.externalCallCount).toBe(31)
+  })
+})
 
 describe('Test 6 — a provider failure never fails the run', () => {
   it('falls through to the next provider in the category', async () => {

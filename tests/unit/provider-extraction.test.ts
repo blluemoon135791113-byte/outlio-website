@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest'
 import { pickCompanyDomain } from '@/lib/intelligence/providers/domain-discovery'
 import {
   extractAmount,
+  extractAnnouncementDate,
   extractFunding,
   extractInvestors,
   extractRound,
@@ -24,6 +25,7 @@ import {
 import { normalizeGdeltArticles, parseGdeltDate } from '@/lib/intelligence/providers/gdelt'
 import { normalizeResults } from '@/lib/intelligence/providers/tavily'
 import { findingsFromDocuments } from '@/lib/intelligence/providers/web-research'
+import { extractBusinessModel, extractSearchProfile } from '@/lib/intelligence/providers/search-profile'
 import type { SearchResult } from '@/lib/intelligence/providers/tavily'
 
 function doc(over: Partial<SearchResult> = {}): SearchResult {
@@ -211,6 +213,36 @@ describe('funding — deterministic extraction', () => {
   it('returns null for no documents', () => {
     expect(extractFunding('Acme', [])).toBeNull()
   })
+
+  it('keeps looking for the requested investor field', () => {
+    const facts = extractFunding(
+      'Acme Systems',
+      [
+        doc({ title: 'Acme Systems raises $8M Series A' }),
+        doc({ title: 'Acme Systems funding led by Alpha Capital and Beta Partners' }),
+      ],
+      ['funding_investors'],
+    )
+
+    expect(facts?.investors).toEqual(['Alpha Capital', 'Beta Partners'])
+  })
+
+  it('reads an announcement date from a search snippet when the engine omits metadata', () => {
+    expect(
+      extractAnnouncementDate(
+        doc({ title: 'Acme raises Series A', content: 'August 20, 2026 — Acme announced funding.' }),
+      ),
+    ).toBe('2026-08-20T00:00:00.000Z')
+  })
+
+  it('normalizes relative search-result dates against the lookup time', () => {
+    expect(
+      extractAnnouncementDate(
+        doc({ content: '3 days ago — Acme raised a new round.' }),
+        new Date('2026-08-22T12:00:00.000Z'),
+      ),
+    ).toBe('2026-08-19T12:00:00.000Z')
+  })
 })
 
 describe('web research — no document, no claim', () => {
@@ -222,6 +254,14 @@ describe('web research — no document, no claim', () => {
     expect(findings).toHaveLength(1)
     expect(findings[0]!.value).toMatchObject({ hiring: true, salesHiring: true })
     expect(findings[0]!.value.roles).toContain('account executive')
+  })
+
+  it('canonicalizes the full sales-development title to SDR', () => {
+    const findings = findingsFromDocuments('hiring_signals', [
+      doc({ title: 'Acme is hiring a Sales Development Representative' }),
+    ])
+
+    expect(findings[0]!.value.roles).toContain('sdr')
   })
 
   it('stays SILENT rather than claiming a company is not hiring', () => {
@@ -254,6 +294,46 @@ describe('web research — no document, no claim', () => {
     ])
 
     expect(findings[0]!.sourceUrl).toBe('https://news.example.com/acme')
+  })
+})
+
+describe('SearXNG company profile extraction', () => {
+  it('extracts a sourced SaaS model only from a result about the company', () => {
+    const finding = extractBusinessModel(
+      { type: 'company', id: 'acme', name: 'Acme Systems', domain: 'acme.test', linkedinUrl: null },
+      [{
+        title: 'Acme Systems — B2B SaaS platform',
+        url: 'https://acme.test/about',
+        snippet: 'Subscription software-as-a-service for revenue teams.',
+      }],
+    )
+
+    expect(finding?.models).toEqual(['SaaS', 'B2B', 'Subscription'])
+    expect(finding?.sourceUrl).toBe('https://acme.test/about')
+  })
+
+  it('does not classify an unrelated search result', () => {
+    expect(extractBusinessModel(
+      { type: 'company', id: 'acme', name: 'Acme Systems', domain: null, linkedinUrl: null },
+      [{ title: 'Other Co SaaS', url: 'https://other.test', snippet: 'A SaaS company.' }],
+    )).toBeNull()
+  })
+
+  it('returns a sourced description and conservative industry for basic profile questions', () => {
+    const finding = extractSearchProfile(
+      { type: 'company', id: 'acme', name: 'Acme Systems', domain: 'acme.test', linkedinUrl: null },
+      [{
+        title: 'About Acme Systems',
+        url: 'https://acme.test/about',
+        snippet: 'Acme Systems builds cybersecurity software for small businesses.',
+      }],
+    )
+
+    expect(finding).toMatchObject({
+      description: 'Acme Systems builds cybersecurity software for small businesses.',
+      industry: 'Cybersecurity',
+      sourceUrl: 'https://acme.test/about',
+    })
   })
 })
 

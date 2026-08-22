@@ -30,6 +30,8 @@ export type SearchHit = {
   publishedDate: string | null
 }
 
+export type DeadlineOptions = { deadlineAt?: number }
+
 export interface SearchProvider {
   readonly name: string
   isConfigured(): boolean
@@ -39,7 +41,7 @@ export interface SearchProvider {
    * ⚠️ NEVER THROWS FOR AN UPSTREAM PROBLEM. A search engine being down must
    * degrade the answer's confidence, not turn the user's question into a 500.
    */
-  search(query: string, limit: number): Promise<SearchHit[]>
+  search(query: string, limit: number, options?: DeadlineOptions): Promise<SearchHit[]>
 }
 
 /* -------------------------------------------------------------------------- *
@@ -65,7 +67,7 @@ export type FetchFailure = {
 export interface PageFetcher {
   readonly name: string
   /** Never throws. A page that cannot be read is a failure value, not an error. */
-  fetchPage(url: string): Promise<FetchedPage | FetchFailure>
+  fetchPage(url: string, options?: DeadlineOptions): Promise<FetchedPage | FetchFailure>
 }
 
 export function isFetchFailure(
@@ -91,7 +93,7 @@ export interface EmbeddingProvider {
    * Ollama with no embedding model pulled is configured but not usable, and
    * treating the two as one makes every question pay a doomed request.
    */
-  isUsable(): Promise<boolean>
+  isUsable(options?: DeadlineOptions): Promise<boolean>
   /**
    * Embeds a batch. Returns null when unavailable.
    *
@@ -99,7 +101,7 @@ export interface EmbeddingProvider {
    * installed. Retrieval falls back to lexical scoring, which needs no service
    * at all. Hubble degrades to a worse ranker, never to no answer.
    */
-  embed(texts: readonly string[]): Promise<number[][] | null>
+  embed(texts: readonly string[], options?: DeadlineOptions): Promise<number[][] | null>
 }
 
 /* -------------------------------------------------------------------------- *
@@ -114,7 +116,7 @@ export interface EmbeddingProvider {
  * limit is enforced by the orchestrator, not trusted to the model.
  */
 export type ResearchBudget = {
-  /** Rounds of search. Two lets Hubble refine once; it cannot browse forever. */
+  /** Search passes. The current orchestrator performs one bounded pass. */
   maxSearchRounds: number
   maxQueriesPerRound: number
   maxPagesFetched: number
@@ -129,7 +131,7 @@ export type ResearchBudget = {
 }
 
 export const DEFAULT_BUDGET: ResearchBudget = {
-  maxSearchRounds: 2,
+  maxSearchRounds: 1,
   maxQueriesPerRound: 4,
   maxPagesFetched: 8,
   maxBrowserFetches: 2,

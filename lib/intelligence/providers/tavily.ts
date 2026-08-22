@@ -37,6 +37,8 @@ export type TavilySearchOptions = {
   excludeDomains?: string[]
   /** Restrict to recent results, for news and hiring signals. */
   days?: number
+  /** Shared wall-clock deadline when called from Ask Hubble. */
+  deadlineAt?: number
 }
 
 type TavilyResponse = {
@@ -84,6 +86,7 @@ export async function tavilySearch(options: TavilySearchOptions): Promise<Search
     method: 'POST',
     headers: { authorization: `Bearer ${apiKey}` },
     body: payload,
+    deadlineAt: options.deadlineAt,
   })
 
   return normalizeResults(response)

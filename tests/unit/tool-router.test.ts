@@ -198,6 +198,21 @@ describe('Test 8 — a tech-stack question returns only tech-stack work', () => 
 })
 
 describe('mixed requests', () => {
+  it('forwards filters to the provider task without widening the fields', () => {
+    const plan = planToTasks({
+      companies: [company(1)],
+      people: [],
+      requiredFields: ['funding_round'],
+      filters: { funding_round: 'Series A', funded_after: '2026-08-17' },
+    })
+
+    expect(plan.tasks[0]?.filters).toEqual({
+      funding_round: 'Series A',
+      funded_after: '2026-08-17',
+    })
+    expect(plan.tasks[0]?.fields).toEqual(['funding_round'])
+  })
+
   it('splits company and person fields onto the right entities', () => {
     const plan = planToTasks({
       companies: [company(1)],

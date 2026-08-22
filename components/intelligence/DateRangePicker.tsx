@@ -10,7 +10,8 @@
  * the range logic it would bring is already in `lib/intelligence/date-range.ts`
  * where it is unit-tested against the off-by-one-day trap.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import {
   formatRange,
@@ -46,6 +47,14 @@ export function DateRangePicker({
   const [open, setOpen] = useState(false)
   const today = useMemo(() => toDateInput(new Date()), [])
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const [popoverPosition, setPopoverPosition] = useState<{
+    left: number
+    top: number
+    width: number
+    maxHeight: number
+  } | null>(null)
 
   const [cursor, setCursor] = useState(() => {
     const anchor = from ? new Date(`${from}T00:00:00.000Z`) : new Date()
@@ -57,7 +66,13 @@ export function DateRangePicker({
     if (!open) return
 
     const onPointerDown = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
+      const target = event.target as Node
+      if (
+        !containerRef.current?.contains(target) &&
+        !popoverRef.current?.contains(target)
+      ) {
+        setOpen(false)
+      }
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
@@ -70,6 +85,60 @@ export function DateRangePicker({
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [open])
+
+  const positionPopover = useCallback(() => {
+    const trigger = triggerRef.current
+    const popover = popoverRef.current
+    if (!trigger || !popover) return
+
+    const viewportPadding = 12
+    const gap = 8
+    const triggerRect = trigger.getBoundingClientRect()
+    const width = Math.min(304, window.innerWidth - viewportPadding * 2)
+
+    /*
+     * Sticky/fixed headers reserve the top edge of the viewport. Reading their
+     * actual bounds also handles browser zoom and the compact mobile header;
+     * a hard-coded 64px value is what allowed the account menu to cover June.
+     */
+    const headerBottom = Array.from(document.querySelectorAll('header')).reduce(
+      (bottom, header) => {
+        const position = window.getComputedStyle(header).position
+        if (position !== 'sticky' && position !== 'fixed') return bottom
+        const rect = header.getBoundingClientRect()
+        return rect.top <= viewportPadding ? Math.max(bottom, rect.bottom) : bottom
+      },
+      viewportPadding,
+    )
+    const safeTop = Math.min(headerBottom + viewportPadding, triggerRect.top - gap)
+    const spaceAbove = Math.max(0, triggerRect.top - gap - safeTop)
+    const spaceBelow = Math.max(0, window.innerHeight - triggerRect.bottom - gap - viewportPadding)
+    const naturalHeight = popover.scrollHeight
+    const openAbove = spaceAbove >= Math.min(naturalHeight, 240) || spaceAbove >= spaceBelow
+    const maxHeight = Math.max(1, openAbove ? spaceAbove : spaceBelow)
+    const visibleHeight = Math.min(naturalHeight, maxHeight)
+    const top = openAbove
+      ? Math.max(safeTop, triggerRect.top - gap - visibleHeight)
+      : triggerRect.bottom + gap
+    const left = Math.min(
+      Math.max(viewportPadding, triggerRect.right - width),
+      window.innerWidth - width - viewportPadding,
+    )
+
+    setPopoverPosition({ left, top, width, maxHeight })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!open) return
+
+    positionPopover()
+    window.addEventListener('resize', positionPopover)
+    window.addEventListener('scroll', positionPopover, true)
+    return () => {
+      window.removeEventListener('resize', positionPopover)
+      window.removeEventListener('scroll', positionPopover, true)
+    }
+  }, [open, cursor, positionPopover])
 
   /*
    * One click starts a range, the next completes it, the third starts over.
@@ -121,6 +190,7 @@ export function DateRangePicker({
   return (
     <div ref={containerRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
         disabled={disabled}
@@ -128,7 +198,7 @@ export function DateRangePicker({
         aria-haspopup="dialog"
         className={
           allTimeLabel
-            ? 'clay-sunken flex h-12 w-full items-center gap-2.5 px-4 text-left text-sm transition-colors duration-150 disabled:opacity-60'
+            ? 'clay-interactive hubble-filter-control hubble-filter-date flex h-12 w-full cursor-pointer items-center gap-2.5 px-4 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60'
             : 'mt-1 flex h-9 w-full items-center justify-between rounded-[var(--radius-md)] border border-border bg-paper px-2 text-left text-sm text-ink transition-colors duration-150 hover:border-border-strong disabled:opacity-60'
         }
       >
@@ -143,8 +213,10 @@ export function DateRangePicker({
         </span>
       </button>
 
-      {open ? (
+      {open && typeof document !== 'undefined' ? createPortal(
         <div
+          ref={popoverRef}
+          data-lenis-prevent
           role="dialog"
           aria-label="Choose a date range"
           /*
@@ -159,7 +231,18 @@ export function DateRangePicker({
            * arrow — which lives at the panel's right edge — was rendered past
            * the window. The calendar looked like it could only go backwards.
            */
-          className="absolute bottom-full right-0 z-30 mb-2 w-[19rem] max-w-[calc(100vw-2rem)] rounded-[var(--radius-clay)] bg-clay-raised p-3 shadow-[var(--clay-shadow-lg)]"
+          className="fixed z-[60] overflow-y-auto overscroll-contain rounded-[var(--radius-clay)] bg-clay-raised p-3 shadow-[var(--clay-shadow-lg)] [scrollbar-gutter:stable]"
+          style={popoverPosition ? {
+            left: popoverPosition.left,
+            top: popoverPosition.top,
+            width: popoverPosition.width,
+            maxHeight: popoverPosition.maxHeight,
+          } : {
+            left: 0,
+            top: 0,
+            width: 304,
+            visibility: 'hidden',
+          }}
         >
           <div className="flex items-center justify-between px-1 pb-2.5">
             <button
@@ -220,9 +303,9 @@ export function DateRangePicker({
                         className={[
                           'clay-interactive h-7 cursor-pointer rounded-[var(--radius-sm)] text-xs',
                           isEdge
-                            ? 'bg-accent font-semibold text-white'
+                            ? 'hubble-selected-option font-semibold'
                             : inRange
-                              ? 'bg-accent-soft text-ink'
+                              ? 'bg-clay-sunken text-ink'
                               : 'text-ink',
                           isFuture ? 'cursor-not-allowed text-muted opacity-40 hover:bg-transparent' : '',
                         ].join(' ')}
@@ -248,7 +331,8 @@ export function DateRangePicker({
               {from && !to ? 'Now pick the end date' : 'Click a start and an end date'}
             </p>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   )

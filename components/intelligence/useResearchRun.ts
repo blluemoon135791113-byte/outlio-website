@@ -52,6 +52,16 @@ export type RunResults = {
     cachedResultsUsed: number
     externalCalls: number
     durationMs: number | null
+    fieldCoverage?: Record<
+      string,
+      {
+        known: number
+        notFound: number
+        providerUnavailable: number
+        noProvider: number
+        noCompany: number
+      }
+    >
   }
   clarification: { questions: Array<{ id: string; question: string; options: string[] }> } | null
   error: string | null

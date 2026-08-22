@@ -87,13 +87,13 @@ export function BatchFilter({
           disabled={disabled}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className="clay-interactive clay-sunken flex h-12 w-full cursor-pointer items-center gap-3 px-4 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60"
+          className="clay-interactive hubble-filter-control hubble-filter-scope flex h-12 w-full cursor-pointer items-center gap-3 px-4 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span aria-hidden className="text-muted">
             ⌕
           </span>
-          <span className={selected ? 'flex-1 truncate text-ink' : 'flex-1 text-muted'}>
-            {selected ? batchLabel(selected) : 'Search Lead List'}
+          <span className="flex-1 truncate text-ink">
+            {selected ? batchLabel(selected) : bounds ? 'All leads in date range' : 'All leads'}
           </span>
           {selected ? (
             <span
@@ -138,6 +138,26 @@ export function BatchFilter({
               className="clay-sunken mb-1.5 h-9 w-full px-3 text-sm text-ink placeholder:text-muted"
             />
 
+            <button
+              type="button"
+              role="option"
+              aria-selected={selectedBatchId === null}
+              onClick={() => {
+                onSelectBatch(null)
+                setOpen(false)
+              }}
+              className={`clay-interactive mb-1 flex w-full cursor-pointer flex-col gap-0.5 rounded-[var(--radius-lg)] px-3 py-2.5 text-left ${
+                selectedBatchId === null ? 'hubble-selected-option' : ''
+              }`}
+            >
+              <span className="text-sm font-medium text-ink">
+                {bounds ? 'All leads in this date range' : 'All leads'}
+              </span>
+              <span className="text-xs text-muted">
+                {bounds ? 'Researches the 25 leads shown' : 'Processes the account in groups of 25'}
+              </span>
+            </button>
+
             {visible.length === 0 ? (
               /*
                * The empty state names the CAUSE. "No lists" when the account has
@@ -163,7 +183,7 @@ export function BatchFilter({
                     setOpen(false)
                   }}
                   className={`clay-interactive flex w-full cursor-pointer flex-col gap-0.5 rounded-[var(--radius-lg)] px-3 py-2.5 text-left ${
-                    batch.id === selectedBatchId ? 'bg-teal-soft' : ''
+                    batch.id === selectedBatchId ? 'hubble-selected-option' : ''
                   }`}
                 >
                   <span className="truncate text-sm font-medium text-ink">{batch.label}</span>

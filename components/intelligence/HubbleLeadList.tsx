@@ -77,12 +77,14 @@ export function HubbleLeadList({
 
   return (
     <ul
-      /* `data-lenis-prevent`: Lenis owns the page scroll and would swallow this
-         container's own once the list is tall enough to need one. */
+      /* Kept as a defensive marker if this component is ever reused on a
+         smooth-scrolled page; dashboard routes themselves use native scroll. */
       data-lenis-prevent
-      className={`clay divide-y divide-clay-sunken overflow-hidden ${
+      tabIndex={fill ? 0 : undefined}
+      aria-label="Leads"
+      className={`clay hubble-lead-ledger divide-y divide-clay-sunken overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink/25 ${
         // The row sets the height; the list just fills it and scrolls.
-        fill ? 'h-full overflow-y-auto' : ''
+        fill ? 'h-full overflow-y-auto overscroll-contain [scrollbar-gutter:stable]' : ''
       }`}
     >
       {leads.map((lead) => (
@@ -90,7 +92,7 @@ export function HubbleLeadList({
           <button
             type="button"
             onClick={() => onOpenLead(lead)}
-            className="clay-interactive grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-4 px-5 py-4 text-left sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto]"
+            className="clay-interactive hubble-lead-row grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-4 px-5 py-4 text-left sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto]"
           >
             {/* Person */}
             <span className="flex min-w-0 items-center gap-3">

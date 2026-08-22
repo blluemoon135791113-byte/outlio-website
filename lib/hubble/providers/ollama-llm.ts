@@ -45,6 +45,11 @@ import type { LlmRequest, LlmResult, LLMProvider, LlmVendor } from '@/lib/intell
  */
 const TIMEOUT_MS = 120_000
 
+function requestTimeout(request: LlmRequest): number {
+  if (request.deadlineAt === undefined) return TIMEOUT_MS
+  return Math.max(1, Math.min(TIMEOUT_MS, request.deadlineAt - Date.now()))
+}
+
 /**
  * Cloud-suffixed models proxy to ollama.com. Local in name only.
  *
@@ -144,8 +149,13 @@ export class OllamaLlmProvider implements LLMProvider {
       }
     }
 
+    if (request.deadlineAt !== undefined && request.deadlineAt <= Date.now()) {
+      return { ok: false, code: 'unavailable', detail: 'Hubble deadline exceeded' }
+    }
+
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const timeoutMs = requestTimeout(request)
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
 
     try {
       const response = await fetch(`${base}/api/chat`, {
@@ -196,7 +206,7 @@ export class OllamaLlmProvider implements LLMProvider {
       return {
         ok: false,
         code: 'unavailable',
-        detail: aborted ? `no response in ${TIMEOUT_MS}ms` : 'Ollama is unreachable',
+        detail: aborted ? `no response in ${timeoutMs}ms` : 'Ollama is unreachable',
       }
     } finally {
       clearTimeout(timer)
@@ -232,6 +242,13 @@ export class LlmWaterfall implements LLMProvider {
   }
 
   async generateJson(request: LlmRequest): Promise<LlmResult> {
+    const accepted = (result: LlmResult) =>
+      result.ok && (!request.validate || request.validate(result.json))
+    const asFailure = (result: LlmResult): LlmResult =>
+      result.ok
+        ? { ok: false, code: 'unparseable', detail: 'completion did not match the requested schema' }
+        : result
+
     /*
      * ⚠️ `isUsable`, NOT `isConfigured`. A named-but-unpulled model is
      * configured and useless; trying it twice per question is pure latency.
@@ -243,13 +260,17 @@ export class LlmWaterfall implements LLMProvider {
 
     if (localReady) {
       const first = await this.local.generateJson(request)
-      if (first.ok) return first
+      if (accepted(first)) return first
 
       // A cold model load often fails once and succeeds immediately after.
-      const second = await this.local.generateJson(request)
-      if (second.ok) return second
+      if (request.deadlineAt === undefined || request.deadlineAt > Date.now()) {
+        const second = await this.local.generateJson(request)
+        if (accepted(second)) return second
 
-      if (!this.hosted.isConfigured()) return second
+        if (!this.hosted.isConfigured()) return asFailure(second)
+      } else if (!this.hosted.isConfigured()) {
+        return asFailure(first)
+      }
     }
 
     return this.hosted.generateJson(request)

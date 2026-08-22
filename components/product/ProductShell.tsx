@@ -15,6 +15,7 @@ function pageLabel(pathname: string) {
   if (pathname.startsWith('/admin')) return 'User administration'
   if (pathname.startsWith('/dashboard/extract/new')) return 'New extraction'
   if (pathname.startsWith('/dashboard/jobs')) return 'Extraction workspace'
+  if (pathname.startsWith('/dashboard/intelligence')) return 'Intelligence'
   if (pathname.startsWith('/dashboard/access')) return 'Access status'
   if (pathname.startsWith('/dashboard/settings')) return 'Settings'
   return 'Overview'
@@ -30,41 +31,40 @@ function SidebarContent({
   isAdmin,
   canUseScraper,
   referralLink,
+  minimal,
   onNavigate,
 }: {
   isAdmin: boolean
   canUseScraper: boolean
   /** `null` until a profile has a code allocated. */
   referralLink: string | null
+  minimal?: boolean
   onNavigate?: () => void
 }) {
   return (
     <>
-      <div className="px-4 pb-7 pt-5">
+      <div className="px-5 pb-8 pt-6">
         <Link
           href="/dashboard"
           onClick={onNavigate}
           className="inline-flex items-center gap-2.5 rounded-lg text-ink focus-visible:outline-offset-4"
         >
-          <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border bg-ink shadow-[var(--shadow-sm)]">
+          <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-ink">
             <Image
               src="/icon.png"
               alt=""
-              width={36}
-              height={36}
-              style={{ width: 36, height: 36 }}
+              width={32}
+              height={32}
+              style={{ width: 32, height: 32 }}
             />
           </span>
-          <span className="font-heading text-[17px] font-semibold tracking-[-0.025em]">
+          <span className="font-heading text-[16px] font-semibold tracking-[-0.025em]">
             Outlio
           </span>
         </Link>
       </div>
 
-      <div className="flex-1 px-4">
-        <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-          Workspace
-        </p>
+      <div className="flex-1 px-3">
         <ProductNav
           isAdmin={isAdmin}
           canUseScraper={canUseScraper}
@@ -72,20 +72,17 @@ function SidebarContent({
         />
       </div>
 
-      {referralLink ? (
-        <div className="px-4 pb-4 pt-2">
+      {referralLink && !minimal ? (
+        <div className="px-3 pb-2 pt-2">
           <SidebarReferral link={referralLink} onNavigate={onNavigate} />
         </div>
       ) : null}
 
-      <div className="border-t border-border px-4 py-4">
-        <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-          Outlio
-        </p>
+      <div className="px-3 pb-5 pt-2">
         <Link
           href="/"
           onClick={onNavigate}
-          className="flex h-10 items-center gap-3 rounded-[var(--radius-md)] px-3 text-sm font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+          className="flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
         >
           <ProductIcon name="website" className="h-[18px] w-[18px]" />
           Back to website
@@ -118,12 +115,24 @@ export function ProductShell({
   const [mobileOpen, setMobileOpen] = useState(false)
   const userInitials = useMemo(() => initials(fullName, email), [email, fullName])
   const displayName = fullName?.trim() || email.split('@')[0] || 'Outlio user'
+  const isHubble = pathname.startsWith('/dashboard/intelligence')
 
   return (
-    <div className="app-shell min-h-dvh bg-app text-ink">
+    <div
+      className={`app-shell min-h-dvh text-ink ${isHubble ? 'hubble-shell bg-clay-bg' : 'bg-app'}`}
+    >
       <NavigationProgress />
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-border bg-panel lg:flex">
-        <SidebarContent isAdmin={isAdmin} canUseScraper={canUseScraper} referralLink={referralLink} />
+      <aside
+        className={`fixed inset-y-0 left-0 z-30 hidden w-[216px] flex-col lg:flex ${
+          isHubble ? 'hubble-nav-panel border-0' : 'border-r border-border/70 bg-panel'
+        }`}
+      >
+        <SidebarContent
+          isAdmin={isAdmin}
+          canUseScraper={canUseScraper}
+          referralLink={referralLink}
+          minimal={isHubble}
+        />
       </aside>
 
       {mobileOpen ? (
@@ -134,7 +143,11 @@ export function ProductShell({
             onClick={() => setMobileOpen(false)}
             className="absolute inset-0 bg-ink/25 backdrop-blur-[2px]"
           />
-          <aside className="relative flex h-full w-[min(86vw,280px)] flex-col border-r border-border bg-panel shadow-[var(--shadow-lg)]">
+          <aside
+            className={`relative flex h-full w-[min(86vw,280px)] flex-col shadow-[var(--shadow-lg)] ${
+              isHubble ? 'hubble-nav-panel border-0' : 'border-r border-border bg-panel'
+            }`}
+          >
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
@@ -147,14 +160,19 @@ export function ProductShell({
               isAdmin={isAdmin}
               canUseScraper={canUseScraper}
               referralLink={referralLink}
+              minimal={isHubble}
               onNavigate={() => setMobileOpen(false)}
             />
           </aside>
         </div>
       ) : null}
 
-      <div className="min-h-dvh lg:pl-[232px]">
-        <header className="sticky top-0 z-20 border-b border-border bg-panel/95 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+      <div className="min-h-dvh lg:pl-[216px]">
+        <header
+          className={`sticky top-0 z-20 px-4 sm:px-6 lg:px-8 ${
+            isHubble ? 'border-0 bg-clay-bg' : 'border-b border-border bg-panel/95 backdrop-blur-md'
+          }`}
+        >
           <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <button
@@ -198,7 +216,11 @@ export function ProductShell({
                   ▾
                 </span>
               </summary>
-              <div className="absolute right-0 top-[calc(100%+8px)] w-64 origin-top-right rounded-xl border border-border bg-panel p-2 shadow-[var(--shadow-lg)]">
+              <div
+                className={`absolute right-0 top-[calc(100%+8px)] w-64 origin-top-right rounded-xl p-2 shadow-[var(--shadow-lg)] ${
+                  isHubble ? 'border-0 bg-clay-raised' : 'border border-border bg-panel'
+                }`}
+              >
                 <div className="border-b border-border px-2 py-2">
                   <p className="truncate font-heading text-sm font-semibold text-ink">{displayName}</p>
                   <p className="mt-0.5 truncate text-xs text-muted">{email}</p>

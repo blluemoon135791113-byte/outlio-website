@@ -150,7 +150,7 @@ export async function askHubble(
    * `isConfigured()` only says a URL was set — see the note on `isUsable`.
    */
   const embedder = resolveEmbeddingProvider()
-  const vectorsUsable = await embedder.isUsable()
+  const vectorsUsable = await embedder.isUsable({ deadlineAt: deadline })
 
   /* ---- 2. What we already hold: previously fetched pages for this company. */
   const chunks: Chunk[] = await loadCachedChunks(userId, subject.companyId)
@@ -181,6 +181,8 @@ export async function askHubble(
       known: subject.known,
     },
     budget.maxQueriesPerRound,
+    deadline,
+    budget.maxLlmCalls > 0,
   )
   usage.llmCalls += llmCalls
 
@@ -191,7 +193,8 @@ export async function askHubble(
    * over the stored chunks — the answer is produced from evidence, never from
    * the planner's opinion that evidence exists.
    */
-  const shouldSearch = !plan.sufficient && Date.now() < deadline
+  const shouldSearch =
+    !plan.sufficient && budget.maxSearchRounds > 0 && Date.now() < deadline
 
   /* ---- 4. Search, then fetch. ----------------------------------------- */
   if (shouldSearch) {
@@ -211,7 +214,7 @@ export async function askHubble(
     for (const [index, query] of queries.entries()) {
       if (Date.now() > deadline) break
       onProgress({ phase: 'searching', query, index: index + 1, total: queries.length })
-      const hits = await search.search(query, 6)
+      const hits = await search.search(query, 6, { deadlineAt: deadline })
       usage.searches += 1
       candidates.push(...hits)
     }
@@ -230,7 +233,7 @@ export async function askHubble(
 
     const fetched = await pooled(toFetch, budget.concurrency, async (url) => {
       if (Date.now() > deadline) return null
-      const page = await httpPageFetcher.fetchPage(url)
+      const page = await httpPageFetcher.fetchPage(url, { deadlineAt: deadline })
       if (isFetchFailure(page)) return null
       return page
     })
@@ -246,7 +249,9 @@ export async function askHubble(
        * Embeddings when available, null when not. `savePage` stores null
        * happily and retrieval falls back to lexical scoring.
        */
-      const embeddings = vectorsUsable ? await embedder.embed(pieces) : null
+      const embeddings = vectorsUsable
+        ? await embedder.embed(pieces, { deadlineAt: deadline })
+        : null
 
       const pageId = await savePage({
         userId,
@@ -276,7 +281,9 @@ export async function askHubble(
   }
 
   /* ---- 5. Retrieve. --------------------------------------------------- */
-  const queryEmbedding = vectorsUsable ? (await embedder.embed([question]))?.[0] ?? null : null
+  const queryEmbedding = vectorsUsable
+    ? (await embedder.embed([question], { deadlineAt: deadline }))?.[0] ?? null
+    : null
 
   const ranked = retrieve(
     question,
@@ -298,6 +305,8 @@ export async function askHubble(
     subject.known,
     domain,
     subject.companyName,
+    deadline,
+    Math.max(0, budget.maxLlmCalls - usage.llmCalls),
   )
   usage.llmCalls += answerCalls
   usage.elapsedMs = Date.now() - started

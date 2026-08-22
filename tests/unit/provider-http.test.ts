@@ -40,4 +40,37 @@ describe('provider HTTP attempt hooks', () => {
     })).rejects.toThrow('limiter unavailable')
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('does not let retries extend an absolute deadline', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      await new Promise((_, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+      })
+      return Response.json({})
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      requestJson({
+        url: 'https://provider.example/data',
+        timeoutMs: 1_000,
+        deadlineAt: Date.now() + 20,
+      }),
+    ).rejects.toThrow('ERR_TIMEOUT')
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('supports failover-oriented requests with retries disabled', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response('{}', { status: 503 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      requestJson({ url: 'https://provider.example/data', maxRetries: 0 }),
+    ).rejects.toThrow('ERR_PROVIDER_UNAVAILABLE')
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })

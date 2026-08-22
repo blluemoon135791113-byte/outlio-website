@@ -12,6 +12,8 @@ import 'server-only'
  * field is `unknown` — not "no news", not "not hiring".
  */
 import { expiresAtFor } from '@/lib/intelligence/ttl'
+import { hasSearxngCredentials, searxngSearch } from '@/lib/hubble/providers/search'
+import { normalizeCompanyName } from '@/lib/companies/normalize'
 import type {
   CompanyEntity,
   IntelligenceProvider,
@@ -68,6 +70,22 @@ function matchesAny(text: string, terms: readonly string[]): string[] {
   return terms.filter((term) => haystack.includes(term))
 }
 
+function documentIsAboutCompany(document: WebDocument, company: CompanyEntity): boolean {
+  if (company.domain) {
+    try {
+      const host = new URL(document.url).hostname.replace(/^www\./, '')
+      const domain = company.domain.replace(/^www\./, '')
+      if (host === domain || host.endsWith(`.${domain}`)) return true
+    } catch {
+      // Search results are untrusted; a malformed URL simply loses this signal.
+    }
+  }
+
+  const name = normalizeCompanyName(company.name)
+  const text = normalizeCompanyName(`${document.title} ${document.content}`)
+  return Boolean(name && text && (` ${text} `).includes(` ${name} `))
+}
+
 /**
  * Turns retrieved documents into findings.
  *
@@ -111,6 +129,11 @@ export function findingsFromDocuments(
     const salesRoles = [
       ...new Set(hits.flatMap((doc) => matchesAny(`${doc.title} ${doc.content}`, SALES_HIRING_TERMS))),
     ]
+    // Search pages alternate between the abbreviation and the full title.
+    // Store one canonical value so an explicit SDR filter matches both.
+    if (salesRoles.includes('sales development') && !salesRoles.includes('sdr')) {
+      salesRoles.push('sdr')
+    }
 
     return [
       {
@@ -145,11 +168,19 @@ export function findingsFromDocuments(
   return []
 }
 
-function queryFor(field: ResearchField, company: CompanyEntity): string {
-  const name = company.name ?? company.domain ?? ''
+function requestedHiringTerms(task: ResearchTask): string[] {
+  const raw = task.filters?.hiring_roles ?? task.filters?.hiring_role
+  if (Array.isArray(raw)) return raw.filter((value): value is string => typeof value === 'string')
+  return typeof raw === 'string' ? [raw] : []
+}
+
+function queryFor(field: ResearchField, company: CompanyEntity, task?: ResearchTask): string {
+  const name = company.name ? `"${company.name.replace(/"/g, '')}"` : company.domain ?? ''
   switch (field) {
-    case 'hiring_signals':
-      return `${name} hiring jobs careers sales`
+    case 'hiring_signals': {
+      const roles = task ? requestedHiringTerms(task).join(' ') : ''
+      return `${name} hiring jobs careers ${roles || 'sales'}`
+    }
     case 'competitors':
       return `${name} competitors alternatives comparison`
     default:
@@ -167,6 +198,16 @@ const RECENCY_DAYS: Partial<Record<ResearchField, number>> = {
 
 export type WebResearchOutput = Array<{ field: ResearchField; documents: WebDocument[] }>
 
+function searxDocuments(hits: Awaited<ReturnType<typeof searxngSearch>>): WebDocument[] {
+  return hits.map((hit) => ({
+    title: hit.title ?? '',
+    url: hit.url,
+    content: hit.snippet ?? '',
+    score: 0,
+    publishedDate: hit.publishedDate,
+  }))
+}
+
 function toEvidence(
   providerName: string,
   task: ResearchTask,
@@ -175,7 +216,12 @@ function toEvidence(
   const retrievedAt = new Date()
 
   return output.flatMap(({ field, documents }) =>
-    findingsFromDocuments(field, documents).map((finding) => ({
+    findingsFromDocuments(
+      field,
+      task.entity.type === 'company'
+        ? documents.filter((document) => documentIsAboutCompany(document, task.entity as CompanyEntity))
+        : [],
+    ).map((finding) => ({
       field: finding.field,
       entityType: 'company' as const,
       entityId: task.entity.id,
@@ -213,7 +259,7 @@ export const tavilyWebResearchProvider: IntelligenceProvider<WebResearchOutput> 
     // cancelling the others.
     for (const field of wanted) {
       const documents = await tavilySearch({
-        query: queryFor(field, company),
+        query: queryFor(field, company, task),
         maxResults: 6,
         days: RECENCY_DAYS[field],
       })
@@ -224,6 +270,38 @@ export const tavilyWebResearchProvider: IntelligenceProvider<WebResearchOutput> 
   },
 
   normalize: (output, task) => toEvidence('tavily-web', task, output),
+}
+
+/** Free operator-owned search for the fields previously stranded behind Tavily. */
+export const searxngWebResearchProvider: IntelligenceProvider<WebResearchOutput> = {
+  name: 'searxng-web',
+  category: 'web_research',
+
+  canHandle: (task) =>
+    task.entity.type === 'company' &&
+    task.fields.some((field) => WEB_FIELDS.includes(field)) &&
+    Boolean((task.entity as CompanyEntity).name ?? (task.entity as CompanyEntity).domain) &&
+    hasSearxngCredentials(),
+
+  estimateCost: async () => 0,
+
+  execute: async (task) => {
+    const company = task.entity as CompanyEntity
+    const output: WebResearchOutput = []
+
+    for (const field of task.fields.filter((candidate) => WEB_FIELDS.includes(candidate))) {
+      const hits = await searxngSearch(queryFor(field, company, task), 8, {
+        // Job pages often omit a publication date. A time-range restriction
+        // silently removes exactly the evergreen careers pages we need.
+        timeRange: undefined,
+      })
+      output.push({ field, documents: searxDocuments(hits) })
+    }
+
+    return output
+  },
+
+  normalize: (output, task) => toEvidence('searxng-web', task, output),
 }
 
 export const gdeltWebResearchProvider: IntelligenceProvider<WebResearchOutput> = {

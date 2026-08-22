@@ -32,8 +32,11 @@
     rgba(255, 255, 255, 0.35) 100%
   );
 
-  --font-display: var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
-  --font-body: var(--font-dm-sans), "Helvetica Neue", Arial, sans-serif;
+  /* Use Apple's native SF Pro optical cuts where the OS provides them.
+     The bundled font files may not be redistributed on the web, so Geist and
+     DM Sans remain the metrically stable fallbacks for other platforms. */
+  --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-body: "SF Pro Text", -apple-system, BlinkMacSystemFont, var(--font-dm-sans), "Helvetica Neue", Arial, sans-serif;
   --font-code: var(--font-geist-mono), ui-monospace, monospace;
   --font-handwriting: var(--font-caveat), "Comic Sans MS", cursive;
 
@@ -69,137 +72,67 @@
   --info: #1f5fa8;
   --info-soft: #e8f1fb;
 
-  /* ==========================================================================
-     CLAY — the Hubble intelligence surface.
-     ==========================================================================
-     A warm, soft-extruded look: surfaces sit ON the background rather than
-     floating over it, so the elevation is carried by a paired shadow (dark
-     below, light above) instead of a border.
+  /* Hubble is cream and jet. Repeated surfaces share the canvas instead of
+     becoming bright cards; only the prompt gets the fuller clay treatment. */
+  --clay-bg: #fffaf0;
+  --clay-surface: #fff8ea;
+  --clay-raised: #fffaf2;
+  --clay-sunken: #f4eadb;
+  /* Palette-accurate burnt coral: vivid enough to lead an interaction while
+     cream mixing keeps hover surfaces integrated with the canvas. */
+  --hubble-coral: 217, 90, 59;
+  --hubble-charcoal: 54, 57, 56;
+  --hubble-sage: 119, 143, 132;
 
-     Scoped to Hubble on purpose. The extraction workspace keeps the flat
-     panels it already has — CLAUDE.md: the extraction board is where raw data
-     becomes export-ready, and it must not inherit visual churn from here.
+  /* Neumorphic surfaces use paired OUTER shadows. There is no clay-like inner
+     pressure on a raised widget; inset depth appears only when it is recessed
+     or actively pressed. The legacy clay-shadow aliases below keep existing
+     utility classes stable while their material is now unambiguously neo. */
+  --neo-shadow:
+    9px 10px 22px rgba(var(--hubble-charcoal), 0.13),
+    -8px -8px 20px rgba(255, 255, 255, 0.74);
+  --neo-shadow-lg:
+    14px 16px 34px rgba(var(--hubble-charcoal), 0.14),
+    -12px -12px 30px rgba(255, 255, 255, 0.78);
+  --neo-shadow-inset:
+    inset 3px 3px 8px rgba(var(--hubble-charcoal), 0.11),
+    inset -3px -3px 8px rgba(255, 255, 255, 0.76);
+  --neo-shadow-focus:
+    0 0 0 2px rgba(var(--hubble-charcoal), 0.14),
+    10px 11px 24px rgba(var(--hubble-charcoal), 0.14),
+    -9px -9px 22px rgba(255, 255, 255, 0.8);
+  --neo-shadow-chip:
+    4px 5px 11px rgba(var(--hubble-charcoal), 0.12),
+    -3px -3px 9px rgba(255, 255, 255, 0.72);
 
-     NO backdrop-filter. CLAUDE.md forbids it on dashboard surfaces, and it is
-     especially wrong over a scrolling list. */
-  /* Warm paper, taken from the Hubble mockup. The page is CREAM and the cards
-     are near-white — that contrast is what makes a card read as a card without
-     needing a border. */
-  /* The page is warm ivory; surfaces sit brighter than it, so a widget reads
-     as a widget without needing a border. */
-  --clay-bg: #f7f4ea;
-  --clay-surface: #fefdfa;
-  --clay-raised: #ffffff;
-  --clay-sunken: #f0ecdf;
+  --clay-shadow: var(--neo-shadow);
+  --clay-shadow-lg: var(--neo-shadow-lg);
+  --clay-shadow-inset: var(--neo-shadow-inset);
+  --clay-shadow-focus: var(--neo-shadow-focus);
+  --clay-shadow-chip: var(--neo-shadow-chip);
 
-  /* Paired shadows: dark below, light above. That pairing is what reads as
-     extruded rather than dropped, and it is the whole of claymorphism. */
-  --clay-shadow:
-    0 1px 2px rgba(84, 72, 45, 0.04),
-    0 6px 16px rgba(84, 72, 45, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  /* A touch deeper than the flat first pass: the bar should sit ON the ivory,
-     not lie flush with it. The inset highlight along the top edge is what sells
-     the extrusion — without it a shadow just reads as a drop shadow. */
-  --clay-shadow-lg:
-    0 1px 1px rgba(84, 72, 45, 0.04),
-    0 3px 6px rgba(84, 72, 45, 0.06),
-    0 12px 26px rgba(84, 72, 45, 0.08),
-    0 26px 56px rgba(84, 72, 45, 0.06),
-    inset 0 2px 0 rgba(255, 255, 255, 1),
-    inset 0 -1px 0 rgba(84, 72, 45, 0.04);
-  /* Pressed: the light and dark swap sides. */
-  --clay-shadow-inset:
-    inset 0 2px 5px rgba(84, 72, 45, 0.08),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.9);
-
-  /* Focus lifts the whole bar rather than ringing a child of it. */
-  --clay-shadow-focus:
-    0 2px 4px rgba(84, 72, 45, 0.05),
-    0 14px 34px rgba(84, 72, 45, 0.09),
-    0 28px 64px rgba(84, 72, 45, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
-
-  /* ==========================================================================
-     THE PROMPT BAR — full claymorphism.
-     ==========================================================================
-     Clay is INFLATED, and what inflates it is a pair of large INNER shadows:
-     light pooling under the top edge, dark gathering at the bottom-right, as if
-     the surface were lit from above-left. An outer shadow alone is just a card.
-
-     The earlier passes used 1–2px insets, which is a bevel, not clay. These are
-     20px+ and heavily negative-spread so they stay soft rather than banding. */
+  /* The one claymorphic object: a soft outer lift and broad inner pressure.
+     Shape comes from shaded insets, without a bright highlight. */
   --clay-shadow-prompt:
-    /* lift off the page */
-    0 2px 4px rgba(84, 72, 45, 0.05),
-    0 10px 24px rgba(84, 72, 45, 0.08),
-    0 28px 60px rgba(84, 72, 45, 0.07),
-    /* the puff: light above, shadow below-right */
-    inset 0 12px 22px -10px rgba(255, 255, 255, 1),
-    inset -8px -10px 22px -12px rgba(84, 72, 45, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
-
-  /* Focus deepens the same shape rather than adding a ring to it. */
+    0 18px 38px rgba(var(--hubble-charcoal), 0.15),
+    inset 7px 8px 17px rgba(var(--hubble-charcoal), 0.045),
+    inset -8px -10px 21px rgba(var(--hubble-charcoal), 0.1),
+    inset 8px 0 18px rgba(var(--hubble-sage), 0.085);
   --clay-shadow-prompt-focus:
-    0 2px 4px rgba(84, 72, 45, 0.05),
-    0 16px 36px rgba(84, 72, 45, 0.11),
-    0 38px 78px rgba(84, 72, 45, 0.09),
-    /* ⚠️ NO RIM. An inset ring renders as an outline drawn on the bar, which
-       is the thing being removed. Focus is the clay deepening, and the caret
-       the browser puts in the field. */
-    inset 0 12px 22px -10px rgba(255, 255, 255, 1),
-    inset -8px -10px 24px -12px rgba(84, 72, 45, 0.34);
+    0 15px 32px rgba(var(--hubble-charcoal), 0.16),
+    inset 8px 9px 19px rgba(var(--hubble-charcoal), 0.06),
+    inset -9px -11px 23px rgba(var(--hubble-charcoal), 0.12),
+    inset 9px 0 20px rgba(var(--hubble-sage), 0.1);
+  --radius-clay: 1rem;
+  --radius-clay-lg: 1.75rem;
 
-  /* Small clay: the chip and the send button. Same idea, smaller radii. */
-  --clay-shadow-chip:
-    0 1px 2px rgba(84, 72, 45, 0.05),
-    0 4px 10px rgba(84, 72, 45, 0.07),
-    inset 0 6px 12px -6px rgba(255, 255, 255, 1),
-    inset -4px -5px 12px -7px rgba(84, 72, 45, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
-
-  /* ==========================================================================
-     HOVER AND PRESS — vivid ivory over teal.
-     ==========================================================================
-     A gradient rather than a flat tint: the ivory stays on top where the
-     content sits, so text keeps its contrast, and the teal gathers toward the
-     bottom-right where the clay shadow already falls. The surface looks lit
-     rather than repainted.
-
-     Press pushes the teal further up and in, so the same gesture reads as
-     deeper — the widget is being pressed INTO the page, not just recoloured. */
-  --ivory-vivid: #fefaea;
-  /* Jet, held at alpha rather than laid down solid.
-     ⚠️ TEXT SITS ON THIS. A solid jet end would swallow the dark ink already
-     printed there — the right-hand side of a lead row would go unreadable on
-     hover. At these alphas the surface smokes rather than blackens, and the
-     ink keeps its contrast. */
-  --jet: 26, 26, 24;
-  --grad-hover: linear-gradient(
-    155deg,
-    var(--ivory-vivid) 0%,
-    #f6f1e0 44%,
-    rgba(var(--jet), 0.13) 100%
-  );
-  --grad-press: linear-gradient(
-    155deg,
-    #f9f3da 0%,
-    rgba(var(--jet), 0.16) 48%,
-    rgba(var(--jet), 0.26) 100%
-  );
-
-  --radius-clay: 1.15rem;
-  --radius-clay-lg: 1.9rem;
-
-  /* The generating sweep. Teal into the accent, so the motion resolves into a
-     colour the product already uses rather than introducing a second identity. */
+  /* Legacy Hubble status tokens used outside the cream/jet console. */
   --teal: #0f8a8a;
   --teal-soft: #ddf1f0;
   --teal-glow: rgba(15, 138, 138, 0.28);
 
 }
 
-/* FONT PLACEHOLDER — final display/body fonts TBD; swap the two vars below in one place */
 @theme inline {
   --color-paper: var(--paper);
   --color-panel: var(--panel);
@@ -800,32 +733,37 @@ details[open] .faq-mark {
 /* ==========================================================================
    HUBBLE — the intelligence surface
    ==========================================================================
-   Claymorphic, warm, and scoped to this one screen. */
+   A cream canvas with restrained depth, scoped to this one screen. */
 
+/* Legacy class names; all non-prompt instances now render as neumorphic
+   surfaces. Keeping the selectors avoids a risky component-wide rename. */
 .clay {
   background: var(--clay-surface);
+  border: 0;
   border-radius: var(--radius-clay);
-  box-shadow: var(--clay-shadow);
+  box-shadow: var(--neo-shadow);
 }
 
 .clay-raised {
   background: var(--clay-raised);
+  border: 0;
   border-radius: var(--radius-clay);
-  box-shadow: var(--clay-shadow-lg);
+  box-shadow: var(--neo-shadow-lg);
 }
 
 /* Inputs read as pressed INTO the surface, which is what tells a user the
    thing is for typing without needing a border to say so. */
 .clay-sunken {
   background: var(--clay-sunken);
+  border: 0;
   border-radius: var(--radius-clay);
-  box-shadow: var(--clay-shadow-inset);
+  box-shadow: var(--neo-shadow-inset);
 }
 
 /* --------------------------------------------------------------------------
    Generating — Claude-style.
 
-   No colour wash across the bar. A gradient sweeping a mostly-empty white
+   No colour wash across the bar. A gradient sweeping a mostly-empty cream
    surface read as a stain, and it said nothing about what was happening.
 
    Instead the STATUS TEXT shimmers: a light travels along the words, the way
@@ -835,10 +773,10 @@ details[open] .faq-mark {
    -------------------------------------------------------------------------- */
 @keyframes hubble-shimmer {
   0% {
-    background-position: 180% 0;
+    background-position: -120% 0;
   }
   100% {
-    background-position: -80% 0;
+    background-position: 220% 0;
   }
 }
 
@@ -856,7 +794,7 @@ details[open] .faq-mark {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: hubble-shimmer 2.1s linear infinite;
+  animation: hubble-shimmer 1.7s linear infinite;
 }
 
 /* The breathing dot beside it. Slow, so it reads as alive rather than urgent. */
@@ -895,7 +833,7 @@ details[open] .faq-mark {
    The prompt bar as ONE object.
 
    ⚠️ THE FOCUS RING MOVES; IT IS NOT REMOVED. The global `:focus-visible` rule
-   drew a 2px accent outline around the INPUT, which rendered as a search field
+   drew a 2px outline around the INPUT, which rendered as a search field
    boxed inside the bar — two objects where there is one. Deleting the ring
    would fix the look and break keyboard navigation, so it is relocated to the
    bar instead: same colour, same width, same offset, drawn around the whole
@@ -906,7 +844,7 @@ details[open] .faq-mark {
  *
  * A ring around the bar reads as a box drawn on top of it, which is the
  * opposite of the bar responding to you. Focus is expressed as the clay
- * deepening and a teal glow blooming inside the rim, so the surface reacts
+ * deepening and a fine inset edge appearing, so the surface reacts
  * rather than acquiring a border.
  *
  * This is still a visible, non-colour-only focus indicator: the shadow
@@ -919,127 +857,192 @@ details[open] .faq-mark {
   outline: none !important;
 }
 
-.hubble-bar:focus-within {
+.hubble-prompt-surface:focus-within {
   box-shadow: var(--clay-shadow-prompt-focus);
 }
 
-/* --------------------------------------------------------------------------
-   Interactive clay.
+.hubble-prompt-surface {
+  background: linear-gradient(145deg, #fffaf1 0%, var(--clay-surface) 62%, #f7eddd 100%);
+  border: 0;
+  border-radius: var(--radius-clay-lg);
+  box-shadow: var(--clay-shadow-prompt);
+  contain: paint;
+  transition: box-shadow 180ms var(--ease-out-ui, ease-out);
+}
 
-   One class for every widget that responds to a cursor, so hover and press
-   look the same everywhere rather than being re-invented per component.
-   -------------------------------------------------------------------------- */
+/* Repeated controls stay quiet until the pointer reaches them. No gradients,
+   white glare, ripple, or long-lived animation. */
 .clay-interactive {
   position: relative;
   isolation: isolate;
   transition:
-    background-image 160ms var(--ease-out-ui, ease-out),
-    box-shadow 160ms var(--ease-out-ui, ease-out),
+    background-color 140ms var(--ease-out-ui, ease-out),
     transform 140ms var(--ease-out-ui, ease-out),
     color 140ms ease-out;
 }
 
-/*
- * The click bloom.
- *
- * A soft radial light expands from the middle on press and settles back — the
- * Gemini-style acknowledgement that something registered. Deliberately NOT a
- * hard material ripple: on clay a sharp expanding disc looks stuck on, whereas
- * a bloom reads as the surface catching the light as it deforms.
- */
-.clay-interactive::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: radial-gradient(
-    circle at center,
-    rgba(255, 255, 255, 0.95) 0%,
-    rgba(var(--jet), 0.10) 55%,
-    transparent 72%
-  );
-  opacity: 0;
-  transform: scale(0.55);
-  pointer-events: none;
-  /* Slow on the way out, so the bloom lingers instead of snapping off. */
-  transition:
-    opacity 420ms var(--ease-out-ui, ease-out),
-    transform 420ms var(--ease-out-ui, ease-out);
-}
+@media (hover: hover) and (pointer: fine) {
+  .hubble-page .clay-interactive:hover:not(:disabled):not(.hubble-lead-row) {
+    background-color: color-mix(
+      in srgb,
+      var(--clay-surface) 88%,
+      rgb(var(--hubble-coral)) 12%
+    );
+    color: var(--ink) !important;
+  }
 
-.clay-interactive:active:not(:disabled)::after {
-  opacity: 1;
-  transform: scale(1);
-  /* Fast on the way in: the response has to feel simultaneous with the click. */
-  transition-duration: 110ms;
-}
-
-.clay-interactive:hover:not(:disabled) {
-  background-image: var(--grad-hover);
+  .hubble-page .clay-interactive:hover:not(:disabled) span {
+    color: inherit !important;
+  }
 }
 
 .clay-interactive:active:not(:disabled) {
-  background-image: var(--grad-press);
   box-shadow: var(--clay-shadow-inset);
+  transform: scale(0.98);
 }
 
-/* The gradient is the affordance; motion is a bonus nobody depends on. */
+.hubble-filter-control {
+  border: 0;
+  background: var(--clay-surface);
+  border-radius: var(--radius-clay);
+  box-shadow: var(--neo-shadow);
+}
+
+.hubble-filter-control:focus-visible {
+  box-shadow: var(--neo-shadow-focus);
+}
+
+.hubble-empty-state {
+  background: var(--clay-sunken);
+  box-shadow: var(--neo-shadow-inset);
+}
+
+.hubble-selected-option {
+  background: rgb(var(--hubble-coral));
+  color: var(--ink);
+  box-shadow: var(--neo-shadow-inset);
+}
+
+.hubble-selected-option span {
+  color: inherit;
+}
+
+/* The canvas stays bright and quiet. Color belongs to interaction, not a wash
+   behind every component. */
+.hubble-page {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--clay-bg);
+}
+
+/* The answer strip is the second intentionally neumorphic surface. It appears
+   only once a run starts, so the added depth communicates a new workspace. */
+.hubble-result-panel {
+  border: 0;
+  background: var(--clay-surface);
+  box-shadow: var(--neo-shadow-lg);
+}
+
+/* One narrow technical rule adds a trace of brutalism without turning the
+   lead ledger into a boxed grid. */
+.hubble-lead-ledger {
+  border: 0;
+  border-left: 2px solid rgba(var(--hubble-charcoal), 0.24);
+  border-radius: 0.55rem var(--radius-clay) var(--radius-clay) 0.55rem;
+  box-shadow: var(--neo-shadow-lg);
+}
+
+.hubble-primary-action {
+  background: rgb(var(--hubble-coral));
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgba(var(--hubble-charcoal), 0.12);
+}
+
+/* Both scope controls stay neutral. Coral belongs to deliberate actions, not
+   the calendar bar. */
+.hubble-filter-scope {
+  background: var(--clay-surface);
+}
+
+.hubble-filter-date {
+  background: var(--clay-surface);
+}
+
+.hubble-send-action {
+  background: rgb(var(--hubble-coral));
+  color: #fff;
+}
+
+.hubble-shell nav a[aria-current='page'] {
+  background: rgba(var(--hubble-charcoal), 0.16);
+  box-shadow:
+    0 5px 12px rgba(var(--hubble-charcoal), 0.08),
+    inset 0 0 0 1px rgba(var(--hubble-charcoal), 0.06);
+}
+
+.hubble-nav-panel {
+  background: linear-gradient(
+    90deg,
+    var(--clay-bg) 0%,
+    var(--clay-bg) 74%,
+    color-mix(in srgb, var(--clay-bg) 91%, rgb(var(--hubble-charcoal)) 9%) 100%
+  );
+  box-shadow:
+    inset -3px 0 0 rgba(var(--hubble-charcoal), 0.22),
+    inset -18px 0 34px rgba(var(--hubble-charcoal), 0.055);
+}
+
+/* A cheap opacity fade supplies the coral/cream hover without animating paint
+   or layout. Text stays on its own layer above the color field. */
+.hubble-lead-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgb(var(--hubble-coral)) 0%,
+    color-mix(in srgb, rgb(var(--hubble-coral)) 58%, var(--clay-surface) 42%) 42%,
+    var(--clay-surface) 100%
+  );
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out-ui, ease-out);
+}
+
+.hubble-lead-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hubble-page
+    .clay-interactive.hubble-filter-control:hover:not(:disabled):not(:active) {
+    background-color: color-mix(
+      in srgb,
+      var(--clay-surface) 90%,
+      rgb(var(--hubble-coral)) 10%
+    );
+    box-shadow: var(--neo-shadow-focus);
+  }
+
+  .hubble-nav-panel nav a:hover {
+    background-color: rgba(var(--hubble-charcoal), 0.12);
+    color: var(--ink);
+  }
+
+  .hubble-lead-row:hover::before {
+    opacity: 0.28;
+  }
+
+  .hubble-page .hubble-send-action:hover:not(:disabled),
+  .hubble-page .hubble-primary-action:hover:not(:disabled) {
+    background-color: rgb(var(--hubble-coral));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .clay-interactive {
-    transition: background-image 100ms linear;
-  }
-  /* The gradient already says "pressed"; the bloom is the part that moves. */
-  .clay-interactive::after {
-    display: none;
-  }
-}
-
-/* ---------------------------------------------------------------------------
- * Ask Hubble — the "researching" shimmer.
- *
- * ⚠️ A LOADING STATE, NOT AN ENTRANCE ANIMATION. CLAUDE.md forbids entrance
- * animation on product surfaces and caps motion at 150ms; both rules are about
- * content arriving. This is the opposite case: a question takes 40-90 seconds
- * of real network work, and a static grey bar for that long reads as frozen.
- * The movement is the only signal that anything is still happening.
- * ------------------------------------------------------------------------- */
-
-@keyframes hubble-shimmer {
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -200% 0;
-  }
-}
-
-.hubble-shimmer {
-  /* Sweeps a lighter band across the sunken bar. Tokens only — no hex. */
-  background-image: linear-gradient(
-    90deg,
-    var(--color-clay-bg) 0%,
-    var(--color-clay-surface) 40%,
-    var(--color-clay-surface) 60%,
-    var(--color-clay-bg) 100%
-  );
-  background-size: 200% 100%;
-  animation: hubble-shimmer 1.8s linear infinite;
-}
-
-/* Staggered so the three bars read as one sweep rather than three blinks. */
-.hubble-shimmer:nth-child(2) {
-  animation-delay: 0.15s;
-}
-.hubble-shimmer:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* Still visibly "busy", but without the sweep. */
-  .hubble-shimmer {
-    animation: none;
-    background-image: none;
-    background-color: var(--color-clay-bg);
+    transition: background-color 100ms linear;
   }
 }

@@ -43,7 +43,7 @@ export function HubbleResultPanel({
     <aside
       aria-label="Hubble results"
       /* Height comes from the grid row it shares with the lead list. */
-      className="clay-raised flex h-full min-h-0 flex-col overflow-hidden"
+      className="hubble-result-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--radius-clay)]"
     >
       <header className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
         <div className="min-w-0">
@@ -73,12 +73,14 @@ export function HubbleResultPanel({
         </button>
       </header>
 
-      {/*
-        ⚠️ `data-lenis-prevent` IS LOAD-BEARING. The app runs Lenis smooth
-        scroll, which hijacks the page scroll — without this attribute a nested
-        scroll container does not scroll at all.
-      */}
-      <div data-lenis-prevent className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+      {/* Native overflow on product routes; the marker also keeps this safe if
+          the panel is later reused inside a smooth-scrolled surface. */}
+      <div
+        data-lenis-prevent
+        tabIndex={0}
+        aria-label="Research result details"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 outline-none [scrollbar-gutter:stable] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/20"
+      >
         {working ? (
           <div role="status" className="space-y-2.5 py-2">
             <p className="text-sm text-muted">
@@ -87,7 +89,7 @@ export function HubbleResultPanel({
                 : 'Researching. Companies already known are reused and cost nothing.'}
             </p>
             {/* Placeholder lines, not a spinner: they show the shape of what is
-                coming, and the teal ring on the prompt bar carries the motion. */}
+                coming while the prompt status names the active phase. */}
             {Array.from({ length: 4 }).map((_, index) => (
               <span key={index} className="block h-3 rounded-full bg-clay-sunken" />
             ))}
@@ -127,7 +129,7 @@ export function HubbleResultPanel({
                       aria-pressed={answers[question.id] === option}
                       className={`clay-interactive cursor-pointer rounded-[var(--radius-clay)] px-3.5 py-2 text-left text-xs ${
                         answers[question.id] === option
-                          ? 'bg-ink font-medium text-white'
+                          ? 'hubble-selected-option font-medium'
                           : 'bg-clay-sunken text-ink'
                       }`}
                     >
@@ -144,7 +146,7 @@ export function HubbleResultPanel({
               disabled={
                 Object.keys(answers).length < results.clarification.questions.length
               }
-              className="clay-interactive w-full cursor-pointer rounded-[var(--radius-clay)] bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="clay-interactive hubble-primary-action w-full cursor-pointer rounded-[var(--radius-clay)] px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
             >
               {Object.keys(answers).length < results.clarification.questions.length
                 ? 'Answer every question to continue'
@@ -155,18 +157,19 @@ export function HubbleResultPanel({
 
         {phase === 'done' && results ? (
           results.rows.length === 0 ? (
-            <p className="py-6 text-sm text-muted">
-              No leads matched that question. Try widening the list, or asking about a different
-              attribute.
-            </p>
+            <EmptyResearchResult results={results} columnLabel={columnLabel} />
           ) : (
             <div className="space-y-3">
               <dl className="grid grid-cols-2 gap-2">
-                <Stat label="Leads" value={results.metadata.leadsEvaluated} />
-                <Stat label="Companies" value={results.metadata.companiesResearched} />
+                <Stat label="Matches" value={results.rows.length} />
+                <Stat label="Companies checked" value={results.metadata.companiesResearched} />
                 <Stat label="Reused from cache" value={results.metadata.cachedResultsUsed} />
                 <Stat label="External calls" value={results.metadata.externalCalls} />
               </dl>
+
+              <p className="text-sm font-medium text-ink">
+                Found {results.rows.length.toLocaleString()} matching compan{results.rows.length === 1 ? 'y' : 'ies'}.
+              </p>
 
               {(() => {
                 /*
@@ -238,7 +241,19 @@ export function HubbleResultPanel({
                                         : 'Not found'}
                                 </span>
                               ) : (
-                                renderCellValue(cell.value)
+                                <>
+                                  <span>{renderCellValue(cell.value)}</span>
+                                  {cell.sourceUrl ? (
+                                    <a
+                                      href={cell.sourceUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer nofollow"
+                                      className="ml-1.5 text-[11px] text-ink underline-offset-2 hover:underline"
+                                    >
+                                      source
+                                    </a>
+                                  ) : null}
+                                </>
                               )}
                             </dd>
                           </div>
@@ -281,7 +296,7 @@ export function HubbleResultPanel({
             className={
               merge.state === 'done'
                 ? 'w-full rounded-[var(--radius-lg)] bg-success-soft px-4 py-2.5 text-sm font-semibold text-success'
-                : 'clay-interactive w-full cursor-pointer rounded-[var(--radius-clay)] bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60'
+                : 'clay-interactive hubble-primary-action w-full cursor-pointer rounded-[var(--radius-clay)] px-4 py-2.5 text-sm font-semibold disabled:opacity-60'
             }
           >
             {merge.state === 'busy'
@@ -301,6 +316,114 @@ function Stat({ label, value }: { label: string; value: number }) {
     <div className="clay-sunken px-3 py-2">
       <dt className="text-[11px] text-muted">{label}</dt>
       <dd className="text-sm font-semibold text-ink">{value.toLocaleString()}</dd>
+    </div>
+  )
+}
+
+function EmptyResearchResult({
+  results,
+  columnLabel,
+}: {
+  results: RunResults
+  columnLabel: (field: string) => string
+}) {
+  const coverage = Object.entries(results.metadata.fieldCoverage ?? {})
+  const missing = coverage
+    .map(([field, counts]) => ({
+      field,
+      count:
+        counts.notFound +
+        counts.providerUnavailable +
+        counts.noProvider +
+        counts.noCompany,
+      ...counts,
+    }))
+    .filter((item) => item.count > 0)
+
+  const providerUnavailable = missing.some((item) => item.providerUnavailable > 0)
+  const noProvider = missing.some((item) => item.noProvider > 0)
+  const noCompany = Math.max(0, ...missing.map((item) => item.noCompany))
+  const incomplete = results.status === 'partially_complete' || missing.length > 0
+
+  let title = 'No verified matches'
+  let explanation = `Hubble checked ${results.metadata.companiesResearched.toLocaleString()} companies and verified the requested information, but none met every filter.`
+
+  if (incomplete) {
+    if (providerUnavailable) {
+      title = 'Research sources were unavailable'
+      explanation =
+        'Hubble could not reach every source needed to apply your filters. This is an incomplete search, not proof that no companies qualify.'
+    } else if (noProvider) {
+      title = 'A required data source is not configured'
+      explanation =
+        'Hubble has no connected source for part of this question, so it could not safely decide which companies match.'
+    } else {
+      title = 'Not enough verified information'
+      explanation = `Hubble checked ${results.metadata.companiesResearched.toLocaleString()} companies, but the available sources did not provide every fact required by your filters. Unknown values are excluded rather than guessed.`
+    }
+  }
+
+  return (
+    <div className="space-y-4 py-2">
+      <div className="hubble-empty-state rounded-[var(--radius-clay)] p-4">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-clay-raised text-sm font-semibold text-ink shadow-[var(--clay-shadow-chip)]"
+          >
+            i
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-ink">{title}</p>
+            <p className="mt-1 text-sm leading-6 text-muted">{explanation}</p>
+          </div>
+        </div>
+
+        {missing.length > 0 ? (
+          <div className="mt-4 border-t border-border/70 pt-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+              What was missing
+            </p>
+            <ul className="mt-2 space-y-1.5 text-xs text-muted">
+              {missing.map((item) => (
+                <li key={item.field} className="flex items-baseline justify-between gap-4">
+                  <span>{columnLabel(item.field)}</span>
+                  <span className="text-right tabular-nums text-ink/75">
+                    {[
+                      item.notFound > 0
+                        ? `No public evidence for ${item.notFound.toLocaleString()}`
+                        : null,
+                      item.providerUnavailable > 0
+                        ? `Source unavailable for ${item.providerUnavailable.toLocaleString()}`
+                        : null,
+                      item.noProvider > 0
+                        ? `No source connected for ${item.noProvider.toLocaleString()}`
+                        : null,
+                      item.noCompany > 0
+                        ? `No company linked for ${item.noCompany.toLocaleString()}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {noCompany > 0 ? (
+          <p className="mt-3 text-xs leading-5 text-muted">
+            {noCompany.toLocaleString()} lead{noCompany === 1 ? '' : 's'} could not be checked
+            because no company is linked.
+          </p>
+        ) : null}
+      </div>
+
+      <dl className="grid grid-cols-2 gap-2">
+        <Stat label="Companies checked" value={results.metadata.companiesResearched} />
+        <Stat label="External searches" value={results.metadata.externalCalls} />
+      </dl>
     </div>
   )
 }

@@ -14,9 +14,97 @@ import 'server-only'
  * ║  code change — only an environment variable.                             ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-import type { SearchHit, SearchProvider } from '@/lib/hubble/providers/types'
+import type { DeadlineOptions, SearchHit, SearchProvider } from '@/lib/hubble/providers/types'
 import { requestJson, setHostPacing } from '@/lib/intelligence/http'
 import { hasTavilyCredentials, tavilySearch } from '@/lib/intelligence/providers/tavily'
+
+type SearxngConfig = {
+  baseUrl: string
+  authToken: string | null
+  engines: string[]
+}
+
+/**
+ * Resolves the operator-owned SearXNG endpoint once, with the same public-host
+ * authentication rule for Hubble and the core Intelligence pipeline.
+ */
+function searxngConfig(): SearxngConfig | null {
+  const value = process.env.SEARXNG_URL?.trim()
+  if (!value) return null
+
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+
+    const isLoopback =
+      url.hostname === '127.0.0.1' || url.hostname === 'localhost' || url.hostname === '::1'
+    const authToken = process.env.SEARXNG_AUTH_TOKEN?.trim() || null
+    if (!isLoopback && !authToken) return null
+
+    const engines = (process.env.SEARXNG_ENGINES ?? '')
+      .split(',')
+      .map((engine) => engine.trim())
+      .filter(Boolean)
+      .slice(0, 8)
+
+    return { baseUrl: url.origin, authToken, engines }
+  } catch {
+    return null
+  }
+}
+
+export function hasSearxngCredentials(): boolean {
+  return searxngConfig() !== null
+}
+
+/**
+ * Shared, throwing SearXNG request used by provider adapters that must
+ * distinguish "no results" from "the search service failed".
+ */
+export async function searxngSearch(
+  query: string,
+  limit: number,
+  options: DeadlineOptions & { timeRange?: 'day' | 'week' | 'month' | 'year' } = {},
+): Promise<SearchHit[]> {
+  const config = searxngConfig()
+  if (!config) return []
+
+  const url = new URL('/search', config.baseUrl)
+  url.searchParams.set('q', query)
+  url.searchParams.set('format', 'json')
+  url.searchParams.set('language', 'en')
+  url.searchParams.set('categories', 'general')
+  if (config.engines.length > 0) url.searchParams.set('engines', config.engines.join(','))
+  if (options.timeRange) url.searchParams.set('time_range', options.timeRange)
+
+  setHostPacing(url.hostname, 750)
+
+  const payload = await requestJson<{
+    results?: Array<{ url?: string; title?: string; content?: string; publishedDate?: string }>
+    unresponsive_engines?: Array<[string, string]>
+  }>({
+    url: url.toString(),
+    headers: config.authToken ? { authorization: `Bearer ${config.authToken}` } : undefined,
+    deadlineAt: options.deadlineAt,
+  })
+
+  if ((payload.results?.length ?? 0) === 0 && (payload.unresponsive_engines?.length ?? 0) > 0) {
+    // Zero hits because every selected engine was throttled is an outage, not
+    // evidence that the company has no results. The executor records this as
+    // provider_unavailable so the UI never presents it as “not found”.
+    throw new Error('SearXNG upstream engines unavailable')
+  }
+
+  return (payload.results ?? [])
+    .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
+    .slice(0, limit)
+    .map((result) => ({
+      url: result.url,
+      title: result.title?.trim() || null,
+      snippet: result.content?.trim() || null,
+      publishedDate: result.publishedDate ?? null,
+    }))
+}
 
 /**
  * A self-hosted SearXNG instance.
@@ -29,21 +117,6 @@ import { hasTavilyCredentials, tavilySearch } from '@/lib/intelligence/providers
  */
 export class SearxngSearchProvider implements SearchProvider {
   readonly name = 'searxng'
-
-  private get baseUrl(): string | null {
-    const value = process.env.SEARXNG_URL?.trim()
-    if (!value) return null
-    try {
-      const url = new URL(value)
-      return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : null
-    } catch {
-      return null
-    }
-  }
-
-  private get authToken(): string | null {
-    return process.env.SEARXNG_AUTH_TOKEN?.trim() || null
-  }
 
   /**
    * A remote instance MUST carry a token; a loopback one need not.
@@ -63,52 +136,13 @@ export class SearxngSearchProvider implements SearchProvider {
    * ║  reachable by anyone else.                                               ║
    * ╚══════════════════════════════════════════════════════════════════════════╝
    */
-  private get isLoopback(): boolean {
-    const base = this.baseUrl
-    if (!base) return false
-    try {
-      const host = new URL(base).hostname
-      return host === '127.0.0.1' || host === 'localhost' || host === '::1'
-    } catch {
-      return false
-    }
-  }
-
   isConfigured(): boolean {
-    if (this.baseUrl === null) return false
-    return this.isLoopback || this.authToken !== null
+    return hasSearxngCredentials()
   }
 
-  async search(query: string, limit: number): Promise<SearchHit[]> {
-    const base = this.baseUrl
-    if (!base || !this.isConfigured()) return []
-
-    const url = new URL('/search', base)
-    url.searchParams.set('q', query)
-    url.searchParams.set('format', 'json')
-    url.searchParams.set('language', 'en')
-    // General engines only: images and videos are not readable evidence.
-    url.searchParams.set('categories', 'general')
-
-    setHostPacing(url.hostname, 250)
-
+  async search(query: string, limit: number, options: DeadlineOptions = {}): Promise<SearchHit[]> {
     try {
-      const payload = await requestJson<{
-        results?: Array<{ url?: string; title?: string; content?: string; publishedDate?: string }>
-      }>({
-        url: url.toString(),
-        headers: this.authToken ? { authorization: `Bearer ${this.authToken}` } : undefined,
-      })
-
-      return (payload.results ?? [])
-        .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
-        .slice(0, limit)
-        .map((result) => ({
-          url: result.url,
-          title: result.title?.trim() || null,
-          snippet: result.content?.trim() || null,
-          publishedDate: result.publishedDate ?? null,
-        }))
+      return await searxngSearch(query, limit, options)
     } catch {
       /*
        * ⚠️ NEVER THROWS. A search engine being down must lower an answer's
@@ -160,7 +194,7 @@ export class GoogleCseSearchProvider implements SearchProvider {
     return this.apiKey !== null && this.engineId !== null
   }
 
-  async search(query: string, limit: number): Promise<SearchHit[]> {
+  async search(query: string, limit: number, options: DeadlineOptions = {}): Promise<SearchHit[]> {
     const apiKey = this.apiKey
     const engineId = this.engineId
     if (!apiKey || !engineId) return []
@@ -177,7 +211,11 @@ export class GoogleCseSearchProvider implements SearchProvider {
     try {
       const payload = await requestJson<{
         items?: Array<{ link?: string; title?: string; snippet?: string }>
-      }>({ url: url.toString(), headers: { accept: 'application/json' } })
+      }>({
+        url: url.toString(),
+        headers: { accept: 'application/json' },
+        deadlineAt: options.deadlineAt,
+      })
 
       return (payload.items ?? [])
         .filter((item): item is { link: string } & typeof item => typeof item.link === 'string')
@@ -229,7 +267,7 @@ export class BraveSearchProvider implements SearchProvider {
     return this.apiKey !== null
   }
 
-  async search(query: string, limit: number): Promise<SearchHit[]> {
+  async search(query: string, limit: number, options: DeadlineOptions = {}): Promise<SearchHit[]> {
     const apiKey = this.apiKey
     if (!apiKey) return []
 
@@ -253,6 +291,7 @@ export class BraveSearchProvider implements SearchProvider {
           'accept-encoding': 'gzip',
           'x-subscription-token': apiKey,
         },
+        deadlineAt: options.deadlineAt,
       })
 
       return (payload.web?.results ?? [])
@@ -281,11 +320,11 @@ export class TavilySearchProvider implements SearchProvider {
     return hasTavilyCredentials()
   }
 
-  async search(query: string, limit: number): Promise<SearchHit[]> {
+  async search(query: string, limit: number, options: DeadlineOptions = {}): Promise<SearchHit[]> {
     if (!this.isConfigured()) return []
 
     try {
-      const results = await tavilySearch({ query, maxResults: limit })
+      const results = await tavilySearch({ query, maxResults: limit, deadlineAt: options.deadlineAt })
       return results.map((result) => ({
         url: result.url,
         title: result.title || null,
@@ -367,13 +406,17 @@ export class SearchWaterfall implements SearchProvider {
   }
 
   /** Which provider actually answered, for the usage record. */
-  async searchWithSource(query: string, limit: number): Promise<{ hits: SearchHit[]; provider: string | null }> {
+  async searchWithSource(
+    query: string,
+    limit: number,
+    options: DeadlineOptions = {},
+  ): Promise<{ hits: SearchHit[]; provider: string | null }> {
     for (const provider of this.providers) {
       if (!provider.isConfigured()) continue
       // Skipped without a request: the point is to not pay the timeout again.
       if (isCoolingDown(provider.name)) continue
 
-      const hits = await provider.search(query, limit)
+      const hits = await provider.search(query, limit, options)
 
       if (hits.length > 0) {
         // Recovered — clear any earlier failure rather than wait out the cooldown.
@@ -393,8 +436,8 @@ export class SearchWaterfall implements SearchProvider {
     return { hits: [], provider: null }
   }
 
-  async search(query: string, limit: number): Promise<SearchHit[]> {
-    return (await this.searchWithSource(query, limit)).hits
+  async search(query: string, limit: number, options: DeadlineOptions = {}): Promise<SearchHit[]> {
+    return (await this.searchWithSource(query, limit, options)).hits
   }
 }
 

@@ -23,7 +23,7 @@ import { getCompaniesForLeads } from '@/lib/companies/repository'
 import { dateRangeBounds } from '@/lib/intelligence/date-range'
 import { deriveAll, derivedEvidence } from '@/lib/intelligence/derive'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
-import { executeTasks } from '@/lib/intelligence/execute'
+import { executeTasks, executeTasksInChunks } from '@/lib/intelligence/execute'
 import { readEvidence, recordToolCalls, writeEvidence } from '@/lib/intelligence/evidence-store'
 import {
   isExecutable,
@@ -35,6 +35,8 @@ import {
 import { applyClarifications } from '@/lib/intelligence/planner'
 import { buildLiveRegistry } from '@/lib/intelligence/providers'
 import { planToTasks } from '@/lib/intelligence/router'
+import { hasSearxngCredentials } from '@/lib/hubble/providers/search'
+import { preserveExplicitConstraints } from '@/lib/intelligence/filters'
 import {
   RESEARCH_FIELD_SPEC,
   type CompanyEntity,
@@ -164,7 +166,7 @@ export async function answerClarifications(
 
   const { data: run, error } = await supabase
     .from('research_runs')
-    .select('id, status, plan, clarifications')
+    .select('id, status, query_text, plan, clarifications')
     .eq('id', runId)
     // Service role bypasses RLS — scoping by user_id is mandatory.
     .eq('user_id', userId)
@@ -180,7 +182,10 @@ export async function answerClarifications(
   const validation = validatePlan(run.plan)
   if (!validation.ok) return { ok: false, reason: 'The stored plan was not valid.' }
 
-  const updated = applyClarifications(validation.plan, answers)
+  const updated = preserveExplicitConstraints(
+    run.query_text,
+    applyClarifications(validation.plan, answers),
+  )
   if (!isExecutable(updated)) {
     return { ok: false, reason: 'That answer did not resolve the question.' }
   }
@@ -363,11 +368,26 @@ export async function processResearchRun(
     companies: companyEntities,
     people: peopleEntities,
     requiredFields: plan.requiredFields,
+    filters: plan.filters,
     knowledge,
   })
 
   // ---- 5. execute, isolating failures (spec §49) -------------------------
-  const report = await executeTasks(routing.tasks, { registry: buildLiveRegistry() })
+  const executionOptions = {
+    registry: buildLiveRegistry(),
+    // The operator-owned service is paced at the HTTP layer. Eight overlapping
+    // requests keeps a visible 25-lead search responsive without bursting the
+    // upstream engines; third-party categories retain the conservative four.
+    concurrency:
+      hasSearxngCredentials() &&
+      routing.categories.some((category) =>
+        category === 'funding' || category === 'web_research' || category === 'company_profile')
+        ? 2
+        : undefined,
+  }
+  const report = scope.type === 'all_leads'
+    ? await executeTasksInChunks(routing.tasks, executionOptions, 25)
+    : await executeTasks(routing.tasks, executionOptions)
 
   // ---- 6. persist with provenance (spec §16) -----------------------------
   const written = await writeEvidence(userId, runId, report.evidence)

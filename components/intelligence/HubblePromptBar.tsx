@@ -12,8 +12,8 @@
  * ║  no background, no ring and no border of its own, so typing happens on   ║
  * ║  the bar itself.                                                         ║
  * ║                                                                          ║
- * ║  Strictly claymorphic: one extruded surface, generous radius, no border. ║
- * ║  The paired shadow does the separating. The send button presses INWARD   ║
+ * ║  Strictly claymorphic: one extruded surface and a generous radius.        ║
+ * ║  A faint seam and broad inner pressure define it. The send button presses║
  * ║  on click — clay deforms, it does not just tint.                         ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
@@ -26,7 +26,7 @@ export function HubblePromptBar({
   onSubmit,
   busy,
   busyLabel = 'Thinking…',
-  modelName,
+  shimmer = false,
   placeholder = 'Ask Hubble…',
   suggestions = [],
 }: {
@@ -36,7 +36,8 @@ export function HubblePromptBar({
   busy: boolean
   /** What the shimmer reads while a query runs. */
   busyLabel?: string
-  modelName: string
+  /** Reserved for the LLM planning/generation phase, not ordinary web fetches. */
+  shimmer?: boolean
   placeholder?: string
   suggestions?: string[]
 }) {
@@ -51,12 +52,12 @@ export function HubblePromptBar({
       <div
         /*
          * ⚠️ NO HOVER GRADIENT ON THE BAR. It was given one and the wash read as
-         * dirt across a surface that is mostly empty white — a tint that works
+         * dirt across a surface that is mostly empty cream — a tint that works
          * on a dense row looks like a stain on a blank field. The bar responds
-         * through DEPTH instead: the clay lifts on hover and settles on focus.
-         * Its controls carry the gradient; the writing surface stays clean.
+         * through DEPTH instead: the surface settles on focus and the writing
+         * area stays a single neutral material.
          */
-        className="hubble-bar flex cursor-text items-center rounded-[var(--radius-clay-lg)] bg-clay-raised pr-3 shadow-[var(--clay-shadow-prompt)] transition-shadow duration-200 hover:shadow-[var(--clay-shadow-prompt-focus)] focus-within:shadow-[var(--clay-shadow-prompt-focus)]"
+        className="hubble-bar hubble-prompt-surface flex cursor-text items-center pr-3"
       >
         {/*
           While a query runs the bar shows a shimmering status line instead of
@@ -66,10 +67,15 @@ export function HubblePromptBar({
         {busy ? (
           <span
             role="status"
-            className="flex h-[68px] min-w-0 flex-1 items-center gap-2.5 px-7 text-[16px]"
+            className="flex h-[76px] min-w-0 flex-1 items-center gap-2.5 px-7 text-[16px]"
           >
-            <span aria-hidden className="hubble-pulse h-2 w-2 shrink-0 rounded-full bg-ink" />
-            <span className="hubble-shimmer font-medium">{busyLabel}</span>
+            <span
+              aria-hidden
+              className={`${shimmer ? 'hubble-pulse' : 'opacity-45'} h-2 w-2 shrink-0 rounded-full bg-ink`}
+            />
+            <span className={shimmer ? 'hubble-shimmer font-medium' : 'font-medium text-muted'}>
+              {busyLabel}
+            </span>
           </span>
         ) : null}
 
@@ -88,35 +94,10 @@ export function HubblePromptBar({
            * the text sits on the bar's own baseline rather than inside a box
            * that happens to be on it.
            */
-          className={`h-[68px] min-w-0 flex-1 border-0 bg-transparent px-7 text-[16px] leading-none text-ink outline-none placeholder:text-muted/80 ${
+          className={`h-[76px] min-w-0 flex-1 border-0 bg-transparent px-7 text-[16px] leading-none text-ink outline-none placeholder:text-muted/80 ${
             busy ? 'hidden' : ''
           }`}
         />
-
-        {/*
-          Shaped like a model switcher: name, chevron, quiet fill. There is one
-          engine to choose so it does not open — the affordance is honest about
-          what it is, and the chevron marks where more models will live when
-          user-supplied ones arrive.
-        */}
-        <span
-          title="Hubble Nova falls over to another engine automatically if one is unavailable"
-          className="mr-2 hidden shrink-0 items-center gap-2 rounded-full bg-clay-sunken py-2 pl-3.5 pr-3 text-[13px] font-medium text-ink sm:inline-flex"
-        >
-          {modelName}
-          <svg
-            aria-hidden
-            viewBox="0 0 10 6"
-            className="h-[6px] w-[10px] text-muted"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M1 1l4 4 4-4" />
-          </svg>
-        </span>
 
         <button
           type="button"
@@ -130,7 +111,7 @@ export function HubblePromptBar({
            * made the control flicker between two identities as you typed.
            * Availability is carried by opacity and the cursor alone.
            */
-          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-clay-surface text-ink shadow-[var(--clay-shadow-chip)] transition-[opacity,transform,box-shadow] duration-150 ease-out ${
+          className={`hubble-send-action inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-[var(--clay-shadow-chip)] transition-[background-color,opacity,transform,box-shadow] duration-150 ease-out ${
             canSubmit
               ? 'cursor-pointer active:scale-[0.94] active:shadow-[var(--clay-shadow-inset)]'
               : 'cursor-not-allowed opacity-45'
@@ -158,9 +139,10 @@ export function HubblePromptBar({
       */}
       {suggestions.length > 0 ? (
         <div
+          aria-label="Suggested prompts"
           aria-hidden={busy}
-          className={`flex flex-wrap gap-2.5 transition-opacity duration-200 ${
-            busy ? 'pointer-events-none opacity-40' : 'opacity-100'
+          className={`flex flex-wrap gap-x-4 gap-y-1.5 ${
+            busy ? 'pointer-events-none invisible' : 'visible'
           }`}
         >
           {suggestions.map((suggestion) => (
@@ -169,7 +151,7 @@ export function HubblePromptBar({
               type="button"
               disabled={busy}
               onClick={() => onChange(suggestion)}
-              className="clay-interactive cursor-pointer rounded-[var(--radius-clay)] bg-clay-surface px-4 py-2.5 text-[13px] text-muted shadow-[var(--clay-shadow-chip)] hover:text-ink active:scale-[0.97]"
+              className="clay-interactive cursor-pointer rounded-lg px-1 py-1.5 text-[12px] text-muted hover:text-ink"
             >
               {suggestion}
             </button>

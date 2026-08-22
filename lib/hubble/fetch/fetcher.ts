@@ -20,7 +20,12 @@ import 'server-only'
  */
 import { extractReadable } from '@/lib/hubble/extract/readable'
 import { assertFetchable } from '@/lib/hubble/net/guard'
-import type { FetchFailure, FetchedPage, PageFetcher } from '@/lib/hubble/providers/types'
+import type {
+  DeadlineOptions,
+  FetchFailure,
+  FetchedPage,
+  PageFetcher,
+} from '@/lib/hubble/providers/types'
 import { USER_AGENT } from '@/lib/intelligence/http'
 
 /** 12s is long enough for a slow marketing site, short enough not to stall. */
@@ -43,6 +48,11 @@ const MIN_USEFUL_CHARS = 200
 
 function bannedHost(host: string): boolean {
   return BANNED_HOSTS.some((pattern) => pattern.test(host))
+}
+
+function timeoutFor(options: DeadlineOptions): number {
+  if (options.deadlineAt === undefined) return TIMEOUT_MS
+  return Math.max(1, Math.min(TIMEOUT_MS, options.deadlineAt - Date.now()))
 }
 
 /**
@@ -93,7 +103,14 @@ export function needsBrowser(html: string, extractedChars: number): boolean {
 export class HttpPageFetcher implements PageFetcher {
   readonly name = 'fetch'
 
-  async fetchPage(rawUrl: string): Promise<FetchedPage | FetchFailure> {
+  async fetchPage(
+    rawUrl: string,
+    options: DeadlineOptions = {},
+  ): Promise<FetchedPage | FetchFailure> {
+    if (options.deadlineAt !== undefined && options.deadlineAt <= Date.now()) {
+      return { url: rawUrl, code: 'timeout', detail: 'Hubble deadline exceeded' }
+    }
+
     const verdict = await assertFetchable(rawUrl)
     if (!verdict.allowed) {
       return { url: rawUrl, code: 'blocked', detail: verdict.reason }
@@ -104,7 +121,8 @@ export class HttpPageFetcher implements PageFetcher {
     }
 
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const timeoutMs = timeoutFor(options)
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
 
     try {
       const response = await fetch(verdict.url, {
@@ -134,7 +152,7 @@ export class HttpPageFetcher implements PageFetcher {
         if (!hop.allowed || bannedHost(hop.host)) {
           return { url: rawUrl, code: 'blocked', detail: `redirect to ${hop.allowed ? hop.host : 'blocked target'}` }
         }
-        return this.fetchOnce(hop.url)
+        return this.fetchOnce(hop.url, options)
       }
 
       return this.finish(response, verdict.url)
@@ -143,7 +161,7 @@ export class HttpPageFetcher implements PageFetcher {
       return {
         url: rawUrl,
         code: aborted ? 'timeout' : 'http_error',
-        detail: aborted ? `no response in ${TIMEOUT_MS}ms` : 'request failed',
+        detail: aborted ? `no response in ${timeoutMs}ms` : 'request failed',
       }
     } finally {
       clearTimeout(timer)
@@ -151,9 +169,12 @@ export class HttpPageFetcher implements PageFetcher {
   }
 
   /** A single request with no further redirect following. */
-  private async fetchOnce(url: string): Promise<FetchedPage | FetchFailure> {
+  private async fetchOnce(
+    url: string,
+    options: DeadlineOptions,
+  ): Promise<FetchedPage | FetchFailure> {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const timer = setTimeout(() => controller.abort(), timeoutFor(options))
     try {
       const response = await fetch(url, {
         signal: controller.signal,

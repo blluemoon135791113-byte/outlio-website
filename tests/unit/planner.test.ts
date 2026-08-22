@@ -37,6 +37,52 @@ function replied(json: unknown): LlmResult {
 }
 
 describe('planQuery — happy paths', () => {
+  it('preserves an explicit round and date window the model dropped', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-22T12:00:00.000Z'))
+    try {
+      const llm = stubLlm([
+        replied({
+          requiredFields: ['funding_round', 'funding_date'],
+          filters: { timeframe: 'Past 7 days' },
+          clarificationRequired: false,
+        }),
+      ])
+
+      const outcome = await planQuery({
+        question: 'Find companies that received their Series A this week.',
+        llm,
+      })
+
+      expect(outcome.status).toBe('planned')
+      if (outcome.status !== 'planned') return
+      expect(outcome.plan.filters).toMatchObject({
+        funding_round: 'Series A',
+        funded_after: '2026-08-17',
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('turns "more than one investor" into an executable count filter', async () => {
+    const calls = vi.fn()
+    const llm = stubLlm([
+      replied({ requiredFields: ['funding_investors'], filters: {}, clarificationRequired: false }),
+    ], calls)
+
+    const outcome = await planQuery({
+      question: 'Find me companies with more than one investor.',
+      llm,
+    })
+
+    expect(outcome.status).toBe('planned')
+    if (outcome.status !== 'planned') return
+    expect(outcome.plan.filters.minimum_investor_count).toBe(2)
+    expect(outcome.plan.requiredFields).toContain('funding_investors')
+    expect(calls).not.toHaveBeenCalled()
+  })
+
   it('turns the spec §6 example into a funding plan', async () => {
     const llm = stubLlm([
       replied({
@@ -64,7 +110,9 @@ describe('planQuery — happy paths', () => {
       'funding_round',
       'funding_amount',
       'funding_date',
+      'business_model',
     ])
+    expect(outcome.plan.filters.business_model).toBe('SaaS')
     expect(outcome.plan.filters.minimum_funding_amount_usd).toBe(5_000_000)
   })
 
@@ -117,6 +165,22 @@ describe('planQuery — happy paths', () => {
     expect(outcome.status).toBe('planned')
     if (outcome.status !== 'planned') return
     expect(outcome.plan.requiredFields).toEqual(['work_email'])
+  })
+
+  it('preserves SaaS and SDR hiring constraints even when the model drops them', async () => {
+    const llm = stubLlm([
+      replied({ requiredFields: ['hiring_signals'], filters: {}, clarificationRequired: false }),
+    ])
+
+    const outcome = await planQuery({ question: 'Find SaaS leads hiring SDRs', llm })
+
+    expect(outcome.status).toBe('planned')
+    if (outcome.status !== 'planned') return
+    expect(outcome.plan.requiredFields).toEqual(['hiring_signals', 'business_model'])
+    expect(outcome.plan.filters).toMatchObject({
+      business_model: 'SaaS',
+      hiring_roles: ['sdr'],
+    })
   })
 })
 

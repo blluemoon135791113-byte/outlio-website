@@ -55,7 +55,7 @@ export function ProductNav({
     : [...links, SETTINGS_LINK]
 
   return (
-    <nav aria-label="Product" className="space-y-1">
+    <nav aria-label="Product" className="space-y-0.5">
       {allLinks.map((link) => {
         const active = 'exact' in link && link.exact
           ? pathname === link.href
@@ -69,17 +69,11 @@ export function ProductNav({
             onClick={onNavigate}
             className={
               active
-                ? 'group relative flex h-10 items-center gap-3 rounded-[var(--radius-md)] bg-accent-soft px-3 text-sm font-semibold text-accent'
-                : 'group relative flex h-10 items-center gap-3 rounded-[var(--radius-md)] px-3 text-sm font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]'
+                ? 'group relative flex h-9 items-center gap-3 rounded-lg bg-surface-muted px-3 text-[13px] font-semibold text-ink'
+                : 'group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]'
             }
           >
-            {active ? (
-              <span
-                aria-hidden
-                className="absolute -left-[13px] h-5 w-[3px] rounded-r-full bg-accent"
-              />
-            ) : null}
-            <ProductIcon name={link.icon} className="h-[18px] w-[18px] shrink-0" />
+            <ProductIcon name={link.icon} className="h-[17px] w-[17px] shrink-0" />
             <span>{link.label}</span>
           </Link>
         )

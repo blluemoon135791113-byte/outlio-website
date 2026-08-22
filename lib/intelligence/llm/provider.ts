@@ -32,6 +32,14 @@ export type LlmRequest = {
   /** Low by default: planning is classification, not creative writing. */
   temperature?: number
   maxOutputTokens?: number
+  /** Absolute budget deadline. Providers and fallbacks must all share it. */
+  deadlineAt?: number
+  /**
+   * Runtime acceptance check owned by the caller's domain schema. JSON Schema
+   * support varies by vendor; the router uses this to reject a syntactically
+   * valid but unusable completion and continue to the next engine.
+   */
+  validate?: (value: unknown) => boolean
 }
 
 export type LlmResult =
@@ -57,6 +65,8 @@ const BACKBOARD_HOST = 'app.backboard.io'
  * Operators can still roll forward independently with `GEMINI_MODEL`.
  */
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.6-flash'
+/** Current Cerebras public-endpoint default. Do not pin a retired model. */
+export const DEFAULT_CEREBRAS_MODEL = 'gpt-oss-120b'
 
 setHostPacing(GEMINI_HOST, 200)
 setHostPacing(GROQ_HOST, 200)
@@ -66,6 +76,58 @@ setHostPacing(BACKBOARD_HOST, 200)
 
 /** Long enough for a planning call, short enough not to stall a request. */
 const LLM_TIMEOUT_MS = 30_000
+
+function llmTimeout(request: LlmRequest): number {
+  if (request.deadlineAt === undefined) return LLM_TIMEOUT_MS
+  return Math.max(1, Math.min(LLM_TIMEOUT_MS, request.deadlineAt - Date.now()))
+}
+
+/**
+ * OpenAI-compatible structured-output providers require every object to reject
+ * unknown properties. Copy the caller schema and add that constraint at every
+ * nesting level rather than relying on each call site to remember it.
+ */
+function strictJsonSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(strictJsonSchema)
+  if (!value || typeof value !== 'object') return value
+
+  const object = Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, child]) => [
+      key,
+      strictJsonSchema(child),
+    ]),
+  )
+
+  if (object.type === 'object') object.additionalProperties = false
+  return object
+}
+
+function supportsStrictSchema(value: unknown): boolean {
+  if (Array.isArray(value)) return value.every(supportsStrictSchema)
+  if (!value || typeof value !== 'object') return true
+
+  const object = value as Record<string, unknown>
+  if (object.type === 'object') {
+    if (!object.properties || typeof object.properties !== 'object') return false
+    const propertyNames = Object.keys(object.properties as Record<string, unknown>)
+    const required = Array.isArray(object.required) ? object.required : []
+    if (!propertyNames.every((name) => required.includes(name))) return false
+  }
+
+  return Object.values(object).every(supportsStrictSchema)
+}
+
+function structuredResponseFormat(schema: Record<string, unknown>) {
+  const strict = supportsStrictSchema(schema)
+  return {
+    type: 'json_schema',
+    json_schema: {
+      name: 'hubble_response',
+      strict,
+      schema: strict ? strictJsonSchema(schema) : schema,
+    },
+  }
+}
 
 function safeParse(text: string): unknown | undefined {
   try {
@@ -116,7 +178,9 @@ export function createGeminiProvider(
           // The key goes in a header, never the query string — a URL with a
           // key in it ends up in logs and error messages.
           headers: { 'x-goog-api-key': apiKey },
-          timeoutMs: LLM_TIMEOUT_MS,
+          timeoutMs: llmTimeout(request),
+          deadlineAt: request.deadlineAt,
+          maxRetries: 0,
           body: {
             systemInstruction: { parts: [{ text: request.system }] },
             contents: [{ role: 'user', parts: [{ text: request.user }] }],
@@ -172,7 +236,9 @@ export function createGroqProvider(
           url: `https://${GROQ_HOST}/openai/v1/chat/completions`,
           method: 'POST',
           headers: { authorization: `Bearer ${apiKey}` },
-          timeoutMs: LLM_TIMEOUT_MS,
+          timeoutMs: llmTimeout(request),
+          deadlineAt: request.deadlineAt,
+          maxRetries: 0,
           body: {
             model,
             temperature: request.temperature ?? 0,
@@ -230,14 +296,19 @@ export function createOpenRouterProvider(
           url: `https://${OPENROUTER_HOST}/api/v1/chat/completions`,
           method: 'POST',
           headers: { authorization: `Bearer ${apiKey}` },
-          timeoutMs: LLM_TIMEOUT_MS,
+          timeoutMs: llmTimeout(request),
+          deadlineAt: request.deadlineAt,
+          maxRetries: 0,
           body: {
             model,
             temperature: request.temperature ?? 0,
             max_tokens: request.maxOutputTokens ?? 2048,
-            // OpenAI-compatible JSON mode. The schema is still repeated in the
-            // prompt and Zod decides, exactly as with Groq.
-            response_format: { type: 'json_object' },
+            response_format: structuredResponseFormat(request.schema),
+            provider: {
+              allow_fallbacks: true,
+              require_parameters: true,
+              data_collection: 'deny',
+            },
             messages: [
               { role: 'system', content: request.system },
               { role: 'user', content: request.user },
@@ -266,7 +337,7 @@ export function createOpenRouterProvider(
 // ---------------------------------------------------------------------------
 
 export function createCerebrasProvider(
-  model = process.env.CEREBRAS_MODEL ?? 'llama-3.3-70b',
+  model = process.env.CEREBRAS_MODEL ?? DEFAULT_CEREBRAS_MODEL,
 ): LLMProvider {
   return {
     vendor: 'cerebras',
@@ -287,12 +358,14 @@ export function createCerebrasProvider(
           url: `https://${CEREBRAS_HOST}/v1/chat/completions`,
           method: 'POST',
           headers: { authorization: `Bearer ${apiKey}` },
-          timeoutMs: LLM_TIMEOUT_MS,
+          timeoutMs: llmTimeout(request),
+          deadlineAt: request.deadlineAt,
+          maxRetries: 0,
           body: {
             model,
             temperature: request.temperature ?? 0,
             max_tokens: request.maxOutputTokens ?? 2048,
-            response_format: { type: 'json_object' },
+            response_format: structuredResponseFormat(request.schema),
             messages: [
               { role: 'system', content: request.system },
               { role: 'user', content: request.user },
@@ -345,7 +418,9 @@ export function createBackboardProvider(
           url: `https://${BACKBOARD_HOST}/api/threads/messages`,
           method: 'POST',
           headers: { 'x-api-key': apiKey },
-          timeoutMs: LLM_TIMEOUT_MS,
+          timeoutMs: llmTimeout(request),
+          deadlineAt: request.deadlineAt,
+          maxRetries: 0,
           body: {
             content: request.user,
             system_prompt: request.system,
@@ -374,11 +449,32 @@ export function createBackboardProvider(
   }
 }
 
+const LLM_FAILED_AT = new Map<string, number>()
+const LLM_COOLDOWN_MS = 60_000
+
+function providerKey(provider: LLMProvider): string {
+  return `${provider.vendor}:${provider.model}`
+}
+
+function llmCoolingDown(provider: LLMProvider): boolean {
+  const key = providerKey(provider)
+  const failedAt = LLM_FAILED_AT.get(key)
+  if (failedAt === undefined) return false
+  if (Date.now() - failedAt < LLM_COOLDOWN_MS) return true
+  LLM_FAILED_AT.delete(key)
+  return false
+}
+
+/** Exported for deterministic tests; production state is process-lifetime. */
+export function resetLlmCircuitBreaker(): void {
+  LLM_FAILED_AT.clear()
+}
+
 /**
- * Tries the preferred configured provider, then a configured alternative when
- * the first vendor is unavailable. An invalid completion stays with the same
- * vendor so the planner's schema-feedback retry can correct it without buying
- * an unnecessary second-vendor call.
+ * Tries configured providers in order. A dead provider is cooled down for the
+ * rest of the request burst, and malformed JSON falls through too: once the
+ * provider has failed constrained output, retrying the same engine does not
+ * make the router resilient.
  */
 export function createFallbackLlmProvider(candidates: LLMProvider[]): LLMProvider {
   const primary = candidates.find((provider) => provider.isConfigured()) ?? candidates[0]
@@ -400,12 +496,36 @@ export function createFallbackLlmProvider(candidates: LLMProvider[]): LLMProvide
 
       for (const provider of candidates) {
         if (!provider.isConfigured()) continue
+        if (llmCoolingDown(provider)) {
+          lastFailure = {
+            ok: false,
+            code: 'unavailable',
+            detail: 'Configured language models are cooling down after an upstream failure',
+          }
+          continue
+        }
+        if (request.deadlineAt !== undefined && request.deadlineAt <= Date.now()) {
+          return { ok: false, code: 'unavailable', detail: 'LLM deadline exceeded' }
+        }
 
         const result = await provider.generateJson(request)
-        if (result.ok) return result
+        if (result.ok) {
+          if (request.validate && !request.validate(result.json)) {
+            lastFailure = {
+              ok: false,
+              code: 'unparseable',
+              detail: 'completion did not match the requested schema',
+            }
+            continue
+          }
+          LLM_FAILED_AT.delete(providerKey(provider))
+          return result
+        }
 
         lastFailure = result
-        if (result.code === 'unparseable') return result
+        if (result.code === 'unavailable') {
+          LLM_FAILED_AT.set(providerKey(provider), Date.now())
+        }
       }
 
       return lastFailure

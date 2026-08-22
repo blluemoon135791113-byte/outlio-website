@@ -63,7 +63,16 @@ describe('the registry excludes metered providers by default', () => {
     const names = registeredNames()
 
     // Free sources are the whole point of running with paid providers off.
-    for (const free of ['dns-tech', 'gdelt-funding', 'wikidata', 'github', 'hackernews']) {
+    for (const free of [
+      'dns-tech',
+      'searxng-funding',
+      'searxng-web',
+      'searxng-company-profile',
+      'gdelt-funding',
+      'wikidata',
+      'github',
+      'hackernews',
+    ]) {
       expect(names, free).toContain(free)
     }
   })

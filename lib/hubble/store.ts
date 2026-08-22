@@ -49,6 +49,13 @@ export type CachedAnswer = {
   createdAt: string
 }
 
+/** Expired pages must never remain eligible just because their chunks do. */
+export function cacheEntryFresh(expiresAt: string | null, now = Date.now()): boolean {
+  if (!expiresAt) return true
+  const expiry = new Date(expiresAt).getTime()
+  return Number.isFinite(expiry) && expiry > now
+}
+
 /** The cache check that must happen before any research runs. */
 export async function findCachedAnswer(
   userId: string,
@@ -132,22 +139,29 @@ export async function loadCachedChunks(
 
   const { data } = await supabase
     .from('hubble_chunks')
-    .select('id, page_id, ordinal, content, embedding, hubble_pages!inner(url, title)')
+    .select('id, page_id, ordinal, content, embedding, hubble_pages!inner(url, title, expires_at)')
     .eq('user_id', userId)
     .eq('company_id', companyId)
     .limit(limit)
 
-  return (data ?? []).map((row) => {
-    const page = row.hubble_pages as unknown as { url: string; title: string | null }
-    return {
+  return (data ?? [])
+    .map((row) => {
+      const page = row.hubble_pages as unknown as {
+        url: string
+        title: string | null
+        expires_at: string | null
+      }
+      return { row, page }
+    })
+    .filter(({ page }) => cacheEntryFresh(page.expires_at))
+    .map(({ row, page }) => ({
       pageId: row.page_id,
       url: page.url,
       title: page.title,
       ordinal: row.ordinal,
       content: row.content,
       embedding: Array.isArray(row.embedding) ? (row.embedding as number[]) : null,
-    }
-  })
+    }))
 }
 
 /** URLs already fetched, so a second question does not refetch them. */
@@ -161,9 +175,7 @@ export async function knownUrls(userId: string, companyId: string | null): Promi
     .eq('user_id', userId)
     .eq('company_id', companyId)
 
-  const fresh = (data ?? []).filter(
-    (row) => !row.expires_at || new Date(row.expires_at).getTime() > Date.now(),
-  )
+  const fresh = (data ?? []).filter((row) => cacheEntryFresh(row.expires_at))
 
   return new Set(fresh.map((row) => row.url))
 }
