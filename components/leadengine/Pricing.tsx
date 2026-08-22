@@ -108,7 +108,13 @@ function RichText({ value }: { value: string }) {
   )
 }
 
-export function Pricing() {
+type PricingProps = {
+  ctaHref?: string
+  ctaLabel?: string
+  billingNotice?: string
+}
+
+export function Pricing({ ctaHref, ctaLabel, billingNotice }: PricingProps = {}) {
   return (
     <section id="pricing" className="scroll-mt-20 bg-paper px-4 py-20 sm:py-28">
       <div className="mx-auto max-w-6xl">
@@ -124,6 +130,14 @@ export function Pricing() {
             for what you extract, not for how many files it arrived in.
             Downloading your CSV is always free.
           </p>
+          {billingNotice ? (
+            <p
+              role="status"
+              className="mx-auto mt-6 max-w-2xl rounded-[var(--radius-lg)] bg-accent-soft px-5 py-4 text-sm leading-6 text-ink shadow-[var(--shadow-sm)]"
+            >
+              {billingNotice}
+            </p>
+          ) : null}
         </div>
 
         <div className="mt-14 grid gap-6 lg:grid-cols-3">
@@ -173,7 +187,7 @@ export function Pricing() {
               {/* CTA centred within the card, per spec. */}
               <div className="mt-8 flex justify-center">
                 <Link
-                  href={tier.cta.href}
+                  href={ctaHref ?? tier.cta.href}
                   target={tier.cta.external ? '_blank' : undefined}
                   rel={tier.cta.external ? 'noopener noreferrer' : undefined}
                   className={
@@ -182,7 +196,7 @@ export function Pricing() {
                       : 'w-full rounded-[var(--radius-md)] border border-ink px-5 py-3 text-center text-base font-semibold text-ink transition-colors duration-150 hover:bg-cream'
                   }
                 >
-                  {tier.cta.label}
+                  {ctaLabel ?? tier.cta.label}
                 </Link>
               </div>
             </div>

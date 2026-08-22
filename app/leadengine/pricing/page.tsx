@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import Footer from '@/app/components/Footer'
 import Nav from '@/app/components/Nav'
 import { PaddlePricing } from '@/components/leadengine/PaddlePricing'
+import { Pricing } from '@/components/leadengine/Pricing'
 import {
   countryCodeFromHeader,
   getPaddleBrowserConfig,
@@ -25,7 +26,29 @@ export default async function PricingPage() {
   const {
     data: { user },
   } = await (await createClient()).auth.getUser()
-  const paddle = getPaddleBrowserConfig()
+  let paddle: ReturnType<typeof getPaddleBrowserConfig>
+  let tiers: ReturnType<typeof getPricingTiers>
+
+  try {
+    paddle = getPaddleBrowserConfig()
+    tiers = getPricingTiers()
+  } catch (error) {
+    console.error('[paddle-pricing] Checkout configuration is incomplete.', error)
+
+    return (
+      <>
+        <Nav surface="leadengine" />
+        <main>
+          <Pricing
+            billingNotice="Secure subscription checkout is temporarily unavailable. You can still create your account and begin the 3-day trial with 10 credits; no payment will be taken from this page."
+            ctaHref="/sign-up"
+            ctaLabel="Start 3-day free trial"
+          />
+        </main>
+        <Footer surface="leadengine" />
+      </>
+    )
+  }
 
   return (
     <>
@@ -37,7 +60,7 @@ export default async function PricingPage() {
           customerUserId={user?.id}
           environment={paddle.environment}
           token={paddle.token}
-          tiers={getPricingTiers()}
+          tiers={tiers}
         />
       </main>
       <Footer surface="leadengine" />
