@@ -56,6 +56,16 @@ export type FetchedPage = {
   content: string
   /** Which fetcher was used. Browser use must be visible, never silent. */
   method: 'fetch' | 'browser'
+  /**
+   * What CODE pulled out before any model ran: JSON-LD, emails, socials,
+   * classified links.
+   *
+   * ⚠️ THIS WAS BEING COMPUTED AND DISCARDED. `extractReadable` produced it on
+   * every fetch and the page was stored with `structured: {}` — 48 pages of
+   * deterministic facts, extracted and thrown away, while the same facts were
+   * re-derived by asking a model or a paid provider.
+   */
+  structured: Record<string, unknown>
 }
 
 export type FetchFailure = {

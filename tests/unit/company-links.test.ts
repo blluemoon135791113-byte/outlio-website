@@ -103,3 +103,32 @@ describe('linksByKind', () => {
     for (const kind of LINK_KINDS) expect(LINK_LABEL[kind]).toBeTruthy()
   })
 })
+
+describe('non-production hosts are never a company link', () => {
+  it('REJECTS staging, dev, qa and preview hosts', async () => {
+    /*
+     * ⚠️ FOUND IN A LIVE TEST. Classifying anthropic.com produced
+     * `about → https://www.staging.ant.dev/...` — a staging host that had
+     * leaked into the page's own markup.
+     *
+     * Wrong twice over: it is not the company's about page, and it would
+     * carry somebody's internal infrastructure into a customer's CSV export.
+     */
+    for (const url of [
+      'https://www.staging.ant.dev/research/team',
+      'https://dev.acme.example/about',
+      'https://qa.acme.example/pricing',
+      'https://preview.acme.example/',
+      'https://internal.acme.example/careers',
+      'https://sandbox.acme.example/',
+    ]) {
+      expect(classifyLink(url), url).toBeNull()
+    }
+  })
+
+  it('still accepts production hosts that merely contain those words', () => {
+    // `devtools.com` is a real product; `dev.` as a SUBDOMAIN is not.
+    expect(classifyLink('https://devtools.example/pricing')).not.toBeNull()
+    expect(classifyLink('https://testify.example/')).not.toBeNull()
+  })
+})

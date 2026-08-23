@@ -105,6 +105,25 @@ const NOT_A_LINK = [
   /(^|\.)t\.co$/i,
 ]
 
+/**
+ * Non-production hosts. Never a company's public presence.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ FOUND IN A LIVE TEST, NOT IMAGINED.                                  ║
+ * ║                                                                          ║
+ * ║  Classifying anthropic.com produced                                      ║
+ * ║  `about → https://www.staging.ant.dev/research/team/alignment`.          ║
+ * ║  A staging host had leaked into the page's own markup.                   ║
+ * ║                                                                          ║
+ * ║  Storing that is wrong twice over. It is not the company's about page,   ║
+ * ║  so the data is false; and it would carry somebody's internal            ║
+ * ║  infrastructure into a customer's CSV export, where it does not belong   ║
+ * ║  and where we have no business putting it.                               ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+const NOT_PRODUCTION =
+  /(^|\.)(staging|stage|dev|develop|test|testing|qa|uat|preview|sandbox|demo|internal|local|beta)\./i
+
 export type ClassifiedLink = { kind: LinkKind; url: string; host: string }
 
 /**
@@ -127,6 +146,8 @@ export function classifyLink(raw: string, ownDomain: string | null = null): Clas
   const host = url.hostname.toLowerCase().replace(/^www\./, '')
   if (!host.includes('.')) return null
   if (NOT_A_LINK.some((pattern) => pattern.test(host))) return null
+  // A staging host is not public presence, whoever linked to it.
+  if (NOT_PRODUCTION.test(host)) return null
 
   for (const [kind, pattern] of HOST_KINDS) {
     if (pattern.test(host)) return { kind, url: url.toString(), host }

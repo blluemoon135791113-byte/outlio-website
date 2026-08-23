@@ -224,6 +224,8 @@ export class HttpPageFetcher implements PageFetcher {
       title: readable.title,
       content: readable.text,
       method: 'fetch',
+      // Deterministic facts, carried through rather than recomputed later.
+      structured: readable.structured as unknown as Record<string, unknown>,
     }
   }
 }

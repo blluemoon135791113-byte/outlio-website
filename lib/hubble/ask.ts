@@ -288,7 +288,7 @@ export async function askHubble(
         url: page.url,
         title: page.title,
         content: page.content,
-        structured: {},
+        structured: page.structured,
         method: page.method,
         status: page.status,
         chunks: pieces,

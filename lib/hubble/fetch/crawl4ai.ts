@@ -128,6 +128,13 @@ export class Crawl4AiPageFetcher implements PageFetcher {
         title: titleFrom(result, content),
         content,
         method: 'browser',
+        /*
+         * ⚠️ EMPTY, AND HONESTLY SO. Crawl4AI returns rendered markdown, not
+         * the DOM, so there is no JSON-LD or link graph left to read. A
+         * browser fetch trades deterministic structure for JavaScript
+         * execution; pretending otherwise would put made-up facts here.
+         */
+        structured: {},
       }
     } catch {
       return { url: rawUrl, code: 'http_error', detail: 'Crawl4AI request failed' }
