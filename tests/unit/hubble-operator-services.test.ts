@@ -122,6 +122,13 @@ describe('Crawl4AI page extraction', () => {
       title: 'Acme',
       content: expectedContent,
       method: 'browser',
+      /*
+       * ⚠️ EMPTY, AND HONESTLY SO. Crawl4AI returns rendered markdown rather
+       * than the DOM, so there is no JSON-LD or link graph left to read.
+       * A browser fetch trades deterministic structure for JavaScript
+       * execution; filling this would be inventing facts.
+       */
+      structured: {},
     })
   })
 })
