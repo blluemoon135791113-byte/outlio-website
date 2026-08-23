@@ -939,6 +939,44 @@ export type HubbleAnswerRow = {
   expires_at: string | null
 }
 
+/* ---------------------------------------------------------------------------
+ * Typed company facts (migration 0056)
+ *
+ * A kind plus a value, rather than a column per possible fact. A company holds
+ * only the links and signals it actually has — not eleven columns of which
+ * nine are NULL.
+ * ------------------------------------------------------------------------- */
+
+export type CompanyLinkRow = {
+  id: string
+  user_id: string
+  company_id: string
+  /** See LINK_KINDS in lib/companies/links.ts. */
+  kind: string
+  url: string
+  host: string
+  source: 'company_page' | 'website' | 'provider' | 'derived'
+  source_url: string | null
+  observed_at: string
+  created_at: string
+}
+
+export type CompanySignalRow = {
+  id: string
+  user_id: string
+  company_id: string
+  kind: string
+  /** ⚠️ One of these is set, never both. Numbers stay numeric so SQL can sum. */
+  value_number: number | null
+  value_text: string | null
+  unit: string | null
+  source: 'company_page' | 'account_list' | 'website' | 'provider' | 'derived'
+  source_url: string | null
+  /** History is kept, not overwritten: two observations are a trend. */
+  observed_at: string
+  created_at: string
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -967,6 +1005,8 @@ export type Database = {
       hubble_pages: TableShape<HubblePageRow>
       hubble_chunks: TableShape<HubbleChunkRow>
       hubble_answers: TableShape<HubbleAnswerRow>
+      company_links: TableShape<CompanyLinkRow>
+      company_signals: TableShape<CompanySignalRow>
       provider_cache: TableShape<ProviderCacheRow>
       provider_request_schedules: TableShape<ProviderRequestScheduleRow>
       qualification_profiles: TableShape<QualificationProfileRow>
