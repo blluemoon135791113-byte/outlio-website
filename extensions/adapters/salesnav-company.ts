@@ -148,7 +148,22 @@ export function readCompanyName(doc: Doc): string | null {
   return null
 }
 
-/** A person listed on a company page. */
+/**
+ * A person listed on a company page.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ NO ROLE FIELD. THE PAGE DOES NOT SECTION PEOPLE BY ROLE.             ║
+ * ║                                                                          ║
+ * ║  This type used to carry `role: 'decision_maker' | 'investor'`, assigned ║
+ * ║  by which reader found the person. Sales Navigator lists personnel in    ║
+ * ║  one undifferentiated set, so that label was manufactured by our code    ║
+ * ║  and not read from anything — a fabricated attribute on a real person,   ║
+ * ║  which is CLAUDE.md rule 4 broken quietly.                               ║
+ * ║                                                                          ║
+ * ║  What a person IS comes from their own job title. Where we FOUND them    ║
+ * ║  is recorded separately, as provenance, in `lead_source`.                ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
 export type CompanyPerson = {
   name: string
   /** Sales Navigator lead URL, when the page links one. */
@@ -156,7 +171,6 @@ export type CompanyPerson = {
   /** Public LinkedIn profile, when the page links one. */
   linkedinUrl: string | null
   jobTitle: string | null
-  role: 'decision_maker' | 'investor'
 }
 
 export type CompanyObservation = {
@@ -168,7 +182,6 @@ export type CompanyObservation = {
   /** EXACT headcount, distinct from the hover card's "2-10" range. */
   employeeCount: number | null
   decisionMakerCount: number | null
-  investorCount: number | null
   people: CompanyPerson[]
 }
 
@@ -198,10 +211,7 @@ export function readCount(text: string, label: RegExp): number | null {
 }
 
 /** `/sales/lead/ACwAA…` and `/in/…` links, paired with the name beside them. */
-export function readPeople(
-  card: Doc,
-  role: CompanyPerson['role'],
-): CompanyPerson[] {
+export function readPeople(card: Doc): CompanyPerson[] {
   const people: CompanyPerson[] = []
   const seen = new Set<string>()
 
@@ -223,7 +233,6 @@ export function readPeople(
       salesNavUrl: isSalesNav ? absolute(href) : null,
       linkedinUrl: isSalesNav ? null : absolute(href),
       jobTitle: null,
-      role,
     })
   }
 
@@ -263,11 +272,8 @@ export function readCompanyPage(doc: Doc, url: string): CompanyObservation | nul
     publicLinkedinUrl: publicLinkedinUrl ? absolute(publicLinkedinUrl) : null,
     employeeCount: readCount(text, /employees?/),
     decisionMakerCount: readCount(text, /decision makers?/),
-    investorCount: readCount(text, /investors?/),
-    people: [
-      ...readPeople(doc, 'decision_maker'),
-      ...readPeople(doc, 'investor'),
-    ],
+    // One pass. There is one set of people on the page, not two.
+    people: readPeople(doc),
   }
 
   /*
@@ -280,7 +286,6 @@ export function readCompanyPage(doc: Doc, url: string): CompanyObservation | nul
     !observation.publicLinkedinUrl &&
     observation.employeeCount === null &&
     observation.decisionMakerCount === null &&
-    observation.investorCount === null &&
     observation.people.length === 0
 
   return empty ? null : observation

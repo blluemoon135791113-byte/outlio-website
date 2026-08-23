@@ -55,13 +55,10 @@ describe('readCount', () => {
 
 describe('readPeople', () => {
   it('reads named profile links', () => {
-    const people = readPeople(
-      doc(`
+    const people = readPeople(doc(`
         <a href="/sales/lead/ACwAAA1Es_wBTEH,NAME_SEARCH,wk7z">Niels Brochner</a>
         <a href="/in/ACwAAAF8aVAB3vT37STZ">Shane Senha</a>
-      `),
-      'decision_maker',
-    )
+      `))
 
     expect(people.map((p) => p.name)).toEqual(['Niels Brochner', 'Shane Senha'])
     expect(people[0]!.salesNavUrl).toContain('/sales/lead/')
@@ -70,29 +67,30 @@ describe('readPeople', () => {
   })
 
   it('ignores links that are not profiles', () => {
-    const people = readPeople(
-      doc('<a href="/sales/company/1035">Acme</a><a href="https://acme.com">Website</a>'),
-      'investor',
-    )
+    const people = readPeople(doc('<a href="/sales/company/1035">Acme</a><a href="https://acme.com">Website</a>'))
     expect(people).toEqual([])
   })
 
   it('skips the avatar link that carries no name', () => {
     // Each person is linked twice: once as an image, once as text.
-    const people = readPeople(
-      doc(`
+    const people = readPeople(doc(`
         <a href="/sales/lead/ACwAAA1Es_wBTEH"><img alt="photo"></a>
         <a href="/sales/lead/ACwAAA1Es_wBTEH">Niels Brochner</a>
-      `),
-      'decision_maker',
-    )
+      `))
     expect(people).toHaveLength(1)
     expect(people[0]!.name).toBe('Niels Brochner')
   })
 
-  it('carries the role it was asked for', () => {
-    const people = readPeople(doc('<a href="/in/ACwAAAF8aVAB3vT">Ada</a>'), 'investor')
-    expect(people[0]!.role).toBe('investor')
+  it('does NOT label a person with a role', () => {
+    /*
+     * ⚠️ Sales Navigator lists personnel in ONE undifferentiated set. A
+     * `decision_maker` / `investor` label would be manufactured by our code
+     * and read from nothing — a fabricated attribute on a real person, which
+     * is CLAUDE.md rule 4 broken quietly. What someone IS comes from their
+     * job title; where we FOUND them is provenance, recorded separately.
+     */
+    const people = readPeople(doc('<a href="/in/ACwAAAF8aVAB3vT">Ada</a>'))
+    expect(people[0]).not.toHaveProperty('role')
   })
 })
 

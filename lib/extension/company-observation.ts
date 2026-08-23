@@ -22,7 +22,6 @@ export type CompanyPersonInput = {
   salesNavUrl: string | null
   linkedinUrl: string | null
   jobTitle: string | null
-  role: 'decision_maker' | 'investor'
 }
 
 export type CompanyObservationInput = {
@@ -32,7 +31,6 @@ export type CompanyObservationInput = {
   publicLinkedinUrl: string | null
   employeeCount: number | null
   decisionMakerCount: number | null
-  investorCount: number | null
   people: CompanyPersonInput[]
 }
 
@@ -41,7 +39,7 @@ export type CompanyObservationOutcome = {
   leadsUpdated: number
   /** True when a `companies` row also adopted the domain. */
   companyUpdated: boolean
-  /** Decision makers and investors added as new leads. */
+  /** People found on the company page and added as new leads. */
   peopleAdded: number
   /** People skipped because they are already in the database. */
   peopleAlreadyKnown: number
@@ -91,7 +89,6 @@ export async function recordCompanyObservation(
     ['company_public_linkedin_url', input.publicLinkedinUrl],
     ['company_employee_count', input.employeeCount],
     ['company_decision_maker_count', input.decisionMakerCount],
-    ['company_investor_count', input.investorCount],
   ]
 
   for (const pattern of patterns) {
@@ -143,7 +140,7 @@ export async function recordCompanyObservation(
 }
 
 /**
- * Adds the decision makers and investors listed on a company page as leads.
+ * Adds the people listed on a company page as leads.
  *
  * ╔══════════════════════════════════════════════════════════════════════════╗
  * ║  ⚠️ DEDUPLICATED AGAINST THE WHOLE ACCOUNT, NOT JUST THIS COMPANY.       ║
@@ -220,7 +217,7 @@ async function ingestPeople(
       company_website_url: input.websiteUrl,
       company_public_linkedin_url: input.publicLinkedinUrl,
       company_employee_count: input.employeeCount,
-      lead_source: person.role,
+      lead_source: 'company_page',
       source_list: input.companyName ? `${input.companyName} · company page` : null,
       // Hashed, like every other key — see lib/leads/dedupe.ts.
       dedupe_key: `li:lead:${id}`,

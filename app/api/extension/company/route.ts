@@ -51,7 +51,6 @@ const bodySchema = z.object({
   publicLinkedinUrl: httpUrl.nullable().optional(),
   employeeCount: z.number().int().min(0).max(50_000_000).nullable().optional(),
   decisionMakerCount: z.number().int().min(0).max(1_000_000).nullable().optional(),
-  investorCount: z.number().int().min(0).max(1_000_000).nullable().optional(),
   /*
    * People listed on the page. Capped: a company page shows a handful, and an
    * unbounded array here would be an unauthenticated-shaped write amplifier.
@@ -63,7 +62,6 @@ const bodySchema = z.object({
         salesNavUrl: httpUrl.nullable().optional(),
         linkedinUrl: httpUrl.nullable().optional(),
         jobTitle: z.string().trim().max(200).nullable().optional(),
-        role: z.enum(['decision_maker', 'investor']),
       }),
     )
     .max(100)
@@ -103,13 +101,11 @@ export async function POST(request: Request) {
       publicLinkedinUrl: body.publicLinkedinUrl ?? null,
       employeeCount: body.employeeCount ?? null,
       decisionMakerCount: body.decisionMakerCount ?? null,
-      investorCount: body.investorCount ?? null,
       people: (body.people ?? []).map((person) => ({
         name: person.name,
         salesNavUrl: person.salesNavUrl ?? null,
         linkedinUrl: person.linkedinUrl ?? null,
         jobTitle: person.jobTitle ?? null,
-        role: person.role,
       })),
     })
 

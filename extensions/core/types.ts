@@ -55,13 +55,11 @@ export type CompanyObservationMessage = {
   publicLinkedinUrl: string | null
   employeeCount: number | null
   decisionMakerCount: number | null
-  investorCount: number | null
   people: Array<{
     name: string
     salesNavUrl: string | null
     linkedinUrl: string | null
     jobTitle: string | null
-    role: 'decision_maker' | 'investor'
   }>
 }
 
