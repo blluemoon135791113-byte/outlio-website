@@ -12,7 +12,7 @@ const EnvSchema = z.object({
   MCP_BEARER_TOKEN: optionalSecret(z.string().min(24)), DATABASE_URL: optionalSecret(z.string().url()),
   DATABASE_SSL_MODE: z.enum(["disable", "require", "verify-full"]).default("require"),
   SUPABASE_URL: optionalSecret(z.string().url()), SUPABASE_SERVICE_ROLE_KEY: optionalSecret(z.string().min(20)),
-  GEMINI_API_KEY: optionalSecret(z.string().min(10)), GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  GEMINI_API_KEY: optionalSecret(z.string().min(10)), GEMINI_MODEL: z.string().default("gemini-3.6-flash"),
   MAX_QUERIES: z.coerce.number().int().min(1).max(30).default(10),
   RESULTS_PER_QUERY: z.coerce.number().int().min(1).max(20).default(8),
   MAX_URLS: z.coerce.number().int().min(1).max(100).default(25),
