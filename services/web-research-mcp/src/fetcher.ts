@@ -47,7 +47,7 @@ export class PageFetcher {
     for (let attempt = 0; attempt < 3; attempt++) {
       const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), this.config.REQUEST_TIMEOUT_MS);
       try {
-        const response = await this.fetchImpl(url, { redirect: "manual", signal: controller.signal, headers: { accept: "text/html,application/xhtml+xml", "user-agent": "OutlioResearchBot/1.0 (+https://outlio.io)" } });
+        const response = await this.fetchImpl(url, { redirect: "manual", signal: controller.signal, headers: { accept: "text/html,application/xhtml+xml", "user-agent": "Mozilla/5.0 (compatible; OutlioResearch/1.0; +https://outlio.io)" } });
         if (attempt < 2 && (response.status === 429 || response.status >= 500)) { await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** attempt)); continue; }
         return response;
       } catch (error) { last = error; if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** attempt)); }

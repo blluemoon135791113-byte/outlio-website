@@ -29,7 +29,7 @@ export class LeadResearchPipeline {
     const domainLimiter = new DomainLimiter(this.config.PER_DOMAIN_CONCURRENCY);
     const fetched = await concurrentMap(selected, this.config.CONCURRENT_REQUESTS, async (result): Promise<ScoredPage | null> => {
       try { const page = await domainLimiter.run(new URL(result.url).hostname, () => this.fetcher.fetch(result.url)); const parsed = parser.parse(page.url, page.html); const score = scorer.score(parsed, request.lead, result.query, result.rank); return { ...parsed, query: result.query, rank: result.rank, ...score }; }
-      catch (error) { failures.push({ url: result.url, error: error instanceof Error ? error.message : "Fetch failed" }); return null; }
+      catch (error) { const message = error instanceof Error ? error.message : "Fetch failed"; failures.push({ url: result.url, error: message }); console.warn(JSON.stringify({ event: "page_fetch_failed", url: result.url, error: message })); return null; }
     });
     const pages = fetched.filter((page): page is ScoredPage => Boolean(page && page.relevance >= this.config.RELEVANCE_THRESHOLD)).sort((a, b) => b.relevance - a.relevance);
     const confidence = new ConfidenceScorer(); const facts: ResearchFact[] = pages.flatMap((page) => confidence.deterministic(page));
@@ -40,7 +40,7 @@ export class LeadResearchPipeline {
       }
       if (calls >= limits.maxGeminiCalls) break;
     }
-    const output = new FactMerger().merge(facts, pages, { queries_generated: queries.length, results_found: results.length, urls_scraped: selected.length - failures.length, failed_pages: failures.length, pages_relevant: pages.length, pages_sent_to_gemini: calls, facts_extracted: facts.length, total_research_ms: Date.now() - started });
+    const output = new FactMerger().merge(facts, pages, { queries_generated: queries.length, results_found: results.length, urls_scraped: selected.length - failures.length, failed_pages: failures.length, failed_page_details: failures.slice(0, 10), pages_relevant: pages.length, pages_sent_to_gemini: calls, facts_extracted: facts.length, total_research_ms: Date.now() - started });
     output.person.name = request.lead.name; output.person.job_title = request.lead.job_title; output.person.company = request.lead.company;
     output.company.name = request.lead.company; output.company.domain = request.lead.company_domain;
     return output;
