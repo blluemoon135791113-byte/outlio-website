@@ -16,7 +16,7 @@ export class DuckDuckGoHtmlSearchProvider implements SearchProvider {
     const timer = setTimeout(() => controller.abort(), this.config.REQUEST_TIMEOUT_MS);
     try {
       const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-      const response = await this.fetchImpl(url, { signal: controller.signal, headers: { "user-agent": "OutlioResearchBot/1.0 (+https://outlio.io)", accept: "text/html" } });
+      const response = await this.fetchImpl(url, { signal: controller.signal, headers: { "user-agent": "Mozilla/5.0 (compatible; OutlioResearch/1.0; +https://outlio.io)", accept: "text/html" } });
       const html = await response.text();
       if (response.status === 202 || /bots use duckduckgo|anomaly-modal|captcha/i.test(html)) {
         throw new ResearchError("SEARCH_PROVIDER_BLOCKED", "DuckDuckGo challenged this host's egress IP; no bypass was attempted", true);
