@@ -28,7 +28,7 @@ export class PageFetcher {
       const chunks: Uint8Array[] = []; let bytes = 0;
       while (true) { const { done, value } = await reader.read(); if (done) break; bytes += value.byteLength; if (bytes > this.config.MAX_PAGE_BYTES) { await reader.cancel(); throw new ResearchError("PAGE_TOO_LARGE", "Page exceeds configured size limit"); } chunks.push(value); }
       const html = new TextDecoder().decode(Buffer.concat(chunks));
-      if (/captcha|verify you are human|enable javascript.*continue|sign in to continue/i.test(html.slice(0, 80_000))) throw new ResearchError("RESTRICTED_PAGE", "Page requires a challenge or login; it was not bypassed");
+      if (/captcha|verify you are human|enable javascript.{0,160}continue/i.test(html.slice(0, 80_000))) throw new ResearchError("RESTRICTED_PAGE", "Page requires a challenge or login; it was not bypassed");
       return { url: current, html, contentType };
     }
     throw new ResearchError("TOO_MANY_REDIRECTS", "Page exceeded redirect limit");
