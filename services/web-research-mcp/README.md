@@ -25,7 +25,7 @@ Set `WORKER_MODE=request` on a sleeping free web host and call `research_run`; `
 
 ## Strict no-charge deployment
 
-For a deployment that cannot create a cloud bill, leave Google Cloud billing unlinked. Use a free web service without a payment method, `WORKER_MODE=request`, an existing Supabase Free database, and a Gemini free-tier API key. Configure low ceilings such as `MAX_QUERIES=4`, `MAX_URLS=10`, and `MAX_GEMINI_CALLS=2`. Free services may sleep, throttle, or suspend at their limits; this design prioritizes zero financial exposure over uptime.
+For a deployment that cannot create a cloud bill, leave Google Cloud billing unlinked. Use a free web service without a payment method, `WORKER_MODE=request`, an existing Supabase Free database, and a Gemini free-tier API key. Supabase storage can use `SUPABASE_URL` plus a server-only `SUPABASE_SERVICE_ROLE_KEY`, avoiding a database-password reset. Configure low ceilings such as `MAX_QUERIES=4`, `MAX_URLS=10`, and `MAX_GEMINI_CALLS=2`. Free services may sleep, throttle, or suspend at their limits; this design prioritizes zero financial exposure over uptime.
 
 ## Production gate
 

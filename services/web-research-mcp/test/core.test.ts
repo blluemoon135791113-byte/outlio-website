@@ -25,6 +25,10 @@ describe("configuration", () => {
   it("supports request-bound execution for free sleeping hosts", () => {
     expect(loadConfig({ NODE_ENV: "test", WORKER_MODE: "request" }).WORKER_MODE).toBe("request");
   });
+  it("accepts Supabase REST storage only in request mode", () => {
+    const parsed = loadConfig({ NODE_ENV: "production", WORKER_MODE: "request", MCP_BEARER_TOKEN: "a".repeat(24), SUPABASE_URL: "https://example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "b".repeat(32) });
+    expect(parsed.SUPABASE_URL).toBe("https://example.supabase.co");
+  });
 });
 
 describe("QueryGenerator", () => {

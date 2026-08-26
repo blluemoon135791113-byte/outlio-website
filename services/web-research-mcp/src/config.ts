@@ -11,6 +11,7 @@ const EnvSchema = z.object({
   WORKER_MODE: z.enum(["background", "request"]).default("background"),
   MCP_BEARER_TOKEN: optionalSecret(z.string().min(24)), DATABASE_URL: optionalSecret(z.string().url()),
   DATABASE_SSL_MODE: z.enum(["disable", "require", "verify-full"]).default("require"),
+  SUPABASE_URL: optionalSecret(z.string().url()), SUPABASE_SERVICE_ROLE_KEY: optionalSecret(z.string().min(20)),
   GEMINI_API_KEY: optionalSecret(z.string().min(10)), GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
   MAX_QUERIES: z.coerce.number().int().min(1).max(30).default(10),
   RESULTS_PER_QUERY: z.coerce.number().int().min(1).max(20).default(8),
@@ -28,8 +29,15 @@ export type Config = z.infer<typeof EnvSchema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const config = EnvSchema.parse(env);
-  if (config.NODE_ENV === "production" && (!config.MCP_BEARER_TOKEN || !config.DATABASE_URL)) {
-    throw new Error("Production requires MCP_BEARER_TOKEN and DATABASE_URL");
+  const hasSupabaseStorage = Boolean(config.SUPABASE_URL && config.SUPABASE_SERVICE_ROLE_KEY);
+  if (Boolean(config.SUPABASE_URL) !== Boolean(config.SUPABASE_SERVICE_ROLE_KEY)) {
+    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured together");
+  }
+  if (config.NODE_ENV === "production" && (!config.MCP_BEARER_TOKEN || (!config.DATABASE_URL && !hasSupabaseStorage))) {
+    throw new Error("Production requires MCP_BEARER_TOKEN and either DATABASE_URL or Supabase REST storage");
+  }
+  if (hasSupabaseStorage && config.WORKER_MODE === "background") {
+    throw new Error("Supabase REST storage requires WORKER_MODE=request");
   }
   return config;
 }

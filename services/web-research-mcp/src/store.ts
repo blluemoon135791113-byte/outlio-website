@@ -38,4 +38,65 @@ export class PostgresResearchStorage implements ResearchStorage {
   async latest(tenantId: string, leadId: string) { const { rows } = await this.pool.query("SELECT output FROM web_research_lead_results WHERE tenant_id=$1 AND lead_id=$2", [tenantId, leadId]); return rows[0] ? rows[0].output as ResearchOutput : null; }
 }
 
+type SupabaseRow = Record<string, unknown>;
+
+export class SupabaseResearchStorage implements ResearchStorage {
+  private readonly restUrl: string;
+  constructor(private readonly projectUrl: string, private readonly serviceRoleKey: string, private readonly fetchImpl: typeof fetch = fetch) {
+    this.restUrl = `${projectUrl.replace(/\/$/, "")}/rest/v1`;
+  }
+  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const response = await this.fetchImpl(`${this.restUrl}${path}`, {
+      ...init,
+      headers: {
+        apikey: this.serviceRoleKey,
+        authorization: `Bearer ${this.serviceRoleKey}`,
+        "content-type": "application/json",
+        ...(init.headers ?? {}),
+      },
+    });
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 500);
+      throw new Error(`Supabase storage request failed (${response.status}): ${detail}`);
+    }
+    if (response.status === 204) return undefined as T;
+    return await response.json() as T;
+  }
+  async initialize() { await this.request<SupabaseRow[]>("/web_research_jobs?select=id&limit=0"); }
+  async create(request: ResearchRequest) {
+    const id = randomUUID();
+    const rows = await this.request<SupabaseRow[]>("/web_research_jobs", { method: "POST", headers: { prefer: "return=representation" }, body: JSON.stringify({ id, status: "queued", request }) });
+    return rowToJob(rows[0]);
+  }
+  async get(id: string) {
+    const rows = await this.request<SupabaseRow[]>(`/web_research_jobs?id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+    return rows[0] ? rowToJob(rows[0]) : null;
+  }
+  async claim(): Promise<ResearchJob | null> { throw new Error("Supabase REST storage supports request-bound processing only"); }
+  async complete(id: string, output: ResearchOutput) {
+    const job = await this.get(id);
+    await this.request<void>(`/web_research_jobs?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "completed", output, updated_at: new Date().toISOString() }) });
+    if (job?.request.tenant_id && job.request.lead_id) {
+      await this.request<void>("/web_research_lead_results?on_conflict=tenant_id,lead_id", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ tenant_id: job.request.tenant_id, lead_id: job.request.lead_id, job_id: id, output, researched_at: new Date().toISOString() }) });
+    }
+  }
+  async fail(id: string, code: string, message: string) {
+    await this.request<void>(`/web_research_jobs?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({ status: "failed", error: { code, message }, updated_at: new Date().toISOString() }) });
+  }
+  async cacheGet<T>(namespace: string, key: string) {
+    const path = `/web_research_cache?namespace=eq.${encodeURIComponent(namespace)}&cache_key=eq.${encodeURIComponent(key)}&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=value&limit=1`;
+    const rows = await this.request<Array<{ value: T }>>(path);
+    return rows[0]?.value ?? null;
+  }
+  async cacheSet(namespace: string, key: string, value: unknown, ttlSeconds: number) {
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+    await this.request<void>("/web_research_cache?on_conflict=namespace,cache_key", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ namespace, cache_key: key, value, expires_at: expiresAt }) });
+  }
+  async latest(tenantId: string, leadId: string) {
+    const path = `/web_research_lead_results?tenant_id=eq.${encodeURIComponent(tenantId)}&lead_id=eq.${encodeURIComponent(leadId)}&select=output&limit=1`;
+    const rows = await this.request<Array<{ output: ResearchOutput }>>(path);
+    return rows[0]?.output ?? null;
+  }
+}
+
 function rowToJob(row: Record<string, unknown>): ResearchJob { return { id: String(row.id), status: row.status as ResearchJob["status"], request: row.request as ResearchRequest, output: row.output as ResearchOutput | undefined, error: row.error as ResearchJob["error"], createdAt: new Date(row.created_at as string).toISOString(), updatedAt: new Date(row.updated_at as string).toISOString() }; }

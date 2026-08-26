@@ -10,11 +10,16 @@ import { PageFetcher } from "./fetcher.js";
 import { GeminiExtractor } from "./gemini.js";
 import { LeadResearchPipeline } from "./pipeline.js";
 import { DuckDuckGoHtmlSearchProvider } from "./search.js";
-import { MemoryResearchStorage, PostgresResearchStorage, type ResearchStorage } from "./store.js";
+import { MemoryResearchStorage, PostgresResearchStorage, SupabaseResearchStorage, type ResearchStorage } from "./store.js";
 import { ResearchError, ResearchRequestSchema } from "./types.js";
 
 const config = loadConfig();
-const storage: ResearchStorage = config.DATABASE_URL ? new PostgresResearchStorage(config.DATABASE_URL, config.DATABASE_SSL_MODE) : new MemoryResearchStorage();
+const storage: ResearchStorage = config.DATABASE_URL
+  ? new PostgresResearchStorage(config.DATABASE_URL, config.DATABASE_SSL_MODE)
+  : config.SUPABASE_URL && config.SUPABASE_SERVICE_ROLE_KEY
+    ? new SupabaseResearchStorage(config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY)
+    : new MemoryResearchStorage();
+const storageName = config.DATABASE_URL ? "postgres" : config.SUPABASE_URL ? "supabase-rest" : "memory";
 await storage.initialize();
 const searchProvider = new CachingSearchProvider(new DuckDuckGoHtmlSearchProvider(config), storage, config);
 const pipeline = new LeadResearchPipeline(config, searchProvider, new CachingPageFetcher(new PageFetcher(config), storage, config), new CachingSemanticExtractor(new GeminiExtractor(config), storage, config));
@@ -81,7 +86,7 @@ if (config.WORKER_MODE === "background") void worker();
 
 const bindHost = config.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1";
 const app = createMcpExpressApp({ host: bindHost, jsonLimit: "1mb" });
-app.get("/health", (_req, res) => res.json({ status: "ok", storage: config.DATABASE_URL ? "postgres" : "memory", gemini: Boolean(config.GEMINI_API_KEY), worker_mode: config.WORKER_MODE }));
+app.get("/health", (_req, res) => res.json({ status: "ok", storage: storageName, gemini: Boolean(config.GEMINI_API_KEY), worker_mode: config.WORKER_MODE }));
 app.post("/mcp", authenticate, async (req, res) => { const transport = new NodeStreamableHTTPServerTransport({ sessionIdGenerator: undefined }); await mcp.connect(transport); await transport.handleRequest(req, res, req.body); });
 app.all("/mcp", authenticate, (_req, res) => res.status(405).setHeader("Allow", "POST").json({ error: "Stateless MCP endpoint accepts POST only" }));
 const listener = app.listen(config.PORT, bindHost, () => console.log(JSON.stringify({ event: "server_started", port: config.PORT })));
