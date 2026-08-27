@@ -1,5 +1,7 @@
 import 'server-only'
 
+import type { Database, Json } from '@/types/database'
+
 /**
  * Evidence persistence — the "check Outlio first" half of the system (spec §8).
  *
@@ -117,6 +119,35 @@ export type WriteEvidenceResult = {
   rejected: number
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
+
+function evidenceIdentity(input: {
+  entityType: string
+  entityId: string
+  field: string
+  value: unknown
+  sourceProvider: string
+  sourceUrl: string | null
+}): string {
+  return [
+    input.entityType,
+    input.entityId,
+    input.field,
+    input.sourceProvider,
+    input.sourceUrl ?? '',
+    canonicalJson(input.value),
+  ].join('\u001f')
+}
+
 /**
  * Persists validated evidence.
  *
@@ -134,9 +165,13 @@ export async function writeEvidence(
   const { valid, rejected } = validateEvidence(items)
   if (valid.length === 0) return { written: 0, rejected: rejected.length }
 
+  // A provider retry must not append the same observation twice. Conflicting
+  // values remain distinct because the normalized value is part of the key.
+  const unique = [...new Map(valid.map((item) => [evidenceIdentity(item), item])).values()]
+
   const supabase = createAdminClient()
 
-  const rows = valid.map((evidence: NormalizedEvidence) => ({
+  const rows = unique.map((evidence: NormalizedEvidence) => ({
     user_id: userId,
     entity_type: evidence.entityType,
     entity_id: evidence.entityId,
@@ -149,14 +184,45 @@ export async function writeEvidence(
     retrieved_at: evidence.retrievedAt,
     expires_at: evidence.expiresAt,
     research_run_id: researchRunId,
-  }))
+  })) as unknown as Database['public']['Tables']['research_evidence']['Insert'][]
 
+  let written = 0
   for (let i = 0; i < rows.length; i += 500) {
-    const { error } = await supabase.from('research_evidence').insert(rows.slice(i, i + 500))
+    const batchEvidence = unique.slice(i, i + 500)
+    const batchRows = rows.slice(i, i + 500)
+    const entityIds = [...new Set(batchEvidence.map((item) => item.entityId))]
+    const fields = [...new Set(batchEvidence.map((item) => item.field))]
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+    const { data: existing, error: readError } = await supabase
+      .from('research_evidence')
+      .select('entity_type, entity_id, field, value_json, source_provider, source_url')
+      .eq('user_id', userId)
+      .in('entity_id', entityIds)
+      .in('field', fields as string[])
+      .gte('retrieved_at', since)
+
+    if (readError) throw new Error(`writeEvidence dedupe failed: ${readError.message}`)
+
+    const existingKeys = new Set((existing ?? []).map((row) => evidenceIdentity({
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      field: row.field,
+      value: row.value_json,
+      sourceProvider: row.source_provider,
+      sourceUrl: row.source_url,
+    })))
+    const insertRows = batchRows.filter((_row, index) =>
+      !existingKeys.has(evidenceIdentity(batchEvidence[index]!)),
+    )
+    if (insertRows.length === 0) continue
+
+    const { error } = await supabase.from('research_evidence').insert(insertRows)
     if (error) throw new Error(`writeEvidence failed: ${error.message}`)
+    written += insertRows.length
   }
 
-  return { written: valid.length, rejected: rejected.length }
+  return { written, rejected: rejected.length }
 }
 
 /**

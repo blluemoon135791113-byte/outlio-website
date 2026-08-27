@@ -41,7 +41,7 @@ function known(field: ResearchField, value: Record<string, unknown>): [string, F
     expiresAt: null,
     researchRunId: null,
   }
-  return [evidenceKey('company', COMPANY.id, field), { state: 'known', record, conflicting: [] }]
+  return [evidenceKey('company', COMPANY.id, field), { state: 'known', record, conflicting: [], corroborating: [], confidence: record.confidence }]
 }
 
 function criterion(over: Partial<Criterion> & Pick<Criterion, 'id' | 'field'>): Criterion {

@@ -27,14 +27,14 @@ export function PhoneField({ defaultCountry = 'US', defaultValue = '' }: PhoneFi
   return (
     <fieldset className="space-y-1.5">
       <legend className="block text-sm font-medium text-ink">Phone number</legend>
-      <div className="grid grid-cols-[minmax(132px,0.48fr)_minmax(0,1fr)] overflow-hidden rounded-[var(--radius-md)] border border-border bg-paper transition-[border-color,box-shadow] duration-150 focus-within:border-accent/60 focus-within:shadow-[0_0_0_3px_rgba(139,92,246,0.12)] hover:border-border-strong">
+      <div className="auth-clay-field grid grid-cols-[minmax(132px,0.48fr)_minmax(0,1fr)] overflow-hidden rounded-[var(--radius-md)] border-0 bg-clay-sunken shadow-[var(--neo-shadow-inset)] transition-shadow duration-150 focus-within:shadow-[var(--neo-shadow-focus)]">
         <label className="sr-only" htmlFor="phone_country">Country code</label>
         <select
           id="phone_country"
           name="phone_country"
           defaultValue={safeDefault}
           autoComplete="tel-country-code"
-          className="min-w-0 border-r border-border bg-accent-soft/45 px-3 py-2.5 text-sm font-semibold text-ink outline-none"
+          className="min-w-0 border-r border-border bg-transparent px-3 py-2.5 text-sm font-semibold text-ink outline-none"
           required
         >
           {countries.map((country) => (

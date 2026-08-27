@@ -63,6 +63,18 @@ type ApolloOrganization = {
   facebook_url?: string | null
   linkedin_url?: string | null
   crunchbase_url?: string | null
+  blog_url?: string | null
+  /** Apollo's own tag cloud for the company — what it calls specialities. */
+  keywords?: string[] | null
+  /**
+   * Per-round events with named investors. Ordered arbitrarily; the newest
+   * dated event is selected at harvest time.
+   */
+  funding_events?: Array<{
+    date?: string | null
+    type?: string | null
+    investors?: string | null
+  }> | null
 }
 
 type ApolloResponse = {
@@ -272,6 +284,19 @@ export function apolloEvidence(
     push('company_description', 'company', companyId, { description: org.short_description }, 'medium', 0.7)
   }
 
+  /*
+   * Specialties — the company's own focus-area tags, free on this response.
+   *
+   * Stored with the `{ value: [...] }` shape every list-valued field uses, so
+   * rendering, merging and export unwrap it without a special case.
+   */
+  const specialties = (org.keywords ?? []).filter(
+    (name): name is string => typeof name === 'string' && name.trim().length > 0,
+  )
+  if (specialties.length > 0) {
+    push('specialties', 'company', companyId, { value: specialties }, 'medium', 0.7)
+  }
+
   const stage = org.latest_funding_stage
   if (stage && !/unknown/i.test(stage)) {
     push('funding_round', 'company', companyId, { round: stage }, 'medium', 0.7)
@@ -299,6 +324,34 @@ export function apolloEvidence(
       'medium',
       0.7,
     )
+  }
+
+  /*
+   * Named investors for the most recent dated round — previously discarded.
+   *
+   * Apollo delivers the event list as display strings ("A Capital, B Ventures"),
+   * so they are split on commas into the `{ investors: [...] }` shape every
+   * other source of this field uses. The newest dated event wins because the
+   * array order is not documented as sorted.
+   */
+  const latestEvent = (org.funding_events ?? [])
+    .filter(
+      (event): event is { date: string; investors: string } =>
+        typeof event?.date === 'string' &&
+        typeof event.investors === 'string' &&
+        Number.isFinite(Date.parse(event.date)),
+    )
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))[0]
+
+  if (latestEvent) {
+    const investors = latestEvent.investors
+      .split(',')
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0 && !/^unknown$/i.test(name))
+
+    if (investors.length > 0) {
+      push('funding_investors', 'company', companyId, { investors }, 'medium', 0.65)
+    }
   }
 
   const technologies = (org.technology_names ?? [])
@@ -359,6 +412,7 @@ export function apolloEvidence(
     ['facebook', org.facebook_url],
     ['linkedin', org.linkedin_url],
     ['crunchbase', org.crunchbase_url],
+    ['blog', org.blog_url],
   ])
 
   if (companySocials) {

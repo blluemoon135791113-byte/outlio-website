@@ -8,9 +8,17 @@
  *   RUN_DOMAIN_BACKFILL=1 npx vitest run \
  *     tests/integration/domain-backfill-live.test.ts --disable-console-intercept
  *
- * ⚠️ SPENDS REAL PROVIDER CREDIT. Never part of `npm test`.
  * ⚠️ Runs tenants sequentially. Each run already has bounded provider
  * concurrency; parallel tenants would multiply that limit and invite 429s.
+ *
+ * Cost model changed 2026-08-25: with OUTLIO_ALLOW_PAID_PROVIDERS unset the
+ * registry contains only free providers, so a pass costs time, not credit.
+ * Two operator knobs bound an invocation:
+ *
+ *   BACKFILL_RESWEEP=1        retry tenants whose prior maintenance pass
+ *                             completed under the OLD waterfall — GLEIF and
+ *                             domain-probe have never seen those misses.
+ *   BACKFILL_MAX_TENANT_SIZE  skip tenants larger than N, for bounded pilots.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -26,7 +34,7 @@ const describeIf = enabled && hasSupabaseEnv ? describe : describe.skip
 
 if (!enabled) {
   console.warn(
-    '[domain-backfill] SKIPPED. Set RUN_DOMAIN_BACKFILL=1 to spend real credit and persist domains.',
+    '[domain-backfill] SKIPPED. Set RUN_DOMAIN_BACKFILL=1 to run discovery and persist domains.',
   )
 }
 
@@ -59,10 +67,18 @@ async function usersWithMissingDomains(): Promise<
 
   if (candidates.length === 0) return []
 
-  // This command is resumable, not a blind retry button. A tenant with a
-  // terminal maintenance run has already had its one paid pass; its unresolved
-  // companies are real misses. Re-running them because a later tenant failed
-  // would buy the same negative answer again.
+  // Bounded pilots: exclude large tenants so an invocation measures the new
+  // waterfall on a sample before committing hours to the full sweep.
+  const maxSize = Number.parseInt(process.env.BACKFILL_MAX_TENANT_SIZE ?? '', 10)
+  if (Number.isFinite(maxSize)) {
+    const bounded = candidates.filter((candidate) => candidate.companiesMissingDomain <= maxSize)
+    console.log(
+      `[domain-backfill] BACKFILL_MAX_TENANT_SIZE=${maxSize}: ` +
+        `${bounded.length}/${candidates.length} tenants qualify`,
+    )
+    return bounded
+  }
+
   const { data: runs, error: runError } = await adminClient()
     .from('research_runs')
     .select('user_id, status, external_call_count, created_at')
@@ -85,6 +101,21 @@ async function usersWithMissingDomains(): Promise<
     runsByUser.set(run.user_id, userRuns)
   }
 
+  // Resweep mode: retry tenants whose prior maintenance pass completed under
+  // the OLD waterfall. GLEIF and domain-probe have never seen those misses,
+  // and with paid providers gated off a pass costs time rather than credit.
+  // Only a live `running` run still blocks — recovery of stale runs belongs
+  // to the queue reaper.
+  if (process.env.BACKFILL_RESWEEP === '1') {
+    console.log(
+      '[domain-backfill] BACKFILL_RESWEEP=1: prior completed passes will be retried under the free-only waterfall',
+    )
+    return candidates.filter((candidate) => {
+      const userRuns = runsByUser.get(candidate.userId) ?? []
+      return !userRuns.some((run) => run.status === 'running')
+    })
+  }
+
   return candidates.filter((candidate) => {
     const userRuns = runsByUser.get(candidate.userId) ?? []
 
@@ -92,7 +123,7 @@ async function usersWithMissingDomains(): Promise<
     // of a genuinely stale `running` run belongs to the queue reaper.
     if (userRuns.some((run) => run.status === 'running')) return false
 
-    // Any paid pass means its unresolved companies have already been tried.
+    // Any prior pass means its unresolved companies have already been tried.
     // Looking only at the latest row is unsafe: a later zero-call failure must
     // not erase the cost history of an older completed pass.
     if (userRuns.some((run) => run.externalCallCount > 0)) return false
@@ -112,8 +143,43 @@ async function usersWithMissingDomains(): Promise<
   })
 }
 
-async function remainingDomains(userId: string): Promise<number> {
-  const { count, error } = await adminClient()
+/**
+ * Every tenant holding domain-less companies, with NO resume guard.
+ *
+ * The orphan pass subtracts lead-linked companies itself, so the pass-history
+ * filtering in `usersWithMissingDomains` — correct for lead-scoped retries —
+ * would wrongly hide tenants whose prior passes never could reach their
+ * orphans.
+ */
+async function tenantsWithMissingDomains(): Promise<
+  Array<{ userId: string; companiesMissingDomain: number }>
+> {
+  const rows: Array<{ user_id: string }> = []
+
+  for (let from = 0; ; from += 1_000) {
+    const { data, error } = await adminClient()
+      .from('companies')
+      .select('user_id')
+      .is('normalized_domain', null)
+      .order('user_id', { ascending: true })
+      .range(from, from + 999)
+
+    if (error) throw new Error(`Could not enumerate companies: ${error.message}`)
+    if (!data?.length) break
+    rows.push(...(data as Array<{ user_id: string }>))
+    if (data.length < 1_000) break
+  }
+
+  const counts = new Map<string, number>()
+  for (const row of rows) counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1)
+
+  return [...counts].map(([userId, companiesMissingDomain]) => ({
+    userId,
+    companiesMissingDomain,
+  }))
+}
+
+async function remainingDomains(userId: string): Promise<number> {  const { count, error } = await adminClient()
     .from('companies')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
@@ -184,6 +250,96 @@ async function runTenant(
 }
 
 describeIf('production domain backfill', () => {
+  /**
+   * ORPHAN COMPANIES.
+   *
+   * Over a thousand domain-less companies are linked to NO surviving lead, so
+   * every lead-scoped pass below is structurally unable to reach them. This
+   * pass names them directly through the `company_ids` scope, in bounded
+   * chunks (~20 minutes of free waterfall each).
+   *
+   *   RUN_DOMAIN_BACKFILL=1 BACKFILL_ORPHANS=1 npx vitest run ...
+   */
+  it(
+    'researches domain-less companies that no lead references',
+    async () => {
+      const tenants = await tenantsWithMissingDomains()
+      if (tenants.length === 0) {
+        console.log('\n=== Orphan backfill: nothing to do ===')
+        return
+      }
+
+      const admin = adminClient()
+
+      for (const tenant of tenants) {
+        // Linked company ids, paged — the subtraction target.
+        const linked = new Set<string>()
+        for (let from = 0; ; from += 1_000) {
+          const { data, error } = await admin
+            .from('extracted_leads')
+            .select('company_id')
+            .eq('user_id', tenant.userId)
+            .not('company_id', 'is', null)
+            .range(from, from + 999)
+          if (error) throw new Error(`Could not read lead links: ${error.message}`)
+          if (!data?.length) break
+          for (const row of data) if (row.company_id) linked.add(row.company_id as string)
+          if (data.length < 1_000) break
+        }
+
+        const orphans: string[] = []
+        for (let from = 0; ; from += 1_000) {
+          const { data, error } = await admin
+            .from('companies')
+            .select('id')
+            .eq('user_id', tenant.userId)
+            .is('normalized_domain', null)
+            .range(from, from + 999)
+          if (error) throw new Error(`Could not enumerate companies: ${error.message}`)
+          if (!data?.length) break
+          for (const row of data) if (!linked.has(row.id)) orphans.push(row.id)
+          if (data.length < 1_000) break
+        }
+
+        console.log(`\n[orphan] ${tenant.userId}: ${orphans.length} unreachable by lead scope`)
+        if (orphans.length === 0) continue
+
+        for (let start = 0; start < orphans.length; start += 150) {
+          const chunk = orphans.slice(start, start + 150)
+          const created = await createResearchRun(tenant.userId, {
+            queryText: 'Maintenance: discover missing company domains (orphan companies).',
+            scope: { type: 'company_ids', companyIds: chunk },
+            plan: {
+              entityScope: 'companies',
+              requiredFields: ['company_domain'],
+              outputFields: ['company_name', 'company_domain'],
+            },
+          })
+          if (!created.ok || created.status !== 'queued') {
+            throw new Error(
+              `Could not queue orphan run: ${created.ok ? created.status : created.reason}`,
+            )
+          }
+
+          const outcome = await claimAndProcessResearchRun(
+            created.runId,
+            tenant.userId,
+            'domain-backfill-live',
+          )
+          if (!outcome) throw new Error(`Orphan run ${created.runId} was claimed elsewhere`)
+
+          const stillMissing = await remainingDomains(tenant.userId)
+          console.log(
+            `  chunk ${Math.floor(start / 150) + 1}/${Math.ceil(orphans.length / 150)}: ` +
+              `calls ${outcome.externalCalls}, cache hits ${outcome.cacheHits}, ${outcome.status}; ` +
+              `tenant still missing ${stillMissing}`,
+          )
+        }
+      }
+    },
+    process.env.BACKFILL_ORPHANS === '1' ? 21_600_000 : 2_400_000,
+  )
+
   it(
     'discovers and persists company domains through the normal research pipeline',
     async () => {
@@ -245,6 +401,9 @@ describeIf('production domain backfill', () => {
       // not merely that this is a hard dataset. Do not report that as success.
       if (before > 0) expect(after).toBeLessThan(before)
     },
-    2_400_000,
+    // A resweep covers every tenant's full backlog under the slow free
+    // waterfall (~8s/company measured in the pilot); a large tenant cannot
+    // fit the default ceiling. Opt-in only, so the long limit harms nobody.
+    process.env.BACKFILL_RESWEEP === '1' ? 21_600_000 : 2_400_000,
   )
 })

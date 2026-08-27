@@ -68,6 +68,17 @@ export type RunResults = {
   rows: ResultRow[]
   /** True when more rows exist than were returned. */
   truncated: boolean
+  progress: {
+    stage: string
+    current: number
+    total: number
+    evidenceGaps: Array<{
+      provider: string
+      entityType: string
+      entityId: string
+      reason: string
+    }>
+  }
   metadata: {
     leadsEvaluated: number
     companiesResearched: number
@@ -140,7 +151,7 @@ export async function getRunResults(
     .from('research_runs')
     // A single literal: PostgREST infers row types from the string, and a
     // concatenation erases that inference entirely.
-    .select('id, status, query_text, plan, scope, lead_count, company_count, qualified_count, cache_hit_count, external_call_count, duration_ms, error_message, clarifications, qualification_profile_id')
+    .select('id, status, query_text, plan, scope, lead_count, company_count, qualified_count, cache_hit_count, external_call_count, duration_ms, error_message, clarifications, qualification_profile_id, progress_stage, progress_current, progress_total, evidence_gaps')
     // Service role bypasses RLS — scoping by user_id is mandatory.
     .eq('id', runId)
     .eq('user_id', userId)
@@ -153,11 +164,31 @@ export async function getRunResults(
 
   const base: RunResults = {
     runId: run.id,
-    status: run.status,
+    status: run.status as RunResults['status'],
     queryText: run.query_text,
     columns,
     rows: [],
     truncated: false,
+    progress: {
+      stage: run.progress_stage,
+      current: run.progress_current,
+      total: run.progress_total,
+      evidenceGaps: Array.isArray(run.evidence_gaps)
+        ? run.evidence_gaps.filter((gap): gap is {
+            provider: string
+            entityType: string
+            entityId: string
+            reason: string
+          } => Boolean(
+            gap &&
+            typeof gap === 'object' &&
+            typeof (gap as { provider?: unknown }).provider === 'string' &&
+            typeof (gap as { entityType?: unknown }).entityType === 'string' &&
+            typeof (gap as { entityId?: unknown }).entityId === 'string' &&
+            typeof (gap as { reason?: unknown }).reason === 'string',
+          ))
+        : [],
+    },
     metadata: {
       leadsEvaluated: run.lead_count,
       companiesResearched: run.company_count,

@@ -40,11 +40,17 @@ export const FIELD_TTL_SECONDS: Record<ResearchField, number | null> = {
   industry: 180 * DAY,
   headquarters: 180 * DAY,
   company_description: 180 * DAY,
+  /** A public page address moves about as rarely as the site itself. */
+  company_linkedin: 180 * DAY,
+  /** Self-described focus areas move about as often as the description does. */
+  specialties: 180 * DAY,
   business_model: 180 * DAY,
   revenue_estimate: 60 * DAY,
   // Registry identity and incorporation history are permanent. Status and
   // compliance flags move quickly enough to warrant a short refresh window.
   company_number: null,
+  /** An LEI is a permanent identifier; it does not decay. */
+  lei_number: null,
   company_status: 7 * DAY,
   company_type: 365 * DAY,
   jurisdiction: null,

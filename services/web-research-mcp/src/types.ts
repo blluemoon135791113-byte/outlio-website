@@ -48,6 +48,15 @@ export type ResearchOutput = {
   person: Record<string, unknown>; company: Record<string, unknown>;
   signals: Record<string, unknown>; facts: ResearchFact[];
   sources: Array<{ url: string; title: string; relevance: number; published_date?: string }>;
+  /**
+   * Cleaned evidence for Hubble's company-level page/chunk store.
+   * Raw HTML is deliberately never returned or persisted.
+   */
+  documents: Array<{
+    url: string; title: string; description: string; headings: string[];
+    text: string; signals: DirectSignals; published_date?: string;
+    relevance: number; source_quality: number;
+  }>;
   meta: Record<string, unknown>;
 };
 

@@ -50,18 +50,21 @@ describe('normalizeExportLead', () => {
       'Job Title',
       'Location',
       'Company',
-      'Company LinkedIn URL',
-      'Company LinkedIn Profile',
+      'Company Sales Navigator URL',
+      'Company LinkedIn Profile (public)',
       'Company Website URL',
     ])
 
     // The person's two links are adjacent, and so are the company's.
     const order = [...EXPORT_COLUMN_ORDER]
     expect(order.indexOf('Sales Navigator URL') - order.indexOf('LinkedIn Profile')).toBe(1)
-    expect(order.indexOf('Company Website URL') - order.indexOf('Company LinkedIn URL')).toBe(2)
+    expect(order.indexOf('Company Website URL') - order.indexOf('Company Sales Navigator URL')).toBe(2)
 
     // HQ is gone: it duplicated Location on almost every row.
     expect(order).not.toContain('Company HQ')
+
+    // Added To List is gone: it contributed nothing a filter could use.
+    expect(EXPORT_COLUMN_ORDER).not.toContain('Added To List')
 
     // Everything the page carries is exported.
     expect(EXPORT_COLUMN_ORDER).toContain('Company Size')
@@ -81,7 +84,7 @@ describe('normalizeExportLead', () => {
       'LinkedIn Profile': 'https://www.linkedin.com/in/fabricated-1',
       'Job Title': 'Founder',
       Company: 'Example, Inc.',
-      'Company LinkedIn URL': 'https://example.com',
+      'Company Sales Navigator URL': 'https://example.com',
       'Company Website URL': 'https://company.example',
       Location: 'London, United Kingdom',
       'Sales Navigator URL': 'https://www.linkedin.com/sales/lead/fabricated-1',

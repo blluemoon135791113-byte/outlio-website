@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { createHash } from 'node:crypto'
+
 /**
  * Hubble's memory: cached answers, cached pages, stored chunks.
  *
@@ -59,18 +61,18 @@ export function cacheEntryFresh(expiresAt: string | null, now = Date.now()): boo
 /** The cache check that must happen before any research runs. */
 export async function findCachedAnswer(
   userId: string,
+  leadId: string | null,
   companyId: string | null,
   question: string,
 ): Promise<CachedAnswer | null> {
-  if (!companyId) return null
+  if (!leadId && !companyId) return null
 
   const supabase = createAdminClient()
 
-  const { data } = await supabase
+  let query = supabase
     .from('hubble_answers')
     .select('id, answer, status, confidence, sources, created_at, expires_at')
     .eq('user_id', userId)
-    .eq('company_id', companyId)
     .eq('question_key', questionKey(question))
     // An "unknown" answer is not worth serving from cache: the web may have
     // changed, and repeating "I could not find it" without looking is worse
@@ -78,7 +80,13 @@ export async function findCachedAnswer(
     .neq('status', 'unknown')
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle()
+
+  // A person-specific answer must never leak across two leads at the same
+  // company. Company-only callers still share their cache by company.
+  query = leadId ? query.eq('lead_id', leadId) : query.is('lead_id', null)
+  query = companyId ? query.eq('company_id', companyId) : query.is('company_id', null)
+
+  const { data } = await query.maybeSingle()
 
   if (!data) return null
   if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) return null
@@ -164,6 +172,109 @@ export async function loadCachedChunks(
     }))
 }
 
+type ResearchEvidenceChunkRow = {
+  id: string
+  entity_type: 'company' | 'person'
+  field: string
+  value_json: unknown
+  source_url: string | null
+  source_provider: string
+  source_confidence: string
+  confidence: number
+  retrieved_at: string
+  expires_at: string | null
+}
+
+function readableEvidenceValue(value: unknown): string {
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, child]) => `${key.replaceAll('_', ' ')}: ${typeof child === 'string' ? child : JSON.stringify(child)}`)
+      .join('; ')
+  }
+  return String(value ?? '')
+}
+
+/** PURE bridge from typed intelligence evidence into citation-ready RAG chunks. */
+export function researchEvidenceToChunks(rows: readonly ResearchEvidenceChunkRow[]): Chunk[] {
+  const seen = new Set<string>()
+  const chunks: Chunk[] = []
+
+  for (const row of rows) {
+    if (!row.source_url || !cacheEntryFresh(row.expires_at)) continue
+    try {
+      const url = new URL(row.source_url)
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
+    } catch {
+      continue
+    }
+
+    const field = row.field.replaceAll('_', ' ')
+    const value = readableEvidenceValue(row.value_json)
+    const key = `${row.entity_type}:${row.field}:${value}:${row.source_url}`
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    chunks.push({
+      pageId: `research-evidence:${row.id}`,
+      url: row.source_url,
+      title: `Outlio research: ${field}`,
+      ordinal: 0,
+      content: [
+        `Entity type: ${row.entity_type}.`,
+        `Field: ${field}.`,
+        `Publicly sourced value: ${value}.`,
+        `Source provider: ${row.source_provider}.`,
+        `Source confidence: ${row.source_confidence}.`,
+        `Evidence confidence: ${Number(row.confidence).toFixed(2)}.`,
+        `Retrieved at: ${row.retrieved_at}.`,
+      ].join(' '),
+      embedding: null,
+    })
+  }
+
+  return chunks
+}
+
+/**
+ * Loads typed provider/MCP facts as RAG passages. This is the bridge that lets
+ * Hubble answer from an email, phone, social profile, funding fact, or signal
+ * already enriched by the batch pipeline without searching the web again.
+ */
+export async function loadResearchEvidenceChunks(
+  userId: string,
+  leadId: string | null,
+  companyId: string | null,
+): Promise<Chunk[]> {
+  const supabase = createAdminClient()
+  const select = 'id, entity_type, field, value_json, source_url, source_provider, source_confidence, confidence, retrieved_at, expires_at'
+  const reads: Array<PromiseLike<{ data: unknown[] | null }>> = []
+
+  if (leadId) {
+    reads.push(supabase
+      .from('research_evidence')
+      .select(select)
+      .eq('user_id', userId)
+      .eq('entity_type', 'person')
+      .eq('entity_id', leadId)
+      .order('retrieved_at', { ascending: false })
+      .limit(100))
+  }
+  if (companyId) {
+    reads.push(supabase
+      .from('research_evidence')
+      .select(select)
+      .eq('user_id', userId)
+      .eq('entity_type', 'company')
+      .eq('entity_id', companyId)
+      .order('retrieved_at', { ascending: false })
+      .limit(100))
+  }
+
+  const results = await Promise.all(reads)
+  const rows = results.flatMap((result) => result.data ?? []) as ResearchEvidenceChunkRow[]
+  return researchEvidenceToChunks(rows)
+}
+
 /** URLs already fetched, so a second question does not refetch them. */
 export async function knownUrls(userId: string, companyId: string | null): Promise<Set<string>> {
   if (!companyId) return new Set()
@@ -194,6 +305,8 @@ export async function savePage(input: {
   embedModel: string | null
 }): Promise<string | null> {
   const supabase = createAdminClient()
+  const contentHash = createHash('sha256').update(input.content).digest('hex')
+  const structured = { ...input.structured, contentHash }
 
   const host = (() => {
     try {
@@ -202,6 +315,37 @@ export async function savePage(input: {
       return 'unknown'
     }
   })()
+
+  const { data: existing } = await supabase
+    .from('hubble_pages')
+    .select('id, structured')
+    .eq('user_id', input.userId)
+    .eq('url', input.url)
+    .maybeSingle()
+
+  const previousStructured = existing?.structured &&
+    typeof existing.structured === 'object' &&
+    !Array.isArray(existing.structured)
+    ? existing.structured as Record<string, unknown>
+    : {}
+
+  if (existing?.id && previousStructured.contentHash === contentHash) {
+    await supabase
+      .from('hubble_pages')
+      .update({
+        company_id: input.companyId,
+        title: input.title,
+        structured,
+        fetch_method: input.method,
+        http_status: input.status,
+        fetched_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + PAGE_TTL_DAYS * 86_400_000).toISOString(),
+      } as never)
+      .eq('id', existing.id)
+      .eq('user_id', input.userId)
+
+    return existing.id
+  }
 
   const { data: page } = await supabase
     .from('hubble_pages')
@@ -214,7 +358,7 @@ export async function savePage(input: {
         title: input.title,
         content: input.content,
         content_chars: input.content.length,
-        structured: input.structured,
+        structured,
         fetch_method: input.method,
         http_status: input.status,
         fetched_at: new Date().toISOString(),

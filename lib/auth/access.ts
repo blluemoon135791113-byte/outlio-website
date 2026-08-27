@@ -12,6 +12,7 @@ import 'server-only'
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 import { redirect } from 'next/navigation'
+import { cache } from 'react'
 
 import {
   NEEDS_LIMITS,
@@ -66,7 +67,7 @@ const UNAUTHENTICATED: AccessContext = {
  * `canUseScraper: false` and a specific `reason`. Callers that need to block
  * should use `requireAccess` / `requireAdmin`.
  */
-export async function getAccessContext(): Promise<AccessContext> {
+export const getAccessContext = cache(async function getAccessContext(): Promise<AccessContext> {
   const supabase = await createClient()
 
   const {
@@ -84,7 +85,7 @@ export async function getAccessContext(): Promise<AccessContext> {
     mfaCurrentLevel: assurance?.currentLevel ?? null,
     mfaNextLevel: assurance?.nextLevel ?? null,
   })
-}
+})
 
 /**
  * The identity-agnostic half of the access decision.

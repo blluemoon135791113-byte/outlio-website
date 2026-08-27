@@ -19,6 +19,8 @@ import 'server-only'
  */
 import * as cheerio from 'cheerio'
 
+import { decodeCfEmail, decodeCfEmailHref } from '@/lib/hubble/extract/cfemail'
+
 /** Boilerplate that is never the substance of a page. */
 const STRIP = [
   'script',
@@ -134,6 +136,26 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
   const interestingLinks: StructuredFacts['interestingLinks'] = []
   const emails: string[] = []
 
+  /*
+   * Cloudflare-obfuscated addresses, decoded BEFORE the strip pass.
+   *
+   * ⚠️ THE ORDERING IS THE WHOLE POINT — same trap as JSON-LD above. A company
+   * contact address most often sits in the <footer>, and <footer> is the third
+   * thing STRIP removes. Decoding after the strip would silently find nothing
+   * on exactly the pages this exists to rescue.
+   *
+   * The node's text is replaced with the decoded address so the placeholder
+   * "[email protected]" does not reach the model as the page's own words.
+   * Safe to mutate: this tree is read for text and then discarded — it is
+   * never rendered (rule 3).
+   */
+  $('[data-cfemail]').each((_, element) => {
+    const address = decodeCfEmail($(element).attr('data-cfemail'))
+    if (!address) return
+    emails.push(address)
+    $(element).text(address)
+  })
+
   $('a[href]').each((_, element) => {
     const href = $(element).attr('href') ?? ''
     const label = $(element).text().replace(/\s+/g, ' ').trim().slice(0, 120)
@@ -141,6 +163,15 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
     if (href.toLowerCase().startsWith('mailto:')) {
       const address = href.slice(7).split('?')[0]
       if (address) emails.push(address)
+      return
+    }
+
+    // The same fact in a second shape: what a `mailto:` becomes when
+    // Cloudflare's obfuscation rewrites it.
+    const protectedAddress = decodeCfEmailHref(href)
+    if (protectedAddress) {
+      emails.push(protectedAddress)
+      $(element).text(protectedAddress)
       return
     }
 

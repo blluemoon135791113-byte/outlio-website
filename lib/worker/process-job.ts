@@ -107,7 +107,6 @@ export const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
   },
   { header: EXPORT_COLUMN_HEADERS.listCount, value: (l) => l.listCount },
   { header: EXPORT_COLUMN_HEADERS.lastActivity, value: (l) => l.lastActivity },
-  { header: EXPORT_COLUMN_HEADERS.addedToList, value: (l) => l.addedToListAt },
 
   // Provenance.
   { header: EXPORT_COLUMN_HEADERS.leadSource, value: () => 'search' },
@@ -405,31 +404,11 @@ export async function processJob(jobId: string, userId: string): Promise<Process
 
   if (uploadError) throw new Error(`export upload failed: ${concise(uploadError.message)}`)
 
-  /*
-   * ---- free enrichment -----------------------------------------------------
-   *
-   * FREE SOURCES ONLY. This runs on every extraction, so anything metered here
-   * would bill on every upload with nobody pressing a button. It fills company
-   * gaps the hover card missed and stands aside entirely if paid providers have
-   * been switched on.
-   *
-   * ⚠️ It cannot produce email or phone. Neither is on the page and no free
-   * source supplies verified work contacts; inventing one from a name and a
-   * domain would be fabricating lead data (CLAUDE.md rule 4).
-   *
-   * The CSV is rewritten afterwards because the file written above predates
-   * anything found here.
-   */
-  try {
-    const enriched = await enrichJobFree(jobId, userId)
-    if (enriched.domainsFound > 0 || enriched.industriesFound > 0) {
-      await rebuildJobExport(jobId, userId)
-    }
-  } catch {
-    // The extraction stands on its own.
-  }
-
   // ---- finalise ----------------------------------------------------------
+  // ⚠️ FINALISE FIRST. The extraction is done the moment the CSV exists —
+  // holding the job at "Processing" for the minutes the enrichment waterfall
+  // takes stalled the user's workflow against a finished file. Enrichment now
+  // continues in the background and the CSV is silently rebuilt when it lands.
   const status: ProcessOutcome['status'] =
     filesProcessed === 0 ? 'failed' : filesFailed > 0 ? 'partially_completed' : 'completed'
 
@@ -458,6 +437,32 @@ export async function processJob(jobId: string, userId: string): Promise<Process
   await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
 
   /*
+   * ---- free enrichment, off the critical path ------------------------------
+   *
+   * FREE SOURCES ONLY. This runs on every extraction, so anything metered here
+   * would bill on every upload with nobody pressing a button. It fills company
+   * gaps the hover card missed and stands aside entirely if paid providers have
+   * been switched on.
+   *
+   * The pass runs the ordinary research pipeline over the job's leads —
+   * company facts AND the free contact sources (scout: website-published
+   * emails; social-scout: bio emails and handle inventories). Only verified-
+   * by-publication addresses are ever stored; nothing is guessed.
+   *
+   * Not awaited: the user is already reading their leads. When the waterfall
+   * settles, the CSV is rewritten in place with whatever was found.
+   */
+  void enrichJobFree(jobId, userId)
+    .then(async (enriched) => {
+      if (enriched.evidenceWritten > 0 || enriched.leadsUpdated > 0) {
+        await rebuildJobExport(jobId, userId)
+      }
+    })
+    .catch(() => {
+      // The extraction stands on its own; enrichment is additive.
+    })
+
+  /*
    * Extension captures only: roll the per-page result into its capture
    * session so the popup and the dashboard widget show live totals.
    *
@@ -482,7 +487,6 @@ export async function processJob(jobId: string, userId: string): Promise<Process
           p_leads_found: report.totalParsed,
           p_leads_kept: report.uniqueKept,
           p_status: status === 'failed' ? 'failed' : 'processed',
-          p_error: null,
         })
       }
     } catch {

@@ -18,6 +18,18 @@ import { RESEARCH_FIELDS, researchFieldSchema } from '@/lib/intelligence/types'
 export const researchScopeSchema = z.discriminatedUnion('type', [
   /** Explicitly chosen leads. The safest scope, and the default from the UI. */
   z.object({ type: z.literal('lead_ids'), leadIds: z.array(z.string().uuid()).min(1).max(10_000) }),
+  /**
+   * Explicitly chosen COMPANIES, whether or not any surviving lead points at
+   * them.
+   *
+   * Exists for maintenance and future account-level research: over a thousand
+   * domain-less companies in production are linked to no lead at all, so every
+   * lead-scoped scope is structurally unable to reach them.
+   */
+  z.object({
+    type: z.literal('company_ids'),
+    companyIds: z.array(z.string().uuid()).min(1).max(10_000),
+  }),
   /** Everything from one extraction run. */
   z.object({ type: z.literal('extraction_job'), extractionJobId: z.string().uuid() }),
   /**

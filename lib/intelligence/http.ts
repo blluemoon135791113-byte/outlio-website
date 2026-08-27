@@ -122,6 +122,14 @@ export type ProviderRequest = {
   /** Bytes. Website fetches raise this; JSON APIs do not need to. */
   maxBytes?: number
   /**
+   * Stop reading at `maxBytes` and return what arrived instead of throwing
+   * `ERR_RESPONSE_TOO_LARGE`. For consumers that only need the head of a page
+   * (title, meta, first text): a modern homepage exceeding the cap is normal,
+   * not an attack. The declared Content-Length pre-check is skipped in this
+   * mode, since a large body is now expected rather than disqualifying.
+   */
+  truncateWhenTooLarge?: boolean
+  /**
    * Runs immediately before EVERY network attempt, including retries.
    * Providers with an account-wide or IP-wide quota use this to reserve a
    * distributed request slot. A rejected hook aborts before `fetch` (fail
@@ -140,9 +148,14 @@ export type ProviderRequest = {
 export const USER_AGENT =
   'OutlioLeadEngine/1.0 (+https://outlio.io; business research; contact@outlio.io)'
 
-async function readBounded(response: Response, maxBytes: number, host: string): Promise<string> {
+async function readBounded(
+  response: Response,
+  maxBytes: number,
+  host: string,
+  truncateWhenTooLarge: boolean = false,
+): Promise<string> {
   const declared = Number.parseInt(response.headers.get('content-length') ?? '', 10)
-  if (Number.isFinite(declared) && declared > maxBytes) {
+  if (!truncateWhenTooLarge && Number.isFinite(declared) && declared > maxBytes) {
     throw new ProviderHttpError('ERR_RESPONSE_TOO_LARGE', host, response.status)
   }
 
@@ -161,7 +174,13 @@ async function readBounded(response: Response, maxBytes: number, host: string): 
       if (!value) continue
       total += value.byteLength
       if (total > maxBytes) {
-        throw new ProviderHttpError('ERR_RESPONSE_TOO_LARGE', host, response.status)
+        if (!truncateWhenTooLarge) {
+          throw new ProviderHttpError('ERR_RESPONSE_TOO_LARGE', host, response.status)
+        }
+        // Truncating mode: keep only what fits and stop reading. The remainder
+        // of the body is cancelled so the socket is not held open.
+        void reader.cancel().catch(() => {})
+        break
       }
       chunks.push(value)
     }
@@ -182,7 +201,10 @@ async function readBounded(response: Response, maxBytes: number, host: string): 
 async function requestOnce(
   request: ProviderRequest,
   attempt: number,
-): Promise<{ ok: true; text: string } | { ok: false; error: ProviderHttpError; retryMs?: number }> {
+): Promise<
+  | { ok: true; text: string; finalUrl: string }
+  | { ok: false; error: ProviderHttpError; retryMs?: number }
+> {
   const host = hostOf(request.url)
   const maxBytes = request.maxBytes ?? MAX_RESPONSE_BYTES
 
@@ -229,7 +251,12 @@ async function requestOnce(
   }
 
   if (response.ok) {
-    return { ok: true, text: await readBounded(response, maxBytes, host) }
+    return {
+      ok: true,
+      text: await readBounded(response, maxBytes, host, request.truncateWhenTooLarge === true),
+      /** Where the request actually landed after redirects. */
+      finalUrl: response.url,
+    }
   }
 
   // Auth failures are permanent: retrying a rejected key wastes the run and can
@@ -263,12 +290,24 @@ async function requestOnce(
 
 /** Raw text, for HTML and non-JSON endpoints. Throws `ProviderHttpError`. */
 export async function requestText(request: ProviderRequest): Promise<string> {
+  return (await requestTextWithMeta(request)).text
+}
+
+/**
+ * Raw text plus the URL the request actually landed on after redirects.
+ *
+ * A consumer deciding whether a page proves anything about the REQUESTED host
+ * needs to know whether the answer really came from there.
+ */
+export async function requestTextWithMeta(
+  request: ProviderRequest,
+): Promise<{ text: string; finalUrl: string }> {
   let lastError: ProviderHttpError | null = null
   const maxRetries = Math.max(0, request.maxRetries ?? MAX_RETRIES)
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     const result = await requestOnce(request, attempt)
-    if (result.ok) return result.text
+    if (result.ok) return { text: result.text, finalUrl: result.finalUrl ?? request.url }
 
     lastError = result.error
     if (result.retryMs === undefined || attempt === maxRetries) break

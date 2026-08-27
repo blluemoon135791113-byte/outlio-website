@@ -5,7 +5,7 @@ import 'server-only'
  * This deliberately handles only business model: a snippet must state the
  * classification, and absence remains unknown rather than becoming a guess.
  */
-import { hasSearxngCredentials, searxngSearch } from '@/lib/hubble/providers/search'
+import { hasWebSearch, serpSearch } from '@/lib/search'
 import { normalizeCompanyName } from '@/lib/companies/normalize'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
 import type {
@@ -104,25 +104,25 @@ function query(task: ResearchTask): string {
   return `${name} ${terms.join(' ')}`
 }
 
-export const searxngCompanyProfileProvider: IntelligenceProvider<SearchProfileFinding> = {
-  name: 'searxng-company-profile',
+export const searchCompanyProfileProvider: IntelligenceProvider<SearchProfileFinding> = {
+  name: 'search-company-profile',
   category: 'company_profile',
 
   canHandle: (task) =>
     task.entity.type === 'company' &&
     task.fields.some((field) => ['business_model', 'company_description', 'industry'].includes(field)) &&
     Boolean((task.entity as CompanyEntity).name ?? (task.entity as CompanyEntity).domain) &&
-    hasSearxngCredentials(),
+    hasWebSearch(),
 
   estimateCost: async () => 0,
-  execute: async (task) => extractSearchProfile(task.entity as CompanyEntity, await searxngSearch(query(task), 8)),
+  execute: async (task) => extractSearchProfile(task.entity as CompanyEntity, await serpSearch(query(task), { limit: 8 })),
   normalize: (finding, task): NormalizedEvidence[] => {
     if (!finding) return []
     const retrievedAt = new Date()
     const base = {
       entityType: 'company' as const,
       entityId: task.entity.id,
-      sourceProvider: 'searxng-company-profile',
+      sourceProvider: 'search-company-profile',
       sourceUrl: finding.sourceUrl,
       sourceConfidence: 'medium' as const,
       retrievedAt: retrievedAt.toISOString(),

@@ -47,6 +47,12 @@ export type PersonEntity = {
   companyName: string | null
   companyDomain: string | null
   /**
+   * Where the lead is, as captured. Carried for IDENTITY RESOLUTION, not for
+   * display: it is a corroborating signal that separates one namesake from
+   * another. The column has existed since the first parser; nothing loaded it.
+   */
+  location: string | null
+  /**
    * The company this person works at.
    *
    * Carried so a person-level provider can attribute company facts it returns
@@ -90,12 +96,19 @@ export const RESEARCH_FIELDS = [
   'industry',
   'headquarters',
   'company_description',
+  // The PUBLIC LinkedIn company page, discovered on the company's own website.
+  // Never fetched — recorded as the company's stated address (rules 1-2).
+  'company_linkedin',
+  // What the company says it does — Apollo's keyword/tag list.
+  'specialties',
   'business_model',
   'revenue_estimate',
   // Official company registry facts
   'company_number',
   'company_status',
   'company_type',
+  // The global LEI registry identifier (GLEIF — every LEI-issuing jurisdiction)
+  'lei_number',
   'jurisdiction',
   'incorporation_date',
   'sic_codes',
@@ -185,11 +198,14 @@ export const RESEARCH_FIELD_SPEC: Record<ResearchField, FieldSpec> = {
   industry: { category: 'company_profile', entity: 'company' },
   headquarters: { category: 'company_profile', entity: 'company' },
   company_description: { category: 'company_profile', entity: 'company' },
+  company_linkedin: { category: 'company_profile', entity: 'company' },
+  specialties: { category: 'company_profile', entity: 'company' },
   business_model: { category: 'company_profile', entity: 'company' },
   revenue_estimate: { category: 'company_profile', entity: 'company' },
   company_number: { category: 'company_profile', entity: 'company' },
   company_status: { category: 'company_profile', entity: 'company' },
   company_type: { category: 'company_profile', entity: 'company' },
+  lei_number: { category: 'company_profile', entity: 'company' },
   jurisdiction: { category: 'company_profile', entity: 'company' },
   incorporation_date: { category: 'company_profile', entity: 'company' },
   sic_codes: { category: 'company_profile', entity: 'company' },

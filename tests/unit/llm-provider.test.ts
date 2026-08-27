@@ -4,22 +4,33 @@ import {
   createFallbackLlmProvider,
   createCerebrasProvider,
   createGeminiProvider,
+  extractGeminiText,
   createOpenRouterProvider,
   DEFAULT_CEREBRAS_MODEL,
   DEFAULT_GEMINI_MODEL,
   resetLlmCircuitBreaker,
+  resolveLlmProvider,
   type LLMProvider,
   type LlmResult,
   type LlmVendor,
 } from '@/lib/intelligence/llm/provider'
 
 const originalGeminiModel = process.env.GEMINI_MODEL
+const originalAllowedVendors = process.env.LLM_ALLOWED_VENDORS
+const originalGeminiKey = process.env.GEMINI_API_KEY
+const originalOpenRouterKey = process.env.OPENROUTER_API_KEY
 
 afterEach(() => {
   vi.restoreAllMocks()
   resetLlmCircuitBreaker()
   if (originalGeminiModel === undefined) delete process.env.GEMINI_MODEL
   else process.env.GEMINI_MODEL = originalGeminiModel
+  if (originalAllowedVendors === undefined) delete process.env.LLM_ALLOWED_VENDORS
+  else process.env.LLM_ALLOWED_VENDORS = originalAllowedVendors
+  if (originalGeminiKey === undefined) delete process.env.GEMINI_API_KEY
+  else process.env.GEMINI_API_KEY = originalGeminiKey
+  if (originalOpenRouterKey === undefined) delete process.env.OPENROUTER_API_KEY
+  else process.env.OPENROUTER_API_KEY = originalOpenRouterKey
 })
 
 function stubProvider(options: {
@@ -56,6 +67,51 @@ describe('Gemini planner provider', () => {
     process.env.GEMINI_MODEL = 'gemini-custom-model'
 
     expect(createGeminiProvider().model).toBe('gemini-custom-model')
+  })
+
+  it('ignores thought parts and reads the complete structured answer', () => {
+    expect(
+      extractGeminiText([
+        { thought: true, text: 'I should return JSON.' },
+        { text: '{"ok":' },
+        { text: 'true}' },
+      ]),
+    ).toBe('{"ok":true}')
+  })
+
+  it('sends JSON Schema through the current GenerateContent field', async () => {
+    const previous = process.env.GEMINI_API_KEY
+    process.env.GEMINI_API_KEY = 'test-key'
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      Response.json({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createGeminiProvider().generateJson({
+      ...request,
+      schema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
+    })
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+
+    expect(result.ok).toBe(true)
+    expect(body.generationConfig.responseJsonSchema).toBeDefined()
+    expect(body.generationConfig.responseSchema).toBeUndefined()
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' })
+
+    if (previous === undefined) delete process.env.GEMINI_API_KEY
+    else process.env.GEMINI_API_KEY = previous
+  })
+})
+
+describe('LLM vendor allowlist', () => {
+  it('fails closed to Gemini instead of falling through to paid vendors', () => {
+    process.env.LLM_ALLOWED_VENDORS = 'gemini'
+    process.env.GEMINI_API_KEY = 'test-key'
+    process.env.OPENROUTER_API_KEY = 'test-key'
+
+    const provider = resolveLlmProvider('openrouter')
+
+    expect(provider.vendor).toBe('gemini')
   })
 })
 

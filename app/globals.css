@@ -275,6 +275,59 @@ h6 {
   touch-action: manipulation;
 }
 
+/* ==========================================================================
+   AUTHENTICATED PRODUCT — Hubble material system
+   ========================================================================== */
+
+/* The product was already built on semantic surface tokens. Scoping the Hubble
+   material here gives every authenticated screen one visual language without
+   leaking dashboard treatments into the public marketing site. */
+.product-clay,
+.auth-clay {
+  --app: var(--clay-bg);
+  --paper: var(--clay-bg);
+  --panel: var(--clay-raised);
+  --surface-muted: var(--clay-sunken);
+  --border: color-mix(in srgb, var(--clay-bg) 84%, var(--ink) 16%);
+  --border-strong: color-mix(in srgb, var(--clay-bg) 72%, var(--ink) 28%);
+  --shadow-sm: var(--neo-shadow-chip);
+  --shadow-md: var(--neo-shadow);
+  --shadow-lg: var(--neo-shadow-lg);
+}
+
+.auth-clay-field:focus-visible {
+  box-shadow: var(--neo-shadow-focus);
+}
+
+.auth-clay a {
+  text-underline-offset: 0.2em;
+}
+
+.product-clay .product-gradient {
+  background: var(--accent);
+  box-shadow: var(--neo-shadow-chip);
+}
+
+.product-clay :is(input, select, textarea) {
+  background-color: var(--clay-sunken);
+  box-shadow: var(--neo-shadow-inset);
+}
+
+.product-clay .hubble-bar :is(input, select, textarea) {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.product-clay :is(button, a, summary):focus-visible {
+  outline-color: var(--accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-clay nav a:hover {
+    box-shadow: var(--neo-shadow-chip);
+  }
+}
+
 ::selection {
   background: var(--accent);
   color: var(--cream);

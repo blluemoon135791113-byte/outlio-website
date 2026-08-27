@@ -14,7 +14,7 @@ import {
   validHubbleAnswer,
 } from '@/lib/hubble/reason'
 import { DEFAULT_BUDGET, retrievalDeadline } from '@/lib/hubble/providers/types'
-import { cacheEntryFresh, questionKey } from '@/lib/hubble/store'
+import { cacheEntryFresh, questionKey, researchEvidenceToChunks } from '@/lib/hubble/store'
 
 vi.mock('server-only', () => ({}))
 
@@ -79,6 +79,8 @@ describe('synthesis quality gate', () => {
     expect(validHubbleAnswer({ ...base, citations: [] }, 2)).toBe(false)
     expect(validHubbleAnswer({ ...base, citations: [3] }, 2)).toBe(false)
     expect(validHubbleAnswer({ ...base, citations: [1] }, 2)).toBe(true)
+    expect(validHubbleAnswer({ ...base, status: 'unknown', citations: [1] }, 2)).toBe(false)
+    expect(validHubbleAnswer({ ...base, status: 'unknown', citations: [] }, 2)).toBe(true)
   })
 
   it('removes control characters and broken punctuation spacing without rewriting facts', () => {
@@ -112,6 +114,48 @@ describe('RAG cache freshness', () => {
     expect(cacheEntryFresh('2026-08-21T12:00:01.000Z', now)).toBe(true)
     expect(cacheEntryFresh('2026-08-21T11:59:59.000Z', now)).toBe(false)
     expect(cacheEntryFresh('not-a-date', now)).toBe(false)
+  })
+})
+
+describe('typed evidence RAG bridge', () => {
+  it('turns sourced contact evidence into a retrievable, citable chunk', () => {
+    const chunks = researchEvidenceToChunks([{
+      id: '00000000-0000-4000-8000-000000000001',
+      entity_type: 'person',
+      field: 'work_email',
+      value_json: { email: 'jamie@fabricated.example', status: 'publicly_found' },
+      source_url: 'https://fabricated.example/team/jamie-rivera',
+      source_provider: 'web-research-mcp',
+      source_confidence: 'high',
+      confidence: 0.82,
+      retrieved_at: '2026-08-27T00:00:00.000Z',
+      expires_at: '2099-08-27T00:00:00.000Z',
+    }])
+
+    expect(chunks).toEqual([expect.objectContaining({
+      url: 'https://fabricated.example/team/jamie-rivera',
+      content: expect.stringContaining('jamie@fabricated.example'),
+    })])
+    expect(chunks[0]?.content).toContain('publicly_found')
+  })
+
+  it('drops unsourced, expired, and unsafe evidence', () => {
+    const base = {
+      id: '00000000-0000-4000-8000-000000000001',
+      entity_type: 'person' as const,
+      field: 'mobile_phone',
+      value_json: { phone: '+44 20 7946 0958' },
+      source_provider: 'search-contact-phone',
+      source_confidence: 'medium',
+      confidence: 0.7,
+      retrieved_at: '2026-08-27T00:00:00.000Z',
+      expires_at: '2020-01-01T00:00:00.000Z',
+    }
+    expect(researchEvidenceToChunks([
+      { ...base, source_url: 'https://fabricated.example/contact' },
+      { ...base, expires_at: null, source_url: null },
+      { ...base, expires_at: null, source_url: 'javascript:alert(1)' },
+    ])).toEqual([])
   })
 })
 
@@ -241,7 +285,8 @@ describe('the answer panel shows text, not chips', () => {
     )
 
     expect(source).toMatch(/Estimated — inferred from the sources below/)
-    expect(source).toMatch(/Not confirmed by the sources below/)
+    expect(source).toMatch(/No supporting source was found/)
+    expect(source).toMatch(/Some requested details were not confirmed/)
 
     // The widgets that used to crowd the answer are gone.
     expect(source).not.toContain('STATUS_CLASS')

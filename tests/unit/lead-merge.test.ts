@@ -39,6 +39,51 @@ const known = (value: unknown, provider = 'prospeo') =>
 
 const unknown = { state: 'unknown', reason: 'not_found' } as const
 
+describe('social profiles split into per-platform columns', () => {
+  const RUN = {
+    runId: RUN_ID,
+    columns: ['social_profiles'] as ResearchField[],
+    rows: [
+      row('lead-1', {
+        social_profiles: known(
+          { x: 'https://x.com/acme', instagram: 'https://instagram.com/acme' },
+          'social-scout-company',
+        ),
+      }),
+    ],
+  }
+
+  it('splits the blob into one provenance-carrying cell per platform', () => {
+    const plan = buildMergePlan(RUN, { now: NOW })
+    const patch = plan.byLead['lead-1']!
+
+    expect(patch['social_x']?.value).toBe('https://x.com/acme')
+    expect(patch['social_x']?.provider).toBe('social-scout-company')
+    expect(patch['social_instagram']?.value).toBe('https://instagram.com/acme')
+    // The bunched field itself is never written.
+    expect(patch['social_profiles']).toBeUndefined()
+    expect(plan.mergedCells).toBe(2)
+  })
+
+  it('headers read as the platform, with X disambiguated', () => {
+    expect(enrichmentColumnHeader('social_x')).toBe('X (Twitter)')
+    expect(enrichmentColumnHeader('social_instagram')).toBe('Instagram')
+    expect(enrichmentColumnHeader('personal_social_linkedin')).toBe('Personal LinkedIn')
+    expect(enrichmentColumnHeader('social_crunchbase')).toBe('Crunchbase')
+  })
+
+  it('writes nothing when the socials map is empty', () => {
+    const plan = buildMergePlan({
+      runId: RUN_ID,
+      columns: ['social_profiles'] as ResearchField[],
+      rows: [row('lead-1', { social_profiles: known({}) })],
+    }, { now: NOW })
+    expect(plan.byLead['lead-1']).toBeUndefined()
+    expect(plan.unknownCells).toBe(1)
+  })
+
+})
+
 describe('buildMergePlan', () => {
   const results = {
     runId: RUN_ID,

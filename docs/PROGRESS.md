@@ -4,6 +4,1279 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — Phase 5: the location signal, made live
+
+### A column that existed and was never read
+
+`extracted_leads.location` has been in the schema since migration 0006, and
+`lib/leads/parse.ts` has populated it from `span[data-anonymize="location"]`
+since the first parser. But `PersonEntity` never carried it, so the field went
+from the saved page into the database and stopped there. Phase 2 built a
+resolver that scores a location signal; nothing could supply one.
+
+### Wired end to end
+
+- `PersonEntity` gains `location`, documented as an identity signal rather than
+  display data.
+- `run.ts` selects and populates it (the `select()` list was the reason it was
+  missing — the column was simply never asked for).
+- `identitySubject()` spends it, so **every** provider that resolves identity
+  through the shared mapper gets it at once.
+- Hubble's cited-contact path threads it too: the route already loaded
+  `lead.location` for the model's context block, so `AskSubject` and
+  `CitedContactSubject` now carry `personLocation` through to the resolver.
+- `IdentitySubject.location` is no longer optional. The Phase 2 comment saying
+  "PersonEntity does not carry one today" is obsolete and was removed rather
+  than left to mislead.
+
+### It changes outcomes, and that is what the test asserts
+
+Plumbing a value through is not the same as it doing anything. A scattered name
+plus an employer NAME scores just under the match threshold; the lead's captured
+city is what settles it. The test asserts the same observation resolves `weak`
+without the location and `match` with it — so the wiring cannot silently rot
+into a no-op.
+
+The invariant still holds: a location can never carry a match on its own,
+because it is not a distinguishing signal. Separately test-pinned.
+
+### The type system found the work
+
+Making `location` required produced **ten** compile errors — every site that
+constructs a `PersonEntity`. That is the intended behaviour of a required
+field: it enumerated the call sites instead of letting a silent `undefined`
+spread. Two of my first fixture edits landed on the wrong object (an
+`McpResearchLead`, and an `IdentitySubject` that already declared a location);
+`tsc` caught both.
+
+### Verification
+
+- TypeScript clean; production build clean.
+- ESLint across `lib app tests`: **0 errors**, 5 warnings — all pre-existing
+  (`app/layout.tsx` GTM hint, and an unused `Json` import in
+  `evidence-store.ts` that belongs to uncommitted work predating this session).
+- Unit suite: **83 files / 1,179 tests, 1,178 passing.** 2 new.
+- ⚠️ Same pre-existing unrelated failure (`tests/unit/hubble-mcp-research.test.ts`).
+
+---
+
+## 2026-08-28 — Phase 4: the confidence engine
+
+### What was being thrown away
+
+`resolveConflict()` already picked a winner well — source tier, then
+confidence, then recency — and already excluded agreeing records from
+`conflicting`, so it was sounder than expected. But those agreeing records were
+computed, filtered out, and then **discarded**. Nothing anywhere recorded that
+three independent providers had reached the same value, and the winner's
+confidence was identical whether one source said it or five.
+
+Corroboration is the cheapest signal in the system and we were deleting it.
+
+### Built — `scoreConfidence()` in `lib/intelligence/evidence.ts` (PURE)
+
+`FieldKnowledge.known` gains two fields:
+
+- `corroborating` — fresh records from OTHER providers that reached the same
+  value, no longer discarded.
+- `confidence` — the confidence of the **answer**, which is not the confidence
+  of the winning record. Kept separate from `record.confidence` deliberately:
+  that number is what the provider claimed, and rewriting it would misreport
+  the provider.
+
+Winner selection is untouched. This phase only changes how sure we say we are.
+
+### ⚠️ Independence is by PROVIDER, not by record
+
+The same provider returning the same value on two URLs is **one source
+agreeing with itself**. A systematic error in that provider produces both rows,
+so counting them twice manufactures confidence out of a single point of
+failure. Only a provider the winner did not come from can corroborate it — and
+the mirror case holds too: a "dissenter" that is the winner's own provider is
+ignored rather than treated as doubt.
+
+Three further rules, each test-pinned:
+
+- **Diminishing returns.** Each independent corroborator closes 30% of the gap
+  to the ceiling, so the second source is worth far more than the fifth.
+- **Certainty is never reached** (ceiling 0.97). A cell reading 100% invites a
+  trust that web research cannot support.
+- **Dissent scales by the STRONGEST dissenter, not the count.** One
+  authoritative source saying otherwise is the alarming case; five weak
+  scrapers repeating each other are not five times the doubt. Floored at 0.05 —
+  contested evidence is still evidence, and a haircut must never read as
+  "nothing found".
+
+### Verification
+
+- TypeScript clean; ESLint clean; production build clean.
+- Full suite incl. integration: **1,239 passing, 24 skipped, 1 failing.**
+  13 new confidence tests.
+- Three existing test helpers constructed `FieldKnowledge` literals and needed
+  the two new fields — a compile error, caught by `tsc`, not a behaviour change.
+- ⚠️ Same pre-existing unrelated failure (`tests/unit/hubble-mcp-research.test.ts`,
+  "calls the stateless tool with hard no-charge limits"), re-confirmed
+  unchanged after this phase.
+
+---
+
+## 2026-08-28 — Phase 3: Cloudflare email decoding
+
+### The silent recall loss
+
+Scout reads company `/contact` and `/about` pages — the pages most likely to
+carry a real published address, and also the pages most likely to have
+Cloudflare's "Email Address Obfuscation" switched on. Those addresses arrive as
+
+    <a class="__cf_email__" data-cfemail="a1c4d9…">[email protected]</a>
+
+and we returned **nothing**. Not an error — an empty result, which is the worse
+failure, because nothing anywhere says a fact was lost.
+
+### Why this is not a rule-1 or rule-4 problem
+
+Recorded here because the feature sits next to two hard rules and the reasoning
+should not have to be reconstructed later:
+
+- **Not rule 1.** Cloudflare ships a script that decodes this in every
+  visitor's browser automatically. The address is public, the scramble is a
+  speed bump for naive harvesters, and the same bytes are served to every
+  client. Rule 1 forbids evading systems that decide **whether to serve us** —
+  CAPTCHAs, bot detection, anti-detection measures. This decodes what was
+  **already served**. Nothing here disguises who is asking.
+- **Not rule 4.** The address is deterministically recovered from bytes
+  literally present in the response. Nothing is inferred, guessed, or assembled
+  from a person's name.
+
+### Built — `lib/hubble/extract/cfemail.ts` (PURE)
+
+`decodeCfEmail()` (the `data-cfemail` payload) and `decodeCfEmailHref()`
+(Cloudflare's rewritten `mailto:` link — the same fact in a second shape). The
+scheme: hex, first byte is an XOR key, remaining bytes are the address.
+
+**It refuses rather than salvages.** Every decoded byte must land in printable
+ASCII and the result must have the shape of an address, or it returns `null`.
+A wrong key produces control characters; decoding those into a "best effort"
+address would manufacture a contact, which is exactly the rule-4 failure. Odd
+lengths, non-hex, and absurdly long payloads are all refused too.
+
+### ⚠️ The ordering is the entire point
+
+The decode runs **before the strip pass**, for the same reason JSON-LD does. A
+company contact address most often sits in the `<footer>` — and `<footer>` is
+the third thing `STRIP` removes. Decoding afterwards would find nothing on
+precisely the pages this exists to rescue.
+
+That is pinned by a test, and the test was **mutation-checked**: moving the
+decode after `STRIP` fails exactly that one test and no other. It has teeth.
+
+The matched node's text is also replaced with the decoded address, so the
+literal placeholder `[email protected]` never reaches the model as the page's
+own words. Safe to mutate — the tree is read for text and discarded, never
+rendered (rule 3).
+
+### Verification
+
+- TypeScript clean; ESLint clean on changed files; production build clean.
+- Unit suite: **82 files / 1,164 tests, 1,163 passing.** 22 new.
+- ⚠️ Same pre-existing unrelated failure (`tests/unit/hubble-mcp-research.test.ts`).
+
+---
+
+## 2026-08-28 — Phase 2: identity resolution, shared and scored
+
+### The failure this closes
+
+A search for `"James Smith" email` returns a real, published, correct address
+belonging to a **different James Smith**. Filed against the lead it is
+indistinguishable from a genuine find: it has a source URL, it passes every
+format check, and it goes out to a CRM and gets emailed. A wrong contact is
+worse than a missing one, because a missing one is visibly missing.
+
+Before this phase, the only defence was `mentionsIdentity()` — a private
+boolean inside `search-contact.ts`. **Exactly one provider in the product asked
+whether a result was about the right person.** Every other one either
+re-invented the check or skipped it.
+
+### Built — `lib/intelligence/identity.ts` (PURE)
+
+`resolveIdentity(subject, observation)` returns a verdict
+(`match` / `weak` / `no_match`), a 0–1 score, and the named signals that
+produced it. Signals: LinkedIn URL, exact name, name tokens, employer domain,
+employer name, job title, location.
+
+⚠️ **THE INVARIANT: a name alone can never produce a match.** A candidate must
+carry at least one DISTINGUISHING signal — LinkedIn URL, employer domain, or
+employer name. This is enforced as an explicit rule *after* the arithmetic, not
+left to the weights, so tuning a weight upward can never quietly promote a
+namesake. Asserted by test.
+
+Two decisions worth recording:
+
+- **A LinkedIn profile URL is decisive both ways.** Equality is an immediate
+  match. Two DIFFERENT profile URLs are an immediate REFUSAL even when name and
+  employer agree — it is the one case where we can be certain two records are
+  different people, and saying so outweighs any amount of name agreement.
+  Recorded and compared, never fetched (rules 1–2).
+- **Job title and location can never carry a match on their own.** They are
+  shared by thousands of people; piling them up must not substitute for knowing
+  where someone works. Name + title + location scores `weak` and is refused.
+
+`bestIdentityMatch` takes the strongest of several observations but cannot
+launder two namesake pages into a match, because neither is distinguishing.
+
+### Wired in
+
+`search-contact.ts` now delegates to the resolver, and the identity score is
+carried through to storage:
+
+- **Confidence is capped by identity certainty** — a perfect address on the
+  company's own site is only as trustworthy as our belief that the page is
+  about this employee rather than their namesake.
+- Stored evidence carries `identityConfidence`, so a wrong contact can be
+  traced to the decision that accepted it rather than guessed about later.
+- Hubble's cited-contact promotion (`lib/hubble/contact-evidence.ts`) inherits
+  the gate for free, since it extracts through the same functions.
+
+Every pre-existing contact test passed untouched, which is the behaviour
+contract holding rather than a formality.
+
+### One deliberate behaviour, recorded rather than left implicit
+
+A name-only page carrying an address **at the employer's domain** is accepted:
+the address itself names the employer, and that is what distinguishes her from
+her namesakes. It is the one place identity is established partly from the value
+being extracted. Bounded by the existing rules that the mailbox domain must be
+the employer's and the local part must match the person's name. Test-asserted in
+both directions — the same page with a third-party address is refused, and the
+same page offering only a PHONE number (which carries no employer) is refused.
+
+### Verification
+
+- TypeScript clean; ESLint clean on changed files; Next.js 16 production build
+  clean.
+- Unit suite: **81 files / 1,142 tests, 1,141 passing.** 26 new identity tests.
+- ⚠️ The one failure (`tests/unit/hubble-mcp-research.test.ts`) remains
+  pre-existing and unrelated — untracked work in progress that imports nothing
+  either phase touched.
+
+---
+
+## 2026-08-28 — Phase 1: one SERP service for the whole product
+
+### Repositories analysed BEFORE any integration
+
+The six proposed B2B enrichment repositories were assessed and written up in
+`docs/ENRICHMENT_REPO_ASSESSMENT.md`. **Two techniques adopted, four
+repositories rejected in full.** Three were rejected on licensing or substance
+(no license at all, or a paid closed database behind a config file); one solves
+lead discovery by geolocation, which this product does not do. The adopted
+items are the Cloudflare `data-cfemail` decode (a real recall gap in Scout) and
+a keyless uncapped SERP tier. No Playwright, no Python service, no new vendor.
+
+⚠️ The brief asked for pattern-generated emails stored and "marked as
+predicted". NOT IMPLEMENTED — hard rule 4 forbids fabricated lead data, and a
+label does not make a guess an observation. Lifting that rule is a product
+decision; it is recorded as open in the assessment.
+
+### The gap this phase closed
+
+Search was scattered across five call sites that each reached for an engine
+directly: Hubble's answer path, funding, web research, company profiles, and
+contact discovery. Nothing was shared — not ordering, not a cache, not the
+quota. A single research run over 25 leads at 6 companies could spend a dozen
+of the day's **100 free Google queries re-asking one company question**, and an
+exhausted tier came back as an empty result set indistinguishable from a
+company nobody has written about.
+
+### Built — `lib/search/`
+
+- **`query.ts` (pure)** — normalization, cache keying, phrasing deduplication,
+  domain filtering, preferred-domain ranking, URL-keyed merging. Cache keys are
+  case-insensitive but preserve `site:`/`filetype:` operators and include limit
+  and time range, so a 10-result answer cannot serve a 20-result question.
+- **`serp.ts`** — the service. Postgres result cache (`provider_cache`,
+  7-day TTL for hits, **6-hour TTL for empty results** so one outage does not
+  become a week of confident wrong answers), an in-flight map that collapses
+  CONCURRENT identical queries into one request, the circuit breaker, and the
+  waterfall. Never throws.
+- **`budget.ts`** — per-engine daily budgets counted through the existing
+  atomic `consume_rate_limit`, so exhaustion is a known state rather than a
+  silent empty. ⚠️ Failure direction depends on cost: an unreachable counter
+  DENIES a metered engine and ALLOWS a free one.
+- **`engines.ts`** — Solr → web-research MCP → Google CSE → Brave → Mojeek →
+  Tavily. The duplicate Google CSE implementation (one in Hubble, one in
+  intelligence, with different caps) is gone; there is one.
+
+Mojeek is the adopted keyless tier and is **off unless `SERP_KEYLESS_FALLBACK=true`**:
+honest User-Agent, paced at 2s, and a block is recorded as zero results. It
+sits above Tavily so an uncapped free index is exhausted before a metered
+vendor is billed.
+
+### 🔴 A vendor name was gating three whole categories
+
+`google-funding`, `google-web` and `google-company-profile` gated on
+`hasGoogleCseCredentials()`. A deployment with a Brave key and no Google key
+therefore had **no funding research, no web research and no search-derived
+company profiles** — three categories dark because of a check that named a
+vendor, which `lib/intelligence/types.ts` rule 1 exists to forbid. Renamed to
+`search-funding`, `search-web`, `search-company-profile`, all gating on
+`hasWebSearch()`. Contact discovery's hand-rolled MCP-then-Google fallback loop
+was deleted in favour of the shared service.
+
+`lib/hubble/providers/search.ts` is now a re-export shim so existing imports
+keep working.
+
+### Verification
+
+- TypeScript: clean. ESLint on every changed file: clean.
+- Unit suite: **80 files / 1,116 tests, 1,115 passing**. 26 new SERP tests.
+- ⚠️ One failure, `tests/unit/hubble-mcp-research.test.ts`, is **pre-existing
+  and unrelated** — the file is untracked work in progress and imports nothing
+  this phase touched.
+- Next.js 16 production build: **clean**.
+- ⚠️ The build machine is nearly out of disk (~1.5 GB free of 228 GB after a
+  successful build). A production build needs roughly 1 GB of headroom and
+  failed with `ENOSPC` twice before space was reclaimed. Reclaimable today:
+  `~/.npm` (2.4 GB) and stale browser/updater caches.
+
+---
+
+## 2026-08-27 — Hubble findings persist into compact lead cards
+
+The Hubble lead modal now reads all three existing persistence layers rather
+than treating an answer as temporary UI: core contact columns on the extracted
+lead, current typed facts in `research_evidence`, and the five most recent
+`hubble_answers`. Website, email, phone, and LinkedIn remain immediately visible.
+Every other saved fact and answer sits behind one compact “More saved details”
+native disclosure with an internal scroll ceiling, so the modal stays short
+until the user asks for depth.
+
+Ask Hubble now promotes literal emails and international phone numbers from its
+exact cited passages into typed person evidence before returning the answer.
+The model's prose is never parsed for persistence. Existing identity, employer,
+generic-mailbox, phone-validity, provenance, TTL, and `publicly_found` gates all
+run before a contact reaches the card. A forced card refresh after an answer
+therefore shows a newly supported contact immediately while unsourced or
+model-only text remains only in the saved answer history.
+
+The earlier repository set remains an architecture input, not a replacement
+search source: SearXNG stays primary, DuckDuckGo HTML stays the adaptive
+fallback, Agent-Reach/MindSearch patterns inform routing and planning, and the
+storage indexes remain downstream retrieval options. Focused Hubble/contact
+suite: **13 files / 154 tests passing**. Full suite: **86 files / 1,152 tests passing**, with 8
+live-only files / 24 tests skipped. TypeScript, changed-file ESLint, and the
+Next.js 16 production build are clean.
+
+---
+
+## 2026-08-27 — RAG and contact-integrity audit
+
+Hubble's RAG path is now explicitly connected to both evidence stores. Cleaned
+MCP documents continue to persist as `hubble_pages`/`hubble_chunks`; sourced,
+fresh typed facts from `research_evidence` now become citation-ready retrieval
+chunks too. This lets an email, phone, social profile, funding fact, or other
+provider result answer a later Hubble question without another web search.
+Person-answer cache lookups are now scoped by lead as well as company, removing
+the possibility of serving one employee's cached answer for another employee at
+the same business.
+
+The live corpus audit found **72 pages, 632 page chunks, 275 stored embeddings,
+30 answers, and 1,760 typed evidence rows**. RAG remains operational in lexical
+BM25 mode when vectors are unavailable. The configured Ollama endpoint was not
+reachable from this environment, so current retrieval is not fully hybrid; this
+is an explicit degraded mode rather than a hidden failure.
+
+Contact correctness was tightened after the audit found that an on-domain
+generic inbox could previously become a person's email. `sales@`, `info@`, and
+other shared mailboxes now remain company/page evidence; only a public mailbox
+whose local part matches the lead's name can be filed for the person. Published
+contacts use `publicly_found`; only non-catch-all SMTP acceptance can use
+`verified`. International public phone numbers are structurally validated and
+stored in E.164 format. Focused RAG/contact tests: **90 passing**. Full suite:
+**85 files / 1,150 tests passing**, with 8 live-only files / 24 tests skipped.
+TypeScript, changed-file ESLint, and the Next.js 16 production build are clean.
+Two malformed untracked Next files discovered by the build audit were
+corrected: the 404 is now a valid App Router component, and the deprecated
+duplicate `middleware.ts` was removed in favor of the existing Next 16
+`proxy.ts`.
+
+---
+
+## 2026-08-27 — Public contact search now mirrors successful manual queries
+
+Lead contact enrichment now searches the way a successful manual lookup does:
+`person name + employer domain + email/phone` first, followed by a stricter
+official-site query. The web-research MCP extracts emails and phones from both
+search snippets and fetched public pages before any LLM call. Person attribution
+requires matching identity/company context; generic company mailboxes are not
+filed as a person's address. Search-derived contacts always retain their source
+URL and the `publicly_found` status — never `verified`.
+
+The local no-charge search path now prefers the existing operator-owned SearXNG
+service and falls back to DuckDuckGo HTML. A challenge stops that provider; no
+CAPTCHA bypass or social-site fetch is attempted. The intelligence waterfall
+also gains public-search contact adapters after the two free website scouts and
+before disabled paid providers; they use MCP/SearXNG first and Google only as an
+optional fallback. Google currently fails closed with HTTP 403 because the
+configured Cloud project does not have access to Custom Search JSON API; this
+does not block the local MCP/SearXNG path and cannot incur a paid fallback.
+
+Live redacted verification against the reported lead: **17 results, 2 relevant
+pages, 1 public email fact, and 1 public phone fact**, both source-backed and
+`publicly_found`. MCP: **22 tests passing** and TypeScript clean. Application:
+**85 test files / 1,144 tests passing** with 8 files / 24 live tests skipped;
+TypeScript clean; changed-file lint has zero errors (one pre-existing warning in
+the already-modified Scout test). The contact waterfall uses MCP/SearXNG for
+every remaining lead after its free website scouts, so the MCP acquisition
+stage's separate per-run cap does not create a bulk-enrichment blind spot. The
+MCP image was rebuilt and its health check is green.
+
+---
+
+## 2026-08-27 — Authentication journey adopts the Hubble material system
+
+Sign in, sign up, email verification, password recovery/reset, and MFA now use
+one shared cream-and-clay authentication shell. The previous glass/aurora card
+was replaced with Hubble's raised surfaces, inset inputs, paired shadows, and
+short interaction timing. A responsive value panel explains Capture →
+Understand → Act on desktop; mobile keeps the same positioning and trust copy
+without horizontal overflow. Form feedback, phone input, primary actions, and
+MFA code entry use the same material and accessible focus treatment.
+
+CRO/UX changes: “Welcome back” and “Create your workspace” clarify intent, the
+Hubble value proposition appears before authentication, and the security footer
+states the session/MFA/no-LinkedIn-credentials guarantees at the decision point.
+The design-system pass reused the existing shared AuthShell/Field/Button
+components, so every current and future auth route inherits the same behavior.
+
+Verification: focused TypeScript and ESLint clean; visual QA at 1440px and
+390px found no horizontal overflow; Next.js production build clean.
+
+---
+
+## 2026-08-27 — Product-wide Hubble material, durable sessions, shared-IP fix
+
+The authenticated product now uses one scoped clay/neumorphic material system:
+cream canvas, raised surfaces, inset controls, paired shadows, unified active
+navigation, and the same responsive shell on Overview, Extractions, Settings,
+Access, Admin, and Hubble. The public marketing site remains untouched. Overview
+now exposes a direct “Research with Hubble” path alongside extraction.
+
+Authentication and load behavior were tightened without lowering the MFA
+boundary:
+
+- the signed HttpOnly guard now stores a stable opaque session ID, upgrades old
+  cookies in place, permits 30 days of inactivity, and requires re-verification
+  after 90 days; Supabase continues rotating the underlying auth tokens;
+- the former per-network signup claim is now a random, one-time attempt claim,
+  so users on the same office, household, school, or VPN IP do not block one
+  another; device and normalized identity anti-abuse claims remain enforced;
+- `getAccessContext()` is request-deduplicated with React cache, dashboard and
+  settings reads run concurrently, and Hubble lead views use a bounded,
+  user-and-filter-keyed 60-second memory cache with forced refresh after writes.
+
+Verification: TypeScript clean; changed-file ESLint clean; full lint has zero
+errors (102 pre-existing warnings); **84 test files / 1,139 tests passing** with
+8 files / 24 live tests skipped; Next.js production build clean.
+
+---
+
+## 2026-08-25 — SearXNG replaced by Google Custom Search
+
+SearXNG (self-hosted, frequently down) is removed from every search path.
+**Google CSE is now the live-search source** for the Hubble RAG pipeline AND
+the intelligence waterfalls:
+
+- Hubble waterfall: Solr cache → **Google CSE** → Brave → Tavily.
+- Intelligence: `google-funding`, `google-web`, `google-company-profile`
+  replace the three searxng adapters (same tasks, same evidence shapes);
+  waterfall orders updated; the GDELT-decline guard now keys on Google CSE
+  being configured; runner concurrency boost follows the same signal.
+- New shared adapter `lib/intelligence/providers/google-cse.ts`
+  (`googleCseSearch`, `hasGoogleCseCredentials`) — `dateRestrict` replaces
+  SearXNG's `time_range`; the daily-quota 429 surfaces as an outage, never as
+  "no results".
+- SearXNG code deleted from search.ts (class, config, auth rules, shared
+  primitive) along with its auth tests; env vars removed from `.env.local` and
+  `.env.example`.
+
+### ⚠️ Blocked on one value: GOOGLE_CSE_ID
+
+The API key is configured (renamed from `GOOGLE_CUSTOMSEARCH_API_KEY`), but
+the search-engine **`cx` is missing** — both are required, and a key without
+an engine id would spend a waterfall slot on guaranteed 400s. Get it from
+programmablesearchengine.google.com (engine set to search the ENTIRE WEB) and
+set `GOOGLE_CSE_ID=` in `.env.local`. Until then Google CSE correctly declines
+and the waterfalls degrade to GDELT.
+
+### Verification
+
+- `npm run typecheck`: clean. ESLint clean. 74 files / **1063 unit tests,
+  0 failures** (registry orders, paid-gate census, and the waterfall-order
+  source assertions all updated to the new contract).
+
+---
+
+## 2026-08-25 — Full per-run controls restored to history strips
+
+Each Extraction history row now carries, right-aligned:
+
+- **Export ▾** — Download CSV / Google Sheets / Drive / GoHighLevel / Clay
+  (connection-gated, as before), restored after the previous strip-down.
+- **Trash** (icon, two-step) — soft-delete: leaves history, parks in the Trash
+  box, fully restorable.
+- **✕ Delete** (icon, two-step, explicit "Erase everything?") — PERMANENT:
+  purges lead data, deletes stored page files + CSV from storage, removes the
+  run row itself. The run disappears from history AND the trash box — nothing
+  lingers. New `deleteJobAction` (ownership re-verified per step; storage
+  paths prefix-checked; storage removal batched).
+
+Also fixed the frozen-history bug from the previous entry's root cause list:
+`trashed_at` was missing from `DASHBOARD_JOB_SELECT`, so every run classified
+as trashed and the list rendered empty on the server render — refresh included.
+
+Verification: typecheck clean; changed-file ESLint clean; 74 files /
+**1066 unit tests passing**; dev server serving.
+
+---
+
+## 2026-08-25 — Restorable trash; exports off history rows; extraction no longer blocks
+
+### Trash is now SOFT — and restorable
+
+The trash icon no longer purges. It sets `extraction_jobs.trashed_at`
+(migration **0061**, applied; types regenerated): the run leaves history and
+parks in the Trash box with **Restore**, **Download CSV**, and **Delete
+permanently** (two-step; purges lead data, removes uploaded page files + CSV
+from storage, deletes the run). Nothing is erased on trash — restore returns
+it intact. The old destructive `purgeJobAction` is gone; `JobActions.tsx`
+deleted with it, and the export dropdowns are removed from history rows
+entirely (downloads live in the Trash box rows).
+
+### Processing no longer blocks the workflow
+
+`process-job.ts` finalises the extraction (status Completed, CSV written) the
+moment parsing finishes; enrichment runs **off the critical path** and the CSV
+is silently rebuilt when the waterfall settles. The user reads their leads
+seconds after upload instead of waiting minutes at 96%.
+
+### 🔴 Types regeneration exposed a hole in production — fixed
+
+Regenerating `types/database.ts` (needed for `trashed_at`) revealed the
+hand-maintained file was badly stale AND that migration **0049's contents
+never reached production**: `provider_cache`, `provider_request_schedules`,
+and `await_provider_request_slot` were missing — provider-state (SEC rate
+limiting, provider cache) had been failing at runtime, failing closed.
+Migration **0062** repairs it (idempotent copy of 0049's infrastructure
+blocks). Several latent call-site mismatches (null-vs-optional RPC params in
+extension refresh/capture/devices, Paddle webhook syncs, evidence inserts,
+status unions) were fixed against the now-accurate generated types; the
+hand-maintained helper-alias block was preserved.
+
+### Verification
+
+- `npm run typecheck`: clean. ESLint: clean. Unit suite: 74 files /
+  **1066 tests, 0 failures**.
+- Migrations 0061 + 0062 applied; types regenerated with the hand block
+  restored.
+
+---
+
+## 2026-08-25 — Explicit company-URL labels; Added To List dropped
+
+Two export changes per product request:
+
+- **"Company LinkedIn URL" → "Company Sales Navigator URL"** — the column held
+  the Sales Nav company page, and users kept reading it as the public
+  LinkedIn one. The captured public page column is now labelled
+  **"Company LinkedIn Profile (public)"**, and the discovered enrichment
+  column remains **"Company LinkedIn"**. Three identifiers, three honest names.
+- **"Added To List" removed from exports** (column order, always-exported
+  spine, row mapping, and the worker's initial CSV) — it contributed nothing a
+  filter or CRM could use. The raw field stays parsed in the database.
+
+⚠️ Core-column renames are breaking for existing CRM column mappings built on
+the old header text.
+
+Verification: typecheck clean; export-leads suite updated and green; 74 files /
+**1066 unit tests passing**.
+
+---
+
+## 2026-08-25 — Trash box: trashed extractions leave history
+
+Purged runs no longer haunt the Extraction history list — they move to a
+**Trash box** in the right column beneath File pipeline:
+
+- Minimal, creamy styling from theme tokens only (`bg-paper/70`, `border/60`,
+  muted small type) — zero hardcoded colors, per design rules.
+- Each row: run label, date, leads-cleared count, and a small **Download CSV**
+  affordance (a purge never destroys data the user paid for; signed-URL action
+  reused).
+- History filters and counts exclude trashed runs automatically; the box
+  renders only when something is in it.
+
+Verification: typecheck clean, ESLint clean, **74 files / 1066 unit tests
+passing**, dev server hot-reloaded.
+
+---
+
+## 2026-08-25 — Live run: the employee-profile bug, and the cache that hid it
+
+### Live verification passed, then caught a real bug
+
+Free providers green live (GLEIF: Barclays/Wise LEIs; probe: vercel.com,
+figma.com). Full enrichment on job 7269bed0: 13 leads / 58 cells merged.
+
+Then the column census caught **Botify's "company LinkedIn" pointing at an
+employee's personal profile** (`linkedin.com/in/…`). Their site features a team
+member; the discovery matcher accepted `/in/` links as the company's page — a
+wrong answer that looks right, filed against the company. Partly and SurrealDB
+had the same defect.
+
+**Fix:** `isCompanyLinkedInUrl` — only `/company/` (or Sales Nav company) forms
+qualify for `company_linkedin`; `/in/` links found on a company site are
+dropped from the company's social inventory entirely. Test-asserted.
+
+### 🔴 The cache hid the fix on the first re-run
+
+Re-running the pass produced the SAME wrong value — because the wrong answer
+was cached as fresh evidence (TTL 180 days) and the cache is the first line of
+the waterfall. The provider fix never executed for Botify; a cached pre-fix
+answer did. Required: purge the bad EVIDENCE rows, not just the merged
+enrichment. Lesson recorded: a correctness fix to a provider invalidates its
+cached answers — purge evidence alongside code.
+
+### Final state (both jobs, live)
+
+Zero contaminated rows; **17 verified company LinkedIn pages**; per-platform
+social columns live in both exports; all at $0.0000.
+
+### Verification
+
+- `npm run typecheck`: clean. Unit suite: 74 files / **1066 tests, 0 failures**
+  (2 new person-vs-company LinkedIn tests).
+- Live: free-provider smoke 4/4; two enrichment passes; production census
+  clean.
+
+---
+
+## 2026-08-25 — Socials split into per-platform columns
+
+A `{ x, instagram, youtube }` blob in one CSV cell is unreadable in a CRM and
+unusable as a filter. `buildMergePlan` now expands `social_profiles` (and
+`person_social_profiles`) into **one provenance-carrying cell per platform**
+(`social_x`, `social_instagram`, `social_youtube`, `social_facebook`,
+`social_tiktok`, `social_github`, `social_crunchbase`, `social_blog`,
+`social_linkedin`; personal variants prefixed `personal_`). The bunched field
+itself is never written. Headers read as platforms ("X (Twitter)", "Instagram",
+"Personal LinkedIn"); empty or malformed maps are counted as unknown, never
+written.
+
+Repair on job `da9b9b69`: 11 bunched keys stripped, re-merged split (16 leads /
+65 cells), export rebuilt. Live column census: company_domain 15,
+company_linkedin 12, social_linkedin 7, social_x 6, social_instagram 6,
+social_facebook 5, social_youtube 4, work_email 4, plus github/tiktok.
+
+### Verification
+
+- `npm run typecheck`: clean. Unit suite: 74 files / **1064 tests, 0 failures**
+  (3 new split tests).
+
+---
+
+## 2026-08-25 — Company LinkedIn, first-class
+
+### Why the CSV lacked it
+
+The "Company LinkedIn URL" column held the SALES NAV company URL — all a
+captured page provides. The PUBLIC page (`linkedin.com/company/slug`) is a
+different identifier whose only free source is the company's own website —
+which social-scout was already reading, but buried the LinkedIn link inside
+the `social_profiles` blob instead of promoting it.
+
+### Built
+
+- New research field **`company_linkedin`** (company, company_profile):
+  vocabulary, TTL (180d), planner description, column label, migration **0060**
+  (applied), vocabulary-sync guard passing.
+- New provider **`social-scout-company`** (free, company_profile category):
+  resolves the company's site — probing by name with domain-probe's own
+  content-verification when no domain exists yet, so it is self-sufficient in
+  the company phase — then inventories the social accounts the company
+  publishes. Emits `company_linkedin` (HIGH, stated by the company) plus
+  `social_profiles` for the remaining handles. This also gives
+  `social_profiles` its first direct source under the free-only gate.
+- LinkedIn links are RECORDED, NEVER FETCHED (rules 1–2), asserted by test.
+- Auto-enrichment plan and the maintenance harness both include the field.
+
+### Live result (job da9b9b69 backfill)
+
+Public company pages discovered and merged for Focusteck, Recharge,
+CameraMatics, Nectar Social, SmartSuite, Software Finder — 16 leads / 46 cells
+merged, export rebuilt, $0.0000.
+
+### Verification
+
+- `npm run typecheck`: clean. Unit suite: **74 files, 1061 tests, 0 failures**.
+- Migration 0060 applied to production; vocabulary guard green.
+
+---
+
+## 2026-08-25 — The missing merge: auto-enrichment now reaches the CSV
+
+### The bug the first real upload exposed
+
+Auto-enrichment ran (96 provider calls on the first live job) — but the
+downloaded CSV still showed only core columns. Cause: the pass wrote EVIDENCE,
+and stopped there. The console's merge action (`mergeRunIntoLeads` →
+`merge_lead_enrichment`) was the only thing that ever moved known values onto
+`extracted_leads.enrichment` — and the export reads the LEAD ROWS. Evidence
+without merge is invisible to every export.
+
+**Fix:** the automatic pass now merges its run's known cells onto the leads
+(`mergeRunIntoLeads` — known cells only, ownership re-scoped) inside
+`enrichJobFree`, before the export rebuild. Outcome gained `leadsUpdated`;
+the rebuild triggers on evidence OR merged leads.
+
+### Repaired the affected job
+
+Re-ran the pass on job `da9b9b69` (mostly cache hits — 40 external calls):
+**14/25 leads enriched, 28 cells merged, 72 unknown honestly skipped, export
+rebuilt.** Domains from probe/Wikidata (identifee.com, partly.com,
+focusteck.com, alkami.com, recharge.com…) and a Scout-published email
+(services@focusteck.com) now travel in the CSV.
+
+The maintenance harness (`enrich-leads-live`) also merges + rebuilds now, so
+manual passes behave identically to the automatic one.
+
+### Verification
+
+- `npm run typecheck`: clean. Unit suite: 74 files / **1058 tests, 0 failures**.
+- Live: merge + rebuild verified against production job `da9b9b69`.
+
+---
+
+## 2026-08-25 — Extraction history moved into a modal; trash-bin delete
+
+Dashboard changes per product request:
+
+- **The inline Extraction history panel is gone from the page flow.** It was
+  the long strip stretching the dashboard. In its place: a compact
+  "Extraction history · Open history" toolbar; the list opens in a modal whose
+  panel is height-capped (80vh) and whose LIST SCROLLS INSIDE — the page never
+  grows with the history. Escape and backdrop-click close it.
+- **Trash bin on the right end of every run's actions**: two-step confirm
+  (trash → "Delete leads?" → confirm/cancel) wiring the EXISTING
+  `purgeJobAction` — purges that run's lead rows to free workspace; the CSV
+  export survives and dedupe keys remain, so future duplicate detection still
+  works. The old text "Clear data" button was replaced by the icon; a purge
+  refreshes the list live.
+- File pipeline panel now stands alone at full width; run selection still
+  drives it from the modal's rows.
+
+Verification: typecheck clean; changed-file ESLint clean; 74 files / 1058 unit
+tests passing; dev server hot-reloaded.
+
+---
+
+## 2026-08-25 — Auto-enrichment wired into extraction completion
+
+The "enrich during extraction" requirement is now the default behaviour.
+
+### What changed
+
+`enrichJobFree` (lib/worker/enrich-free.ts) previously hand-rolled a
+company-field loop and asserted it "CANNOT PRODUCE EMAIL" — true before Scout,
+false since. It now delegates to the ORDINARY research pipeline:
+`createResearchRun` (lead_ids scope, plan: company_domain, industry,
+work_email, email_status, social_profiles) + `claimAndProcessResearchRun`, so
+the two-phase runner, evidence, provenance, tool-call telemetry, cache and the
+contact waterfall all apply with zero duplication.
+
+Preserved invariants:
+
+- **Free only, asserted**: the pass steps aside entirely when
+  `OUTLIO_ALLOW_PAID_PROVIDERS=true` — a background job must never bill on
+  upload.
+- **Never throws**: an enrichment outage cannot make a completed extraction
+  look failed (caller also wraps).
+- **Bounded by time**: at most 60 leads per automatic pass; the rest stay
+  available to the Intelligence console.
+- **SMTP probing stays out**: `SCOUT_SMTP_VERIFY` is an explicit operator
+  opt-in for port-25-capable runtimes, never a default of an automatic pass.
+- Export rebuild triggers on `evidenceWritten > 0`, so the downloadable CSV
+  includes what the pass found.
+
+### Verification
+
+- `npm run typecheck`: clean. Unit suite: **74 files, 1058 tests, 0 failures**.
+- The pipeline this hook delegates to was verified live twice earlier today
+  (11 domains + 7 published emails + 5 social inventories on a real 25-lead
+  job). The first real upload through localhost is the end-to-end proof.
+
+---
+
+## 2026-08-25 — Two-phase runner, and a self-contamination bug found live
+
+### Why extraction exports showed no enrichment (asked and answered)
+
+Extraction exports carry the 8 core captured columns by contract. Enrichment
+columns come from research runs, merged via the console. The free waterfall had
+simply never been run against the new leads — so a maintenance pass
+(`tests/integration/enrich-leads-live.test.ts`, gated by `ENRICH_JOB_ID`) now
+runs the full pipeline over one job's leads.
+
+### 🔴 Sequencing bug the first pass exposed
+
+Pass 1 discovered 11 domains (10 probe + 1 Wikidata) but **zero contact
+tasks ran**: `loadPeople` snapshots `companyDomain` BEFORE execution, and for
+fresh extractions that domain only comes into existence during this very run's
+company-profile phase. The runner discovered the domain and then routed contact
+tasks against its absence.
+
+**Fix — the runner is now two-phase:** company tasks route and execute first;
+evidence persists and `persistDiscoveredDomains` lands the domain in the
+companies table; THEN people reload with fresh domains and contact tasks route.
+The persistence step is the handoff. All 1056 unit tests held through the
+restructure.
+
+### 🔴 Second live find: our own User-Agent came home as a lead's email
+
+Pass 2 fired scout + social-scout for real — published emails found for SamCart,
+Binti, Adfin, Hipp… — but stored `contact@outlio.io` for ThreatSpike, Native
+Teams and Arty Traders. Provenance on all three: YouTube channel pages, whose
+player config **echoes the request's User-Agent into the page body**. Our UA
+carries our contact address; the extractor read the reflection back as a fact
+about the company.
+
+**Fix:** `extractEmails` strips the USER_AGENT string before matching, and
+`outlio.io` is blacklisted as a lead-contact host. The three bogus evidence
+rows were deleted from production (lead `enrichment` was untouched — the
+console merge had not run). Regression tests assert both guards.
+
+### Results on the first real job (25 leads, $0.0000)
+
+11 company domains + 7 published work emails + 5 company social inventories,
+all with provenance. Yield is honest about its limits: catch-all-free
+published addresses only, and SearXNG still down.
+
+### Verification
+
+- `npm run typecheck`: clean.
+- Unit suite: **74 files, 1058 tests, 0 failures**.
+- Two live enrichment passes against production data through the ordinary
+  pipeline (evidence, tool-calls, provenance all recorded).
+
+---
+
+## 2026-08-25 — Social Scout integrated; domain backfill complete
+
+### Backfill — FINISHED
+
+All passes complete: **483 company domains resolved, $0.0000 total cost**
+(1,530 → 1,047 missing). The orphan pass alone recovered 336 domains for
+companies no lead had ever pointed at, across 8 chunks over ~2¼ hours.
+Remaining misses are genuine free-waterfall negatives (plus SearXNG still
+down); they are resumable facts, not failures.
+
+### Social Scout (`lib/intelligence/providers/social-scout.ts`)
+
+Scout's platform scrapers were analysed and REJECTED as-is: the LinkedIn
+scraper violates rules 1–2 outright, and the others depend on proxy/UA-rotation
+evasion machinery this project will not carry. What WAS ported is the
+enforcement-free chain underneath, rebuilt around Outlio's own disciplines:
+
+```
+company website → DISCOVER social links (10 platforms incl. bio-link trees)
+                → ENRICH discovered public profiles (og:description etc.)
+                → bio emails = PUBLISHED work_email (HIGH)
+                → handle inventory = social_profiles evidence against the COMPANY
+```
+
+- LinkedIn links are DISCOVERED and stored as the company's stated address,
+  but NO request ever touches linkedin.com — asserted by test
+  (`isFetchableProfileUrl`).
+- No evasion machinery: honest UA, pacing per platform host, a 429 is recorded
+  as absent rather than retried through disguises.
+- With paid providers gated off, `social-scout` + `scout` are the ONLY sources
+  of contact emails AND social profiles — both fields were previously
+  sourceless under the free-only decision. Waterfall:
+  `scout → social-scout → prospeo-email → apollo-email`.
+- Discovery fetches are injectable; no unit test touches the network.
+
+### Verification
+
+- `npm run typecheck`: clean. Changed-file ESLint: clean.
+- Unit suite: **74 files, 1056 tests, 0 failures** (14 new Social Scout tests;
+  three waterfall-order assertions updated to the new contract).
+- Live behaviour unexercised by design here: real Instagram/TikTok fetches are
+  network-dependent and rate-limited; first production research runs will show
+  real yield. Watch tool_calls for `social-scout` statuses.
+
+---
+
+## 2026-08-25 — Scout enrichment engine ported to the free waterfall
+
+The Scout repository (Python CLI) was analysed and its CONTACT ENGINE — not
+its platform scrapers — was reimplemented as a TypeScript intelligence
+provider. Scout's LinkedIn/Instagram/TikTok scrapers stay out permanently:
+rules 1–2 exist precisely for them, and the worker-runtime decision already
+forbids a Python service.
+
+### What `scout` does (free, $0)
+
+1. **Harvest** — reads the company's own `/`, `/contact`, `/contact-us`,
+   `/about`, `/about-us` through the shared HTTP discipline (bounded, paced,
+   truncating) and extracts addresses, filtered against scraper-noise hosts.
+2. **Pattern inference** — a REAL mailbox found on the domain reveals the house
+   style (`first.last`, `f.last`). Bare words are refused as ambiguous; the
+   candidate generator probes every common shape anyway, so strictness here is
+   free.
+3. **SMTP verification** (opt-in via `SCOUT_SMTP_VERIFY=true` — needs outbound
+   port 25, which Vercel blocks; self-hosted workers qualify): RCPT-probe with
+   a guaranteed-fake control address. Catch-all servers downgrade every yes to
+   meaningless.
+
+**Storage gates (rule 4):** PUBLISHED on the company's own site → HIGH.
+SMTP-confirmed with clean catch-all control → MEDIUM. Everything else —
+unverified patterns, all accept-all answers — is never stored.
+
+### Integration
+
+- Registered first in `contact_email`: `scout → prospeo-email → apollo-email`.
+  With paid providers gated off, scout is now the category's ONLY source — it
+  fills the gap the free-only decision created.
+- `loadPeople` now prefers the research-resolved `companies.normalized_domain`
+  over the raw captured URL when the lead carries none — every contact
+  provider benefits.
+- A published address short-circuits: no mail-server questions are asked once
+  an answer we can use is already in hand.
+- Registry contract updated honestly: with paid off, `contact_email` is now
+  `['scout']`, not `[]`.
+
+### Verification
+
+- `npm run typecheck`: clean. Changed-file ESLint: clean.
+- Unit suite: **73 files, 1042 tests, 0 failures** (19 new Scout tests).
+- SMTP transport is injectable; no test touches a real mail server. Live
+  SMTP probing remains unexercised until `SCOUT_SMTP_VERIFY` is enabled on a
+  runtime that allows port 25.
+
+---
+
+## 2026-08-25 — Environment hygiene, and orphan backfill in flight
+
+### `.env.local` consolidated
+
+Eleven duplicate keys with conflicting values collapsed, keeping the LAST
+occurrence everywhere — that is what runtime already used, so behaviour is
+preserved exactly. Notable resolutions: `GROQ_API_KEY` moved to the
+qwen-modelled key, `GITHUB_TOKEN`/`PAGESPEED_API_KEY`/`APOLLO_API_KEY` each had
+two different live candidates.
+
+The stale `INTELLIGENCE_PROVIDER_ORDER` override was REMOVED rather than
+migrated: it pinned a company_profile waterfall that predated `gleif` and
+`domain-probe`, silently demoting both. Code defaults are canonical again.
+File now parses clean: 34 unique keys, zero malformed lines.
+
+### 🟡 SearXNG restart blocked at Docker
+
+The compose file lives at `~/searxng/searxng/docker-compose.yml`. Docker
+Desktop's engine refuses to boot (`_ping`: "Docker Desktop is unable to
+start"; two clean restarts did not clear it). Needs GUI-level attention.
+Impact is bounded: the waterfall's circuit breaker degrades search-based
+discovery without erroring runs.
+
+### GLEIF legal-form names — deferred with evidence
+
+Verified against the live API: `/reference/legal-forms` and `/legal-forms` do
+not exist (404); only registration-authorities is published. Mapping codes
+(`B6ES`, `H0PO`) to readable names requires GLEIF's offline dataset download.
+Deferred until that pipeline is worth building; records keep the official code
+rather than a guessed name.
+
+### Orphan backfill — running
+
+Chunks 1–2 of 8 complete: **58 domains recovered** from companies no lead has
+ever pointed at. Account-wide missing count: 1,530 → **1,325** and falling.
+Results to be appended on completion.
+
+---
+
+## 2026-08-25 — Free domain backfill, and the orphan-company gap closed
+
+### Lead-scoped resweep (free waterfall: wikidata → gleif → searxng* → probe)
+
+*SearXNG down; degrades gracefully.
+
+- Pilot on 30 companies: **9 resolved, $0.0000** — 30% incremental yield on
+  companies the Tavily era had already missed.
+- Full lead-scoped sweep: 1,530 companies, **111 resolved at $0.0000**
+  (816 provider calls). Aggregate looks low only because of the finding below;
+  yield on REACHABLE companies was ~26%, and tenant `7cac…`'s reachable
+  companies resolved at **89%** (32/36).
+- domain-probe did the heavy lifting; GLEIF and Companies House correctly
+  decline — they answer registry fields, not domains.
+
+### 🔴 The finding that mattered: 1,120 orphan companies
+
+Tenant `7cacc86b` holds 1,156 domain-less companies of which **only 36 are
+linked to a surviving lead**. Every lead-scoped scope — the entire product
+surface for research — is structurally unable to reach the other 1,120. They
+were invisible to every previous backfill, not merely unresolved by them.
+
+### Built — `company_ids` research scope
+
+- `researchScopeSchema` gains `{ type: 'company_ids', companyIds[] }`.
+- `getCompaniesByIds()` in the company repository: same batching, same
+  mandatory user scoping.
+- The runner branches before the lead hop: company scopes skip people loading
+  (already short-circuits on empty leads) and use bounded 25-task chunks like
+  all-leads runs.
+- `useResearchRun`'s hand-copied scope union replaced with an import of the
+  canonical type — the second instance of the drift class that migration 0050
+- No UI emits the scope yet; it is maintenance surface, validated server-side.
+
+### Built — orphan backfill mode
+
+`BACKFILL_ORPHANS=1` enumerates missing-domain companies NOT referenced by any
+lead and runs them through the ordinary pipeline via `company_ids`, in
+150-company chunks. Running against production as this entry is written;
+results to be appended on completion.
+
+### Verification
+
+- `npm run typecheck`: clean. Changed-file ESLint: clean.
+- Unit suite: 72 files, **1023 tests, 0 failures**.
+
+---
+
+## 2026-08-25 — Free providers verified LIVE, and a redirect trap found by it
+
+### GLEIF — verified against the real registry
+
+- **Barclays Bank UK PLC** → LEI `213800UUGANOMFJ9X769`, ACTIVE, GB, official
+  registered office at 1 Churchill Place. ✅
+- **Wise Payments Limited** → LEI `213800U4GNTXRFYZKG18`, ACTIVE, GB. ✅
+- **Monzo Bank Limited** → refused (no exact normalized legal-name match in
+  the registry under that form). Correct behaviour, not a failure.
+- A fabricated name → refused. Legal-form codes (`B6ES`, `H0PO`) surface raw
+  when GLEIF publishes no plain-language form — honest, but worth mapping to
+  readable names later.
+
+### domain-probe — one live failure that found a real design flaw
+
+First live run returned null for BOTH Vercel and Figma despite both sites
+answering. Diagnosis:
+
+1. **Oversized pages killed every probe.** vercel.com serves ~213KB of HTML;
+   the shared HTTP layer throws `ERR_RESPONSE_TOO_LARGE` past the cap, and a
+   caught throw reads as "no candidate". Identity lives in the page head, so
+   `truncateWhenTooLarge` was added to `requestTextWithMeta`: stop at the cap,
+   cancel the body, return what arrived. Opt-in; every existing consumer keeps
+   the strict behaviour.
+2. **The deeper flaw — redirects manufactured false ambiguity.** After fixing
+   (1), `vercel.co.uk` still "verified": it redirects to `vercel.com` and
+   inherits its content, so two different hosts appeared to prove ownership of
+   the same name and the ambiguity rule refused everything. Rule added
+   (`servedDirectly`): a response counts for a host only if it landed there
+   (www-variants count); a redirect to another site is no evidence about the
+   redirecting domain.
+
+After both fixes: **vercel.com ✅ and figma.com ✅ probed live**, MEDIUM
+confidence, correct refusals for nonexistent hosts.
+
+### New opt-in live smoke
+
+`tests/integration/free-providers-live.test.ts` (gated by
+`RUN_LIVE_PROVIDERS=1`, spends nothing) covers GLEIF identity binding/refusal
+and probe verification/refusal against real hosts.
+
+### Verification
+
+- `npm run typecheck`: clean.
+- Full unit suite: **72 files, 1023 tests, 0 failures** (4 new
+  servedDirectly/redirect tests).
+- Live free-provider smoke: **4 passed**.
+
+---
+
+## 2026-08-25 — Migrations applied to production, and free domain probing
+
+### 🔴 Discovery: the remote database was 17 migrations ahead of its own bookkeeping
+
+`supabase migration list` reported the remote at **0042**, but the live schema
+and data told another story: `qualification_rules` already held rows using SEC,
+USAspending, derived and harvested vocabularies; Hubble's tables were live.
+Migrations 0043–0055 had been applied out-of-band (SQL editor) and never
+recorded in `supabase_migrations.schema_migrations`.
+
+Replaying them for real collided with that reality: 0048's re-ADD of the
+qualification CHECK failed because live rows already carried later vocabulary.
+
+**Resolution:** `migration repair --status applied` for 0043–0055 (bookkeeping
+only), then a real push of everything genuinely missing.
+
+### Fixed while applying
+
+- **Duplicate migration number resolved.** `0056_paddle_billing.sql` renamed to
+  `0059_paddle_billing.sql`; ordering is now total and deterministic.
+- **Real bug in 0056, found by the first real application it ever had:**
+  `(observed_at::date)` in an index expression is not IMMUTABLE for
+  `timestamptz` (timezone-dependent). Now
+  `(observed_at at time zone 'UTC')::date`.
+
+### Applied
+
+0056 typed company facts (`company_links`, `company_signals`) · 0057
+specialties vocabulary · 0058 lei_number vocabulary · 0059 Paddle billing
+mirror. Verified remotely afterwards: all new tables present, and the live
+CHECK constraint contains both `specialties` and `lei_number`.
+
+### Also fixed — `.env.local`
+
+A malformed `$TOKENRA_API_KEY` line broke dotenv parsing for every tool that
+reads the file, and `OUTLIO_ALLOW_PAID_PROVIDERS=true` had been set — directly
+contradicting the free-only product decision. Reset to `false`. ⚠️ The file now
+contains DUPLICATE keys with different values (GEMINI_API_KEY, LLM_PROVIDER,
+SEARXNG_URL, TAVILY_API_KEY, GITHUB_TOKEN, PAGESPEED_API_KEY, PROSPEO_API_KEY,
+APOLLO_API_KEY, HUNTER_API_KEY). Last assignment wins silently. Needs a
+deliberate cleanup pass — not done here, because choosing between two live API
+keys is an owner decision.
+
+### Built — `domain-probe` provider (free, keyless)
+
+The last line of the company-domain waterfall, answering the wall documented on
+2026-08-15 (72% of companies had no domain; Tavily quota exhausted and now
+gated off as paid).
+
+- Builds candidate hosts from the normalized name (flat + hyphenated ×
+  .com/.io/.co.uk, capped at four probes).
+- Fetches each with bounded timeout and byte cap through the shared HTTP
+  discipline, then VERIFIES BY CONTENT: the page must carry the company's full
+  normalized name (≥5 chars — "Acme" alone matches too much unrelated text).
+- Two different hosts verifying equally = ambiguity = refused. A wrong domain
+  becomes identity precedence and can merge two companies; refusing beats
+  guessing.
+- Emits `company_domain` at MEDIUM confidence with the probed URL as
+  provenance; loses the waterfall to every stated-fact source.
+
+### Verification
+
+- `npm run typecheck`: clean. Changed-file ESLint: clean.
+- Unit suite: **72 files, 1019 tests, 0 failures** (14 new probe tests;
+  registry relative-order assertions unchanged, correctly).
+
+---
+
+## 2026-08-24 — Free-data-only lead engine, and GLEIF global registry
+
+Product decision: the engine runs on free sources only. Nothing may bill by
+default, and free official coverage should reach the smallest jurisdiction.
+
+### What was already true
+
+The `PAID_PROVIDERS` gate (registry construction) already excluded
+`prospeo-email`, `prospeo-phone`, `apollo-email` and all three Tavily adapters
+unless an operator explicitly sets `OUTLIO_ALLOW_PAID_PROVIDERS=true`. A missing
+variable can never enable spending. The paid adapters stay in the tree behind
+that deliberate act rather than being deleted; their tests keep the masking,
+locked-email and waterfall discipline alive for the day a BYO-key path exists.
+
+### Built — GLEIF LEI provider (`lib/intelligence/providers/gleif.ts`)
+
+Free, no key, official, and the only registry in the waterfall that reaches
+every LEI-issuing jurisdiction — BVI, Jersey, Guernsey, Cayman, every US state
+code, the whole EU list.
+
+- Two-stage identity like Companies House: exact normalized legal-name search,
+  ONE match accepted, two matches refused. Suffix-stripping normalization is
+  shared with the rest of the product, so "Acme" matches "Acme Ltd" but never
+  "Unrelated Fabrications".
+- Feeds existing fields `company_status`, `company_type` (legal form),
+  `jurisdiction`, `registered_office` at HIGH confidence, plus a new permanent
+  identifier field **`lei_number`**.
+- ⚠️ An LEI issuance date is NOT an incorporation date and is never mapped to
+  `incorporation_date`.
+- Paced at one request per second against the open API.
+- Migration **0058** adds `lei_number` to the qualification CHECK constraint;
+  the vocabulary-sync guard covers it.
+
+### Contact fields after this decision
+
+`work_email`, `email_status`, `mobile_phone`, `phone_status`,
+`person_seniority`, `person_department`, `person_social_profiles` have NO free
+source. They resolve to unknown at zero cost. The vocabulary keeps them:
+historical evidence remains valid, and narrowing the compliance CHECK could
+strand existing rules. Guessed email patterns remain forbidden (rule 4).
+Documented in `.env.example`.
+
+### Verification
+
+- `npm run typecheck`: clean. Changed-file ESLint: clean.
+- Full unit suite: **1018 passed across 72 files**, including 14 new GLEIF
+  tests, the paid-providers default-off guard, and the relative-order registry
+  assertions (which correctly did not need changing for a new provider).
+
+---
+
+## 2026-08-24 — Lead-engine field expansion, phase 1: specialties + investor windfall
+
+The lead-engine archetype review mapped the user's proposed field list onto what
+the system already holds. Most proposals were already shipped (`incorporation_date`,
+`employee_growth`, `github_presence`, socials harvests, domain provenance) or
+unobtainable without banned navigation (decision makers, posting volume,
+mutual connections). The genuinely missing, verifiable additions came from data
+Apollo already returns on a paid response and the adapter was discarding.
+
+### Verified against Apollo's published people-enrichment schema
+
+- `organization.keywords` — the company's own focus-area tags → **new
+  `specialties` research field**.
+- `organization.funding_events[].investors` — named investors per round → feeds
+  the **existing** `funding_investors` field, which had no Apollo source before.
+- `organization.blog_url` → added to the company `social_profiles` harvest.
+
+Not integrated, deliberately: other locations and follower counts appear in no
+configured provider's response; shipping them would be columns that are always
+empty — the fabrication rule applied to schema design.
+
+### Built
+
+- `specialties` added to `RESEARCH_FIELDS`, `RESEARCH_FIELD_SPEC`, TTLs
+  (180 days — self-description moves slowly), planner vocabulary, and column
+  labels. Stored `{ value: string[] }` like every list-valued field.
+- Apollo harvests specialties, newest-dated-round investors, and blog URL.
+  Investors split on commas into the shared `{ investors: [...] }` shape;
+  events without parseable dates or an "Unknown" string are refused.
+- Migration **0057** widens the qualification CHECK constraint to include
+  `specialties`.
+
+### ⚠️ Operational finding — duplicate migration numbers
+
+`0056_paddle_billing.sql` and `0056_typed_company_facts.sql` share a number.
+Both exist in the repo; whichever ordering the migration tool applies may not
+match authoring intent. Renumber one before the next baseline. 0057 skips past
+the collision rather than becoming a third occupant.
+
+### ⚠️ Migration 0057 not yet applied to the live project
+
+Until it is, saving a qualification rule on `specialties` fails on the old
+constraint. The unit vocabulary guard passes against the file, which is not the
+same as applied.
+
+### Verification
+
+- `npm run typecheck`: clean.
+- Changed-file ESLint: clean.
+- Focused suites: apollo 34, evidence-ttl 25, qualification-vocabulary 4 —
+  **63 passed**. The vocabulary test parses the newest migration's constraint,
+  so it now guards 0057.
+
+---
+
 ## 2026-08-22 — Hubble search answers instead of directories
 
 Two post-fix runs exposed the remaining failure precisely. Search time had
@@ -3308,3 +4581,64 @@ required.
    accounts blocked with **distinct `reason` values**
 
 Phase 4 needs nothing further from the user.
+
+## 2026-08-26 — Public web research MCP MVP
+
+### Built
+
+- Added a standalone Node/TypeScript MCP service under
+  `services/web-research-mcp` with stateless Streamable HTTP tools for starting,
+  polling, and retrieving durable lead-research jobs.
+- Implemented the end-to-end public-web pipeline: deterministic query
+  generation, a modular DuckDuckGo HTML search provider, URL normalization,
+  safe concurrent page fetching, Cheerio cleanup, code-level signal
+  extraction, relevance and source-quality scoring, bounded chunking, Gemini
+  semantic extraction, confidence scoring, corroboration, conflict retention,
+  and structured results.
+- Added explicit CAPTCHA/challenge, login, paywall, restricted-host, response
+  size, timeout, redirect, and SSRF boundaries. DuckDuckGo challenges fail
+  closed as `SEARCH_PROVIDER_BLOCKED`; no bypass is attempted.
+- Added PostgreSQL-backed jobs and TTL caches using `FOR UPDATE SKIP LOCKED`,
+  with an in-memory local/test implementation. Search results, fetched pages,
+  and extraction outputs are cached independently.
+- Added tenant-and-lead-scoped completed result storage plus the
+  `research_latest` MCP tool, allowing Hubble/RAG to reuse one completed
+  research bundle instead of repeating web searches.
+- Added the bounded `web_search` MCP tool and an authenticated, server-only
+  Outlio MCP client. Hubble's search waterfall now prefers cached Solr evidence,
+  then the operator-owned research MCP, while retaining Google CSE, Brave, and
+  Tavily as automatic fallbacks when the MCP is absent, stopped, challenged, or
+  returns malformed output.
+- Added bearer authentication for hosted use, production configuration
+  ceilings, global and per-domain concurrency limits, health reporting, an
+  environment template, and a deployment/egress viability runbook.
+- Added a multi-stage, non-root Docker image, container health check, and a
+  PostgreSQL-backed local Compose stack. Database transport security is
+  explicit through `DATABASE_SSL_MODE` instead of being guessed from the host.
+
+### Verification
+
+- MCP service TypeScript typecheck and production build pass.
+- Eight focused tests pass for configuration normalization, URL normalization, query generation, DuckDuckGo
+  parsing/challenge detection, Cheerio cleanup and deterministic extraction,
+  fact corroboration/conflict retention, and durable job lifecycle.
+- Four Outlio-side MCP provider tests cover remote HTTPS/token requirements,
+  loopback development, structured-result mapping, and graceful failure. The
+  complete Outlio suite passes: 1,130 tests with 23 intentionally skipped.
+- A live local Streamable HTTP smoke test completed MCP initialization using
+  protocol version `2025-11-25`; `/health` returned an operational response.
+  A second smoke test used the official MCP v2 client to list all five tools
+  and call `web_search`, confirming the challenge reaches Hubble as a normal
+  tool failure and activates its existing provider fallback.
+- The current local egress IP receives DuckDuckGo's bot challenge. This is a
+  deployment gate rather than an application defect: the intended hosting
+  provider must pass the documented harmless search probe, or a lawful
+  alternative `SearchProvider` must be configured.
+- The Compose definition and 63 MB ARM64 production image build successfully.
+  Both containers become healthy; the MCP runs as the non-root `outlio` user,
+  reports PostgreSQL storage, rejects unauthenticated requests with HTTP 401,
+  survives an application-container restart, and retains its durable job row.
+  The official MCP client listed all five tools and exercised a real queued job
+  through PostgreSQL. No cloud CLI/login or production database/model secrets
+  are present in this workspace, so public deployment still requires those
+  operator inputs.

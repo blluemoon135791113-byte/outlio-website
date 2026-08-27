@@ -1,4 +1,25 @@
 services:
+  searxng:
+    image: docker.io/searxng/searxng:${SEARXNG_VERSION:-latest}
+    environment:
+      SEARXNG_BASE_URL: http://localhost:8080/
+      SEARXNG_BIND_ADDRESS: 0.0.0.0
+      SEARXNG_PORT: 8080
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?set SEARXNG_SECRET to a random 32-byte value}
+      SEARXNG_LIMITER: "false"
+      SEARXNG_PUBLIC_INSTANCE: "false"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxng-cache:/var/cache/searxng
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
   postgres:
     image: postgres:17-alpine
     environment:
@@ -20,14 +41,25 @@ services:
       DATABASE_URL: postgresql://web_research:local-development-only@postgres:5432/web_research
       DATABASE_SSL_MODE: disable
       MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:?set MCP_BEARER_TOKEN to at least 24 characters}
+      # Internal, operator-owned metasearch: no per-query provider charge.
+      # DuckDuckGo HTML remains the lawful fallback inside the MCP service.
+      SEARXNG_URL: http://searxng:8080
+      # Optional local model. Leave blank for deterministic code-only mode.
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
     ports:
       - "127.0.0.1:8787:8787"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
+      searxng:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
   web-research-postgres:
+  searxng-cache:

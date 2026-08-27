@@ -74,7 +74,7 @@ export function createTestSignupSecurityMetadata(
   }
 }
 
-/** Reserve a fabricated network identity through the same database gate as production. */
+/** Reserve a fabricated one-time attempt through the same database gate as production. */
 export async function createTestSignupReservation(
   label: string,
   ipHashOverride?: string,

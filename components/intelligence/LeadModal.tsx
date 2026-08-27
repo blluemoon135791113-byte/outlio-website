@@ -44,15 +44,17 @@ export function LeadModal({
   lead,
   linkedinUrl,
   modelName,
+  onResearchComplete,
   onClose,
 }: {
   lead: HubbleLead
   linkedinUrl: string | null
   modelName: string
+  onResearchComplete: (answer: AskAnswer) => void
   onClose: () => void
 }) {
   const [question, setQuestion] = useState('')
-  const hubble = useAskHubble()
+  const hubble = useAskHubble(onResearchComplete)
   const { answers, busy } = hubble
 
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -90,6 +92,14 @@ export function LeadModal({
 
   const website = safeExternalUrl(lead.companyDomain)
   const linkedin = safeExternalUrl(linkedinUrl)
+  const email = lead.workEmail?.trim() || null
+  const phone = lead.mobilePhone?.trim() || null
+  const emailHref = email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ? `mailto:${email}`
+    : null
+  const phoneHref = phone && /^\+?[\d().\s-]{8,}$/.test(phone)
+    ? `tel:${phone.replace(/[^+\d]/g, '')}`
+    : null
 
   const submit = () => {
     const asked = question.trim()
@@ -156,8 +166,43 @@ export function LeadModal({
               company={lead.companyName}
               domain={lead.companyDomain}
             />
+            <ContactRow
+              icon="@"
+              label={email ?? 'Email not found yet'}
+              href={emailHref}
+              status={lead.emailStatus}
+            />
+            <ContactRow
+              icon="☎"
+              label={phone ?? 'Phone not found yet'}
+              href={phoneHref}
+              status={lead.phoneStatus}
+            />
             <LinkRow icon="in" label="LinkedIn" href={linkedin} />
           </div>
+
+          {lead.savedDetails.length > 0 ? (
+            <details className="clay-sunken group mt-4 overflow-hidden">
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-medium text-ink transition-transform duration-150 ease-out active:scale-[0.99] [&::-webkit-details-marker]:hidden">
+                <span className="clay inline-flex h-8 w-8 shrink-0 items-center justify-center text-xs text-muted">
+                  +
+                </span>
+                <span className="min-w-0 flex-1">More saved details</span>
+                <span className="text-xs font-normal text-muted">
+                  {lead.savedDetails.length}
+                </span>
+                <span aria-hidden className="text-muted group-open:rotate-90">
+                  ›
+                </span>
+              </summary>
+
+              <div className="max-h-72 space-y-2 overflow-y-auto border-t border-clay-sunken p-3">
+                {lead.savedDetails.map((detail) => (
+                  <SavedDetailRow key={detail.id} detail={detail} />
+                ))}
+              </div>
+            </details>
+          ) : null}
 
           <div className="clay-sunken mt-5 p-4">
             <p className="text-sm font-medium text-ink">About this lead</p>
@@ -291,7 +336,9 @@ function AnswerBlock({ answer }: { answer: AskAnswer }) {
     answer.status === 'estimated'
       ? 'Estimated — inferred from the sources below, not stated by them.'
       : answer.status === 'unknown'
-        ? 'Not confirmed by the sources below.'
+        ? answer.sources.length > 0
+          ? 'Some requested details were not confirmed; use only the cited claims.'
+          : 'No supporting source was found.'
         : null
 
   return (
@@ -402,5 +449,94 @@ function LinkRow({
     >
       {content}
     </a>
+  )
+}
+
+function statusLabel(value: string | null): string | null {
+  if (!value) return null
+  return value
+    .replace(/_/g, ' ')
+    .replace(/^./, (letter) => letter.toUpperCase())
+}
+
+function ContactRow({
+  icon,
+  label,
+  href,
+  status,
+}: {
+  icon: string
+  label: string
+  href: string | null
+  status: string | null
+}) {
+  const content = (
+    <>
+      <span
+        aria-hidden
+        className="clay inline-flex h-9 w-9 shrink-0 items-center justify-center text-xs font-semibold text-ink"
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm text-ink">{label}</span>
+        {status ? (
+          <span className="block text-[11px] text-muted">{statusLabel(status)}</span>
+        ) : null}
+      </span>
+      {href ? <span aria-hidden className="text-muted">↗</span> : null}
+    </>
+  )
+
+  if (!href) {
+    return (
+      <div className="clay flex items-center gap-3 px-3 py-2.5 opacity-70">
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <a
+      href={href}
+      className="cursor-pointer clay flex items-center gap-3 px-3 py-2.5 transition-transform duration-150 ease-out active:scale-[0.995]"
+    >
+      {content}
+    </a>
+  )
+}
+
+function SavedDetailRow({ detail }: { detail: HubbleLead['savedDetails'][number] }) {
+  const source = safeExternalUrl(detail.sourceUrl)
+  return (
+    <div className="clay bg-clay-surface px-3 py-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-medium text-muted">{detail.label}</p>
+        {detail.status ? (
+          <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted">
+            {statusLabel(detail.status)}
+          </span>
+        ) : null}
+      </div>
+      <p
+        className={
+          detail.kind === 'answer'
+            ? 'mt-1 line-clamp-3 text-sm leading-relaxed text-ink'
+            : 'mt-1 truncate text-sm text-ink'
+        }
+      >
+        {detail.value}
+      </p>
+      {source ? (
+        <a
+          href={source}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          className="mt-1 inline-block text-[11px] text-muted underline decoration-clay-sunken underline-offset-2 hover:text-ink"
+        >
+          View source · {hostOf(source)}
+        </a>
+      ) : null}
+    </div>
   )
 }

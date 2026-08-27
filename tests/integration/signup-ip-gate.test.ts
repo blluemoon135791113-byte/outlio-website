@@ -13,8 +13,8 @@ import {
 
 const describeIf = hasSupabaseEnv ? describe : describe.skip
 
-describeIf('signup IP gate', () => {
-  it('atomically blocks a second reservation for the same IP hash', async () => {
+describeIf('signup reservation gate', () => {
+  it('atomically blocks reuse of the same one-time reservation key', async () => {
     const first = await createTestSignupReservation('duplicate-ip')
     const secondToken = randomBytes(32).toString('base64url')
     const secondTokenHash = createHash('sha256').update(secondToken).digest('hex')
@@ -62,7 +62,7 @@ describeIf('signup IP gate', () => {
     }
   })
 
-  it('blocks reuse of a phone number or LinkedIn identity on another network', async () => {
+  it('blocks reuse of a phone number or LinkedIn identity on another attempt', async () => {
     const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`
     const phone = `+1555${suffix.slice(-7)}`
     const linkedInUrl = `https://www.linkedin.com/in/outlio-test-${suffix}`
@@ -122,7 +122,7 @@ describeIf('signup IP gate', () => {
     }
   })
 
-  it('blocks the same signed device after the network and identities change', async () => {
+  it('blocks the same signed device after the reservation and identities change', async () => {
     const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`
     const firstReservation = await createTestSignupReservation('device-first')
     const firstSecurity = createTestSignupSecurityMetadata('device-first')

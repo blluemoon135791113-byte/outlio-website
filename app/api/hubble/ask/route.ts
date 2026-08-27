@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
     domain,
     personName: lead.full_name,
     personTitle: lead.job_title,
+    personLocation: lead.location,
     known,
   }
 

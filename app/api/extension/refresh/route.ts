@@ -67,7 +67,6 @@ export async function POST(request: Request) {
     await admin.rpc('revoke_extension_device', {
       p_device_id: device.id,
       p_user_id: device.user_id,
-      p_actor_id: null,
     })
 
     await recordSecurityEvent({
@@ -86,7 +85,6 @@ export async function POST(request: Request) {
     await admin.rpc('revoke_extension_device', {
       p_device_id: device.id,
       p_user_id: device.user_id,
-      p_actor_id: null,
     })
     return NextResponse.json({ error: 'DEVICE_REVOKED' }, { status: 401 })
   }

@@ -185,7 +185,7 @@ export async function proxy(request: NextRequest) {
 
     const refreshedGuard = createSessionGuard(
       Math.floor(Date.now() / 1000),
-      guard?.issuedAt,
+      guard ?? undefined,
     )
     if (refreshedGuard) {
       response.cookies.set({

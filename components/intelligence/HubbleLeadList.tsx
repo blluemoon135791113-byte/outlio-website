@@ -17,6 +17,15 @@
  */
 import { CompanyAvatar, PersonAvatar } from '@/components/intelligence/Avatar'
 
+export type HubbleSavedDetail = {
+  id: string
+  kind: 'fact' | 'answer'
+  label: string
+  value: string
+  sourceUrl: string | null
+  status: string | null
+}
+
 export type HubbleLead = {
   id: string
   fullName: string | null
@@ -28,6 +37,13 @@ export type HubbleLead = {
   /** True when `companyLocation` is the person's, not the company's. */
   locationIsPersonal: boolean
   description: string | null
+  researchStatus: 'verified' | 'corroborated' | 'estimated' | 'unknown' | null
+  researchSourceCount: number
+  workEmail: string | null
+  emailStatus: string | null
+  mobilePhone: string | null
+  phoneStatus: string | null
+  savedDetails: HubbleSavedDetail[]
 }
 
 export function HubbleLeadList({
@@ -137,7 +153,15 @@ export function HubbleLeadList({
             {/* What they do */}
             <span className="hidden min-w-0 text-sm leading-snug text-muted sm:block">
               {lead.description ?? (
-                <span className="text-muted/60">Not researched yet — ask Hubble above</span>
+                lead.researchStatus ? (
+                  <span className="text-muted/75">
+                    {lead.researchStatus === 'unknown'
+                      ? 'Research saved · details need confirmation'
+                      : `Research saved · ${lead.researchSourceCount} source${lead.researchSourceCount === 1 ? '' : 's'}`}
+                  </span>
+                ) : (
+                  <span className="text-muted/60">Not researched yet — open this lead to ask Hubble</span>
+                )
               )}
             </span>
 

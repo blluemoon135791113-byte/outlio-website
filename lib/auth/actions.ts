@@ -22,8 +22,8 @@ import { RULES, enforce, subjectFor } from '@/lib/auth/rate-limit'
 import { appOrigin, safeRedirectPath } from '@/lib/auth/redirects'
 import {
   clientIp,
-  releaseSignupIp,
-  reserveSignupIp,
+  releaseSignupAttempt,
+  reserveSignupAttempt,
   signupClaimsWereClaimed,
   signupSecurityClaims,
 } from '@/lib/auth/signup-gate'
@@ -132,15 +132,10 @@ export async function signUpAction(
     )
   }
 
-  const reservationResult = await reserveSignupIp()
-  if (reservationResult.status === 'blocked') {
-    return reject(
-      'A trial account has already been created from this network. Sign in to continue or contact support if this is a shared network.',
-    )
-  }
+  const reservationResult = await reserveSignupAttempt()
   if (reservationResult.status === 'unavailable') {
     return reject(
-      'We could not verify this network for trial eligibility. Please try again or contact support.',
+      'We could not start a secure sign-up session. Please try again or contact support.',
     )
   }
 
@@ -172,7 +167,7 @@ export async function signUpAction(
     })
 
     if (error || !data.user) {
-      await releaseSignupIp(reservation)
+      await releaseSignupAttempt(reservation)
       await recordSecurityEvent({
         event: 'auth.sign_up_failed',
         level: 'warn',
@@ -190,9 +185,9 @@ export async function signUpAction(
 
     // Supabase can return an obfuscated user for an already-registered email.
     // Confirming the trigger's claim prevents that response from burning a new
-    // network reservation or appearing to create a second account.
+    // one-time reservation or appearing to create a second account.
     if (!(await signupClaimsWereClaimed(reservation, data.user.id, securityClaims))) {
-      await releaseSignupIp(reservation)
+      await releaseSignupAttempt(reservation)
       await recordSecurityEvent({
         event: 'auth.sign_up_claim_verification_failed',
         level: 'warn',
@@ -202,7 +197,7 @@ export async function signUpAction(
       return reject('We could not complete sign-up. Please check your details and try again.')
     }
   } catch (error) {
-    await releaseSignupIp(reservation)
+    await releaseSignupAttempt(reservation)
     await recordSecurityEvent({
       event: 'auth.sign_up_exception',
       level: 'error',

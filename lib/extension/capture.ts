@@ -125,6 +125,10 @@ export async function claimPage(input: {
 }): Promise<ClaimOutcome> {
   const admin = createAdminClient()
 
+  // The RPC declares source URL and page identifier NOT NULL; a capture
+  // without them cannot be claimed, which is a miss — not a crash.
+  if (!input.sourceUrl || !input.pageIdentifier) return { status: 'not_found' }
+
   const { data, error } = await admin.rpc('claim_capture_page', {
     p_session_id: input.sessionId,
     p_user_id: input.userId,
@@ -155,7 +159,7 @@ export async function markPageFailed(
   await admin.rpc('roll_capture_totals', {
     p_page_id: pageId,
     p_user_id: userId,
-    p_job_id: null,
+    p_job_id: '',
     p_leads_found: 0,
     p_leads_kept: 0,
     p_status: 'failed',

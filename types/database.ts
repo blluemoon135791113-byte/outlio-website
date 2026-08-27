@@ -1,16 +1,3 @@
-/**
- * Database types.
- *
- * Hand-written to match supabase/migrations/*.sql exactly, because the
- * migrations have not yet been applied to a live database.
- *
- * ONCE THE MIGRATIONS ARE APPLIED, REGENERATE THIS FILE:
- *
- *     npm run db:types
- *
- * and commit the result. The generated file is authoritative from that point on.
- */
-
 export type Json =
   | string
   | number
@@ -18,6 +5,7 @@ export type Json =
   | null
   | { [key: string]: Json | undefined }
   | Json[]
+
 
 // ---------------------------------------------------------------------------
 // Enums — mirror the Postgres enum types in 0001
@@ -978,168 +966,2772 @@ export type CompanySignalRow = {
 }
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.15"
+  }
   public: {
     Tables: {
-      extension_devices: TableShape<ExtensionDeviceRow>
-      extension_pairings: TableShape<ExtensionPairingRow>
-      capture_sessions: TableShape<CaptureSessionRow>
-      capture_pages: TableShape<CapturePageRow>
-      plans: TableShape<PlanRow>
-      profiles: TableShape<ProfileRow>
-      access_requests: TableShape<AccessRequestRow>
-      subscriptions: TableShape<SubscriptionRow>
-      paddle_webhook_events: TableShape<PaddleWebhookEventRow>
-      paddle_customers: TableShape<PaddleCustomerRow>
-      paddle_subscriptions: TableShape<PaddleSubscriptionRow>
-      paddle_transactions: TableShape<PaddleTransactionRow>
-      usage_counters: TableShape<UsageCounterRow>
-      invitation_codes: TableShape<InvitationCodeRow>
-      extraction_jobs: TableShape<ExtractionJobRow>
-      uploaded_files: TableShape<UploadedFileRow>
-      extracted_leads: TableShape<ExtractedLeadRow>
-      companies: TableShape<CompanyRow>
-      research_runs: TableShape<ResearchRunRow>
-      research_evidence: TableShape<ResearchEvidenceRow>
-      research_tool_calls: TableShape<ResearchToolCallRow>
-      research_job_queue: TableShape<ResearchJobQueueRow>
-      hubble_pages: TableShape<HubblePageRow>
-      hubble_chunks: TableShape<HubbleChunkRow>
-      hubble_answers: TableShape<HubbleAnswerRow>
-      company_links: TableShape<CompanyLinkRow>
-      company_signals: TableShape<CompanySignalRow>
-      provider_cache: TableShape<ProviderCacheRow>
-      provider_request_schedules: TableShape<ProviderRequestScheduleRow>
-      qualification_profiles: TableShape<QualificationProfileRow>
-      qualification_rules: TableShape<QualificationRuleRow>
-      qualification_results: TableShape<QualificationResultRow>
-      integration_connections: TableShape<IntegrationConnectionRow>
-      integration_secrets: TableShape<IntegrationSecretRow>
-      integration_oauth_transactions: TableShape<IntegrationOAuthTransactionRow>
-      export_jobs: TableShape<ExportJobRow>
-      export_job_errors: TableShape<ExportJobErrorRow>
-      integration_record_links: TableShape<IntegrationRecordLinkRow>
-      job_queue: TableShape<JobQueueRow>
-      admin_audit_logs: TableShape<AdminAuditLogRow>
-      system_events: TableShape<SystemEventRow>
-      rate_limits: TableShape<RateLimitRow>
-      signup_ip_claims: TableShape<SignupIpClaimRow>
-      signup_device_claims: TableShape<SignupDeviceClaimRow>
-      signup_identity_claims: TableShape<SignupIdentityClaimRow>
-      lead_keys: TableShape<LeadKeyRow>
+      access_requests: {
+        Row: {
+          admin_note: string | null
+          created_at: string
+          id: string
+          message: string | null
+          request_type: Database["public"]["Enums"]["access_request_type"]
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["access_request_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          request_type: Database["public"]["Enums"]["access_request_type"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["access_request_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          request_type?: Database["public"]["Enums"]["access_request_type"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["access_request_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      admin_audit_logs: {
+        Row: {
+          action: string
+          admin_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          created_at: string
+          id: string
+          ip_address: unknown
+          reason: string | null
+          request_id: string | null
+          target_id: string | null
+          target_type: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          admin_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          reason?: string | null
+          request_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          admin_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          reason?: string | null
+          request_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
+      capture_pages: {
+        Row: {
+          capture_session_id: string
+          content_hash: string
+          created_at: string
+          error: string | null
+          extraction_job_id: string | null
+          id: string
+          leads_found: number
+          page_identifier: string | null
+          processed_at: string | null
+          source_url: string | null
+          status: Database["public"]["Enums"]["capture_page_status"]
+          user_id: string
+        }
+        Insert: {
+          capture_session_id: string
+          content_hash: string
+          created_at?: string
+          error?: string | null
+          extraction_job_id?: string | null
+          id?: string
+          leads_found?: number
+          page_identifier?: string | null
+          processed_at?: string | null
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["capture_page_status"]
+          user_id: string
+        }
+        Update: {
+          capture_session_id?: string
+          content_hash?: string
+          created_at?: string
+          error?: string | null
+          extraction_job_id?: string | null
+          id?: string
+          leads_found?: number
+          page_identifier?: string | null
+          processed_at?: string | null
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["capture_page_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "capture_pages_capture_session_id_fkey"
+            columns: ["capture_session_id"]
+            isOneToOne: false
+            referencedRelation: "capture_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "capture_pages_extraction_job_id_fkey"
+            columns: ["extraction_job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      capture_sessions: {
+        Row: {
+          browser: string | null
+          completed_at: string | null
+          created_at: string
+          dedupe_mode: Database["public"]["Enums"]["dedupe_mode"]
+          device_id: string | null
+          duplicates_skipped: number
+          id: string
+          leads_found: number
+          leads_imported: number
+          pages_processed: number
+          source: string
+          started_at: string
+          status: Database["public"]["Enums"]["capture_session_status"]
+          user_id: string
+        }
+        Insert: {
+          browser?: string | null
+          completed_at?: string | null
+          created_at?: string
+          dedupe_mode?: Database["public"]["Enums"]["dedupe_mode"]
+          device_id?: string | null
+          duplicates_skipped?: number
+          id?: string
+          leads_found?: number
+          leads_imported?: number
+          pages_processed?: number
+          source?: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["capture_session_status"]
+          user_id: string
+        }
+        Update: {
+          browser?: string | null
+          completed_at?: string | null
+          created_at?: string
+          dedupe_mode?: Database["public"]["Enums"]["dedupe_mode"]
+          device_id?: string | null
+          duplicates_skipped?: number
+          id?: string
+          leads_found?: number
+          leads_imported?: number
+          pages_processed?: number
+          source?: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["capture_session_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "capture_sessions_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "extension_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          created_at: string
+          decision_maker_count: number | null
+          domain: string | null
+          employee_count: number | null
+          employee_count_exact: number | null
+          headquarters: string | null
+          id: string
+          industry: string | null
+          investor_count: number | null
+          linkedin_url: string | null
+          name: string | null
+          normalized_domain: string | null
+          normalized_linkedin_url: string | null
+          normalized_name: string | null
+          page_observed_at: string | null
+          public_linkedin_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          decision_maker_count?: number | null
+          domain?: string | null
+          employee_count?: number | null
+          employee_count_exact?: number | null
+          headquarters?: string | null
+          id?: string
+          industry?: string | null
+          investor_count?: number | null
+          linkedin_url?: string | null
+          name?: string | null
+          normalized_domain?: string | null
+          normalized_linkedin_url?: string | null
+          normalized_name?: string | null
+          page_observed_at?: string | null
+          public_linkedin_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          decision_maker_count?: number | null
+          domain?: string | null
+          employee_count?: number | null
+          employee_count_exact?: number | null
+          headquarters?: string | null
+          id?: string
+          industry?: string | null
+          investor_count?: number | null
+          linkedin_url?: string | null
+          name?: string | null
+          normalized_domain?: string | null
+          normalized_linkedin_url?: string | null
+          normalized_name?: string | null
+          page_observed_at?: string | null
+          public_linkedin_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      company_links: {
+        Row: {
+          company_id: string
+          created_at: string
+          host: string
+          id: string
+          kind: string
+          observed_at: string
+          source: string
+          source_url: string | null
+          url: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          host: string
+          id?: string
+          kind: string
+          observed_at?: string
+          source: string
+          source_url?: string | null
+          url: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          host?: string
+          id?: string
+          kind?: string
+          observed_at?: string
+          source?: string
+          source_url?: string | null
+          url?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_signals: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          kind: string
+          observed_at: string
+          source: string
+          source_url: string | null
+          unit: string | null
+          user_id: string
+          value_number: number | null
+          value_text: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          observed_at?: string
+          source: string
+          source_url?: string | null
+          unit?: string | null
+          user_id: string
+          value_number?: number | null
+          value_text?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          observed_at?: string
+          source?: string
+          source_url?: string | null
+          unit?: string | null
+          user_id?: string
+          value_number?: number | null
+          value_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_signals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_grants: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          period_start: string
+          reason: string
+          referral_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          period_start: string
+          reason: string
+          referral_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          period_start?: string
+          reason?: string
+          referral_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_grants_referral_id_fkey"
+            columns: ["referral_id"]
+            isOneToOne: false
+            referencedRelation: "referrals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_grants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      export_destinations: {
+        Row: {
+          access_token: string | null
+          account_label: string | null
+          connected_at: string | null
+          created_at: string
+          folder_id: string | null
+          folder_name: string | null
+          id: string
+          is_default: boolean
+          kind: Database["public"]["Enums"]["export_destination_kind"]
+          last_error: string | null
+          refresh_token: string | null
+          scopes: string | null
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          account_label?: string | null
+          connected_at?: string | null
+          created_at?: string
+          folder_id?: string | null
+          folder_name?: string | null
+          id?: string
+          is_default?: boolean
+          kind: Database["public"]["Enums"]["export_destination_kind"]
+          last_error?: string | null
+          refresh_token?: string | null
+          scopes?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          account_label?: string | null
+          connected_at?: string | null
+          created_at?: string
+          folder_id?: string | null
+          folder_name?: string | null
+          id?: string
+          is_default?: boolean
+          kind?: Database["public"]["Enums"]["export_destination_kind"]
+          last_error?: string | null
+          refresh_token?: string | null
+          scopes?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      export_job_errors: {
+        Row: {
+          created_at: string
+          error_code: string
+          error_message: string
+          export_job_id: string
+          id: string
+          lead_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_code: string
+          error_message: string
+          export_job_id: string
+          id?: string
+          lead_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_code?: string
+          error_message?: string
+          export_job_id?: string
+          id?: string
+          lead_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "export_job_errors_export_job_id_user_id_fkey"
+            columns: ["export_job_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "export_jobs"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "export_job_errors_lead_id_user_id_fkey"
+            columns: ["lead_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "extracted_leads"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      export_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          destination_id: string | null
+          destination_url: string | null
+          error_code: string | null
+          error_message: string | null
+          extraction_job_id: string | null
+          failed_count: number
+          id: string
+          lead_count: number
+          options: Json
+          provider: string
+          started_at: string | null
+          status: string
+          successful_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          destination_id?: string | null
+          destination_url?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          extraction_job_id?: string | null
+          failed_count?: number
+          id?: string
+          lead_count?: number
+          options?: Json
+          provider: string
+          started_at?: string | null
+          status?: string
+          successful_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          destination_id?: string | null
+          destination_url?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          extraction_job_id?: string | null
+          failed_count?: number
+          id?: string
+          lead_count?: number
+          options?: Json
+          provider?: string
+          started_at?: string | null
+          status?: string
+          successful_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "export_jobs_extraction_job_id_fkey"
+            columns: ["extraction_job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      extension_devices: {
+        Row: {
+          access_token_jti: string | null
+          browser: string | null
+          created_at: string
+          enabled: boolean
+          id: string
+          label: string
+          last_active_at: string | null
+          platform: string | null
+          refresh_token_hash: string
+          revoked_at: string | null
+          revoked_by: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token_jti?: string | null
+          browser?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          label: string
+          last_active_at?: string | null
+          platform?: string | null
+          refresh_token_hash: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token_jti?: string | null
+          browser?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          label?: string
+          last_active_at?: string | null
+          platform?: string | null
+          refresh_token_hash?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      extension_pairings: {
+        Row: {
+          browser: string | null
+          code_hash: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          label: string | null
+          platform: string | null
+          state: string
+          user_id: string
+        }
+        Insert: {
+          browser?: string | null
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          label?: string | null
+          platform?: string | null
+          state: string
+          user_id: string
+        }
+        Update: {
+          browser?: string | null
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          label?: string | null
+          platform?: string | null
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      extracted_leads: {
+        Row: {
+          added_to_list_at: string | null
+          company_decision_maker_count: number | null
+          company_employee_count: number | null
+          company_headquarters: string | null
+          company_id: string | null
+          company_industry: string | null
+          company_investor_count: number | null
+          company_match_strategy: string | null
+          company_name: string | null
+          company_public_linkedin_url: string | null
+          company_size: string | null
+          company_url: string | null
+          company_website_url: string | null
+          connection_degree: string | null
+          contact_enriched_at: string | null
+          created_at: string
+          dedupe_key: string
+          dedupe_strategy: Database["public"]["Enums"]["dedupe_strategy"]
+          duplicate_of_id: string | null
+          email_status: string | null
+          enrichment: Json
+          extraction_job_id: string
+          full_name: string | null
+          id: string
+          is_duplicate: boolean
+          is_reachable: boolean | null
+          job_title: string | null
+          last_activity: string | null
+          lead_source: string | null
+          linkedin_url: string | null
+          list_count: number | null
+          location: string | null
+          mobile_phone: string | null
+          person_blurb: string | null
+          phone_status: string | null
+          raw_data: Json | null
+          sales_navigator_url: string | null
+          source_list: string | null
+          source_page: string | null
+          source_row_index: number | null
+          tenure_in_company: string | null
+          tenure_in_role: string | null
+          updated_at: string
+          uploaded_file_id: string | null
+          user_id: string
+          work_email: string | null
+        }
+        Insert: {
+          added_to_list_at?: string | null
+          company_decision_maker_count?: number | null
+          company_employee_count?: number | null
+          company_headquarters?: string | null
+          company_id?: string | null
+          company_industry?: string | null
+          company_investor_count?: number | null
+          company_match_strategy?: string | null
+          company_name?: string | null
+          company_public_linkedin_url?: string | null
+          company_size?: string | null
+          company_url?: string | null
+          company_website_url?: string | null
+          connection_degree?: string | null
+          contact_enriched_at?: string | null
+          created_at?: string
+          dedupe_key: string
+          dedupe_strategy: Database["public"]["Enums"]["dedupe_strategy"]
+          duplicate_of_id?: string | null
+          email_status?: string | null
+          enrichment?: Json
+          extraction_job_id: string
+          full_name?: string | null
+          id?: string
+          is_duplicate?: boolean
+          is_reachable?: boolean | null
+          job_title?: string | null
+          last_activity?: string | null
+          lead_source?: string | null
+          linkedin_url?: string | null
+          list_count?: number | null
+          location?: string | null
+          mobile_phone?: string | null
+          person_blurb?: string | null
+          phone_status?: string | null
+          raw_data?: Json | null
+          sales_navigator_url?: string | null
+          source_list?: string | null
+          source_page?: string | null
+          source_row_index?: number | null
+          tenure_in_company?: string | null
+          tenure_in_role?: string | null
+          updated_at?: string
+          uploaded_file_id?: string | null
+          user_id: string
+          work_email?: string | null
+        }
+        Update: {
+          added_to_list_at?: string | null
+          company_decision_maker_count?: number | null
+          company_employee_count?: number | null
+          company_headquarters?: string | null
+          company_id?: string | null
+          company_industry?: string | null
+          company_investor_count?: number | null
+          company_match_strategy?: string | null
+          company_name?: string | null
+          company_public_linkedin_url?: string | null
+          company_size?: string | null
+          company_url?: string | null
+          company_website_url?: string | null
+          connection_degree?: string | null
+          contact_enriched_at?: string | null
+          created_at?: string
+          dedupe_key?: string
+          dedupe_strategy?: Database["public"]["Enums"]["dedupe_strategy"]
+          duplicate_of_id?: string | null
+          email_status?: string | null
+          enrichment?: Json
+          extraction_job_id?: string
+          full_name?: string | null
+          id?: string
+          is_duplicate?: boolean
+          is_reachable?: boolean | null
+          job_title?: string | null
+          last_activity?: string | null
+          lead_source?: string | null
+          linkedin_url?: string | null
+          list_count?: number | null
+          location?: string | null
+          mobile_phone?: string | null
+          person_blurb?: string | null
+          phone_status?: string | null
+          raw_data?: Json | null
+          sales_navigator_url?: string | null
+          source_list?: string | null
+          source_page?: string | null
+          source_row_index?: number | null
+          tenure_in_company?: string | null
+          tenure_in_role?: string | null
+          updated_at?: string
+          uploaded_file_id?: string | null
+          user_id?: string
+          work_email?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extracted_leads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extracted_leads_duplicate_of_id_fkey"
+            columns: ["duplicate_of_id"]
+            isOneToOne: false
+            referencedRelation: "extracted_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extracted_leads_extraction_job_id_fkey"
+            columns: ["extraction_job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extracted_leads_uploaded_file_id_fkey"
+            columns: ["uploaded_file_id"]
+            isOneToOne: false
+            referencedRelation: "uploaded_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      extraction_jobs: {
+        Row: {
+          capture_session_id: string | null
+          completed_at: string | null
+          created_at: string
+          credits_charged: number | null
+          dedupe_mode: Database["public"]["Enums"]["dedupe_mode"]
+          delivered_at: string | null
+          delivery_error: string | null
+          destination_kind: Database["public"]["Enums"]["export_destination_kind"]
+          duplicates_found: number
+          duplicates_removed: number
+          error_code: string | null
+          error_message: string | null
+          export_storage_path: string | null
+          file_count: number
+          id: string
+          leads_kept: number
+          leads_parsed: number
+          progress_current: number
+          progress_step: string | null
+          progress_total: number
+          request_id: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          total_bytes: number
+          trashed_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          capture_session_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          credits_charged?: number | null
+          dedupe_mode?: Database["public"]["Enums"]["dedupe_mode"]
+          delivered_at?: string | null
+          delivery_error?: string | null
+          destination_kind?: Database["public"]["Enums"]["export_destination_kind"]
+          duplicates_found?: number
+          duplicates_removed?: number
+          error_code?: string | null
+          error_message?: string | null
+          export_storage_path?: string | null
+          file_count?: number
+          id?: string
+          leads_kept?: number
+          leads_parsed?: number
+          progress_current?: number
+          progress_step?: string | null
+          progress_total?: number
+          request_id?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          total_bytes?: number
+          trashed_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          capture_session_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          credits_charged?: number | null
+          dedupe_mode?: Database["public"]["Enums"]["dedupe_mode"]
+          delivered_at?: string | null
+          delivery_error?: string | null
+          destination_kind?: Database["public"]["Enums"]["export_destination_kind"]
+          duplicates_found?: number
+          duplicates_removed?: number
+          error_code?: string | null
+          error_message?: string | null
+          export_storage_path?: string | null
+          file_count?: number
+          id?: string
+          leads_kept?: number
+          leads_parsed?: number
+          progress_current?: number
+          progress_step?: string | null
+          progress_total?: number
+          request_id?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          total_bytes?: number
+          trashed_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extraction_jobs_capture_session_id_fkey"
+            columns: ["capture_session_id"]
+            isOneToOne: false
+            referencedRelation: "capture_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hubble_answers: {
+        Row: {
+          answer: string
+          company_id: string | null
+          confidence: number
+          created_at: string
+          expires_at: string | null
+          id: string
+          lead_id: string | null
+          question: string
+          question_key: string
+          research_run_id: string | null
+          sources: Json
+          status: string
+          usage: Json
+          user_id: string
+        }
+        Insert: {
+          answer: string
+          company_id?: string | null
+          confidence?: number
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          lead_id?: string | null
+          question: string
+          question_key: string
+          research_run_id?: string | null
+          sources?: Json
+          status?: string
+          usage?: Json
+          user_id: string
+        }
+        Update: {
+          answer?: string
+          company_id?: string | null
+          confidence?: number
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          lead_id?: string | null
+          question?: string
+          question_key?: string
+          research_run_id?: string | null
+          sources?: Json
+          status?: string
+          usage?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubble_answers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hubble_answers_research_run_id_fkey"
+            columns: ["research_run_id"]
+            isOneToOne: false
+            referencedRelation: "research_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hubble_chunks: {
+        Row: {
+          company_id: string | null
+          content: string
+          created_at: string
+          embed_model: string | null
+          embedding: number[] | null
+          id: string
+          ordinal: number
+          page_id: string
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          content: string
+          created_at?: string
+          embed_model?: string | null
+          embedding?: number[] | null
+          id?: string
+          ordinal: number
+          page_id: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          content?: string
+          created_at?: string
+          embed_model?: string | null
+          embedding?: number[] | null
+          id?: string
+          ordinal?: number
+          page_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubble_chunks_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hubble_chunks_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "hubble_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hubble_pages: {
+        Row: {
+          company_id: string | null
+          content: string
+          content_chars: number
+          created_at: string
+          expires_at: string | null
+          fetch_method: string
+          fetched_at: string
+          host: string
+          http_status: number | null
+          id: string
+          structured: Json
+          title: string | null
+          url: string
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          content: string
+          content_chars: number
+          created_at?: string
+          expires_at?: string | null
+          fetch_method?: string
+          fetched_at?: string
+          host: string
+          http_status?: number | null
+          id?: string
+          structured?: Json
+          title?: string | null
+          url: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          content?: string
+          content_chars?: number
+          created_at?: string
+          expires_at?: string | null
+          fetch_method?: string
+          fetched_at?: string
+          host?: string
+          http_status?: number | null
+          id?: string
+          structured?: Json
+          title?: string | null
+          url?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubble_pages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_connections: {
+        Row: {
+          configuration: Json
+          connected_at: string | null
+          created_at: string
+          external_account_email: string | null
+          external_account_id: string | null
+          external_account_name: string | null
+          id: string
+          last_error: string | null
+          last_tested_at: string | null
+          last_used_at: string | null
+          provider: string
+          scopes: string[]
+          secret_reference: string
+          status: string
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          configuration?: Json
+          connected_at?: string | null
+          created_at?: string
+          external_account_email?: string | null
+          external_account_id?: string | null
+          external_account_name?: string | null
+          id?: string
+          last_error?: string | null
+          last_tested_at?: string | null
+          last_used_at?: string | null
+          provider: string
+          scopes?: string[]
+          secret_reference?: string
+          status?: string
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          configuration?: Json
+          connected_at?: string | null
+          created_at?: string
+          external_account_email?: string | null
+          external_account_id?: string | null
+          external_account_name?: string | null
+          id?: string
+          last_error?: string | null
+          last_tested_at?: string | null
+          last_used_at?: string | null
+          provider?: string
+          scopes?: string[]
+          secret_reference?: string
+          status?: string
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      integration_oauth_transactions: {
+        Row: {
+          created_at: string
+          encrypted_code_verifier: string | null
+          expires_at: string
+          id: string
+          provider: string
+          redirect_uri: string
+          return_to: string
+          state_hash: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          encrypted_code_verifier?: string | null
+          expires_at: string
+          id?: string
+          provider: string
+          redirect_uri: string
+          return_to?: string
+          state_hash: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          encrypted_code_verifier?: string | null
+          expires_at?: string
+          id?: string
+          provider?: string
+          redirect_uri?: string
+          return_to?: string
+          state_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      integration_record_links: {
+        Row: {
+          connection_id: string
+          created_at: string
+          id: string
+          lead_id: string
+          provider_record_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string
+          id?: string
+          lead_id: string
+          provider_record_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string
+          id?: string
+          lead_id?: string
+          provider_record_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_record_links_connection_id_user_id_fkey"
+            columns: ["connection_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "integration_connections"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "integration_record_links_lead_id_user_id_fkey"
+            columns: ["lead_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "extracted_leads"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      integration_secrets: {
+        Row: {
+          connection_id: string
+          created_at: string
+          encrypted_payload: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string
+          encrypted_payload: string
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string
+          encrypted_payload?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_secrets_connection_id_id_fkey"
+            columns: ["connection_id", "id"]
+            isOneToOne: false
+            referencedRelation: "integration_connections"
+            referencedColumns: ["id", "secret_reference"]
+          },
+        ]
+      }
+      invitation_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          max_uses: number
+          plan_id: string | null
+          updated_at: string
+          used_count: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number
+          plan_id?: string | null
+          updated_at?: string
+          used_count?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number
+          plan_id?: string | null
+          updated_at?: string
+          used_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invitation_codes_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_queue: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          id: string
+          job_id: string
+          last_error: string | null
+          max_attempts: number
+          next_attempt_at: string
+          status: Database["public"]["Enums"]["queue_status"]
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          id?: string
+          job_id: string
+          last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          status?: Database["public"]["Enums"]["queue_status"]
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          id?: string
+          job_id?: string
+          last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          status?: Database["public"]["Enums"]["queue_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_queue_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_keys: {
+        Row: {
+          dedupe_key: string
+          first_seen: string
+          id: string
+          last_seen: string
+          seen_count: number
+          user_id: string
+        }
+        Insert: {
+          dedupe_key: string
+          first_seen?: string
+          id?: string
+          last_seen?: string
+          seen_count?: number
+          user_id: string
+        }
+        Update: {
+          dedupe_key?: string
+          first_seen?: string
+          id?: string
+          last_seen?: string
+          seen_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      paddle_customers: {
+        Row: {
+          created_at: string
+          custom_data: Json | null
+          customer_id: string
+          email: string | null
+          last_event_at: string
+          marketing_consent: boolean
+          name: string | null
+          paddle_created_at: string | null
+          paddle_updated_at: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          custom_data?: Json | null
+          customer_id: string
+          email?: string | null
+          last_event_at: string
+          marketing_consent?: boolean
+          name?: string | null
+          paddle_created_at?: string | null
+          paddle_updated_at?: string | null
+          status: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          custom_data?: Json | null
+          customer_id?: string
+          email?: string | null
+          last_event_at?: string
+          marketing_consent?: boolean
+          name?: string | null
+          paddle_created_at?: string | null
+          paddle_updated_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      paddle_subscriptions: {
+        Row: {
+          canceled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          custom_data: Json | null
+          customer_id: string
+          last_event_at: string
+          paused_at: string | null
+          plan_key: string | null
+          price_id: string
+          product_id: string
+          scheduled_change_action: string | null
+          scheduled_change_at: string | null
+          status: string
+          subscription_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          custom_data?: Json | null
+          customer_id: string
+          last_event_at: string
+          paused_at?: string | null
+          plan_key?: string | null
+          price_id: string
+          product_id: string
+          scheduled_change_action?: string | null
+          scheduled_change_at?: string | null
+          status: string
+          subscription_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          custom_data?: Json | null
+          customer_id?: string
+          last_event_at?: string
+          paused_at?: string | null
+          plan_key?: string | null
+          price_id?: string
+          product_id?: string
+          scheduled_change_action?: string | null
+          scheduled_change_at?: string | null
+          status?: string
+          subscription_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paddle_subscriptions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "paddle_customers"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
+      paddle_transactions: {
+        Row: {
+          billed_at: string | null
+          created_at: string
+          currency_code: string
+          custom_data: Json | null
+          customer_id: string | null
+          last_event_at: string
+          price_id: string | null
+          product_id: string | null
+          status: string
+          subscription_id: string | null
+          total: string | null
+          transaction_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          billed_at?: string | null
+          created_at?: string
+          currency_code: string
+          custom_data?: Json | null
+          customer_id?: string | null
+          last_event_at: string
+          price_id?: string | null
+          product_id?: string | null
+          status: string
+          subscription_id?: string | null
+          total?: string | null
+          transaction_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          billed_at?: string | null
+          created_at?: string
+          currency_code?: string
+          custom_data?: Json | null
+          customer_id?: string | null
+          last_event_at?: string
+          price_id?: string | null
+          product_id?: string | null
+          status?: string
+          subscription_id?: string | null
+          total?: string | null
+          transaction_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paddle_transactions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "paddle_customers"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
+      paddle_webhook_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          occurred_at: string
+          processed_at: string
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          occurred_at: string
+          processed_at?: string
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          occurred_at?: string
+          processed_at?: string
+        }
+        Relationships: []
+      }
+      plans: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          key: Database["public"]["Enums"]["plan_key"]
+          limits: Json
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          key: Database["public"]["Enums"]["plan_key"]
+          limits?: Json
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          key?: Database["public"]["Enums"]["plan_key"]
+          limits?: Json
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          access_expires_at: string | null
+          avatar_path: string | null
+          company_name: string | null
+          consent_accepted_at: string | null
+          created_at: string
+          deleted_at: string | null
+          email: string | null
+          extension_enabled: boolean
+          full_name: string | null
+          id: string
+          linkedin_url: string | null
+          phone: string | null
+          plan_id: string | null
+          referral_code: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          suspended_at: string | null
+          suspended_reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_expires_at?: string | null
+          avatar_path?: string | null
+          company_name?: string | null
+          consent_accepted_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          extension_enabled?: boolean
+          full_name?: string | null
+          id: string
+          linkedin_url?: string | null
+          phone?: string | null
+          plan_id?: string | null
+          referral_code?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          suspended_at?: string | null
+          suspended_reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_expires_at?: string | null
+          avatar_path?: string | null
+          company_name?: string | null
+          consent_accepted_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          extension_enabled?: boolean
+          full_name?: string | null
+          id?: string
+          linkedin_url?: string | null
+          phone?: string | null
+          plan_id?: string | null
+          referral_code?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          suspended_at?: string | null
+          suspended_reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          expires_at: string
+          provider: string
+          retrieved_at: string
+          updated_at: string
+          value_json: Json
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          expires_at: string
+          provider: string
+          retrieved_at: string
+          updated_at?: string
+          value_json: Json
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          expires_at?: string
+          provider?: string
+          retrieved_at?: string
+          updated_at?: string
+          value_json?: Json
+        }
+        Relationships: []
+      }
+      provider_request_schedules: {
+        Row: {
+          last_started_at: string | null
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          last_started_at?: string | null
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          last_started_at?: string | null
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      qualification_profiles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_archived: boolean
+          name: string
+          qualify_at: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          name: string
+          qualify_at?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          name?: string
+          qualify_at?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      qualification_results: {
+        Row: {
+          breakdown: Json
+          created_at: string
+          disqualified_by: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          profile_id: string | null
+          qualified: boolean
+          research_run_id: string | null
+          score: number
+          unknown_count: number
+          user_id: string
+        }
+        Insert: {
+          breakdown?: Json
+          created_at?: string
+          disqualified_by?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          profile_id?: string | null
+          qualified: boolean
+          research_run_id?: string | null
+          score: number
+          unknown_count?: number
+          user_id: string
+        }
+        Update: {
+          breakdown?: Json
+          created_at?: string
+          disqualified_by?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          profile_id?: string | null
+          qualified?: boolean
+          research_run_id?: string | null
+          score?: number
+          unknown_count?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qualification_results_profile_id_user_id_fkey"
+            columns: ["profile_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "qualification_profiles"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "qualification_results_research_run_id_fkey"
+            columns: ["research_run_id"]
+            isOneToOne: false
+            referencedRelation: "research_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qualification_rules: {
+        Row: {
+          created_at: string
+          field: string
+          id: string
+          kind: string
+          operator: string
+          profile_id: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+          value: Json | null
+          value_path: string | null
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          field: string
+          id?: string
+          kind?: string
+          operator: string
+          profile_id: string
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+          value?: Json | null
+          value_path?: string | null
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          field?: string
+          id?: string
+          kind?: string
+          operator?: string
+          profile_id?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+          value?: Json | null
+          value_path?: string | null
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qualification_rules_profile_id_user_id_fkey"
+            columns: ["profile_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "qualification_profiles"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      rate_limits: {
+        Row: {
+          attempts: number
+          blocked_until: string | null
+          bucket: string
+          created_at: string
+          id: string
+          subject: string
+          updated_at: string
+          window_start: string
+        }
+        Insert: {
+          attempts?: number
+          blocked_until?: string | null
+          bucket: string
+          created_at?: string
+          id?: string
+          subject: string
+          updated_at?: string
+          window_start: string
+        }
+        Update: {
+          attempts?: number
+          blocked_until?: string | null
+          bucket?: string
+          created_at?: string
+          id?: string
+          subject?: string
+          updated_at?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
+      referrals: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          referred_user_id: string
+          referrer_id: string
+          rewarded_at: string | null
+          status: Database["public"]["Enums"]["referral_status"]
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          referred_user_id: string
+          referrer_id: string
+          rewarded_at?: string | null
+          status?: Database["public"]["Enums"]["referral_status"]
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          referred_user_id?: string
+          referrer_id?: string
+          rewarded_at?: string | null
+          status?: Database["public"]["Enums"]["referral_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_referred_user_id_fkey"
+            columns: ["referred_user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      research_evidence: {
+        Row: {
+          confidence: number
+          created_at: string
+          entity_id: string
+          entity_type: string
+          expires_at: string | null
+          field: string
+          id: string
+          research_run_id: string | null
+          retrieved_at: string
+          source_confidence: string
+          source_provider: string
+          source_url: string | null
+          user_id: string
+          value_json: Json
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          expires_at?: string | null
+          field: string
+          id?: string
+          research_run_id?: string | null
+          retrieved_at?: string
+          source_confidence: string
+          source_provider: string
+          source_url?: string | null
+          user_id: string
+          value_json: Json
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          expires_at?: string | null
+          field?: string
+          id?: string
+          research_run_id?: string | null
+          retrieved_at?: string
+          source_confidence?: string
+          source_provider?: string
+          source_url?: string | null
+          user_id?: string
+          value_json?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_evidence_research_run_id_fkey"
+            columns: ["research_run_id"]
+            isOneToOne: false
+            referencedRelation: "research_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      research_job_queue: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          max_attempts: number
+          next_attempt_at: string
+          research_run_id: string
+          status: Database["public"]["Enums"]["queue_status"]
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          research_run_id: string
+          status?: Database["public"]["Enums"]["queue_status"]
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          research_run_id?: string
+          status?: Database["public"]["Enums"]["queue_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_job_queue_research_run_id_fkey"
+            columns: ["research_run_id"]
+            isOneToOne: true
+            referencedRelation: "research_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      research_runs: {
+        Row: {
+          actual_cost_micros: number
+          cache_hit_count: number
+          clarifications: Json
+          company_count: number
+          completed_at: string | null
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          error_message: string | null
+          estimated_cost_micros: number
+          external_call_count: number
+          evidence_gaps: Json
+          id: string
+          idempotency_key: string | null
+          lead_count: number
+          plan: Json | null
+          qualification_profile_id: string | null
+          qualified_count: number
+          query_text: string
+          progress_current: number
+          progress_stage: string
+          progress_total: number
+          scope: Json
+          started_at: string | null
+          status: string
+          tools_used: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_cost_micros?: number
+          cache_hit_count?: number
+          clarifications?: Json
+          company_count?: number
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          estimated_cost_micros?: number
+          external_call_count?: number
+          evidence_gaps?: Json
+          id?: string
+          idempotency_key?: string | null
+          lead_count?: number
+          plan?: Json | null
+          qualification_profile_id?: string | null
+          qualified_count?: number
+          query_text: string
+          progress_current?: number
+          progress_stage?: string
+          progress_total?: number
+          scope?: Json
+          started_at?: string | null
+          status?: string
+          tools_used?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actual_cost_micros?: number
+          cache_hit_count?: number
+          clarifications?: Json
+          company_count?: number
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          estimated_cost_micros?: number
+          external_call_count?: number
+          evidence_gaps?: Json
+          id?: string
+          idempotency_key?: string | null
+          lead_count?: number
+          plan?: Json | null
+          qualification_profile_id?: string | null
+          qualified_count?: number
+          query_text?: string
+          progress_current?: number
+          progress_stage?: string
+          progress_total?: number
+          scope?: Json
+          started_at?: string | null
+          status?: string
+          tools_used?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_runs_qualification_profile_fk"
+            columns: ["qualification_profile_id"]
+            isOneToOne: false
+            referencedRelation: "qualification_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      research_tool_calls: {
+        Row: {
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          estimated_cost_micros: number
+          id: string
+          latency_ms: number | null
+          provider: string
+          research_run_id: string | null
+          status: string
+          tool: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          estimated_cost_micros?: number
+          id?: string
+          latency_ms?: number | null
+          provider: string
+          research_run_id?: string | null
+          status: string
+          tool: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          estimated_cost_micros?: number
+          id?: string
+          latency_ms?: number | null
+          provider?: string
+          research_run_id?: string | null
+          status?: string
+          tool?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_tool_calls_research_run_id_fkey"
+            columns: ["research_run_id"]
+            isOneToOne: false
+            referencedRelation: "research_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signup_device_claims: {
+        Row: {
+          claimed_at: string
+          device_hash: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          device_hash: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string
+          device_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      signup_identity_claims: {
+        Row: {
+          claimed_at: string
+          identity_hash: string
+          identity_kind: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          identity_hash: string
+          identity_kind: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string
+          identity_hash?: string
+          identity_kind?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      signup_ip_claims: {
+        Row: {
+          claimed_at: string | null
+          created_at: string
+          ip_hash: string
+          reserved_until: string
+          token_hash: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string
+          ip_hash: string
+          reserved_until: string
+          token_hash?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string
+          ip_hash?: string
+          reserved_until?: string
+          token_hash?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          access_expires_at_before_cancel: string | null
+          cancel_at: string | null
+          cancelled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string
+          granted_by: string | null
+          id: string
+          paddle_customer_id: string | null
+          paddle_event_at: string | null
+          paddle_price_id: string | null
+          paddle_product_id: string | null
+          plan_id: string
+          provider: string
+          provider_ref: string | null
+          scheduled_change_action: string | null
+          scheduled_change_at: string | null
+          status: Database["public"]["Enums"]["subscription_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_expires_at_before_cancel?: string | null
+          cancel_at?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string
+          granted_by?: string | null
+          id?: string
+          paddle_customer_id?: string | null
+          paddle_event_at?: string | null
+          paddle_price_id?: string | null
+          paddle_product_id?: string | null
+          plan_id: string
+          provider?: string
+          provider_ref?: string | null
+          scheduled_change_action?: string | null
+          scheduled_change_at?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_expires_at_before_cancel?: string | null
+          cancel_at?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string
+          granted_by?: string | null
+          id?: string
+          paddle_customer_id?: string | null
+          paddle_event_at?: string | null
+          paddle_price_id?: string | null
+          paddle_product_id?: string | null
+          plan_id?: string
+          provider?: string
+          provider_ref?: string | null
+          scheduled_change_action?: string | null
+          scheduled_change_at?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_events: {
+        Row: {
+          context: Json | null
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          event: string
+          file_id: string | null
+          id: string
+          job_id: string | null
+          level: string
+          message: string | null
+          request_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          event: string
+          file_id?: string | null
+          id?: string
+          job_id?: string | null
+          level?: string
+          message?: string | null
+          request_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          event?: string
+          file_id?: string | null
+          id?: string
+          job_id?: string | null
+          level?: string
+          message?: string | null
+          request_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_events_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "uploaded_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_events_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      uploaded_files: {
+        Row: {
+          byte_size: number
+          content_sha256: string
+          created_at: string
+          deleted_at: string | null
+          error_code: string | null
+          error_message: string | null
+          extraction_job_id: string
+          id: string
+          leads_found: number
+          original_filename: string
+          processed_at: string | null
+          status: Database["public"]["Enums"]["file_status"]
+          storage_path: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          byte_size: number
+          content_sha256: string
+          created_at?: string
+          deleted_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          extraction_job_id: string
+          id?: string
+          leads_found?: number
+          original_filename: string
+          processed_at?: string | null
+          status?: Database["public"]["Enums"]["file_status"]
+          storage_path: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          byte_size?: number
+          content_sha256?: string
+          created_at?: string
+          deleted_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          extraction_job_id?: string
+          id?: string
+          leads_found?: number
+          original_filename?: string
+          processed_at?: string | null
+          status?: Database["public"]["Enums"]["file_status"]
+          storage_path?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uploaded_files_extraction_job_id_fkey"
+            columns: ["extraction_job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_counters: {
+        Row: {
+          count: number
+          created_at: string
+          id: string
+          metric: string
+          period_end: string
+          period_start: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          created_at?: string
+          id?: string
+          metric: string
+          period_end: string
+          period_start: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          created_at?: string
+          id?: string
+          metric?: string
+          period_end?: string
+          period_start?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
-    Views: Record<string, never>
+    Views: {
+      [_ in never]: never
+    }
     Functions: {
-      is_admin: {
-        Args: Record<string, never>
-        Returns: boolean
+      await_provider_request_slot: {
+        Args: { p_min_interval_ms: number; p_provider: string }
+        Returns: string
       }
-      enqueue_research_run: {
-        Args: { p_run_id: string }
-        Returns: undefined
+      bootstrap_admin: { Args: { p_email: string }; Returns: string }
+      charge_extraction_leads: {
+        Args: { p_job_id: string; p_lead_count: number; p_user_id: string }
+        Returns: {
+          charged: number
+          credits_left: number
+          required: number
+          status: string
+        }[]
       }
-      claim_research_run: {
-        Args: { p_run_id: string; p_user_id: string; p_claimed_by: string }
-        Returns: Array<{ research_run_id: string; user_id: string; attempts: number }>
+      claim_capture_page: {
+        Args: {
+          p_content_hash: string
+          p_page_ident: string
+          p_session_id: string
+          p_source_url: string
+          p_user_id: string
+        }
+        Returns: {
+          page_id: string
+          status: string
+        }[]
+      }
+      claim_job: {
+        Args: { p_claimed_by: string; p_job_id: string; p_user_id: string }
+        Returns: {
+          attempts: number
+          job_id: string
+          user_id: string
+        }[]
+      }
+      claim_next_job: {
+        Args: { p_claimed_by: string }
+        Returns: {
+          attempts: number
+          job_id: string
+          user_id: string
+        }[]
       }
       claim_next_research_run: {
         Args: { p_claimed_by: string }
-        Returns: Array<{ research_run_id: string; user_id: string; attempts: number }>
+        Returns: {
+          attempts: number
+          research_run_id: string
+          user_id: string
+        }[]
       }
-      reap_stale_research_runs: {
-        Args: { p_timeout_seconds?: number }
+      claim_research_run: {
+        Args: { p_claimed_by: string; p_run_id: string; p_user_id: string }
+        Returns: {
+          attempts: number
+          research_run_id: string
+          user_id: string
+        }[]
+      }
+      claim_salesforce_token_refresh: {
+        Args: {
+          p_claim_expires_at: string
+          p_connection_id: string
+          p_expected_encrypted_payload: string
+          p_refresh_claim: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      consume_credit: {
+        Args: {
+          p_amount?: number
+          p_period_end?: string
+          p_period_start?: string
+          p_user_id: string
+        }
         Returns: number
+      }
+      consume_rate_limit: {
+        Args: {
+          p_block_seconds: number
+          p_bucket: string
+          p_max_attempts: number
+          p_subject: string
+          p_window_start: string
+        }
+        Returns: {
+          attempts: number
+          blocked_until: string
+        }[]
+      }
+      credit_balance: {
+        Args: { p_user_id: string }
+        Returns: {
+          allowance: number
+          granted: number
+          remaining: number
+          used: number
+        }[]
+      }
+      disconnect_integration: {
+        Args: { p_provider: string; p_user_id: string }
+        Returns: boolean
+      }
+      enqueue_job: { Args: { p_job_id: string }; Returns: undefined }
+      enqueue_research_run: { Args: { p_run_id: string }; Returns: undefined }
+      expired_export_paths: {
+        Args: { p_limit?: number }
+        Returns: {
+          export_storage_path: string
+          job_id: string
+          user_id: string
+        }[]
+      }
+      finalize_upload_job: {
+        Args: { p_job_id: string; p_user_id: string }
+        Returns: string
+      }
+      generate_referral_code: { Args: never; Returns: string }
+      grant_entitlement: {
+        Args: {
+          p_duration_days?: number
+          p_granted_by?: string
+          p_plan_id: string
+          p_provider?: string
+          p_provider_ref?: string
+          p_reason?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      granted_credits: {
+        Args: { p_period_start: string; p_user_id: string }
+        Returns: number
+      }
+      increment_usage: {
+        Args: {
+          p_by?: number
+          p_metric: string
+          p_period_end: string
+          p_period_start: string
+          p_user_id: string
+        }
+        Returns: number
+      }
+      is_admin: { Args: never; Returns: boolean }
+      lead_credit_cost: {
+        Args: { p_lead_count: number; p_leads_per_credit: number }
+        Returns: number
+      }
+      link_leads_to_companies: {
+        Args: { p_leads: Json; p_user_id: string }
+        Returns: {
+          company_id: string
+          lead_id: string
+          match_strategy: string
+        }[]
+      }
+      merge_lead_enrichment: {
+        Args: { p_enrichment: Json; p_lead_ids: string[]; p_user_id: string }
+        Returns: number
+      }
+      paddle_subscription_grants_access: {
+        Args: { p_status: string }
+        Returns: boolean
       }
       purge_expired_evidence: {
         Args: { p_older_than_days?: number }
         Returns: number
       }
-      await_provider_request_slot: {
-        Args: { p_provider: string; p_min_interval_ms: number }
-        Returns: string
-      }
-      link_leads_to_companies: {
-        Args: {
-          p_user_id: string
-          p_leads: Json
-        }
-        Returns: Array<{
-          lead_id: string
-          company_id: string
-          match_strategy: CompanyMatchStrategy
-        }>
-      }
-      increment_usage: {
-        Args: {
-          p_user_id: string
-          p_metric: UsageMetric
-          p_period_start: string
-          p_period_end: string
-          p_by?: number
-        }
+      purge_job_leads: {
+        Args: { p_job_id: string; p_user_id: string }
         Returns: number
       }
-      save_clay_connection: {
-        Args: {
-          p_user_id: string
-          p_encrypted_payload: string
-          p_account_label: string
-        }
+      reap_orphaned_uploads: {
+        Args: { p_older_than_minutes?: number }
+        Returns: {
+          enqueued: number
+          failed: number
+        }[]
+      }
+      reap_stale_jobs: { Args: { p_timeout_seconds?: number }; Returns: number }
+      reap_stale_research_runs: {
+        Args: { p_timeout_seconds?: number }
+        Returns: number
+      }
+      reconcile_paddle_entitlement: {
+        Args: { p_subscription_id: string }
+        Returns: undefined
+      }
+      record_referral: {
+        Args: { p_code: string; p_referred_user_id: string }
         Returns: string
       }
-      save_google_connection: {
-        Args: {
-          p_user_id: string
-          p_encrypted_payload: string
-          p_external_account_id: string
-          p_external_account_name: string
-          p_external_account_email: string
-          p_scopes: string[]
-          p_token_expires_at: string
-        }
+      redeem_invitation_code: {
+        Args: { p_code: string; p_user_id: string }
         Returns: string
       }
-      update_google_tokens: {
+      referral_summary: {
+        Args: { p_user_id: string }
+        Returns: {
+          code: string
+          credits_earned: number
+          pending: number
+          rewarded: number
+        }[]
+      }
+      release_salesforce_token_refresh: {
         Args: {
-          p_user_id: string
           p_connection_id: string
-          p_expected_encrypted_payload: string
-          p_encrypted_payload: string
-          p_scopes: string[]
-          p_token_expires_at: string
-        }
-        Returns: boolean
-      }
-      save_ghl_connection: {
-        Args: {
+          p_refresh_claim: string
           p_user_id: string
-          p_encrypted_payload: string
-          p_location_id: string
-          p_location_name: string
-        }
-        Returns: string
-      }
-      disconnect_integration: {
-        Args: {
-          p_user_id: string
-          p_provider: string
-        }
-        Returns: boolean
-      }
-      consume_rate_limit: {
-        Args: {
-          p_bucket: string
-          p_subject: string
-          p_window_start: string
-          p_max_attempts: number
-          p_block_seconds: number
-        }
-        Returns: { attempts: number; blocked_until: string | null }[]
-      }
-      reserve_signup_ip: {
-        Args: {
-          p_ip_hash: string
-          p_token_hash: string
-          p_reservation_seconds?: number
         }
         Returns: boolean
       }
@@ -1147,245 +3739,425 @@ export type Database = {
         Args: { p_ip_hash: string; p_token_hash: string }
         Returns: boolean
       }
-      sweep_signup_ip_reservations: {
-        Args: Record<string, never>
-        Returns: number
+      request_subscription_cancellation: {
+        Args: { p_user_id: string }
+        Returns: {
+          ends_at: string
+          status: string
+        }[]
       }
-      sweep_rate_limits: {
-        Args: Record<string, never>
-        Returns: number
-      }
-      bootstrap_admin: {
-        Args: { p_email: string }
-        Returns: string
-      }
-      grant_entitlement: {
+      reserve_signup_ip: {
         Args: {
-          p_user_id: string
-          p_plan_id: string
-          p_duration_days?: number
-          p_granted_by?: string
-          p_provider?: string
-          p_provider_ref?: string
-          p_reason?: string
+          p_ip_hash: string
+          p_reservation_seconds?: number
+          p_token_hash: string
         }
-        /** New subscription id. */
+        Returns: boolean
+      }
+      resolve_paddle_user: {
+        Args: { p_custom_data: Json; p_customer_id: string; p_email?: string }
         Returns: string
       }
+      resume_subscription: { Args: { p_user_id: string }; Returns: string }
       revoke_entitlement: {
+        Args: { p_reason?: string; p_revoked_by?: string; p_user_id: string }
+        Returns: undefined
+      }
+      revoke_extension_device: {
+        Args: { p_actor_id?: string; p_device_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      reward_pending_referral: {
+        Args: { p_amount: number; p_referred_user_id: string }
+        Returns: string
+      }
+      roll_capture_totals: {
         Args: {
+          p_error?: string
+          p_job_id: string
+          p_leads_found: number
+          p_leads_kept: number
+          p_page_id: string
+          p_status: Database["public"]["Enums"]["capture_page_status"]
           p_user_id: string
-          p_revoked_by?: string
-          p_reason?: string
         }
         Returns: undefined
       }
+      save_clay_connection: {
+        Args: {
+          p_account_label: string
+          p_encrypted_payload: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      save_ghl_connection: {
+        Args: {
+          p_encrypted_payload: string
+          p_location_id: string
+          p_location_name: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      save_google_connection: {
+        Args: {
+          p_encrypted_payload: string
+          p_external_account_email: string
+          p_external_account_id: string
+          p_external_account_name: string
+          p_scopes: string[]
+          p_token_expires_at: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      save_hubspot_connection: {
+        Args: {
+          p_encrypted_payload: string
+          p_external_account_id: string
+          p_external_account_name: string
+          p_scopes: string[]
+          p_token_expires_at: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      save_salesforce_connection: {
+        Args: {
+          p_encrypted_payload: string
+          p_external_account_id: string
+          p_external_account_name: string
+          p_scopes: string[]
+          p_token_expires_at: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      set_user_suspension: {
+        Args: { p_admin_id: string; p_suspend: boolean; p_user_id: string }
+        Returns: undefined
+      }
+      sweep_rate_limits: { Args: never; Returns: number }
+      sweep_signup_ip_reservations: { Args: never; Returns: number }
       sync_paddle_customer: {
         Args: {
-          p_event_id: string
-          p_event_type: string
-          p_occurred_at: string
+          p_custom_data: Json
           p_customer_id: string
           p_email: string
-          p_name: string | null
-          p_status: string
+          p_event_id: string
+          p_event_type: string
           p_marketing_consent: boolean
-          p_custom_data: Json | null
+          p_name: string
+          p_occurred_at: string
           p_paddle_created_at: string
           p_paddle_updated_at: string
+          p_status: string
         }
         Returns: boolean
       }
       sync_paddle_subscription: {
         Args: {
+          p_canceled_at: string
+          p_current_period_end: string
+          p_current_period_start: string
+          p_custom_data: Json
+          p_customer_id: string
           p_event_id: string
           p_event_type: string
           p_occurred_at: string
-          p_subscription_id: string
-          p_customer_id: string
-          p_status: string
+          p_paused_at: string
+          p_plan_key: string
           p_price_id: string
           p_product_id: string
-          p_plan_key: string | null
-          p_scheduled_change_action: string | null
-          p_scheduled_change_at: string | null
-          p_current_period_start: string | null
-          p_current_period_end: string | null
-          p_canceled_at: string | null
-          p_paused_at: string | null
-          p_custom_data: Json | null
+          p_scheduled_change_action: string
+          p_scheduled_change_at: string
+          p_status: string
+          p_subscription_id: string
         }
         Returns: boolean
       }
       sync_paddle_transaction: {
         Args: {
+          p_billed_at: string
+          p_currency_code: string
+          p_custom_data: Json
+          p_customer_id: string
           p_event_id: string
           p_event_type: string
           p_occurred_at: string
-          p_transaction_id: string
-          p_customer_id: string | null
-          p_subscription_id: string | null
+          p_price_id: string
+          p_product_id: string
           p_status: string
-          p_price_id: string | null
-          p_product_id: string | null
-          p_currency_code: string
-          p_total: string | null
-          p_custom_data: Json | null
-          p_billed_at: string | null
+          p_subscription_id: string
+          p_total: string
+          p_transaction_id: string
         }
         Returns: boolean
       }
-      redeem_invitation_code: {
-        Args: { p_code: string; p_user_id: string }
-        /** 'ok' | 'invalid' | 'unavailable' | 'already_active' */
-        Returns: string
-      }
-      enqueue_job: {
-        Args: { p_job_id: string }
-        Returns: undefined
-      }
-      finalize_upload_job: {
-        Args: { p_job_id: string; p_user_id: string }
-        /** 'ok' | 'already_finalized' | 'not_found' | 'invalid_state' | 'no_files' | 'insufficient_credits' */
-        Returns: string
-      }
-      set_user_suspension: {
-        Args: { p_user_id: string; p_admin_id: string; p_suspend: boolean }
-        Returns: undefined
-      }
-      claim_next_job: {
-        Args: { p_claimed_by: string }
-        Returns: { job_id: string; user_id: string; attempts: number }[]
-      }
-      claim_job: {
-        Args: { p_job_id: string; p_user_id: string; p_claimed_by: string }
-        Returns: { job_id: string; user_id: string; attempts: number }[]
-      }
-      reap_stale_jobs: {
-        Args: { p_timeout_seconds?: number }
-        Returns: number
-      }
-      reap_orphaned_uploads: {
-        Args: { p_older_than_minutes?: number }
-        Returns: { enqueued: number; failed: number }[]
-      }
-      consume_credit: {
+      update_google_tokens: {
         Args: {
+          p_connection_id: string
+          p_encrypted_payload: string
+          p_expected_encrypted_payload: string
+          p_scopes: string[]
+          p_token_expires_at: string
           p_user_id: string
-          p_amount?: number
-          p_period_start?: string
-          p_period_end?: string
         }
-        /** Remaining balance, or -1 when there were not enough credits. */
-        Returns: number
-      }
-      request_subscription_cancellation: {
-        Args: { p_user_id: string }
-        /** status: 'ok' | 'no_subscription' | 'not_active' | 'already_scheduled' */
-        Returns: { status: string; ends_at: string | null }[]
-      }
-      resume_subscription: {
-        Args: { p_user_id: string }
-        /** 'ok' | 'no_subscription' | 'not_scheduled' | 'already_ended' */
-        Returns: string
-      }
-      claim_capture_page: {
-        Args: {
-          p_session_id: string
-          p_user_id: string
-          p_content_hash: string
-          p_source_url: string | null
-          p_page_ident: string | null
-        }
-        /** 'claimed' | 'duplicate' | 'session_closed' | 'not_found' */
-        Returns: { status: string; page_id: string | null }[]
-      }
-      roll_capture_totals: {
-        Args: {
-          p_page_id: string
-          p_user_id: string
-          p_job_id: string | null
-          p_leads_found: number
-          p_leads_kept: number
-          p_status: CapturePageStatus
-          p_error?: string | null
-        }
-        Returns: undefined
-      }
-      revoke_extension_device: {
-        Args: { p_device_id: string; p_user_id: string; p_actor_id?: string | null }
         Returns: boolean
       }
-      lead_credit_cost: {
-        Args: { p_lead_count: number; p_leads_per_credit: number | null }
-        /** Credits one extraction of this size costs. Never below 1. */
-        Returns: number
+      update_hubspot_tokens: {
+        Args: {
+          p_connection_id: string
+          p_encrypted_payload: string
+          p_expected_encrypted_payload: string
+          p_scopes: string[]
+          p_token_expires_at: string
+          p_user_id: string
+        }
+        Returns: boolean
       }
-      charge_extraction_leads: {
-        Args: { p_job_id: string; p_user_id: string; p_lead_count: number }
-        /**
-         * Charges a parsed run. `status` is
-         * 'ok' | 'already_charged' | 'insufficient_credits' | 'not_found'.
-         * On 'insufficient_credits' nothing is spent and `required` is the cost.
-         */
-        Returns: {
-          status: string
-          charged: number
-          required: number
-          credits_left: number
-        }[]
-      }
-      credit_balance: {
-        Args: { p_user_id: string }
-        /** `allowance` already includes `granted` (referral and other bonuses). */
-        Returns: { allowance: number; used: number; remaining: number; granted: number }[]
-      }
-      record_referral: {
-        Args: { p_referred_user_id: string; p_code: string }
-        /** 'ok' | 'no_code' | 'unknown_code' | 'self_referral' | 'error' */
-        Returns: string
-      }
-      reward_pending_referral: {
-        Args: { p_referred_user_id: string; p_amount: number }
-        /** 'ok' | 'no_referral' | 'already_rewarded' | 'invalid_amount' */
-        Returns: string
-      }
-      referral_summary: {
-        Args: { p_user_id: string }
-        Returns: {
-          code: string | null
-          pending: number
-          rewarded: number
-          credits_earned: number
-        }[]
-      }
-      expired_export_paths: {
-        Args: { p_limit?: number }
-        Returns: { job_id: string; user_id: string; export_storage_path: string }[]
-      }
-      purge_job_leads: {
-        Args: { p_job_id: string; p_user_id: string }
-        /** Number of lead rows deleted. */
-        Returns: number
-      }
-      merge_lead_enrichment: {
-        Args: { p_user_id: string; p_lead_ids: string[]; p_enrichment: Json }
-        /** Number of lead rows actually changed. */
-        Returns: number
+      update_salesforce_tokens: {
+        Args: {
+          p_connection_id: string
+          p_encrypted_payload: string
+          p_expected_encrypted_payload: string
+          p_refresh_claim: string
+          p_scopes: string[]
+          p_token_expires_at: string
+          p_user_id: string
+        }
+        Returns: boolean
       }
     }
     Enums: {
-      user_role: UserRole
-      access_request_type: AccessRequestType
-      access_request_status: AccessRequestStatus
-      job_status: JobStatus
-      file_status: FileStatus
-      queue_status: QueueStatus
-      dedupe_mode: DedupeMode
-      dedupe_strategy: DedupeStrategy
-      plan_key: PlanKey
-      subscription_status: SubscriptionStatus
+      access_request_status:
+        | "pending"
+        | "approved"
+        | "rejected"
+        | "expired"
+        | "suspended"
+      access_request_type:
+        | "payment"
+        | "sales_call"
+        | "manual_approval"
+        | "trial"
+        | "invitation"
+      capture_page_status:
+        | "received"
+        | "queued"
+        | "processed"
+        | "duplicate"
+        | "failed"
+      capture_session_status: "active" | "completed" | "abandoned"
+      dedupe_mode: "keep_all" | "remove_exact" | "remove_likely" | "review"
+      dedupe_strategy:
+        | "linkedin_url_canonical"
+        | "salesnav_id"
+        | "name_company"
+        | "name_title_company"
+        | "row_hash"
+      export_destination_kind: "device" | "google_drive" | "onedrive"
+      file_status: "pending" | "processing" | "processed" | "failed"
+      job_status:
+        | "uploaded"
+        | "queued"
+        | "processing"
+        | "completed"
+        | "partially_completed"
+        | "failed"
+        | "cancelled"
+      plan_key: "trial" | "starter" | "professional" | "agency" | "custom"
+      queue_status: "pending" | "claimed" | "done" | "failed"
+      referral_status: "pending" | "rewarded" | "void"
+      subscription_status: "active" | "past_due" | "cancelled" | "expired"
+      user_role:
+        | "registered_user"
+        | "pending_user"
+        | "approved_user"
+        | "subscriber"
+        | "admin"
+        | "suspended_user"
     }
-    CompositeTypes: Record<string, never>
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      access_request_status: [
+        "pending",
+        "approved",
+        "rejected",
+        "expired",
+        "suspended",
+      ],
+      access_request_type: [
+        "payment",
+        "sales_call",
+        "manual_approval",
+        "trial",
+        "invitation",
+      ],
+      capture_page_status: [
+        "received",
+        "queued",
+        "processed",
+        "duplicate",
+        "failed",
+      ],
+      capture_session_status: ["active", "completed", "abandoned"],
+      dedupe_mode: ["keep_all", "remove_exact", "remove_likely", "review"],
+      dedupe_strategy: [
+        "linkedin_url_canonical",
+        "salesnav_id",
+        "name_company",
+        "name_title_company",
+        "row_hash",
+      ],
+      export_destination_kind: ["device", "google_drive", "onedrive"],
+      file_status: ["pending", "processing", "processed", "failed"],
+      job_status: [
+        "uploaded",
+        "queued",
+        "processing",
+        "completed",
+        "partially_completed",
+        "failed",
+        "cancelled",
+      ],
+      plan_key: ["trial", "starter", "professional", "agency", "custom"],
+      queue_status: ["pending", "claimed", "done", "failed"],
+      referral_status: ["pending", "rewarded", "void"],
+      subscription_status: ["active", "past_due", "cancelled", "expired"],
+      user_role: [
+        "registered_user",
+        "pending_user",
+        "approved_user",
+        "subscriber",
+        "admin",
+        "suspended_user",
+      ],
+    },
+  },
+} as const

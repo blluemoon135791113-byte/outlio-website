@@ -31,6 +31,65 @@ export type ResolvedDomain = {
   origin: 'stored' | 'discovered'
 }
 
+function hostOf(value: string): string | null {
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/^www\./, '')
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Accept a canonical domain only when the company's stored site itself
+ * redirected there and the destination still matches the company name.
+ * Search rank or a same-name citation alone is not enough to overwrite
+ * company identity.
+ */
+export function domainFromVerifiedRedirect(
+  currentDomain: string,
+  requestedUrl: string,
+  finalUrl: string,
+  companyName: string | null,
+): string | null {
+  const current = currentDomain.toLowerCase().replace(/^www\./, '')
+  const requested = hostOf(requestedUrl)
+  const final = hostOf(finalUrl)
+
+  if (!requested || !final || requested !== current || final === current) return null
+  return looksLikeOwnDomain(final, companyName) ? final : null
+}
+
+/** Persist a canonical host proven by an HTTP redirect from the stored site. */
+export async function learnDomainFromRedirect(
+  userId: string,
+  companyId: string | null,
+  companyName: string | null,
+  currentDomain: string,
+  requestedUrl: string,
+  finalUrl: string,
+): Promise<string | null> {
+  if (!companyId) return null
+  const canonical = domainFromVerifiedRedirect(
+    currentDomain,
+    requestedUrl,
+    finalUrl,
+    companyName,
+  )
+  if (!canonical) return null
+
+  const supabase = createAdminClient()
+  const { data } = await supabase
+    .from('companies')
+    .update({ domain: canonical } as never)
+    .eq('user_id', userId)
+    .eq('id', companyId)
+    // Compare-and-swap: never overwrite a newer correction from another run.
+    .eq('domain', currentDomain)
+    .select('id')
+
+  return (data?.length ?? 0) > 0 ? canonical : null
+}
+
 /**
  * Reads `companies.domain`, or finds it and writes it back.
  *

@@ -1,5 +1,3 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
 import Nav from "./components/Nav";
@@ -241,8 +239,11 @@ export default function Home() {
             {/* Main Content - CENTERED */}
             <div className="relative z-20 flex min-h-[590px] items-center justify-center px-5 py-20 sm:min-h-[660px] sm:px-10 sm:py-24 lg:min-h-[760px] lg:px-16 lg:py-28 xl:min-h-[800px] xl:py-32">
               <div className="mx-auto max-w-5xl text-center">
-                <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
-                  Outlio &middot; Hands-on growth accelerator
+                <h1 className="text-4xl font-bold uppercase tracking-tight text-ink sm:text-5xl">
+                  Hands-on growth accelerator for tech startups and SaaS
+                </h1>
+                <p className="mt-3 text-base leading-relaxed text-muted/80 sm:text-lg">
+                  Outlio isn't a consultancy. We research your market, identify your ideal customers, write every message by hand, and run your outbound ourselves, then show you all of it live in a shared CRM. Our approach is research-first, human-led, and built to scale with you — from the intro call through launch and beyond. We help tech startups and SaaS companies fill the pipeline so you can focus on building your product.
                 </p>
                 <div className="mt-3">
                   <HeroHeadline />

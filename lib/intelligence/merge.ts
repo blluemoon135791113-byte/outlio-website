@@ -84,6 +84,38 @@ export function buildMergePlan(
         continue
       }
 
+      /*
+       * ⚠️ SOCIALS ARE NOT ONE COLUMN. A `{ x, instagram, youtube }` blob in a
+       * single cell is unreadable in a CRM and unusable as a filter, so the
+       * object is split into one provenance-carrying cell per platform
+       * (`social_x`, `social_instagram`, …). The bunched field is never
+       * written.
+       */
+      if (field === 'social_profiles' || field === 'person_social_profiles') {
+        // An empty or malformed map is "we looked and found nothing", not a
+        // value — counted, never written.
+        if (!isSocialMap(cell.value)) {
+          unknownCells += 1
+          continue
+        }
+        const prefix = field === 'social_profiles' ? 'social' : 'personal_social'
+        const entries = Object.entries(cell.value).filter(
+          ([, url]) => typeof url === 'string' && url.trim().length > 0,
+        )
+        for (const [platform, url] of entries) {
+          patch[`${prefix}_${platform}`] = {
+            value: url,
+            provider: cell.sourceProvider,
+            sourceUrl: cell.sourceUrl,
+            runId: results.runId,
+            mergedAt,
+          }
+          mergedCells += 1
+        }
+        fieldsSeen.add(field)
+        continue
+      }
+
       patch[field] = {
         value: cell.value,
         provider: cell.sourceProvider,
@@ -107,6 +139,13 @@ export function buildMergePlan(
     unknownCells,
     fields: wanted.filter((field) => fieldsSeen.has(field)),
   }
+}
+
+/** PURE. A socials value is a platform → URL map, nothing else. */
+function isSocialMap(value: unknown): value is Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const entries = Object.entries(value as Record<string, unknown>)
+  return entries.length > 0 && entries.every(([, item]) => typeof item === 'string')
 }
 
 /**
@@ -176,8 +215,29 @@ export function flattenEnrichmentValue(value: unknown): string | null {
  */
 const HEADER_ACRONYMS = new Set(['sec', 'cik', 'ein', 'lei', 'sic', 'url', 'ceo', 'us', 'uk'])
 
+/** Split social columns read as the platform, not as database keys. */
+const SOCIAL_HEADERS: Record<string, string> = {
+  x: 'X (Twitter)',
+  twitter: 'X (Twitter)',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  facebook: 'Facebook',
+  twitch: 'Twitch',
+  pinterest: 'Pinterest',
+  crunchbase: 'Crunchbase',
+  github: 'GitHub',
+  blog: 'Blog',
+  linkedin: 'LinkedIn',
+}
+
 /** Column header for a merged field, e.g. `work_email` → `Work Email`. */
 export function enrichmentColumnHeader(field: string): string {
+  const social = /^(personal_)?social_([a-z]+)$/.exec(field)
+  if (social) {
+    const label = SOCIAL_HEADERS[social[2]!] ?? social[2]!.replace(/\b\w/g, (c) => c.toUpperCase())
+    return (social[1] ? 'Personal ' : '') + label
+  }
   return field
     .split('_')
     .filter(Boolean)

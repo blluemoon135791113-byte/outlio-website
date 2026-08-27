@@ -1,28 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-
-import { JobActions } from '@/components/jobs/JobActions'
-import { LeadExportMenu } from '@/components/integrations/LeadExportMenu'
-import { EXPORT_COLUMN_HEADERS } from '@/lib/export/leads'
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DeleteRunButton, RowExportMenu } from '@/components/jobs/RowActions'
 import {
-  DEFAULT_LEAD_PAGE_SIZE,
-  LEAD_PAGE_SIZES,
-  leadSearchFilter,
-  pageNumbers,
-  pageView,
-  toPageSize,
-  type LeadPageSize,
-} from '@/lib/jobs/lead-pagination'
+  deleteJobAction,
+  getDownloadUrlAction,
+  restoreJobAction,
+  trashJobAction,
+  type JobActionState,
+} from '@/lib/jobs/actions'
 import {
   DASHBOARD_FILE_SELECT,
   DASHBOARD_JOB_SELECT,
-  DASHBOARD_LEAD_SELECT,
   type CreditSnapshot,
   type DashboardFile,
   type DashboardJob,
-  type DashboardLead,
 } from '@/lib/jobs/dashboard-types'
 import {
   currentStage,
@@ -54,27 +47,6 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-/**
- * ⚠️ ONE WORD FOR "WE HAVE NO VALUE", MATCHING THE CSV.
- *
- * The table said "Not available" while the export wrote `N/A`, so the same
- * absent field read as two different things depending on where you looked.
- */
-function missing(value: string | null) {
-  return value?.trim() || 'N/A'
-}
-
-function safeExternalUrl(value: string | null) {
-  if (!value) return null
-
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' ? url.href : null
-  } catch {
-    return null
-  }
-}
-
 function jobLabel(job: DashboardJob, files: readonly DashboardFile[] = []) {
   const firstFile = files.find((file) => file.extraction_job_id === job.id)
   if (firstFile?.original_filename) {
@@ -87,8 +59,6 @@ export function ExtractionDashboard({
   userId,
   initialJobs,
   initialFiles,
-  initialLeads,
-  initialLeadCount,
   credits,
   planName,
   clayConnected,
@@ -98,8 +68,6 @@ export function ExtractionDashboard({
   userId: string
   initialJobs: DashboardJob[]
   initialFiles: DashboardFile[]
-  initialLeads: DashboardLead[]
-  initialLeadCount: number
   credits: CreditSnapshot | null
   planName: string | null
   clayConnected: boolean
@@ -109,18 +77,12 @@ export function ExtractionDashboard({
   const supabase = useMemo(() => createClient(), [])
   const [jobs, setJobs] = useState(initialJobs)
   const [files, setFiles] = useState(initialFiles)
-  const [leads, setLeads] = useState(initialLeads)
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState(
     initialJobs.find(isActiveJob)?.id ?? initialJobs[0]?.id ?? null,
   )
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
-  const [leadSearch, setLeadSearch] = useState('')
-  const [leadPage, setLeadPage] = useState(0)
-  const [leadPageSize, setLeadPageSize] = useState<LeadPageSize>(DEFAULT_LEAD_PAGE_SIZE)
-  const [leadTotal, setLeadTotal] = useState(initialLeadCount)
-  const [leadsLoading, setLeadsLoading] = useState(false)
   /*
    * ⚠️ SELECTED LEAD RECORDS, NOT JUST IDS.
    *
@@ -130,9 +92,6 @@ export function ExtractionDashboard({
    * exports every row the user ticked, instead of silently dropping the ones
    * that scrolled out of the query.
    */
-  const [selectedLeads, setSelectedLeads] = useState<Map<string, DashboardLead>>(
-    () => new Map(),
-  )
   const refreshing = useRef(false)
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -165,8 +124,6 @@ export function ExtractionDashboard({
 
       setJobs((jobResult.data ?? []) as DashboardJob[])
       setFiles((fileResult.data ?? []) as DashboardFile[])
-      // Leads are paged and searched separately — see `loadLeads`. Refetching
-      // them on the 2.5s job poll would fight the user's paging.
       setRefreshError(null)
     } catch {
       setRefreshError('Live data paused. We will keep retrying automatically.')
@@ -175,97 +132,6 @@ export function ExtractionDashboard({
       refreshing.current = false
     }
   }, [supabase, userId])
-
-  /**
-   * Loads one page of leads.
-   *
-   * ⚠️ SEARCH RUNS IN POSTGRES, NOT IN THE BROWSER. Filtering the 25 rows the
-   * client happens to hold would search one page and report "no matches" for a
-   * lead that exists — a wrong answer dressed as an empty one.
-   *
-   * The page is clamped by `pageView` before the range is built, because a
-   * deletion or a narrowed search can strand the user past the end, and
-   * PostgREST answers an out-of-range request with zero rows.
-   */
-  const loadLeads = useCallback(
-    async (page: number, pageSize: LeadPageSize, search: string) => {
-      setLeadsLoading(true)
-      try {
-        const filter = leadSearchFilter(search)
-
-        let query = supabase
-          .from('extracted_leads')
-          .select(DASHBOARD_LEAD_SELECT, { count: 'exact' })
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-
-        if (filter) query = query.or(filter)
-
-        // A first pass at page 0 establishes the count; the view then clamps.
-        const view = pageView({ page, pageSize, total: leadTotal })
-        const { data, count, error } = await query.range(view.from, view.to)
-
-        if (error) throw error
-
-        const total = count ?? 0
-        setLeadTotal(total)
-
-        // The clamp can only be applied once the true count is known. If the
-        // requested page turned out not to exist, land on the last real one
-        // rather than showing an empty table.
-        const clamped = pageView({ page, pageSize, total })
-        if (clamped.page !== page) {
-          setLeadPage(clamped.page)
-          return
-        }
-
-        setLeads((data ?? []) as DashboardLead[])
-      } catch {
-        setRefreshError('Could not load that page of leads. Retrying shortly.')
-      } finally {
-        setLeadsLoading(false)
-      }
-    },
-    // `leadTotal` is read only as a hint for the first range; the authoritative
-    // count comes back with the response, so it is intentionally not a dep.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [supabase, userId],
-  )
-
-  // Debounced: typing a nine-character company name should cost one query.
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(leadSearch), 300)
-    return () => clearTimeout(timer)
-  }, [leadSearch])
-
-  /*
-   * A new search or page size invalidates the page number, so both handlers
-   * reset it. Doing this in an effect on `debouncedSearch` instead would be a
-   * cascading render — and would leave the user on page 5 for the 300ms until
-   * the debounce fired.
-   */
-  const changeSearch = useCallback((value: string) => {
-    setLeadSearch(value)
-    setLeadPage(0)
-  }, [])
-
-  const changePageSize = useCallback((size: LeadPageSize) => {
-    setLeadPageSize(size)
-    setLeadPage(0)
-  }, [])
-
-  const firstLeadLoad = useRef(true)
-  useEffect(() => {
-    // The server already rendered page 0 unsearched; refetching it on mount
-    // would be a wasted round trip and a visible flash.
-    if (firstLeadLoad.current && leadPage === 0 && debouncedSearch === '' && leadPageSize === DEFAULT_LEAD_PAGE_SIZE) {
-      firstLeadLoad.current = false
-      return
-    }
-    firstLeadLoad.current = false
-    void loadLeads(leadPage, leadPageSize, debouncedSearch)
-  }, [leadPage, leadPageSize, debouncedSearch, loadLeads])
 
   useEffect(() => {
     const scheduleRefresh = () => {
@@ -331,7 +197,14 @@ export function ExtractionDashboard({
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
     : []
 
+  const isTrashed = (job: DashboardJob) => job.trashed_at !== null
+
+  /*
+   * Trashed runs leave the history the moment they are deleted — that is what
+   * "free up workspace" means. They live in the trash box instead.
+   */
   const filteredJobs = jobs.filter((job) => {
+    if (isTrashed(job)) return false
     if (historyFilter === 'active') return isActiveJob(job)
     if (historyFilter === 'completed') return FINISHED_JOB_STATUSES.has(job.status)
     if (historyFilter === 'attention') {
@@ -340,40 +213,11 @@ export function ExtractionDashboard({
     return true
   })
 
-  /*
-   * Selection is keyed on the lead RECORD, so it survives paging.
-   *
-   * The previous version intersected the selection with the rows currently
-   * loaded, which was correct when every lead was in the browser. With paging
-   * it would silently discard a page-1 selection the moment the user reached
-   * page 2, and the export would go out short without saying so.
-   */
-  const selectedLeadIds = useMemo(() => new Set(selectedLeads.keys()), [selectedLeads])
+  const trashedJobs = jobs.filter(isTrashed)
 
-  const toggleLead = useCallback((lead: DashboardLead) => {
-    setSelectedLeads((current) => {
-      const next = new Map(current)
-      if (next.has(lead.id)) next.delete(lead.id)
-      else next.set(lead.id, lead)
-      return next
-    })
-  }, [])
+  const activeJobsCount = jobs.filter(isActiveJob).length
 
-  const toggleVisibleLeads = useCallback((visible: readonly DashboardLead[]) => {
-    setSelectedLeads((current) => {
-      const next = new Map(current)
-      const allSelected = visible.length > 0 && visible.every((lead) => next.has(lead.id))
-      for (const lead of visible) {
-        if (allSelected) next.delete(lead.id)
-        else next.set(lead.id, lead)
-      }
-      return next
-    })
-  }, [])
-
-  const clearSelectedLeads = useCallback(() => setSelectedLeads(new Map()), [])
-
-  const totals = jobs.reduce(
+   const totals = jobs.reduce(
     (acc, job) => {
       acc.files += FINISHED_JOB_STATUSES.has(job.status)
         ? job.file_count
@@ -445,59 +289,48 @@ export function ExtractionDashboard({
         <EmptyState />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-          <section className="relative z-20 min-w-0 self-start overflow-visible rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
+          <section className="relative z-20 flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
               <div>
                 <h2 className="text-base font-semibold text-ink">Extraction history</h2>
-                <p className="mt-0.5 text-sm text-muted">Every run and its final outcome.</p>
+                <p className="mt-0.5 text-sm text-muted">
+                  {jobs.length.toLocaleString()} run{jobs.length === 1 ? '' : 's'}
+                  {activeJobsCount > 0 ? ` · ${activeJobsCount} processing` : ''} · trash deletes a run&rsquo;s lead data; the CSV is kept.
+                </p>
               </div>
               <HistoryFilters value={historyFilter} onChange={setHistoryFilter} />
             </div>
 
-            {filteredJobs.length > 0 ? (
-              <ul className="divide-y divide-border">
-                {filteredJobs.map((job) => (
-                  <JobHistoryRow
-                    key={job.id}
-                    job={job}
-                    selected={selectedJob?.id === job.id}
-                    onSelect={() => setSelectedJobId(job.id)}
-                    label={jobLabel(job, files)}
-                    clayConnected={clayConnected}
-                    googleConnected={googleConnected}
-                    ghlConnected={ghlConnected}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <p className="px-5 py-10 text-center text-sm text-muted">
-                No runs match this filter.
-              </p>
-            )}
+            <div className="max-h-[62vh] min-h-0 overflow-y-auto">
+              {filteredJobs.length > 0 ? (
+                <ul className="divide-y divide-border">
+                  {filteredJobs.map((job) => (
+                    <JobHistoryRow
+                      key={job.id}
+                      job={job}
+                      selected={selectedJob?.id === job.id}
+                      onSelect={() => setSelectedJobId(job.id)}
+                      onPurged={refresh}
+                      onDeleted={refresh}
+                      label={jobLabel(job, files)}
+                      clayConnected={clayConnected}
+                      googleConnected={googleConnected}
+                      ghlConnected={ghlConnected}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-5 py-10 text-center text-sm text-muted">No runs match this filter.</p>
+              )}
+            </div>
           </section>
 
-          <FilePipeline job={selectedJob} files={selectedFiles} />
+          <div className="flex min-w-0 flex-col gap-6">
+            <FilePipeline job={selectedJob} files={selectedFiles} />
+            <TrashBox jobs={trashedJobs} labelFor={jobLabel} onRestore={refresh} />
+          </div>
         </div>
       )}
-
-      <LeadPreview
-        leads={leads}
-        selectedLeadRecords={[...selectedLeads.values()]}
-        view={pageView({ page: leadPage, pageSize: leadPageSize, total: leadTotal })}
-        pageSize={leadPageSize}
-        onPageChange={setLeadPage}
-        onPageSizeChange={changePageSize}
-        loading={leadsLoading}
-        search={leadSearch}
-        onSearch={changeSearch}
-        selectedLeadIds={selectedLeadIds}
-        onToggleLead={toggleLead}
-        onToggleVisible={toggleVisibleLeads}
-        onExportSuccess={clearSelectedLeads}
-        clayConnected={clayConnected}
-        googleConnected={googleConnected}
-        ghlConnected={ghlConnected}
-      />
     </div>
   )
 }
@@ -684,6 +517,8 @@ function JobHistoryRow({
   label,
   selected,
   onSelect,
+  onPurged,
+  onDeleted,
   clayConnected,
   googleConnected,
   ghlConnected,
@@ -692,12 +527,13 @@ function JobHistoryRow({
   label: string
   selected: boolean
   onSelect: () => void
+  onPurged: () => void
+  onDeleted: () => void
   clayConnected: boolean
   googleConnected: boolean
   ghlConnected: boolean
 }) {
   const percent = runProgress(job)
-  const purged = (job.progress_step ?? '').toLowerCase().includes('data purged')
 
   return (
     <li className={selected ? 'bg-accent-soft/55 px-5 py-4' : 'px-5 py-4 transition-colors duration-150 hover:bg-surface-muted/70'}>
@@ -724,14 +560,18 @@ function JobHistoryRow({
         </button>
 
         {!isActiveJob(job) ? (
-          <JobActions
-            jobId={job.id}
-            hasExport={Boolean(job.export_storage_path)}
-            leadsRemaining={purged ? 0 : job.leads_kept}
-            clayConnected={clayConnected}
-            googleConnected={googleConnected}
-            ghlConnected={ghlConnected}
-          />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <RowExportMenu
+              jobId={job.id}
+              hasExport={Boolean(job.export_storage_path)}
+              leadsRemaining={job.leads_kept}
+              clayConnected={clayConnected}
+              googleConnected={googleConnected}
+              ghlConnected={ghlConnected}
+            />
+            <TrashButton jobId={job.id} onTrashed={onPurged} />
+            <DeleteRunButton jobId={job.id} onDeleted={onDeleted} />
+          </div>
         ) : null}
       </div>
     </li>
@@ -743,7 +583,7 @@ function FilePipeline({ job, files }: { job: DashboardJob | null; files: Dashboa
   const failed = files.filter((file) => file.status === 'failed').length
 
   return (
-    <section className="min-w-0 self-start rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)] xl:sticky xl:top-6">
+    <section className="min-w-0 w-full rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)] xl:sticky xl:top-6">
       <div className="border-b border-border px-5 py-4">
         <h2 className="text-base font-semibold text-ink">File pipeline</h2>
         <p className="mt-0.5 text-sm text-muted">
@@ -824,366 +664,6 @@ function FileStatusDot({ status }: { status: DashboardFile['status'] }) {
   return <span aria-hidden className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${className}`} />
 }
 
-function LeadPreview({
-  leads,
-  selectedLeadRecords,
-  view,
-  pageSize,
-  onPageChange,
-  onPageSizeChange,
-  loading,
-  search,
-  onSearch,
-  selectedLeadIds,
-  onToggleLead,
-  onToggleVisible,
-  onExportSuccess,
-  clayConnected,
-  googleConnected,
-  ghlConnected,
-}: {
-  leads: DashboardLead[]
-  /** Every selected lead, including ones on pages not currently loaded. */
-  selectedLeadRecords: DashboardLead[]
-  view: ReturnType<typeof pageView>
-  pageSize: LeadPageSize
-  onPageChange: (page: number) => void
-  onPageSizeChange: (size: LeadPageSize) => void
-  loading: boolean
-  search: string
-  onSearch: (value: string) => void
-  selectedLeadIds: ReadonlySet<string>
-  onToggleLead: (lead: DashboardLead) => void
-  onToggleVisible: (leads: readonly DashboardLead[]) => void
-  onExportSuccess: () => void
-  clayConnected: boolean
-  googleConnected: boolean
-  ghlConnected: boolean
-}) {
-  const allVisibleSelected =
-    leads.length > 0 && leads.every((lead) => selectedLeadIds.has(lead.id))
-
-  return (
-    <section className="rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 py-4">
-        <div>
-          <h2 className="text-base font-semibold text-ink">Extracted leads</h2>
-          <p className="mt-0.5 text-sm text-muted">
-            {view.lastRow === 0
-              ? 'No retained lead rows yet.'
-              : `Showing ${view.firstRow.toLocaleString()}–${view.lastRow.toLocaleString()} of ${view.total.toLocaleString()}${search.trim() ? ' matching' : ''} lead rows.`}
-            {selectedLeadRecords.length > 0 ? (
-              <>
-                {' '}
-                <span className="font-medium text-ink">
-                  {selectedLeadRecords.length.toLocaleString()} selected
-                </span>
-                {' across all pages.'}
-              </>
-            ) : null}
-          </p>
-        </div>
-        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-end">
-          <LeadExportMenu
-            selectedLeads={selectedLeadRecords}
-            clayConnected={clayConnected}
-            googleConnected={googleConnected}
-            ghlConnected={ghlConnected}
-            onSuccess={onExportSuccess}
-          />
-          <label className="w-full sm:w-72">
-            <span className="sr-only">Search latest leads</span>
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => onSearch(event.target.value)}
-              placeholder="Search name, title, company…"
-              className="w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 py-2 text-sm text-ink transition-colors duration-150 placeholder:text-muted hover:border-border-strong"
-            />
-          </label>
-        </div>
-      </div>
-
-      {leads.length > 0 ? (
-        <div className="overflow-x-auto" data-lenis-prevent-horizontal>
-          <table className="w-full min-w-[2100px] border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b border-border bg-surface-muted/70 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-                <th className="w-12 px-5 py-3">
-                  <input
-                    type="checkbox"
-                    aria-label="Select all visible leads"
-                    checked={allVisibleSelected}
-                    onChange={() => onToggleVisible(leads)}
-                    className="h-4 w-4 accent-accent"
-                  />
-                </th>
-                <th className="px-5 py-3">{EXPORT_COLUMN_HEADERS.name}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.linkedinProfile}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.jobTitle}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.company}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyLinkedInUrl}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyUrl}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.location}</th>
-                {/*
-                  Everything the CSV carries, so the table and the file agree.
-                  Previously the table showed eight columns while the export had
-                  seventeen — a user checking their data on screen could not see
-                  what they were about to download.
-                */}
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.sourceList}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyIndustry}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companySize}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyEmployeeCount}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyDecisionMakers}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.companyInvestors}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.connectionDegree}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.reachable}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.listCount}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.lastActivity}</th>
-                <th className="px-4 py-3">{EXPORT_COLUMN_HEADERS.addedToList}</th>
-                <th className="px-5 py-3 text-right">{EXPORT_COLUMN_HEADERS.salesNavigatorUrl}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {leads.map((lead) => (
-                <tr key={lead.id} className="transition-colors duration-150 hover:bg-surface-muted/80">
-                  <td className="px-5 py-3">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${lead.full_name?.trim() || 'lead'}`}
-                      checked={selectedLeadIds.has(lead.id)}
-                      onChange={() => onToggleLead(lead)}
-                      className="h-4 w-4 accent-accent"
-                    />
-                  </td>
-                  <td className="px-5 py-3 font-medium text-ink">{missing(lead.full_name)}</td>
-                  <td className="max-w-56 truncate px-4 py-3">
-                    {safeExternalUrl(lead.linkedin_url) ? (
-                      <a
-                        href={safeExternalUrl(lead.linkedin_url) ?? undefined}
-                        target="_blank"
-                        rel="noopener noreferrer nofollow"
-                        className="font-semibold text-accent underline-offset-2 hover:underline"
-                      >
-                        Open profile
-                      </a>
-                    ) : (
-                      <span className="text-muted">Not available</span>
-                    )}
-                  </td>
-                  <td className="max-w-56 truncate px-4 py-3 text-muted" title={lead.job_title ?? undefined}>
-                    {missing(lead.job_title)}
-                  </td>
-                  <td className="max-w-48 truncate px-4 py-3 text-ink" title={lead.company_name ?? undefined}>
-                    {missing(lead.company_name)}
-                  </td>
-                  <td className="max-w-48 truncate px-4 py-3">
-                    {safeExternalUrl(lead.company_url) ? (
-                      <a
-                        href={safeExternalUrl(lead.company_url) ?? undefined}
-                        target="_blank"
-                        rel="noopener noreferrer nofollow"
-                        className="font-semibold text-accent underline-offset-2 hover:underline"
-                      >
-                        Open company
-                      </a>
-                    ) : (
-                      <span className="text-muted">Not available</span>
-                    )}
-                  </td>
-                  <td className="max-w-48 truncate px-4 py-3">
-                    {safeExternalUrl(lead.company_website_url) ? (
-                      <a
-                        href={safeExternalUrl(lead.company_website_url) ?? undefined}
-                        target="_blank"
-                        rel="noopener noreferrer nofollow"
-                        className="font-semibold text-accent underline-offset-2 hover:underline"
-                      >
-                        Open website
-                      </a>
-                    ) : (
-                      <span className="text-muted">Not available</span>
-                    )}
-                  </td>
-                  <td className="max-w-48 truncate px-4 py-3 text-muted" title={lead.location ?? undefined}>
-                    {missing(lead.location)}
-                  </td>
-                  <td className="max-w-40 truncate px-4 py-3 text-muted" title={lead.source_list ?? undefined}>
-                    {missing(lead.source_list)}
-                  </td>
-                  <td className="max-w-40 truncate px-4 py-3 text-muted">
-                    {missing(lead.company_industry)}
-                  </td>
-                  <td className="max-w-32 truncate px-4 py-3 text-muted">
-                    {missing(lead.company_size)}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {lead.company_employee_count ?? 'N/A'}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {lead.company_decision_maker_count ?? 'N/A'}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {lead.company_investor_count ?? 'N/A'}
-                  </td>
-                  <td className="px-4 py-3 text-muted">{missing(lead.connection_degree)}</td>
-                  {/* `null` means the badge was absent, which is not "no". */}
-                  <td className="px-4 py-3 text-muted">
-                    {lead.is_reachable === true ? 'Yes' : 'N/A'}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {lead.list_count === null ? 'N/A' : lead.list_count}
-                  </td>
-                  <td className="max-w-36 truncate px-4 py-3 text-muted">
-                    {missing(lead.last_activity)}
-                  </td>
-                  <td className="px-4 py-3 text-muted">{missing(lead.added_to_list_at)}</td>
-                  <td className="px-5 py-3 text-right">
-                    {safeExternalUrl(lead.sales_navigator_url) ? (
-                      <a
-                        href={safeExternalUrl(lead.sales_navigator_url) ?? undefined}
-                        target="_blank"
-                        rel="noopener noreferrer nofollow"
-                        className="font-semibold text-accent underline-offset-2 hover:underline"
-                      >
-                        Open lead
-                      </a>
-                    ) : (
-                      <span className="text-muted">Not available</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="px-5 py-12 text-center">
-          <h3 className="text-sm font-semibold text-ink">
-            {search ? 'No leads match your search' : 'No retained leads yet'}
-          </h3>
-          <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-muted">
-            {search
-              ? 'Try a different name, title, or company.'
-              : 'Lead rows appear here after an extraction finishes. Downloaded CSV files remain available even after you clear lead data.'}
-          </p>
-        </div>
-      )}
-
-      <LeadPager
-        view={view}
-        pageSize={pageSize}
-        loading={loading}
-        onPageChange={onPageChange}
-        onPageSizeChange={onPageSizeChange}
-      />
-    </section>
-  )
-}
-
-/**
- * Page navigation and rows-per-page.
- *
- * Rendered even for a single page: the rows-per-page control is what a user
- * reaches for when they want more on screen, and hiding it until there are
- * enough rows to page hides it exactly when it is least discoverable.
- */
-function LeadPager({
-  view,
-  pageSize,
-  loading,
-  onPageChange,
-  onPageSizeChange,
-}: {
-  view: ReturnType<typeof pageView>
-  pageSize: LeadPageSize
-  loading: boolean
-  onPageChange: (page: number) => void
-  onPageSizeChange: (size: LeadPageSize) => void
-}) {
-  const numbers = pageNumbers(view.page, view.pageCount)
-
-  const stepButton =
-    'inline-flex h-8 items-center rounded-[var(--radius-md)] border border-border bg-paper px-3 text-sm font-medium text-ink transition-colors duration-150 hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40'
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
-      <label className="flex items-center gap-2 text-sm text-muted">
-        <span>Rows per page</span>
-        <select
-          value={pageSize}
-          onChange={(event) => onPageSizeChange(toPageSize(event.target.value))}
-          className="h-8 rounded-[var(--radius-md)] border border-border bg-paper px-2 text-sm text-ink"
-        >
-          {LEAD_PAGE_SIZES.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <nav aria-label="Lead pages" className="flex items-center gap-1.5">
-        {/*
-          * `aria-live` on the position, not the table: a screen reader should
-          * hear "page 3 of 12" after a jump, not all 25 rows again.
-          */}
-        <span className="sr-only" aria-live="polite">
-          {loading ? 'Loading page' : `Page ${view.page + 1} of ${view.pageCount}`}
-        </span>
-
-        <button
-          type="button"
-          onClick={() => onPageChange(view.page - 1)}
-          disabled={!view.hasPrevious || loading}
-          className={stepButton}
-        >
-          Previous
-        </button>
-
-        <div className="hidden items-center gap-1 sm:flex">
-          {numbers.map((number, index) =>
-            number === null ? (
-              <span key={`gap-${index}`} aria-hidden className="px-1 text-sm text-muted">
-                …
-              </span>
-            ) : (
-              <button
-                key={number}
-                type="button"
-                onClick={() => onPageChange(number)}
-                disabled={loading}
-                aria-current={number === view.page ? 'page' : undefined}
-                className={
-                  number === view.page
-                    ? 'inline-flex h-8 min-w-8 items-center justify-center rounded-[var(--radius-md)] bg-accent px-2 text-sm font-semibold text-white'
-                    : 'inline-flex h-8 min-w-8 items-center justify-center rounded-[var(--radius-md)] border border-border bg-paper px-2 text-sm text-ink transition-colors duration-150 hover:border-border-strong disabled:opacity-40'
-                }
-              >
-                {number + 1}
-              </button>
-            ),
-          )}
-        </div>
-
-        <span className="text-sm text-muted sm:hidden">
-          {view.page + 1} / {view.pageCount}
-        </span>
-
-        <button
-          type="button"
-          onClick={() => onPageChange(view.page + 1)}
-          disabled={!view.hasNext || loading}
-          className={stepButton}
-        >
-          Next
-        </button>
-      </nav>
-    </div>
-  )
-}
-
 function StatusBadge({ status }: { status: JobStatus }) {
   const map: Record<JobStatus, { label: string; className: string }> = {
     uploaded: { label: 'Uploaded', className: 'border-info/25 bg-info-soft text-info' },
@@ -1221,5 +701,213 @@ function EmptyState() {
         Start your first extraction
       </Link>
     </section>
+  )
+}
+
+/**
+ * The trash box — where trashed extractions go instead of haunting history.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ *  MINIMAL BY INTENT. Muted surfaces, small type, no heavy borders: this box
+ *  holds deletions, and quiet is the point. The CSV survives a purge, so each
+ *  row keeps a small download affordance — data the user paid for never
+ *  disappears behind a cleanup.
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function TrashBox({
+  jobs,
+  labelFor,
+  onRestore,
+}: {
+  jobs: DashboardJob[]
+  labelFor: (job: DashboardJob) => string
+  onRestore: () => void
+}) {
+  if (jobs.length === 0) return null
+
+  return (
+    <section
+      aria-label="Trash"
+      className="rounded-[var(--radius-xl)] border border-border/60 bg-paper/70 p-4 shadow-[var(--shadow-sm)]"
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-medium text-muted">Trash</h2>
+        <span className="text-[11px] tabular-nums text-muted/80">{jobs.length.toLocaleString()}</span>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-muted/80">
+        Restorable. Deleting for good also erases the lead data.
+      </p>
+
+      {/*
+       * ⚠️ THE LIST SCROLLS INSIDE THE BOX, same contract as the history
+       * panel: a growing trash pile must never stretch the page.
+       */}
+      <div className="mt-3 max-h-[40vh] min-h-0 overflow-y-auto pr-1">
+        <ul className="space-y-2">
+          {jobs.map((job) => (
+            <TrashRow key={job.id} job={job} label={labelFor(job)} onRestore={onRestore} />
+          ))}
+        </ul>
+      </div>
+    </section>
+  )
+}
+
+function TrashRow({
+  job,
+  label,
+  onRestore,
+}: {
+  job: DashboardJob
+  label: string
+  onRestore: () => void
+}) {
+  const [download, downloadAction] = useActionState(getDownloadUrlAction, { status: 'idle' } as JobActionState)
+  const [restore, restoreAction] = useActionState(restoreJobAction, { status: 'idle' } as JobActionState)
+  const [del, deleteAction] = useActionState(deleteJobAction, { status: 'idle' } as JobActionState)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+
+  useEffect(() => {
+    if (download.status === 'ready') window.location.href = download.url
+  }, [download])
+
+  useEffect(() => {
+    if (restore.status === 'purged' || del.status === 'purged') onRestore()
+  }, [restore, del, onRestore])
+
+  const busy = restore.status === 'purged' || del.status !== 'idle' && del.status !== 'error'
+
+  return (
+    <li className="rounded-[var(--radius-lg)] border border-border/50 bg-panel/80 px-3 py-2.5">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-xs font-medium text-ink/75">{label}</span>
+        <time dateTime={job.created_at} className="shrink-0 text-[11px] text-muted/70">
+          {formatDate(job.created_at)}
+        </time>
+      </div>
+
+      {confirmingDelete ? (
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-medium text-danger">Delete run and lead data for good?</span>
+          <div className="flex items-center gap-1.5">
+            <form action={deleteAction}>
+              <input type="hidden" name="job_id" value={job.id} />
+              <button
+                type="submit"
+                className="rounded-[var(--radius-md)] bg-danger/10 px-2 py-1 text-[11px] font-semibold text-danger transition-colors duration-150 hover:bg-danger/20"
+              >
+                {del.status === 'purged' ? 'Deleted' : 'Delete'}
+              </button>
+            </form>
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              className="rounded-[var(--radius-md)] border border-border px-2 py-1 text-[11px] text-muted transition-colors duration-150 hover:text-ink"
+            >
+              Keep
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          <span className="text-[11px] text-muted/70">
+            {job.leads_kept.toLocaleString()} lead{job.leads_kept === 1 ? '' : 's'} · {job.file_count.toLocaleString()} file{job.file_count === 1 ? '' : 's'}
+          </span>
+          <div className="flex items-center gap-2.5">
+            {job.export_storage_path ? (
+              <form action={downloadAction}>
+                <input type="hidden" name="job_id" value={job.id} />
+                <button
+                  type="submit"
+                  className="text-[11px] font-medium text-muted underline decoration-border underline-offset-2 transition-colors duration-150 hover:text-ink"
+                >
+                  {download.status === 'idle' ? 'Download CSV' : 'Preparing…'}
+                </button>
+              </form>
+            ) : null}
+            <form action={restoreAction}>
+              <input type="hidden" name="job_id" value={job.id} />
+              <button
+                type="submit"
+                className="text-[11px] font-semibold text-accent transition-colors duration-150 hover:text-accent-deep"
+              >
+                {busy && restore.status !== 'purged' ? 'Restoring…' : 'Restore'}
+              </button>
+            </form>
+            <button
+              type="button"
+              aria-label="Permanently delete this run"
+              onClick={() => setConfirmingDelete(true)}
+              className="text-[11px] font-medium text-muted transition-colors duration-150 hover:text-danger"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(() => {
+        const firstError = [download, restore, del].find((state) => state.status === 'error')
+        return firstError && firstError.status === 'error' ? (
+          <p role="alert" className="mt-1 text-[11px] text-danger">{firstError.message}</p>
+        ) : null
+      })()}
+    </li>
+  )
+}
+
+/** Soft-delete: the run leaves history and parks in the Trash box. */
+function TrashButton({ jobId, onTrashed }: { jobId: string; onTrashed: () => void }) {
+  const [trashed, trashAction] = useActionState(trashJobAction, { status: 'idle' } as JobActionState)
+  const [confirming, setConfirming] = useState(false)
+
+  useEffect(() => {
+    if (trashed.status === 'purged') onTrashed()
+  }, [trashed, onTrashed])
+
+  if (trashed.status === 'purged') {
+    return <span className="text-[11px] text-muted/70">In trash</span>
+  }
+
+  return confirming ? (
+    <div className="flex items-center gap-1.5" role="group" aria-label="Confirm moving to trash">
+      <span className="text-xs font-medium text-danger">Move to trash?</span>
+      <form action={trashAction}>
+        <input type="hidden" name="job_id" value={jobId} />
+        <button
+          type="submit"
+          aria-label="Confirm: move to trash"
+          className="inline-flex size-9 items-center justify-center rounded-[var(--radius-md)] bg-danger/10 text-danger transition-colors duration-150 hover:bg-danger/20 active:scale-[0.95]"
+        >
+          <TrashIcon />
+        </button>
+      </form>
+      <button
+        type="button"
+        aria-label="Cancel"
+        onClick={() => setConfirming(false)}
+        className="inline-flex size-9 items-center justify-center rounded-[var(--radius-md)] border border-border text-muted transition-colors duration-150 hover:text-ink"
+      >
+        <svg aria-hidden viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="m5 5 10 10M15 5 5 15" /></svg>
+      </button>
+    </div>
+  ) : (
+    <button
+      type="button"
+      aria-label="Move this extraction to trash"
+      title="Move to trash (restorable)"
+      onClick={() => setConfirming(true)}
+      className="inline-flex size-10 items-center justify-center rounded-[var(--radius-md)] border border-border text-muted transition-colors duration-150 hover:border-danger/40 hover:text-danger active:scale-[0.97]"
+    >
+      <TrashIcon />
+    </button>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+      <path d="M3.5 5.5h13M8 5V3.8c0-.44.36-.8.8-.8h2.4c.44 0 .8.36.8.8V5M5 5.5l.7 10.2c.04.72.64 1.3 1.36 1.3h5.88c.72 0 1.32-.58 1.36-1.3L15 5.5M8.2 8.8v4.9M11.8 8.8v4.9" />
+    </svg>
   )
 }

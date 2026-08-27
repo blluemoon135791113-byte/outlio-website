@@ -45,6 +45,17 @@ export type RunResults = {
   columns: string[]
   rows: RunRow[]
   truncated: boolean
+  progress: {
+    stage: string
+    current: number
+    total: number
+    evidenceGaps: Array<{
+      provider: string
+      entityType: string
+      entityId: string
+      reason: string
+    }>
+  }
   metadata: {
     leadsEvaluated: number
     companiesResearched: number
@@ -67,11 +78,10 @@ export type RunResults = {
   error: string | null
 }
 
-export type ResearchScope =
-  | { type: 'all_leads' }
-  | { type: 'lead_ids'; leadIds: string[] }
-  | { type: 'extraction_job'; extractionJobId: string }
-  | { type: 'date_range'; from: string; to: string }
+// The canonical scope union lives in lib/intelligence/plan.ts. This re-export
+// exists because this module is client-side and plan.ts is server-shared —
+// importing the type directly keeps the two from drifting again.
+export type ResearchScope = import('@/lib/intelligence/plan').ResearchScope
 
 /**
  * ⚠️ `clarifying` IS ITS OWN PHASE, NOT `idle`.
@@ -140,6 +150,11 @@ export function useResearchRun() {
 
         if (data.status === 'completed' || data.status === 'partially_complete') {
           setPhase('done')
+          setMessage(
+            data.progress.evidenceGaps.length > 0
+              ? `Completed with ${data.progress.evidenceGaps.length} source coverage gap${data.progress.evidenceGaps.length === 1 ? '' : 's'}.`
+              : null,
+          )
           /*
            * ⚠️ FIRED ONCE, HERE — not inside the poll body above it. Asking
            * for the finding on every tick would spend an LLM call every two
@@ -153,6 +168,18 @@ export function useResearchRun() {
           setMessage(data.error ?? 'The research run did not finish.')
           return
         }
+
+        const stageLabels: Record<string, string> = {
+          queued: 'Waiting in the research queue…',
+          resolving_scope: 'Resolving leads and companies…',
+          checking_cache: 'Checking existing Hubble evidence…',
+          web_research: data.progress.total > 0
+            ? `Researching public sources ${data.progress.current}/${data.progress.total}…`
+            : 'Researching public sources…',
+          provider_research: 'Filling remaining evidence gaps…',
+          qualifying: 'Scoring and finalizing evidence…',
+        }
+        setMessage(stageLabels[data.progress.stage] ?? 'Research is running…')
 
         pollRef.current = setTimeout(tick, POLL_MS)
       } catch {
@@ -211,6 +238,12 @@ export function useResearchRun() {
             columns: [],
             rows: [],
             truncated: false,
+            progress: {
+              stage: 'waiting_for_clarification',
+              current: 0,
+              total: 0,
+              evidenceGaps: [],
+            },
             metadata: {
               leadsEvaluated: 0,
               companiesResearched: 0,

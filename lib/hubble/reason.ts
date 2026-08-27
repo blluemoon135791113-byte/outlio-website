@@ -269,6 +269,10 @@ export function validHubbleAnswer(value: unknown, evidenceCount = Number.POSITIV
     )
   )) return false
 
+  // `unknown` means none of the answer is supported. A completion that makes
+  // sourced claims but labels the whole multi-part response unknown is the
+  // exact state that made the UI say a cited answer was "not confirmed".
+  if (candidate.status === 'unknown' && candidate.citations.length > 0) return false
   if (candidate.status !== 'unknown' && candidate.citations.length === 0) return false
   if (/<<<EVIDENCE|```json|\{\s*"answer"/i.test(candidate.answer)) return false
   return true
@@ -306,6 +310,11 @@ Set status to:
 - "unknown"      the evidence does not answer the question.
 
 "unknown" is a correct and useful answer, not a failure.
+Status describes THE CLAIMS YOU INCLUDE, not whether every requested subtopic
+was found. If at least one material part of a broad question is answered from
+cited evidence, omit the unsupported parts and use verified, corroborated, or
+estimated as appropriate. Use unknown only when no material claim can be made,
+and then return an empty citations array.
 NEVER fill a gap with a plausible guess — a made-up funding figure or an
 invented contact is worse than no answer, because the user will act on it.
 
@@ -321,6 +330,11 @@ round, has no public coverage, or is too early to have a public record. Do not
 dress that up and do not apologise for it.
 
 Cite by returning the INDEX NUMBERS of the passages you used.
+
+The CRM RECORD is an identity hint for choosing the right entity. It is not
+web evidence and cannot support a factual claim in the answer. In particular,
+do not state a website or domain merely because it appears in the CRM record;
+only state it when a cited passage supports it.
 
 ═══ ACROSS MANY LEADS ═══
 When the question spans a list of leads, the answer is the PATTERN, not the
@@ -433,7 +447,7 @@ export async function answerFromEvidence(
    */
   const request = {
     system: ANSWER_SYSTEM,
-    user: `QUESTION: ${question}\n\nCRM RECORD:\n${leadContext}\n\nEVIDENCE:\n${evidence}`,
+    user: `QUESTION: ${question}\n\nCRM IDENTITY HINTS (not evidence):\n${leadContext}\n\nEVIDENCE:\n${evidence}`,
     schema: ANSWER_SCHEMA as unknown as Record<string, unknown>,
     temperature: 0.2,
     maxOutputTokens: 1200,
@@ -522,7 +536,9 @@ export async function answerFromEvidence(
       ? Math.min(1, Math.max(0, parsed.confidence))
       : 0.5
 
-  const used = cited.length > 0 ? cited : shown.slice(0, 3)
+  // An unknown answer carries no citations by contract. Attaching the first
+  // three merely-related pages would make "not found" look source-backed.
+  const used = status === 'unknown' ? [] : cited.length > 0 ? cited : shown.slice(0, 3)
 
   /*
    * ⚠️ "CORROBORATED" IS VERIFIED BY CODE, NOT ACCEPTED FROM THE MODEL.

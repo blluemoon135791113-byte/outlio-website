@@ -34,6 +34,7 @@ function person(n: number): PersonEntity {
     id: `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
     fullName: `Person ${n}`,
     linkedinUrl: null,
+    location: null,
     jobTitle: 'Founder',
     companyName: 'Company 1',
     companyDomain: 'company-1.com',

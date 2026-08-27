@@ -17,7 +17,12 @@ import 'server-only'
  * upload is exactly the unbounded work the budget exists to prevent — batch
  * analysis stays with the existing provider pipeline and SQL aggregation.
  */
-import { learnDomainFromSources, resolveCompanyDomain, siteScopedQuery } from '@/lib/hubble/domain'
+import {
+  learnDomainFromRedirect,
+  learnDomainFromSources,
+  resolveCompanyDomain,
+  siteScopedQuery,
+} from '@/lib/hubble/domain'
 import { crawl4AiPageFetcher } from '@/lib/hubble/fetch/crawl4ai'
 import { httpPageFetcher } from '@/lib/hubble/fetch/fetcher'
 import { resolveEmbeddingProvider } from '@/lib/hubble/providers/embedding'
@@ -42,7 +47,17 @@ import {
   retrieve,
   type Chunk,
 } from '@/lib/hubble/retrieve'
-import { findCachedAnswer, knownUrls, loadCachedChunks, savePage, saveAnswer } from '@/lib/hubble/store'
+import { looksLikeOwnDomain } from '@/lib/hubble/source-quality'
+import {
+  findCachedAnswer,
+  knownUrls,
+  loadCachedChunks,
+  loadResearchEvidenceChunks,
+  savePage,
+  saveAnswer,
+} from '@/lib/hubble/store'
+import { citedContactEvidence } from '@/lib/hubble/contact-evidence'
+import { writeEvidence } from '@/lib/intelligence/evidence-store'
 
 export type AskSubject = {
   leadId: string | null
@@ -51,6 +66,11 @@ export type AskSubject = {
   domain: string | null
   personName: string | null
   personTitle: string | null
+  /**
+   * Where the lead is. Passed to identity resolution so a cited contact can be
+   * corroborated against the right person, not merely the right name.
+   */
+  personLocation: string | null
   /** Whatever the CRM already holds, rendered for the model as context. */
   known: string
 }
@@ -141,7 +161,7 @@ export async function askHubble(
 
   /* ---- 1. Cache. Before anything else, always. ------------------------- */
   onProgress({ phase: 'cache' })
-  const cached = await findCachedAnswer(userId, subject.companyId, question)
+  const cached = await findCachedAnswer(userId, subject.leadId, subject.companyId, question)
   if (cached) {
     usage.cacheHits = 1
     usage.elapsedMs = Date.now() - started
@@ -165,8 +185,12 @@ export async function askHubble(
   const vectorsUsable = await embedder.isUsable({ deadlineAt: researchDeadline })
 
   /* ---- 2. What we already hold: previously fetched pages for this company. */
-  const chunks: Chunk[] = await loadCachedChunks(userId, subject.companyId)
-  const alreadyFetched = await knownUrls(userId, subject.companyId)
+  const [pageChunks, typedEvidenceChunks, alreadyFetched] = await Promise.all([
+    loadCachedChunks(userId, subject.companyId),
+    loadResearchEvidenceChunks(userId, subject.leadId, subject.companyId),
+    knownUrls(userId, subject.companyId),
+  ])
+  const chunks: Chunk[] = [...pageChunks, ...typedEvidenceChunks]
 
   /*
    * ⚠️ THE DOMAIN, BEFORE PLANNING — it is what makes the queries precise.
@@ -180,7 +204,47 @@ export async function askHubble(
     ? { domain: subject.domain, origin: 'stored' as const }
     : await resolveCompanyDomain(userId, subject.companyId, subject.companyName, researchDeadline)
 
-  const domain = resolved?.domain ?? null
+  let domain = resolved?.domain ?? null
+
+  /*
+   * Repair a stale stored alias from evidence already in the cache.
+   *
+   * The first Caddie run had `hirecaddie.ai` stored but cached primary pages
+   * on `caddie.app`. Reusable evidence meant the search/fetch block was skipped,
+   * so redirect learning there could never run. A single guarded homepage read
+   * proves the relationship before changing identity; after the compare-and-
+   * swap succeeds, later questions skip this path because the hosts agree.
+   */
+  let checkedStoredHomepage = false
+  if (domain && resolved?.origin === 'stored') {
+    const hasMatchingAlias = chunks.some((chunk) => {
+      try {
+        const host = new URL(chunk.url).hostname.toLowerCase().replace(/^www\./, '')
+        return host !== domain && looksLikeOwnDomain(host, subject.companyName)
+      } catch {
+        return false
+      }
+    })
+
+    if (hasMatchingAlias && Date.now() < researchDeadline) {
+      const requestedUrl = `https://${domain}/`
+      const homepage = await httpPageFetcher.fetchPage(requestedUrl, {
+        deadlineAt: researchDeadline,
+      })
+      checkedStoredHomepage = true
+      if (!isFetchFailure(homepage)) {
+        const canonical = await learnDomainFromRedirect(
+          userId,
+          subject.companyId,
+          subject.companyName,
+          domain,
+          requestedUrl,
+          homepage.url,
+        )
+        if (canonical) domain = canonical
+      }
+    }
+  }
 
   /* ---- 3. Plan. ------------------------------------------------------- */
   onProgress({ phase: 'planning' })
@@ -237,6 +301,18 @@ export async function askHubble(
     // Dedup by URL, drop what we already have and what is not worth reading.
     const seen = new Set<string>(alreadyFetched)
     const toFetch: string[] = []
+
+    // Read the stored official homepage once. Besides providing primary
+    // evidence, this deterministically discovers canonical-domain redirects
+    // such as hirecaddie.ai -> caddie.app.
+    if (domain && !checkedStoredHomepage) {
+      const homepage = `https://${domain}/`
+      if (!seen.has(homepage)) {
+        seen.add(homepage)
+        toFetch.push(homepage)
+      }
+    }
+
     for (const hit of candidates) {
       if (seen.has(hit.url) || !worthFetching(hit.url)) continue
       seen.add(hit.url)
@@ -249,7 +325,7 @@ export async function askHubble(
     const fetched = await pooled(toFetch, budget.concurrency, async (url) => {
       if (Date.now() > researchDeadline) return null
       const direct = await httpPageFetcher.fetchPage(url, { deadlineAt: researchDeadline })
-      if (!isFetchFailure(direct)) return direct
+      if (!isFetchFailure(direct)) return { requestedUrl: url, page: direct }
 
       // Browser rendering is reserved for pages plain HTTP could not read and
       // is bounded across the whole question, regardless of fetch concurrency.
@@ -260,12 +336,25 @@ export async function askHubble(
 
       usage.browserFetches += 1
       const rendered = await crawl4AiPageFetcher.fetchPage(url, { deadlineAt: researchDeadline })
-      return isFetchFailure(rendered) ? null : rendered
+      return isFetchFailure(rendered) ? null : { requestedUrl: url, page: rendered }
     })
 
-    for (const page of fetched) {
-      if (!page) continue
+    for (const fetchedPage of fetched) {
+      if (!fetchedPage) continue
+      const { requestedUrl, page } = fetchedPage
       usage.pagesFetched += 1
+
+      if (domain) {
+        const canonical = await learnDomainFromRedirect(
+          userId,
+          subject.companyId,
+          subject.companyName,
+          domain,
+          requestedUrl,
+          page.url,
+        )
+        if (canonical) domain = canonical
+      }
 
       // Solr is an acceleration layer, never the source of truth. Indexing is
       // best-effort and cannot block saving the evidence in Hubble's database.
@@ -359,6 +448,23 @@ export async function askHubble(
   }
 
   /* ---- 7. Save, so the next question reuses it. ------------------------ */
+  // Deterministic contacts found in the exact cited passages become typed
+  // lead evidence. The model's answer text is never parsed or trusted here.
+  // Persistence is best-effort: a card write cannot erase a completed answer.
+  try {
+    await writeEvidence(userId, null, citedContactEvidence({
+      leadId: subject.leadId,
+      companyId: subject.companyId,
+      personName: subject.personName,
+      personTitle: subject.personTitle,
+      personLocation: subject.personLocation,
+      companyName: subject.companyName,
+      domain,
+    }, answer.status, answer.sources))
+  } catch {
+    // The page/chunk and answer stores still retain the cited result.
+  }
+
   await saveAnswer({
     userId,
     leadId: subject.leadId,

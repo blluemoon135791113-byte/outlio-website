@@ -159,6 +159,24 @@ function safeParse(text: string): unknown | undefined {
   }
 }
 
+type GeminiPart = { text?: string; thought?: boolean }
+
+/**
+ * Gemini 3 may put internal reasoning and the structured answer in separate
+ * content parts. Only non-thought text is part of the answer contract; reading
+ * `parts[0]` can therefore try to JSON-parse a reasoning preamble and discard
+ * the valid JSON that follows it.
+ */
+export function extractGeminiText(parts: readonly GeminiPart[] | undefined): string | undefined {
+  const text = (parts ?? [])
+    .filter((part) => part.thought !== true && typeof part.text === 'string')
+    .map((part) => part.text)
+    .join('')
+    .trim()
+
+  return text || undefined
+}
+
 function describe(error: unknown): string {
   if (error instanceof ProviderHttpError) return `${error.code} from ${error.host}`
   return 'llm request failed'
@@ -185,7 +203,7 @@ export function createGeminiProvider(
 
       try {
         const response = await requestJson<{
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+          candidates?: Array<{ content?: { parts?: GeminiPart[] } }>
         }>({
           url: `https://${GEMINI_HOST}/v1beta/models/${model}:generateContent`,
           method: 'POST',
@@ -201,14 +219,24 @@ export function createGeminiProvider(
             generationConfig: {
               temperature: request.temperature ?? 0,
               maxOutputTokens: request.maxOutputTokens ?? 2048,
+              // Gemini 3 counts hidden reasoning against maxOutputTokens. Its
+              // default can exhaust the entire answer budget before emitting
+              // JSON (observed as `MAX_TOKENS` plus "Here is the"). Hubble's
+              // tasks are constrained extraction/classification, so minimal
+              // reasoning is both faster and preserves the structured output.
+              ...(/^gemini-3(?:\.|-)/.test(model)
+                ? { thinkingConfig: { thinkingLevel: 'MINIMAL' } }
+                : {}),
               // Constrained decoding: the model cannot return prose at all.
               responseMimeType: 'application/json',
-              responseSchema: request.schema,
+              // Current GenerateContent accepts JSON Schema through this
+              // field. `responseSchema` is the older OpenAPI-shaped variant.
+              responseJsonSchema: request.schema,
             },
           },
         })
 
-        const text = response.candidates?.[0]?.content?.parts?.[0]?.text
+        const text = extractGeminiText(response.candidates?.[0]?.content?.parts)
         if (!text) return { ok: false, code: 'unparseable', detail: 'empty completion' }
 
         const json = safeParse(text)
@@ -585,17 +613,32 @@ export function resolveLlmProvider(
     backboard: createBackboardProvider(),
   }
 
+  const configuredAllowlist = process.env.LLM_ALLOWED_VENDORS
+    ?.split(',')
+    .map((vendor) => vendor.trim().toLowerCase())
+    .filter((vendor): vendor is LlmVendor => LLM_VENDORS.includes(vendor as LlmVendor))
+
+  // When an allowlist is present, fail closed: a malformed/empty value must
+  // not silently re-enable a provider that may incur charges.
+  const allowedVendors = process.env.LLM_ALLOWED_VENDORS === undefined
+    ? [...LLM_VENDORS]
+    : configuredAllowlist ?? []
+
+  const usableVendors = allowedVendors.length > 0 ? allowedVendors : ['gemini' as const]
+
   const preferredVendor =
-    preferred !== undefined && preferred in providers ? (preferred as LlmVendor) : undefined
+    preferred !== undefined && usableVendors.includes(preferred as LlmVendor)
+      ? (preferred as LlmVendor)
+      : undefined
 
   const candidates: LLMProvider[] = preferredVendor
     ? [
         providers[preferredVendor],
-        ...LLM_VENDORS.filter((vendor) => vendor !== preferredVendor).map(
+        ...usableVendors.filter((vendor) => vendor !== preferredVendor).map(
           (vendor) => providers[vendor],
         ),
       ]
-    : LLM_VENDORS.map((vendor) => providers[vendor])
+    : usableVendors.map((vendor) => providers[vendor])
 
   return createFallbackLlmProvider(candidates)
 }

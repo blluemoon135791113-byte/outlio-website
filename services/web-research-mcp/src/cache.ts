@@ -20,5 +20,5 @@ export class CachingPageFetcher {
 
 export class CachingSemanticExtractor implements SemanticExtractor {
   constructor(private readonly inner: SemanticExtractor, private readonly store: ResearchStorage, private readonly config: Config) {}
-  async extract(lead: Lead, page: ScoredPage, chunk: string): Promise<ResearchFact[]> { const key = keyOf({ lead, url: page.url, chunk, model: this.config.GEMINI_MODEL }); const cached = await this.store.cacheGet<ResearchFact[]>("extraction", key); if (cached) return cached; const value = await this.inner.extract(lead, page, chunk); await this.store.cacheSet("extraction", key, value, this.config.CACHE_TTL_SECONDS); return value; }
+  async extract(lead: Lead, page: ScoredPage, chunk: string): Promise<ResearchFact[]> { const key = keyOf({ lead, url: page.url, chunk, ollama: this.config.OLLAMA_URL ? this.config.OLLAMA_MODEL : null, gemini: this.config.GEMINI_API_KEY ? this.config.GEMINI_MODEL : null }); const cached = await this.store.cacheGet<ResearchFact[]>("extraction", key); if (cached) return cached; const value = await this.inner.extract(lead, page, chunk); await this.store.cacheSet("extraction", key, value, this.config.CACHE_TTL_SECONDS); return value; }
 }

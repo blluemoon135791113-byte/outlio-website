@@ -185,3 +185,45 @@ export async function getCompaniesForLeads(
 
   return { companies, companyIdByLeadId }
 }
+
+/**
+ * Loads companies by id, regardless of whether any lead points at them.
+ *
+ * The maintenance counterpart to `getCompaniesForLeads`: over a thousand
+ * domain-less companies in production are linked to no surviving lead, so a
+ * lead-scoped read can never reach them. Same batching, same mandatory
+ * user scoping — the service role bypasses RLS and one check in TypeScript is
+ * not a boundary.
+ */
+export async function getCompaniesByIds(
+  userId: string,
+  companyIds: readonly string[],
+): Promise<CompanyRecord[]> {
+  if (!userId) throw new Error('getCompaniesByIds: userId is required')
+  if (companyIds.length === 0) return []
+
+  const supabase = createAdminClient()
+  const companies: CompanyRecord[] = []
+
+  for (let i = 0; i < companyIds.length; i += QUERY_BATCH_SIZE) {
+    const { data, error } = await supabase
+      .from('companies')
+      .select('id, name, normalized_domain, normalized_linkedin_url, normalized_name')
+      .eq('user_id', userId)
+      .in('id', companyIds.slice(i, i + QUERY_BATCH_SIZE))
+
+    if (error) throw new Error(`getCompaniesByIds failed: ${concise(error.message)}`)
+
+    for (const row of data ?? []) {
+      companies.push({
+        id: row.id,
+        name: row.name,
+        normalizedDomain: row.normalized_domain,
+        normalizedLinkedInUrl: row.normalized_linkedin_url,
+        normalizedName: row.normalized_name,
+      })
+    }
+  }
+
+  return companies
+}

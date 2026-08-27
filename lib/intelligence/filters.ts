@@ -112,7 +112,7 @@ export function preserveExplicitConstraints(
   return { ...plan, requiredFields: [...required], filters }
 }
 
-export function searxngTimeRange(filters: Readonly<Record<string, unknown>>):
+export function searchTimeRange(filters: Readonly<Record<string, unknown>>):
   | 'day'
   | 'week'
   | 'month'

@@ -37,8 +37,86 @@ export function evidenceKey(
  * reads as "no".
  */
 export type FieldKnowledge =
-  | { state: 'known'; record: EvidenceRecord; conflicting: EvidenceRecord[] }
+  | {
+      state: 'known'
+      record: EvidenceRecord
+      conflicting: EvidenceRecord[]
+      /**
+       * Fresh records from OTHER providers that reached the same value.
+       * Previously these were computed, discarded, and never seen again — so
+       * "three independent sources agree" looked identical to "one source
+       * said so".
+       */
+      corroborating: EvidenceRecord[]
+      /**
+       * The confidence of the ANSWER, which is not the confidence of the
+       * winning record. Agreement raises it, dissent lowers it. Kept separate
+       * from `record.confidence` because that is what the provider claimed and
+       * rewriting it would misreport the provider.
+       */
+      confidence: number
+    }
   | { state: 'unknown'; reason: 'never_researched' | 'expired' | 'unavailable' }
+
+/**
+ * Certainty is not available from web research, so the engine cannot express
+ * it. A cell that reads 100% invites a trust the method cannot support.
+ */
+const CONFIDENCE_CEILING = 0.97
+
+/** Contested evidence is still evidence. Never let a haircut read as "nothing". */
+const CONFIDENCE_FLOOR = 0.05
+
+/** Each independent corroborator closes this much of the gap to the ceiling. */
+const CORROBORATION_GAIN = 0.3
+
+/** How hard the strongest dissenting provider cuts the answer. */
+const DISSENT_PENALTY = 0.4
+
+function sameValue(a: EvidenceRecord, b: EvidenceRecord): boolean {
+  return JSON.stringify(a.value) === JSON.stringify(b.value)
+}
+
+/**
+ * Scores the ANSWER, given the winner and everyone else who was fresh.
+ *
+ * ⚠️ INDEPENDENCE IS BY PROVIDER, NOT BY RECORD. The same provider returning
+ * the same value on two URLs is ONE source agreeing with itself — a systematic
+ * error in that provider produces both rows, so counting them twice would
+ * manufacture confidence out of a single point of failure. Only a provider the
+ * winner did not come from can corroborate it.
+ *
+ * Diminishing returns are deliberate: the second independent source is worth
+ * far more than the fifth.
+ */
+export function scoreConfidence(
+  winner: EvidenceRecord,
+  corroborating: readonly EvidenceRecord[],
+  conflicting: readonly EvidenceRecord[],
+): number {
+  let confidence = Math.min(winner.confidence, CONFIDENCE_CEILING)
+
+  const agreeing = new Set(corroborating.map((record) => record.sourceProvider))
+  agreeing.delete(winner.sourceProvider)
+  for (let index = 0; index < agreeing.size; index += 1) {
+    confidence += (CONFIDENCE_CEILING - confidence) * CORROBORATION_GAIN
+  }
+
+  /*
+   * Dissent is scaled by the STRONGEST dissenter, not by how many there are.
+   * One authoritative source saying otherwise is the alarming case; five weak
+   * scrapers repeating each other is not five times the doubt.
+   */
+  const dissenters = conflicting.filter(
+    (record) => record.sourceProvider !== winner.sourceProvider,
+  )
+  if (dissenters.length > 0) {
+    const strongest = Math.max(...dissenters.map((record) => record.confidence))
+    confidence *= 1 - DISSENT_PENALTY * strongest
+  }
+
+  return Math.min(CONFIDENCE_CEILING, Math.max(CONFIDENCE_FLOOR, confidence))
+}
 
 /**
  * Picks the authoritative record when sources disagree (spec §17).
@@ -75,14 +153,17 @@ export function resolveConflict(
   })
 
   const [winner, ...rest] = ranked
+  // Only records that actually disagree are a conflict. Two providers agreeing
+  // is corroboration, and reporting it as a dispute is noise.
+  const conflicting = rest.filter((record) => !sameValue(record, winner!))
+  const corroborating = rest.filter((record) => sameValue(record, winner!))
+
   return {
     state: 'known',
     record: winner!,
-    // Only records that actually disagree are a conflict. Two providers
-    // agreeing is corroboration, and reporting it as a dispute is noise.
-    conflicting: rest.filter(
-      (record) => JSON.stringify(record.value) !== JSON.stringify(winner!.value),
-    ),
+    conflicting,
+    corroborating,
+    confidence: scoreConfidence(winner!, corroborating, conflicting),
   }
 }
 

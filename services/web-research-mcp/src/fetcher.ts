@@ -5,6 +5,25 @@ import { ResearchError } from "./types.js";
 
 export type FetchedPage = { url: string; html: string; contentType: string };
 
+/**
+ * Resolve a server redirect without canonicalizing `www` away.
+ *
+ * Search-result normalization intentionally treats `www.example.com` and
+ * `example.com` as duplicates. Fetching cannot do that: many sites redirect
+ * apex → www, and stripping it after every response creates an artificial
+ * loop until the redirect limit is exhausted.
+ */
+export function resolveRedirectUrl(location: string, current: string): string | null {
+  try {
+    const url = new URL(location, current);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export class PageFetcher {
   constructor(private readonly config: Config, private readonly fetchImpl: typeof fetch = fetch) {}
 
@@ -15,7 +34,7 @@ export class PageFetcher {
       const url = new URL(current); await this.assertPublic(url);
       const response = await this.withRetry(url);
       if (response.status >= 300 && response.status < 400) {
-        const next = normalizeUrl(response.headers.get("location") ?? "", current);
+        const next = resolveRedirectUrl(response.headers.get("location") ?? "", current);
         if (!next) throw new ResearchError("INVALID_REDIRECT", "Page returned an invalid redirect");
         current = next; continue;
       }

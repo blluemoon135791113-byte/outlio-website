@@ -9,7 +9,7 @@ and measured cost/coverage data.
 | Capability | Preferred path | Fallbacks |
 | --- | --- | --- |
 | Planning/reasoning | `LLM_PROVIDER` | Gemini → Groq → OpenRouter → Cerebras → Backboard circuit-breaker chain |
-| Existing evidence search | Solr | Database lexical/vector retrieval |
+| Existing evidence search | Postgres lexical/vector retrieval | Meilisearch only after the capacity gate in `docs/HUBBLE_RESEARCH_ARCHITECTURE.md` |
 | Live web search | SearXNG | Google CSE → Brave → Tavily |
 | Browser extraction | direct HTTP first | Crawl4AI, with a hard per-question cap |
 | Company facts | Wikidata | Companies House → SEC EDGAR → domain discovery → USAspending |
@@ -18,8 +18,10 @@ and measured cost/coverage data.
 | Contact details | Prospeo | Apollo; add Hunter only after a coverage/cost benchmark |
 | Embeddings | Ollama `nomic-embed-text` | lexical BM25 when unavailable |
 
-Never run Solr, Elasticsearch, and Meilisearch as three parallel indexes. Pick
-one source-independent retrieval index; Hubble currently targets Solr. Likewise,
+Never run Solr, Elasticsearch, and Meilisearch as three parallel indexes. The
+accepted research architecture keeps Postgres as the current retrieval store
+and permits Meilisearch as the single future read index only after a measured
+capacity gate. Likewise,
 do not call Crawl4AI, Firecrawl, Jina, and Apify for every URL. Direct HTTP is
 first, one browser renderer is the bounded fallback, and another service is
 introduced only when a benchmark proves incremental coverage.
@@ -123,7 +125,9 @@ For every run verify:
 ## Deployment sequence
 
 1. Run the offline gate.
-2. Deploy Solr/Crawl4AI/SearXNG to an always-on host with enough memory.
+2. Deploy only the enabled acquisition services (currently Crawl4AI/SearXNG)
+   to an always-on host with enough memory. Do not deploy Solr, Elasticsearch,
+   Redis Search, or Meilisearch for the current Postgres-backed retrieval path.
 3. Use authenticated HTTPS service URLs in the production environment. Never
    use `127.0.0.1` in Vercel; it points back to the Vercel function itself.
 4. Run the operator-service gate against staging.

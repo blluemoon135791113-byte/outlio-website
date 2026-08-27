@@ -24,7 +24,7 @@ const PRODUCT_LINKS: Array<{
   { href: '/dashboard', label: 'Overview', exact: true, icon: 'dashboard' },
   { href: '/dashboard/extract/new', label: 'New extraction', icon: 'extract' },
   { href: '/dashboard/jobs', label: 'Extractions', icon: 'history' },
-  { href: '/dashboard/intelligence', label: 'Intelligence', icon: 'intelligence' },
+  { href: '/dashboard/intelligence', label: 'Hubble Intelligence', icon: 'intelligence' },
 ]
 
 const ACCESS_LINK = {
@@ -69,7 +69,7 @@ export function ProductNav({
             onClick={onNavigate}
             className={
               active
-                ? 'group relative flex h-9 items-center gap-3 rounded-lg bg-surface-muted px-3 text-[13px] font-semibold text-ink'
+                ? 'group relative flex h-9 items-center gap-3 rounded-lg bg-surface-muted px-3 text-[13px] font-semibold text-ink shadow-[var(--clay-shadow-inset)]'
                 : 'group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]'
             }
           >

@@ -65,9 +65,11 @@ describe('the registry excludes metered providers by default', () => {
     // Free sources are the whole point of running with paid providers off.
     for (const free of [
       'dns-tech',
-      'searxng-funding',
-      'searxng-web',
-      'searxng-company-profile',
+      'search-funding',
+      'search-web',
+      'search-company-profile',
+      'search-contact-email',
+      'search-contact-phone',
       'gdelt-funding',
       'wikidata',
       'github',

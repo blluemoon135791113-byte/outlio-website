@@ -58,7 +58,7 @@ function known(field: EvidenceRecord['field'], value: Record<string, unknown>): 
     expiresAt: null,
     researchRunId: null,
   }
-  return [evidenceKey('company', COMPANY_ID, field), { state: 'known', record, conflicting: [] }]
+  return [evidenceKey('company', COMPANY_ID, field), { state: 'known', record, conflicting: [], corroborating: [], confidence: record.confidence }]
 }
 
 describeIf('qualification profiles', () => {

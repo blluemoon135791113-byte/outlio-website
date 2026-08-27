@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { createHash } from 'node:crypto'
+
 /**
  * The research runner — the thing that turns a plan into answers.
  *
@@ -19,12 +21,13 @@ import 'server-only'
  * Steps 2 and 3 are where the money is saved. Skipping either turns a £2 query
  * into a £200 one.
  */
-import { getCompaniesForLeads } from '@/lib/companies/repository'
+import { getCompaniesByIds, getCompaniesForLeads } from '@/lib/companies/repository'
 import { dateRangeBounds } from '@/lib/intelligence/date-range'
 import { deriveAll, derivedEvidence } from '@/lib/intelligence/derive'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
-import { executeTasks, executeTasksInChunks } from '@/lib/intelligence/execute'
+import { executeTasks, executeTasksInChunks, type ExecutionReport } from '@/lib/intelligence/execute'
 import { readEvidence, recordToolCalls, writeEvidence } from '@/lib/intelligence/evidence-store'
+import { normalizeMcpResearch, persistMcpDocuments } from '@/lib/intelligence/mcp-research'
 import {
   isExecutable,
   researchScopeSchema,
@@ -35,7 +38,8 @@ import {
 import { applyClarifications } from '@/lib/intelligence/planner'
 import { buildLiveRegistry } from '@/lib/intelligence/providers'
 import { planToTasks } from '@/lib/intelligence/router'
-import { hasSearxngCredentials } from '@/lib/hubble/providers/search'
+import { hasWebSearch } from '@/lib/search'
+import { McpLeadResearchClient } from '@/lib/intelligence/providers/mcp-research'
 import { preserveExplicitConstraints } from '@/lib/intelligence/filters'
 import {
   RESEARCH_FIELD_SPEC,
@@ -43,6 +47,8 @@ import {
   type EvidenceRecord,
   type PersonEntity,
   type ResearchField,
+  type ResearchTask,
+  type ToolCategory,
 } from '@/lib/intelligence/types'
 import { getProfile, saveResults } from '@/lib/qualification/repository'
 import { scoreEntity, type QualificationResult } from '@/lib/qualification/score'
@@ -51,6 +57,186 @@ import type { Json } from '@/types/database'
 
 /** Leads read per page. PostgREST caps responses; never use a bare `.limit()`. */
 const PAGE_SIZE = 1000
+
+const ACTIVE_RUN_STATUSES = [
+  'pending',
+  'planning',
+  'waiting_for_clarification',
+  'running',
+] as const
+
+type EvidenceGap = {
+  provider: 'web-research-mcp'
+  entityType: 'company' | 'person'
+  entityId: string
+  reason: 'deadline' | 'unavailable' | 'invalid_response'
+}
+
+async function updateResearchProgress(
+  runId: string,
+  userId: string,
+  stage: string,
+  current = 0,
+  total = 0,
+  evidenceGaps?: readonly EvidenceGap[],
+): Promise<void> {
+  const update: Record<string, unknown> = {
+    progress_stage: stage,
+    progress_current: current,
+    progress_total: total,
+  }
+  if (evidenceGaps) update.evidence_gaps = evidenceGaps
+
+  await createAdminClient()
+    .from('research_runs')
+    .update(update as never)
+    .eq('id', runId)
+    .eq('user_id', userId)
+}
+
+function mcpEntityLimit(): number {
+  const parsed = Number.parseInt(process.env.WEB_RESEARCH_MCP_MAX_ENTITIES ?? '3', 10)
+  return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 10) : 3
+}
+
+function knowledgeHas(
+  knowledge: ReadonlyMap<string, import('@/lib/intelligence/evidence').FieldKnowledge>,
+  entityType: 'company' | 'person',
+  entityId: string,
+  field: ResearchField,
+): boolean {
+  return knowledge.get(`${entityType}:${entityId}:${field}`)?.state === 'known'
+}
+
+async function runMcpAcquisitionStage(input: {
+  runId: string
+  userId: string
+  companies: readonly CompanyEntity[]
+  people: readonly PersonEntity[]
+  companyFields: readonly ResearchField[]
+  personFields: readonly ResearchField[]
+  knowledge: ReadonlyMap<string, import('@/lib/intelligence/evidence').FieldKnowledge>
+}): Promise<{
+  evidenceWritten: number
+  externalCalls: number
+  gaps: EvidenceGap[]
+}> {
+  const client = new McpLeadResearchClient()
+  const limit = mcpEntityLimit()
+  if (!client.isConfigured() || limit === 0) {
+    return { evidenceWritten: 0, externalCalls: 0, gaps: [] }
+  }
+
+  const companyById = new Map(input.companies.map((company) => [company.id, company]))
+  const candidates: Array<{
+    company: CompanyEntity
+    person?: PersonEntity
+    fields: ResearchField[]
+  }> = []
+  const representedCompanies = new Set<string>()
+
+  for (const person of input.people) {
+    if (candidates.length >= limit) break
+    if (!person.companyId) continue
+    const company = companyById.get(person.companyId)
+    if (!company) continue
+    const fields = input.personFields.filter((field) =>
+      !knowledgeHas(input.knowledge, 'person', person.id, field),
+    )
+    if (fields.length === 0) continue
+    const companyGaps = input.companyFields.filter((field) =>
+      !knowledgeHas(input.knowledge, 'company', company.id, field),
+    )
+    candidates.push({ company, person, fields: [...new Set([...fields, ...companyGaps])] })
+    representedCompanies.add(company.id)
+  }
+
+  for (const company of input.companies) {
+    if (candidates.length >= limit) break
+    if (representedCompanies.has(company.id)) continue
+    const fields = input.companyFields.filter((field) =>
+      !knowledgeHas(input.knowledge, 'company', company.id, field),
+    )
+    if (fields.length > 0) candidates.push({ company, fields })
+  }
+
+  if (candidates.length === 0) return { evidenceWritten: 0, externalCalls: 0, gaps: [] }
+
+  const gaps: EvidenceGap[] = []
+  let evidenceWritten = 0
+  let externalCalls = 0
+  const deadlineAt = Date.now() + 150_000
+
+  await updateResearchProgress(input.runId, input.userId, 'web_research', 0, candidates.length)
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]!
+    const displayName = candidate.person?.fullName ?? candidate.company.name ?? candidate.company.domain
+    const companyName = candidate.company.name ?? candidate.company.domain
+    if (!displayName || !companyName) continue
+
+    const attempt = await client.research({
+      name: displayName,
+      jobTitle: candidate.person?.jobTitle ?? null,
+      company: companyName,
+      companyDomain: candidate.company.domain,
+      linkedinUrl: candidate.person?.linkedinUrl ?? candidate.company.linkedinUrl,
+    }, candidate.fields, deadlineAt)
+    externalCalls += 1
+
+    if (!attempt.ok) {
+      if (attempt.reason !== 'not_configured') {
+        gaps.push({
+          provider: 'web-research-mcp',
+          entityType: candidate.person ? 'person' : 'company',
+          entityId: candidate.person?.id ?? candidate.company.id,
+          reason: attempt.reason,
+        })
+      }
+      await recordToolCalls(input.userId, input.runId, [{
+        provider: 'web-research-mcp',
+        tool: 'web_research',
+        entityType: candidate.person ? 'person' : 'company',
+        entityId: candidate.person?.id ?? candidate.company.id,
+        status: attempt.reason === 'deadline' ? 'timeout' : 'error',
+        latencyMs: attempt.latencyMs,
+        estimatedCostMicros: 0,
+        errorCode: attempt.reason === 'deadline' ? 'ERR_TIMEOUT' : 'ERR_PROVIDER_UNAVAILABLE',
+      }])
+    } else {
+      const evidence = normalizeMcpResearch(attempt.result, {
+        company: candidate.company,
+        person: candidate.person,
+      })
+      evidenceWritten += (await writeEvidence(input.userId, input.runId, evidence)).written
+      await persistMcpDocuments(input.userId, candidate.company.id, attempt.result).catch(() => ({
+        pages: 0,
+        chunks: 0,
+      }))
+      await recordToolCalls(input.userId, input.runId, [{
+        provider: 'web-research-mcp',
+        tool: 'web_research',
+        entityType: candidate.person ? 'person' : 'company',
+        entityId: candidate.person?.id ?? candidate.company.id,
+        status: evidence.length > 0 || attempt.result.documents.length > 0 ? 'success' : 'not_found',
+        latencyMs: attempt.latencyMs,
+        estimatedCostMicros: 0,
+        errorCode: null,
+      }])
+    }
+
+    await updateResearchProgress(
+      input.runId,
+      input.userId,
+      'web_research',
+      index + 1,
+      candidates.length,
+      gaps,
+    )
+  }
+
+  return { evidenceWritten, externalCalls, gaps }
+}
 
 export type ResearchOutcome = {
   runId: string
@@ -69,6 +255,32 @@ function concise(message: string): string {
   const first = message.split('\n')[0]?.trim() ?? ''
   const stripped = first.startsWith('<') ? 'upstream returned HTML' : first
   return stripped.length > 160 ? `${stripped.slice(0, 160)}…` : stripped
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
+
+export function researchIdempotencyKey(input: {
+  queryText: string
+  scope: ResearchScope
+  plan: ResearchPlan
+  qualificationProfileId?: string | null
+}): string {
+  return createHash('sha256').update(canonicalJson({
+    query: input.queryText.toLowerCase().replace(/\s+/g, ' ').trim(),
+    scope: input.scope,
+    plan: input.plan,
+    qualificationProfileId: input.qualificationProfileId ?? null,
+    version: 1,
+  })).digest('hex')
 }
 
 export type CreateRunResult =
@@ -107,14 +319,43 @@ export async function createResearchRun(
 
   const plan = validation.plan
   const needsClarification = !isExecutable(plan)
+  const idempotencyKey = researchIdempotencyKey({
+    queryText: input.queryText,
+    scope: input.scope,
+    plan,
+    qualificationProfileId: input.qualificationProfileId,
+  })
 
   const supabase = createAdminClient()
+
+  const { data: active } = await supabase
+    .from('research_runs')
+    .select('id, status')
+    .eq('user_id', userId)
+    .eq('idempotency_key', idempotencyKey)
+    .in('status', [...ACTIVE_RUN_STATUSES])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (active) {
+    return active.status === 'waiting_for_clarification'
+      ? {
+          ok: true,
+          runId: active.id,
+          status: 'waiting_for_clarification',
+          questions: plan.clarificationQuestions,
+        }
+      : { ok: true, runId: active.id, status: 'queued' }
+  }
 
   const { data, error } = await supabase
     .from('research_runs')
     .insert({
       user_id: userId,
+      idempotency_key: idempotencyKey,
       status: needsClarification ? 'waiting_for_clarification' : 'pending',
+      progress_stage: needsClarification ? 'waiting_for_clarification' : 'queued',
       query_text: input.queryText,
       // Validated above, so serialising to jsonb is safe. The cast exists
       // because a Zod-inferred shape is structurally wider than `Json`.
@@ -129,6 +370,28 @@ export async function createResearchRun(
     .single()
 
   if (error || !data) {
+    // The partial unique index closes the race between the lookup above and
+    // this insert. If another request won, join its run rather than surfacing
+    // a duplicate-key error to the user.
+    const { data: raced } = await supabase
+      .from('research_runs')
+      .select('id, status')
+      .eq('user_id', userId)
+      .eq('idempotency_key', idempotencyKey)
+      .in('status', [...ACTIVE_RUN_STATUSES])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (raced) {
+      return raced.status === 'waiting_for_clarification'
+        ? {
+            ok: true,
+            runId: raced.id,
+            status: 'waiting_for_clarification',
+            questions: plan.clarificationQuestions,
+          }
+        : { ok: true, runId: raced.id, status: 'queued' }
+    }
     return { ok: false, reason: concise(error?.message ?? 'run could not be created') }
   }
 
@@ -142,7 +405,20 @@ export async function createResearchRun(
   }
 
   const { error: queueError } = await supabase.rpc('enqueue_research_run', { p_run_id: data.id })
-  if (queueError) return { ok: false, reason: concise(queueError.message) }
+  if (queueError) {
+    await supabase
+      .from('research_runs')
+      .update({
+        status: 'failed',
+        progress_stage: 'failed',
+        error_code: 'ERR_QUEUE_UNAVAILABLE',
+        error_message: 'The research run could not be queued.',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', data.id)
+      .eq('user_id', userId)
+    return { ok: false, reason: concise(queueError.message) }
+  }
 
   return { ok: true, runId: data.id, status: 'queued' }
 }
@@ -196,6 +472,7 @@ export async function answerClarifications(
     .from('research_runs')
     .update({
       status: 'pending',
+      progress_stage: 'queued',
       plan: updated as unknown as Json,
       clarifications: [
         ...history,
@@ -209,7 +486,20 @@ export async function answerClarifications(
   if (updateError) return { ok: false, reason: concise(updateError.message) }
 
   const { error: queueError } = await supabase.rpc('enqueue_research_run', { p_run_id: runId })
-  if (queueError) return { ok: false, reason: concise(queueError.message) }
+  if (queueError) {
+    await supabase
+      .from('research_runs')
+      .update({
+        status: 'failed',
+        progress_stage: 'failed',
+        error_code: 'ERR_QUEUE_UNAVAILABLE',
+        error_message: 'The research run could not be queued.',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', runId)
+      .eq('user_id', userId)
+    return { ok: false, reason: concise(queueError.message) }
+  }
 
   return { ok: true, runId }
 }
@@ -326,10 +616,20 @@ export async function processResearchRun(
   const scope: ResearchScope = parsedScope.data
 
   // ---- 1. scope → leads --------------------------------------------------
-  const leadIds = await resolveScope(userId, scope)
+  await updateResearchProgress(runId, userId, 'resolving_scope')
+  const leadIds = scope.type === 'company_ids' ? [] : await resolveScope(userId, scope)
 
-  // ---- 2. leads → distinct companies (spec §9) ---------------------------
-  const { companies, companyIdByLeadId } = await getCompaniesForLeads(userId, leadIds)
+  // ---- 2. scope target → distinct companies (spec §9) ---------------------
+  /*
+   * A `company_ids` scope names its companies directly and skips the lead
+   * hop entirely — that is its reason to exist: companies linked to no
+   * surviving lead are unreachable through any lead-scoped read, and people
+   * loading below already short-circuits on an empty lead list.
+   */
+  const { companies } =
+    scope.type === 'company_ids'
+      ? { companies: await getCompaniesByIds(userId, scope.companyIds) }
+      : await getCompaniesForLeads(userId, leadIds)
 
   const companyEntities: CompanyEntity[] = companies.map((company) => ({
     type: 'company',
@@ -358,44 +658,150 @@ export async function processResearchRun(
     (field) => RESEARCH_FIELD_SPEC[field].entity === 'person',
   )
 
-  const knowledge = await readEvidence(userId, [
+  /*
+   * ⚠️ COMPANY FACTS RUN FIRST, AND CONTACT TASKS ARE ROUTED AFTER THEM.
+   *
+   * The contact waterfall keys on a company domain — and for a fresh
+   * extraction that domain often does not exist until THIS run's
+   * company-profile phase discovers it. Routing contact tasks against the
+   * pre-run snapshot makes every provider decline (no domain), the run report
+   * `unknown`, and the discovery we just paid for sit unused. So: company
+   * phase → persist → reload people with fresh domains → contact phase.
+   */
+  await updateResearchProgress(runId, userId, 'checking_cache')
+  let knowledge = await readEvidence(userId, [
     { entityType: 'company', entityIds: companyEntities.map((c) => c.id), fields: companyFields },
     { entityType: 'person', entityIds: peopleEntities.map((p) => p.id), fields: personFields },
   ])
 
-  // ---- 4. route only the gaps (spec §15) ---------------------------------
-  const routing = planToTasks({
+  // Hubble owns this durable run. The MCP performs bounded acquisition only;
+  // it does not create a second job or persist a parallel result bundle.
+  const mcpStage = await runMcpAcquisitionStage({
+    runId,
+    userId,
     companies: companyEntities,
     people: peopleEntities,
-    requiredFields: plan.requiredFields,
-    filters: plan.filters,
+    companyFields,
+    personFields,
     knowledge,
   })
+  if (mcpStage.evidenceWritten > 0) {
+    knowledge = await readEvidence(userId, [
+      { entityType: 'company', entityIds: companyEntities.map((c) => c.id), fields: companyFields },
+      { entityType: 'person', entityIds: peopleEntities.map((p) => p.id), fields: personFields },
+    ])
+  }
 
-  // ---- 5. execute, isolating failures (spec §49) -------------------------
+  await updateResearchProgress(runId, userId, 'provider_research')
+
   const executionOptions = {
     registry: buildLiveRegistry(),
     // The operator-owned service is paced at the HTTP layer. Eight overlapping
     // requests keeps a visible 25-lead search responsive without bursting the
     // upstream engines; third-party categories retain the conservative four.
     concurrency:
-      hasSearxngCredentials() &&
-      routing.categories.some((category) =>
-        category === 'funding' || category === 'web_research' || category === 'company_profile')
+      hasWebSearch() &&
+      (companyFields.length > 0 ||
+        plan.requiredFields.some((field) =>
+          ['funding', 'web_research', 'company_profile'].includes(
+            RESEARCH_FIELD_SPEC[field].category,
+          ),
+        ))
         ? 2
         : undefined,
   }
-  const report = scope.type === 'all_leads'
-    ? await executeTasksInChunks(routing.tasks, executionOptions, 25)
-    : await executeTasks(routing.tasks, executionOptions)
 
-  // ---- 6. persist with provenance (spec §16) -----------------------------
-  const written = await writeEvidence(userId, runId, report.evidence)
-  // Windfall facts are worth exactly as much as requested ones next time, and
-  // they were already paid for.
-  await writeEvidence(userId, runId, report.bonusEvidence)
-  await recordToolCalls(userId, runId, report.toolCalls)
-  await persistDiscoveredDomains(userId, [...report.evidence, ...report.bonusEvidence])
+  const chunked = scope.type === 'all_leads' || scope.type === 'company_ids'
+  const runChunk = async (tasks: readonly ResearchTask[]) =>
+    chunked ? executeTasksInChunks(tasks, executionOptions, 25) : executeTasks(tasks, executionOptions)
+
+  // ---- 4a. company phase --------------------------------------------------
+  const companyRouting =
+    companyFields.length > 0
+      ? planToTasks({
+          companies: companyEntities,
+          people: [],
+          requiredFields: companyFields,
+          filters: plan.filters,
+          knowledge,
+        })
+      : { tasks: [], cacheHits: 0, categories: [] as ToolCategory[] }
+
+  const companyReport =
+    companyRouting.tasks.length > 0 ? await runChunk(companyRouting.tasks) : null
+
+  // ---- 5. persist with provenance (spec §16) -----------------------------
+  let writtenTotal = mcpStage.evidenceWritten
+
+  if (companyReport) {
+    const writtenCompany = await writeEvidence(userId, runId, companyReport.evidence)
+    writtenTotal += writtenCompany.written
+    // Windfall facts are worth exactly as much as requested ones next time,
+    // and they were already paid for.
+    writtenTotal += (await writeEvidence(userId, runId, companyReport.bonusEvidence)).written
+    await recordToolCalls(userId, runId, companyReport.toolCalls)
+    // Discovery must reach the companies table BEFORE the contact phase
+    // routes — that persistence IS the handoff.
+    await persistDiscoveredDomains(userId, [
+      ...companyReport.evidence,
+      ...companyReport.bonusEvidence,
+    ])
+  }
+
+  // ---- 4b/5b. contact phase, against freshly resolved domains -------------
+  let peopleForContact: PersonEntity[] = []
+  let personReport: ExecutionReport | null = null
+  let personCacheHits = 0
+  let personCategories: ToolCategory[] = []
+
+  if (personFields.length > 0 && leadIds.length > 0) {
+    peopleForContact = await loadPeople(userId, leadIds, plan)
+    const personKnowledge = await readEvidence(userId, [
+      { entityType: 'person', entityIds: peopleForContact.map((p) => p.id), fields: personFields },
+    ])
+
+    const personRouting = planToTasks({
+      companies: [],
+      people: peopleForContact,
+      requiredFields: personFields,
+      filters: plan.filters,
+      knowledge: personKnowledge,
+    })
+    personCacheHits = personRouting.cacheHits
+    personCategories = personRouting.categories
+
+    if (personRouting.tasks.length > 0) {
+      personReport = await runChunk(personRouting.tasks)
+      writtenTotal += (await writeEvidence(userId, runId, personReport.evidence)).written
+      writtenTotal += (await writeEvidence(userId, runId, personReport.bonusEvidence)).written
+      await recordToolCalls(userId, runId, personReport.toolCalls)
+      await persistDiscoveredDomains(userId, [
+        ...personReport.evidence,
+        ...personReport.bonusEvidence,
+      ])
+    }
+  }
+
+  // ---- combined report ----------------------------------------------------
+  const mergedResults = [
+    ...(companyReport?.results ?? []),
+    ...(personReport?.results ?? []),
+  ]
+  const report = {
+    results: mergedResults,
+    externalCallCount:
+      mcpStage.externalCalls +
+      (companyReport?.externalCallCount ?? 0) +
+      (personReport?.externalCallCount ?? 0),
+    estimatedCostMicros:
+      (companyReport?.estimatedCostMicros ?? 0) + (personReport?.estimatedCostMicros ?? 0),
+  }
+  const cacheHits = companyRouting.cacheHits + personCacheHits
+  const categories: ToolCategory[] = [...new Set([
+    ...(mcpStage.externalCalls > 0 ? ['web_research' as const] : []),
+    ...companyRouting.categories,
+    ...personCategories,
+  ])]
 
   // ---- 6b. derive, for free ----------------------------------------------
   const derivedCount = await deriveForCompanies(
@@ -405,6 +811,7 @@ export async function processResearchRun(
   )
 
   // ---- 7. qualify (spec §19) ---------------------------------------------
+  await updateResearchProgress(runId, userId, 'qualifying')
   const qualifiedCount = await qualifyRun(
     userId,
     runId,
@@ -419,37 +826,39 @@ export async function processResearchRun(
    * green tick over a table full of blanks.
    */
   const anyUnknown = report.results.some((result) => result.unknownFields.length > 0)
+  const routedTaskCount = (companyRouting.tasks?.length ?? 0) + (personReport ? 1 : 0)
   const status: ResearchOutcome['status'] =
-    routing.tasks.length === 0 || !anyUnknown ? 'completed' : 'partially_complete'
+    routedTaskCount === 0 || !anyUnknown ? 'completed' : 'partially_complete'
 
   await supabase
     .from('research_runs')
     .update({
       status,
-      tools_used: routing.categories,
+      tools_used: categories,
       external_call_count: report.externalCallCount,
-      cache_hit_count: routing.cacheHits,
+      cache_hit_count: cacheHits,
       estimated_cost_micros: report.estimatedCostMicros,
       actual_cost_micros: report.estimatedCostMicros,
       qualified_count: qualifiedCount ?? 0,
       duration_ms: Date.now() - startedAt,
       completed_at: new Date().toISOString(),
+      progress_stage: 'completed',
+      progress_current: 1,
+      progress_total: 1,
     })
     .eq('id', runId)
     .eq('user_id', userId)
 
   await supabase.from('research_job_queue').update({ status: 'done' }).eq('research_run_id', runId)
 
-  void companyIdByLeadId
-
   return {
     runId,
     status,
     leadCount: leadIds.length,
     companyCount: companyEntities.length,
-    cacheHits: routing.cacheHits,
+    cacheHits,
     externalCalls: report.externalCallCount,
-    evidenceWritten: written.written + derivedCount,
+    evidenceWritten: writtenTotal + derivedCount,
     estimatedCostMicros: report.estimatedCostMicros,
     qualifiedCount,
   }
@@ -496,7 +905,7 @@ async function deriveForCompanies(
           value: (row.value_json ?? {}) as Record<string, unknown>,
           sourceProvider: row.source_provider,
           sourceUrl: row.source_url,
-          sourceConfidence: row.source_confidence,
+          sourceConfidence: row.source_confidence as 'low' | 'medium' | 'high',
           confidence: Number(row.confidence),
           retrievedAt: row.retrieved_at,
           expiresAt: row.expires_at,
@@ -595,9 +1004,33 @@ async function loadPeople(
   for (let i = 0; i < leadIds.length; i += 200) {
     const { data } = await supabase
       .from('extracted_leads')
-      .select('id, full_name, linkedin_url, job_title, company_name, company_website_url, company_id')
+      .select('id, full_name, linkedin_url, job_title, company_name, company_website_url, company_id, location')
       .eq('user_id', userId)
       .in('id', leadIds.slice(i, i + 200))
+
+    // The research-grade domain beats the captured one: discovery may have
+    // resolved a website this lead never carried, and every contact provider
+    // keys on it.
+    const companyIdsToResolve = [
+      ...new Set(
+        (data ?? [])
+          .filter((row) => !row.company_website_url && row.company_id)
+          .map((row) => row.company_id as string),
+      ),
+    ]
+
+    const resolvedDomains = new Map<string, string>()
+    for (let j = 0; j < companyIdsToResolve.length; j += 100) {
+      const { data: companyRows } = await supabase
+        .from('companies')
+        .select('id, normalized_domain')
+        .eq('user_id', userId)
+        .in('id', companyIdsToResolve.slice(j, j + 100))
+
+      for (const row of companyRows ?? []) {
+        if (row.normalized_domain) resolvedDomains.set(row.id, row.normalized_domain)
+      }
+    }
 
     for (const row of data ?? []) {
       people.push({
@@ -606,8 +1039,11 @@ async function loadPeople(
         fullName: row.full_name,
         linkedinUrl: row.linkedin_url,
         jobTitle: row.job_title,
+        location: row.location,
         companyName: row.company_name,
-        companyDomain: row.company_website_url,
+        companyDomain:
+          row.company_website_url ??
+          (row.company_id ? resolvedDomains.get(row.company_id) ?? null : null),
         companyId: row.company_id,
       })
     }
@@ -630,6 +1066,7 @@ async function failRun(
       error_code: code,
       error_message: message,
       completed_at: new Date().toISOString(),
+      progress_stage: 'failed',
     })
     .eq('id', runId)
     .eq('user_id', userId)

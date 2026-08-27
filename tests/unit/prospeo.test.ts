@@ -17,6 +17,7 @@ const PERSON: PersonEntity = {
   id: '10000000-0000-4000-8000-000000000001',
   fullName: 'Fabricated Person',
   linkedinUrl: null,
+  location: null,
   jobTitle: 'Founder',
   companyName: 'Fabricated Systems',
   companyDomain: null,

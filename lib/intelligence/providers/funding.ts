@@ -23,7 +23,7 @@ import 'server-only'
  * the origin of a number (spec §5: it must not fabricate funding).
  */
 import { normalizeCompanyName } from '@/lib/companies/normalize'
-import { searxngTimeRange } from '@/lib/intelligence/filters'
+import { searchTimeRange } from '@/lib/intelligence/filters'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
 import type {
   CompanyEntity,
@@ -31,7 +31,7 @@ import type {
   NormalizedEvidence,
   ResearchTask,
 } from '@/lib/intelligence/types'
-import { hasSearxngCredentials, searxngSearch } from '@/lib/hubble/providers/search'
+import { hasWebSearch, serpSearch } from '@/lib/search'
 import { gdeltSearch } from './gdelt'
 import { hasTavilyCredentials, tavilySearch, type SearchResult } from './tavily'
 
@@ -377,21 +377,22 @@ function fundingQuery(task: ResearchTask): string {
   return parts.join(' ')
 }
 
-export const searxngFundingProvider: IntelligenceProvider<FundingFacts | null> = {
-  name: 'searxng-funding',
+export const searchFundingProvider: IntelligenceProvider<FundingFacts | null> = {
+  name: 'search-funding',
   category: 'funding',
 
   canHandle: (task) =>
     task.entity.type === 'company' &&
     Boolean((task.entity as CompanyEntity).name) &&
-    hasSearxngCredentials(),
+    hasWebSearch(),
 
   estimateCost: async () => 0,
 
   execute: async (task) => {
     const company = task.entity as CompanyEntity
-    const hits = await searxngSearch(fundingQuery(task), 10, {
-      timeRange: searxngTimeRange(task.filters ?? {}),
+    const hits = await serpSearch(fundingQuery(task), {
+      limit: 10,
+      timeRange: searchTimeRange(task.filters ?? {}),
     })
     const documents: SearchResult[] = hits.map((hit) => ({
       title: hit.title ?? '',
@@ -403,7 +404,7 @@ export const searxngFundingProvider: IntelligenceProvider<FundingFacts | null> =
     return extractFunding(company.name, documents, task.fields)
   },
 
-  normalize: (facts, task) => toEvidence('searxng-funding', task, facts),
+  normalize: (facts, task) => toEvidence('search-funding', task, facts),
 }
 
 export const tavilyFundingProvider: IntelligenceProvider<FundingFacts | null> = {
@@ -439,7 +440,7 @@ export const gdeltFundingProvider: IntelligenceProvider<FundingFacts | null> = {
     Boolean((task.entity as CompanyEntity).name) &&
     // GDELT is paced at one request per five seconds and is unsuitable for a
     // list-wide run when the operator-owned search service is available.
-    !hasSearxngCredentials(),
+    !hasWebSearch(),
 
   estimateCost: async () => 0,
 

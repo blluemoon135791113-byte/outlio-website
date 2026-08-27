@@ -87,11 +87,16 @@ function toPhase(event: Record<string, unknown>): Phase | null {
   }
 }
 
-export function useAskHubble() {
+export function useAskHubble(onAnswer?: (answer: AskAnswer) => void) {
   const [answers, setAnswers] = useState<AskAnswer[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase | null>(null)
+  const onAnswerRef = useRef(onAnswer)
+
+  useEffect(() => {
+    onAnswerRef.current = onAnswer
+  }, [onAnswer])
 
   /*
    * A request that outlives its modal would set state on a component that is
@@ -181,10 +186,9 @@ export function useAskHubble() {
             if (next) setPhase(next)
           } else if (event.type === 'answer') {
             const { type: _type, ...payload } = event
-            setAnswers((current) => [
-              ...current,
-              { ...(payload as Omit<AskAnswer, 'question'>), question: asked },
-            ])
+            const answer = { ...(payload as Omit<AskAnswer, 'question'>), question: asked }
+            setAnswers((current) => [...current, answer])
+            onAnswerRef.current?.(answer)
           } else if (event.type === 'error') {
             setError('Hubble could not complete the research. Try again.')
           }

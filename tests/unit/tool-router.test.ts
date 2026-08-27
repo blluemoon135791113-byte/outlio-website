@@ -34,6 +34,7 @@ function person(n: number, companyIndex: number): PersonEntity {
     id: `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
     fullName: `Person ${n}`,
     linkedinUrl: null,
+    location: null,
     jobTitle: 'Founder',
     companyName: `Company ${companyIndex}`,
     companyDomain: `company-${companyIndex}.com`,
@@ -58,7 +59,7 @@ function fresh(entityId: string, field: ResearchField): [string, FieldKnowledge]
   }
   return [
     evidenceKey('company', entityId, field),
-    { state: 'known', record, conflicting: [] },
+    { state: 'known', record, conflicting: [], corroborating: [], confidence: record.confidence },
   ]
 }
 

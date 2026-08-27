@@ -27,23 +27,33 @@ export default async function SettingsPage({
   const ctx = await requireUser()
   const params = await searchParams
   const adminMfaRequired = ctx.isAdmin && params.required_mfa === '1'
-  const avatarUrl = await signedAvatarUrl(ctx.userId!, ctx.profile?.avatar_path)
-  const { data: factors } = await (await createClient()).auth.mfa.listFactors()
-  const initialFactorId = factors?.totp[0]?.id ?? null
-  const { data: subscription } = await createAdminClient()
-    .from('subscriptions')
-    .select('status, provider, provider_ref, current_period_end, cancel_at')
-    .eq('user_id', ctx.userId!)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const authClient = await createClient()
+  const admin = createAdminClient()
   const initials = (ctx.profile?.full_name ?? ctx.email ?? 'O').split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
-  const [devices, clayConnection, googleConnection, ghlConnection] = await Promise.all([
+  const [
+    avatarUrl,
+    { data: factors },
+    { data: subscription },
+    devices,
+    clayConnection,
+    googleConnection,
+    ghlConnection,
+  ] = await Promise.all([
+    signedAvatarUrl(ctx.userId!, ctx.profile?.avatar_path),
+    authClient.auth.mfa.listFactors(),
+    admin
+      .from('subscriptions')
+      .select('status, provider, provider_ref, current_period_end, cancel_at')
+      .eq('user_id', ctx.userId!)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
     listDevices(ctx.userId!),
     getClayConnectionMetadata(ctx.userId!),
     getGoogleConnectionMetadata(ctx.userId!),
     getGhlConnectionMetadata(ctx.userId!),
   ])
+  const initialFactorId = factors?.totp[0]?.id ?? null
   // Chrome is published, so its URL is a constant. Firefox and Safari stay
   // null until they have listings — the UI shows "coming soon" rather than a
   // dead link, so nobody is sent to a 404 on a store we have not shipped to.

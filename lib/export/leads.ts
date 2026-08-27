@@ -53,7 +53,9 @@ export const EXPORT_COLUMN_HEADERS = {
   linkedinProfile: 'LinkedIn Profile',
   jobTitle: 'Job Title',
   company: 'Company',
-  companyLinkedInUrl: 'Company LinkedIn URL',
+  // ⚠️ EXPLICIT BY REQUEST: this is the SALES NAVIGATOR company page, not the
+  // public linkedin.com/company one — two identifiers users kept conflating.
+  companyLinkedInUrl: 'Company Sales Navigator URL',
   companyUrl: 'Company Website URL',
   location: 'Location',
   salesNavigatorUrl: 'Sales Navigator URL',
@@ -62,7 +64,7 @@ export const EXPORT_COLUMN_HEADERS = {
   companyIndustry: 'Company Industry',
   companySize: 'Company Size',
   /** `linkedin.com/company/<slug>` — the public page, not the Sales Nav one. */
-  companyPublicLinkedIn: 'Company LinkedIn Profile',
+  companyPublicLinkedIn: 'Company LinkedIn Profile (public)',
   /** An exact number from the company page, unlike the "2-10" range. */
   companyEmployeeCount: 'Company Employees',
   companyDecisionMakers: 'Decision Makers',
@@ -115,7 +117,6 @@ export const EXPORT_COLUMN_ORDER = [
   EXPORT_COLUMN_HEADERS.reachable,
   EXPORT_COLUMN_HEADERS.listCount,
   EXPORT_COLUMN_HEADERS.lastActivity,
-  EXPORT_COLUMN_HEADERS.addedToList,
   EXPORT_COLUMN_HEADERS.leadSource,
   EXPORT_COLUMN_HEADERS.sourceList,
 ] as const
@@ -179,7 +180,6 @@ export function toCanonicalExportRecord(
     [EXPORT_COLUMN_HEADERS.listCount]:
       lead.listCount === null || lead.listCount === undefined ? null : String(lead.listCount),
     [EXPORT_COLUMN_HEADERS.lastActivity]: lead.lastActivity ?? null,
-    [EXPORT_COLUMN_HEADERS.addedToList]: lead.addedToList ?? null,
     [EXPORT_COLUMN_HEADERS.sourceList]: lead.sourceList ?? null,
     [EXPORT_COLUMN_HEADERS.name]: lead.name,
     [EXPORT_COLUMN_HEADERS.linkedinProfile]: lead.linkedinUrl,

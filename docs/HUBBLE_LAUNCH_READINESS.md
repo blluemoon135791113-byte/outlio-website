@@ -1,6 +1,19 @@
 # Hubble launch readiness
 
-Updated: 2026-08-23
+Updated: 2026-08-27
+
+## Current RAG status
+
+RAG is active. Cleaned web pages are stored in `hubble_pages` and chunked into
+`hubble_chunks`; fresh sourced typed facts in `research_evidence` are also
+converted to citable retrieval passages. Cached person answers are isolated by
+lead, while company pages remain reusable across leads at the same company.
+
+The live store currently contains 72 pages, 632 page chunks, 275 stored
+embeddings, 30 cached answers, and 1,760 typed evidence rows. The configured
+Ollama endpoint is currently unreachable, so retrieval is correctly degrading
+to BM25 rather than using hybrid vectors. Restoring local Ollama is an optional
+zero-meter quality improvement, not a requirement for grounded retrieval.
 
 ## Request path
 
@@ -19,8 +32,8 @@ even though code defaults exist, so a deployment cannot drift silently.
 | --- | --- | --- |
 | Hosted synthesis | `LLM_PROVIDER`, one of `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `CEREBRAS_API_KEY`, `BACKBOARD_API_KEY` | Present in Vercel: Gemini selected |
 | Pinned Gemini | `GEMINI_MODEL=gemini-3.6-flash` | Recommended; default passed live test |
-| Live search | `SEARXNG_URL`, `SEARXNG_AUTH_TOKEN` | Present in Vercel |
-| Search fallback | `TAVILY_API_KEY` and/or Google CSE/Brave variables | Tavily present in Vercel |
+| Live search | `MCP_WEB_RESEARCH_URL`; MCP uses `SEARXNG_URL`/token internally | Local MCP and SearXNG passed health checks |
+| Search fallback | DuckDuckGo HTML inside the MCP | Enabled; challenges fail closed |
 | Database/cache | existing Supabase public URL/key and service-role key | Present in Vercel |
 
 ## Optional operator services
@@ -32,7 +45,7 @@ down. Hubble falls back to database/BM25 retrieval and direct HTTP extraction.
 | --- | --- | --- | --- |
 | Solr | `SOLR_URL`, `SOLR_COLLECTION`, plus bearer or basic auth | Remote must be authenticated HTTPS | Adapter complete; not configured in Vercel |
 | Crawl4AI | `CRAWL4AI_URL`, `CRAWL4AI_API_TOKEN` | Remote must be authenticated HTTPS | Adapter complete; not configured in Vercel |
-| Ollama embeddings | `OLLAMA_URL`, optional `OLLAMA_AUTH_TOKEN`, `OLLAMA_EMBED_MODEL`, `OLLAMA_EMBED_DIMENSIONS` | Remote must be authenticated HTTPS; loopback may omit token | Local model passed at 768 dimensions |
+| Ollama embeddings | `OLLAMA_URL`, optional `OLLAMA_AUTH_TOKEN`, `OLLAMA_EMBED_MODEL`, `OLLAMA_EMBED_DIMENSIONS` | Remote must be authenticated HTTPS; loopback may omit token | Configured but unreachable in the 2026-08-27 audit; BM25 fallback active |
 | Ollama synthesis | above plus `OLLAMA_LLM_MODEL` | Opt-in; cloud-suffixed models refused | Keep disabled for launch on the tested 6.7B model |
 
 The Oracle host has approximately 954 MiB RAM and already runs SearXNG. Do

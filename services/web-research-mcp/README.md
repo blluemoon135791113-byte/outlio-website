@@ -3,13 +3,19 @@
 A standalone MCP service that queues public-web research jobs and exposes stateless Streamable HTTP tools:
 
 - `web_search` — return normalized public search-result metadata for Hubble's existing fetch/evidence pipeline.
+- `research_lead` — run bounded full research without creating an MCP-owned job; Hubble owns the durable queue and canonical persistence.
 - `research_start` — validate a lead and queue a durable job.
 - `research_run` — run and persist research in one bounded request for free hosts that sleep.
 - `research_status` — inspect queued/running/completed/failed state.
 - `research_result` — retrieve source-preserving structured research.
 - `research_latest` — retrieve the latest result persisted for a tenant-scoped Outlio lead.
 
-The search layer is modular; the MVP provider uses DuckDuckGo's public HTML result page. It never attempts to bypass CAPTCHAs, bot challenges, logins, paywalls, or restricted social platforms. A DuckDuckGo challenge fails the job with `SEARCH_PROVIDER_BLOCKED`.
+The search layer is modular. When `SEARXNG_URL` is configured it prefers the operator-owned metasearch service, with DuckDuckGo's public HTML result page as a fallback. It never attempts to bypass CAPTCHAs, bot challenges, logins, paywalls, or restricted social platforms. When every configured search provider refuses a request, the search fails closed.
+
+Outlio production calls `research_lead` from its existing Postgres-backed
+`research_job_queue`. The MCP's queued tools remain available for standalone
+use, but Hubble must not enqueue the same run in both systems. `research_lead`
+returns cleaned evidence documents and sourced facts; it never returns raw HTML.
 
 ## Run locally
 
@@ -29,7 +35,7 @@ For a deployment that cannot create a cloud bill, leave Google Cloud billing unl
 
 ## Production gate
 
-Deploy first to the intended host, submit one harmless test lead, and confirm DuckDuckGo returns ordinary result HTML from that host's egress IP. If it returns a challenge, move the worker to acceptable egress or add another lawful `SearchProvider`; do not automate around the challenge.
+Deploy first to the intended host, submit one harmless test lead, and confirm the configured search provider returns ordinary result metadata from that host. An operator-owned SearXNG instance is the recommended zero-charge primary provider. DuckDuckGo HTML remains a fallback; do not automate around a challenge.
 
 Recommended topology: HTTPS ingress/load balancer → this stateless MCP API and worker replicas → PostgreSQL. Keep Gemini and database secrets server-side. Autoscale conservatively because DuckDuckGo searches are intentionally paced.
 

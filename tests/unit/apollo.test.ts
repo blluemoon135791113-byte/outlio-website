@@ -17,6 +17,7 @@ const PERSON: PersonEntity = {
   id: '10000000-0000-4000-8000-000000000001',
   fullName: 'Fabricated Person',
   linkedinUrl: null,
+  location: null,
   jobTitle: 'Founder',
   companyName: 'Fabricated Systems',
   companyDomain: null,
@@ -315,6 +316,89 @@ describe('apolloEvidence — the fields that used to be thrown away', () => {
       expect(evidence.find((item) => item.field === 'incorporation_date'), String(year)).toBeUndefined()
     }
   })
+
+  it('keeps the company keyword list as specialties', () => {
+    const evidence = apolloEvidence(
+      output({ person: { organization: { keywords: ['lead generation', ' ', 'sales enablement'] } } }),
+      PERSON,
+    )
+
+    expect(evidence.find((item) => item.field === 'specialties')?.value).toEqual({
+      value: ['lead generation', 'sales enablement'],
+    })
+    // Aggregated third-party tags, not the registry speaking.
+    expect(evidence.find((item) => item.field === 'specialties')?.sourceConfidence).toBe('medium')
+  })
+
+  it('reports no specialties when the response carries no keywords', () => {
+    const evidence = apolloEvidence(
+      output({ person: { organization: { keywords: [] } } }),
+      PERSON,
+    )
+    expect(evidence.find((item) => item.field === 'specialties')).toBeUndefined()
+  })
+
+  it('names the investors of the NEWEST dated round', () => {
+    /*
+     * The event array's order is not documented as sorted, so the newest
+     * `date` must win regardless of position in the list.
+     */
+    const evidence = apolloEvidence(
+      output({
+        person: {
+          organization: {
+            funding_events: [
+              { date: '2022-03-01', investors: 'Sequoia Capital, Tribe Capital' },
+              { date: '2023-08-01', investors: 'Bain Capital Ventures, Sequoia Capital' },
+              { date: null, investors: 'Undated, ignored' },
+            ],
+          },
+        },
+      }),
+      PERSON,
+    )
+
+    expect(evidence.find((item) => item.field === 'funding_investors')?.value).toEqual({
+      investors: ['Bain Capital Ventures', 'Sequoia Capital'],
+    })
+  })
+
+  it('ignores malformed and unknown investor events', () => {
+    const evidence = apolloEvidence(
+      output({
+        person: {
+          organization: {
+            funding_events: [
+              { date: '2023-08-01', investors: 'Unknown' },
+              { date: 'not-a-date', investors: 'Malformed, ignored' },
+            ],
+          },
+        },
+      }),
+      PERSON,
+    )
+
+    expect(evidence.find((item) => item.field === 'funding_investors')).toBeUndefined()
+  })
+
+  it('keeps the company blog alongside the social accounts', () => {
+    const evidence = apolloEvidence(
+      output({
+        person: {
+          organization: {
+            blog_url: 'https://acme.com/blog',
+            twitter_url: 'https://x.com/acme',
+          },
+        },
+      }),
+      PERSON,
+    )
+
+    expect(evidence.find((item) => item.field === 'social_profiles')?.value).toMatchObject({
+      blog: 'https://acme.com/blog',
+      twitter: 'https://x.com/acme',
+    })
+  })
 })
 
 describe('the contact waterfall pays only providers that could answer', () => {
@@ -355,8 +439,16 @@ describe('the contact waterfall pays only providers that could answer', () => {
 })
 
 describe('the email waterfall', () => {
-  it('has two providers, in a configurable order', () => {
-    expect(DEFAULT_PROVIDER_ORDER.contact_email).toEqual(['prospeo-email', 'apollo-email'])
+  it('has four providers, free sources first', () => {
+    // The Scout pair is free and answers before anything metered is even
+    // considered.
+    expect(DEFAULT_PROVIDER_ORDER.contact_email).toEqual([
+      'scout',
+      'social-scout',
+      'search-contact-email',
+      'prospeo-email',
+      'apollo-email',
+    ])
   })
 
   it('offers no Apollo phone provider', () => {
@@ -368,6 +460,6 @@ describe('the email waterfall', () => {
   })
 
   it('keeps phone on the provider that answers synchronously', () => {
-    expect(DEFAULT_PROVIDER_ORDER.contact_phone).toEqual(['prospeo-phone'])
+    expect(DEFAULT_PROVIDER_ORDER.contact_phone).toEqual(['search-contact-phone', 'prospeo-phone'])
   })
 })

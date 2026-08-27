@@ -29,6 +29,7 @@ const COLUMN_LABELS: Record<string, string> = {
   confirmation_statement_overdue: 'Statement overdue',
   insolvency_history: 'Insolvency history',
   sec_cik: 'SEC CIK',
+  lei_number: 'LEI',
   sec_legal_name: 'SEC legal name',
   sec_entity_type: 'SEC entity type',
   sec_sic: 'SEC SIC',
@@ -53,6 +54,8 @@ const COLUMN_LABELS: Record<string, string> = {
   // Two different things, so two different labels. "Socials" alone on both
   // columns would leave nobody able to tell whose account they were looking at.
   social_profiles: 'Company socials',
+  company_linkedin: 'Company LinkedIn',
+  specialties: 'Specialties',
   person_seniority: 'Seniority',
   person_department: 'Department',
   person_social_profiles: 'Personal socials',

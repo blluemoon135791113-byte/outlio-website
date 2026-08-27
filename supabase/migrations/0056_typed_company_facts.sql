@@ -106,7 +106,7 @@ create table if not exists public.company_signals (
 );
 
 create unique index if not exists company_signals_unique
-  on public.company_signals (company_id, kind, (observed_at::date));
+  on public.company_signals (company_id, kind, ((observed_at at time zone 'UTC')::date));
 
 create index if not exists company_signals_lookup
   on public.company_signals (user_id, company_id, kind, observed_at desc);

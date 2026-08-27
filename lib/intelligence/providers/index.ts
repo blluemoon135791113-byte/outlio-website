@@ -28,19 +28,28 @@ import {
   type AnyIntelligenceProvider,
   type ToolCategory,
 } from '@/lib/intelligence/types'
-import { hasSearxngCredentials } from '@/lib/hubble/providers/search'
+import { hasWebSearch } from '@/lib/search'
 import { apolloEmailProvider } from './apollo'
 import { companiesHouseProvider } from './companies-house'
 import { dnsTechProvider } from './dns-tech'
 import { domainDiscoveryProvider } from './domain-discovery'
+import { domainProbeProvider } from './domain-probe'
 import { githubProvider } from './github'
 import { hackerNewsProvider } from './hackernews'
-import { gdeltFundingProvider, searxngFundingProvider, tavilyFundingProvider } from './funding'
+import { gdeltFundingProvider, searchFundingProvider, tavilyFundingProvider } from './funding'
 import { pageSpeedTechProvider } from './pagespeed'
+import { gleifProvider } from './gleif'
 import { prospeoEmailProvider, prospeoPhoneProvider } from './prospeo'
 import { secEdgarProvider } from './sec-edgar'
-import { gdeltWebResearchProvider, searxngWebResearchProvider, tavilyWebResearchProvider } from './web-research'
-import { searxngCompanyProfileProvider } from './search-profile'
+import { scoutEmailProvider } from './scout'
+import { companyScoutProvider, socialScoutProvider } from './social-scout'
+import { gdeltWebResearchProvider, searchWebResearchProvider, tavilyWebResearchProvider } from './web-research'
+import { searchCompanyProfileProvider } from './search-profile'
+import {
+  hasPublicContactSearch,
+  searchContactEmailProvider,
+  searchContactPhoneProvider,
+} from './search-contact'
 import { usaSpendingProvider } from './usaspending'
 import { wikidataProvider } from './wikidata'
 
@@ -51,17 +60,24 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(githubProvider),
   eraseProviderType(hackerNewsProvider),
   eraseProviderType(companiesHouseProvider),
+  eraseProviderType(gleifProvider),
   eraseProviderType(secEdgarProvider),
   eraseProviderType(domainDiscoveryProvider),
-  eraseProviderType(searxngCompanyProfileProvider),
-  eraseProviderType(searxngFundingProvider),
+  eraseProviderType(domainProbeProvider),
+  eraseProviderType(companyScoutProvider),
+  eraseProviderType(searchCompanyProfileProvider),
+  eraseProviderType(searchFundingProvider),
   eraseProviderType(tavilyFundingProvider),
   eraseProviderType(gdeltFundingProvider),
   eraseProviderType(tavilyWebResearchProvider),
-  eraseProviderType(searxngWebResearchProvider),
+  eraseProviderType(searchWebResearchProvider),
   eraseProviderType(gdeltWebResearchProvider),
   eraseProviderType(dnsTechProvider),
   eraseProviderType(pageSpeedTechProvider),
+  eraseProviderType(scoutEmailProvider),
+  eraseProviderType(socialScoutProvider),
+  eraseProviderType(searchContactEmailProvider),
+  eraseProviderType(searchContactPhoneProvider),
   eraseProviderType(prospeoEmailProvider),
   eraseProviderType(prospeoPhoneProvider),
   eraseProviderType(apolloEmailProvider),
@@ -77,13 +93,23 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
   company_profile: [
     'wikidata',
     'companies-house',
+    // GLEIF: free, official, and the only registry here that reaches every
+    // LEI-issuing jurisdiction, including the small ones no other source has.
+    'gleif',
     'sec-edgar',
-    'searxng-company-profile',
+    'search-company-profile',
     'tavily-domain-discovery',
+    // The keyless last line: probe the hosts the name implies and verify by
+    // page content. Runs only when everything above declined or found nothing.
+    'domain-probe',
+    // Company-scoped social discovery: reads the site domain-probe may have
+    // just verified, and inventories the accounts the company publishes —
+    // LinkedIn recorded first-class, never fetched.
+    'social-scout-company',
     'usaspending',
   ],
-  funding: ['searxng-funding', 'tavily-funding', 'gdelt-funding'],
-  web_research: ['searxng-web', 'tavily-web', 'gdelt-web'],
+  funding: ['search-funding', 'tavily-funding', 'gdelt-funding'],
+  web_research: ['search-web', 'tavily-web', 'gdelt-web'],
   /*
    * DNS first: it is free, ~50ms, and sees the marketing and sales stack that
    * matters to an ICP question. PageSpeed is slower, costs a rendered page, and
@@ -91,16 +117,16 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
    */
   tech_stack: ['dns-tech', 'pagespeed-tech'],
   /*
-   * The email waterfall. Prospeo first only as a starting assumption — spec §52
-   * says the order must come from measured cost per INCREMENTAL valid result,
-   * not from a guess, and `INTELLIGENCE_PROVIDER_ORDER` flips it without a
-   * deploy once the benchmark has run.
+   * The email waterfall. The two Scout sources first: FREE (website + social
+   * harvest; SMTP probing is separately opted in), so they answer before
+   * anything metered is considered. Prospeo and Apollo remain behind them,
+   * reachable only when paid providers are explicitly enabled.
    */
   // Both free, and the only providers in their categories.
   technical_presence: ['github'],
   product_activity: ['hackernews'],
-  contact_email: ['prospeo-email', 'apollo-email'],
-  contact_phone: ['prospeo-phone'],
+  contact_email: ['scout', 'social-scout', 'search-contact-email', 'prospeo-email', 'apollo-email'],
+  contact_phone: ['search-contact-phone', 'prospeo-phone'],
 }
 
 /**
@@ -181,17 +207,28 @@ function isConfigured(name: string): boolean {
     case 'tavily-funding':
     case 'tavily-web':
       return Boolean(process.env.TAVILY_API_KEY)
-    case 'searxng-funding':
-    case 'searxng-web':
-    case 'searxng-company-profile':
-      return hasSearxngCredentials()
+    case 'search-funding':
+    case 'search-web':
+    case 'search-company-profile':
+      return hasWebSearch()
+    case 'search-contact-email':
+    case 'search-contact-phone':
+      return hasPublicContactSearch()
     case 'pagespeed-tech':
       return Boolean(process.env.PAGESPEED_API_KEY)
     // No key exists for DNS — it uses the system resolver.
     case 'dns-tech':
-    // Free public APIs. GitHub works unauthenticated at a lower rate limit.
+    // Free public APIs. GitHub works unauthenticated at a lower rate limit;
+    // GLEIF is open published data; domain-probe fetches candidate sites.
     case 'github':
+    case 'gleif':
+    case 'domain-probe':
     case 'hackernews':
+      return true
+    case 'scout':
+      // Website harvesting works everywhere; SMTP probing additionally
+      // requires the SCOUT_SMTP_VERIFY opt-in, checked at execution time so a
+      // Vercel deployment still gets published-address answers.
       return true
     case 'prospeo-email':
     case 'prospeo-phone':

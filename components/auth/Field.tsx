@@ -20,7 +20,7 @@ export function Field({
       <input
         id={id}
         aria-describedby={hintId}
-        className="w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 py-2 text-base text-ink transition-colors duration-150 placeholder:text-muted/70 hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-60"
+        className="auth-clay-field w-full rounded-[var(--radius-md)] border-0 bg-clay-sunken px-3.5 py-2.5 text-base text-ink shadow-[var(--neo-shadow-inset)] transition-[box-shadow,transform] duration-150 placeholder:text-muted/65 disabled:cursor-not-allowed disabled:opacity-60"
         {...props}
       />
       {hint ? (

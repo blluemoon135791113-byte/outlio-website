@@ -5,6 +5,83 @@ import { ResearchError, type SearchResult } from "./types.js";
 
 export interface SearchProvider { search(query: string, limit: number): Promise<SearchResult[]>; }
 
+type SearxResult = {
+  title?: unknown;
+  url?: unknown;
+  content?: unknown;
+  snippet?: unknown;
+};
+
+/** Operator-owned metasearch. No per-query API or billing dependency. */
+export class SearxngSearchProvider implements SearchProvider {
+  constructor(
+    private readonly config: Config,
+    private readonly baseUrl: string,
+    private readonly fetchImpl: typeof fetch = fetch,
+  ) {}
+
+  async search(query: string, limit: number): Promise<SearchResult[]> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.config.REQUEST_TIMEOUT_MS);
+    try {
+      const url = new URL("search", this.baseUrl.endsWith("/") ? this.baseUrl : `${this.baseUrl}/`);
+      url.searchParams.set("q", query);
+      url.searchParams.set("format", "json");
+      const response = await this.fetchImpl(url, {
+        signal: controller.signal,
+        headers: { accept: "application/json", "user-agent": "OutlioResearch/1.0 (+https://outlio.io)" },
+      });
+      if (!response.ok) {
+        throw new ResearchError("SEARCH_PROVIDER_ERROR", `SearXNG returned HTTP ${response.status}`, response.status >= 500 || response.status === 429);
+      }
+      const payload = await response.json() as { results?: SearxResult[] };
+      const results: SearchResult[] = [];
+      for (const item of payload.results ?? []) {
+        if (results.length >= limit) break;
+        if (typeof item.url !== "string") continue;
+        const normalized = normalizeUrl(item.url);
+        if (!normalized) continue;
+        results.push({
+          query,
+          title: typeof item.title === "string" ? item.title.trim() : "",
+          url: normalized,
+          snippet: typeof item.content === "string"
+            ? item.content.replace(/\s+/g, " ").trim()
+            : typeof item.snippet === "string"
+              ? item.snippet.replace(/\s+/g, " ").trim()
+              : "",
+          rank: results.length + 1,
+        });
+      }
+      return results;
+    } catch (error) {
+      if (error instanceof ResearchError) throw error;
+      throw new ResearchError("SEARCH_PROVIDER_ERROR", error instanceof Error ? error.message : "SearXNG search failed", true);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/** Try lawful providers in order; a refusal never triggers evasion. */
+export class FallbackSearchProvider implements SearchProvider {
+  constructor(private readonly providers: readonly SearchProvider[]) {}
+
+  async search(query: string, limit: number): Promise<SearchResult[]> {
+    let lastError: unknown = null;
+    for (const provider of this.providers) {
+      try {
+        const results = await provider.search(query, limit);
+        if (results.length > 0) return results;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastError) throw lastError;
+    return [];
+  }
+}
+
 export class DuckDuckGoHtmlSearchProvider implements SearchProvider {
   private lastRequest = 0;
   constructor(private readonly config: Config, private readonly fetchImpl: typeof fetch = fetch) {}

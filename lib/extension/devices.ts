@@ -65,7 +65,7 @@ export async function revokeDevice(
   const { data, error } = await admin.rpc('revoke_extension_device', {
     p_device_id: deviceId,
     p_user_id: userId,
-    p_actor_id: actorId,
+    ...(actorId === null ? {} : { p_actor_id: actorId }),
   })
 
   if (error) return false

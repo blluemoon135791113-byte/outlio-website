@@ -7,18 +7,22 @@
  * the lead list. The generative side panel and the per-lead modal land next;
  * `onOpenLead` is wired to a placeholder until then rather than to a dead click.
  *
- * ⚠️ THIS SCREEN DOES NOT TOUCH THE EXTRACTION WORKSPACE. `/dashboard/jobs`
- * keeps its flat panels and its own data path — CLAUDE.md: the extraction board
- * is where raw data becomes export-ready, and it must not inherit churn here.
+ * ⚠️ THIS SCREEN DOES NOT TOUCH THE EXTRACTION WORKSPACE'S DATA PATH.
+ * `/dashboard/jobs` remains the place where raw data becomes export-ready,
+ * while both screens now share the product's Hubble material language.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { BatchFilter } from '@/components/intelligence/BatchFilter'
-import { HubbleLeadList, type HubbleLead } from '@/components/intelligence/HubbleLeadList'
+import {
+  HubbleLeadList,
+  type HubbleLead,
+  type HubbleSavedDetail,
+} from '@/components/intelligence/HubbleLeadList'
 import { HubblePromptBar } from '@/components/intelligence/HubblePromptBar'
 import { HubbleResultPanel } from '@/components/intelligence/HubbleResultPanel'
 import { LeadModal } from '@/components/intelligence/LeadModal'
-import { columnLabel } from '@/components/intelligence/render-value'
+import { columnLabel, renderCellValue } from '@/components/intelligence/render-value'
 import { useResearchRun, type ResearchScope } from '@/components/intelligence/useResearchRun'
 import type { LeadBatch } from '@/lib/intelligence/batches'
 import { dateRangeBounds } from '@/lib/intelligence/date-range'
@@ -27,6 +31,9 @@ import { createClient } from '@/lib/supabase/client'
 
 /** One list is 25 leads. */
 const LIST_SIZE = 25
+const LEAD_VIEW_CACHE_MS = 60_000
+const MAX_CACHED_LEAD_VIEWS = 12
+const CARD_EVIDENCE_LIMIT = 500
 
 /**
  * The height both result columns share.
@@ -54,7 +61,7 @@ const SUGGESTIONS = [
  * so it cannot be the sixth.
  */
 const LEAD_SELECT_BASE =
-  'id, full_name, job_title, company_name, company_website_url, linkedin_url, location, extraction_job_id, created_at' as const
+  'id, full_name, job_title, company_name, company_id, company_website_url, linkedin_url, location, extraction_job_id, created_at, work_email, email_status, mobile_phone, phone_status, companies(domain)' as const
 
 const LEAD_SELECT_ENRICHED = `${LEAD_SELECT_BASE}, enrichment` as const
 
@@ -63,10 +70,58 @@ type LeadRow = {
   full_name: string | null
   job_title: string | null
   company_name: string | null
+  company_id: string | null
   company_website_url: string | null
   linkedin_url: string | null
   location: string | null
+  work_email: string | null
+  email_status: string | null
+  mobile_phone: string | null
+  phone_status: string | null
+  companies?: { domain: string | null } | null
   enrichment?: unknown
+}
+
+type LeadResearchRow = {
+  lead_id: string | null
+  status: HubbleLead['researchStatus']
+  sources: unknown
+  question: string
+  answer: string
+  created_at: string
+}
+
+type LeadEvidenceRow = {
+  id: string
+  entity_type: 'person' | 'company'
+  entity_id: string
+  field: string
+  value_json: unknown
+  source_url: string | null
+  source_confidence: 'high' | 'medium' | 'low'
+  confidence: number
+  retrieved_at: string
+  expires_at: string | null
+}
+
+type CachedLeadView = {
+  expiresAt: number
+  leads: HubbleLead[]
+  linkedinById: Record<string, string | null>
+}
+
+// Memory-only and keyed by user + filter. It survives client navigation but is
+// discarded on reload, never crosses accounts, and cannot grow without bound.
+const leadViewCache = new Map<string, CachedLeadView>()
+
+function rememberLeadView(key: string, value: CachedLeadView) {
+  leadViewCache.delete(key)
+  leadViewCache.set(key, value)
+  while (leadViewCache.size > MAX_CACHED_LEAD_VIEWS) {
+    const oldest = leadViewCache.keys().next().value
+    if (!oldest) break
+    leadViewCache.delete(oldest)
+  }
 }
 
 /**
@@ -85,7 +140,7 @@ function merged(enrichment: unknown, field: string): string | null {
   if (typeof value === 'string') return value.trim() || null
   if (!value || typeof value !== 'object') return null
 
-  for (const key of ['description', 'headquarters', 'value', 'industry']) {
+  for (const key of ['email', 'phone', 'status', 'description', 'headquarters', 'value', 'industry']) {
     const candidate = (value as Record<string, unknown>)[key]
     if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
   }
@@ -93,21 +148,158 @@ function merged(enrichment: unknown, field: string): string | null {
   return null
 }
 
-function toHubbleLead(row: LeadRow): HubbleLead {
+function evidenceValue(value: unknown): string | null {
+  const rendered = renderCellValue(value).trim()
+  return rendered && rendered !== '—' ? rendered : null
+}
+
+function socialValue(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return evidenceValue(value)
+  const platforms = Object.entries(value as Record<string, unknown>)
+    .filter(([, url]) => typeof url === 'string' && /^https?:\/\//i.test(url))
+    .map(([platform]) => columnLabel(platform))
+  return platforms.length > 0 ? platforms.join(' · ') : evidenceValue(value)
+}
+
+function bestEvidence(rows: readonly LeadEvidenceRow[]): Map<string, LeadEvidenceRow> {
+  const rank = { high: 3, medium: 2, low: 1 }
+  const fresh = rows.filter((row) =>
+    row.expires_at === null || Date.parse(row.expires_at) > Date.now(),
+  )
+  fresh.sort((left, right) =>
+    rank[right.source_confidence] - rank[left.source_confidence] ||
+    Number(right.confidence) - Number(left.confidence) ||
+    Date.parse(right.retrieved_at) - Date.parse(left.retrieved_at),
+  )
+
+  const winners = new Map<string, LeadEvidenceRow>()
+  for (const row of fresh) {
+    const key = `${row.entity_type}:${row.entity_id}:${row.field}`
+    if (!winners.has(key)) winners.set(key, row)
+  }
+  return winners
+}
+
+function evidenceFor(
+  evidence: Map<string, LeadEvidenceRow>,
+  entityType: 'person' | 'company',
+  entityId: string | null,
+  field: string,
+): LeadEvidenceRow | null {
+  if (!entityId) return null
+  return evidence.get(`${entityType}:${entityId}:${field}`) ?? null
+}
+
+const CORE_CARD_FIELDS = new Set([
+  'company_domain',
+  'work_email',
+  'email_status',
+  'mobile_phone',
+  'phone_status',
+])
+
+function savedDetailsFor(
+  row: LeadRow,
+  evidence: Map<string, LeadEvidenceRow>,
+  history: readonly LeadResearchRow[],
+): HubbleSavedDetail[] {
+  const details: HubbleSavedDetail[] = []
+  const entityKeys = new Set([
+    `person:${row.id}`,
+    ...(row.company_id ? [`company:${row.company_id}`] : []),
+  ])
+
+  for (const record of evidence.values()) {
+    if (!entityKeys.has(`${record.entity_type}:${record.entity_id}`)) continue
+    if (CORE_CARD_FIELDS.has(record.field)) continue
+    const value = record.field.includes('social_profiles')
+      ? socialValue(record.value_json)
+      : evidenceValue(record.value_json)
+    if (!value) continue
+    details.push({
+      id: `evidence:${record.id}`,
+      kind: 'fact',
+      label: columnLabel(record.field),
+      value,
+      sourceUrl: record.source_url,
+      status: null,
+    })
+  }
+
+  if (row.enrichment && typeof row.enrichment === 'object' && !Array.isArray(row.enrichment)) {
+    for (const [field, raw] of Object.entries(row.enrichment as Record<string, unknown>)) {
+      if (CORE_CARD_FIELDS.has(field) || details.some((detail) => detail.label === columnLabel(field))) continue
+      const entry = raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? raw as Record<string, unknown>
+        : null
+      const value = evidenceValue(entry?.value ?? raw)
+      if (!value) continue
+      details.push({
+        id: `merged:${field}`,
+        kind: 'fact',
+        label: columnLabel(field),
+        value,
+        sourceUrl: typeof entry?.source_url === 'string' ? entry.source_url : null,
+        status: null,
+      })
+    }
+  }
+
+  for (const answer of history.slice(0, 5)) {
+    const source = Array.isArray(answer.sources) && answer.sources[0] &&
+      typeof answer.sources[0] === 'object'
+      ? (answer.sources[0] as { url?: unknown }).url
+      : null
+    details.push({
+      id: `answer:${answer.created_at}:${answer.question}`,
+      kind: 'answer',
+      label: answer.question,
+      value: answer.answer,
+      sourceUrl: typeof source === 'string' ? source : null,
+      status: answer.status,
+    })
+  }
+
+  return details
+}
+
+function toHubbleLead(
+  row: LeadRow,
+  evidence: Map<string, LeadEvidenceRow>,
+  history: readonly LeadResearchRow[] = [],
+): HubbleLead {
+  const research = history[0] ?? null
   const hq = merged(row.enrichment, 'headquarters')
+  const emailEvidence = evidenceFor(evidence, 'person', row.id, 'work_email')
+  const emailStatusEvidence = evidenceFor(evidence, 'person', row.id, 'email_status')
+  const phoneEvidence = evidenceFor(evidence, 'person', row.id, 'mobile_phone')
+  const phoneStatusEvidence = evidenceFor(evidence, 'person', row.id, 'phone_status')
 
   return {
     id: row.id,
     fullName: row.full_name,
     jobTitle: row.job_title,
     companyName: row.company_name,
-    companyDomain: row.company_website_url,
+    // `companies.domain` is Hubble's canonical company identity. Most imported
+    // leads have no website column even after the company has been resolved.
+    companyDomain: row.companies?.domain ?? row.company_website_url,
     // The company's HQ when we have it; otherwise the person's own location,
     // clearly labelled as such by the list.
     companyLocation: hq ?? row.location,
     locationIsPersonal: !hq && Boolean(row.location),
     description:
       merged(row.enrichment, 'company_description') ?? merged(row.enrichment, 'industry'),
+    researchStatus: research?.status ?? null,
+    researchSourceCount: Array.isArray(research?.sources) ? research.sources.length : 0,
+    workEmail:
+      evidenceValue(emailEvidence?.value_json) ?? merged(row.enrichment, 'work_email') ?? row.work_email,
+    emailStatus:
+      evidenceValue(emailStatusEvidence?.value_json) ?? merged(row.enrichment, 'email_status') ?? row.email_status,
+    mobilePhone:
+      evidenceValue(phoneEvidence?.value_json) ?? merged(row.enrichment, 'mobile_phone') ?? row.mobile_phone,
+    phoneStatus:
+      evidenceValue(phoneStatusEvidence?.value_json) ?? merged(row.enrichment, 'phone_status') ?? row.phone_status,
+    savedDetails: savedDetailsFor(row, evidence, history),
   }
 }
 
@@ -139,6 +331,10 @@ export function HubbleConsole({
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const latestRequest = useRef(0)
+  const viewCacheKey = useMemo(
+    () => [userId, batchId ?? 'all', from ?? '', to ?? ''].join(':'),
+    [userId, batchId, from, to],
+  )
 
   /**
    * Loads the visible leads.
@@ -152,9 +348,19 @@ export function HubbleConsole({
    * which is what the cascading-render rule is about.
    */
   const loadLeads = useCallback(
-    async (requestId: number) => {
+    async (requestId: number, force = false) => {
       await Promise.resolve()
       if (requestId !== latestRequest.current) return
+
+      const cached = force ? null : leadViewCache.get(viewCacheKey)
+      if (cached && cached.expiresAt > Date.now()) {
+        setLeads(cached.leads)
+        setLinkedinById(cached.linkedinById)
+        setLoadError(null)
+        setLoading(false)
+        return
+      }
+      if (cached) leadViewCache.delete(viewCacheKey)
 
       setLoading(true)
       setLoadError(null)
@@ -203,8 +409,78 @@ export function HubbleConsole({
         }
 
         const rows = (result.data ?? []) as unknown as LeadRow[]
-        setLeads(rows.map(toHubbleLead))
-        setLinkedinById(Object.fromEntries(rows.map((row) => [row.id, row.linkedin_url])))
+        const historyByLead = new Map<string, LeadResearchRow[]>()
+        let resolvedEvidence = new Map<string, LeadEvidenceRow>()
+
+        if (rows.length > 0) {
+          const leadIds = rows.map((row) => row.id)
+          const companyIds = [...new Set(rows
+            .map((row) => row.company_id)
+            .filter((id): id is string => Boolean(id)))]
+          const currentEvidenceFilter = `expires_at.is.null,expires_at.gt.${new Date().toISOString()}`
+          const evidenceColumns =
+            'id, entity_type, entity_id, field, value_json, source_url, source_confidence, confidence, retrieved_at, expires_at'
+
+          const [history, personEvidence, companyEvidence] = await Promise.all([
+            supabase
+              .from('hubble_answers')
+              .select('lead_id, status, sources, question, answer, created_at')
+              .eq('user_id', userId)
+              .in('lead_id', leadIds)
+              .order('created_at', { ascending: false })
+              .limit(125),
+            supabase
+              .from('research_evidence')
+              .select(evidenceColumns)
+              .eq('user_id', userId)
+              .eq('entity_type', 'person')
+              .in('entity_id', leadIds)
+              // A card never needs expired history. Keeping the cap below one
+              // page also prevents a heavily researched lead from turning a
+              // compact list read into an unbounded evidence download.
+              .or(currentEvidenceFilter)
+              .order('retrieved_at', { ascending: false })
+              .limit(CARD_EVIDENCE_LIMIT),
+            companyIds.length > 0
+              ? supabase
+                  .from('research_evidence')
+                  .select(evidenceColumns)
+                  .eq('user_id', userId)
+                  .eq('entity_type', 'company')
+                  .in('entity_id', companyIds)
+                  .or(currentEvidenceFilter)
+                  .order('retrieved_at', { ascending: false })
+                  .limit(CARD_EVIDENCE_LIMIT)
+              : Promise.resolve({ data: [] }),
+          ])
+
+          for (const answer of (history.data ?? []) as unknown as LeadResearchRow[]) {
+            if (!answer.lead_id) continue
+            const bucket = historyByLead.get(answer.lead_id) ?? []
+            bucket.push(answer)
+            historyByLead.set(answer.lead_id, bucket)
+          }
+
+          resolvedEvidence = bestEvidence([
+            ...((personEvidence.data ?? []) as unknown as LeadEvidenceRow[]),
+            ...((companyEvidence.data ?? []) as unknown as LeadEvidenceRow[]),
+          ])
+        }
+
+        if (requestId !== latestRequest.current) return
+        const nextLeads = rows.map((row) =>
+          toHubbleLead(row, resolvedEvidence, historyByLead.get(row.id) ?? []),
+        )
+        const nextLinkedinById = Object.fromEntries(
+          rows.map((row) => [row.id, row.linkedin_url]),
+        )
+        setLeads(nextLeads)
+        setLinkedinById(nextLinkedinById)
+        rememberLeadView(viewCacheKey, {
+          expiresAt: Date.now() + LEAD_VIEW_CACHE_MS,
+          leads: nextLeads,
+          linkedinById: nextLinkedinById,
+        })
       } catch {
         if (requestId !== latestRequest.current) return
         setLoadError('Your leads could not be loaded. Refresh, or try again shortly.')
@@ -212,7 +488,7 @@ export function HubbleConsole({
         if (requestId === latestRequest.current) setLoading(false)
       }
     },
-    [supabase, userId, batchId, from, to],
+    [supabase, userId, batchId, from, to, viewCacheKey],
   )
 
   useEffect(() => {
@@ -232,7 +508,7 @@ export function HubbleConsole({
     }
     if (mergedOnce.current) return
     mergedOnce.current = true
-    void loadLeads((latestRequest.current += 1))
+    void loadLeads((latestRequest.current += 1), true)
   }, [run.merge.state, loadLeads])
 
   /**
@@ -261,9 +537,9 @@ export function HubbleConsole({
 
   return (
     /*
-     * The neutral Hubble page. Applied with a negative bleed so it
-     * reaches the edges of the shell's content area, and scoped here so the
-     * extraction workspace keeps its own surface.
+     * The neutral Hubble page. Applied with a negative bleed so it reaches the
+     * edges of the shell's content area while retaining the shared product
+     * material beneath it.
      */
     <div className="hubble-page -mx-4 -my-6 min-h-[calc(100dvh-4rem)] space-y-7 bg-clay-bg px-4 py-6 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
       <header>
@@ -364,6 +640,23 @@ export function HubbleConsole({
           lead={openLead}
           linkedinUrl={linkedinById[openLead.id] ?? null}
           modelName={modelName}
+          onResearchComplete={(answer) => {
+            setLeads((current) =>
+              current.map((lead) =>
+                lead.id === openLead.id
+                  ? {
+                      ...lead,
+                      researchStatus: answer.status,
+                      researchSourceCount: answer.sources.length,
+                    }
+                  : lead,
+              ),
+            )
+            // The run may also have learned a canonical company domain from a
+            // verified redirect. Refresh the record so the open modal and row
+            // show it immediately rather than on the next page load.
+            void loadLeads((latestRequest.current += 1), true)
+          }}
           onClose={() => setOpenLeadId(null)}
         />
       ) : null}

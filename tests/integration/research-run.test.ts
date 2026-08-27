@@ -44,6 +44,10 @@ const missing = await missingMigrations([
     migration: '0047 (research_runs.qualification_profile_id)',
     probe: async () => adminClient().from('research_runs').select('qualification_profile_id').limit(1),
   },
+  {
+    migration: '0064 (research_runs.progress_stage)',
+    probe: async () => adminClient().from('research_runs').select('progress_stage').limit(1),
+  },
 ])
 
 const ready = missing.length === 0
@@ -65,7 +69,12 @@ describeIf('processResearchRun', () => {
 
   /** Removed for the whole suite so no provider can reach the network. */
   const savedKeys: Record<string, string | undefined> = {}
-  const MUTED = ['TAVILY_API_KEY', 'PAGESPEED_API_KEY']
+  const MUTED = [
+    'TAVILY_API_KEY',
+    'PAGESPEED_API_KEY',
+    'WEB_RESEARCH_MCP_URL',
+    'WEB_RESEARCH_MCP_TOKEN',
+  ]
 
   beforeAll(async () => {
     for (const key of MUTED) {

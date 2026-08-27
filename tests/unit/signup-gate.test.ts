@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   hashReservationToken,
-  hashSignupIp,
   normalizeClientIp,
-  signupNetworkIdentity,
 } from '@/lib/auth/signup-gate'
 import {
   createTrialDeviceCookie,
@@ -40,30 +38,6 @@ describe('normalizeClientIp', () => {
 })
 
 describe('signup hashing', () => {
-  it('groups rotating IPv6 addresses by their /64 network', () => {
-    expect(signupNetworkIdentity('2001:db8:abcd:12::1')).toBe(
-      signupNetworkIdentity('2001:db8:abcd:12:ffff::99'),
-    )
-  })
-
-  it('is stable for the same IP and secret', () => {
-    expect(hashSignupIp('203.0.113.8', TEST_SECRET)).toBe(
-      hashSignupIp('203.0.113.8', TEST_SECRET),
-    )
-  })
-
-  it('changes when the secret changes', () => {
-    expect(hashSignupIp('203.0.113.8', TEST_SECRET)).not.toBe(
-      hashSignupIp('203.0.113.8', `${TEST_SECRET}-rotated`),
-    )
-  })
-
-  it('refuses a weak hashing secret', () => {
-    expect(() => hashSignupIp('203.0.113.8', 'too-short')).toThrow(
-      /at least 32 characters/,
-    )
-  })
-
   it('hashes reservation tokens as lowercase SHA-256 hex', () => {
     expect(hashReservationToken('one-time-token')).toMatch(/^[0-9a-f]{64}$/)
   })

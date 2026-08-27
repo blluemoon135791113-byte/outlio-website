@@ -7,6 +7,7 @@ function job(overrides: Partial<DashboardJob> = {}): DashboardJob {
   return {
     id: '00000000-0000-4000-8000-000000000000',
     status: 'processing',
+    trashed_at: null,
     dedupe_mode: 'remove_exact',
     file_count: 18,
     total_bytes: 1,

@@ -31,14 +31,12 @@ function SidebarContent({
   isAdmin,
   canUseScraper,
   referralLink,
-  minimal,
   onNavigate,
 }: {
   isAdmin: boolean
   canUseScraper: boolean
   /** `null` until a profile has a code allocated. */
   referralLink: string | null
-  minimal?: boolean
   onNavigate?: () => void
 }) {
   return (
@@ -72,7 +70,7 @@ function SidebarContent({
         />
       </div>
 
-      {referralLink && !minimal ? (
+      {referralLink ? (
         <div className="px-3 pb-2 pt-2">
           <SidebarReferral link={referralLink} onNavigate={onNavigate} />
         </div>
@@ -115,23 +113,14 @@ export function ProductShell({
   const [mobileOpen, setMobileOpen] = useState(false)
   const userInitials = useMemo(() => initials(fullName, email), [email, fullName])
   const displayName = fullName?.trim() || email.split('@')[0] || 'Outlio user'
-  const isHubble = pathname.startsWith('/dashboard/intelligence')
-
   return (
-    <div
-      className={`app-shell min-h-dvh text-ink ${isHubble ? 'hubble-shell bg-clay-bg' : 'bg-app'}`}
-    >
+    <div className="app-shell product-clay hubble-shell min-h-dvh bg-app text-ink">
       <NavigationProgress />
-      <aside
-        className={`fixed inset-y-0 left-0 z-30 hidden w-[216px] flex-col lg:flex ${
-          isHubble ? 'hubble-nav-panel border-0' : 'border-r border-border/70 bg-panel'
-        }`}
-      >
+      <aside className="hubble-nav-panel fixed inset-y-0 left-0 z-30 hidden w-[216px] flex-col border-0 lg:flex">
         <SidebarContent
           isAdmin={isAdmin}
           canUseScraper={canUseScraper}
           referralLink={referralLink}
-          minimal={isHubble}
         />
       </aside>
 
@@ -141,13 +130,9 @@ export function ProductShell({
             type="button"
             aria-label="Close navigation"
             onClick={() => setMobileOpen(false)}
-            className="absolute inset-0 bg-ink/25 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-ink/25"
           />
-          <aside
-            className={`relative flex h-full w-[min(86vw,280px)] flex-col shadow-[var(--shadow-lg)] ${
-              isHubble ? 'hubble-nav-panel border-0' : 'border-r border-border bg-panel'
-            }`}
-          >
+          <aside className="hubble-nav-panel relative flex h-full w-[min(86vw,280px)] flex-col border-0 shadow-[var(--shadow-lg)]">
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
@@ -160,7 +145,6 @@ export function ProductShell({
               isAdmin={isAdmin}
               canUseScraper={canUseScraper}
               referralLink={referralLink}
-              minimal={isHubble}
               onNavigate={() => setMobileOpen(false)}
             />
           </aside>
@@ -168,11 +152,7 @@ export function ProductShell({
       ) : null}
 
       <div className="min-h-dvh lg:pl-[216px]">
-        <header
-          className={`sticky top-0 z-20 px-4 sm:px-6 lg:px-8 ${
-            isHubble ? 'border-0 bg-clay-bg' : 'border-b border-border bg-panel/95 backdrop-blur-md'
-          }`}
-        >
+        <header className="sticky top-0 z-20 border-0 bg-app px-4 sm:px-6 lg:px-8">
           <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <button
@@ -216,11 +196,7 @@ export function ProductShell({
                   ▾
                 </span>
               </summary>
-              <div
-                className={`absolute right-0 top-[calc(100%+8px)] w-64 origin-top-right rounded-xl p-2 shadow-[var(--shadow-lg)] ${
-                  isHubble ? 'border-0 bg-clay-raised' : 'border border-border bg-panel'
-                }`}
-              >
+              <div className="absolute right-0 top-[calc(100%+8px)] w-64 origin-top-right rounded-xl border-0 bg-panel p-2 shadow-[var(--shadow-lg)]">
                 <div className="border-b border-border px-2 py-2">
                   <p className="truncate font-heading text-sm font-semibold text-ink">{displayName}</p>
                   <p className="mt-0.5 truncate text-xs text-muted">{email}</p>

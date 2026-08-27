@@ -12,7 +12,7 @@ import 'server-only'
  * field is `unknown` — not "no news", not "not hiring".
  */
 import { expiresAtFor } from '@/lib/intelligence/ttl'
-import { hasSearxngCredentials, searxngSearch } from '@/lib/hubble/providers/search'
+import { hasWebSearch, serpSearch } from '@/lib/search'
 import { normalizeCompanyName } from '@/lib/companies/normalize'
 import type {
   CompanyEntity,
@@ -198,7 +198,7 @@ const RECENCY_DAYS: Partial<Record<ResearchField, number>> = {
 
 export type WebResearchOutput = Array<{ field: ResearchField; documents: WebDocument[] }>
 
-function searxDocuments(hits: Awaited<ReturnType<typeof searxngSearch>>): WebDocument[] {
+function searchDocuments(hits: Awaited<ReturnType<typeof serpSearch>>): WebDocument[] {
   return hits.map((hit) => ({
     title: hit.title ?? '',
     url: hit.url,
@@ -273,15 +273,15 @@ export const tavilyWebResearchProvider: IntelligenceProvider<WebResearchOutput> 
 }
 
 /** Free operator-owned search for the fields previously stranded behind Tavily. */
-export const searxngWebResearchProvider: IntelligenceProvider<WebResearchOutput> = {
-  name: 'searxng-web',
+export const searchWebResearchProvider: IntelligenceProvider<WebResearchOutput> = {
+  name: 'search-web',
   category: 'web_research',
 
   canHandle: (task) =>
     task.entity.type === 'company' &&
     task.fields.some((field) => WEB_FIELDS.includes(field)) &&
     Boolean((task.entity as CompanyEntity).name ?? (task.entity as CompanyEntity).domain) &&
-    hasSearxngCredentials(),
+    hasWebSearch(),
 
   estimateCost: async () => 0,
 
@@ -290,18 +290,14 @@ export const searxngWebResearchProvider: IntelligenceProvider<WebResearchOutput>
     const output: WebResearchOutput = []
 
     for (const field of task.fields.filter((candidate) => WEB_FIELDS.includes(candidate))) {
-      const hits = await searxngSearch(queryFor(field, company, task), 8, {
-        // Job pages often omit a publication date. A time-range restriction
-        // silently removes exactly the evergreen careers pages we need.
-        timeRange: undefined,
-      })
-      output.push({ field, documents: searxDocuments(hits) })
+      const hits = await serpSearch(queryFor(field, company, task), { limit: 8 })
+      output.push({ field, documents: searchDocuments(hits) })
     }
 
     return output
   },
 
-  normalize: (output, task) => toEvidence('searxng-web', task, output),
+  normalize: (output, task) => toEvidence('search-web', task, output),
 }
 
 export const gdeltWebResearchProvider: IntelligenceProvider<WebResearchOutput> = {

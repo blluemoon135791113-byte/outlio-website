@@ -1,7 +1,7 @@
 /**
  * The local LLM provider, and the domain that makes search precise.
  */
-import { afterAll, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { isLocalModel, LlmWaterfall, OllamaLlmProvider } from '@/lib/hubble/providers/ollama-llm'
 import { siteScopedQuery } from '@/lib/hubble/domain'
@@ -209,6 +209,39 @@ describe('learnDomainFromSources — the gating logic', () => {
   })
 })
 
+describe('canonical company-domain redirects', () => {
+  it('accepts a matching host only when the stored domain itself redirected there', async () => {
+    const { domainFromVerifiedRedirect } = await import('@/lib/hubble/domain')
+
+    expect(
+      domainFromVerifiedRedirect(
+        'hirecaddie.ai',
+        'https://hirecaddie.ai/',
+        'https://caddie.app/',
+        'Caddie AI',
+      ),
+    ).toBe('caddie.app')
+
+    expect(
+      domainFromVerifiedRedirect(
+        'hirecaddie.ai',
+        'https://search.example/result',
+        'https://caddie.app/',
+        'Caddie AI',
+      ),
+    ).toBeNull()
+
+    expect(
+      domainFromVerifiedRedirect(
+        'hirecaddie.ai',
+        'https://hirecaddie.ai/',
+        'https://unrelated.example/',
+        'Caddie AI',
+      ),
+    ).toBeNull()
+  })
+})
+
 describe('the waterfall consults isUsable, not just isConfigured', () => {
   it('SKIPS a named-but-unpulled local model entirely', async () => {
     /*
@@ -298,46 +331,6 @@ describe('the local LLM is opt-IN, by name', () => {
   })
 })
 
-describe('SearXNG auth', () => {
-  const reset = (url?: string, token?: string) => {
-    if (url) process.env.SEARXNG_URL = url
-    else delete process.env.SEARXNG_URL
-    if (token) process.env.SEARXNG_AUTH_TOKEN = token
-    else delete process.env.SEARXNG_AUTH_TOKEN
-  }
-
-  it('REFUSES a public instance with no token', async () => {
-    /*
-     * ⚠️ SearXNG has no auth of its own. A public URL with no token means
-     * either an open search API for whoever finds it, or every request
-     * rejected — and a search provider returning nothing looks exactly like a
-     * company nobody has written about. Fail at config time, not silently.
-     */
-    const { SearxngSearchProvider } = await import('@/lib/hubble/providers/search')
-    reset('https://outlio-searxng.fly.dev')
-
-    const provider = new SearxngSearchProvider()
-    expect(provider.isConfigured()).toBe(false)
-    await expect(provider.search('anything', 3)).resolves.toEqual([])
-  })
-
-  it('accepts a public instance WITH a token', async () => {
-    const { SearxngSearchProvider } = await import('@/lib/hubble/providers/search')
-    reset('https://outlio-searxng.fly.dev', 'secret-token')
-
-    expect(new SearxngSearchProvider().isConfigured()).toBe(true)
-  })
-
-  it('exempts loopback — nobody else can reach a dev container', async () => {
-    const { SearxngSearchProvider } = await import('@/lib/hubble/providers/search')
-    reset('http://127.0.0.1:8080')
-
-    expect(new SearxngSearchProvider().isConfigured()).toBe(true)
-  })
-
-  afterAll(() => reset('http://127.0.0.1:8080'))
-})
-
 describe('BraveSearchProvider', () => {
   it('is not configured without a key', async () => {
     const { BraveSearchProvider } = await import('@/lib/hubble/providers/search')
@@ -355,25 +348,26 @@ describe('BraveSearchProvider', () => {
 })
 
 describe('the search waterfall is ordered by cost', () => {
-  it('goes unmetered → free-no-card → free-with-card → paid', async () => {
+  it('goes cached → operator-owned → free-no-card → free-with-card → paid', async () => {
     /*
      * ⚠️ GETTING THIS BACKWARDS SPENDS MONEY WHILE A FREE PROVIDER SITS IDLE.
      *
      * Brave sits below Google CSE deliberately: its free tier requires a card
      * on file, which is not free in the way that matters to someone choosing
-     * a provider. Deploying SearXNG later must demote all of them, and none
-     * of it should need a code change — only an environment variable. Solr is
-     * first because reusing Hubble's indexed evidence is cheaper than a search.
+     * a provider. Solr is first because reusing Hubble's indexed evidence is
+     * cheaper than a search.
      */
     const source = await import('node:fs/promises').then((fs) =>
-      fs.readFile('lib/hubble/providers/search.ts', 'utf8'),
+      fs.readFile('lib/search/engines.ts', 'utf8'),
     )
 
     const order = [
       'SolrSearchProvider()',
-      'SearxngSearchProvider()',
+      'McpWebResearchSearchProvider()',
       'GoogleCseSearchProvider()',
       'BraveSearchProvider()',
+      // Keyless and uncapped: exhausted before a metered vendor is billed.
+      'MojeekSearchProvider()',
       'TavilySearchProvider()',
     ].map((name) => source.lastIndexOf(name))
 

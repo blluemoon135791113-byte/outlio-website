@@ -32,7 +32,7 @@ export async function syncCustomerEvent(event: CustomerEvent): Promise<void> {
     p_occurred_at: event.occurredAt,
     p_customer_id: customer.id,
     p_email: customer.email,
-    p_name: customer.name,
+    p_name: customer.name ?? '',
     p_status: customer.status,
     p_marketing_consent: customer.marketingConsent,
     p_custom_data: json(customer.customData),
@@ -54,6 +54,11 @@ export async function syncSubscriptionEvent(event: SubscriptionEvent): Promise<v
     throw new Error(`Paddle subscription ${subscription.id} has no catalog price/product`)
   }
 
+  /*
+   * The generated RPC type marks every no-default parameter as required, but
+   * the function accepts NULL for the optional lifecycle fields (scheduled
+   * change, period bounds, cancellation). The cast keeps the honest nulls.
+   */
   const { error } = await createAdminClient().rpc('sync_paddle_subscription', {
     p_event_id: event.eventId,
     p_event_type: event.eventType,
@@ -71,7 +76,7 @@ export async function syncSubscriptionEvent(event: SubscriptionEvent): Promise<v
     p_canceled_at: subscription.canceledAt,
     p_paused_at: subscription.pausedAt,
     p_custom_data: json(subscription.customData),
-  })
+  } as never)
 
   if (error) throw new Error(`Paddle subscription sync failed: ${error.message}`)
 }
@@ -82,6 +87,7 @@ export async function syncTransactionCompletedEvent(
   const transaction = event.data
   const item = transaction.items[0]
 
+  // Same conservative-generated-type cast as sync_paddle_subscription above.
   const { error } = await createAdminClient().rpc('sync_paddle_transaction', {
     p_event_id: event.eventId,
     p_event_type: event.eventType,
@@ -96,7 +102,7 @@ export async function syncTransactionCompletedEvent(
     p_total: transaction.details?.totals?.grandTotal ?? transaction.details?.totals?.total ?? null,
     p_custom_data: json(transaction.customData),
     p_billed_at: transaction.billedAt,
-  })
+  } as never)
 
   if (error) throw new Error(`Paddle transaction sync failed: ${error.message}`)
 }

@@ -16,7 +16,7 @@ export function SubmitButton({ children }: { children: React.ReactNode }) {
       type="submit"
       disabled={pending}
       aria-busy={pending}
-      className="w-full rounded-[var(--radius-md)] bg-accent px-4 py-2.5 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
+      className="w-full rounded-[var(--radius-md)] bg-accent px-4 py-3 text-sm font-semibold text-cream shadow-[var(--neo-shadow-chip)] transition-[background-color,box-shadow,transform] duration-150 hover:bg-accent-deep active:scale-[0.98] active:shadow-[var(--neo-shadow-inset)] disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? 'Working…' : children}
     </button>

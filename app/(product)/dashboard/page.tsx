@@ -20,30 +20,34 @@ export const metadata: Metadata = {
 
 export default async function DashboardPage() {
   const ctx = await requireAccess()
+  const admin = createAdminClient()
 
   // Rendered server-side so the widget is correct on first paint; Realtime
   // takes over from there.
-  const activeCapture = await getActiveSession(ctx.userId!)
-  const connectedDevices = await countDevices(ctx.userId!)
-
-  const { data: balanceRows } = await createAdminClient().rpc('credit_balance', {
-    p_user_id: ctx.userId!,
-  })
-  const { data: referralRows } = await createAdminClient().rpc('referral_summary', {
-    p_user_id: ctx.userId!,
-  })
+  const [
+    activeCapture,
+    connectedDevices,
+    { data: balanceRows },
+    { data: referralRows },
+    { data: subscription },
+  ] = await Promise.all([
+    getActiveSession(ctx.userId!),
+    countDevices(ctx.userId!),
+    admin.rpc('credit_balance', { p_user_id: ctx.userId! }),
+    admin.rpc('referral_summary', { p_user_id: ctx.userId! }),
+    admin
+      .from('subscriptions')
+      .select('status, provider')
+      .eq('user_id', ctx.userId!)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
   const referral = Array.isArray(referralRows) ? referralRows[0] : null
   const balance = Array.isArray(balanceRows) ? balanceRows[0] : null
   const limits = ctx.plan?.limits
   const uploadLimits = resolveUploadLimits(limits ?? null)
   const usage = ctx.usage
-  const { data: subscription } = await createAdminClient()
-    .from('subscriptions')
-    .select('status, provider')
-    .eq('user_id', ctx.userId!)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
   const upgradeTarget = nextPlan(ctx.plan?.key)
 
   const metrics = [
@@ -91,10 +95,10 @@ export default async function DashboardPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/dashboard/jobs"
+            href="/dashboard/intelligence"
             className="inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-4 text-sm font-semibold text-ink transition-[border-color,background-color,transform] duration-150 ease-out hover:border-accent/35 hover:bg-accent-soft/40 active:scale-[0.97]"
           >
-            View extractions
+            Research with Hubble
           </Link>
           <Link
             href="/dashboard/extract/new"
@@ -185,7 +189,7 @@ export default async function DashboardPage() {
             />
           </dl>
         </section>
-        <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-accent/15 bg-[linear-gradient(145deg,#fbf9ff_0%,#f0eaff_100%)] p-5 shadow-[var(--shadow-sm)]">
+        <section className="credits-gradient relative overflow-hidden rounded-[var(--radius-xl)] border border-accent/15 p-5 shadow-[var(--shadow-sm)]">
           <div className="relative z-10">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">Subscription</p>
             <div className="mt-2 flex items-start justify-between gap-3">
