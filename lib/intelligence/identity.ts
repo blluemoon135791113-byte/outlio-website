@@ -169,6 +169,62 @@ function nameAppearsExactly(nameTokens: readonly string[], haystack: readonly st
 }
 
 /**
+ * True when the name's anchors are present.
+ *
+ * ⚠️ A SINGLE-LETTER ANCHOR IS AN INITIAL, AND MUST SIT IN A NAME POSITION.
+ * Captured lead sources often abbreviate a surname ("Muhritz W") while
+ * first-party pages spell it out, so the initial has to match something — but
+ * matching it against ANY word starting with that letter makes the surname
+ * check a no-op: "works", "with", "website" and "welcome" all satisfy a "W".
+ * That degrades the test to first-name-plus-employer and readmits exactly the
+ * namesake contamination this module exists to prevent.
+ *
+ * So the initial must be ADJACENT to the spelled-out anchor, in the right
+ * order, AND capitalised in the source: "Muhritz Waheed" passes, "Muhritz
+ * Ahmed works with…" does not, and neither does "Muhritz will be speaking" —
+ * adjacency alone still admits a function word that happens to start with the
+ * right letter.
+ *
+ * Capitalisation is the cheapest signal that separates a surname from a
+ * stopword, and preferring it costs us pages that style names in lower case.
+ * That trade is deliberate: a wrong contact is worse than a missing one.
+ */
+function anchorsPresent(
+  anchors: readonly string[],
+  haystack: readonly string[],
+  cased: readonly string[],
+): boolean {
+  if (anchors.length === 1) {
+    // A lone initial identifies nobody at all.
+    const only = anchors[0]!
+    return only.length > 1 && haystack.includes(only)
+  }
+
+  const [first, last] = anchors as [string, string]
+  const firstIsInitial = first.length === 1
+  const lastIsInitial = last.length === 1
+
+  // "J. S." is not a name.
+  if (firstIsInitial && lastIsInitial) return false
+
+  if (!firstIsInitial && !lastIsInitial) {
+    return haystack.includes(first) && haystack.includes(last)
+  }
+
+  const spelled = firstIsInitial ? last : first
+  const initial = firstIsInitial ? first : last
+  return haystack.some((token, index) => {
+    if (token !== spelled) return false
+    // The initial precedes a surname and follows a forename.
+    const at = firstIsInitial ? index - 1 : index + 1
+    const neighbour = haystack[at]
+    if (!neighbour?.startsWith(initial)) return false
+    const original = cased[at] ?? ''
+    return original.slice(0, 1) !== original.slice(0, 1).toLowerCase()
+  })
+}
+
+/**
  * Scores one observation against one subject.
  *
  * Never throws, and never guesses: an unparseable URL contributes nothing
@@ -179,14 +235,19 @@ export function resolveIdentity(
   subject: IdentitySubject,
   observation: IdentityObservation,
 ): IdentityMatch {
-  const nameTokens = words(subject.fullName).filter((token) => token.length > 1)
+  // Keep one-letter initials: captured lead sources frequently abbreviate a
+  // surname ("Muhritz W") while first-party pages spell it in full.
+  const nameTokens = words(subject.fullName)
   if (nameTokens.length === 0) {
     return { verdict: 'no_match', score: 0, signals: [], reason: 'subject has no name' }
   }
 
   const candidate = observation.candidate ?? {}
   const text = `${observation.text ?? ''} ${candidate.fullName ?? ''} ${candidate.jobTitle ?? ''} ${candidate.companyName ?? ''} ${candidate.location ?? ''}`
-  const haystack = words(text)
+  // Case is preserved in parallel: an initial is only credible next to a
+  // capitalised neighbour, and `words()` lower-cases everything.
+  const cased = text.match(/[\p{L}\p{N}]+/gu) ?? []
+  const haystack = cased.map((token) => token.toLowerCase())
   const compact = haystack.join('')
   const signals: IdentitySignal[] = []
 
@@ -215,8 +276,7 @@ export function resolveIdentity(
   // First and last anchor the name. Middle names appear inconsistently and
   // requiring them loses real matches.
   const anchors = nameTokens.length === 1 ? nameTokens : [nameTokens[0]!, nameTokens.at(-1)!]
-  const hasAnchors = anchors.every((token) => haystack.includes(token))
-  if (!hasAnchors) {
+  if (!anchorsPresent(anchors, haystack, cased)) {
     return { verdict: 'no_match', score: 0, signals: [], reason: 'name not present' }
   }
   signals.push(nameAppearsExactly(nameTokens, haystack) ? 'name_exact' : 'name_tokens')

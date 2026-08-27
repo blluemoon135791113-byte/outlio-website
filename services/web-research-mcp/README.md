@@ -77,6 +77,6 @@ The Compose database is local-development-only. Hosted deployments should use a 
 - Fetch only public HTTP(S) pages and reject private/reserved DNS targets on every redirect.
 - LinkedIn and other login-oriented social hosts are never fetched.
 - Code extracts emails, phones, URLs, dates, currencies, and social links before any model call.
-- Gemini is used only for semantic extraction from relevant, bounded chunks.
+- Local Ollama, then optional Gemini, is used only for semantic extraction from relevant, bounded chunks.
 - Contact data found in public page text is `publicly_found`, never automatically `verified`.
 - Contradictory sourced facts remain in the output with a `conflict_group`.

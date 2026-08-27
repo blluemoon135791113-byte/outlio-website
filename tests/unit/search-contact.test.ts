@@ -65,6 +65,13 @@ describe('Google public contact search', () => {
     expect(finding?.confidence).toBeGreaterThan(0.82)
   })
 
+  it('matches a captured surname initial to a published full surname', () => {
+    expect(extractPublicEmail({ ...PERSON, fullName: 'Muhritz W' }, [hit({
+      title: 'Muhritz Waheed — Founder at Fabricated Labs',
+      snippet: 'Muhritz Waheed leads Fabricated Labs. Email muhritz@fabricated.example.',
+    })])).toMatchObject({ value: 'muhritz@fabricated.example' })
+  })
+
   it('rejects generic mailboxes, different employers, and other people', () => {
     expect(extractPublicEmail(PERSON, [hit({
       snippet: 'Jamie Rivera leads Fabricated Labs. Email support@fabricated.example.',

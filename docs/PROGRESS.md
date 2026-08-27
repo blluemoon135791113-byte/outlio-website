@@ -343,6 +343,39 @@ keep working.
 
 ---
 
+## 2026-08-28 — Contact Intelligence v2 and local no-charge semantics
+
+Hubble's free contact path now uses a bounded query ladder instead of one
+email/phone search. Contact tasks receive up to eight targeted searches and
+four reserved first-party follow-ups; the MCP follows relevant team, about,
+leadership, contact, and person-path links on the verified company domain. The
+parser now extracts ordinary and obfuscated addresses, `mailto:`, `tel:`,
+JSON-LD contacts, international phones, and public social-profile URLs before
+any model call. Identity association tolerates omitted middle names and
+captured surname initials while continuing to require employer evidence.
+Independent hosts that publish the same contact increase its confidence and
+their source inventory persists with the typed evidence.
+
+Docker Compose now includes a private SearXNG service with JSON search enabled,
+making the documented primary live-search provider part of the actual local
+stack. DuckDuckGo HTML remains the lawful fail-closed fallback. The semantic
+extractor is now a local-first waterfall: schema-constrained Ollama runs before
+optional Gemini, and deterministic code-only extraction remains available when
+neither model is configured. Contacts are still never invented by a model and
+never upgraded from `publicly_found` to `verified` merely because they appear
+in search results.
+
+Verification: root TypeScript and changed-file ESLint are clean; the complete
+application suite passes **90 files / 1,244 tests**, with 8 live-only files / 24
+tests skipped. The standalone MCP passes **29 tests**, its TypeScript production
+build is clean, and Docker Compose configuration validates with generated test
+secrets. The local machine currently has neither an MCP `.env` file nor Ollama
+installed, so the updated containers were not restarted over the user's
+existing unhealthy MCP container; exact setup steps are documented in the MCP
+README.
+
+---
+
 ## 2026-08-27 — Hubble findings persist into compact lead cards
 
 The Hubble lead modal now reads all three existing persistence layers rather

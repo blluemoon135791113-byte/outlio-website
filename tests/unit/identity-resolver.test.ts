@@ -78,6 +78,59 @@ describe('employer signals distinguish namesakes', () => {
     expect(match.verdict).toBe('match')
   })
 
+  it('matches a captured surname initial to a first-party full surname', () => {
+    const match = resolveIdentity({ ...ada, fullName: 'Muhritz W' }, {
+      text: 'Muhritz Waheed, Founder',
+      url: 'https://acme.com/team/muhritz-waheed',
+    })
+    expect(match.verdict).toBe('match')
+    expect(match.signals).toContain('name_tokens')
+  })
+
+  it('⚠️ REFUSES a different surname that merely starts with the initial', () => {
+    /*
+     * The regression this guards. Matching a one-letter anchor against ANY
+     * word starting with that letter makes the surname check a no-op —
+     * "works", "with", "website" all satisfy a "W" — which degrades the test
+     * to first-name-plus-employer and readmits namesake contamination.
+     *
+     * Muhritz Ahmed is a DIFFERENT PERSON at the same company.
+     */
+    const match = resolveIdentity({ ...ada, fullName: 'Muhritz W' }, {
+      text: 'Muhritz Ahmed works with our engineering team',
+      url: 'https://acme.com/team',
+    })
+
+    expect(match.verdict).toBe('no_match')
+    expect(match.reason).toContain('name not present')
+  })
+
+  it('requires the initial to sit beside the name, not anywhere on the page', () => {
+    const match = resolveIdentity({ ...ada, fullName: 'Muhritz W' }, {
+      text: 'Muhritz will be speaking, and we welcome him to Acme Corp',
+      url: 'https://news.example/1',
+    })
+    expect(match.verdict).toBe('no_match')
+  })
+
+  it('handles an initialled FORENAME, where the initial comes first', () => {
+    // "A Lovelace" -> the initial precedes the surname, not follows it.
+    const match = resolveIdentity({ ...ada, fullName: 'A Lovelace' }, {
+      text: 'Ada Lovelace, VP Engineering',
+      url: 'https://acme.com/team',
+    })
+    expect(match.verdict).toBe('match')
+  })
+
+  it('refuses a name that is nothing but initials', () => {
+    // "J S" identifies nobody.
+    const match = resolveIdentity({ ...ada, fullName: 'J S' }, {
+      text: 'Jane Smith, Acme Corp',
+      url: 'https://acme.com/team',
+    })
+    expect(match.verdict).toBe('no_match')
+  })
+
   it('is not fooled by a lookalike host', () => {
     // `notacme.com` ends with `acme.com`. A naive suffix check accepts it.
     const match = resolveIdentity(ada, {

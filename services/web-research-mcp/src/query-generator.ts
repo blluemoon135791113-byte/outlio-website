@@ -20,7 +20,7 @@ export class QueryGenerator {
     // Contact tasks are different from general company research: ordinary
     // search engines surface public contact details most reliably for an exact
     // person + employer-domain query. Put those searches inside the caller's
-    // four-query budget instead of hiding them behind one generic query.
+    // contact-query budget instead of hiding them behind one generic query.
     const emailQueries = wantsEmail ? [
         `${broadIdentity} email`,
         lead.company_domain
