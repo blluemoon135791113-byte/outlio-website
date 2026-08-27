@@ -33,7 +33,8 @@ export default async function PricingPage() {
     paddle = getPaddleBrowserConfig()
     tiers = getPricingTiers()
   } catch (error) {
-    console.error('[paddle-pricing] Checkout configuration is incomplete.', error)
+    const reason = error instanceof Error ? error.message : 'Unknown configuration error'
+    console.warn(`[paddle-pricing] Checkout configuration is incomplete: ${reason}`)
 
     return (
       <>

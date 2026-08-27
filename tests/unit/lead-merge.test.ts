@@ -35,7 +35,15 @@ function row(leadId: string, fields: ResultRow['fields']): ResultRow {
 }
 
 const known = (value: unknown, provider = 'prospeo') =>
-  ({ state: 'known', value, sourceProvider: provider, sourceUrl: null }) as const
+  ({
+    state: 'known',
+    value,
+    sourceProvider: provider,
+    sourceUrl: null,
+    confidence: 0.8,
+    corroboratingProviders: [],
+    conflictingProviders: [],
+  }) as const
 
 const unknown = { state: 'unknown', reason: 'not_found' } as const
 

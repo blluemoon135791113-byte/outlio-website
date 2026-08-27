@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { resolveConflict, scoreConfidence } from '@/lib/intelligence/evidence'
+import type { ResultCell } from '@/lib/intelligence/results'
 import type { EvidenceRecord, SourceConfidence } from '@/lib/intelligence/types'
 
 let counter = 0
@@ -160,5 +161,55 @@ describe('resolveConflict surfaces corroboration', () => {
 
   it('leaves unknown states untouched', () => {
     expect(resolveConflict([])).toEqual({ state: 'unknown', reason: 'never_researched' })
+  })
+})
+
+describe('the results boundary carries trust, not just the value', () => {
+  /*
+   * ⚠️ THE REGRESSION THIS GUARDS. The engine scored agreement and dissent and
+   * `results.ts` then dropped both, so a cell backed by three independent
+   * providers rendered identically to one scraped from a single weak page.
+   * These assert the SHAPE the table needs; `results.ts` builds it from
+   * exactly the fields checked here.
+   */
+  it('projects corroboration and dissent as deduplicated provider names', () => {
+    const winner = record({ sourceProvider: 'apollo', sourceConfidence: 'high', confidence: 0.8 })
+    const knowledge = resolveConflict([
+      winner,
+      record({ sourceProvider: 'wikidata' }),
+      // Same provider twice: one source, and it must not be counted twice.
+      record({ sourceProvider: 'scout' }),
+      record({ sourceProvider: 'scout' }),
+      record({ sourceProvider: 'gdelt', value: { industry: 'Retail' } }),
+    ])
+    if (knowledge.state !== 'known') throw new Error('expected known')
+
+    const cell: ResultCell = {
+      state: 'known',
+      value: knowledge.record.value,
+      sourceUrl: knowledge.record.sourceUrl,
+      sourceProvider: knowledge.record.sourceProvider,
+      confidence: knowledge.confidence,
+      corroboratingProviders: [...new Set(knowledge.corroborating.map((r) => r.sourceProvider))],
+      conflictingProviders: [...new Set(knowledge.conflicting.map((r) => r.sourceProvider))],
+    }
+    if (cell.state !== 'known') throw new Error('expected known')
+
+    expect(cell.corroboratingProviders).toEqual(['wikidata', 'scout'])
+    expect(cell.conflictingProviders).toEqual(['gdelt'])
+
+    /*
+     * Both projections feed the score: the three agreeing providers raise it,
+     * and gdelt's dissent then cuts it back. Compared against the same set
+     * with the dissenter removed, so the assertion cannot pass by accident.
+     */
+    const undisputed = resolveConflict([
+      winner,
+      record({ sourceProvider: 'wikidata' }),
+      record({ sourceProvider: 'scout' }),
+    ])
+    if (undisputed.state !== 'known') throw new Error('expected known')
+    expect(undisputed.confidence).toBeGreaterThan(knowledge.record.confidence)
+    expect(cell.confidence).toBeLessThan(undisputed.confidence)
   })
 })

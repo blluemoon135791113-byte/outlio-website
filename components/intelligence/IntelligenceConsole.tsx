@@ -22,7 +22,15 @@ import { DateRangePicker } from '@/components/intelligence/DateRangePicker'
 import { dayCount, formatRange } from '@/lib/intelligence/date-range'
 
 type Cell =
-  | { state: 'known'; value: unknown; sourceUrl: string | null; sourceProvider: string }
+  | {
+      state: 'known'
+      value: unknown
+      sourceUrl: string | null
+      sourceProvider: string
+      confidence?: number
+      corroboratingProviders?: readonly string[]
+      conflictingProviders?: readonly string[]
+    }
   | { state: 'unknown' }
 
 type Row = {
@@ -150,6 +158,50 @@ function label(field: string): string {
 }
 
 /** Renders a researched value compactly without inventing precision. */
+/**
+ * How sure we are, shown only when there is something worth saying.
+ *
+ * ⚠️ SILENT ON THE ORDINARY CASE. Most cells come from one provider, and
+ * stamping "1 source" on every one of them is noise that trains people to stop
+ * reading. This speaks up for the two states that change a decision:
+ * independent agreement, and disagreement.
+ *
+ * Disagreement is deliberately louder than agreement. A seller who emails a
+ * contested address wastes the lead; one who skips a corroborated address
+ * loses nothing.
+ */
+function Corroboration({ cell }: { cell: Extract<Cell, { state: 'known' }> }) {
+  const agree = cell.corroboratingProviders ?? []
+  const disagree = cell.conflictingProviders ?? []
+  const pct = typeof cell.confidence === 'number' ? Math.round(cell.confidence * 100) : null
+
+  if (disagree.length > 0) {
+    return (
+      <span
+        className="text-[11px] text-warning"
+        title={`${disagree.join(', ')} reported a different value${pct === null ? '' : ` — ${pct}% confidence`}`}
+      >
+        {disagree.length} disagree{disagree.length === 1 ? 's' : ''}
+      </span>
+    )
+  }
+
+  if (agree.length > 0) {
+    // The winning provider counts too: two agreeing sources, not one plus one.
+    const total = agree.length + 1
+    return (
+      <span
+        className="text-[11px] text-success"
+        title={`${[cell.sourceProvider, ...agree].join(', ')} independently agree${pct === null ? '' : ` — ${pct}% confidence`}`}
+      >
+        {total} sources agree
+      </span>
+    )
+  }
+
+  return null
+}
+
 function renderValue(value: unknown): string {
   if (value === null || value === undefined) return '—'
 
@@ -714,16 +766,19 @@ function Results({ results }: { results: RunResults }) {
                       ) : (
                         <>
                           <span className="text-ink">{renderValue(cell.value)}</span>
-                          {cell.sourceUrl ? (
-                            <a
-                              href={cell.sourceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer nofollow"
-                              className="cursor-pointer mt-0.5 block text-[11px] text-accent underline-offset-2 hover:underline"
-                            >
-                              source
-                            </a>
-                          ) : null}
+                          <span className="mt-0.5 flex flex-wrap items-center gap-x-2">
+                            {cell.sourceUrl ? (
+                              <a
+                                href={cell.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer nofollow"
+                                className="cursor-pointer text-[11px] text-accent underline-offset-2 hover:underline"
+                              >
+                                source
+                              </a>
+                            ) : null}
+                            <Corroboration cell={cell} />
+                          </span>
                         </>
                       )}
                     </td>

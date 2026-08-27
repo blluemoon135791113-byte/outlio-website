@@ -4,6 +4,79 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — Phase 6: confidence and corroboration reach the screen
+
+### Computed, then thrown away
+
+Phase 4 built an engine that scores agreement and dissent. `results.ts` then
+dropped both at the boundary: `ResultCell` carried `value`, `sourceUrl` and
+`sourceProvider` and nothing else. So a cell backed by **three independent
+providers rendered identically to one scraped from a single weak page**, and
+every cell implicitly claimed equal footing. The same was true of the
+`identityConfidence` Phase 2 writes onto evidence — computed, stored, never
+shown. Verified before starting: a grep for `corroborating` and
+`identityConfidence` outside the two modules that produce them returned
+nothing.
+
+### Carried through
+
+`ResultCell.known` now also carries `confidence`, `corroboratingProviders` and
+`conflictingProviders`. The provider lists are **deduplicated by name**, which
+is the same rule the confidence engine scores by — one provider is one source
+however many rows it filed. The arrays are `readonly`: they are projections for
+display, and nothing downstream should be editing them.
+
+`app/api/intelligence/runs/[id]/route.ts` returns the results object wholesale,
+so no serialization change was needed — checked rather than assumed.
+
+### The indicator is silent on the ordinary case
+
+Most cells come from one provider. Stamping "1 source" on every one of them is
+noise that trains people to stop reading, so the indicator speaks only for the
+two states that change a decision: independent agreement, and disagreement.
+
+**Disagreement is deliberately louder than agreement** — warning-toned, and
+checked first. A seller who emails a contested address wastes the lead; one who
+skips a corroborated address loses nothing. Confidence and the contributing
+provider names sit in the `title`, so the detail is available without putting a
+percentage on every cell.
+
+Colours come from the existing `--success` / `--warning` theme tokens. No
+hardcoded colour, no entrance animation on the table.
+
+### Verification
+
+- TypeScript clean; production build clean; **1,186 unit tests passing**.
+- ESLint `lib app components tests`: **0 errors**, 7 warnings, all in files this
+  phase did not touch (`VideoShowcase`, `layout`, `Avatar`, `evidence-store`).
+  The earlier "5 warnings" figure covered a narrower path list, not a
+  regression.
+- One test assertion of mine was wrong and the code was right: it expected
+  corroboration to raise the score while ignoring a dissenter deliberately
+  placed in the same fixture. Rewritten to compare against the identical set
+  with the dissenter removed, so it cannot pass by accident.
+- ⚠️ **NOT visually verified.** The results table sits behind authentication and
+  needs a completed run carrying corroborated evidence; there is no React
+  component test setup in this repo (`jsdom` is present but the vitest
+  environment is `node` and there is no `@testing-library/react`). The data
+  path is covered by type checking, the production build, and a boundary test
+  asserting the exact shape the table consumes — but nobody has seen it render.
+
+---
+
+## 2026-08-28 — Paddle-free pricing no longer opens the Next.js error overlay
+
+The pricing route already caught missing Paddle configuration and rendered its
+safe sign-up fallback, but it passed the caught `Error` to `console.error`.
+Next.js development mode promotes that call into the full-screen error overlay,
+making the handled condition look like a route crash. The route now records the
+non-secret configuration reason with `console.warn`, preserving the diagnostic
+without obscuring the fallback pricing page. Paddle configuration remains strict
+when checkout is actually enabled; no fake credentials or billing defaults were
+introduced.
+
+---
+
 ## 2026-08-28 — Phase 5: the location signal, made live
 
 ### A column that existed and was never read

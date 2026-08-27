@@ -35,8 +35,28 @@ const MAX_ROWS = 500
  */
 export type UnknownReason = 'not_found' | 'provider_unavailable' | 'no_provider' | 'no_company'
 
+/**
+ * ⚠️ A KNOWN CELL CARRIES HOW SURE WE ARE, NOT JUST WHAT WE FOUND.
+ *
+ * The confidence engine computes an answer-level confidence and the list of
+ * independent providers that agreed, then this boundary used to discard both.
+ * A cell backed by three independent sources rendered identically to one
+ * scraped from a single weak page, so a seller had no way to tell a solid
+ * contact from a shaky one — and every cell implicitly claimed equal footing.
+ */
 export type ResultCell =
-  | { state: 'known'; value: unknown; sourceUrl: string | null; sourceProvider: string }
+  | {
+      state: 'known'
+      value: unknown
+      sourceUrl: string | null
+      sourceProvider: string
+      /** 0–1, the ANSWER's confidence: agreement raises it, dissent lowers it. */
+      confidence: number
+      /** Other providers that independently reached this same value. */
+      corroboratingProviders: readonly string[]
+      /** Providers that reached a DIFFERENT value. A conflict is information. */
+      conflictingProviders: readonly string[]
+    }
   | { state: 'unknown'; reason: UnknownReason }
 
 export type ResultRow = {
@@ -395,6 +415,15 @@ async function loadRows(
               value: found.record.value,
               sourceUrl: found.record.sourceUrl,
               sourceProvider: found.record.sourceProvider,
+              confidence: found.confidence,
+              // Deduplicated: one provider is one source however many rows it
+              // filed, which is the same rule the confidence engine scores by.
+              corroboratingProviders: [
+                ...new Set(found.corroborating.map((record) => record.sourceProvider)),
+              ],
+              conflictingProviders: [
+                ...new Set(found.conflicting.map((record) => record.sourceProvider)),
+              ],
             }
           : { state: 'unknown', reason: reasonByField.get(field) ?? 'not_found' }
     }
