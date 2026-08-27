@@ -347,6 +347,31 @@ The software path can be configured to make **no metered vendor calls**:
 - No automatic proxy purchase, CAPTCHA service, phone/email enrichment vendor,
   Browser Use Cloud, Elastic Cloud, Redis Cloud, or Meilisearch Cloud.
 
+### Contact Intelligence v2 — accepted implementation
+
+The no-charge acquisition path now treats contact discovery as a dedicated
+bounded workflow rather than one generic web query:
+
+1. SearXNG runs inside the MCP Docker stack as the primary live metasearch;
+   DuckDuckGo HTML remains the fail-closed fallback.
+2. Email and phone tasks receive up to eight narrow queries and fourteen URL
+   candidates; general research retains the smaller four-query/ten-URL budget.
+3. The crawler reserves four URL slots for one-hop first-party
+   team/about/leadership/contact discovery.
+4. Code extracts ordinary and obfuscated email addresses, `mailto:`, `tel:`,
+   JSON-LD contacts, international phones, and public profile URLs before a
+   model sees the page.
+5. Person association accepts omitted middle names and captured surname
+   initials but still requires employer evidence. Independent hosts confirming
+   the same value raise confidence.
+6. Local Ollama structured extraction runs before optional Gemini. Neither
+   model is allowed to invent contacts; deterministic evidence remains the
+   contact authority.
+
+This improves public-web recall but does not change the explicit non-goal:
+non-public personal numbers, government identifiers, account credentials, and
+guessed contact details are not collected.
+
 Open-source licenses do not make compute free. A local Docker deployment can
 avoid a vendor bill by using the user's hardware and network. Free cloud tiers
 can sleep, throttle, change limits, or disappear; Hubble must treat that as an

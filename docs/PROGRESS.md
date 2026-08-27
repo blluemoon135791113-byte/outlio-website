@@ -335,10 +335,11 @@ keep working.
   and unrelated** — the file is untracked work in progress and imports nothing
   this phase touched.
 - Next.js 16 production build: **clean**.
-- ⚠️ The build machine is nearly out of disk (~1.5 GB free of 228 GB after a
-  successful build). A production build needs roughly 1 GB of headroom and
-  failed with `ENOSPC` twice before space was reclaimed. Reclaimable today:
-  `~/.npm` (2.4 GB) and stale browser/updater caches.
+- Disk: **resolved 2026-08-28.** Space was reclaimed and a cold build now has
+  room. Measured properly on a from-scratch build: it consumes **~2.5 GB of
+  transient space**, not the ~1 GB first estimated here — that earlier figure
+  was inferred from a partial build and understated the requirement. The
+  finished `.next` is ~390 MB; the rest is build scratch that is released.
 
 ---
 

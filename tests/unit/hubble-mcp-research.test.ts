@@ -71,9 +71,9 @@ describe('McpLeadResearchClient', () => {
       arguments: expect.objectContaining({
         requested_fields: ['work_email', 'industry'],
         limits: {
-          max_queries: 4,
-          results_per_query: 5,
-          max_urls: 10,
+          max_queries: 8,
+          results_per_query: 6,
+          max_urls: 14,
           max_gemini_calls: 2,
         },
       }),
@@ -140,4 +140,3 @@ describe('MCP evidence normalization', () => {
     expect(mapMcpFact('person.favorite_color', 'blue')).toEqual([])
   })
 })
-

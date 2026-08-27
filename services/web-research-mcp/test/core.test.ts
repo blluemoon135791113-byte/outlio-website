@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { attributedPersonContacts, FactMerger } from "../src/facts.js";
 import { resolveRedirectUrl } from "../src/fetcher.js";
+import { OllamaExtractor, SemanticExtractorWaterfall } from "../src/gemini.js";
 import { discoverOfficialContactUrls, LeadResearchPipeline } from "../src/pipeline.js";
 import { CheerioParser } from "../src/parser.js";
 import { QueryGenerator } from "../src/query-generator.js";
@@ -215,6 +216,48 @@ describe("FactMerger", () => {
     ], [page("https://example.com")], {});
     expect(output.facts).toHaveLength(2); expect(output.facts.find((fact) => fact.value === "Software")?.confidence).toBeCloseTo(.8); expect(output.facts.every((fact) => fact.conflict_group === "company.industry")).toBe(true);
     expect(output.documents).toEqual([expect.objectContaining({ url: "https://example.com", text: "" })]);
+  });
+});
+
+describe("local semantic extraction", () => {
+  const page: ScoredPage = {
+    url: "https://fabricated.example/about",
+    title: "About Fabricated Labs",
+    description: "",
+    headings: [],
+    text: "",
+    signals: { emails: [], phones: [], urls: [], dates: [], currencies: [], social_links: [] },
+    query: "Fabricated Labs industry",
+    rank: 1,
+    relevance: .9,
+    sourceQuality: .9,
+  };
+  const lead = { name: "Jamie Rivera", job_title: "Founder", company: "Fabricated Labs", company_domain: "fabricated.example", linkedin_url: "" };
+
+  it("uses Ollama structured output without a hosted API key", async () => {
+    const requests: unknown[] = [];
+    const fakeFetch = async (_input: string | URL | Request, init?: RequestInit) => {
+      requests.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({
+        message: { content: JSON.stringify({ facts: [{ field: "company.industry", value: "Software", confidence: .9 }] }) },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const extractor = new OllamaExtractor(
+      loadConfig({ NODE_ENV: "test", OLLAMA_URL: "http://127.0.0.1:11434", OLLAMA_MODEL: "test-model" }),
+      fakeFetch as typeof fetch,
+    );
+    await expect(extractor.extract(lead, page, "Fabricated Labs builds B2B software."))
+      .resolves.toEqual([expect.objectContaining({ field: "company.industry", value: "Software", source_url: page.url })]);
+    expect(requests[0]).toMatchObject({ model: "test-model", stream: false, format: { type: "object" } });
+  });
+
+  it("falls through when the local extractor is unavailable", async () => {
+    const extractor = new SemanticExtractorWaterfall([
+      { extract: async () => { throw new ResearchError("OLLAMA_ERROR", "offline", true); } },
+      { extract: async () => [{ field: "company.industry", value: "Software", source_url: page.url, source_title: page.title, published_date: null, confidence: .8 }] },
+    ]);
+    await expect(extractor.extract(lead, page, "Software company"))
+      .resolves.toEqual([expect.objectContaining({ value: "Software" })]);
   });
 });
 
