@@ -32,6 +32,9 @@ describe("configuration", () => {
   it("supports request-bound execution for free sleeping hosts", () => {
     expect(loadConfig({ NODE_ENV: "test", WORKER_MODE: "request" }).WORKER_MODE).toBe("request");
   });
+  it("uses an explicit zero-charge SearXNG engine set", () => {
+    expect(loadConfig({ NODE_ENV: "test" }).SEARXNG_ENGINES).toBe("yandex,bing,yep");
+  });
   it("accepts Supabase REST storage only in request mode", () => {
     const parsed = loadConfig({ NODE_ENV: "production", WORKER_MODE: "request", MCP_BEARER_TOKEN: "a".repeat(24), SUPABASE_URL: "https://example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "b".repeat(32) });
     expect(parsed.SUPABASE_URL).toBe("https://example.supabase.co");
@@ -53,8 +56,8 @@ describe("QueryGenerator", () => {
     expect(queries).toEqual([
       'Jamie Rivera fabricated.example email',
       'site:fabricated.example "Jamie Rivera" email',
+      'fabricated.example Jamie Rivera phone number',
       'Jamie Rivera fabricated.example phone WhatsApp',
-      'site:fabricated.example "Jamie Rivera" phone',
     ]);
   });
 
@@ -82,6 +85,15 @@ describe("contact attribution", () => {
       emails: ["jamie@fabricated.example"],
       phones: ["+44 20 7946 0958"],
     });
+  });
+
+  it("accepts a public Mexican business number attributed by person and employer", () => {
+    expect(attributedPersonContacts(
+      "Jamie Rivera — Founder at Fabricated Labs — phone number +52 55 6765 4571.",
+      "https://directory.example/jamie-rivera",
+      lead,
+      true,
+    ).phones).toEqual(["+52 55 6765 4571"]);
   });
 
   it("does not misattribute a generic company mailbox or unrelated contact", () => {
@@ -115,9 +127,13 @@ describe("DuckDuckGo provider", () => {
 
 describe("modular search fallback", () => {
   it("normalizes SearXNG JSON results", async () => {
-    const fakeFetch = async () => new Response(JSON.stringify({ results: [
-      { title: "Jamie Rivera — Fabricated Labs", url: "https://fabricated.example/team?utm_source=search", content: "Email jamie@fabricated.example" },
-    ] }), { status: 200, headers: { "content-type": "application/json" } });
+    let requestedUrl = "";
+    const fakeFetch = async (input: string | URL | Request) => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify({ results: [
+        { title: "Jamie Rivera — Fabricated Labs", url: "https://fabricated.example/team?utm_source=search", content: "Email jamie@fabricated.example" },
+      ] }), { status: 200, headers: { "content-type": "application/json" } });
+    };
     const provider = new SearxngSearchProvider(config, "http://127.0.0.1:8080", fakeFetch as typeof fetch);
     await expect(provider.search("Jamie Rivera", 5)).resolves.toEqual([{
       query: "Jamie Rivera",
@@ -126,6 +142,7 @@ describe("modular search fallback", () => {
       snippet: "Email jamie@fabricated.example",
       rank: 1,
     }]);
+    expect(new URL(requestedUrl).searchParams.get("engines")).toBe("yandex,bing,yep");
   });
 
   it("uses the next provider when the primary search is unavailable", async () => {

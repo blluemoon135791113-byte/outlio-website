@@ -49,20 +49,61 @@ export function AuthShell({
         <div className="my-auto grid items-center gap-8 py-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,1fr)] lg:gap-16">
           <section className="max-w-lg">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
-              Lead intelligence, connected
+              Outlio Lead Engine
             </p>
-            <h2 className="mt-4 max-w-md font-heading text-[clamp(2.25rem,5vw,4rem)] font-semibold leading-[0.98] tracking-[-0.055em] text-ink">
-              Turn lead data into your next best action.
+            <h2 className="mt-4 max-w-md font-heading text-[clamp(2.25rem,5vw,3.6rem)] font-semibold leading-[1.0] tracking-[-0.05em] text-ink">
+              Your prospect list, researched and sourced.
             </h2>
             <p className="mt-5 max-w-md text-[15px] leading-7 text-muted">
-              Capture clean records, enrich the companies behind them, and ask Hubble what matters before your team reaches out.
+              Upload a saved Sales Navigator page. Outlio researches the companies
+              and people behind it across public sources, and Hubble answers your
+              questions — with a source on every fact.
             </p>
 
-            <ol className="mt-8 hidden space-y-3 lg:block" aria-label="How Outlio works">
-              <AuthBenefit number="01" title="Capture" detail="Bring in the lead pages you already saved." />
-              <AuthBenefit number="02" title="Understand" detail="Turn scattered evidence into verified context." />
-              <AuthBenefit number="03" title="Act" detail="Export clean data or research it with Hubble." />
+            {/*
+             * ⚠️ CONCRETE, NOT ASPIRATIONAL. The previous panel read
+             * "Capture / Understand / Act", which is true of almost any B2B
+             * tool and told a returning user nothing. These are the three
+             * things this product does that most alternatives do not.
+             */}
+            <ol className="mt-8 hidden space-y-3 lg:block" aria-label="What Outlio does">
+              <AuthBenefit
+                number="01"
+                title="60+ researched fields"
+                detail="Registries, filings, funding, tech stack, hiring signals and public contacts."
+              />
+              <AuthBenefit
+                number="02"
+                title="A source on every fact"
+                detail="Each value links to the page it came from. Nothing is inferred or guessed."
+              />
+              <AuthBenefit
+                number="03"
+                title="Ask Hubble anything"
+                detail="Plain-English answers about a lead, quoting the passages behind them."
+              />
             </ol>
+
+            <dl className="mt-8 flex flex-wrap gap-x-8 gap-y-3">
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  Deduplicated
+                </dt>
+                <dd className="mt-0.5 text-sm text-ink">Across every upload</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  Exports
+                </dt>
+                <dd className="mt-0.5 text-sm text-ink">CSV and XLSX</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  LinkedIn login
+                </dt>
+                <dd className="mt-0.5 text-sm text-ink">Never requested</dd>
+              </div>
+            </dl>
           </section>
 
           <section className="clay-raised w-full p-6 sm:p-8" aria-labelledby="auth-title">

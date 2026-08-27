@@ -35,12 +35,18 @@ function hit(overrides: Partial<GoogleSearchHit> = {}): GoogleSearchHit {
 describe('Google public contact search', () => {
   it('generates the same exact person + domain query used in a manual search', () => {
     expect(contactSearchQuery(PERSON, 'email')).toBe('Jamie Rivera fabricated.example email')
-    expect(contactSearchQuery(PERSON, 'phone')).toBe('Jamie Rivera fabricated.example phone WhatsApp')
+    expect(contactSearchQuery(PERSON, 'phone')).toBe('fabricated.example Jamie Rivera phone number')
     expect(contactSearchQueries(PERSON, 'email')).toEqual([
       'Jamie Rivera fabricated.example email',
       'site:fabricated.example "Jamie Rivera" email',
       '"Jamie Rivera" "Fabricated Labs" contact email',
       '"Jamie Rivera" "Fabricated Labs" filetype:pdf email',
+    ])
+    expect(contactSearchQueries(PERSON, 'phone')).toEqual([
+      'fabricated.example Jamie Rivera phone number',
+      'Jamie Rivera fabricated.example phone WhatsApp',
+      'site:fabricated.example "Jamie Rivera" phone',
+      '"Jamie Rivera" "Fabricated Labs" contact phone',
     ])
   })
 
@@ -93,6 +99,17 @@ describe('Google public contact search', () => {
       title: 'Fabricated Labs contact',
       snippet: 'Call Fabricated Labs on +44 20 7946 0958.',
     })])).toBeNull()
+  })
+
+  it('normalizes an attributed public Mexican business number', () => {
+    expect(extractPublicPhone(PERSON, [hit({
+      url: 'https://directory.example/jamie-rivera',
+      snippet: 'Jamie Rivera founded Fabricated Labs. Phone Number: +52 55 6765 4571.',
+    })])).toMatchObject({
+      value: '+525567654571',
+      sourceUrl: 'https://directory.example/jamie-rivera',
+      sourceConfidence: 'medium',
+    })
   })
 
   it('rejects malformed international numbers rather than storing phone-shaped text', () => {

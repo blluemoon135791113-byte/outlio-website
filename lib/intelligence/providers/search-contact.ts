@@ -269,10 +269,10 @@ export function contactSearchQueries(
         `${quoted} filetype:pdf email`,
       ]
     : [
+        `${employer} ${name} phone number`,
         `${name} ${employer} phone WhatsApp`,
         ...(person.companyDomain ? [`site:${domain(person.companyDomain)} "${name}" phone`] : []),
         `${quoted} contact phone`,
-        `${quoted} filetype:pdf phone`,
       ]
   return [...new Set(queries.map((query) => query.replace(/\s+/g, ' ').trim()))].slice(0, max)
 }

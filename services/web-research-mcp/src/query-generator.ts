@@ -30,12 +30,12 @@ export class QueryGenerator {
         `${person} filetype:pdf email`,
       ] : [];
     const phoneQueries = wantsPhone ? [
+        `${lead.company_domain || employer} ${name} phone number`,
         `${broadIdentity} phone WhatsApp`,
         lead.company_domain
           ? `site:${lead.company_domain} "${name}" phone`
           : `${person} phone contact`,
         `${person} contact phone`,
-        `${person} filetype:pdf phone`,
       ] : [];
     const contactQueries = [
       ...emailQueries.slice(0, 2),

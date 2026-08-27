@@ -27,6 +27,11 @@ export class SearxngSearchProvider implements SearchProvider {
       const url = new URL("search", this.baseUrl.endsWith("/") ? this.baseUrl : `${this.baseUrl}/`);
       url.searchParams.set("q", query);
       url.searchParams.set("format", "json");
+      const engines = this.config.SEARXNG_ENGINES.split(",")
+        .map((engine) => engine.trim())
+        .filter(Boolean)
+        .join(",");
+      if (engines) url.searchParams.set("engines", engines);
       const response = await this.fetchImpl(url, {
         signal: controller.signal,
         headers: { accept: "application/json", "user-agent": "OutlioResearch/1.0 (+https://outlio.io)" },

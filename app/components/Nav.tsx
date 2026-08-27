@@ -62,7 +62,7 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
       { label: "Download the extension", href: CHROME_EXTENSION_URL, external: true },
     ],
     ctas: [
-      { label: "Start free trial", href: "/leadengine/pricing", primary: true },
+      { label: "Get started", href: "/sign-up", primary: true },
       { label: "Sign In", href: "/sign-in" },
     ],
   },

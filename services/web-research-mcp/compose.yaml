@@ -44,6 +44,7 @@ services:
       # Internal, operator-owned metasearch: no per-query provider charge.
       # DuckDuckGo HTML remains the lawful fallback inside the MCP service.
       SEARXNG_URL: http://searxng:8080
+      SEARXNG_ENGINES: ${SEARXNG_ENGINES:-yandex,bing,yep}
       # Optional local model. Leave blank for deterministic code-only mode.
       OLLAMA_URL: ${OLLAMA_URL:-}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}

@@ -61,6 +61,7 @@ The included `Dockerfile` runs as a non-root user and exposes a container health
 ```bash
 MCP_BEARER_TOKEN=<random 32-byte hex value>
 SEARXNG_SECRET=<different random 32-byte hex value>
+SEARXNG_ENGINES=yandex,bing,yep
 OLLAMA_URL=http://host.docker.internal:11434
 OLLAMA_MODEL=qwen3:4b
 ```
@@ -69,6 +70,12 @@ Then run `docker compose up --build -d`. On a machine with Ollama installed,
 pull the configured model once before starting the stack. Leave `OLLAMA_URL`
 blank for code-only mode. SearXNG is available only on
 `http://127.0.0.1:8080`; the MCP remains on `http://127.0.0.1:8787`.
+
+The MCP sends the configured `SEARXNG_ENGINES` list explicitly. This avoids a
+healthy SearXNG instance silently returning no results because its default
+general-search engines are blocked. The default list is `yandex,bing,yep`;
+individual upstreams may still throttle or refuse requests, in which case the
+remaining engines and then DuckDuckGo are tried without bypassing the refusal.
 
 The Compose database is local-development-only. Hosted deployments should use a managed PostgreSQL database, HTTPS ingress, a generated bearer token, and the appropriate `DATABASE_SSL_MODE`.
 

@@ -5,44 +5,30 @@ import Link from 'next/link'
 /**
  * Lead Engine hero.
  *
- * Matches the main outlio.io hero deliberately: paper background with the dotted
- * grid, heavy black uppercase headline with one accent word, muted subtitle,
- * black pill + outlined pill CTAs, and floating product cards at the edges.
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  WHY THIS WAS REWRITTEN.                                                 ║
+ * ║                                                                          ║
+ * ║  The previous hero sold a CSV converter: "Turn Sales Navigator results   ║
+ * ║  into a clean CSV." That was true in the first month and has been        ║
+ * ║  badly wrong since. The product now researches 60+ sourced fields per    ║
+ * ║  company, resolves identity before attaching a contact to a person,      ║
+ * ║  scores confidence by independent corroboration, and answers questions   ║
+ * ║  in plain English through Hubble. Selling the export step is like        ║
+ * ║  advertising a database by its "Save" button.                            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * NOTE ON THE VOLUMETRIC VERSION: an earlier build used a dark 3D spotlight
- * room. It was replaced because volumetric beams are only visible against
- * darkness — the effect physically cannot work on a paper-white background, so
- * it could never sit alongside the main hero's palette. Removing it also drops
- * ~30 MB of three.js dependencies and a 908 KB chunk.
+ * Visually this now uses the CLAY surfaces the dashboard and Hubble use
+ * (`--clay-bg`, `clay-raised`, `--neo-shadow`) rather than the flat paper cards
+ * of the agency site. Someone arriving from this page should recognise the app
+ * they land in.
  */
 
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
 export function LeadEngineHero() {
   return (
-    /*
-     * Sized so the three cards are ABOVE THE FOLD on a laptop.
-     *
-     * The first build used a 5.2rem headline with 24px section padding and the
-     * cards landed ~200px below the viewport — the before/after contrast is the
-     * whole pitch, so burying it defeated the section. Padding, headline clamp
-     * and inter-block gaps are all tightened to fit within ~800px.
-     */
-    <section className="relative overflow-hidden bg-paper px-4 pb-12 pt-10 sm:pb-16 sm:pt-12">
-      {/* Dotted grid, matching the main hero's texture. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage: 'radial-gradient(circle, rgba(22,21,15,0.09) 1px, transparent 1px)',
-          backgroundSize: '22px 22px',
-        }}
-      />
-      {/* Soft accent bloom, same treatment as the landing page aurora. */}
-      <div
-        aria-hidden
-        className="hero-aurora pointer-events-none absolute inset-0"
-      />
+    <section className="relative overflow-hidden bg-clay-bg px-4 pb-14 pt-10 sm:pb-20 sm:pt-14">
+      <div aria-hidden className="hero-aurora pointer-events-none absolute inset-0" />
 
       <div className="relative mx-auto max-w-5xl">
         <div className="text-center">
@@ -54,36 +40,42 @@ export function LeadEngineHero() {
           </p>
 
           <h1
-            className="mx-auto mt-4 max-w-4xl text-[clamp(2rem,5vw,3.9rem)] font-bold uppercase leading-[0.98] tracking-tight text-ink"
+            className="mx-auto mt-4 max-w-4xl font-heading text-[clamp(2rem,5vw,3.9rem)] font-bold leading-[0.98] tracking-[-0.04em] text-ink"
             style={{ animation: `fade-in 0.7s ${EASE} 0.05s both` }}
           >
-            Turn Sales Navigator
+            Your prospect list,
             <br />
-            results into a <span className="text-accent">clean CSV.</span>
+            <span className="text-accent">researched and sourced.</span>
           </h1>
 
+          {/*
+           * ⚠️ WHAT IT DOES, IN THREE CLAUSES. A visitor decides in one read.
+           * Every claim here maps to shipped behaviour: the parser, the
+           * research pipeline, and Hubble.
+           */}
           <p
-            className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg"
+            className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted sm:text-lg"
             style={{ animation: `fade-in 0.7s ${EASE} 0.12s both` }}
           >
-            Save the results page already open in your browser. Outlio extracts
-            the names, titles, companies and profile links, removes duplicates,
-            and gives you a CSV ready for your workflow.
+            Upload the Sales Navigator page you already saved. Outlio turns it
+            into a clean, de-duplicated lead database, researches the companies
+            and people behind it across public sources, and lets you ask
+            questions in plain English — with a source link on every answer.
           </p>
 
           <div
-            className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row"
+            className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
             style={{ animation: `fade-in 0.7s ${EASE} 0.18s both` }}
           >
             <Link
-              href="/leadengine/pricing"
-              className="rounded-full bg-ink px-7 py-3.5 text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent"
+              href="/sign-up"
+              className="rounded-full bg-ink px-8 py-3.5 text-base font-semibold text-cream shadow-[var(--neo-shadow-chip)] transition-colors duration-150 hover:bg-accent"
             >
-              Convert your first list free
+              Get started free
             </Link>
             <Link
               href="#how-it-works"
-              className="rounded-full border border-ink px-7 py-3.5 text-base font-semibold text-ink transition-colors duration-150 hover:bg-cream"
+              className="rounded-full border border-border-strong bg-clay-raised px-8 py-3.5 text-base font-semibold text-ink shadow-[var(--neo-shadow-chip)] transition-colors duration-150 hover:border-accent hover:text-accent"
             >
               See how it works
             </Link>
@@ -97,71 +89,67 @@ export function LeadEngineHero() {
           </p>
         </div>
 
-        {/* Floating product cards, echoing the main hero's pinboard treatment. */}
-        <div className="pointer-events-none mt-10 grid gap-4 sm:grid-cols-3">
-          <FloatCard delay="0.28s" tilt="-1.2deg">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-              Before
+        {/*
+         * Three cards, one per stage of the actual pipeline. The old set was
+         * a before/after comparison about copy-pasting — a problem framing
+         * that stopped being the point once research shipped.
+         */}
+        <div className="mt-12 grid gap-4 sm:grid-cols-3">
+          <ClayCard delay="0.28s" step="01" title="Capture">
+            <p className="text-sm leading-relaxed text-muted">
+              Upload a saved results page, or capture one with the extension
+              while you browse. Duplicates are caught against everything you
+              have uploaded before.
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-ink">
-              Copy each name, title and company into a spreadsheet. Discover the
-              duplicates only after outreach starts.
-            </p>
-          </FloatCard>
+          </ClayCard>
 
-          <FloatCard delay="0.34s" tilt="0.6deg" accent>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">
-              After
+          <ClayCard delay="0.34s" step="02" title="Research" accent>
+            <p className="text-sm leading-relaxed text-muted">
+              Company registries, filings, funding, tech stack, hiring signals
+              and public contacts — gathered, de-conflicted and scored.
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-ink">
-              <span className="font-semibold">Cmd+S</span> on the results page.
-              Upload the saved file. Download a clean CSV.
+            <p className="mt-3 font-heading text-2xl font-bold tracking-[-0.03em] text-ink">
+              60+ sourced fields
             </p>
-            <p className="mt-3 text-2xl font-black tracking-tight text-ink">
-              Ready in seconds
-            </p>
-          </FloatCard>
+          </ClayCard>
 
-          <FloatCard delay="0.4s" tilt="1.1deg">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-              Every row
+          <ClayCard delay="0.4s" step="03" title="Ask">
+            <p className="text-sm leading-relaxed text-muted">
+              Hubble answers questions about a lead in plain English, quoting
+              the page it read. Export to CSV or XLSX whenever you want.
             </p>
-            <ul className="mt-2 space-y-1 text-sm text-ink">
-              <li>Name · Profile link</li>
-              <li>Title · Company</li>
-              <li>Location · Tenure</li>
-            </ul>
-          </FloatCard>
+          </ClayCard>
         </div>
       </div>
     </section>
   )
 }
 
-function FloatCard({
+function ClayCard({
   children,
   delay,
-  tilt,
+  step,
+  title,
   accent = false,
 }: {
   children: React.ReactNode
   delay: string
-  tilt: string
+  step: string
+  title: string
   accent?: boolean
 }) {
   return (
     <div
-      className={
-        accent
-          ? 'rounded-[var(--radius-lg)] border-2 border-accent bg-panel p-5 shadow-[var(--shadow-md)]'
-          : 'rounded-[var(--radius-lg)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]'
-      }
-      style={{
-        transform: `rotate(${tilt})`,
-        animation: `fade-in 0.7s ${EASE} ${delay} both`,
-      }}
+      className={`clay-raised p-6 ${accent ? 'ring-1 ring-accent/25' : ''}`}
+      style={{ animation: `fade-in 0.7s ${EASE} ${delay} both` }}
     >
-      {children}
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-[11px] font-semibold text-accent">{step}</span>
+        <h3 className="font-heading text-lg font-semibold tracking-[-0.03em] text-ink">
+          {title}
+        </h3>
+      </div>
+      <div className="mt-3">{children}</div>
     </div>
   )
 }

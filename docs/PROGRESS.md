@@ -64,6 +64,29 @@ hardcoded colour, no entrance animation on the table.
 
 ---
 
+## 2026-08-28 — Public phone retrieval: provider diagnosis and SearXNG coverage
+
+A live Google CSE request returned HTTP 403 with `PERMISSION_DENIED`: the new
+project does not have access to Custom Search JSON API. Google now documents
+that API as closed to new customers, so possessing a key and search-engine ID
+does not make the adapter usable. The email observed in Hubble was therefore
+coming from another provider or cache; Google contributed no results.
+
+The local SearXNG service was healthy but its default general-engine selection
+returned zero results because its upstreams were challenged or rate-limited.
+An explicit zero-charge `yandex,bing,yep` selection returned a relevant public
+directory result with person, employer, and phone signals. The MCP now sends a
+configurable `SEARXNG_ENGINES` list on every request, and Docker defaults it to
+that working set. Refusals still fail closed and no CAPTCHA bypass was added.
+
+Both contact query generators now lead phone research with the successful
+manual pattern — company domain, person name, `phone number` — before WhatsApp,
+official-site, and contact-page variants. Fabricated regression cases prove a
+public Mexican business number survives snippet attribution and is normalized
+to E.164 in the main Intelligence provider.
+
+---
+
 ## 2026-08-28 — Paddle-free pricing no longer opens the Next.js error overlay
 
 The pricing route already caught missing Paddle configuration and rendered its

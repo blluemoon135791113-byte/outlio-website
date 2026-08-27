@@ -13,6 +13,9 @@ const EnvSchema = z.object({
   DATABASE_SSL_MODE: z.enum(["disable", "require", "verify-full"]).default("require"),
   SUPABASE_URL: optionalSecret(z.string().url()), SUPABASE_SERVICE_ROLE_KEY: optionalSecret(z.string().min(20)),
   SEARXNG_URL: optionalSecret(z.string().url()),
+  // Explicit general-web engines avoid SearXNG's instance-dependent default
+  // category, which can be healthy while every default engine is unavailable.
+  SEARXNG_ENGINES: z.string().default("yandex,bing,yep"),
   OLLAMA_URL: optionalSecret(z.string().url()), OLLAMA_MODEL: z.string().default("qwen3:4b"),
   GEMINI_API_KEY: optionalSecret(z.string().min(10)), GEMINI_MODEL: z.string().default("gemini-3.6-flash"),
   MAX_QUERIES: z.coerce.number().int().min(1).max(30).default(10),
