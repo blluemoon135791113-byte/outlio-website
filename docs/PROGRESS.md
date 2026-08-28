@@ -70,8 +70,15 @@ deliberate: `hasGoogleCseCredentials()` falls back to `GOOGLE_MAPS_API_KEY`
 when the CSE key is absent, so the engine id is the only field that reliably
 disables the provider. Verified: the check now returns false.
 
-**Production needs the same change** — `GOOGLE_CSE_ID` must be blank or unset
-in Vercel, or the deployed app keeps burning a slot per cooldown window.
+~~**Production needs the same change**~~ — ⚠️ **CORRECTED 2026-08-28.** Checked
+via `vercel env ls`: `GOOGLE_CSE_ID`, `GOOGLE_CSE_API_KEY` and
+`GOOGLE_MAPS_API_KEY` are set in **none** of production, preview or
+development. `hasGoogleCseCredentials()` has therefore always returned false on
+the deployed app — the wasted waterfall slot was a LOCAL-ONLY problem, already
+fixed. No Vercel change was needed, and advising one was wrong.
+
+Production does carry `SEARXNG_URL` and `SEARXNG_AUTH_TOKEN`, so the
+web-research MCP path is configured there as intended.
 
 The provider code stays. An account with existing access still works, and
 deleting a provider is not how you record that an upstream closed; its header
