@@ -4,6 +4,853 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — Account List ingestion: companies as a first-class feature
+
+### It is a separate feature, and the schema says so
+
+A lead page yields PEOPLE who happen to have employers; companies appear as a
+side effect of linking. An account list yields COMPANIES directly, with no
+person attached — so it does not belong in the lead pipeline, which dedupes by
+person and exports person rows.
+
+⚠️ **IT STILL WRITES TO THE SAME `companies` TABLE, ON PURPOSE.** A company
+found through an account list and the same company found through a lead's
+employer must be ONE row, or every later count is wrong — and the plan is for
+macro analysis to move onto company accounts, which makes a split identity
+space a future data corruption rather than a cosmetic issue.
+
+### `0065_account_list_ingest.sql` — `upsert_companies`
+
+`link_leads_to_companies` (0043) cannot serve this: it requires a `lead_id` and
+skips any row without one. The new RPC does the same identity resolution with
+no lead, and additionally reports whether the row was **created**, so ingestion
+can say "18 new, 7 already known" rather than one meaningless total.
+
+The resolution deliberately mirrors 0043 step for step — precedence, name-row
+adoption, the contended-retry loop, the guarded weaker-identifier attachment.
+⚠️ Divergence would mean the same company resolving differently depending on
+which page it arrived on, which is exactly the duplicate the table's three
+partial unique indexes exist to prevent.
+
+⚠️ **Industry is filled in, never overwritten.** `companies.industry` is a
+projection of `research_evidence`, which carries provenance and a TTL. A
+captured page is weaker than researched evidence, so it may seed an empty cell
+and must not replace a value a provider stood behind.
+
+### `lib/companies/ingest-accounts.ts`
+
+`toIngestPayload` is pure and exported precisely so identity mapping — the part
+most likely to be wrong — is testable without a database.
+
+⚠️ **THE SALES NAVIGATOR URL IS CONVERTED, NOT STORED AS-IS.**
+`normalized_linkedin_url` is deduped against values written by the lead
+pipeline, which stores the public `linkedin.com/company/<slug>` page. A
+`/sales/company/` URL never matches one, so the same company would land twice —
+once per page type. Uses `publicCompanyUrl`, the lead parser's own converter.
+
+Unidentifiable rows are counted and returned, never silently dropped: "25 rows
+in, 18 companies out" needs the missing seven accounted for.
+
+### Verification
+
+- Typecheck, ESLint and production build clean. **1,229 tests**, 5 new.
+- ⚠️ **The migration has NOT been applied.** No database was reachable from
+  this session, so `upsert_companies` exists as SQL only and its behaviour is
+  unverified against Postgres. `types/database.ts` was hand-extended in the
+  generator's own shape so the code compiles; regenerating types after applying
+  0065 should produce an identical entry.
+
+### Next
+
+A job type that reports accounts rather than leads, and an upload path that
+routes an account list to `ingestAccounts` instead of refusing it — the worker
+currently refuses account lists with an accurate message.
+
+---
+
+## 2026-08-28 — Account List: unblocked the build, added page-type routing
+
+### Two failures inherited from the in-flight Account List work
+
+Both after the last unrelated edit, both blocking:
+
+1. **`tsc` failed.** `parse-account-list.ts:118` used
+   `cheerio.Cheerio<cheerio.Element>`, but cheerio 1.x no longer exports
+   `Element` — that type moved to `domhandler`. Fixed by deriving the type
+   from the API itself (`ReturnType<cheerio.CheerioAPI>`) rather than adding a
+   dependency on cheerio's internal DOM package to spell one parameter.
+
+2. **A test failed.** `hubble-summarize` required the exact words "with a
+   public record"; `HubbleResultPanel` had been reworded to "with public
+   evidence". ⚠️ The test's actual subject — coverage stated as a NUMBER
+   rather than a wall of "Not found" — was never in question, and its own
+   header comment says so. Rewritten to assert the shape (`{summary.withData}
+   of` and the `withData + withoutData` denominator) instead of the sentence.
+   A copy test that breaks on copy teaches people to edit tests without
+   reading them.
+
+### `lib/leads/page-type.ts` (PURE) — the missing router
+
+The parser and its extension adapter existed with **no caller**. The worker had
+exactly one parser, so an Account Hub upload reached `parseSearchResults`,
+found zero leads and raised `ERR_FILE_FORMAT` — technically correct and the
+wrong answer: the file was perfectly valid, we pointed the wrong reader at it.
+
+⚠️ **ACCOUNT LIST IS TESTED FIRST, AND THE ORDER IS LOAD-BEARING.** An Account
+Hub row can recommend a *person*, so the page may carry a `person-name` anchor;
+a lead search page never carries the account-hub table hooks. The specific test
+must precede the general one, or account pages route silently to the lead
+parser — the exact bug the module prevents. Pinned by a test using a page with
+both anchors.
+
+⚠️ **`unknown` IS A REAL ANSWER.** Defaulting to the lead parser so something
+always runs would convert "we cannot tell what this is" into "this is a broken
+lead page" — the failure-looks-like-empty trap this codebase keeps re-learning.
+
+Detection is substring-only on `data-*` hooks, never classes or ember ids, per
+`SELECTOR_MAP.md`: a detector that drifts is worse than none, because it routes
+a good file to the wrong reader.
+
+### Wired into the worker, honestly
+
+`process-job.ts` now routes before parsing. Account lists are **refused with a
+message naming what they actually are** rather than called malformed — company
+ingestion does not exist yet, so this pipeline still persists leads only. That
+refusal is the honest state, and it is a smaller lie than "this page could not
+be read".
+
+### Verification
+
+- Typecheck, ESLint and production build clean.
+- **1,224 tests passing**, 5 new.
+
+### Next for this feature
+
+Company ingestion: a `companies`-shaped write path, dedupe by
+`sales_navigator_url`, and a job type that reports accounts rather than leads.
+Until that exists the parser is reachable only from the extension adapter.
+
+---
+
+## 2026-08-28 — Buttons lose the neumorphic halo
+
+`--neo-shadow-chip` carries `-4px -4px 10px rgba(255, 255, 255, 0.72)` — the
+upper-left highlight that makes a cream panel look extruded. Applied to a
+FILLED control it is not a highlight, it is a halo: the button appears to glow,
+and on the charcoal card the white bled around the label.
+
+⚠️ **THE RULE, NOT JUST THE FIX.** A filled button is a solid object sitting ON
+the surface, not a piece of the surface pushed up out of it, so it takes an
+ordinary drop shadow. Panels keep the paired light. That distinction is what
+makes the neumorphism read as *material* rather than as an effect sprayed over
+everything — and it is why this was a new `--shadow-button` token rather than
+deleting shadows.
+
+Applied across seven files: the featured-card CTA, auth submit buttons, the MFA
+challenge, the Lead Engine hero pair, the date-picker chips, and the Hubble
+prompt and result controls.
+
+### Verification
+
+- Typecheck, ESLint (0 errors), production build clean, **1,215 tests**.
+- Confirmed in-browser: every button resolves to
+  `rgba(54, 57, 56, 0.24) 0 2px 6px -1px` or `none`, with **no white glow**;
+  `.clay` panels still resolve to the paired
+  `rgba(54,57,56,0.13) 9px 9px` / `rgba(255,255,255,0.74) -9px -9px`.
+
+---
+
+## 2026-08-28 — Flat colour by default; one gradient, one meaning
+
+### Gradients were everywhere and all of them were violet
+
+`--grad-band` ran `#34265f → #5e42ad → #8c6bea → #b9a6ff`; the hero aurora used
+two violet radial pools; the team beam, the glass card's border and shadows all
+carried `rgba(79, 75, 255, …)`. None of those hues exist in the brand.
+
+⚠️ **A GRADIENT NOW MEANS EXACTLY ONE THING: SAGE MEETING BURNT CORAL.**
+`--grad-band` is `sage-deep → sage → coral → coral-deep`, and the team beam and
+hero aurora use the same two colours. Everywhere else colour is flat, because a
+surface carrying data should be one colour and a gradient should carry meaning
+rather than decoration.
+
+### The featured card is a colour, not a ramp
+
+`.product-gradient` was a jet ramp. A gradient behind a number makes the digits
+sit on two different backgrounds and adds nothing. It is flat now.
+
+⚠️ Worth recording: inside `.product-clay` the card is **coral, not jet** — the
+scope override at `globals.css:409` wins. That is deliberate and now documented
+in place: the featured card is a call to act on, and jet among cream panels
+reads as a hole. Both are flat; neither is a gradient. Without the note, the
+jet declaration looks like it applies in-product when it never does.
+
+### Flattened, not recoloured
+
+Three more ramps became single colours because they were shading for its own
+sake: the glass surface, the explanatory sidebar wash, and the clay-surface
+card.
+
+### Verification
+
+- Typecheck, ESLint (0 errors), production build clean, **1,219 tests**.
+- Confirmed in-browser: featured card `backgroundImage: none`, flat
+  `rgb(168, 61, 34)`; `--grad-band` resolves to
+  `#4f6459 → #778f84 → #d95a3b → #a83d22`.
+- `grep` for the violet hexes and `rgba(79, 75, 255` returns **0**.
+
+---
+
+## 2026-08-28 — The whole palette, each colour with a job
+
+### Sage and Lilac finally do something
+
+Coral was carrying the palette alone. Each colour now has one job:
+
+- **Coral** — action: buttons, links, focus-free active states.
+- **Sage** — positive: `--success` derives from it.
+- **Lilac** — informational: `--info` now derives from it, retiring `#1f5fa8`,
+  the last unbranded status colour.
+- **Jet / Charcoal** — ink, depth, the darkest surfaces.
+
+⚠️ `--lilac-deep` added for the same reason `--coral-deep` exists: the brand
+lilac on cream is nowhere near AA, so the deep variant carries text while the
+brand hex stays a surface colour.
+
+`/leadengine` hero cards now take one colour per pipeline stage — Capture
+lilac, Research coral, Ask sage — as a tinted ring and step number only. The
+card stays clay; the colour is a label, not a fill. Section washes alternate
+`lilac-soft` and `sage-soft` instead of two flat neutrals. Minimal clay applied
+to the two callout panels.
+
+### Hardcoded colours removed — and some deliberately kept
+
+`DashboardPreview` carried a violet-white chrome bar, three generic macOS
+traffic lights and a violet gradient. All now palette.
+
+⚠️ **`HeroWidgets` hex values were left alone on purpose.** `#0066DA`,
+`#00AC47`, `#EA4335`, `#FFBA00` and `#F06A6A` are the **Google Drive and Asana
+brand marks**. Recolouring a third-party logo to fit our palette makes the logo
+wrong. Hardcoded colour is the correct answer there.
+
+### Two corrections
+
+- **The hero widgets were never removed.** `<HeroWidgets />` is still at
+  `app/page.tsx:237`; it is gated `hidden xl:block` and the screenshot that
+  prompted the concern was taken at 800px. Confirmed present at 1440px:
+  sticky note, reminder, pipeline, integrations.
+- **`npx skills add Leonxlnx/taste-skill` was blocked** by the permission
+  classifier and was not installed. Not worked around.
+
+### Verification
+
+- Typecheck, ESLint (0 errors), production build clean, **1,219 tests**.
+- Palette confirmed in-browser: the three hero cards resolve to lilac-deep,
+  coral-deep and sage-deep respectively.
+
+---
+
+## 2026-08-28 — Field focus by light; duplicate hero heading removed
+
+### Fields signal focus by depth, not by a border colour
+
+Inputs swapped their border colour on focus — the weakest possible cue on an
+already-bordered control, since the only thing that changed was a hue, and it
+read as the field having gone *wrong* rather than having been selected.
+
+A shared `.field` surface now applies the same treatment as the micro-analysis
+prompt: the surface deepens and lifts, so the field visibly becomes the active
+thing. The global `:focus-visible` outline still applies on top, so nothing is
+lost for keyboard users.
+
+⚠️ **Two real bugs surfaced in the shared `inputClass` while doing this:**
+
+- `focus:shadow-[0_0_0_3px_rgba(139,92,246,0.12)]` — a hardcoded **violet**
+  left over from the retired accent, in three files. Both a wrong brand colour
+  and a hardcoded colour CLAUDE.md forbids.
+- `placeholder:text-muted/60/60` — a malformed doubled-opacity class that was
+  never valid and therefore never applied at all.
+
+Neither was visible from a screenshot; both were found by reading the class
+string while migrating it.
+
+### The dashboard badge: removed, not restyled
+
+A decorative ↗ in a 24px circle became the word "Open" in the glyph purge,
+which overflowed the circle. ⚠️ The deeper problem was that it **labelled a
+control that does not exist** — the badge is `aria-hidden` and the card is not
+a link. A card that looks clickable and is not is a worse defect than a symbol
+nobody decodes, so the badge is gone rather than reworded.
+
+### Landing hero
+
+`app/page.tsx` carried an `<h1>` and a long paragraph directly above
+`HeroHeadline`, which renders **its own `<h1>`** — two competing headings — and
+the paragraph restated the concise one below it almost word for word. Removed;
+`HeroHeadline` is the hero.
+
+⚠️ **THIS EDITS `app/page.tsx`, WHICH CLAUDE.md RULE 5 MARKS READ-ONLY** and
+which was explicitly kept out of scope during the Lead Engine rewrite. Changed
+on the owner's direct instruction. **Rule 5 now contradicts the repository and
+should either be amended or re-affirmed.**
+
+### Verification
+
+- Typecheck, ESLint (0 errors), production build clean.
+- Field focus confirmed in-browser: inset shadow deepens and an outer glow
+  appears; no colour swap.
+- Hero confirmed: one heading, concise copy.
+
+---
+
+## 2026-08-28 — Chunk overlap fixed; settings split into pages
+
+### The garbled citation
+
+A saved answer read "…here is the evidence I retrieved: 1. gical Principles
+Make Educational Content Effective?" — a passage starting mid-word.
+
+The fallback wording itself is **not in the codebase**; that row is stored data
+from an older run. But the cause was live: `chunkText` in
+`lib/hubble/retrieve.ts` carried overlap between chunks with a bare
+`slice(-OVERLAP_CHARS)`, which cuts wherever the character count lands —
+usually mid-word. "Psychological" became "gical", and that fragment was quoted
+back to the user as evidence.
+
+⚠️ **A citation that begins mid-word reads as corruption and defeats the one
+thing citations are for: being checkable.** Overlap now snaps forward to the
+next word boundary, losing a few characters of context and nothing that
+matters. A single unbroken token is kept whole rather than cut.
+
+Pinned by a test asserting every chunk opens with a whole word from the source.
+Folded into the existing `hubble-retrieve.test.ts` rather than adding a second
+file for the same module.
+
+### Settings: seven anchors → seven pages
+
+`/dashboard/settings` was one route with seven `#anchor` links. Three problems:
+
+1. The nav had **no affordance** — seven real links rendered as plain body
+   text, so it did not read as navigation.
+2. **Every visit ran all seven data loads** — MFA factors, subscription,
+   devices and three integration lookups — even to change a display name.
+3. Nothing was linkable; "open your billing settings" meant the page and a
+   scroll.
+
+Now a `layout.tsx` for the shared header, a client `SettingsShell` for the nav
+(it needs `usePathname` for the active state, so the layout stays a Server
+Component and adds no client JS of its own), and one page per section. Each
+loads only its own data.
+
+⚠️ **THE MFA GATE WOULD HAVE BROKEN SILENTLY.** `app/(auth)/mfa/page.tsx`
+redirected to `/dashboard/settings?required_mfa=1#security`, and the notice
+that reads that flag moved to the security page — so an admin forced to set up
+MFA would have landed on Profile with no explanation. Redirect and notice moved
+together. Six other stale `settings#…` links across `welcome`, the dashboard,
+`ConnectPanel`, `LeadExportMenu`, `ClayLeadExport`, `RowActions` and
+`google-repository` were migrated too; none remain.
+
+### Verification
+
+- Typecheck, ESLint (0 errors), production build clean — all seven settings
+  routes compile.
+- **1,219 tests**, 3 new.
+- Confirmed live: the security page loads alone with its nav item marked
+  active.
+
+---
+
+## 2026-08-28 — Focus recoloured, chevrons restored, one noun per thing
+
+### The orange focus ring
+
+`:focus-visible` used `outline: 2px solid var(--accent)`, so repointing the
+accent to coral turned every focused control orange — a brand colour doing a
+job that is not branding.
+
+⚠️ **THE RING WAS RECOLOURED, NOT REMOVED.** Deleting focus indication breaks
+keyboard navigation outright (WCAG 2.4.7) and is invisible to the person who
+requested it, because a mouse user never sees the thing they would have lost.
+Focus now has its own token, `--focus`, set to jet: it reads as system chrome
+rather than as an action, and at roughly 14:1 on cream it is **more** visible
+than the coral it replaces. Six components carrying `focus:border-accent` were
+moved to a neutral border.
+
+### Chevrons back where they belong
+
+The disclosure toggles briefly read "Show" after the glyph purge. That went too
+far: a chevron is a universal affordance, unlike `◍` for a website. All three
+modal sections now use the same rotating `›`, matching "Saved research".
+`Show less` / `Show full value` survive as screen-reader text, where the words
+are the point.
+
+### One noun for one thing
+
+The same object was a **run**, an **extraction**, a **job** and a **batch**
+depending on the sentence — "Completed runs", "Start another run", "Select a
+run" on a page titled *Extraction workspace*. User-facing copy now says
+extraction throughout; `job` and `batch` remain as internal identifiers.
+
+### Spelling: checked, and largely a false alarm
+
+A scan for common misspellings found none. The `licence` / `license` pair in
+the Lead Engine terms is **correct British usage** — noun and verb respectively
+— and consistent with the nine uses of "cancelled". `behavior` appears only as
+the CSS property `scroll-behavior`, which must stay American. These were
+verified rather than "fixed"; changing correct usage would have been a
+regression dressed as a cleanup.
+
+⚠️ One inconsistency is deliberate and left alone: the Hubble headline says
+"prospects" while the rest of the product says "leads" (178 uses against 1).
+That wording was specifically requested, so it stands — but it is the one place
+the vocabulary splits.
+
+### Verification
+
+- Typecheck, ESLint (0 errors), production build clean, **1,216 tests**.
+- Focus confirmed in-browser: 2px dark neutral, no accent class on the select.
+
+---
+
+## 2026-08-28 — The modal was hiding data the export already carried
+
+### The LinkedIn bug, and its real cause
+
+`extracted_leads` has **two** profile columns: `linkedin_url` (the public
+`/in/` page) and `sales_navigator_url` (migration 0034). `publicProfileUrl()`
+in `lib/leads/parse.ts:115` only fills the first when the captured anchor is a
+`/in/` path — and a lead captured from Sales Navigator usually is not. So the
+URL landed in `sales_navigator_url`, the CSV export carried it (it has columns
+for both), and **the modal read only `linkedin_url` and reported "LinkedIn not
+available"** for a lead whose link the product was holding all along.
+
+Verified fixed on a real lead: Website, Company page and **Sales Navigator**
+now render; LinkedIn profile is correctly absent because that column really is
+null for that row.
+
+### Every captured field now reaches the modal
+
+The modal rendered a fixed four rows. Rows are now built from what exists, so
+`sales_navigator_url`, `company_url`, `person_blurb`, `tenure_in_role` and
+`tenure_in_company` — all captured by the parser, none previously shown —
+appear when present and are omitted when not. Captured values live in a
+separate "From the saved page" group: they are read off the page rather than
+researched, so a missing one is simply absent and must never render as a
+"not found".
+
+### Plain text instead of glyphs
+
+Rows carried `◍` for a website, `@` for email, `☎` for phone, `in` for
+LinkedIn, `›` as a marker, `✕` for close, `↗` on every metric card. A symbol
+earns its place only when its meaning is obvious to everyone; these were
+guesses the reader had to decode. Replaced with words — Open, Show, Close,
+View. `LinkRow` and `ContactRow` are retired in favour of one `DetailLink`.
+
+### CSV
+
+⚠️ `analysisCsvRows` emitted `min 10 · median 20 · max 300` into a cell. A
+middle dot in a spreadsheet is not something anyone can sort, filter or split
+on, and it renders differently across locales and fonts. Now comma-separated
+words. `toCsv` already writes `N/A` rather than an ambiguous blank.
+
+### Noticed, not fixed
+
+Saved research on one lead contains answers reading "I could not reach the
+language model to write this up, so here is the evidence I retrieved: 1. gical
+Principles Make Educational Content Effective?" — a truncated fallback stored
+as if it were an answer. Worth its own look.
+
+### Verification
+
+- Typecheck, ESLint (0 errors), production build clean, **1,216 tests**.
+- Contact rows confirmed in-browser on a live lead.
+
+---
+
+## 2026-08-28 — Jet and ivory adopted; copy and widgets cut back
+
+### The logo's own colours are now the product's
+
+The mark is two colours and nothing else: an ivory disc on a jet field. Neither
+existed properly in the CSS — ivory only incidentally as `--cream`, jet not at
+all — so the product sat on **pure white** (`--paper`, `--panel`: `#ffffff`)
+beside a logo that never uses white. `--jet` and `--ivory` are now named
+tokens, and `--cream` derives from ivory.
+
+⚠️ **`.product-gradient` was still a hardcoded purple gradient**
+(`#694bc9 → #aa95f5`) — simultaneously a leftover of the retired violet accent
+and a hardcoded colour CLAUDE.md forbids. It is now the logo's jet, so the
+product's darkest surface is the same dark the mark is drawn on.
+
+### Direct communication, fewer widgets
+
+⚠️ **"Latest run: 25 leads from 1 files."** Counts were always plural. Fixed in
+both places (`ExtractionDashboard.tsx:466` and `:560`).
+
+Subtitles that restated their own heading were cut or shortened — a label, not
+a sentence:
+
+- Overview: "Your usage, account, and next extraction in one place." → "Usage
+  this billing period."
+- Workspace: "Follow every file, review the leads kept, and download clean CSV
+  files." → "Every run, its files, and the leads kept."
+- New extraction: "Upload saved lead-search pages. Processing happens securely
+  on Outlio's servers." → "Upload the pages you saved."
+- Settings: subtitle removed; the section list beneath it says the same thing.
+
+**The upload page had three sidebar widgets and now has one.** A "before you
+upload" guide, a credits explainer and a privacy card sat beside a form whose
+dropzone already states the file type, the limit and the credit cost, and whose
+consent checkbox already states the privacy position. Three panels restating
+the control next to them is noise, and they squeezed the actual form into a
+narrow column. The steps survive because they are the one thing the form cannot
+say: what to do **before** arriving. The credit rule folds into a single line.
+
+### Cleanup
+
+Removing those widgets left three dead references — a `CreditsSummary` import,
+a `hubbleModelStatus` import, and a `planName` prop threaded from the jobs page.
+All removed rather than left dangling; the prop removal required updating its
+caller.
+
+### Verification
+
+- Typecheck, ESLint (**0 errors, 0 warnings** in the touched paths), production
+  build clean.
+- No purple remains: `grep 694bc9|8669e7|aa95f5` returns only the comment
+  recording its removal.
+
+---
+
+## 2026-08-28 — Brand palette adopted; five materials given one job each
+
+### The palette is now the product's
+
+`--accent` was `#7c5ce7`, a violet absent from the brand palette, consumed by
+65 files — and the product scope overrode it to warm graphite, so one class
+name meant two colours and the brand stopped at the sign-in door.
+
+Coral, Sage, Lilac and Charcoal are now root tokens. Because those 65 files use
+`text-accent` / `bg-accent` rather than raw hex, repointing the token moved
+almost all of them with no file edits.
+
+⚠️ **THE BRAND CORAL IS NOT AA FOR BODY TEXT, AND THIS WAS MEASURED, NOT
+ASSUMED.** `#D95A3B` renders at **3.8:1**; `--coral-deep` at **6.3:1**. Sage is
+the same story: 3.5 vs 6.4. `--accent` therefore points at the DEEP variants,
+since it is consumed as prose-link colour across the app. The vivid brand hex
+stays reachable as `bg-coral` for buttons, bars and chips, where it sits under
+white text rather than under body copy. Pointing `--accent` at the raw brand
+hex would have shipped an accessibility regression across 65 files.
+
+`--success` now derives from sage, retiring the unrelated `#16794a`.
+
+### Five materials, one job each
+
+Five visual languages is normally a warning sign. It holds only if each has
+exactly one job, so the material becomes a signal rather than decoration:
+
+- **Minimalism** — the default and the majority of every screen.
+- **Neumorphism** — panels and cards. Surfaces that HOLD things.
+- **Skeuomorphism** — controls. Things you PRESS.
+- **Glass** — overlay layers only. Things that float ABOVE content.
+- **Maximalism** (`.brand-wash`) — one moment per screen, in empty states and
+  heroes, where no data is competing.
+
+⚠️ **Material follows FUNCTION, never importance.** A thing is glass because it
+overlays, not because it matters.
+
+⚠️ **Glass is confined to overlays because CLAUDE.md forbids `backdrop-filter`
+on dashboard surfaces** — blurring the layer being read costs legibility for
+decoration. A scrim is the one case where the blur does the job it exists for.
+Flagged to the user rather than silently overridden. There is an opaque
+`@supports` fallback so a floating layer never becomes transparent over live
+text.
+
+### Applied
+
+- Dashboard and workspace metric cards: flat bordered panels → `.clay`.
+- Lead modal scrim → `.glass-overlay`.
+- All six `text-muted/NN` modifiers removed from `ExtractionDashboard`; stacked
+  opacity had them near 3:1.
+
+### ⚠️ A correction to the audit
+
+The audit called "Credits remaining 0" a live instance of the `?? 0` bug. It is
+not. With the fix in place the card still reads 0/0, which means a balance row
+**does** exist carrying zero allowance — the displayed number is real data.
+
+The `?? 0` conflation was still a genuine latent bug and is fixed: a missing
+balance now renders "—" with "Balance unavailable", not a hard zero. But it
+does not explain this screen, and **why the account holds a 0 allowance while
+running research successfully is a separate, still-open question.**
+
+### Still outstanding
+
+Native `<select>` / checkbox / file inputs; settings-nav affordance;
+neumorphic pass over upload, settings, access and qualification;
+`.glass-popover` not yet applied to dropdowns; `.brand-wash` not yet applied to
+empty states; the 5-card orphan grid; the duplicated credits card.
+
+### Verification
+
+- Typecheck, ESLint (0 errors), production build clean, **1,216 tests**.
+- Contrast measured in-browser for coral, coral-deep, sage, sage-deep.
+
+---
+
+## 2026-08-28 — Correcting the neumorphism, and unhiding saved research
+
+### The surfaces were not neumorphic
+
+Two concrete defects, both measured:
+
+1. **The controls did not share the page's colour.** `.hubble-filter-control`
+   carried `--clay-surface` (#fff8ea) on a `--clay-bg` (#fffaf0) page. That
+   single fact makes an object sitting ON a background — the one thing
+   neumorphism is not. The shadow pair only reads as material pushed UP OUT OF
+   a surface when the surface is the same colour.
+2. **The light source was incoherent.** Shadows were `9px 10px` dark against
+   `-8px -8px` light, blurs 22 and 20. Unequal offsets describe two different
+   lamps, so the eye cannot locate the light and the result reads as a soft
+   card. Every pair is now an exact mirror.
+
+⚠️ **`.hubble-filter-scope` and `.hubble-filter-date` were silently undoing the
+fix.** They re-declared `--clay-surface` later in the file and won on source
+order — the first attempt appeared to change nothing, and only a computed-style
+check caught it. Verified after: control and page both `rgb(255, 250, 240)`.
+
+**User-optimised, not purist.** Neumorphism is fairly criticised for hiding
+affordance — borderless, low contrast, nothing announcing "control". The answer
+here is not to add a border back but to make the material behave: pressed and
+open states sink into the page via `--neo-shadow-inset`, which is the one
+motion a raised surface can make. The focus ring stays.
+
+### Saved research was unreadable
+
+The section cut values off with **no way to see the rest** — facts `truncate`,
+answers `line-clamp-3`, no control and no indication more existed. A value the
+user paid to research was silently unreachable.
+
+Long values now expand behind a rotating chevron. The toggle appears only when
+the text is actually long enough to clip, so short facts do not carry a control
+that does nothing. Length-based rather than measured, so it cannot disagree
+with itself between renders.
+
+Confirmed live: `aria-expanded` and the clamp class toggle together; short
+values (`HQ`, `Employees`) render in full with no chevron.
+
+### Wording
+
+- Headline → "Data analysis at the micro and macro scale, across all
+  prospects." `analyses` is the plural of a countable analysis; the mass noun
+  is what was meant, and mid-sentence Capitals were inconsistent.
+- "Saved details" → **"Saved research"**, matching what the section holds, with
+  "nothing saved yet" as its empty state.
+- `columnLabel` fallback is now capitalised. Mapped labels read "Website" and
+  "Employees" while unmapped ones fell through as "tech stack" — one list
+  mixing two capitalisation styles looked unfinished.
+
+### Verification
+
+- Typecheck, ESLint (0 errors), production build clean, **1,216 tests**.
+- Computed-style checks for the surface match and the mirrored shadows.
+- ⚠️ Two earlier readings of mine were wrong and the code was right: a contrast
+  script mis-parsed `color(srgb …)` (channels are 0–1, not 0–255), and a toggle
+  check read the DOM before React re-rendered. Both re-measured.
+
+---
+
+## 2026-08-28 — Intelligence page: minimalist analytics surface
+
+### Legibility
+
+`--muted` was `#696962` on ivory — roughly **5:1**, technically AA but thin at
+the 11–12px this page runs on. Worse, `HubbleLeadList` layered opacity on top
+(`text-muted/75`, `/70`, `/60`), dropping four strings to roughly **3–3.5:1**,
+below AA at any size.
+
+Fixed at the **scope, not the page**: `--muted: #55554d` (~7:1) inside
+`.app-shell`, so every authenticated surface moves together and this screen
+cannot drift into its own grey. All four opacity modifiers removed — darkening
+a token achieves nothing if an opacity is layered over it.
+
+Confirmed live: a muted label computes to `rgb(85, 85, 77)`.
+
+### Chips
+
+Now `.skeuo-key` + `.skeuo-key-interactive`, the same material as the micro
+modal's starters, so both prompt surfaces read as one product.
+
+⚠️ **One line is enforced structurally**, not by hoping the copy stays short:
+`flex-nowrap` + `whitespace-nowrap`, with `overflow-x-auto` as the containment
+if it ever overflows. Copy can no longer reflow the row and shift the page.
+Suggestions shortened to `Recent Series A` / `Who uses HubSpot?` /
+`SaaS hiring SDRs`. Verified at 1280 and 768: **one row, no scroll**.
+
+### Text compacted
+
+Labels, not sentences: "Not researched yet — open this lead to ask Hubble" →
+"Not researched"; "Research saved · details need confirmation" → "Saved ·
+unconfirmed"; three empty hints cut to one clause each; busy states to
+"Planning…" / "Searching sources…".
+
+⚠️ **Distinctions preserved.** `unknown`, `unconfirmed` and `not researched`
+stay three different words. Collapsing them is exactly how "failure looks like
+empty" returns, which this codebase has hit repeatedly.
+
+### Analytics features
+
+- **Drill-down** — distribution bars are buttons; clicking one filters the lead
+  list, with a dismissible chip showing `n of total`. Required carrying
+  `field` on `HubbleSavedDetail`, which `savedDetailsFor` already had and
+  discarded. It filters the VIEW only: no re-query, no re-research.
+- **Data completeness** — `coverageOf`, ranked **thinnest first**. Best-first
+  would be a reassurance exercise; the useful question is what the analysis is
+  weakest on, because that is what a reader over-trusts.
+- **Analysis CSV** — reuses `toCsv`/`sanitizeCell` from `lib/export/sanitize.ts`,
+  the shared formula-injection defence. No second CSV writer.
+- ⚠️ **Compare two batches: NOT DONE.** `compareAnalyses` is written and tested,
+  including the coverage guard, but the UI is not wired. It needs the page's
+  main lead loader (~130 lines carrying caching, request-race guards and an
+  enrichment-column fallback) extracted into a reusable fetcher, and that
+  refactor touches the most critical query on the page. Left unstarted rather
+  than half-built.
+
+⚠️ **The comparison suppresses its own deltas.** If a field is known for 90% of
+one list and 20% of the other, "B is 30% less software" describes what we
+failed to find, not the companies. On screen that is indistinguishable from a
+real difference, so the subtraction is withheld rather than annotated — a
+caveat under a big number does not stop anyone believing the number. Shares are
+still shown; only the delta is withheld.
+
+### Follow-ups closed
+
+- **`IntelligenceConsole.tsx` deleted** — 909 lines imported by nothing.
+  Re-checked for references immediately before removing.
+- **Selected-option colour** was solid `--hubble-coral` (#D95A3B) behind text:
+  the heaviest element on an otherwise cream page, and ink on it measured about
+  4.7:1 — legal and muddy. Now a 16% tint of the same coral with the identity
+  carried by a ring instead of the fill. Measured **14.3:1**.
+  ⚠️ Scoped to `.hubble-selected-option` only; `.hubble-send-action` and
+  `.hubble-primary-action` keep full coral, because a deliberate action should
+  still be the loudest thing on the page.
+- **`ContactResults` deliberately kept.** It now fires only for runs created
+  before the macro/micro boundary. Hiding contact data a user already paid for
+  would be retroactively destructive.
+
+### Verification
+
+- Typecheck, ESLint (0 errors), production build clean.
+- **1,216 unit tests**, 6 new: coverage ranking, the half-coverage boundary,
+  share deltas, delta suppression, field intersection, CSV shape.
+- Live: chips one row at two widths, `--muted` confirmed at `#55554d`.
+- ⚠️ Drill-down and the CSV button are **not click-verified**. Both need a
+  completed macro run on screen, and re-running would spend another credit
+  beyond the one already authorised.
+
+---
+
+## 2026-08-28 — Macro and micro are now different products
+
+### The distinction
+
+**Micro** answers "who is this person and how do I reach them?" — one lead,
+opened deliberately. It is the ONLY place individual access details are ever
+researched or shown.
+
+**Macro** answers "what is true of this set?" — distributions, concentration,
+coverage. ⚠️ **Its answer is the analysis.** A macro run that hands back a pile
+of individual leads has not answered a macro question; it has done micro many
+times and left the synthesis to the reader.
+
+### `lib/intelligence/analysis-scope.ts` (PURE) — the boundary
+
+Five fields are micro-only: `work_email`, `email_status`, `mobile_phone`,
+`phone_status`, `person_social_profiles`.
+
+⚠️ **`person_seniority` and `person_department` are deliberately NOT blocked.**
+They describe a role, not a way to reach somebody, and "what is the seniority
+mix of this set?" is one of the most useful macro questions available. Blocking
+every person field would have weakened macro while protecting nothing.
+
+The gate **refuses rather than silently dropping**. A run that returns 59
+columns when 60 were asked for teaches the user the product drops things at
+random; a refusal naming the column, and where to get it, teaches them how the
+product works. A MIXED request is refused whole for the same reason.
+
+### Where it is enforced
+
+Not in the UI — the plan is built server-side, so hiding a button would stop
+nothing. `planQuery` is now unconditionally macro (its only caller is the
+set-wide query route; the micro path is `lib/hubble/ask.ts`).
+
+`deterministicEmailPlan` and `deterministicPhonePlan` are no longer plan
+producers. They are the most precise contact-request detectors in the codebase,
+so they now **power the refusal** — which is why the message names the exact
+field asked for. Gating only the LLM path would have left the two fastest
+routes to bulk contact harvesting open; the model's own plan is gated too,
+because a model asked to "profile these accounts" can still put `work_email` in
+`requiredFields`.
+
+A `scope` parameter was written and then removed: no caller would have passed
+`micro`, making it a speculative option CLAUDE.md forbids.
+
+### `lib/intelligence/aggregate.ts` (PURE) — the macro answer
+
+`analyseRun` turns rows into distributions, numeric summaries and headlines,
+ranked so the most concentrated finding leads.
+
+⚠️ **Coverage is reported as loudly as the finding.** "68% are software" means
+something different over 900 of 1,000 leads than over 40, and the two render
+identically unless something says so — every breakdown carries its base, and a
+field known for under half the set is called out as thin evidence in warning
+tone.
+
+⚠️ **No headline is model-written.** Every sentence is a restatement of a count
+computed here. A claim about a customer's data that cannot be traced to a
+number is the fabrication rule 4 forbids.
+
+The module is structurally typed rather than importing `ResultRow`: the server
+row and client row are different shapes, and a pure aggregator should need only
+what it reads.
+
+### UI
+
+The analysis panel leads; the per-lead table stays beneath it because export
+and merge-to-lead read from those rows. They are evidence for the answer, not
+the answer.
+
+### Verification
+
+- Typecheck, ESLint (0 errors) and production build clean.
+- **1,210 unit tests passing**, 18 new.
+- Five existing planner tests asserted the OLD contract — that a set-wide
+  question could plan contact discovery. Rewritten as refusals rather than
+  deleted, preserving their original intent, plus a new test that macro can
+  still research `person_seniority`, so the boundary cannot silently become
+  "macro cannot research people at all".
+- Gate confirmed live: `POST /api/intelligence/query` with a set-wide phone
+  request returns **422 refused**, before anything is spent.
+- **Confirmed on a real run** (25 leads, 1 credit, authorised): the panel
+  rendered "industry is spread across 10 values, the largest being Software
+  Development at 20% (15 of 25 known)" with the base shown beside the
+  breakdown. The model-written summary independently said "9 of the 15
+  companies" — the prose and the arithmetic agreed on the same denominator.
+
+### ⚠️ A mistake caught before it shipped
+
+`components/intelligence/IntelligenceConsole.tsx` (854 lines) is **imported by
+nothing**. The macro surface is `HubbleConsole` → `HubbleResultPanel`.
+
+Both the macro analysis panel AND the confidence/corroboration indicator from
+the earlier phase had been added to that unmounted file, so neither had ever
+rendered and the "verified by build and types" claim covered code no user could
+reach. Both are now in `HubbleResultPanel`, removed from the dead file, and the
+analysis has been seen working. **The dead file itself is left in place — a
+854-line deletion is a separate decision.**
+
+---
+
 ## 2026-08-28 — Phase 6: confidence and corroboration reach the screen
 
 ### Computed, then thrown away
@@ -64,6 +911,27 @@ hardcoded colour, no entrance animation on the table.
 
 ---
 
+## 2026-08-28 — Phone-only Intelligence requests no longer depend on an LLM
+
+The macro Intelligence query shown in the UI — `give me phone numbers of all`
+— failed before any search ran because the planner had deterministic rules for
+funding and work-email questions but none for phone retrieval. A hosted planner
+outage therefore turned an unambiguous one-field request into `The planner was
+unavailable.`
+
+An explicit phone-retrieval rule now produces a people-scoped plan containing
+only `mobile_phone`. It adds `phone_status` only when the user explicitly asks
+for verification, and mixed questions such as phone plus industry still go to
+the model rather than being partially interpreted. The rule runs before the LLM
+router, so the exact all-leads request queues contact research even when every
+model provider is offline.
+
+Verification: all 26 planner tests pass, including offline phone-only,
+verification-status, and mixed-research boundaries. Root TypeScript and
+changed-file ESLint are clean. The local MCP remains healthy.
+
+---
+
 ## 2026-08-28 — Public phone retrieval: provider diagnosis and SearXNG coverage
 
 A live Google CSE request returned HTTP 403 with `PERMISSION_DENIED`: the new
@@ -84,6 +952,13 @@ manual pattern — company domain, person name, `phone number` — before WhatsA
 official-site, and contact-page variants. Fabricated regression cases prove a
 public Mexican business number survives snippet attribution and is normalized
 to E.164 in the main Intelligence provider.
+
+Verification: the full application suite passes 1,250 tests with 24 live-only
+tests skipped, and all 31 MCP tests pass. Both TypeScript projects are clean and
+the MCP production build succeeds. The stateless MCP container was rebuilt in
+place with its existing database and authentication preserved. A live
+authenticated `research_lead` smoke returned six search results and one typed
+`person.phones` fact with `publicly_found` status after a single query.
 
 ---
 
@@ -4772,3 +5647,36 @@ Phase 4 needs nothing further from the user.
   through PostgreSQL. No cloud CLI/login or production database/model secrets
   are present in this workspace, so public deployment still requires those
   operator inputs.
+
+## 2026-08-28 — Hubble bulk contact-result correction
+
+### Fixed
+
+- Added deterministic planning for explicit phone-number requests, so “give me
+  phone numbers of all” no longer depends on the semantic planner being online.
+- Traced the reported 199-lead run in stored telemetry: 195 contact searches
+  completed and nine public phone facts were persisted, but the result panel
+  incorrectly announced that nothing was found when the optional summary LLM
+  returned no paragraph.
+- Added a deterministic coverage summary for every run that has evidence, even
+  when semantic summarisation is unavailable or fails.
+- Contact questions now render only the actionable matched leads in a compact
+  sourced list. Unknown leads remain a coverage count instead of becoming a
+  long wall of “not found” cards.
+- Contact search now tries the displayed company name before the normalized
+  website domain, retains the domain as a fallback, and extracts after each
+  query so it stops once a supported contact is found. This fixes cases where
+  the public search result is indexed under a dotted brand name that differs
+  from the stored website host and reduces unnecessary free-search traffic.
+
+### Verification
+
+- The exact reported run was confirmed as 199 leads, 96 companies, 195 contact
+  calls, nine successful phone discoveries, and nine stored `mobile_phone`
+  facts—proving the prior zero-result message was a presentation defect.
+- A live first-query search using the displayed company name returned the
+  referenced public directory phone result; the older domain-first queries did
+  not contain it.
+- Planner, contact extraction, summary-panel tests, TypeScript, and focused
+  ESLint pass. The complete suite passes 1,255 tests across 90 files, with 24
+  intentionally skipped, and the Next.js 16.3 production build passes.

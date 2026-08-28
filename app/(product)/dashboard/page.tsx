@@ -53,7 +53,15 @@ export default async function DashboardPage() {
   const metrics = [
     {
       label: 'Credits remaining',
-      value: balance?.remaining ?? 0,
+      /*
+       * ⚠️ null MEANS "WE DO NOT KNOW", AND 0 MEANS "NONE LEFT".
+       *
+       * This was `balance?.remaining ?? 0`, so a missing balance row rendered
+       * as a hard zero — indistinguishable from an exhausted account. A user
+       * who reads 0 concludes they cannot work and stops. Same failure shape
+       * as the empty lead list documented in HubbleConsole.
+       */
+      value: balance?.remaining ?? null,
       limit: balance?.allowance ?? null,
       featured: true,
     },
@@ -90,7 +98,7 @@ export default async function DashboardPage() {
             Overview
           </h1>
           <p className="mt-1 text-sm text-muted">
-            Your usage, account, and next extraction in one place.
+            Usage this billing period.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -118,15 +126,13 @@ export default async function DashboardPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
         <div className="space-y-4">
-        <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel p-6 shadow-[var(--shadow-sm)] sm:p-7">
+        <section className="relative overflow-hidden rounded-[var(--radius-clay)] bg-charcoal p-6 shadow-[var(--neo-shadow)] sm:p-7">
           <div className="relative z-10 max-w-xl">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-accent-soft text-lg font-semibold text-accent">
-              ↗
-            </span>
-            <h2 className="mt-6 text-xl font-semibold tracking-[-0.025em] text-ink">
+            {/* Ivory on charcoal: the logo's own pairing, ~13:1. */}
+            <h2 className="text-xl font-semibold tracking-[-0.025em] text-ivory">
               Build your next lead list
             </h2>
-            <p className="mt-2 max-w-lg text-sm leading-6 text-muted">
+            <p className="mt-2 max-w-lg text-sm leading-6 text-ivory/75">
               Upload the lead-search pages you already saved. Outlio parses them on
               our servers, removes duplicates, and prepares a clean CSV.
             </p>
@@ -139,7 +145,7 @@ export default async function DashboardPage() {
               </Link>
               <Link
                 href="/dashboard/jobs"
-                className="inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] border border-border bg-panel px-4 text-sm font-semibold text-ink transition-[border-color,transform] duration-150 ease-out hover:border-border-strong active:scale-[0.97]"
+                className="inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] border border-ivory/35 px-4 text-sm font-semibold text-ivory transition-[border-color,transform] duration-150 ease-out hover:border-ivory active:scale-[0.97]"
               >
                 Open workspace
               </Link>
@@ -147,11 +153,11 @@ export default async function DashboardPage() {
           </div>
           <div
             aria-hidden
-            className="absolute -bottom-24 -right-20 h-72 w-72 rounded-full border-[42px] border-accent-soft/70"
+            className="absolute -bottom-24 -right-20 h-72 w-72 rounded-full border-[42px] border-ivory/[0.06]"
           />
           <div
             aria-hidden
-            className="absolute -bottom-10 right-16 h-32 w-32 rounded-full border border-accent/15"
+            className="absolute -bottom-10 right-16 h-32 w-32 rounded-full border border-ivory/15"
           />
         </section>
         <ExtensionCard connectedDevices={connectedDevices} />
@@ -202,7 +208,7 @@ export default async function DashboardPage() {
             <p className="mt-4 text-sm leading-6 text-muted">{upgradeTarget ? `Move to ${upgradeTarget} when you need more credits, files, and exports.` : 'Talk to us for a custom plan built around your workflow.'}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link href="/dashboard/access?intent=upgrade" className="product-gradient inline-flex h-9 items-center rounded-[var(--radius-md)] px-3.5 text-xs font-semibold text-white hover:brightness-95">{upgradeTarget ? `Upgrade to ${upgradeTarget}` : 'Request a custom plan'}</Link>
-              <Link href="/dashboard/settings#subscription-and-billing" className="inline-flex h-9 items-center rounded-[var(--radius-md)] border border-white/80 bg-white/60 px-3.5 text-xs font-semibold text-ink hover:bg-white">Billing details</Link>
+              <Link href="/dashboard/settings/billing" className="inline-flex h-9 items-center rounded-[var(--radius-md)] border border-white/80 bg-white/60 px-3.5 text-xs font-semibold text-ink hover:bg-white">Billing details</Link>
             </div>
           </div>
           <div aria-hidden className="absolute -bottom-12 -right-10 h-36 w-36 rounded-full bg-accent/10 blur-2xl" />
@@ -235,47 +241,51 @@ function UsageCard({
   featured = false,
 }: {
   label: string
-  value: number
+  /** `null` is "unknown", which is not the same fact as `0`. */
+  value: number | null
   limit: number | null
   featured?: boolean
 }) {
-  const percent = limit && limit > 0 ? Math.min((value / limit) * 100, 100) : null
+  const unknown = value === null
+  const percent =
+    !unknown && limit && limit > 0 ? Math.min((value / limit) * 100, 100) : null
 
   return (
     <article
       className={
         featured
-          ? 'product-gradient min-h-36 rounded-[var(--radius-lg)] border border-accent/20 p-4 text-white shadow-[var(--shadow-md)]'
-          : 'min-h-36 rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)]'
+          ? 'product-gradient min-h-36 rounded-[var(--radius-clay)] p-4 text-white shadow-[var(--neo-shadow)]'
+          : 'clay min-h-36 p-4'
       }
     >
       <div className="flex items-start justify-between gap-2">
         <p className={featured ? 'text-xs font-medium text-white/75' : 'text-xs font-medium text-muted'}>
           {label}
         </p>
-        <span
-          aria-hidden
-          className={
-            featured
-              ? 'flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs text-accent'
-              : 'flex h-6 w-6 items-center justify-center rounded-full border border-border text-xs text-muted'
-          }
-        >
-          ↗
-        </span>
+        {/*
+          ⚠️ REMOVED, NOT RE-STYLED. This was a decorative ↗ in a 24px circle;
+          swapping the glyph for the word "Open" overflowed the circle and,
+          worse, labelled a control that never existed — the badge is
+          `aria-hidden` and the card is not a link. A card that looks clickable
+          and is not is a worse defect than a symbol nobody decodes.
+        */}
       </div>
       <p className="mt-4 font-heading text-[30px] font-semibold leading-none tracking-[-0.045em] tabular-nums">
-        {value.toLocaleString()}
+        {unknown ? '—' : value.toLocaleString()}
       </p>
       <div className="mt-4">
         <div className={featured ? 'h-1 overflow-hidden rounded-full bg-white/20' : 'h-1 overflow-hidden rounded-full bg-surface-muted'}>
           <div
             className={featured ? 'h-full rounded-full bg-white' : 'h-full rounded-full bg-accent'}
-            style={{ width: percent === null ? '28%' : `${Math.max(percent, 3)}%` }}
+            style={{ width: unknown ? '0%' : percent === null ? '28%' : `${Math.max(percent, 3)}%` }}
           />
         </div>
         <p className={featured ? 'mt-2 text-[11px] text-white/70' : 'mt-2 text-[11px] text-muted'}>
-          {limit === null ? 'Unlimited allowance' : `${limit.toLocaleString()} included`}
+          {unknown
+            ? 'Balance unavailable — refresh to retry'
+            : limit === null
+              ? 'Unlimited allowance'
+              : `${limit.toLocaleString()} included`}
         </p>
       </div>
     </article>

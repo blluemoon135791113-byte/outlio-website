@@ -60,7 +60,6 @@ export function ExtractionDashboard({
   initialJobs,
   initialFiles,
   credits,
-  planName,
   clayConnected,
   googleConnected,
   ghlConnected,
@@ -69,7 +68,6 @@ export function ExtractionDashboard({
   initialJobs: DashboardJob[]
   initialFiles: DashboardFile[]
   credits: CreditSnapshot | null
-  planName: string | null
   clayConnected: boolean
   googleConnected: boolean
   ghlConnected: boolean
@@ -244,7 +242,7 @@ export function ExtractionDashboard({
             Extraction workspace
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
-            Follow every file, review the leads kept, and download clean CSV files.
+            Every run, its files, and the leads kept.
           </p>
         </div>
 
@@ -278,8 +276,18 @@ export function ExtractionDashboard({
       {activeJob ? <ActiveRun job={activeJob} /> : <CaughtUp latestJob={jobs[0] ?? null} />}
 
       <section aria-label="Workspace totals" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard featured label="Credits remaining" value={credits?.remaining ?? 0} detail={credits ? `${credits.used} used of ${credits.allowance}` : planName ?? 'Current plan'} />
-        <MetricCard label="Completed runs" value={totals.completed} detail={`${jobs.length} total in history`} />
+        {/* ⚠️ null is "unknown", 0 is "none left". `?? 0` conflated them. */}
+        <MetricCard
+          featured
+          label="Credits remaining"
+          value={credits?.remaining ?? null}
+          detail={
+            credits
+              ? `${credits.used} used of ${credits.allowance}`
+              : 'Balance unavailable — refresh to retry'
+          }
+        />
+        <MetricCard label="Completed extractions" value={totals.completed} detail={`${jobs.length} total in history`} />
         <MetricCard label="Files processed" value={totals.files} detail="Across extraction history" />
         <MetricCard label="Leads extracted" value={totals.leads} detail="Unique leads kept" />
         <MetricCard label="Duplicates removed" value={totals.duplicates} detail="Automatically cleaned" />
@@ -320,7 +328,7 @@ export function ExtractionDashboard({
                   ))}
                 </ul>
               ) : (
-                <p className="px-5 py-10 text-center text-sm text-muted">No runs match this filter.</p>
+                <p className="px-5 py-10 text-center text-sm text-muted">No extractions match this filter.</p>
               )}
             </div>
           </section>
@@ -441,19 +449,27 @@ function RunStat({ label, value, suffix }: { label: string; value: number; suffi
   )
 }
 
+/*
+ * ⚠️ SAGE, BECAUSE THIS IS THE "ALL CLEAR" CARD.
+ *
+ * Sage was defined but invisible — only `--success-soft` referenced it, and at
+ * that tint it reads as off-white. A settled, positive state is the one thing
+ * sage should mean, so this card wears it properly. It is the ONLY sage
+ * surface on the page; that restraint is what keeps it a signal.
+ */
 function CaughtUp({ latestJob }: { latestJob: DashboardJob | null }) {
   return (
-    <section className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)] sm:p-6">
+    <section className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-clay)] bg-sage-soft p-5 shadow-[var(--neo-shadow)] ring-1 ring-sage/30 sm:p-6">
       <div>
         <div className="flex items-center gap-2">
-          <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-full bg-success-soft text-success">
+          <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-full bg-sage text-ivory">
             ✓
           </span>
           <h2 className="text-lg font-semibold text-ink">Your workspace is caught up</h2>
         </div>
         <p className="mt-2 text-sm text-muted">
           {latestJob
-            ? `Latest run: ${latestJob.leads_kept.toLocaleString()} leads from ${latestJob.file_count.toLocaleString()} files.`
+            ? `Last extraction: ${latestJob.leads_kept.toLocaleString()} leads from ${latestJob.file_count.toLocaleString()} file${latestJob.file_count === 1 ? '' : 's'}`
             : 'Start an extraction to build your first clean lead list.'}
         </p>
       </div>
@@ -461,17 +477,17 @@ function CaughtUp({ latestJob }: { latestJob: DashboardJob | null }) {
         href="/dashboard/extract/new"
         className="rounded-[var(--radius-md)] border border-border px-4 py-2 text-sm font-semibold text-ink transition-[border-color,transform] duration-150 hover:border-border-strong active:scale-[0.97]"
       >
-        Start another run
+        Start another extraction
       </Link>
     </section>
   )
 }
 
-function MetricCard({ label, value, detail, featured = false }: { label: string; value: number; detail: string; featured?: boolean }) {
+function MetricCard({ label, value, detail, featured = false }: { label: string; value: number | null; detail: string; featured?: boolean }) {
   return (
-    <div className={featured ? 'min-h-32 rounded-[var(--radius-lg)] border border-accent bg-accent p-4 text-white shadow-[var(--shadow-md)]' : 'min-h-32 rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)]'}>
+    <div className={featured ? 'min-h-32 rounded-[var(--radius-clay)] bg-accent p-4 text-white shadow-[var(--neo-shadow)]' : 'clay min-h-32 p-4'}>
       <p className={featured ? 'text-xs font-medium text-white/75' : 'text-xs font-medium text-muted'}>{label}</p>
-      <p className="mt-4 font-heading text-[28px] font-semibold leading-none tabular-nums tracking-[-0.04em]">{value.toLocaleString()}</p>
+      <p className="mt-4 font-heading text-[28px] font-semibold leading-none tabular-nums tracking-[-0.04em]">{value === null ? '—' : value.toLocaleString()}</p>
       <p className={featured ? 'mt-3 text-xs text-white/70' : 'mt-3 text-xs text-muted'}>{detail}</p>
     </div>
   )
@@ -547,7 +563,7 @@ function JobHistoryRow({
             </time>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
-            <span>{job.file_count.toLocaleString()} files</span>
+            <span>{job.file_count.toLocaleString()} file{job.file_count === 1 ? '' : 's'}</span>
             <span>
               {job.status === 'processing'
                 ? `${job.leads_parsed.toLocaleString()} leads found`
@@ -587,7 +603,7 @@ function FilePipeline({ job, files }: { job: DashboardJob | null; files: Dashboa
       <div className="border-b border-border px-5 py-4">
         <h2 className="text-base font-semibold text-ink">File pipeline</h2>
         <p className="mt-0.5 text-sm text-muted">
-          {job ? jobLabel(job, files) : 'Select a run'}
+          {job ? jobLabel(job, files) : 'Select an extraction'}
         </p>
       </div>
 
@@ -732,9 +748,9 @@ function TrashBox({
     >
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-medium text-muted">Trash</h2>
-        <span className="text-[11px] tabular-nums text-muted/80">{jobs.length.toLocaleString()}</span>
+        <span className="text-[11px] tabular-nums text-muted">{jobs.length.toLocaleString()}</span>
       </div>
-      <p className="mt-1 text-xs leading-5 text-muted/80">
+      <p className="mt-1 text-xs leading-5 text-muted">
         Restorable. Deleting for good also erases the lead data.
       </p>
 
@@ -781,14 +797,14 @@ function TrashRow({
     <li className="rounded-[var(--radius-lg)] border border-border/50 bg-panel/80 px-3 py-2.5">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="min-w-0 truncate text-xs font-medium text-ink/75">{label}</span>
-        <time dateTime={job.created_at} className="shrink-0 text-[11px] text-muted/70">
+        <time dateTime={job.created_at} className="shrink-0 text-[11px] text-muted">
           {formatDate(job.created_at)}
         </time>
       </div>
 
       {confirmingDelete ? (
         <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium text-danger">Delete run and lead data for good?</span>
+          <span className="text-[11px] font-medium text-danger">Delete this extraction and its lead data?</span>
           <div className="flex items-center gap-1.5">
             <form action={deleteAction}>
               <input type="hidden" name="job_id" value={job.id} />
@@ -810,7 +826,7 @@ function TrashRow({
         </div>
       ) : (
         <div className="mt-1.5 flex items-center justify-between gap-2">
-          <span className="text-[11px] text-muted/70">
+          <span className="text-[11px] text-muted">
             {job.leads_kept.toLocaleString()} lead{job.leads_kept === 1 ? '' : 's'} · {job.file_count.toLocaleString()} file{job.file_count === 1 ? '' : 's'}
           </span>
           <div className="flex items-center gap-2.5">
@@ -836,7 +852,7 @@ function TrashRow({
             </form>
             <button
               type="button"
-              aria-label="Permanently delete this run"
+              aria-label="Permanently delete this extraction"
               onClick={() => setConfirmingDelete(true)}
               className="text-[11px] font-medium text-muted transition-colors duration-150 hover:text-danger"
             >
@@ -866,7 +882,7 @@ function TrashButton({ jobId, onTrashed }: { jobId: string; onTrashed: () => voi
   }, [trashed, onTrashed])
 
   if (trashed.status === 'purged') {
-    return <span className="text-[11px] text-muted/70">In trash</span>
+    return <span className="text-[11px] text-muted">In trash</span>
   }
 
   return confirming ? (

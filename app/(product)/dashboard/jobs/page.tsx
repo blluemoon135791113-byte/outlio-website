@@ -95,7 +95,6 @@ export default async function JobsPage() {
       initialJobs={jobs}
       initialFiles={(fileResult.data ?? []) as DashboardFile[]}
       credits={credits}
-      planName={ctx.plan?.name ?? null}
       clayConnected={clayConnection?.status === 'connected'}
       googleConnected={googleConnection?.status === 'connected'}
       ghlConnected={ghlConnection?.status === 'connected'}
