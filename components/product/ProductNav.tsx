@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ComponentProps, ReactNode } from 'react'
 
+import { HubbleLogo } from '@/components/brand/HubbleLogo'
+
 type IconName =
   | 'admin'
   | 'dashboard'
@@ -73,7 +75,11 @@ export function ProductNav({
                 : 'group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]'
             }
           >
-            <ProductIcon name={link.icon} className="h-[17px] w-[17px] shrink-0" />
+            {link.icon === 'intelligence' ? (
+              <HubbleLogo size="nav" />
+            ) : (
+              <ProductIcon name={link.icon} className="h-[17px] w-[17px] shrink-0" />
+            )}
             <span>{link.label}</span>
           </Link>
         )

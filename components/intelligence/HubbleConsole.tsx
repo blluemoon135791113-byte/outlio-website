@@ -13,6 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { HubbleLogo } from '@/components/brand/HubbleLogo'
 import { BatchFilter } from '@/components/intelligence/BatchFilter'
 import {
   HubbleLeadList,
@@ -581,12 +582,15 @@ export function HubbleConsole({
      * The neutral Hubble page. Applied with a negative bleed so it reaches the
      * edges of the shell's content area while retaining the shared product
      * material beneath it.
-     */
+      */
     <div className="hubble-page -mx-4 -my-6 min-h-[calc(100dvh-4rem)] space-y-7 bg-clay-bg px-4 py-6 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
       <header>
-        <h1 className="text-[34px] font-semibold leading-[1.1] tracking-[-0.04em] text-ink">
-          Hubble
-        </h1>
+        <div className="flex items-center gap-3">
+          <HubbleLogo size="lg" priority />
+          <h1 className="text-[34px] font-semibold leading-[1.1] tracking-[-0.04em] text-ink">
+            Hubble
+          </h1>
+        </div>
         {/*
           * ⚠️ THE TWO SCALES ARE NAMED SEPARATELY BECAUSE THEY ANSWER
           * DIFFERENT QUESTIONS, AND THIS PAGE IS ONLY ONE OF THEM.

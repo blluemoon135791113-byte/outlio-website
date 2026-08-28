@@ -4,6 +4,26 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Hubble telescope logo integrated
+
+The user-supplied telescope/orbit artwork is now the canonical Hubble product
+mark at `public/brand/hubble-logo.png`. A reusable `HubbleLogo` component
+optically crops the generous source canvas without distorting or redrawing the
+artwork, and blends its white field into the existing cream/clay surfaces.
+
+The mark now appears immediately left of the main Hubble heading at a 48px
+frame with a 12px gap, replaces the generic search glyph in Hubble's product
+navigation item, and identifies the Hubble section on the Lead Engine marketing
+page. It stays decorative in the accessibility tree because adjacent visible
+text already supplies the product name.
+
+Verified in the running app at the active narrow viewport: the logo and 34px
+heading align as one lockup without wrapping, the navigation mark remains
+legible at 18px, and the original image is served through Next's image
+optimizer. TypeScript and focused ESLint pass.
+
+---
+
 ## 2026-08-29 — One lead identity per Hubble strip
 
 The narrow Hubble ledger stacked a person avatar and a company avatar inside

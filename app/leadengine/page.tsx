@@ -3,6 +3,7 @@ import Link from 'next/link'
 
 import Footer from '@/app/components/Footer'
 import Nav from '@/app/components/Nav'
+import { HubbleLogo } from '@/components/brand/HubbleLogo'
 import { DashboardPreview } from '@/components/leadengine/DashboardPreview'
 import { LeadEngineHero } from '@/components/leadengine/LeadEngineHero'
 import { Pricing } from '@/components/leadengine/Pricing'
@@ -241,9 +242,12 @@ export default function LeadEnginePage() {
       <section className="bg-clay-bg px-4 py-20 sm:py-28">
         <div className="mx-auto max-w-5xl">
           <div className="max-w-2xl">
-            <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
-              Hubble
-            </p>
+            <div className="flex items-center gap-2.5">
+              <HubbleLogo size="sm" />
+              <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
+                Hubble
+              </p>
+            </div>
             <h2 className="mt-4 text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
               Ask about a lead in plain English
             </h2>
