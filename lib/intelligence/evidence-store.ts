@@ -1,6 +1,6 @@
 import 'server-only'
 
-import type { Database, Json } from '@/types/database'
+import type { Database } from '@/types/database'
 
 /**
  * Evidence persistence — the "check Outlio first" half of the system (spec §8).

@@ -20,6 +20,14 @@ import { CompanyAvatar, PersonAvatar } from '@/components/intelligence/Avatar'
 export type HubbleSavedDetail = {
   id: string
   kind: 'fact' | 'answer'
+  /**
+   * The research field key (`industry`, `tech_stack`, …).
+   *
+   * Carried so a distribution bar can find the leads behind it. `label` is for
+   * display and is not stable enough to match on — two fields can render the
+   * same words.
+   */
+  field: string | null
   label: string
   value: string
   sourceUrl: string | null
@@ -43,6 +51,12 @@ export type HubbleLead = {
   emailStatus: string | null
   mobilePhone: string | null
   phoneStatus: string | null
+  /** Captured from the saved page. Shown when present, omitted when not. */
+  salesNavigatorUrl: string | null
+  companyUrl: string | null
+  personBlurb: string | null
+  tenureInRole: string | null
+  tenureInCompany: string | null
   savedDetails: HubbleSavedDetail[]
 }
 
@@ -140,11 +154,11 @@ export function HubbleLeadList({
                         and works for a company in Berlin.
                       */}
                       {lead.locationIsPersonal ? (
-                        <span className="text-muted/70"> · lead's location</span>
+                        <span className="text-muted"> · lead&apos;s location</span>
                       ) : null}
                     </>
                   ) : (
-                    <span className="text-muted/60">Location unknown</span>
+                    <span className="text-muted">Location unknown</span>
                   )}
                 </span>
               </span>
@@ -153,20 +167,30 @@ export function HubbleLeadList({
             {/* What they do */}
             <span className="hidden min-w-0 text-sm leading-snug text-muted sm:block">
               {lead.description ?? (
+                /*
+                 * ⚠️ NO OPACITY ON MUTED TEXT. These carried `text-muted/75`
+                 * and `/60`, which dropped them to roughly 3.5:1 and 3:1 — below
+                 * AA at any size, and it would have undone the darker token
+                 * exactly where the page is hardest to read.
+                 *
+                 * Compact, but three DISTINCT words survive: researched with
+                 * sources, researched-but-unconfirmed, and never researched.
+                 * Collapsing them is how "failure looks like empty" returns.
+                 */
                 lead.researchStatus ? (
-                  <span className="text-muted/75">
+                  <span className="text-muted">
                     {lead.researchStatus === 'unknown'
-                      ? 'Research saved · details need confirmation'
-                      : `Research saved · ${lead.researchSourceCount} source${lead.researchSourceCount === 1 ? '' : 's'}`}
+                      ? 'Saved · unconfirmed'
+                      : `${lead.researchSourceCount} source${lead.researchSourceCount === 1 ? '' : 's'}`}
                   </span>
                 ) : (
-                  <span className="text-muted/60">Not researched yet — open this lead to ask Hubble</span>
+                  <span className="text-muted">Not researched</span>
                 )
               )}
             </span>
 
             <span aria-hidden className="hidden justify-self-end text-muted sm:block">
-              ›
+              View
             </span>
           </button>
         </li>

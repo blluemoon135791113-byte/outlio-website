@@ -3,7 +3,6 @@ import type { Metadata } from 'next'
 import { HubbleConsole } from '@/components/intelligence/HubbleConsole'
 import { requireHubbleAccess } from '@/lib/auth/access'
 import type { LeadBatch } from '@/lib/intelligence/batches'
-import { hubbleModelStatus } from '@/lib/intelligence/llm/catalog'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const metadata: Metadata = {
@@ -100,7 +99,6 @@ export default async function HubblePage() {
       userId={userId}
       // Only the NAME crosses to the browser. Which vendors we hold keys for
       // is operational detail, not something to publish in a dashboard.
-      modelName={hubbleModelStatus().name}
       batches={batches}
     />
   )

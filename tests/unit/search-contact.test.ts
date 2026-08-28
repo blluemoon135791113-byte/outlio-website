@@ -34,20 +34,34 @@ function hit(overrides: Partial<GoogleSearchHit> = {}): GoogleSearchHit {
 
 describe('Google public contact search', () => {
   it('generates the same exact person + domain query used in a manual search', () => {
-    expect(contactSearchQuery(PERSON, 'email')).toBe('Jamie Rivera fabricated.example email')
-    expect(contactSearchQuery(PERSON, 'phone')).toBe('fabricated.example Jamie Rivera phone number')
+    expect(contactSearchQuery(PERSON, 'email')).toBe('Jamie Rivera Fabricated Labs email')
+    expect(contactSearchQuery(PERSON, 'phone')).toBe('Fabricated Labs Jamie Rivera phone number')
     expect(contactSearchQueries(PERSON, 'email')).toEqual([
+      'Jamie Rivera Fabricated Labs email',
       'Jamie Rivera fabricated.example email',
       'site:fabricated.example "Jamie Rivera" email',
       '"Jamie Rivera" "Fabricated Labs" contact email',
-      '"Jamie Rivera" "Fabricated Labs" filetype:pdf email',
     ])
     expect(contactSearchQueries(PERSON, 'phone')).toEqual([
+      'Fabricated Labs Jamie Rivera phone number',
       'fabricated.example Jamie Rivera phone number',
-      'Jamie Rivera fabricated.example phone WhatsApp',
+      'Jamie Rivera Fabricated Labs phone WhatsApp',
       'site:fabricated.example "Jamie Rivera" phone',
-      '"Jamie Rivera" "Fabricated Labs" contact phone',
     ])
+  })
+
+  it('prioritizes the public company name when it differs from the stored domain', () => {
+    const person = {
+      ...PERSON,
+      fullName: 'Example Founder',
+      companyName: 'Example.ai',
+      companyDomain: 'exampleai.com',
+    }
+
+    expect(contactSearchQuery(person, 'phone')).toBe('Example.ai Example Founder phone number')
+    expect(contactSearchQueries(person, 'phone')).toContain(
+      'exampleai.com Example Founder phone number',
+    )
   })
 
   it('extracts a person-shaped public work email with provenance', () => {

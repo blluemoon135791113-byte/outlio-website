@@ -295,16 +295,59 @@ function deterministicFundingPlan(question: string): ResearchPlan | null {
  */
 function deterministicEmailPlan(question: string): ResearchPlan | null {
   const lower = question.toLowerCase()
-  if (!/\b(?:work|business|professional|corporate)\s+email(?: address)?(?:es)?\b/.test(lower)) {
+  const explicitAddress =
+    /\b(?:work|business|professional|corporate)\s+e-?mail(?: address)?(?:es)?\b/.test(lower) ||
+    /\be-?mail\s+(?:address(?:es)?|ids?)\b/.test(lower)
+  const retrievalIntent =
+    /\b(?:find|get|give|show|list|provide|return|research|enrich)\b[^.!?]{0,80}\be-?mails?\b/.test(
+      lower,
+    )
+  if (!explicitAddress && !retrievalIntent) {
     return null
   }
 
   const otherResearchIntent =
-    /\b(?:fund(?:ing|ed)?|rais(?:e|ed|es|ing)|headcount|employees?|industry|revenue|technolog(?:y|ies)|tech stack|hiring|news|competitors?|pricing|reviews?|phone|mobile)\b/
+    /\b(?:fund(?:ing|ed)?|rais(?:e|ed|es|ing)|headcount|employees?|industry|revenue|technolog(?:y|ies)|tech stack|hiring|news|competitors?|pricing|reviews?|phone|mobile|seniority|department|job titles?|socials?|profiles?)\b/
   if (otherResearchIntent.test(lower)) return null
 
   const fields: ResearchField[] = ['work_email']
   if (/\b(?:verified|valid|deliverable|status)\b/.test(lower)) fields.push('email_status')
+
+  return {
+    entityScope: 'people',
+    requiredFields: fields,
+    outputFields: fields,
+    filters: {},
+    clarificationRequired: false,
+    clarificationQuestions: [],
+  }
+}
+
+/**
+ * Explicit phone-number retrieval is field selection, not language reasoning.
+ * Keeping it deterministic lets contact enrichment run when every hosted LLM
+ * is unavailable and prevents a planner from widening "give me phone numbers"
+ * into unrelated paid research.
+ */
+function deterministicPhonePlan(question: string): ResearchPlan | null {
+  const lower = question.toLowerCase()
+  const explicitNumber =
+    /\b(?:phone|telephone|mobile|whatsapp)\s+(?:number|numbers|contact|contacts)\b/.test(lower) ||
+    /\bcontact\s+(?:number|numbers)\b/.test(lower)
+  const retrievalIntent =
+    /\b(?:find|get|give|show|list|provide|return|research|enrich)\b[^.!?]{0,80}\b(?:phone|phones|telephone|mobile|whatsapp)\b/.test(
+      lower,
+    )
+  if (!explicitNumber && !retrievalIntent) return null
+
+  const otherResearchIntent =
+    /\b(?:emails?|fund(?:ing|ed)?|rais(?:e|ed|es|ing)|headcount|employees?|industry|revenue|technolog(?:y|ies)|tech stack|hiring|news|competitors?|pricing|reviews?|socials?|profiles?|seniority|department|job titles?)\b/
+  if (otherResearchIntent.test(lower)) return null
+
+  const fields: ResearchField[] = ['mobile_phone']
+  if (/\b(?:verified|verify|valid|validation|status)\b/.test(lower)) {
+    fields.push('phone_status')
+  }
 
   return {
     entityScope: 'people',
@@ -343,9 +386,24 @@ export async function planQuery(options: PlanQueryOptions): Promise<PlannerOutco
     }
   }
 
-  const emailPlan = deterministicEmailPlan(question)
-  const deterministic = emailPlan ?? deterministicFundingPlan(question)
-  const deterministicModel = emailPlan ? 'email-rules-v1' : 'funding-rules-v1'
+  /*
+   * Explicit contact retrieval does not need an LLM. Run the smallest possible
+   * sourced plan even when the hosted planner is unavailable; identity checks,
+   * public-source requirements and status labelling still happen downstream.
+   */
+  const deterministicContact =
+    deterministicEmailPlan(question) ?? deterministicPhonePlan(question)
+  if (deterministicContact) {
+    return {
+      status: 'planned',
+      plan: deterministicContact,
+      vendor: 'deterministic',
+      model: 'contact-rules-v2',
+    }
+  }
+
+  const deterministic = deterministicFundingPlan(question)
+  const deterministicModel = 'funding-rules-v1'
   if (deterministic) {
     if (deterministic.clarificationRequired) {
       return {

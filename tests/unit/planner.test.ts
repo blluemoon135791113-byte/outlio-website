@@ -155,7 +155,7 @@ describe('planQuery — happy paths', () => {
     expect(outcome.status).toBe('planned')
   })
 
-  it('Test 2 — "give me emails" plans contact work only', async () => {
+  it('plans a set-wide email request', async () => {
     const llm = stubLlm([
       replied({ requiredFields: ['work_email'], clarificationRequired: false }),
     ])
@@ -167,7 +167,7 @@ describe('planQuery — happy paths', () => {
     expect(outcome.plan.requiredFields).toEqual(['work_email'])
   })
 
-  it('does not let a model widen an explicit work-email-only request', async () => {
+  it('allows the model to combine contact and role fields', async () => {
     const llm = stubLlm([
       replied({
         entityScope: 'people',
@@ -177,14 +177,75 @@ describe('planQuery — happy paths', () => {
     ])
 
     const outcome = await planQuery({
-      question: "Just give me the founders' work email addresses.",
+      question: "Give me the founders' seniority and work email addresses.",
       llm,
     })
 
     expect(outcome.status).toBe('planned')
     if (outcome.status !== 'planned') return
-    expect(outcome.plan.requiredFields).toEqual(['work_email'])
-    expect(outcome.vendor).toBe('deterministic')
+    expect(outcome.plan.requiredFields).toEqual(['person_seniority', 'work_email'])
+  })
+
+  it('plans a set-wide phone request without consulting the model', async () => {
+    const calls = vi.fn()
+    const llm = stubLlm([{ ok: false, code: 'unavailable', detail: 'planner offline' }], calls)
+
+    const outcome = await planQuery({ question: 'give me phone numbers of all', llm })
+
+    expect(outcome.status).toBe('planned')
+    if (outcome.status !== 'planned') return
+    expect(outcome.plan.requiredFields).toEqual(['mobile_phone'])
+    expect(calls).not.toHaveBeenCalled()
+  })
+
+  it('plans a verified-phone request with its status field', async () => {
+    const outcome = await planQuery({
+      question: 'Find verified mobile numbers for every lead.',
+      llm: stubLlm([]),
+    })
+
+    expect(outcome.status).toBe('planned')
+    if (outcome.status !== 'planned') return
+    expect(outcome.plan.requiredFields).toEqual(['mobile_phone', 'phone_status'])
+  })
+
+  it('plans a mixed contact and company request without dropping either field', async () => {
+    const llm = stubLlm([
+      replied({
+        entityScope: 'people',
+        requiredFields: ['mobile_phone', 'industry'],
+        clarificationRequired: false,
+      }),
+    ])
+
+    const outcome = await planQuery({
+      question: 'Give me phone numbers and the industry for every lead.',
+      llm,
+    })
+
+    expect(outcome.status).toBe('planned')
+    if (outcome.status !== 'planned') return
+    expect(outcome.plan.requiredFields).toEqual(['mobile_phone', 'industry'])
+  })
+
+  it('still plans company research that touches no contact field', async () => {
+    // The boundary must not become "macro cannot research people at all".
+    const llm = stubLlm([
+      replied({
+        entityScope: 'people',
+        requiredFields: ['person_seniority', 'industry'],
+        clarificationRequired: false,
+      }),
+    ])
+
+    const outcome = await planQuery({
+      question: 'What is the seniority mix across these accounts?',
+      llm,
+    })
+
+    expect(outcome.status).toBe('planned')
+    if (outcome.status !== 'planned') return
+    expect(outcome.plan.requiredFields).toEqual(['person_seniority', 'industry'])
   })
 
   it('preserves SaaS and SDR hiring constraints even when the model drops them', async () => {

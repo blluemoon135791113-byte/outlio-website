@@ -44,11 +44,9 @@ const CARD_EVIDENCE_LIMIT = 500
  */
 const RESULT_PANE_HEIGHT = 'lg:h-[calc(100dvh-13rem)] lg:min-h-[32rem]'
 
-const SUGGESTIONS = [
-  'Companies that announced a Series A in the last 3 months',
-  'Which of these use HubSpot?',
-  'Find SaaS leads hiring SDRs',
-]
+/* Short enough that three fit one row unscrolled. The bar enforces a single
+   line structurally, but copy that has to scroll is still copy nobody reads. */
+const SUGGESTIONS = ['Recent Series A', 'Who uses HubSpot?', 'SaaS hiring SDRs']
 
 /**
  * ⚠️ TWO SELECTS, BECAUSE `enrichment` MAY NOT EXIST YET.
@@ -61,7 +59,7 @@ const SUGGESTIONS = [
  * so it cannot be the sixth.
  */
 const LEAD_SELECT_BASE =
-  'id, full_name, job_title, company_name, company_id, company_website_url, linkedin_url, location, extraction_job_id, created_at, work_email, email_status, mobile_phone, phone_status, companies(domain)' as const
+  'id, full_name, job_title, company_name, company_id, company_website_url, linkedin_url, sales_navigator_url, company_url, person_blurb, tenure_in_role, tenure_in_company, location, extraction_job_id, created_at, work_email, email_status, mobile_phone, phone_status, companies(domain)' as const
 
 const LEAD_SELECT_ENRICHED = `${LEAD_SELECT_BASE}, enrichment` as const
 
@@ -73,6 +71,11 @@ type LeadRow = {
   company_id: string | null
   company_website_url: string | null
   linkedin_url: string | null
+  sales_navigator_url: string | null
+  company_url: string | null
+  person_blurb: string | null
+  tenure_in_role: string | null
+  tenure_in_company: string | null
   location: string | null
   work_email: string | null
   email_status: string | null
@@ -219,6 +222,7 @@ function savedDetailsFor(
     details.push({
       id: `evidence:${record.id}`,
       kind: 'fact',
+      field: record.field,
       label: columnLabel(record.field),
       value,
       sourceUrl: record.source_url,
@@ -237,6 +241,7 @@ function savedDetailsFor(
       details.push({
         id: `merged:${field}`,
         kind: 'fact',
+        field,
         label: columnLabel(field),
         value,
         sourceUrl: typeof entry?.source_url === 'string' ? entry.source_url : null,
@@ -253,6 +258,8 @@ function savedDetailsFor(
     details.push({
       id: `answer:${answer.created_at}:${answer.question}`,
       kind: 'answer',
+      // A free-text answer belongs to no single field.
+      field: null,
       label: answer.question,
       value: answer.answer,
       sourceUrl: typeof source === 'string' ? source : null,
@@ -299,24 +306,36 @@ function toHubbleLead(
       evidenceValue(phoneEvidence?.value_json) ?? merged(row.enrichment, 'mobile_phone') ?? row.mobile_phone,
     phoneStatus:
       evidenceValue(phoneStatusEvidence?.value_json) ?? merged(row.enrichment, 'phone_status') ?? row.phone_status,
+    /*
+     * ⚠️ CAPTURED FIELDS THE MODAL COULD NEVER SHOW.
+     *
+     * `sales_navigator_url` is the one that hurt: the parser only fills
+     * `linkedin_url` when the anchor is a public /in/ profile, so a lead
+     * captured from Sales Navigator stored its URL here and the modal — which
+     * read only `linkedin_url` — showed "LinkedIn not available" while the CSV
+     * export happily carried it.
+     */
+    salesNavigatorUrl: row.sales_navigator_url,
+    companyUrl: row.company_url,
+    personBlurb: row.person_blurb,
+    tenureInRole: row.tenure_in_role,
+    tenureInCompany: row.tenure_in_company,
     savedDetails: savedDetailsFor(row, evidence, history),
   }
 }
 
 export function HubbleConsole({
   userId,
-  modelName,
   batches,
 }: {
   userId: string
-  /** "Hubble Nova". One name over every configured engine. */
-  modelName: string
   batches: LeadBatch[]
 }) {
   const supabase = useMemo(() => createClient(), [])
 
   const [question, setQuestion] = useState('')
   const [openLeadId, setOpenLeadId] = useState<string | null>(null)
+  const [drillDown, setDrillDown] = useState<{ field: string; label: string } | null>(null)
 
   const run = useResearchRun()
   const busy = run.busy
@@ -529,11 +548,30 @@ export function HubbleConsole({
 
   const openLead = leads.find((lead) => lead.id === openLeadId) ?? null
 
+  /*
+   * ⚠️ FILTERS THE VIEW, NEVER THE DATA. Drill-down narrows what is listed; it
+   * does not re-run research, re-query, or change what a subsequent export
+   * contains. Matching is on the field KEY plus the rendered value, because two
+   * fields can display the same words.
+   */
+  const visibleLeads = drillDown
+    ? leads.filter((lead) =>
+        lead.savedDetails.some(
+          (detail) =>
+            detail.field === drillDown.field &&
+            detail.value.toLowerCase().includes(drillDown.label.toLowerCase()),
+        ),
+      )
+    : leads
+
+  /* A label, not a paragraph — but each cause keeps its own wording, because
+     "empty list", "empty range" and "nothing extracted yet" are three
+     different situations and collapsing them hides which one you are in. */
   const emptyHint = batchId
-    ? 'That list has no leads. Pick another from the dropdown above.'
+    ? 'This list is empty.'
     : from && to
-      ? 'No leads were extracted in that date range. Widen the calendar to see more.'
-      : 'Run an extraction and your leads will appear here, ready to research.'
+      ? 'No leads in this date range.'
+      : 'Run an extraction to see leads here.'
 
   return (
     /*
@@ -547,7 +585,7 @@ export function HubbleConsole({
           Hubble
         </h1>
         <p className="mt-2 text-[15px] leading-relaxed text-muted">
-          Outlio&apos;s intelligence layer for micro and macro lead-data analytics.
+          Data analysis at the micro and macro scale, across all prospects.
         </p>
       </header>
 
@@ -561,9 +599,7 @@ export function HubbleConsole({
         busy={busy}
         shimmer={run.phase === 'planning'}
         busyLabel={
-          run.phase === 'planning'
-            ? 'Generating the research plan…'
-            : 'Searching and verifying sources…'
+          run.phase === 'planning' ? 'Planning…' : 'Searching sources…'
         }
         suggestions={SUGGESTIONS}
       />
@@ -610,8 +646,24 @@ export function HubbleConsole({
             </p>
           ) : null}
 
+          {drillDown ? (
+            <button
+              type="button"
+              onClick={() => setDrillDown(null)}
+              className="skeuo-key skeuo-key-interactive flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs"
+            >
+              <span className="min-w-0 flex-1 truncate text-ink">
+                {drillDown.label}
+                <span className="text-muted"> · {visibleLeads.length} of {leads.length}</span>
+              </span>
+              <span aria-hidden className="shrink-0 text-muted">
+                clear ✕
+              </span>
+            </button>
+          ) : null}
+
           <HubbleLeadList
-            leads={leads}
+            leads={visibleLeads}
             loading={loading}
             emptyHint={emptyHint}
             onOpenLead={(lead) => setOpenLeadId(lead.id)}
@@ -631,6 +683,7 @@ export function HubbleConsole({
             onClarify={(answers) => void run.clarify(answers)}
             onClose={run.reset}
             columnLabel={columnLabel}
+            onDrillDown={setDrillDown}
           />
         ) : null}
       </div>
@@ -639,7 +692,6 @@ export function HubbleConsole({
         <LeadModal
           lead={openLead}
           linkedinUrl={linkedinById[openLead.id] ?? null}
-          modelName={modelName}
           onResearchComplete={(answer) => {
             setLeads((current) =>
               current.map((lead) =>

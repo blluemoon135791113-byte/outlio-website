@@ -14,7 +14,20 @@
  */
 import { useState } from 'react'
 
+import { renderCellValue } from '@/components/intelligence/render-value'
+import {
+  analyseRun,
+  analysisCsvRows,
+  coverageOf,
+  type MacroAnalysis,
+} from '@/lib/intelligence/aggregate'
+import { CONTACT_FIELDS } from '@/lib/intelligence/analysis-scope'
+import { toCsv } from '@/lib/export/sanitize'
 import type { RunPhase, RunResults, RunSummary } from '@/components/intelligence/useResearchRun'
+
+const CONTACT_RESULT_FIELDS: ReadonlySet<string> = new Set(
+  [...CONTACT_FIELDS].filter((field) => field !== 'email_status' && field !== 'phone_status'),
+)
 
 export function HubbleResultPanel({
   phase,
@@ -27,6 +40,7 @@ export function HubbleResultPanel({
   onClarify,
   onClose,
   columnLabel,
+  onDrillDown,
 }: {
   phase: RunPhase
   message: string | null
@@ -38,6 +52,8 @@ export function HubbleResultPanel({
   onClarify: (answers: Record<string, string>) => void
   onClose: () => void
   columnLabel: (field: string) => string
+  /** Filter the lead list to the rows behind one share. */
+  onDrillDown?: (filter: { field: string; label: string }) => void
 }) {
   const working = phase === 'planning' || phase === 'running'
   const [answers, setAnswers] = useState<Record<string, string>>({})
@@ -179,7 +195,25 @@ export function HubbleResultPanel({
                 summary={summary}
                 pending={summaryPending}
                 rowCount={results.rows.length}
+                hasKnownData={results.rows.some((row) =>
+                  results.columns.some((field) => row.fields[field]?.state === 'known'),
+                )}
               />
+
+              {/*
+               * ⚠️ THE ARITHMETIC, BENEATH THE PROSE.
+               *
+               * `SummaryBlock` is model-written and reads well; this is the
+               * counted version of the same set, and the two answer to
+               * different standards. If the prose and these numbers ever
+               * disagree, THE NUMBERS ARE THE ONES THAT CAME FROM THE DATA.
+               */}
+              <MacroAnalysisPanel
+                analysis={analyseRun(results.columns, results.rows)}
+                onDrillDown={onDrillDown}
+              />
+
+              <ContactResults results={results} columnLabel={columnLabel} />
 
               {(() => {
                 /*
@@ -276,10 +310,12 @@ function SummaryBlock({
   summary,
   pending,
   rowCount,
+  hasKnownData,
 }: {
   summary: RunSummary | null
   pending: boolean
   rowCount: number
+  hasKnownData: boolean
 }) {
   if (pending) {
     return (
@@ -299,20 +335,321 @@ function SummaryBlock({
      */
     return (
       <p className="text-sm text-muted">
-        Nothing was found for this question across the {rowCount.toLocaleString()} compan
-        {rowCount === 1 ? 'y' : 'ies'} checked.
+        {hasKnownData
+          ? 'Sourced results are shown below; a narrative summary was unavailable.'
+          : `Nothing was found for this question across the ${rowCount.toLocaleString()} record${rowCount === 1 ? '' : 's'} checked.`}
       </p>
     )
   }
 
   return (
     <div>
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+        Narrative summary
+      </p>
       <p className="text-sm leading-relaxed whitespace-pre-wrap text-ink">{summary.text}</p>
       <p className="mt-1.5 text-xs text-muted">
         Based on {summary.withData} of {(summary.withData + summary.withoutData).toLocaleString()}{' '}
-        compan{summary.withData + summary.withoutData === 1 ? 'y' : 'ies'} with a public record.
+        record{summary.withData + summary.withoutData === 1 ? '' : 's'} with public evidence.
       </p>
     </div>
+  )
+}
+
+/**
+ * Contact questions are requests for actionable values, so show the matches.
+ * Unknown rows remain summarized as coverage rather than becoming a wall of
+ * "not found" cards.
+ */
+/**
+ * How sure we are, shown only when there is something worth saying.
+ *
+ * ⚠️ SILENT ON THE ORDINARY CASE. Most cells come from one provider, and
+ * stamping "1 source" on every one of them is noise that trains people to stop
+ * reading. This speaks up for the two states that change a decision:
+ * independent agreement, and disagreement — disagreement louder, because
+ * acting on a contested value costs more than skipping a corroborated one.
+ */
+function Corroboration({
+  cell,
+}: {
+  cell: { corroboratingProviders?: readonly string[]; conflictingProviders?: readonly string[]; confidence?: number; sourceProvider?: string }
+}) {
+  const agree = cell.corroboratingProviders ?? []
+  const disagree = cell.conflictingProviders ?? []
+  const pct = typeof cell.confidence === 'number' ? Math.round(cell.confidence * 100) : null
+
+  if (disagree.length > 0) {
+    return (
+      <span
+        className="mt-0.5 block text-[10px] text-warning"
+        title={`${disagree.join(', ')} reported a different value${pct === null ? '' : ` — ${pct}% confidence`}`}
+      >
+        {disagree.length} disagree{disagree.length === 1 ? 's' : ''}
+      </span>
+    )
+  }
+
+  if (agree.length > 0) {
+    return (
+      <span
+        className="mt-0.5 block text-[10px] text-success"
+        title={`${[cell.sourceProvider, ...agree].filter(Boolean).join(', ')} independently agree${pct === null ? '' : ` — ${pct}% confidence`}`}
+      >
+        {agree.length + 1} sources agree
+      </span>
+    )
+  }
+
+  return null
+}
+
+/**
+ * The macro answer, rendered.
+ *
+ * ⚠️ EVERY NUMBER COMES FROM `analyseRun`, WHICH IS PURE ARITHMETIC OVER THE
+ * ROWS. No model writes a sentence about a customer's data here: a claim that
+ * cannot be traced back to a count is the fabrication rule 4 forbids.
+ */
+function MacroAnalysisPanel({
+  analysis,
+  onDrillDown,
+}: {
+  analysis: MacroAnalysis
+  onDrillDown?: (filter: { field: string; label: string }) => void
+}) {
+  if (analysis.distributions.length === 0 && analysis.numerics.length === 0) return null
+
+  const coverage = coverageOf(analysis)
+
+  /*
+   * Built and revoked on click rather than held in state: an object URL kept
+   * across renders is a leak, and the file is small enough that generating it
+   * on demand is imperceptible.
+   */
+  const downloadCsv = () => {
+    const csv = toCsv(analysisCsvRows(analysis), [
+      { header: 'Field', value: (row) => row.field },
+      { header: 'Value', value: (row) => row.value },
+      { header: 'Count', value: (row) => row.count },
+      { header: 'Share %', value: (row) => row.share_percent },
+      { header: 'Known', value: (row) => row.known },
+      { header: 'Entity', value: (row) => row.entity },
+      { header: 'Total entities', value: (row) => row.total_entities },
+    ])
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'outlio-analysis.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <section aria-label="Set analysis" className="rounded-[var(--radius-lg)] bg-clay-sunken p-3">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h3 className="text-xs font-semibold text-ink">Counted analysis</h3>
+          <p className="mt-0.5 text-[10px] text-muted">Calculated directly from the sourced rows.</p>
+        </div>
+        <div className="flex items-baseline gap-3">
+          <p className="text-[11px] text-muted">
+            {analysis.leads.toLocaleString()} leads · {analysis.companies.toLocaleString()} companies
+          </p>
+          <button
+            type="button"
+            onClick={downloadCsv}
+            className="cursor-pointer text-[11px] font-medium text-ink underline decoration-border underline-offset-2 hover:decoration-ink"
+          >
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      {analysis.headlines.length > 0 ? (
+        <ul className="space-y-1">
+          {analysis.headlines.map((line) => (
+            <li
+              key={line}
+              className={`text-xs leading-5 ${
+                line.startsWith('Thin evidence') ? 'text-warning' : 'text-ink'
+              }`}
+            >
+              {line}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <div className="mt-3 space-y-3">
+        {analysis.distributions.slice(0, 3).map((distribution) => (
+          <div key={distribution.field}>
+            <p className="flex items-baseline justify-between gap-2 text-[11px] text-muted">
+              <span className="font-semibold uppercase tracking-[0.08em]">
+                {distribution.field.replace(/_/g, ' ')}
+              </span>
+              {/* The base, next to the breakdown it produced. */}
+              <span>
+                {distribution.known} of {distribution.base}{' '}
+                {distribution.entity === 'company' ? 'companies' : 'leads'} known
+              </span>
+            </p>
+            <ul className="mt-1 space-y-1">
+              {distribution.buckets.slice(0, 4).map((bucket) => (
+                <li key={bucket.label}>
+                  {/* Clicking a share filters the lead list to the rows behind
+                      it — the point of a breakdown is getting to the records. */}
+                  <button
+                    type="button"
+                    onClick={() => onDrillDown?.({ field: distribution.field, label: bucket.label })}
+                    disabled={!onDrillDown}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded text-left text-xs enabled:hover:text-ink disabled:cursor-default"
+                  >
+                    <span
+                      aria-hidden
+                      className="h-1 rounded-full bg-accent"
+                      style={{ width: `${Math.max(4, Math.round(bucket.share * 100))}%` }}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-ink">{bucket.label}</span>
+                    <span className="shrink-0 text-muted">{Math.round(bucket.share * 100)}%</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+
+        {/*
+         * ⚠️ COVERAGE, THINNEST FIRST.
+         *
+         * Sorted best-first this would be a reassurance exercise. The useful
+         * question is what the analysis is WEAKEST on, because that is the
+         * column a reader is most likely to over-trust.
+         */}
+        {coverage.length > 0 ? (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+              Data completeness
+            </p>
+            <ul className="mt-1 space-y-1">
+              {coverage.slice(0, 5).map((entry) => (
+                <li key={entry.field} className="flex items-center gap-2 text-xs">
+                  <span className="min-w-0 flex-1 truncate text-ink">
+                    {entry.field.replace(/_/g, ' ')}
+                  </span>
+                  <span className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-clay-raised">
+                    <span
+                      aria-hidden
+                      className={`block h-full rounded-full ${entry.thin ? 'bg-warning' : 'bg-accent'}`}
+                      style={{ width: `${Math.round(entry.share * 100)}%` }}
+                    />
+                  </span>
+                  <span className={`shrink-0 tabular-nums ${entry.thin ? 'text-warning' : 'text-muted'}`}>
+                    {entry.known}/{entry.total}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {analysis.numerics.slice(0, 2).map((numeric) => (
+          <p key={numeric.field} className="text-xs text-ink">
+            <span className="font-semibold uppercase tracking-[0.08em] text-muted">
+              {numeric.field.replace(/_/g, ' ')}
+            </span>{' '}
+            median {numeric.median.toLocaleString()}
+            <span className="text-muted">
+              {' '}· {numeric.min.toLocaleString()}–{numeric.max.toLocaleString()} ·{' '}
+              {numeric.known} of {numeric.base}{' '}
+              {numeric.entity === 'company' ? 'companies' : 'leads'} known
+            </span>
+          </p>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function ContactResults({
+  results,
+  columnLabel,
+}: {
+  results: RunResults
+  columnLabel: (field: string) => string
+}) {
+  const fields = results.columns.filter((field) => CONTACT_RESULT_FIELDS.has(field))
+  if (fields.length === 0) return null
+
+  const matches = results.rows.flatMap((row) => {
+    const values = fields.flatMap((field) => {
+      const cell = row.fields[field]
+      if (cell?.state !== 'known') return []
+      const statusField =
+        field === 'work_email'
+          ? 'email_status'
+          : field === 'mobile_phone'
+            ? 'phone_status'
+            : null
+      const statusCell = statusField ? row.fields[statusField] : undefined
+      return [{
+        field,
+        cell,
+        status: statusCell?.state === 'known' ? renderCellValue(statusCell.value) : null,
+      }]
+    })
+    return values.length > 0 ? [{ row, values }] : []
+  })
+  if (matches.length === 0) return null
+
+  return (
+    <section aria-label="Contacts found" className="rounded-[var(--radius-lg)] bg-clay-sunken p-3">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h3 className="text-xs font-semibold text-ink">Contacts found</h3>
+        <span className="text-[11px] tabular-nums text-muted">{matches.length.toLocaleString()}</span>
+      </div>
+      <ul className="divide-y divide-border/70">
+        {matches.map(({ row, values }) => (
+          <li key={row.leadId} className="py-2 first:pt-0 last:pb-0">
+            <p className="truncate text-xs font-semibold text-ink">
+              {row.personName ?? 'Unnamed lead'}
+            </p>
+            {row.companyName ? (
+              <p className="truncate text-[11px] text-muted">{row.companyName}</p>
+            ) : null}
+            <div className="mt-1 space-y-1">
+              {values.map(({ field, cell, status }) => (
+                <div key={field} className="flex items-start justify-between gap-3 text-xs">
+                  <span className="shrink-0 text-muted">{columnLabel(field)}</span>
+                  <span className="min-w-0 text-right">
+                    {cell.sourceUrl ? (
+                      <a
+                        href={cell.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="break-all font-medium text-ink underline decoration-border underline-offset-2 hover:decoration-ink"
+                      >
+                        {renderCellValue(cell.value)}
+                      </a>
+                    ) : (
+                      <span className="break-all font-medium text-ink">
+                        {renderCellValue(cell.value)}
+                      </span>
+                    )}
+                    <Corroboration cell={cell} />
+                    {status ? (
+                      <span className="mt-0.5 block text-[10px] font-medium text-muted">
+                        {status}
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -374,7 +711,7 @@ function EmptyResearchResult({
         <div className="flex items-start gap-3">
           <span
             aria-hidden
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-clay-raised text-sm font-semibold text-ink shadow-[var(--clay-shadow-chip)]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-clay-raised text-sm font-semibold text-ink shadow-[var(--shadow-button)]"
           >
             i
           </span>

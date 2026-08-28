@@ -84,7 +84,15 @@ const COLUMN_LABELS: Record<string, string> = {
 
 /** Field key → column header, falling back to a readable form of the key. */
 export function columnLabel(field: string): string {
-  return COLUMN_LABELS[field] ?? field.replace(/_/g, ' ')
+  /*
+   * ⚠️ THE FALLBACK IS CAPITALISED TOO. Mapped labels read "Website" and
+   * "Employees" while unmapped ones fell through as "tech stack" and "funding
+   * round", so one list mixed two capitalisation styles and looked unfinished.
+   */
+  const mapped = COLUMN_LABELS[field]
+  if (mapped) return mapped
+  const words = field.replace(/_/g, ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
 /** Renders a researched value compactly without inventing precision. */

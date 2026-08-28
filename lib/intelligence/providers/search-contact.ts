@@ -11,7 +11,7 @@ import { parsePhoneNumberFromString } from 'libphonenumber-js/min'
  * `publicly_found` rather than `verified`.
  */
 import { expiresAtFor } from '@/lib/intelligence/ttl'
-import { hasWebSearch, serpSearchMany } from '@/lib/search'
+import { hasWebSearch, serpSearch } from '@/lib/search'
 import {
   identityAccepted,
   resolveIdentity,
@@ -260,17 +260,20 @@ export function contactSearchQueries(
   const name = (person.fullName ?? '').replace(/"/g, '').trim()
   const company = (person.companyName ?? '').replace(/"/g, '').trim()
   const employer = domain(person.companyDomain) || company
+  const namedEmployer = company || employer
   const quoted = company ? `"${name}" "${company}"` : `"${name}"`
   const queries = kind === 'email'
     ? [
-        `${name} ${employer} email`,
+        `${name} ${namedEmployer} email`,
+        ...(employer && employer !== namedEmployer ? [`${name} ${employer} email`] : []),
         ...(person.companyDomain ? [`site:${domain(person.companyDomain)} "${name}" email`] : []),
         `${quoted} contact email`,
         `${quoted} filetype:pdf email`,
       ]
     : [
-        `${employer} ${name} phone number`,
-        `${name} ${employer} phone WhatsApp`,
+        `${namedEmployer} ${name} phone number`,
+        ...(employer && employer !== namedEmployer ? [`${employer} ${name} phone number`] : []),
+        `${name} ${namedEmployer} phone WhatsApp`,
         ...(person.companyDomain ? [`site:${domain(person.companyDomain)} "${name}" phone`] : []),
         `${quoted} contact phone`,
       ]
@@ -299,15 +302,34 @@ export function hasPublicContactSearch(): boolean {
 async function publicSearch(
   person: PersonEntity,
   queries: readonly string[],
-): Promise<SearchHit[]> {
+  extract: (person: PersonEntity, hits: readonly SearchHit[]) => PublicContactFinding,
+): Promise<PublicContactFinding> {
   const employer = domain(person.companyDomain)
-  return serpSearchMany(queries, {
-    limit: 8,
-    maxQueries: 4,
-    stopAfter: 24,
-    deadlineAt: Date.now() + 13_000,
-    preferDomains: employer ? [employer] : [],
-  })
+  const collected = new Map<string, SearchHit>()
+  const deadlineAt = Date.now() + 13_000
+
+  /*
+   * Search one phrasing at a time and stop as soon as a supported contact is
+   * found. Bulk contact runs used to execute four searches for every lead
+   * before attempting extraction, even when result one already contained the
+   * phone. This both delayed the answer and multiplied load on the free search
+   * service. The accumulated hits still allow corroboration within and across
+   * result sets.
+   */
+  for (const query of queries.slice(0, 4)) {
+    const hits = await serpSearch(query, {
+      limit: 8,
+      deadlineAt,
+      preferDomains: employer ? [employer] : [],
+    })
+    for (const hit of hits) if (!collected.has(hit.url)) collected.set(hit.url, hit)
+
+    const finding = extract(person, [...collected.values()])
+    if (finding) return finding
+    if (Date.now() >= deadlineAt) break
+  }
+
+  return null
 }
 
 function canSearch(task: ResearchTask, fields: ReadonlySet<string>): boolean {
@@ -370,7 +392,7 @@ export const searchContactEmailProvider: IntelligenceProvider<PublicContactFindi
   estimateCost: async () => 0,
   execute: async (task) => {
     const person = task.entity as PersonEntity
-    return extractPublicEmail(person, await publicSearch(person, contactSearchQueries(person, 'email')))
+    return publicSearch(person, contactSearchQueries(person, 'email'), extractPublicEmail)
   },
   normalize: (finding, task) => evidence(finding, task, 'email'),
 }
@@ -382,7 +404,7 @@ export const searchContactPhoneProvider: IntelligenceProvider<PublicContactFindi
   estimateCost: async () => 0,
   execute: async (task) => {
     const person = task.entity as PersonEntity
-    return extractPublicPhone(person, await publicSearch(person, contactSearchQueries(person, 'phone')))
+    return publicSearch(person, contactSearchQueries(person, 'phone'), extractPublicPhone)
   },
   normalize: (finding, task) => evidence(finding, task, 'phone'),
 }
