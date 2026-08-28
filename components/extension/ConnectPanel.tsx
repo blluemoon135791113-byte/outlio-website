@@ -79,7 +79,7 @@ export function ConnectPanel({
           connected yet.
         </p>
         <a
-          href="/dashboard/settings#subscription-and-billing"
+          href="/dashboard/settings/billing"
           className="product-gradient mt-5 inline-flex h-9 items-center rounded-[var(--radius-md)] px-3.5 text-xs font-semibold text-white hover:brightness-95"
         >
           Manage subscription

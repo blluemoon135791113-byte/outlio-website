@@ -41,7 +41,7 @@ export function ClayLeadExport({
 
   if (!clayConnected) {
     return (
-      <Link href="/dashboard/settings#integrations" className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-4 text-sm font-semibold text-ink hover:border-accent/35 hover:text-accent">
+      <Link href="/dashboard/settings/integrations" className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-4 text-sm font-semibold text-ink hover:border-accent/35 hover:text-accent">
         Connect Clay to export
       </Link>
     )

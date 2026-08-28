@@ -31,7 +31,7 @@ type FileState = {
 }
 
 const inputClass =
-  'w-full rounded-[var(--radius-md)] border border-border bg-panel px-3 py-2.5 text-sm text-ink transition-colors duration-150 hover:border-border-strong focus:border-accent'
+  'w-full field px-3 py-2.5 text-sm text-ink'
 
 export function UploadForm({
   maxFiles,

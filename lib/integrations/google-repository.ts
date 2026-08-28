@@ -62,7 +62,7 @@ export async function createGoogleOAuthTransaction(userId: string, redirectUri: 
     provider: 'google',
     state_hash: hashState(state),
     redirect_uri: redirectUri,
-    return_to: '/dashboard/settings#integrations',
+    return_to: '/dashboard/settings/integrations',
     expires_at: new Date(now.getTime() + OAUTH_TTL_MS).toISOString(),
   })
   if (error) throw new Error('Google OAuth state could not be saved.')

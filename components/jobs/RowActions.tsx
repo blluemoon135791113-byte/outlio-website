@@ -42,7 +42,7 @@ function MenuSubmit({ logo, label }: { logo: ConnectorLogoName; label: string })
 function ConnectRow({ logo, label }: { logo: ConnectorLogoName; label: string }) {
   return (
     <Link
-      href="/dashboard/settings#integrations"
+      href="/dashboard/settings/integrations"
       className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors duration-150 hover:bg-accent-soft/70 hover:text-accent"
     >
       <ConnectorLogo name={logo} className="size-5 opacity-60" />

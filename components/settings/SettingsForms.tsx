@@ -20,7 +20,7 @@ import { createClient } from '@/lib/supabase/client'
 
 const INITIAL: SettingsActionState = { status: 'idle' }
 
-const inputClass = 'w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 py-2.5 text-base text-ink transition-[border-color,box-shadow] duration-150 placeholder:text-muted/60 hover:border-border-strong focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(139,92,246,0.12)] focus:outline-none'
+const inputClass = 'w-full field px-3 py-2.5 text-base text-ink placeholder:text-muted focus:outline-none'
 
 export function ProfileSettings({ fullName }: { fullName: string }) {
   const [state, action] = useActionState(updateProfileAction, INITIAL)

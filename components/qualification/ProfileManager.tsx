@@ -120,7 +120,7 @@ export function ProfileManager({ profiles }: { profiles: ExistingProfile[] }) {
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Seed SaaS ICP"
                 maxLength={120}
-                className="mt-1 h-10 w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 text-sm text-ink outline-none focus:border-accent/50"
+                className="mt-1 h-10 w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 text-sm text-ink outline-none/50"
               />
             </div>
             <div>
@@ -134,7 +134,7 @@ export function ProfileManager({ profiles }: { profiles: ExistingProfile[] }) {
                 max={100}
                 value={qualifyAt}
                 onChange={(event) => setQualifyAt(Number(event.target.value))}
-                className="mt-1 h-10 w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 text-sm text-ink outline-none focus:border-accent/50"
+                className="mt-1 h-10 w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 text-sm text-ink outline-none/50"
               />
             </div>
           </div>
@@ -180,7 +180,7 @@ export function ProfileManager({ profiles }: { profiles: ExistingProfile[] }) {
                     onChange={(event) => update(criterion.key, { rawValue: event.target.value })}
                     disabled={criterion.operator === 'exists'}
                     placeholder={valueHint(criterion.operator)}
-                    className="h-9 rounded-[var(--radius-md)] border border-border bg-paper px-2 text-sm text-ink outline-none focus:border-accent/50 disabled:opacity-50"
+                    className="h-9 rounded-[var(--radius-md)] border border-border bg-paper px-2 text-sm text-ink outline-none/50 disabled:opacity-50"
                   />
                 </div>
 

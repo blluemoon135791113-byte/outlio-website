@@ -40,7 +40,7 @@ export function GhlSettings({ status, accountLabel }: { status: IntegrationConne
     }
   }
 
-  const inputClass = 'w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 py-2.5 text-base text-ink transition-[border-color,box-shadow] duration-150 placeholder:text-muted/60 hover:border-border-strong focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(139,92,246,0.12)] focus:outline-none'
+  const inputClass = 'w-full field px-3 py-2.5 text-base text-ink placeholder:text-muted focus:outline-none'
 
   return (
     <div className="rounded-xl border border-border bg-app/70 p-4 sm:p-5">

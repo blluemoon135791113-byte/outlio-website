@@ -31,7 +31,7 @@ export default async function WelcomePage() {
           <Link href="/dashboard" className="rounded-[var(--radius-md)] bg-accent px-6 py-3 font-semibold text-white hover:bg-accent-deep">
             Open dashboard
           </Link>
-          <Link href="/dashboard/settings#subscription-and-billing" className="rounded-[var(--radius-md)] bg-cream px-6 py-3 font-semibold text-ink ring-1 ring-border hover:ring-accent/40">
+          <Link href="/dashboard/settings/billing" className="rounded-[var(--radius-md)] bg-cream px-6 py-3 font-semibold text-ink ring-1 ring-border hover:ring-accent/40">
             View billing
           </Link>
         </div>
