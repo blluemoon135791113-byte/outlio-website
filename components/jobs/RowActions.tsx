@@ -157,8 +157,13 @@ export function DeleteRunButton({
   if (deleted.status === 'purged') return null
 
   return confirming ? (
+    /*
+     * ⚠️ NO VISIBLE PROMPT — the two buttons ARE the question. "Erase" beside
+     * "Keep" reads as a confirmation without a line of copy repeating it.
+     * `aria-label` therefore carries the whole meaning for a screen reader and
+     * must not be dropped as decoration.
+     */
     <div className="flex items-center gap-1.5" role="group" aria-label="Confirm permanent deletion">
-      <span className="text-[11px] font-medium text-danger">Erase everything?</span>
       <form action={deleteAction}>
         <input type="hidden" name="job_id" value={jobId} />
         <button

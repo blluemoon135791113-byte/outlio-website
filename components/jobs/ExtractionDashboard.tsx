@@ -41,11 +41,6 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 function jobLabel(job: DashboardJob, files: readonly DashboardFile[] = []) {
   const firstFile = files.find((file) => file.extraction_job_id === job.id)
@@ -77,9 +72,6 @@ export function ExtractionDashboard({
   const [files, setFiles] = useState(initialFiles)
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const [refreshError, setRefreshError] = useState<string | null>(null)
-  const [selectedJobId, setSelectedJobId] = useState(
-    initialJobs.find(isActiveJob)?.id ?? initialJobs[0]?.id ?? null,
-  )
   /*
    * ⚠️ ONE FILTER PER BOARD, NOT ONE SHARED FILTER.
    *
@@ -196,13 +188,18 @@ export function ExtractionDashboard({
   }, [hasActiveJobs, refresh])
 
   const activeJob = jobs.find(isActiveJob) ?? null
-  const selectedJob =
-    jobs.find((job) => job.id === selectedJobId) ?? activeJob ?? jobs[0] ?? null
-  const selectedFiles = selectedJob
-    ? files
-        .filter((file) => file.extraction_job_id === selectedJob.id)
-        .sort((a, b) => a.created_at.localeCompare(b.created_at))
-    : []
+  /*
+   * ⚠️ THE ONLY THING A ROW'S FILES ARE STILL READ FOR IS FAILURE.
+   *
+   * The per-file board that showed every file's size and status is gone. The
+   * one fact it held that lives nowhere else is WHICH file failed — recorded
+   * on `uploaded_files`, and otherwise invisible on a run that completed with
+   * errors. So it moves onto the row, and only when there is something to say.
+   */
+  const failedFilesFor = (jobId: string) =>
+    files
+      .filter((file) => file.extraction_job_id === jobId && file.status === 'failed')
+      .map((file) => file.original_filename)
 
   const isTrashed = (job: DashboardJob) => job.trashed_at !== null
 
@@ -341,8 +338,7 @@ export function ExtractionDashboard({
               subtitle="Saved lead search-results pages."
               emptyLabel="No lead extractions yet."
               jobs={leadJobs}
-              selectedId={selectedJob?.id ?? null}
-              onSelect={setSelectedJobId}
+              failedFilesFor={failedFilesFor}
               onChanged={refresh}
               labelFor={(job) => jobLabel(job, files)}
               clayConnected={clayConnected}
@@ -357,8 +353,7 @@ export function ExtractionDashboard({
               subtitle="Saved Sales Navigator account lists."
               emptyLabel="No account lists yet."
               jobs={accountJobs}
-              selectedId={selectedJob?.id ?? null}
-              onSelect={setSelectedJobId}
+              failedFilesFor={failedFilesFor}
               onChanged={refresh}
               labelFor={(job) => jobLabel(job, files)}
               clayConnected={clayConnected}
@@ -369,11 +364,7 @@ export function ExtractionDashboard({
             />
           </div>
 
-          {/* The selected run's detail, whichever board it came from. */}
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-            <FilePipeline job={selectedJob} files={selectedFiles} />
-            <TrashBox jobs={trashedJobs} labelFor={jobLabel} onRestore={refresh} />
-          </div>
+          <TrashBox jobs={trashedJobs} labelFor={jobLabel} onRestore={refresh} />
         </div>
       )}
     </div>
@@ -564,8 +555,7 @@ function HistoryBoard({
   subtitle,
   emptyLabel,
   jobs,
-  selectedId,
-  onSelect,
+  failedFilesFor,
   onChanged,
   labelFor,
   clayConnected,
@@ -578,8 +568,7 @@ function HistoryBoard({
   subtitle: string
   emptyLabel: string
   jobs: DashboardJob[]
-  selectedId: string | null
-  onSelect: (id: string) => void
+  failedFilesFor: (jobId: string) => string[]
   onChanged: () => void
   labelFor: (job: DashboardJob) => string
   clayConnected: boolean
@@ -611,8 +600,7 @@ function HistoryBoard({
               <JobHistoryRow
                 key={job.id}
                 job={job}
-                selected={selectedId === job.id}
-                onSelect={() => onSelect(job.id)}
+                failedFiles={failedFilesFor(job.id)}
                 onPurged={onChanged}
                 onDeleted={onChanged}
                 label={labelFor(job)}
@@ -676,8 +664,7 @@ function HistoryFilters({
 function JobHistoryRow({
   job,
   label,
-  selected,
-  onSelect,
+  failedFiles,
   onPurged,
   onDeleted,
   clayConnected,
@@ -686,8 +673,7 @@ function JobHistoryRow({
 }: {
   job: DashboardJob
   label: string
-  selected: boolean
-  onSelect: () => void
+  failedFiles: readonly string[]
   onPurged: () => void
   onDeleted: () => void
   clayConnected: boolean
@@ -697,9 +683,15 @@ function JobHistoryRow({
   const percent = runProgress(job)
 
   return (
-    <li className={selected ? 'bg-accent-soft/55 px-5 py-4' : 'px-5 py-4 transition-colors duration-150 hover:bg-surface-muted/70'}>
+    /*
+     * ⚠️ THE ROW IS NOT A CONTROL. It used to be a button that selected the
+     * run for the file board beside it; that board is gone, so a click would
+     * highlight and do nothing. A control with no effect is worse than plain
+     * text.
+     */
+    <li className="px-5 py-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={job.status} />
             <span className="text-sm font-semibold text-ink">{label}</span>
@@ -728,7 +720,12 @@ function JobHistoryRow({
             {isActiveJob(job) ? <span className="font-medium text-accent">{percent}% complete</span> : null}
           </div>
           {job.error_message ? <p className="mt-2 text-sm text-danger">{job.error_message}</p> : null}
-        </button>
+          {failedFiles.length > 0 ? (
+            <p className="mt-1 text-xs text-danger">
+              Failed: {failedFiles.join(', ')}
+            </p>
+          ) : null}
+        </div>
 
         {!isActiveJob(job) ? (
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -756,92 +753,6 @@ function JobHistoryRow({
       </div>
     </li>
   )
-}
-
-function FilePipeline({ job, files }: { job: DashboardJob | null; files: DashboardFile[] }) {
-  const processed = files.filter((file) => file.status === 'processed').length
-  const failed = files.filter((file) => file.status === 'failed').length
-
-  return (
-    <section className="min-w-0 w-full rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)] xl:sticky xl:top-6">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="text-base font-semibold text-ink">File pipeline</h2>
-        <p className="mt-0.5 text-sm text-muted">
-          {job ? jobLabel(job, files) : 'Select an extraction'}
-        </p>
-      </div>
-
-      {job ? (
-        <>
-          <div className="grid grid-cols-3 border-b border-border">
-            <PipelineTotal label="Total" value={files.length || job.file_count} />
-            <PipelineTotal label="Processed" value={processed} />
-            <PipelineTotal label="Failed" value={failed} danger={failed > 0} />
-          </div>
-          {files.length > 0 ? (
-            <ul className="max-h-[30rem] divide-y divide-border overflow-y-auto" data-lenis-prevent>
-              {files.map((file, index) => (
-                <li key={file.id} className="flex items-start gap-3 px-5 py-3">
-                  <FileStatusDot status={file.status} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink" title={file.original_filename}>
-                      {file.original_filename}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      File {index + 1} · {formatBytes(file.byte_size)}
-                      {file.leads_found > 0 ? ` · ${file.leads_found.toLocaleString()} leads` : ''}
-                    </p>
-                    {file.error_message ? <p className="mt-1 text-xs text-danger">{file.error_message}</p> : null}
-                  </div>
-                  <span className="text-xs font-medium capitalize text-muted">{file.status}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-5 py-8 text-center text-sm text-muted">
-              File details will appear when processing begins.
-            </p>
-          )}
-        </>
-      ) : (
-        <p className="px-5 py-8 text-center text-sm text-muted">
-          Select an extraction to inspect its files.
-        </p>
-      )}
-    </section>
-  )
-}
-
-function PipelineTotal({
-  label,
-  value,
-  danger = false,
-}: {
-  label: string
-  value: number
-  danger?: boolean
-}) {
-  return (
-    <div className="px-4 py-3 text-center">
-      <p className={`font-heading text-lg font-semibold tabular-nums ${danger ? 'text-danger' : 'text-ink'}`}>
-        {value.toLocaleString()}
-      </p>
-      <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted">{label}</p>
-    </div>
-  )
-}
-
-function FileStatusDot({ status }: { status: DashboardFile['status'] }) {
-  const className =
-    status === 'processed'
-      ? 'bg-success'
-      : status === 'failed'
-        ? 'bg-danger'
-        : status === 'processing'
-          ? 'bg-accent motion-safe:animate-pulse'
-          : 'bg-border-strong'
-
-  return <span aria-hidden className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${className}`} />
 }
 
 function StatusBadge({ status }: { status: JobStatus }) {

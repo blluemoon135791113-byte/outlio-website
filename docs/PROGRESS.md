@@ -4,6 +4,42 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Removed the File pipeline board and the delete confirm's prompt line
+
+Two removals, both requested after seeing the split board on screen.
+
+**The delete confirmation lost its "Erase everything?" line.** The two buttons
+ARE the question: "Erase" beside "Keep" reads as a confirmation without a line
+of copy repeating it. The confirmation STEP is unchanged — still two clicks.
+`role="group" aria-label="Confirm permanent deletion"` now carries the whole
+meaning for a screen reader and must not be dropped as decoration.
+
+**The File pipeline board is gone.** It was the run detail beside the history,
+showing each file's size, status and lead count.
+
+⚠️ It held one fact that lived nowhere else: WHICH file failed. Per-file errors
+are written to `uploaded_files` by the worker's per-file isolation handler and
+were surfaced only there, so a `partially_completed` run would have become
+undiagnosable. That one line moved onto the job row, rendered only when there
+is something to say ("Failed: <filenames>"). Everything else the board showed —
+totals, sizes, per-file lead counts — is either on the row already or was
+decoration.
+
+**Row selection went with it.** The row was a `<button>` whose only effect was
+choosing which run the file board described. With the board gone a click would
+highlight and do nothing, and a control with no effect is worse than plain
+text, so the row is now a plain `<li>`. `formatBytes` had no other reader and
+was deleted.
+
+The trash box, previously the narrow rail beside the file board, is now the
+full-width strip below the two history boards.
+
+Verified in the running app: only "Leads" and "Accounts" headings remain, the
+row is no longer a button, and the confirm strip reads "Erase | Keep" with its
+`aria-label` intact. Suite 1,239 passing; typecheck, lint and build clean.
+
+---
+
 ## 2026-08-29 — Split extraction board: Leads and Accounts, and an account CSV
 
 ### The board
