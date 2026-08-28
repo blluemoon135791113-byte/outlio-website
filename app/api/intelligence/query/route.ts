@@ -68,9 +68,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 'estimate', ...estimate })
   }
 
-  if (estimate.leadCount === 0) {
+  // A saved Account List can legitimately contain companies and no people.
+  // Reject only when the selected scope contains neither kind of target.
+  if (estimate.leadCount === 0 && estimate.companyCount === 0) {
     return NextResponse.json(
-      { error: { code: 'ERR_NOT_FOUND', message: 'There are no leads in that selection.' } },
+      { error: { code: 'ERR_NOT_FOUND', message: 'There are no leads or companies in that selection.' } },
       { status: 404 },
     )
   }

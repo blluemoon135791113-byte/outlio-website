@@ -17,13 +17,17 @@ export type RunUnknownReason =
   | 'provider_unavailable'
   | 'no_provider'
   | 'no_company'
+  | 'no_person'
 
 export type RunCell =
   | { state: 'known'; value: unknown; sourceUrl: string | null; sourceProvider: string }
   | { state: 'unknown'; reason?: RunUnknownReason }
 
 export type RunRow = {
-  leadId: string
+  /** NULL for a company no lead points at — an account-list company. */
+  leadId: string | null
+  /** Canonical company identity, including rows that do not have a lead. */
+  companyId: string | null
   personName: string | null
   jobTitle: string | null
   companyName: string | null
@@ -71,6 +75,7 @@ export type RunResults = {
         providerUnavailable: number
         noProvider: number
         noCompany: number
+        noPerson: number
       }
     >
   }

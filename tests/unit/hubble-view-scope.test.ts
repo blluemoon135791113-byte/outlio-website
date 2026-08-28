@@ -8,10 +8,27 @@ const ids = Array.from(
 )
 
 describe('researchScopeForView', () => {
-  it('allows the explicit All-leads state to cover the account', () => {
+  it('covers the whole workspace when nothing is filtered, so saved accounts are reachable', () => {
+    /*
+     * ⚠️ NOT `all_leads`. That scope resolves companies by walking leads, so
+     * every company from a saved account list — which has no people in it —
+     * was structurally unreachable from the macro console.
+     */
     expect(
       researchScopeForView({ batchId: null, from: null, to: null, visibleLeadIds: ids }),
-    ).toEqual({ type: 'all_leads' })
+    ).toEqual({ type: 'workspace' })
+  })
+
+  it('does not widen a filtered view back out to the workspace', () => {
+    // Applying a filter says "these people". Reaching past it to account lists
+    // the user just excluded would be spend they did not approve.
+    for (const filter of [
+      { batchId: '00000000-0000-4000-8000-000000000999', from: null, to: null },
+      { batchId: null, from: '2026-08-01', to: '2026-08-14' },
+    ]) {
+      const scope = researchScopeForView({ ...filter, visibleLeadIds: ids })
+      expect(scope?.type).toBe('lead_ids')
+    }
   })
 
   it('caps a selected extraction at the 25 visible leads', () => {

@@ -56,12 +56,16 @@ export default async function HubblePage() {
    * hardcoding a plan limit.
    */
   const liveByJob = new Map<string, number>()
+  /* Companies a lead points at. The complement of this set is what only the
+     workspace scope can reach — see `linkedCompanyIds` below. */
+  const linkedCompanyIds = new Set<string>()
+  let liveLeadCount = 0
   const PAGE = 1000
 
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from('extracted_leads')
-      .select('extraction_job_id')
+      .select('extraction_job_id, company_id')
       .eq('user_id', userId)
       .order('id', { ascending: true })
       .range(from, from + PAGE - 1)
@@ -69,11 +73,35 @@ export default async function HubblePage() {
     if (error) break
 
     const rows = data ?? []
+    liveLeadCount += rows.length
     for (const row of rows) {
+      if (row.company_id) linkedCompanyIds.add(row.company_id)
       if (!row.extraction_job_id) continue
       liveByJob.set(row.extraction_job_id, (liveByJob.get(row.extraction_job_id) ?? 0) + 1)
     }
     if (rows.length < PAGE) break
+  }
+
+  /*
+   * What an unfiltered macro question actually covers.
+   *
+   * ⚠️ STATED, NOT IMPLIED. The console's unfiltered scope is `workspace`,
+   * which researches every company the user owns — including the ones from
+   * saved account lists that no lead points at. That is strictly more than the
+   * old lead-derived scope, so the number has to be on screen: a widened blast
+   * radius the user cannot see is a spend they did not agree to.
+   */
+  const { count: companyCount } = await supabase
+    .from('companies')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+
+  const totalCompanies = companyCount ?? 0
+  const workspace = {
+    leads: liveLeadCount,
+    companies: totalCompanies,
+    // Reachable ONLY through the workspace scope. Account lists produce these.
+    unlinkedCompanies: Math.max(0, totalCompanies - linkedCompanyIds.size),
   }
 
   const nameByJob = new Map<string, string>()
@@ -100,6 +128,7 @@ export default async function HubblePage() {
       // Only the NAME crosses to the browser. Which vendors we hold keys for
       // is operational detail, not something to publish in a dashboard.
       batches={batches}
+      workspace={workspace}
     />
   )
 }

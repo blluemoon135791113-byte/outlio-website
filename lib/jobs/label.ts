@@ -30,12 +30,19 @@ export function jobYield(job: DashboardJob): string {
  * ║  produced.                                                               ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
+ * ⚠️ THE TWO ROUTES ARE NAMED, NOT ABBREVIATED. A run arrives by exactly one
+ * of two paths (rule 1): a file the user saved and uploaded, or a page the
+ * extension captured during a session they started. Those differ in what the
+ * user must do to reproduce the run and in what a support question means, so
+ * the row says which one in full — "HTML file" and "Extension list", not "HTML"
+ * and "Browser", which read as a file format beside a piece of software.
+ *
  * The source is read, never guessed: `capture_session_id` is set by the
  * extension path and NULL for an upload (migration 0032). There is no third
  * state to fall back on.
  */
-export function jobSource(job: DashboardJob): 'Browser' | 'HTML' {
-  return job.capture_session_id ? 'Browser' : 'HTML'
+export function jobSource(job: DashboardJob): 'Extension list' | 'HTML file' {
+  return job.capture_session_id ? 'Extension list' : 'HTML file'
 }
 
 export function jobLabel(job: DashboardJob) {

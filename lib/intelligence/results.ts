@@ -13,9 +13,10 @@ import 'server-only'
  * the screen (spec §49).
  */
 import { dateRangeBounds } from '@/lib/intelligence/date-range'
+import { getAllCompanies } from '@/lib/companies/repository'
 import { readEvidence } from '@/lib/intelligence/evidence-store'
 import { evidenceKey } from '@/lib/intelligence/evidence'
-import { validatePlan } from '@/lib/intelligence/plan'
+import { validatePlan, type ResearchScope } from '@/lib/intelligence/plan'
 import { dedupeRowsForPlan, shapeRowsForPlan } from '@/lib/intelligence/result-match'
 import { RESEARCH_FIELD_SPEC, type ResearchField } from '@/lib/intelligence/types'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -33,7 +34,19 @@ const MAX_ROWS = 500
  * `unknown`, which is how a run where Tavily was over its plan limit and GDELT
  * was throttled rendered as a silent wall of Unknown.
  */
-export type UnknownReason = 'not_found' | 'provider_unavailable' | 'no_provider' | 'no_company'
+export type UnknownReason =
+  | 'not_found'
+  | 'provider_unavailable'
+  | 'no_provider'
+  | 'no_company'
+  /**
+   * A person-level field on a row that has no person — an account-list company.
+   *
+   * ⚠️ NOT `not_found`. "We searched for their email and found none" and
+   * "there is nobody on this row to have an email" are different facts, and
+   * collapsing them makes a company row look like a failed person lookup.
+   */
+  | 'no_person'
 
 /**
  * ⚠️ A KNOWN CELL CARRIES HOW SURE WE ARE, NOT JUST WHAT WE FOUND.
@@ -60,7 +73,16 @@ export type ResultCell =
   | { state: 'unknown'; reason: UnknownReason }
 
 export type ResultRow = {
-  leadId: string
+  /**
+   * NULL for a company that no lead points at.
+   *
+   * ⚠️ These rows exist so macro analysis can see a saved ACCOUNT LIST. An
+   * account list contains companies and no people, so under a lead-derived
+   * result table its companies were researched and then silently dropped
+   * before the analysis ran — spend with nothing to show. A row without a
+   * person is the honest representation, not a lead with blank name fields.
+   */
+  leadId: string | null
   personName: string | null
   jobTitle: string | null
   linkedinUrl: string | null
@@ -121,6 +143,8 @@ export type FieldCoverage = {
   providerUnavailable: number
   noProvider: number
   noCompany: number
+  /** Person fields on a row with no person. Never a lookup failure. */
+  noPerson: number
 }
 
 function summarizeFieldCoverage(
@@ -135,6 +159,7 @@ function summarizeFieldCoverage(
         providerUnavailable: 0,
         noProvider: 0,
         noCompany: 0,
+        noPerson: 0,
       }
 
       for (const row of rows) {
@@ -147,6 +172,12 @@ function summarizeFieldCoverage(
         if (cell?.reason === 'provider_unavailable') summary.providerUnavailable += 1
         else if (cell?.reason === 'no_provider') summary.noProvider += 1
         else if (cell?.reason === 'no_company') summary.noCompany += 1
+        /*
+         * ⚠️ MUST NOT FALL INTO `notFound`. An account-list company has no
+         * person, so a person field was never looked up — counting it as "not
+         * found" would report a coverage failure for work nobody attempted.
+         */
+        else if (cell?.reason === 'no_person') summary.noPerson += 1
         else summary.notFound += 1
       }
 
@@ -441,7 +472,118 @@ async function loadRows(
     }
   })
 
-  return { rows, truncated }
+  /*
+   * ---- companies no lead points at ---------------------------------------
+   *
+   * ╔══════════════════════════════════════════════════════════════════════╗
+   * ║  WITHOUT THIS, RESEARCHING AN ACCOUNT LIST PRODUCES NOTHING TO READ. ║
+   * ║                                                                      ║
+   * ║  Every row above is a lead. A saved account list has no people in    ║
+   * ║  it, so its companies are researched under the `workspace` scope and ║
+   * ║  then dropped here — the run spends, reports success, and the macro  ║
+   * ║  analysis covers only the companies that happened to have employees. ║
+   * ║  Silently analysing a fraction of what was paid for is worse than    ║
+   * ║  failing, because nothing on screen says so.                         ║
+   * ╚══════════════════════════════════════════════════════════════════════╝
+   *
+   * Only for `workspace`, the one scope that researches companies directly
+   * without being handed a lead list.
+   */
+  const companyOnly =
+    scope.type === 'workspace' && rows.length <= MAX_ROWS
+      ? await loadCompanyOnlyRows(userId, {
+          columns,
+          alreadyShown: new Set(companyIds),
+          budget: MAX_ROWS - rows.length,
+          reasonByField,
+          scores,
+        })
+      : { rows: [], truncated: false }
+
+  return {
+    rows: [...rows, ...companyOnly.rows],
+    truncated: truncated || companyOnly.truncated,
+  }
+}
+
+/**
+ * Result rows for companies that no lead points at.
+ *
+ * These are almost always account-list companies. They carry company fields
+ * only: there is no person, so a person field is `no_person` rather than
+ * `not_found` — the difference between "we looked and found nothing" and
+ * "there was nobody here to look for", which a reader cannot otherwise tell.
+ */
+async function loadCompanyOnlyRows(
+  userId: string,
+  input: {
+    columns: readonly ResearchField[]
+    alreadyShown: ReadonlySet<string>
+    budget: number
+    reasonByField: ReadonlyMap<ResearchField, UnknownReason>
+    scores: ReadonlyMap<string, ScoreSummary>
+  },
+): Promise<{ rows: ResultRow[]; truncated: boolean }> {
+  if (input.budget <= 0) return { rows: [], truncated: true }
+
+  const companies = (await getAllCompanies(userId)).filter(
+    (company) => !input.alreadyShown.has(company.id),
+  )
+
+  if (companies.length === 0) return { rows: [], truncated: false }
+
+  const visible = companies.slice(0, input.budget)
+  const companyFields = input.columns.filter(
+    (field) => RESEARCH_FIELD_SPEC[field].entity === 'company',
+  )
+
+  const knowledge = await readEvidence(userId, [
+    { entityType: 'company', entityIds: visible.map((company) => company.id), fields: companyFields },
+  ])
+
+  const rows: ResultRow[] = visible.map((company) => {
+    const fields: Record<string, ResultCell> = {}
+
+    for (const field of input.columns) {
+      if (RESEARCH_FIELD_SPEC[field].entity !== 'company') {
+        fields[field] = { state: 'unknown', reason: 'no_person' }
+        continue
+      }
+
+      const found = knowledge.get(evidenceKey('company', company.id, field))
+
+      fields[field] =
+        found?.state === 'known'
+          ? {
+              state: 'known',
+              value: found.record.value,
+              sourceUrl: found.record.sourceUrl,
+              sourceProvider: found.record.sourceProvider,
+              confidence: found.confidence,
+              corroboratingProviders: [
+                ...new Set(found.corroborating.map((record) => record.sourceProvider)),
+              ],
+              conflictingProviders: [
+                ...new Set(found.conflicting.map((record) => record.sourceProvider)),
+              ],
+            }
+          : { state: 'unknown', reason: input.reasonByField.get(field) ?? 'not_found' }
+    }
+
+    return {
+      leadId: null,
+      personName: null,
+      jobTitle: null,
+      linkedinUrl: null,
+      companyId: company.id,
+      companyName: company.name,
+      companyDomain: company.normalizedDomain,
+      fields,
+      qualification: input.scores.get(company.id) ?? null,
+    }
+  })
+
+  return { rows, truncated: companies.length > visible.length }
 }
 
 type ScoreSummary = NonNullable<ResultRow['qualification']>
@@ -502,7 +644,7 @@ function formatValue(value: unknown): string {
  */
 export async function estimateScope(
   userId: string,
-  scope: { type: string; leadIds?: string[]; extractionJobId?: string; from?: string; to?: string },
+  scope: ResearchScope,
 ): Promise<{ leadCount: number; companyCount: number }> {
   const supabase = createAdminClient()
 
@@ -522,73 +664,69 @@ export async function estimateScope(
     }
   }
 
-  let leadQuery = supabase
-    .from('extracted_leads')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
+  if (scope.type === 'company_ids') {
+    const { count } = await supabase
+      .from('companies')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .in('id', scope.companyIds)
 
-  if (scope.type === 'extraction_job' && scope.extractionJobId) {
-    leadQuery = leadQuery.eq('extraction_job_id', scope.extractionJobId)
+    return { leadCount: 0, companyCount: count ?? 0 }
   }
 
-  if (scope.type === 'date_range') {
-    const bounds = dateRangeBounds(scope.from ?? '', scope.to ?? '')
-    // Same rule as the resolver: an unusable range estimates ZERO, never
-    // everything. The estimate is what a user approves a spend against.
-    if (!bounds) return { leadCount: 0, companyCount: 0 }
-    leadQuery = leadQuery
-      .gte('created_at', bounds.fromInclusive)
-      .lt('created_at', bounds.toExclusive)
-  }
+  if (scope.type === 'workspace') {
+    const [{ count: leadCount }, { count: companyCount }] = await Promise.all([
+      supabase
+        .from('extracted_leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId),
+      supabase
+        .from('companies')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId),
+    ])
 
-  const { count: leadCount } = await leadQuery
+    return { leadCount: leadCount ?? 0, companyCount: companyCount ?? 0 }
+  }
 
   /*
-   * A date range needs its OWN company count.
-   *
-   * Falling through to the workspace-wide figure would tell a user that one
-   * day's leads cost the same as researching every company they own. The
-   * estimate is what a spend is approved against, so it counts the distinct
-   * companies actually inside the range.
+   * Every remaining scope is lead-derived. Count the leads and their DISTINCT
+   * linked companies from the same paged rows, so an extraction/date estimate
+   * cannot accidentally display the workspace-wide company total. Paging is
+   * required because PostgREST otherwise returns only its first 1,000 rows.
    */
-  if (scope.type === 'date_range') {
-    const bounds = dateRangeBounds(scope.from ?? '', scope.to ?? '')
-    if (!bounds) return { leadCount: 0, companyCount: 0 }
+  const companies = new Set<string>()
+  let leadCount = 0
+  const PAGE = 1000
+  const bounds = scope.type === 'date_range' ? dateRangeBounds(scope.from, scope.to) : null
+  if (scope.type === 'date_range' && !bounds) return { leadCount: 0, companyCount: 0 }
 
-    const companies = new Set<string>()
-    const PAGE = 1000
+  for (let from = 0; ; from += PAGE) {
+    let query = supabase
+      .from('extracted_leads')
+      .select('company_id')
+      .eq('user_id', userId)
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1)
 
-    for (let from = 0; ; from += PAGE) {
-      const { data } = await supabase
-        .from('extracted_leads')
-        .select('company_id')
-        .eq('user_id', userId)
-        .gte('created_at', bounds.fromInclusive)
-        .lt('created_at', bounds.toExclusive)
-        .order('id', { ascending: true })
-        .range(from, from + PAGE - 1)
-
-      const rows = data ?? []
-      for (const row of rows) if (row.company_id) companies.add(row.company_id)
-      if (rows.length < PAGE) break
+    if (scope.type === 'extraction_job') {
+      query = query.eq('extraction_job_id', scope.extractionJobId)
     }
 
-    return { leadCount: leadCount ?? 0, companyCount: companies.size }
+    if (scope.type === 'date_range' && bounds) {
+      query = query
+        .gte('created_at', bounds.fromInclusive)
+        .lt('created_at', bounds.toExclusive)
+    }
+
+    const { data, error } = await query
+    if (error) throw new Error('Could not estimate the selected research scope.')
+
+    const rows = data ?? []
+    leadCount += rows.length
+    for (const row of rows) if (row.company_id) companies.add(row.company_id)
+    if (rows.length < PAGE) break
   }
 
-  const companyQuery = supabase
-    .from('companies')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-
-  if (scope.type === 'extraction_job') {
-    // Company counting for one job needs the lead join; approximate with the
-    // lead count rather than reporting a workspace-wide figure that would
-    // overstate the job's cost.
-    return { leadCount: leadCount ?? 0, companyCount: Math.min(leadCount ?? 0, 0) || 0 }
-  }
-
-  const { count: companyCount } = await companyQuery
-
-  return { leadCount: leadCount ?? 0, companyCount: companyCount ?? 0 }
+  return { leadCount, companyCount: companies.size }
 }

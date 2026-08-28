@@ -3,7 +3,8 @@ import type { ResearchPlan } from '@/lib/intelligence/plan'
 type MatchCell = { state: 'known'; value: unknown } | { state: 'unknown' }
 
 export type MatchableRow = {
-  leadId: string
+  /** NULL for a company no lead points at — an account-list company. */
+  leadId: string | null
   companyId: string | null
   fields: Record<string, MatchCell>
 }
@@ -14,7 +15,19 @@ export function dedupeRowsForPlan<T extends MatchableRow>(
   plan: ResearchPlan,
 ): T[] {
   return plan.entityScope === 'companies'
-    ? [...new Map(rows.map((row) => [row.companyId ?? `lead:${row.leadId}`, row])).values()]
+    ? [
+        ...new Map(
+          rows.map((row, index) => [
+            /*
+             * A row with neither id cannot be deduped against anything, so it
+             * gets a key unique to itself. Falling back to a shared constant
+             * would collapse every such row into one.
+             */
+            row.companyId ?? (row.leadId ? `lead:${row.leadId}` : `row:${index}`),
+            row,
+          ]),
+        ).values(),
+      ]
     : [...rows]
 }
 

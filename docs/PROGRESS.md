@@ -4,6 +4,40 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Hubble workspace analysis includes saved Account Lists
+
+Unfiltered Hubble questions now use an explicit `workspace` scope. That scope
+reads the tenant's canonical `companies` table directly, so companies imported
+from Sales Navigator Account Lists remain reachable even when no extracted
+lead points at them. Lead, extraction, and date filters still narrow to the
+visible people and never widen themselves back to the workspace.
+
+Completed result sets now include honest company-only rows for those accounts:
+`leadId` is null, `companyId` remains the stable identity, and person fields
+are marked `no_person` rather than `not_found`. Company-only rows are excluded
+from person-field denominators and from lead merges, preventing saved accounts
+from making email, phone, or job-title coverage look artificially poor.
+
+The Hubble header and unfiltered selector now state the widened scope and show
+the number of companies, leads, and account-list-only companies involved. A
+workspace with companies but no leads is valid; preflight rejects a selection
+only when both counts are zero. Scope estimates now count the actual selected
+companies for direct-company, extraction, date, all-leads, and workspace
+scopes instead of falling through to a workspace-wide approximation.
+
+Run source labels were also made explicit: `HTML file` and `Extension list`
+replace the ambiguous `HTML` and `Browser` abbreviations.
+
+### Verification
+
+- Full suite: 1,313 passed across 94 test files; 24 intentionally skipped.
+- TypeScript passes.
+- ESLint has zero errors; existing generated-bundle and analytics warnings
+  remain.
+- Next.js 16.3 production build passes with all 49 pages generated.
+
+---
+
 ## 2026-08-29 — Runs are named by source and yield, not by the saved filename
 
 A run's title was the uploaded file's name with `.html` stripped:

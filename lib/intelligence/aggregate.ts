@@ -39,6 +39,16 @@ type AnalysableCell = { state: 'known'; value: unknown } | { state: 'unknown' }
 export type AnalysableRow = {
   companyId?: string | null
   companyName?: string | null
+  /**
+   * NULL when the row is a company that no lead points at — the shape a saved
+   * ACCOUNT LIST produces, since it holds companies and no people.
+   *
+   * ⚠️ READ ONLY TO EXCLUDE SUCH ROWS FROM PERSON-FIELD DENOMINATORS. Left in,
+   * they would report "job title known for 25 of 50 leads" on a set where 25
+   * of the rows are not people and were never looked up — a coverage figure
+   * that understates the real answer and blames the research for it.
+   */
+  leadId?: string | null
   fields: Record<string, AnalysableCell | undefined>
 }
 
@@ -138,7 +148,15 @@ function fieldEntity(field: string): EntityType {
  * known value over an earlier unknown row; person facts remain one row per lead.
  */
 function rowsForField(field: string, rows: readonly AnalysableRow[]): AnalysableRow[] {
-  if (fieldEntity(field) !== 'company') return [...rows]
+  if (fieldEntity(field) !== 'company') {
+    /*
+     * A person field is counted over people. A row carrying an explicit null
+     * `leadId` has no person, so it is not a denominator for one. Rows that
+     * omit the key entirely are unaffected — callers that never had the notion
+     * keep their previous behaviour.
+     */
+    return rows.filter((row) => row.leadId !== null)
+  }
 
   const companies = new Map<string, AnalysableRow>()
   rows.forEach((row, index) => {

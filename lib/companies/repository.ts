@@ -187,6 +187,57 @@ export async function getCompaniesForLeads(
 }
 
 /**
+ * Every company the user owns, whatever route it arrived by.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  THE ONLY READ THAT SEES AN ACCOUNT LIST.                                ║
+ * ║                                                                          ║
+ * ║  `getCompaniesForLeads` walks leads to reach companies, so a company     ║
+ * ║  with no lead pointing at it cannot be returned by it — and that is      ║
+ * ║  EVERY company a saved account list produced, since an account list has  ║
+ * ║  no person in it at all. Widening the lead scope does not help; the hop  ║
+ * ║  itself is the barrier.                                                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Paged rather than a single select: PostgREST caps a response at 1000 rows by
+ * default, so an unpaged read would silently return a prefix — the analysis
+ * would run, look healthy, and cover a fraction of the workspace.
+ */
+export async function getAllCompanies(userId: string): Promise<CompanyRecord[]> {
+  if (!userId) throw new Error('getAllCompanies: userId is required')
+
+  const supabase = createAdminClient()
+  const companies: CompanyRecord[] = []
+
+  for (let from = 0; ; from += QUERY_BATCH_SIZE) {
+    const { data, error } = await supabase
+      .from('companies')
+      .select('id, name, normalized_domain, normalized_linkedin_url, normalized_name')
+      // Service role bypasses RLS — scoping by user_id is mandatory.
+      .eq('user_id', userId)
+      .order('id', { ascending: true })
+      .range(from, from + QUERY_BATCH_SIZE - 1)
+
+    if (error) throw new Error(`getAllCompanies failed: ${concise(error.message)}`)
+
+    const rows = data ?? []
+    for (const row of rows) {
+      companies.push({
+        id: row.id,
+        name: row.name,
+        normalizedDomain: row.normalized_domain,
+        normalizedLinkedInUrl: row.normalized_linkedin_url,
+        normalizedName: row.normalized_name,
+      })
+    }
+
+    if (rows.length < QUERY_BATCH_SIZE) break
+  }
+
+  return companies
+}
+
+/**
  * Loads companies by id, regardless of whether any lead points at them.
  *
  * The maintenance counterpart to `getCompaniesForLeads`: over a thousand

@@ -35,16 +35,16 @@ function job(overrides: Partial<DashboardJob> = {}): DashboardJob {
 
 describe('jobSource', () => {
   it('reads the capture session rather than guessing', () => {
-    expect(jobSource(job({ capture_session_id: null }))).toBe('HTML')
+    expect(jobSource(job({ capture_session_id: null }))).toBe('HTML file')
     expect(
       jobSource(job({ capture_session_id: '11111111-1111-4111-8111-111111111111' })),
-    ).toBe('Browser')
+    ).toBe('Extension list')
   })
 })
 
 describe('jobLabel', () => {
   it('names a finished run by source and what it produced', () => {
-    expect(jobLabel(job())).toBe('HTML · 25 leads')
+    expect(jobLabel(job())).toBe('HTML file · 25 leads')
   })
 
   it('never carries the saved page’s filename', () => {
@@ -59,7 +59,7 @@ describe('jobLabel', () => {
     const label = jobLabel(
       job({ kind: 'account_list', accounts_created: 18, accounts_matched: 7, leads_kept: 0 }),
     )
-    expect(label).toBe('HTML · 25 companies')
+    expect(label).toBe('HTML file · 25 companies')
   })
 
   it('does not state a final count while the run is still going', () => {
@@ -69,16 +69,16 @@ describe('jobLabel', () => {
      * pattern. An active run is named by its size instead.
      */
     const label = jobLabel(job({ status: 'processing', file_count: 3, leads_kept: 0 }))
-    expect(label).toBe('HTML · 3 files')
+    expect(label).toBe('HTML file · 3 files')
     expect(label).not.toContain('0 leads')
   })
 
   it('singularises both units', () => {
-    expect(jobLabel(job({ leads_kept: 1 }))).toBe('HTML · 1 lead')
+    expect(jobLabel(job({ leads_kept: 1 }))).toBe('HTML file · 1 lead')
     expect(
       jobLabel(job({ kind: 'account_list', accounts_created: 1, accounts_matched: 0 })),
-    ).toBe('HTML · 1 company')
-    expect(jobLabel(job({ status: 'processing', file_count: 1 }))).toBe('HTML · 1 file')
+    ).toBe('HTML file · 1 company')
+    expect(jobLabel(job({ status: 'processing', file_count: 1 }))).toBe('HTML file · 1 file')
   })
 })
 

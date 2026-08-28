@@ -93,7 +93,19 @@ export function BatchFilter({
             ⌕
           </span>
           <span className="flex-1 truncate text-ink">
-            {selected ? batchLabel(selected) : bounds ? 'All leads in date range' : 'All leads'}
+            {/*
+              * ⚠️ THE UNFILTERED STATE IS NOT "ALL LEADS" ANY MORE.
+              *
+              * With nothing selected the console researches the whole
+              * workspace: every company, including those from saved account
+              * lists that no lead points at. A date range still narrows to
+              * leads, so its wording is unchanged.
+              */}
+            {selected
+              ? batchLabel(selected)
+              : bounds
+                ? 'All leads in date range'
+                : 'All leads and accounts'}
           </span>
           {selected ? (
             <span

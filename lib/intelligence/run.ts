@@ -21,7 +21,7 @@ import { createHash } from 'node:crypto'
  * Steps 2 and 3 are where the money is saved. Skipping either turns a £2 query
  * into a £200 one.
  */
-import { getCompaniesByIds, getCompaniesForLeads } from '@/lib/companies/repository'
+import { getAllCompanies, getCompaniesByIds, getCompaniesForLeads } from '@/lib/companies/repository'
 import { dateRangeBounds } from '@/lib/intelligence/date-range'
 import { deriveAll, derivedEvidence } from '@/lib/intelligence/derive'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
@@ -508,6 +508,25 @@ export async function answerClarifications(
 async function resolveScope(userId: string, scope: ResearchScope): Promise<string[]> {
   if (scope.type === 'lead_ids') return scope.leadIds
 
+  /*
+   * ⚠️ THE SCOPES ALLOWED TO REACH THE QUERY BELOW ARE NAMED, NOT ASSUMED.
+   *
+   * That query returns the user's ENTIRE lead table unless a branch narrows
+   * it, and the narrowing branches are opt-in. So without this guard any scope
+   * type added later inherits the widest possible read simply by matching no
+   * branch — an unbounded spend arriving through an omission. Of the four
+   * named, only `all_leads` and `workspace` actually mean every lead; the
+   * other two narrow below.
+   */
+  if (
+    scope.type !== 'all_leads' &&
+    scope.type !== 'workspace' &&
+    scope.type !== 'extraction_job' &&
+    scope.type !== 'date_range'
+  ) {
+    return []
+  }
+
   const supabase = createAdminClient()
   const ids: string[] = []
 
@@ -629,7 +648,15 @@ export async function processResearchRun(
   const { companies } =
     scope.type === 'company_ids'
       ? { companies: await getCompaniesByIds(userId, scope.companyIds) }
-      : await getCompaniesForLeads(userId, leadIds)
+      : scope.type === 'workspace'
+        ? /*
+           * ⚠️ NOT `getCompaniesForLeads(everyLead)`. That walks leads to reach
+           * companies, so it can never return a company no lead points at —
+           * which is every company a saved ACCOUNT LIST produced. Reading the
+           * companies directly is the only way macro analysis sees them.
+           */
+          { companies: await getAllCompanies(userId) }
+        : await getCompaniesForLeads(userId, leadIds)
 
   const companyEntities: CompanyEntity[] = companies.map((company) => ({
     type: 'company',
@@ -711,7 +738,8 @@ export async function processResearchRun(
         : undefined,
   }
 
-  const chunked = scope.type === 'all_leads' || scope.type === 'company_ids'
+  const chunked =
+    scope.type === 'all_leads' || scope.type === 'company_ids' || scope.type === 'workspace'
   const runChunk = async (tasks: readonly ResearchTask[]) =>
     chunked ? executeTasksInChunks(tasks, executionOptions, 25) : executeTasks(tasks, executionOptions)
 

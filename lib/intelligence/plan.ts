@@ -52,6 +52,26 @@ export const researchScopeSchema = z.discriminatedUnion('type', [
    * so a missing scope can never silently become "spend money on everything".
    */
   z.object({ type: z.literal('all_leads') }),
+  /**
+   * Everything the user owns: every lead, AND every company — including the
+   * ones that arrived on a saved ACCOUNT LIST and are attached to no lead at
+   * all.
+   *
+   * ╔════════════════════════════════════════════════════════════════════════╗
+   * ║  THIS IS THE ONE SCOPE THAT REACHES AN ACCOUNT LIST.                   ║
+   * ║                                                                        ║
+   * ║  `all_leads` resolves companies by walking leads, so a company with no ║
+   * ║  lead pointing at it is structurally unreachable — which is every      ║
+   * ║  company an account list produced. Macro analysis over accounts is     ║
+   * ║  therefore impossible under any lead-derived scope, no matter how wide.║
+   * ║                                                                        ║
+   * ║  It is NOT a superset shortcut for `all_leads`: it deliberately costs  ║
+   * ║  more, because it researches strictly more companies. It stays its own ║
+   * ║  case so that widening the blast radius is always something the caller ║
+   * ║  chose and can be read in a diff.                                      ║
+   * ╚════════════════════════════════════════════════════════════════════════╝
+   */
+  z.object({ type: z.literal('workspace') }),
 ])
 
 export type ResearchScope = z.infer<typeof researchScopeSchema>

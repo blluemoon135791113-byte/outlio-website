@@ -211,6 +211,77 @@ describe('the macro answer is the analysis', () => {
   })
 })
 
+/**
+ * A company that arrived on a saved ACCOUNT LIST: no person, so no lead id.
+ * `companyId` is set because the company is real and must dedupe against
+ * itself; the person fields are `no_person`, which is not a lookup failure.
+ */
+function accountRow(id: string, fields: Record<string, unknown>): ResultRow {
+  const base = row(id, fields, `Account ${id}`)
+  return {
+    ...base,
+    leadId: null,
+    personName: null,
+    companyId: `company-${id}`,
+    fields: Object.fromEntries(
+      Object.entries(base.fields).map(([key, cell]) => [
+        key,
+        cell.state === 'unknown' ? { state: 'unknown' as const, reason: 'no_person' as const } : cell,
+      ]),
+    ),
+  }
+}
+
+describe('account-list companies in a macro analysis', () => {
+  it('counts a company that no lead points at', () => {
+    /*
+     * ⚠️ THE WHOLE POINT OF THE WORKSPACE SCOPE. An account list holds
+     * companies and no people, so before these rows existed its companies were
+     * researched and then dropped before the analysis — spend with nothing to
+     * show for it.
+     */
+    const analysis = analyseRun(
+      ['industry'],
+      [row('1', { industry: 'Software' }), accountRow('2', { industry: 'Retail' })],
+    )
+
+    const industry = analysis.distributions[0]!
+    expect(industry.base).toBe(2)
+    expect(industry.known).toBe(2)
+    expect(industry.buckets.map((bucket) => bucket.label).sort()).toEqual(['Retail', 'Software'])
+  })
+
+  it('⚠️ does not put a person-less row in a person field’s denominator', () => {
+    /*
+     * "Job title known for 1 of 2 leads" would be a coverage failure invented
+     * by the analysis: the second row is a company, has no person, and was
+     * never looked up. It must not dilute the figure.
+     */
+    const analysis = analyseRun(
+      ['job_title'],
+      [row('1', { job_title: 'Founder' }), accountRow('2', { job_title: undefined })],
+    )
+
+    const jobTitle = analysis.distributions[0]!
+    expect(jobTitle.entity).toBe('person')
+    expect(jobTitle.base).toBe(1)
+    expect(jobTitle.known).toBe(1)
+    expect(jobTitle.unknown).toBe(0)
+  })
+
+  it('still counts ordinary leads in a person field', () => {
+    // The exclusion must key on an explicit null, not on anything else that
+    // happens to be missing, or it would quietly shrink normal analyses.
+    const analysis = analyseRun(
+      ['job_title'],
+      [row('1', { job_title: 'Founder' }), row('2', { job_title: undefined })],
+    )
+
+    expect(analysis.distributions[0]!.base).toBe(2)
+    expect(analysis.distributions[0]!.unknown).toBe(1)
+  })
+})
+
 describe('coverage', () => {
   it('⚠️ ranks the THINNEST column first', () => {
     /*

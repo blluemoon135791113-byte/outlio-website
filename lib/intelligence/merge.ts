@@ -71,6 +71,12 @@ export function buildMergePlan(
   let unknownCells = 0
 
   for (const row of results.rows) {
+    /*
+     * ⚠️ A COMPANY-ONLY ROW HAS NO LEAD TO MERGE ONTO. Its findings live on
+     * the company and are already stored as evidence; keying a lead patch by
+     * a null id would write every such row into one bucket named "null".
+     */
+    if (row.leadId === null) continue
     if (onlyLeads && !onlyLeads.has(row.leadId)) continue
 
     const patch: LeadEnrichmentPatch = {}

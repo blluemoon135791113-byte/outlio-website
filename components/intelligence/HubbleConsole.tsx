@@ -327,9 +327,12 @@ function toHubbleLead(
 export function HubbleConsole({
   userId,
   batches,
+  workspace,
 }: {
   userId: string
   batches: LeadBatch[]
+  /** What an unfiltered macro question covers. See the header copy below. */
+  workspace: { leads: number; companies: number; unlinkedCompanies: number }
 }) {
   const supabase = useMemo(() => createClient(), [])
 
@@ -584,8 +587,28 @@ export function HubbleConsole({
         <h1 className="text-[34px] font-semibold leading-[1.1] tracking-[-0.04em] text-ink">
           Hubble
         </h1>
+        {/*
+          * ⚠️ THE TWO SCALES ARE NAMED SEPARATELY BECAUSE THEY ANSWER
+          * DIFFERENT QUESTIONS, AND THIS PAGE IS ONLY ONE OF THEM.
+          *
+          * This prompt bar is MACRO: it aggregates across companies — the ones
+          * behind lead extractions and the ones from saved account lists, one
+          * set, because they are the same firms in the same table. MICRO is a
+          * single person, and lives in the lead modal below, not here. Saying
+          * "micro and macro" on the macro bar invited people to ask it about
+          * one individual and get a distribution back.
+          */}
         <p className="mt-2 text-[15px] leading-relaxed text-muted">
-          Data analysis at the micro and macro scale, across all prospects.
+          Analysis across every company you hold — from lead extractions and
+          saved account lists alike. Open a lead below to ask about one person.
+        </p>
+        <p className="mt-1 text-[13px] text-muted">
+          {workspace.companies.toLocaleString()} compan
+          {workspace.companies === 1 ? 'y' : 'ies'} ·{' '}
+          {workspace.leads.toLocaleString()} lead{workspace.leads === 1 ? '' : 's'}
+          {workspace.unlinkedCompanies > 0
+            ? ` · ${workspace.unlinkedCompanies.toLocaleString()} from account lists only`
+            : ''}
         </p>
       </header>
 

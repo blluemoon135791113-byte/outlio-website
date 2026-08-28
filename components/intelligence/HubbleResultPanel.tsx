@@ -610,7 +610,8 @@ function ContactResults({
       </div>
       <ul className="divide-y divide-border/70">
         {matches.map(({ row, values }) => (
-          <li key={row.leadId} className="py-2 first:pt-0 last:pb-0">
+          /* A company-only row has no lead id; `companyId` is its identity. */
+          <li key={row.leadId ?? row.companyId} className="py-2 first:pt-0 last:pb-0">
             <p className="truncate text-xs font-semibold text-ink">
               {row.personName ?? 'Unnamed lead'}
             </p>
