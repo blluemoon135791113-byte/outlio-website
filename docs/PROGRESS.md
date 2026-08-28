@@ -4,6 +4,45 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — Google CSE: diagnosed to the console, cannot be finished in code
+
+### The blocker is a KEY RESTRICTION, not just API enablement
+
+Probing the same key against two other Google APIs returns:
+
+    403 — Requests to this API translate method ... are blocked.
+    403 — Requests to this API books method ... are blocked.
+
+That wording is Google's **API-key restriction** message, not the
+project-level "has not been used in project N before" one. So the key is locked
+to an allow-list of APIs and Custom Search is not on it. The Custom Search 403
+carries no project number and no activation link, so the owning project cannot
+be identified programmatically — I probed for one and Google does not return it
+for this API.
+
+⚠️ **This cannot be finished from the repo.** It needs the Google Cloud console
+on the account owning the key: enable **Custom Search API**, and add it to the
+key's API restrictions. Claude in Chrome is not connected, and the in-app
+browser has no Google session — entering credentials is not something I do.
+
+### The env fix did NOT create a regression
+
+Worth checking rather than assuming: `isConfigured()` is now true, so the
+provider occupies a waterfall slot and every call returns `[]` via its catch.
+`serp.ts` treats zero hits as a failure, sidelines the engine for a cooldown,
+and falls through to the next one. Tavily and Serper are both configured, so
+live search still works; the cost is one wasted request per cooldown window,
+not degraded results.
+
+### Still to do on the Google side
+
+After enabling, the `cx` must be set to search **the entire web**. A `cx`
+scoped to specific sites returns almost nothing and looks exactly like a broken
+key — `google-cse.ts` warns about this in its own header, and it cannot be
+tested until the API responds.
+
+---
+
 ## 2026-08-28 — Google CSE: credentials were fine, the API is not enabled
 
 ### Correcting an earlier claim
