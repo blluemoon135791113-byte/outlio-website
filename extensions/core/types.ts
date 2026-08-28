@@ -40,12 +40,15 @@ export type StoredAuth = {
 
 /** A page the adapter judged ready to send. */
 export type CapturedPage = {
+  sourceType: CaptureSourceType
   html: string
   sourceUrl: string
   pageName: string
   pageIdentifier: string | null
   contentHash: string
 }
+
+export type CaptureSourceType = 'salesnav_lead_results' | 'salesnav_account_list'
 
 /** Everything a company page yielded. See adapters/salesnav-company.ts. */
 export type CompanyObservationMessage = {
@@ -77,6 +80,7 @@ export type DedupeMode = 'remove_exact' | 'remove_likely' | 'review' | 'keep_all
  */
 export interface PageAdapter {
   readonly id: string
+  readonly sourceType: CaptureSourceType
   /** Is this a page this adapter understands? */
   supports(url: string): boolean
   /** Have the results finished rendering? */

@@ -20,6 +20,7 @@ import { toCsv, type CsvColumn } from '@/lib/export/sanitize'
 import { ALWAYS_EXPORTED, EXPORT_COLUMN_HEADERS } from '@/lib/export/leads'
 import { dedupeLeads, type DedupeMode, type KeyedLead } from '@/lib/leads/dedupe'
 import { ParseError, parseSearchResults } from '@/lib/leads/parse'
+import { detectSavedPageType } from '@/lib/leads/page-type'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SNIFF_BYTES, sniffHtml } from '@/lib/upload/sniff'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
@@ -546,6 +547,31 @@ async function parseOne(storagePath: string, fileId: string, userId: string, job
   // Decode with the encoding the sniffer detected, not a hardcoded UTF-8 —
   // that assumption is defect G3 in the original scraper.
   const html = new TextDecoder(sniff.encoding, { fatal: false }).decode(bytes)
+
+  /*
+   * ⚠️ ROUTE BEFORE PARSING, SO A VALID FILE IS NOT CALLED BROKEN.
+   *
+   * An Account Hub page fed to the lead parser yields zero leads, which is
+   * correctly raised as ERR_FILE_FORMAT — and is nonetheless the wrong answer:
+   * the file was fine, we pointed the wrong reader at it. The user then gets
+   * "this page could not be read" for a page we can read, and no hint that
+   * they uploaded the wrong KIND of export.
+   *
+   * Account lists are parsed by `lib/companies/parse-account-list.ts`, but
+   * this pipeline persists LEADS — companies have no ingestion path yet — so
+   * for now the file is refused with a message that names what it actually is.
+   * That is a smaller lie than "malformed", and it is the honest state until
+   * company ingestion exists.
+   */
+  const pageType = detectSavedPageType(html)
+  if (pageType === 'account_list') {
+    throw new ParseError(
+      'ERR_FILE_FORMAT',
+      'this is a Sales Navigator account list, not a lead search-results page — ' +
+        'account lists cannot be extracted yet',
+    )
+  }
+
   return parseSearchResults(html)
 }
 

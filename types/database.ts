@@ -3929,6 +3929,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      upsert_companies: {
+        Args: { p_companies: Json; p_user_id: string }
+        Returns: {
+          company_id: string
+          created: boolean
+          match_strategy: string
+        }[]
+      }
     }
     Enums: {
       access_request_status:

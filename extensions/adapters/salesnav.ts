@@ -28,6 +28,8 @@
  * parser. Only volatile and executable content is removed.
  */
 import type { CaptureOptions, CapturedPage, PageAdapter } from '../core/types'
+import { sanitizePageElement, sha256Hex } from '../core/page-snapshot'
+import { salesNavAccountListAdapter } from './salesnav-account-list'
 
 /** Row anchors, in the order the backend parser tries them. */
 const LIST_ROW = 'li.artdeco-list__item'
@@ -39,48 +41,6 @@ const CONTAINER_CANDIDATES = ['ol.artdeco-list', 'table', 'main']
 const SETTLE_QUIET_MS = 600
 const SETTLE_MAX_MS = 3_000
 const COMPANY_HOVER_SETTLE_MS = 250
-
-/** Elements that carry no parseable data and may carry secrets. */
-const DROP_ELEMENTS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'IMG', 'CANVAS', 'IFRAME'])
-
-/** Volatile or executable attributes. `id` is the per-render Ember id. */
-function keepAttribute(name: string): boolean {
-  if (name === 'id' || name === 'style') return false
-  if (name.startsWith('on')) return false
-  if (name.startsWith('aria-')) return false
-  return true
-}
-
-function sanitize(node: Element): Element | null {
-  if (DROP_ELEMENTS.has(node.tagName)) return null
-
-  const clone = node.cloneNode(false) as Element
-
-  for (const attr of Array.from(node.attributes)) {
-    if (!keepAttribute(attr.name)) clone.removeAttribute(attr.name)
-  }
-
-  for (const child of Array.from(node.childNodes)) {
-    if (child.nodeType === Node.TEXT_NODE) {
-      clone.appendChild(child.cloneNode(false))
-      continue
-    }
-    if (child.nodeType !== Node.ELEMENT_NODE) continue
-
-    const cleaned = sanitize(child as Element)
-    if (cleaned) clone.appendChild(cleaned)
-  }
-
-  return clone
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
 
 function rowCount(): number {
   const rows = document.querySelectorAll(`${LIST_ROW}, ${TABLE_ROW}`)
@@ -254,6 +214,7 @@ function waitForResultsToSettle(container: Element): Promise<void> {
 
 export const salesNavAdapter: PageAdapter = {
   id: 'salesnav',
+  sourceType: 'salesnav_lead_results',
 
   supports(url: string): boolean {
     try {
@@ -329,7 +290,7 @@ export const salesNavAdapter: PageAdapter = {
      */
     if (options?.includeCompanyWebsites !== false) await revealCompanyDetails(container)
 
-    const cleaned = sanitize(container)
+    const cleaned = sanitizePageElement(container)
     if (!cleaned) throw new Error('results container could not be read')
 
     // Wrapped in a minimal document so the backend's content sniffing sees a
@@ -340,6 +301,7 @@ export const salesNavAdapter: PageAdapter = {
       + '</body></html>'
 
     return {
+      sourceType: 'salesnav_lead_results',
       html,
       sourceUrl: window.location.href.split('#')[0]!,
       pageName: salesNavAdapter.getPageName(),
@@ -349,7 +311,7 @@ export const salesNavAdapter: PageAdapter = {
   },
 }
 
-export const ADAPTERS: PageAdapter[] = [salesNavAdapter]
+export const ADAPTERS: PageAdapter[] = [salesNavAccountListAdapter, salesNavAdapter]
 
 export function adapterFor(url: string): PageAdapter | null {
   return ADAPTERS.find((a) => a.supports(url)) ?? null
