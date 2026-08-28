@@ -150,3 +150,49 @@ describe('account list ingestion mapping', () => {
     expect(toIngestPayload([])).toEqual({ payload: [], unidentified: 0 })
   })
 })
+
+describe('the whole chain, on the real fixture', () => {
+  /*
+   * ⚠️ THE UNIT TESTS ABOVE USE SYNTHETIC ROWS. This one runs the ACTUAL saved
+   * Account Hub markup through every stage a real upload takes — detect,
+   * parse, map — because the bugs that survive unit tests are the ones between
+   * two components that each pass their own.
+   */
+  const html = readFileSync('tests/fixtures/html/account-list-valid.html', 'utf8')
+
+  it('routes, parses and maps without losing a company', () => {
+    expect(detectSavedPageType(html)).toBe('account_list')
+
+    const parsed = parseAccountList(html)
+    expect(parsed.accounts.length).toBeGreaterThan(0)
+
+    const { payload, unidentified } = toIngestPayload(parsed.accounts)
+
+    // Nothing may vanish between parsing and the upsert payload.
+    expect(payload.length + unidentified).toBe(parsed.accounts.length)
+  })
+
+  it('gives every payload row something the database can dedupe on', () => {
+    /*
+     * `companies_has_identity` (0043) rejects a row carrying no normalized
+     * name, domain or LinkedIn URL. A payload row that fails it would be
+     * skipped by the RPC and silently lost, so the mapping must never emit one.
+     */
+    const { payload } = toIngestPayload(parseAccountList(html).accounts)
+
+    for (const row of payload) {
+      const identified =
+        Boolean(row.normalized_name) ||
+        Boolean(row.normalized_domain) ||
+        Boolean(row.normalized_linkedin_url)
+      expect(identified).toBe(true)
+    }
+  })
+
+  it('never emits a Sales Navigator URL as the company identity', () => {
+    const { payload } = toIngestPayload(parseAccountList(html).accounts)
+    for (const row of payload) {
+      expect(row.normalized_linkedin_url ?? '').not.toContain('/sales/')
+    }
+  })
+})

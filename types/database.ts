@@ -975,11 +975,24 @@ export type CompanySignalRow = {
   created_at: string
 }
 
+// ===========================================================================
+// ⚠️ HAND-WRITTEN ABOVE THE GENERATED TYPES. DO NOT OVERWRITE THIS FILE.
+//
+// `supabase gen types typescript --linked > types/database.ts` replaces the
+// WHOLE file and silently deletes everything in this block — roughly two dozen
+// aliases (`ProfileRow`, `ExtractionJobRow`, `PlanLimits`, `JobStatus`, …)
+// that the app imports directly. That is exactly how this section was lost
+// once already: forty type errors, none of which name the real cause.
+//
+// To regenerate safely, write the generated output somewhere else and splice
+// it in below this banner, keeping everything above it.
+// ===========================================================================
+
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -1824,7 +1837,6 @@ export type Database = {
           accounts_matched: number
           accounts_parsed: number
           accounts_unidentified: number
-          kind: string
           capture_session_id: string | null
           completed_at: string | null
           created_at: string
@@ -1840,6 +1852,7 @@ export type Database = {
           export_storage_path: string | null
           file_count: number
           id: string
+          kind: string
           leads_kept: number
           leads_parsed: number
           progress_current: number
@@ -1858,7 +1871,6 @@ export type Database = {
           accounts_matched?: number
           accounts_parsed?: number
           accounts_unidentified?: number
-          kind?: string
           capture_session_id?: string | null
           completed_at?: string | null
           created_at?: string
@@ -1874,6 +1886,7 @@ export type Database = {
           export_storage_path?: string | null
           file_count?: number
           id?: string
+          kind?: string
           leads_kept?: number
           leads_parsed?: number
           progress_current?: number
@@ -1892,7 +1905,6 @@ export type Database = {
           accounts_matched?: number
           accounts_parsed?: number
           accounts_unidentified?: number
-          kind?: string
           capture_session_id?: string | null
           completed_at?: string | null
           created_at?: string
@@ -1908,6 +1920,7 @@ export type Database = {
           export_storage_path?: string | null
           file_count?: number
           id?: string
+          kind?: string
           leads_kept?: number
           leads_parsed?: number
           progress_current?: number
@@ -3097,18 +3110,18 @@ export type Database = {
           error_code: string | null
           error_message: string | null
           estimated_cost_micros: number
-          external_call_count: number
           evidence_gaps: Json
+          external_call_count: number
           id: string
           idempotency_key: string | null
           lead_count: number
           plan: Json | null
-          qualification_profile_id: string | null
-          qualified_count: number
-          query_text: string
           progress_current: number
           progress_stage: string
           progress_total: number
+          qualification_profile_id: string | null
+          qualified_count: number
+          query_text: string
           scope: Json
           started_at: string | null
           status: string
@@ -3127,18 +3140,18 @@ export type Database = {
           error_code?: string | null
           error_message?: string | null
           estimated_cost_micros?: number
-          external_call_count?: number
           evidence_gaps?: Json
+          external_call_count?: number
           id?: string
           idempotency_key?: string | null
           lead_count?: number
           plan?: Json | null
-          qualification_profile_id?: string | null
-          qualified_count?: number
-          query_text: string
           progress_current?: number
           progress_stage?: string
           progress_total?: number
+          qualification_profile_id?: string | null
+          qualified_count?: number
+          query_text: string
           scope?: Json
           started_at?: string | null
           status?: string
@@ -3157,18 +3170,18 @@ export type Database = {
           error_code?: string | null
           error_message?: string | null
           estimated_cost_micros?: number
-          external_call_count?: number
           evidence_gaps?: Json
+          external_call_count?: number
           id?: string
           idempotency_key?: string | null
           lead_count?: number
           plan?: Json | null
-          qualification_profile_id?: string | null
-          qualified_count?: number
-          query_text?: string
           progress_current?: number
           progress_stage?: string
           progress_total?: number
+          qualification_profile_id?: string | null
+          qualified_count?: number
+          query_text?: string
           scope?: Json
           started_at?: string | null
           status?: string
@@ -3539,6 +3552,89 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      web_research_cache: {
+        Row: {
+          cache_key: string
+          expires_at: string
+          namespace: string
+          value: Json
+        }
+        Insert: {
+          cache_key: string
+          expires_at: string
+          namespace: string
+          value: Json
+        }
+        Update: {
+          cache_key?: string
+          expires_at?: string
+          namespace?: string
+          value?: Json
+        }
+        Relationships: []
+      }
+      web_research_jobs: {
+        Row: {
+          created_at: string
+          error: Json | null
+          id: string
+          output: Json | null
+          request: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error?: Json | null
+          id: string
+          output?: Json | null
+          request: Json
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error?: Json | null
+          id?: string
+          output?: Json | null
+          request?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      web_research_lead_results: {
+        Row: {
+          job_id: string
+          lead_id: string
+          output: Json
+          researched_at: string
+          tenant_id: string
+        }
+        Insert: {
+          job_id: string
+          lead_id: string
+          output: Json
+          researched_at?: string
+          tenant_id: string
+        }
+        Update: {
+          job_id?: string
+          lead_id?: string
+          output?: Json
+          researched_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "web_research_lead_results_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "web_research_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

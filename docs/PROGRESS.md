@@ -4,6 +4,53 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — Migrations applied; recovered the types file after regeneration
+
+### 0065 and 0066 are live
+
+Confirmed against the regenerated types: `upsert_companies` and the
+`extraction_jobs` account columns are present. **The account list path is now
+unblocked end to end.**
+
+⚠️ The hand-written RPC signature matched the applied SQL exactly —
+`Args: { p_companies: Json; p_user_id: string }`,
+`Returns: { company_id, created, match_strategy }[]`. The guess was right, and
+the generated file is now the source of truth for it.
+
+### The regeneration deleted 969 lines and broke the build
+
+`supabase gen types typescript --linked > types/database.ts` replaces the
+**whole file**. That file was not purely generated: lines 1–977 were
+hand-written aliases — `ProfileRow`, `ExtractionJobRow`, `PlanLimits`,
+`JobStatus`, `DedupeMode` and about twenty more — imported directly across the
+app. The redirect silently discarded all of them.
+
+Result: **40 type errors**, none of which name the real cause. They read as
+"has no exported member 'ProfileRow'" scattered across unrelated files, which
+looks like twenty separate breakages rather than one deleted block.
+
+Restored from `HEAD` and spliced above the generated `Database` type. A banner
+now sits at the seam explaining that this file is not safe to overwrite and how
+to regenerate without losing the block — the failure is silent and expensive
+enough to be worth the eleven lines.
+
+### Also added
+
+An end-to-end test over the REAL Account Hub fixture: detect → parse → map.
+The existing mapping tests used synthetic rows, and the bugs that survive unit
+tests are the ones between two components that each pass their own. It asserts
+nothing is lost between parsing and payload, that every payload row satisfies
+`companies_has_identity` (0043) — a row failing it would be skipped by the RPC
+and silently vanish — and that no Sales Navigator URL survives as an identity.
+
+### Verification
+
+- Typecheck, ESLint (0 errors) and production build clean. **1,234 tests.**
+- ⚠️ Not yet exercised: a real account-list upload against the live schema.
+  The SQL is applied and the types match, but no run has been performed.
+
+---
+
 ## 2026-08-28 — Google CSE retired; search runs through the MCP
 
 ### It cannot be enabled, so it is disabled
