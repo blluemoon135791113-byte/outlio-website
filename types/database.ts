@@ -288,6 +288,16 @@ export type ExtractionJobRow = {
   progress_total: number
   leads_parsed: number
   leads_kept: number
+  /**
+   * What this run ingests. `lead_search` yields people; `account_list` yields
+   * companies. Set by the worker from the detected page type — the browser
+   * does not know what is inside the file it uploaded. See migration 0066.
+   */
+  kind: 'lead_search' | 'account_list'
+  accounts_parsed: number
+  accounts_created: number
+  accounts_matched: number
+  accounts_unidentified: number
   duplicates_found: number
   duplicates_removed: number
   export_storage_path: string | null

@@ -220,7 +220,8 @@ export function ExtractionDashboard({
       acc.files += FINISHED_JOB_STATUSES.has(job.status)
         ? job.file_count
         : Math.min(job.progress_current, job.file_count)
-      acc.leads += job.leads_kept
+      // Only lead runs contribute to the lead total.
+      if (job.kind !== 'account_list') acc.leads += job.leads_kept
       acc.duplicates += job.duplicates_removed
       if (FINISHED_JOB_STATUSES.has(job.status)) acc.completed += 1
       return acc
@@ -483,6 +484,23 @@ function CaughtUp({ latestJob }: { latestJob: DashboardJob | null }) {
   )
 }
 
+/**
+ * What a run produced, in its own units.
+ *
+ * ⚠️ AN ACCOUNT RUN IS NOT A LEAD RUN WITH ZERO LEADS. Reading `leads_kept`
+ * for every job renders a successful ingest of 25 companies as "0 leads kept"
+ * — a run that worked, displayed as one that produced nothing. That is the
+ * failure-looks-like-empty pattern, and it is worse here than a blank cell
+ * because the number is confidently wrong rather than absent.
+ */
+function jobYield(job: DashboardJob): string {
+  if (job.kind === 'account_list') {
+    const n = job.accounts_created + job.accounts_matched
+    return `${n.toLocaleString()} compan${n === 1 ? 'y' : 'ies'}`
+  }
+  return `${job.leads_kept.toLocaleString()} lead${job.leads_kept === 1 ? '' : 's'}`
+}
+
 function MetricCard({ label, value, detail, featured = false }: { label: string; value: number | null; detail: string; featured?: boolean }) {
   return (
     <div className={featured ? 'min-h-32 rounded-[var(--radius-clay)] bg-accent p-4 text-white shadow-[var(--neo-shadow)]' : 'clay min-h-32 p-4'}>
@@ -566,10 +584,20 @@ function JobHistoryRow({
             <span>{job.file_count.toLocaleString()} file{job.file_count === 1 ? '' : 's'}</span>
             <span>
               {job.status === 'processing'
-                ? `${job.leads_parsed.toLocaleString()} leads found`
-                : `${job.leads_kept.toLocaleString()} leads kept`}
+                ? job.kind === 'account_list'
+                  ? `${job.accounts_parsed.toLocaleString()} companies found`
+                  : `${job.leads_parsed.toLocaleString()} leads found`
+                : job.kind === 'account_list'
+                  ? `${jobYield(job)} ingested`
+                  : `${job.leads_kept.toLocaleString()} leads kept`}
             </span>
-            <span>{job.duplicates_removed.toLocaleString()} duplicates removed</span>
+            {job.kind === 'account_list' ? (
+              // "Already known" is the account equivalent, and it is a
+              // different fact from a duplicate row removed from an export.
+              <span>{job.accounts_matched.toLocaleString()} already known</span>
+            ) : (
+              <span>{job.duplicates_removed.toLocaleString()} duplicates removed</span>
+            )}
             {isActiveJob(job) ? <span className="font-medium text-accent">{percent}% complete</span> : null}
           </div>
           {job.error_message ? <p className="mt-2 text-sm text-danger">{job.error_message}</p> : null}
@@ -827,7 +855,7 @@ function TrashRow({
       ) : (
         <div className="mt-1.5 flex items-center justify-between gap-2">
           <span className="text-[11px] text-muted">
-            {job.leads_kept.toLocaleString()} lead{job.leads_kept === 1 ? '' : 's'} · {job.file_count.toLocaleString()} file{job.file_count === 1 ? '' : 's'}
+            {jobYield(job)} · {job.file_count.toLocaleString()} file{job.file_count === 1 ? '' : 's'}
           </span>
           <div className="flex items-center gap-2.5">
             {job.export_storage_path ? (

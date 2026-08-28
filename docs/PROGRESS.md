@@ -4,6 +4,56 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — An account run now reports companies, not "0 leads"
+
+### The display bug this closes
+
+`DashboardJob` selected only the lead counters, so the workspace read
+`leads_kept` for every job. A run that successfully ingested 25 companies
+would have rendered as **"0 leads kept"** — a run that worked, displayed as one
+that produced nothing.
+
+⚠️ That is worse than a blank cell: the number is **confidently wrong** rather
+than absent, so nobody investigates. Same shape as the credits `?? 0` bug and
+the empty lead list before it.
+
+`jobYield()` now reports in the run's own units, and three related fixes
+follow from it:
+
+- "Duplicates removed" is a lead-dedupe concept. An account run shows
+  **"already known"** instead — a different fact from a row removed from an
+  export.
+- Workspace totals no longer add companies into the lead count.
+- In-progress runs say "companies found" rather than "leads found".
+
+### Upload guidance
+
+The dropzone said lead search-results pages only, so nothing told a user
+account lists are accepted. It now names both, and states **one kind per run**
+— the worker refuses a mixed batch, and discovering that from a failed upload
+costs more than the line it takes to say it.
+
+### Verification
+
+- Typecheck, ESLint (0 errors) and production build clean. **1,231 tests.**
+- ⚠️ Still unapplied: 0065 and 0066. `supabase/APPLY_PENDING.sql` holds both
+  for the SQL editor, or `npx supabase db push` prompts for the password
+  interactively.
+
+### Fixed while unblocking the CLI
+
+`.env.local` held a pasted Google CSE HTML snippet (`<script>`, `</script>`,
+`<div>`) where env vars belong, plus a key with a space before `=`. Next.js
+parses leniently and booted past it; the Supabase CLI refused the file
+entirely. Syntax corrected, no values touched.
+
+⚠️ That surfaced a live gap: `google-cse.ts` reads `GOOGLE_CSE_ID` and
+`GOOGLE_CSE_API_KEY`, and **neither is set** — the cx value is stranded inside
+the HTML paste, so Google CSE is silently disabled as a search provider.
+Deliberately NOT wired up: enabling a provider starts real API spend.
+
+---
+
 ## 2026-08-28 — Account lists ingest end to end
 
 ### The queue is shared; the output is not
