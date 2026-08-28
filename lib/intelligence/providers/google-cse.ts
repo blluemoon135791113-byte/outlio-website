@@ -5,11 +5,22 @@ import 'server-only'
  * source for the intelligence waterfalls.
  *
  * ╔══════════════════════════════════════════════════════════════════════════╗
- *  100 QUERIES A DAY at no cost, no card, no server — it runs on Vercel
- *  unchanged. Two settings, both free: enable the Custom Search API on a
- *  Google project, and create a search engine set to search THE ENTIRE WEB.
- *  A `cx` scoped to specific sites returns almost nothing and looks like a
- *  broken key.
+ *  ⚠️ CLOSED TO NEW CUSTOMERS. Google no longer grants access to the Custom
+ *  Search JSON API, so this provider cannot be switched on for an account
+ *  that does not already have it. A key without that access returns
+ *  `403 PERMISSION_DENIED` on every call, which this provider swallows into
+ *  an empty result — so the symptom is silence, not an error.
+ *
+ *  The code stays because an account WITH existing access still works, and
+ *  because deleting a provider is not how you record that an upstream closed.
+ *  On this deployment search runs through the web-research MCP (SearXNG with
+ *  a DuckDuckGo fallback), which sits ABOVE this provider in
+ *  `defaultSearchEngines()`.
+ *
+ *  Where it does work: 100 queries a day at no cost, no card, no server.
+ *  Two settings, both free: enable the Custom Search API on a Google project,
+ *  and create a search engine set to search THE ENTIRE WEB. A `cx` scoped to
+ *  specific sites returns almost nothing and looks like a broken key.
  *
  *  ⚠️ 100/DAY IS THE REAL CONSTRAINT. The cache is what stretches it: a
  *  repeat question costs zero searches, and company research is shared

@@ -4,6 +4,47 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — Google CSE retired; search runs through the MCP
+
+### It cannot be enabled, so it is disabled
+
+Google no longer grants access to the Custom Search JSON API. The 403 was not
+a misconfiguration to fix — the product is closed to new customers, so no
+console change on this account can activate it.
+
+⚠️ **Left configured it was worse than useless.** `hasGoogleCseCredentials()`
+returned true, so the provider claimed a waterfall slot **above Mojeek**, the
+keyless free index that does work. Every call returned `403`, which the
+provider swallows into an empty result, so the symptom was silence rather than
+an error.
+
+`GOOGLE_CSE_ID` is now blank. ⚠️ Blanking the ID rather than the key is
+deliberate: `hasGoogleCseCredentials()` falls back to `GOOGLE_MAPS_API_KEY`
+when the CSE key is absent, so the engine id is the only field that reliably
+disables the provider. Verified: the check now returns false.
+
+**Production needs the same change** — `GOOGLE_CSE_ID` must be blank or unset
+in Vercel, or the deployed app keeps burning a slot per cooldown window.
+
+The provider code stays. An account with existing access still works, and
+deleting a provider is not how you record that an upstream closed; its header
+now says so.
+
+### The search path that IS working
+
+`defaultSearchEngines()` order: Solr, **web-research MCP**, Google CSE, Brave,
+Mojeek, Tavily. The MCP sits above CSE, so it was already handling searches.
+
+Confirmed reachable: `{"status":"ok","storage":"postgres","worker_mode":
+"background"}` on 127.0.0.1:8787, in Docker, with SearXNG plus a DuckDuckGo
+fallback inside the compose stack.
+
+⚠️ An earlier reading of mine was wrong: I reported the MCP unreachable after a
+404. I had appended `/health` to the configured URL, which already ends in
+`/mcp`, and requested `/mcp/health`. The service was healthy the whole time.
+
+---
+
 ## 2026-08-28 — Google CSE: diagnosed to the console, cannot be finished in code
 
 ### The blocker is a KEY RESTRICTION, not just API enablement
