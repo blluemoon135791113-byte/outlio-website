@@ -4,6 +4,46 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — Google CSE: credentials were fine, the API is not enabled
+
+### Correcting an earlier claim
+
+I reported that `GOOGLE_CSE_ID` and `GOOGLE_CSE_API_KEY` were unset. **That was
+wrong** — both are present in `.env.local` (39 and 17 characters). The earlier
+grep read only the first 20 lines and the variables sit at 60 and 61.
+
+### What was actually broken
+
+Those two lines sit **after** the malformed HTML at lines 32-34, so the pasted
+Google CSE `<script>` block stopped env parsing before reaching them. Fixing
+the syntax restored both variables — verified loading cleanly via
+`node --env-file`.
+
+### What is still blocking, and it is not in this repo
+
+A live query returns:
+
+    403 — This project does not have the access to Custom Search JSON API.
+
+Both keys were tested (`GOOGLE_CSE_API_KEY` and the `GOOGLE_MAPS_API_KEY`
+fallback the provider also accepts); they belong to different projects and
+**neither project has the Custom Search JSON API enabled**.
+
+⚠️ This cannot be fixed from the codebase. It is a Google Cloud console setting
+on the account that owns the key, exactly as `google-cse.ts` warns in its own
+header: "Two settings, both free: enable the Custom Search API on a Google
+project, and create a search engine set to search THE ENTIRE WEB."
+
+Cost is not the obstacle — the tier is 100 queries/day, free, no card.
+
+### Still unverified after enabling
+
+The `cx` must be configured to search the entire web. A `cx` scoped to specific
+sites returns almost nothing and looks like a broken key. That cannot be tested
+until the API is enabled.
+
+---
+
 ## 2026-08-28 — An account run now reports companies, not "0 leads"
 
 ### The display bug this closes
