@@ -4,6 +4,46 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — `upsert_companies` verified against the live database
+
+The last untested piece is closed. No database password was needed: the app
+calls this RPC through PostgREST with the service-role key, so the same path
+the worker uses is the one that was exercised.
+
+**Empty-payload smoke test** — `HTTP 200 []`. Proves the function exists and
+the argument shape matches, and writes nothing.
+
+**Round trip with a fabricated company** (CLAUDE.md: fixtures are fabricated):
+
+| call | result |
+|---|---|
+| 1st | `created: true`, `match_strategy: "linkedin"` |
+| 2nd | `created: false`, **same `company_id`** |
+
+That is exactly the contract the ingestion depends on:
+
+- **Precedence is right.** No domain was supplied, so it resolved by LinkedIn
+  URL rather than falling through to the name strategy.
+- **⚠️ Idempotency holds.** The second call returned the SAME id and
+  `created: false`. This is what stops an `after()` retry or a re-run by the
+  stale-claim reaper from duplicating an entire list — the case the counters
+  exist to report as "0 new, 25 already known".
+- **Industry seeded** on insert, and the normalized LinkedIn URL stored in the
+  form the lead pipeline dedupes against.
+
+**Cleanup verified**: row deleted (HTTP 204), and a follow-up query confirms
+zero fixture rows remain in `companies`.
+
+### The chain is now verified end to end
+
+parse (tests) → detect (tests) → map (tests, including the real Account Hub
+fixture) → **upsert (live)** → job reporting (tests).
+
+⚠️ Still not done: a real Account Hub page through the actual upload UI. Every
+layer is now proven, but nothing has driven them together from a file on disk.
+
+---
+
 ## 2026-08-28 — Migrations applied; recovered the types file after regeneration
 
 ### 0065 and 0066 are live
