@@ -170,3 +170,39 @@ describe('diversify', () => {
     expect(kept.some((c) => c.pageId === 'other')).toBe(true)
   })
 })
+
+describe('chunk overlap starts on a word boundary', () => {
+  it('⚠️ never begins a chunk mid-word', () => {
+    /*
+     * THE REGRESSION THIS GUARDS. The overlap was `slice(-OVERLAP_CHARS)`,
+     * which cuts wherever the character count lands. A retrieved passage began
+     * "gical Principles Make Educational Content Effective" and that fragment
+     * was quoted back to the user as evidence. A citation that starts mid-word
+     * reads as corruption and defeats the point of citing at all.
+     */
+    const sentence =
+      'Psychological principles make educational content effective for the reader. '
+    const text = sentence.repeat(60)
+
+    const chunks = chunkText(text)
+    expect(chunks.length).toBeGreaterThan(1)
+
+    const words = new Set(text.split(/\s+/).filter(Boolean))
+    for (const chunk of chunks) {
+      const first = chunk.trim().split(/\s+/)[0]!
+      // Every chunk must open with a whole word from the source.
+      expect(words.has(first)).toBe(true)
+    }
+  })
+
+  it('keeps a single unbroken token rather than cutting it', () => {
+    // No whitespace to snap to; truncating would lose the token entirely.
+    const chunks = chunkText('x'.repeat(4000))
+    expect(chunks.join('')).toContain('x'.repeat(100))
+  })
+
+  it('returns one chunk for short text and none for empty', () => {
+    expect(chunkText('Short passage.')).toEqual(['Short passage.'])
+    expect(chunkText('   ')).toEqual([])
+  })
+})

@@ -193,6 +193,24 @@ function rowLine(row: ResultRow, columns: readonly string[]): string {
   return `${row.companyName ?? 'Unknown company'}: ${parts.join('; ')}`
 }
 
+/**
+ * A factual fallback when semantic summarisation is unavailable.
+ *
+ * The result rows are already validated evidence. Hiding them because an LLM
+ * could not turn them into prose is a presentation failure, not an absence of
+ * data. This sentence is intentionally modest: code can count coverage, but it
+ * must not invent a pattern among the values.
+ */
+function coverageFinding(withData: number, total: number, columns: readonly string[]): string {
+  const noun = columns.length === 1 && columns[0] === 'mobile_phone'
+    ? 'public phone numbers'
+    : columns.length === 1 && columns[0] === 'work_email'
+      ? 'public work emails'
+      : 'the requested public information'
+
+  return `Found ${noun} for ${withData.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} leads checked.`
+}
+
 export async function summarizeRun(
   question: string,
   rows: readonly ResultRow[],
@@ -206,7 +224,12 @@ export async function summarizeRun(
   if (withData.length === 0) return null
 
   const llm = resolveHubbleLlm()
-  if (!llm.isConfigured()) return null
+  const fallback = {
+    text: coverageFinding(withData.length, rows.length, columns),
+    withData: withData.length,
+    withoutData,
+  }
+  if (!llm.isConfigured()) return fallback
 
   /*
    * Capped. A 500-lead run would otherwise build a prompt larger than any
@@ -217,7 +240,7 @@ export async function summarizeRun(
     .map((row) => rowLine(row, columns))
     .filter(Boolean)
 
-  if (lines.length === 0) return null
+  if (lines.length === 0) return fallback
 
   const figures = computeFigures(withData, columns)
 
@@ -233,11 +256,11 @@ export async function summarizeRun(
     maxOutputTokens: 500,
   })
 
-  if (!result.ok) return null
+  if (!result.ok) return fallback
 
   const parsed = result.json as { finding?: unknown }
   const text = typeof parsed.finding === 'string' ? parsed.finding.trim() : ''
-  if (!text) return null
+  if (!text) return fallback
 
   return { text, withData: withData.length, withoutData }
 }

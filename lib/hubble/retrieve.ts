@@ -50,6 +50,26 @@ const MIN_CHUNK_CHARS = 120
  * ending one chunk and "in a Series A led by…" starting the next — is
  * retrievable from neither half alone without it.
  */
+/**
+ * The tail of `text`, at most `chars` long, starting on a word boundary.
+ *
+ * ⚠️ WHY THIS EXISTS. The overlap between consecutive chunks was taken with a
+ * bare `slice(-OVERLAP_CHARS)`, which cuts wherever the character count lands
+ * — usually mid-word. A retrieved passage then began "gical Principles Make
+ * Educational Content Effective", and that fragment was quoted back to the
+ * user as evidence. A citation that starts mid-word reads as corruption and
+ * undermines the one thing citations are for: being checkable.
+ *
+ * Snapping forward to the next boundary loses a few characters of overlap and
+ * costs nothing that matters.
+ */
+function overlapTail(text: string, chars: number): string {
+  const tail = text.slice(-chars)
+  const boundary = tail.search(/\s/)
+  // No whitespace at all means one long token; keeping it whole beats cutting.
+  return boundary === -1 ? tail : tail.slice(boundary + 1)
+}
+
 export function chunkText(text: string): string[] {
   const normalised = text.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
   if (normalised.length === 0) return []
@@ -76,7 +96,7 @@ export function chunkText(text: string): string[] {
       for (const sentence of sentences) {
         if (buffer.length + sentence.length > TARGET_CHARS && buffer) {
           chunks.push(buffer.trim())
-          buffer = buffer.slice(-OVERLAP_CHARS)
+          buffer = overlapTail(buffer, OVERLAP_CHARS)
         }
         buffer += `${sentence} `
       }
@@ -86,7 +106,7 @@ export function chunkText(text: string): string[] {
 
     if (current.length + paragraph.length > TARGET_CHARS && current) {
       push()
-      current = `${current.slice(-OVERLAP_CHARS)}\n\n`
+      current = `${overlapTail(current, OVERLAP_CHARS)}\n\n`
     }
     current += `${paragraph}\n\n`
   }

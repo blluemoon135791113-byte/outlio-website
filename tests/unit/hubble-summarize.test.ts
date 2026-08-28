@@ -111,27 +111,42 @@ describe('the finding is a pattern in plain text', () => {
 })
 
 describe('the panel states coverage as a number, not a roll-call', () => {
-  it('shows "N of M with a public record" instead of listing the empties', async () => {
+  it('states coverage as a count instead of listing the empties', async () => {
     const panel = await import('node:fs/promises').then((fs) =>
       fs.readFile('components/intelligence/HubbleResultPanel.tsx', 'utf8'),
     )
 
-    expect(panel).toMatch(/with a public record/)
+    /*
+     * ⚠️ ASSERTS THE SHAPE, NOT THE SENTENCE. This used to require the exact
+     * words "with a public record", so rewording the line to "with public
+     * evidence" failed a test whose actual subject — coverage stated as a
+     * number rather than a wall of "Not found" — was never in question.
+     *
+     * A copy test that breaks on copy teaches people to edit the test without
+     * reading it. What must hold is that BOTH sides of the fraction are
+     * rendered together.
+     */
+    expect(panel).toMatch(/\{summary\.withData\}\s*of/)
+    expect(panel).toMatch(/summary\.withData \+ summary\.withoutData/)
     // The telemetry tiles that used to open the panel are gone.
     expect(panel).not.toContain('label="Reused from cache"')
     expect(panel).not.toContain('label="External calls"')
-    /*
-     * ⚠️ THE ROSTER IS GONE ENTIRELY, not merely collapsed. Seventy-five lead
-     * cards reading "No company linked" and "Source unavailable" is not
-     * supporting detail — it is the absence of detail, rendered at length.
-     * The per-lead values still reach the user through Enrich List Data,
-     * which writes them into the export.
-     */
+    // Unknown rows stay omitted; actionable contact matches are shown compactly.
     expect(panel).not.toContain('<details')
     expect(panel).not.toContain('rows behind this')
-    expect(panel).not.toContain('renderCellValue')
+    expect(panel).toContain('function ContactResults')
+    expect(panel).toContain('renderCellValue')
 
     // And the banner that duplicated the coverage line in colour.
     expect(panel).not.toContain('Some values could not be found')
+  })
+})
+
+describe('summary fallback preserves real findings', () => {
+  it('returns deterministic coverage when the LLM is unavailable', async () => {
+    const s = await source()
+    expect(s).toContain('function coverageFinding')
+    expect(s).toMatch(/if \(!llm\.isConfigured\(\)\) return fallback/)
+    expect(s).toMatch(/if \(!result\.ok\) return fallback/)
   })
 })
