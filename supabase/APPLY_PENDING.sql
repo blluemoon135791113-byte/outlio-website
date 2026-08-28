@@ -1,206 +1,285 @@
 -- ===========================================================================
--- OUTLIO — PENDING MIGRATIONS (0055)
--- Updated 2026-08-20
--- Already applied before this release: 0001-0054. Idempotent — safe to re-run.
+-- OUTLIO — PENDING MIGRATIONS (0065-0066)
+-- Updated 2026-08-28
+--
+-- Account list ingestion: companies captured from a saved Sales Navigator
+-- Account Hub page, as a company-volume feature separate from lead extraction.
+--
+-- Both statements are additive and idempotent — safe to re-run:
+--   * 0065 is CREATE OR REPLACE FUNCTION.
+--   * 0066 uses ADD COLUMN IF NOT EXISTS, a guarded constraint, and
+--     CREATE INDEX IF NOT EXISTS.
+--
+-- Nothing here drops, renames, or rewrites an existing column, and no existing
+-- row changes meaning: extraction_jobs.kind defaults to 'lead_search', which is
+-- what every historical run was.
+--
+-- AFTER APPLYING, regenerate types so the hand-written entries in
+-- types/database.ts are replaced by generated ones:
+--   npx supabase gen types typescript --linked > types/database.ts
 -- ===========================================================================
 
--- ####################  0055_hubble_research.sql  ####################
 
-/*
- * Ask Hubble — the retrieval layer.
- *
- * ╔══════════════════════════════════════════════════════════════════════════╗
- * ║  THIS SITS ON TOP OF WHAT ALREADY EXISTS. IT REPLACES NOTHING.           ║
- * ║                                                                          ║
- * ║  `research_evidence` (0044) still owns FIELD-SHAPED facts — the ones the ║
- * ║  fixed provider catalog fills. These tables own the open-ended half: the ║
- * ║  pages Hubble read, the passages it retrieved, and the answers it gave.  ║
- * ║  A question about funding should still be served by the provider that    ║
- * ║  already answers it; only a question no field covers reaches here.       ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
- */
+-- ####################  0065_account_list_ingest.sql  ####################
 
-/*
- * A page Hubble fetched, cleaned, and kept.
- *
- * ⚠️ KEYED BY COMPANY, NOT BY LEAD. Ten leads at the same company must not
- * cause ten fetches of the same about page. `company_id` is the dedup axis and
- * `companies` is already normalised by domain (lib/companies/normalize.ts), so
- * this inherits that dedup for free.
- */
-create table if not exists public.hubble_pages (
-  id            uuid primary key default gen_random_uuid(),
-  user_id       uuid not null references auth.users(id) on delete cascade,
+-- ---------------------------------------------------------------------------
+-- Account List ingestion
+-- ---------------------------------------------------------------------------
+--
+-- Saved Sales Navigator ACCOUNT lists are a company-volume feature, separate
+-- from individual lead extraction. A lead page yields people who happen to
+-- have employers; an account list yields companies directly, with no person
+-- attached.
+--
+-- `link_leads_to_companies` (0043) cannot serve this: it requires a lead_id and
+-- skips any row without one. This function performs the same identity
+-- resolution with no lead, and additionally reports whether the row was
+-- CREATED, so ingestion can tell a user "18 new, 7 already known" instead of a
+-- single meaningless total.
+--
+-- The resolution below deliberately mirrors 0043 step for step — precedence,
+-- name-row adoption, the contended-retry loop, and the guarded attachment of
+-- the weaker identifier. Divergence between the two would mean the same
+-- company resolving differently depending on which page it arrived on, which
+-- is exactly the duplicate this table's partial unique indexes exist to stop.
 
-  /* NULL for a page found while researching a person with no known company. */
-  company_id    uuid references public.companies(id) on delete cascade,
-
-  url           text not null,
-  /* Host kept separately so a domain's pages can be swept without a LIKE. */
-  host          text not null,
-  title         text,
-  /* Readable text after boilerplate removal. Never raw HTML — see below. */
-  content       text not null,
-  /*
-   * ⚠️ RAW HTML IS DELIBERATELY NOT STORED.
-   *
-   * CLAUDE.md rule 3 forbids ever rendering fetched HTML. Keeping only the
-   * extracted text means there is no stored markup for a future careless
-   * `dangerouslySetInnerHTML` to find.
-   */
-  content_chars integer not null check (content_chars >= 0),
-
-  /* What deterministic code pulled out before any model ran: JSON-LD, emails,
-   * social links, headings. Code first, model second. */
-  structured    jsonb not null default '{}'::jsonb,
-
-  /* 'fetch' or 'browser' — which fetcher was needed. Playwright is expensive
-   * and its use should be visible, not silent. */
-  fetch_method  text not null default 'fetch'
-                  check (fetch_method in ('fetch', 'browser')),
-  http_status   integer,
-
-  fetched_at    timestamptz not null default now(),
-  /* Cache horizon. A page past this is refetched rather than reused. */
-  expires_at    timestamptz,
-
-  created_at    timestamptz not null default now()
-);
-
-/* One row per URL per user: the cache lookup, and the dedup constraint. */
-create unique index if not exists hubble_pages_user_url_key
-  on public.hubble_pages (user_id, url);
-
-create index if not exists hubble_pages_company_idx
-  on public.hubble_pages (user_id, company_id, fetched_at desc);
-
-/*
- * A passage of a page, with its embedding.
- *
- * ⚠️ THE WHOLE POINT IS THAT THE MODEL NEVER SEES THE WHOLE PAGE. Retrieval
- * selects a handful of these; only they reach the LLM. Sending a full site
- * would be slower, costlier, and no more accurate.
- */
-create table if not exists public.hubble_chunks (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references auth.users(id) on delete cascade,
-  page_id     uuid not null references public.hubble_pages(id) on delete cascade,
-  company_id  uuid references public.companies(id) on delete cascade,
-
-  /* Position in the page, so retrieved passages can be shown in order. */
-  ordinal     integer not null check (ordinal >= 0),
-  content     text not null,
-
-  /*
-   * ⚠️ NULLABLE ON PURPOSE — EMBEDDINGS ARE AN UPGRADE, NOT A REQUIREMENT.
-   *
-   * Ollama may not be installed. When it is absent this stays NULL and
-   * retrieval falls back to lexical scoring, which needs no service and no
-   * model. Hubble degrades to a worse ranker, never to no answer.
-   *
-   * Stored as float array rather than `vector` so the table works whether or
-   * not pgvector is present; 0056 can add a typed column and an ANN index
-   * once availability is confirmed.
-   */
-  embedding   double precision[],
-  /* Which model produced `embedding`. Mixing models in one index silently
-   * ruins similarity, so a change of model must be detectable. */
-  embed_model text,
-
-  created_at  timestamptz not null default now()
-);
-
-create index if not exists hubble_chunks_page_idx
-  on public.hubble_chunks (page_id, ordinal);
-
-create index if not exists hubble_chunks_company_idx
-  on public.hubble_chunks (user_id, company_id);
-
-/* Lexical retrieval's index — the fallback path when there is no embedding. */
-create index if not exists hubble_chunks_fts_idx
-  on public.hubble_chunks using gin (to_tsvector('english', content));
-
-/*
- * An answer Hubble gave, kept so the next question can reuse it.
- *
- * ⚠️ THE CACHE THE SPEC ASKS FOR. Before any research runs, this is consulted:
- * a question already answered for this company is answered from here.
- */
-create table if not exists public.hubble_answers (
-  id            uuid primary key default gen_random_uuid(),
-  user_id       uuid not null references auth.users(id) on delete cascade,
-
-  lead_id       uuid,
-  company_id    uuid references public.companies(id) on delete cascade,
-
-  question      text not null,
-  /* Normalised question, for cache lookup: lowercased, collapsed, stripped. */
-  question_key  text not null,
-  answer        text not null,
-
-  /*
-   * ⚠️ EVERY ANSWER CARRIES ITS EPISTEMIC STATUS.
-   *
-   * verified    = a retrieved source states it outright
-   * corroborated= two independent sources agree
-   * estimated   = derived or inferred, and must be shown as such
-   * unknown     = research ran and found nothing. NOT an error, and NOT absence
-   *               of an answer — "we looked and could not confirm" is a result.
-   */
-  status        text not null default 'unknown'
-                  check (status in ('verified', 'corroborated', 'estimated', 'unknown')),
-  confidence    numeric(4, 3) not null default 0.500
-                  check (confidence >= 0 and confidence <= 1),
-
-  /* [{url, title, quote}] — what the answer was built from. */
-  sources       jsonb not null default '[]'::jsonb,
-  /* Budget actually consumed: searches, fetches, llm calls, ms. */
-  usage         jsonb not null default '{}'::jsonb,
-
-  research_run_id uuid references public.research_runs(id) on delete set null,
-
-  created_at    timestamptz not null default now(),
-  expires_at    timestamptz
-);
-
-create index if not exists hubble_answers_cache_idx
-  on public.hubble_answers (user_id, company_id, question_key, created_at desc);
-
-create index if not exists hubble_answers_lead_idx
-  on public.hubble_answers (user_id, lead_id, created_at desc);
-
-/* ------------------------------------------------------------------------- *
- * RLS. CLAUDE.md rule 9: every table, no exceptions.
- * ------------------------------------------------------------------------- */
-
-alter table public.hubble_pages   enable row level security;
-alter table public.hubble_chunks  enable row level security;
-alter table public.hubble_answers enable row level security;
-
-do $$
+create or replace function public.upsert_companies(
+  p_user_id   uuid,
+  p_companies jsonb
+)
+returns table (company_id uuid, match_strategy text, created boolean)
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare
-  t text;
+  v_row         jsonb;
+  v_name        text;
+  v_norm_name   text;
+  v_domain      text;
+  v_norm_domain text;
+  v_li          text;
+  v_norm_li     text;
+  v_industry    text;
+  v_strategy    text;
+  v_company_id  uuid;
+  v_created     boolean;
+  v_attempt     int;
 begin
-  foreach t in array array['hubble_pages', 'hubble_chunks', 'hubble_answers'] loop
-    execute format(
-      'drop policy if exists %I on public.%I', t || '_owner', t
-    );
-    /*
-     * Read-only to the owner. Writes go through the service role, which
-     * bypasses RLS and MUST scope by user_id in code — the same contract every
-     * other service-role query in this codebase follows.
-     */
-    execute format(
-      'create policy %I on public.%I for select using (auth.uid() = user_id)',
-      t || '_owner', t
-    );
+  if p_user_id is null then
+    raise exception 'upsert_companies: p_user_id is required';
+  end if;
+
+  for v_row in
+    select value from jsonb_array_elements(coalesce(p_companies, '[]'::jsonb))
+  loop
+    v_name        := nullif(v_row ->> 'name', '');
+    v_norm_name   := nullif(v_row ->> 'normalized_name', '');
+    v_domain      := nullif(v_row ->> 'domain', '');
+    v_norm_domain := nullif(v_row ->> 'normalized_domain', '');
+    v_li          := nullif(v_row ->> 'linkedin_url', '');
+    v_norm_li     := nullif(v_row ->> 'normalized_linkedin_url', '');
+    v_industry    := nullif(v_row ->> 'industry', '');
+
+    -- Precedence (spec §9), chosen from what THIS row carries.
+    if v_norm_domain is not null then
+      v_strategy := 'domain';
+    elsif v_norm_li is not null then
+      v_strategy := 'linkedin';
+    elsif v_norm_name is not null then
+      v_strategy := 'name';
+    else
+      -- Nothing identifies a company. Never invent one.
+      continue;
+    end if;
+
+    v_company_id := null;
+    v_created    := false;
+    v_attempt    := 0;
+
+    while v_company_id is null and v_attempt < 3 loop
+      v_attempt := v_attempt + 1;
+
+      -- 1 — find by the strongest identifier this row has.
+      if v_strategy = 'domain' then
+        select c.id into v_company_id
+          from public.companies c
+         where c.user_id = p_user_id
+           and c.normalized_domain = v_norm_domain;
+      elsif v_strategy = 'linkedin' then
+        select c.id into v_company_id
+          from public.companies c
+         where c.user_id = p_user_id
+           and c.normalized_linkedin_url = v_norm_li;
+      else
+        select c.id into v_company_id
+          from public.companies c
+         where c.user_id = p_user_id
+           and c.normalized_name = v_norm_name
+           and c.normalized_domain is null
+           and c.normalized_linkedin_url is null;
+      end if;
+
+      exit when v_company_id is not null;
+
+      -- 2 — adopt a name-only row rather than creating a second company. The
+      --     same company arrives from a lead page with a website and from an
+      --     account list with only a name; promoting the weaker row keeps them
+      --     as one company.
+      if v_strategy <> 'name' and v_norm_name is not null then
+        begin
+          if v_strategy = 'domain' then
+            update public.companies
+               set domain = v_domain, normalized_domain = v_norm_domain
+             where user_id = p_user_id
+               and normalized_name = v_norm_name
+               and normalized_domain is null
+               and normalized_linkedin_url is null
+            returning id into v_company_id;
+          else
+            update public.companies
+               set linkedin_url = v_li, normalized_linkedin_url = v_norm_li
+             where user_id = p_user_id
+               and normalized_name = v_norm_name
+               and normalized_domain is null
+               and normalized_linkedin_url is null
+            returning id into v_company_id;
+          end if;
+        exception when unique_violation then
+          -- A concurrent transaction claimed the same identifier. Re-select.
+          v_company_id := null;
+        end;
+
+        exit when v_company_id is not null;
+      end if;
+
+      -- 3 — insert. Only the strategy's own identifier plus the name is
+      --     written, so this can only conflict on the index the retry loop
+      --     re-reads.
+      insert into public.companies (
+        user_id, name, normalized_name,
+        domain, normalized_domain,
+        linkedin_url, normalized_linkedin_url,
+        industry
+      )
+      values (
+        p_user_id, v_name, v_norm_name,
+        case when v_strategy = 'domain'   then v_domain end,
+        case when v_strategy = 'domain'   then v_norm_domain end,
+        case when v_strategy = 'linkedin' then v_li end,
+        case when v_strategy = 'linkedin' then v_norm_li end,
+        v_industry
+      )
+      on conflict do nothing
+      returning id into v_company_id;
+
+      if v_company_id is not null then
+        v_created := true;
+      end if;
+    end loop;
+
+    -- Gave up after three contended attempts. Skip rather than guess.
+    continue when v_company_id is null;
+
+    -- 4 — attach the weaker identifier this row also carried, if still free.
+    if v_strategy = 'domain' and v_norm_li is not null then
+      begin
+        update public.companies
+           set linkedin_url = v_li, normalized_linkedin_url = v_norm_li
+         where id = v_company_id
+           and user_id = p_user_id
+           and normalized_linkedin_url is null;
+      exception when unique_violation then null;
+      end;
+    end if;
+
+    if v_norm_name is not null then
+      update public.companies
+         set name = coalesce(name, v_name),
+             normalized_name = coalesce(normalized_name, v_norm_name)
+       where id = v_company_id
+         and user_id = p_user_id;
+    end if;
+
+    -- ⚠️ INDUSTRY IS ONLY EVER FILLED IN, NEVER OVERWRITTEN.
+    --
+    -- `companies.industry` is a projection of `research_evidence`, which is
+    -- the source of truth and carries provenance and a TTL. A captured page is
+    -- weaker than researched evidence, so it may seed an empty cell and must
+    -- not replace a value some provider stood behind.
+    if v_industry is not null then
+      update public.companies
+         set industry = v_industry
+       where id = v_company_id
+         and user_id = p_user_id
+         and industry is null;
+    end if;
+
+    company_id     := v_company_id;
+    match_strategy := v_strategy;
+    created        := v_created;
+    return next;
   end loop;
+end;
+$$;
+
+revoke all on function public.upsert_companies(uuid, jsonb) from public, anon, authenticated;
+
+comment on function public.upsert_companies(uuid, jsonb) is
+  'Upserts companies from a saved account list. Service-role only; every read '
+  'and write is scoped by p_user_id. Mirrors link_leads_to_companies identity '
+  'resolution so a company resolves identically whichever page it arrived on.';
+
+
+-- ####################  0066_account_list_jobs.sql  ####################
+
+-- ---------------------------------------------------------------------------
+-- Account list jobs
+-- ---------------------------------------------------------------------------
+--
+-- Account lists reuse `extraction_jobs` rather than getting a table of their
+-- own. The queue, `claim_next_job`, `FOR UPDATE SKIP LOCKED`, attempt counts,
+-- backoff and the stale-claim reaper are the hard parts of this pipeline and
+-- are already correct here. A parallel `account_jobs` table would duplicate
+-- every one of them and drift.
+--
+-- What differs is only the OUTPUT: a lead job yields people, an account job
+-- yields companies, so the counters cannot share columns. Reporting "25 leads
+-- kept" for a run that produced 25 companies would be a lie in the one place a
+-- user checks what a run did.
+
+alter table public.extraction_jobs
+  add column if not exists kind text not null default 'lead_search',
+  add column if not exists accounts_parsed int not null default 0,
+  add column if not exists accounts_created int not null default 0,
+  add column if not exists accounts_matched int not null default 0,
+  add column if not exists accounts_unidentified int not null default 0;
+
+-- ⚠️ THE DEFAULT IS `lead_search`, WHICH IS CORRECT FOR EVERY EXISTING ROW.
+-- Account lists could not be ingested before this migration, so no historical
+-- job can be one. A nullable column would have forced every reader to handle
+-- "unknown kind", which is a state that has never existed.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'extraction_jobs_kind_check'
+  ) then
+    alter table public.extraction_jobs
+      add constraint extraction_jobs_kind_check
+      check (kind in ('lead_search', 'account_list'));
+  end if;
 end $$;
 
-comment on table public.hubble_pages is
-  'Pages Ask Hubble fetched and cleaned. Keyed by company so leads at the '
-  'same company share one cache. Extracted text only — never raw HTML.';
+comment on column public.extraction_jobs.kind is
+  'What this run ingests. lead_search yields people; account_list yields '
+  'companies. Set by the worker from the detected page type, never by the '
+  'client — the browser does not know what is inside the file it uploaded.';
 
-comment on table public.hubble_answers is
-  'Answered questions, reused before any new research runs. status records '
-  'whether a claim is verified, corroborated, estimated, or unknown.';
+comment on column public.extraction_jobs.accounts_unidentified is
+  'Account rows carrying nothing that identifies a company. Recorded rather '
+  'than dropped so "25 rows in, 18 companies out" is explainable.';
+
+-- Counting a tenant's account runs without scanning their lead runs.
+create index if not exists extraction_jobs_user_kind_idx
+  on public.extraction_jobs (user_id, kind, created_at desc);
+
