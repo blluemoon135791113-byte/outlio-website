@@ -98,7 +98,14 @@ export default function Nav({ surface = "agency" }: NavProps) {
           className="relative flex items-center border-r border-ink px-5 py-3.5"
           aria-label="Outlio home"
         >
-          <Image src="/outlio logo.png" alt="Outlio" width={50} height={20} priority className="object-contain rounded-lg" />
+          <Image
+            src="/outlio logo.png"
+            alt="Outlio"
+            width={48}
+            height={48}
+            preload
+            className="size-10 rounded-lg object-contain sm:size-12"
+          />
         </Link>
 
         {/* Desktop Navigation */}

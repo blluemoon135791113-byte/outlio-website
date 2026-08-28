@@ -249,7 +249,7 @@ export function DateRangePicker({
               type="button"
               onClick={() => shiftMonth(-1)}
               aria-label="Previous month"
-              className="clay-interactive inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-clay-surface text-sm text-ink shadow-[var(--clay-shadow-chip)] active:scale-[0.94]"
+              className="clay-interactive inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-clay-surface text-sm text-ink shadow-[var(--shadow-button)] active:scale-[0.94]"
             >
               <span aria-hidden>‹</span>
             </button>
@@ -264,7 +264,7 @@ export function DateRangePicker({
               disabled={atPresent}
               aria-label="Next month"
               title={atPresent ? 'Leads cannot be extracted in the future' : undefined}
-              className="clay-interactive inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-clay-surface text-sm text-ink shadow-[var(--clay-shadow-chip)] active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none disabled:active:scale-100"
+              className="clay-interactive inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-md)] bg-clay-surface text-sm text-ink shadow-[var(--shadow-button)] active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none disabled:active:scale-100"
             >
               <span aria-hidden>›</span>
             </button>

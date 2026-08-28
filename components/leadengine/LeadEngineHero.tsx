@@ -15,6 +15,11 @@ import Link from 'next/link'
  * ║  scores confidence by independent corroboration, and answers questions   ║
  * ║  in plain English through Hubble. Selling the export step is like        ║
  * ║  advertising a database by its "Save" button.                            ║
+ * ║                                                                          ║
+ * ║  ⚠️ HUBBLE IS TIER-GATED. `requireHubbleAccess()` restricts it to the    ║
+ * ║  Pro + Hubble plan, so it is named as a plan feature here rather than    ║
+ * ║  as a general capability. Selling it flat sends buyers to the $28 tier   ║
+ * ║  expecting something that redirects them to an upgrade page.             ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
  * Visually this now uses the CLAY surfaces the dashboard and Hubble use
@@ -58,9 +63,9 @@ export function LeadEngineHero() {
             style={{ animation: `fade-in 0.7s ${EASE} 0.12s both` }}
           >
             Upload the Sales Navigator page you already saved. Outlio turns it
-            into a clean, de-duplicated lead database, researches the companies
-            and people behind it across public sources, and lets you ask
-            questions in plain English — with a source link on every answer.
+            into a clean, de-duplicated lead database and researches the
+            companies and people behind it across public sources — with a link
+            to the page every fact came from.
           </p>
 
           <div
@@ -69,13 +74,13 @@ export function LeadEngineHero() {
           >
             <Link
               href="/sign-up"
-              className="rounded-full bg-ink px-8 py-3.5 text-base font-semibold text-cream shadow-[var(--neo-shadow-chip)] transition-colors duration-150 hover:bg-accent"
+              className="rounded-full bg-ink px-8 py-3.5 text-base font-semibold text-cream shadow-[var(--shadow-button)] transition-colors duration-150 hover:bg-accent"
             >
-              Get started free
+              Start 3-day trial
             </Link>
             <Link
               href="#how-it-works"
-              className="rounded-full border border-border-strong bg-clay-raised px-8 py-3.5 text-base font-semibold text-ink shadow-[var(--neo-shadow-chip)] transition-colors duration-150 hover:border-accent hover:text-accent"
+              className="rounded-full border border-border-strong bg-clay-raised px-8 py-3.5 text-base font-semibold text-ink shadow-[var(--shadow-button)] transition-colors duration-150 hover:border-accent hover:text-accent"
             >
               See how it works
             </Link>
@@ -85,7 +90,7 @@ export function LeadEngineHero() {
             className="mt-4 text-sm text-muted"
             style={{ animation: `fade-in 0.7s ${EASE} 0.24s both` }}
           >
-            3-day free trial · 10 credits · No charge until the trial ends
+            10 credits · Payment method required · No charge for 3 days
           </p>
         </div>
 
@@ -94,8 +99,9 @@ export function LeadEngineHero() {
          * a before/after comparison about copy-pasting — a problem framing
          * that stopped being the point once research shipped.
          */}
+        <h2 className="sr-only">How Lead Engine works</h2>
         <div className="mt-12 grid gap-4 sm:grid-cols-3">
-          <ClayCard delay="0.28s" step="01" title="Capture">
+          <ClayCard delay="0.28s" step="01" title="Capture" tone="lilac">
             <p className="text-sm leading-relaxed text-muted">
               Upload a saved results page, or capture one with the extension
               while you browse. Duplicates are caught against everything you
@@ -103,7 +109,7 @@ export function LeadEngineHero() {
             </p>
           </ClayCard>
 
-          <ClayCard delay="0.34s" step="02" title="Research" accent>
+          <ClayCard delay="0.34s" step="02" title="Research" tone="coral">
             <p className="text-sm leading-relaxed text-muted">
               Company registries, filings, funding, tech stack, hiring signals
               and public contacts — gathered, de-conflicted and scored.
@@ -113,10 +119,11 @@ export function LeadEngineHero() {
             </p>
           </ClayCard>
 
-          <ClayCard delay="0.4s" step="03" title="Ask">
+          <ClayCard delay="0.4s" step="03" title="Ask" tone="sage">
             <p className="text-sm leading-relaxed text-muted">
-              Hubble answers questions about a lead in plain English, quoting
-              the page it read. Export to CSV or XLSX whenever you want.
+              Export to CSV or XLSX whenever you want. On Pro + Hubble, ask
+              questions about a lead in plain English and get answers that
+              quote the page they came from.
             </p>
           </ClayCard>
         </div>
@@ -130,21 +137,30 @@ function ClayCard({
   delay,
   step,
   title,
-  accent = false,
+  tone,
 }: {
   children: React.ReactNode
   delay: string
   step: string
   title: string
-  accent?: boolean
+  /* One palette colour per stage, so the three read apart at a glance without
+     any of them shouting. A tint on the rule and the step number only — the
+     card stays clay, the colour is a label rather than a fill. */
+  tone: 'lilac' | 'coral' | 'sage'
 }) {
+  const ring = {
+    lilac: 'ring-lilac/45',
+    coral: 'ring-coral/35',
+    sage: 'ring-sage/40',
+  }[tone]
+  const step_colour = { lilac: 'text-lilac-deep', coral: 'text-coral-deep', sage: 'text-sage-deep' }[tone]
   return (
     <div
-      className={`clay-raised p-6 ${accent ? 'ring-1 ring-accent/25' : ''}`}
+      className={`clay-raised p-6 ring-1 ${ring}`}
       style={{ animation: `fade-in 0.7s ${EASE} ${delay} both` }}
     >
       <div className="flex items-baseline gap-3">
-        <span className="font-mono text-[11px] font-semibold text-accent">{step}</span>
+        <span className={`font-mono text-[11px] font-semibold ${step_colour}`}>{step}</span>
         <h3 className="font-heading text-lg font-semibold tracking-[-0.03em] text-ink">
           {title}
         </h3>

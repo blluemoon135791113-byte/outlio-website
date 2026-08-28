@@ -14,7 +14,7 @@ export default function TestimonialFlipCard({ quote, who, proofImage }: Testimon
 
   return (
     <div
-      className="perspective-1000"
+      className="perspective-1000 relative w-full"
       style={{
         minHeight: "220px",
         height: "100%"
@@ -22,7 +22,19 @@ export default function TestimonialFlipCard({ quote, who, proofImage }: Testimon
       onMouseEnter={() => setIsFlipped(true)}
       onMouseLeave={() => setIsFlipped(false)}
     >
+      <button
+        type="button"
+        aria-pressed={isFlipped}
+        aria-label={
+          isFlipped
+            ? `Proof from ${who} is shown. Return to testimonial.`
+            : `${quote} — ${who}. View proof.`
+        }
+        onClick={() => setIsFlipped((current) => !current)}
+        className="absolute inset-0 z-20 cursor-pointer appearance-none rounded-2xl border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+      />
       <div
+        aria-hidden="true"
         className="relative transition-transform duration-700 preserve-3d"
         style={{
           transformStyle: "preserve-3d",
@@ -46,7 +58,7 @@ export default function TestimonialFlipCard({ quote, who, proofImage }: Testimon
           </blockquote>
           <figcaption className="mt-6 text-sm text-muted">- {who}</figcaption>
           <div className="mt-3 text-xs text-accent uppercase tracking-wider">
-            Hover to see proof
+            View proof
           </div>
         </figure>
 

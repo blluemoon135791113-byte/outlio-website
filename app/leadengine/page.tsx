@@ -106,7 +106,7 @@ export default function LeadEnginePage() {
       <DashboardPreview />
 
       <section className="bg-paper px-4 pb-8 pt-10">
-        <div className="mx-auto max-w-5xl rounded-[var(--radius-lg)] border border-border bg-panel p-6 sm:p-8">
+        <div className="clay mx-auto max-w-5xl p-6 sm:p-8">
           <p className="text-[13px] font-semibold uppercase tracking-[0.2em] text-accent">
             Software subscription only
           </p>
@@ -119,7 +119,7 @@ export default function LeadEnginePage() {
       </section>
 
       {/* ---- The problem --------------------------------------------------- */}
-      <section className="bg-cream px-4 py-20 sm:py-28">
+      <section className="bg-lilac-soft px-4 py-20 sm:py-28">
         <div className="mx-auto max-w-5xl">
           <div className="max-w-2xl">
             <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
@@ -164,7 +164,7 @@ export default function LeadEnginePage() {
       </section>
 
       {/* ---- How it works --------------------------------------------------- */}
-      <section id="how-it-works" className="scroll-mt-20 bg-cream px-4 py-20 sm:py-28">
+      <section id="how-it-works" className="scroll-mt-20 bg-sage-soft px-4 py-20 sm:py-28">
         <div className="mx-auto max-w-5xl">
           <h2 className="max-w-2xl text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
             Three steps. No setup.
@@ -228,7 +228,7 @@ export default function LeadEnginePage() {
             </dl>
           </div>
 
-          <p className="mt-10 max-w-2xl rounded-[var(--radius-lg)] border border-border bg-panel p-5 text-sm leading-relaxed text-muted">
+          <p className="clay mt-10 max-w-2xl p-5 text-sm leading-relaxed text-muted">
             <strong className="font-semibold text-ink">Sales Navigator only.</strong>{' '}
             Lead Engine reads saved <em>Sales Navigator lead search-results</em>{' '}
             pages. A regular linkedin.com search page, a company page, or a file
@@ -251,6 +251,19 @@ export default function LeadEnginePage() {
               &ldquo;What does this company sell, and who would buy it?&rdquo;
               &ldquo;Have they raised recently?&rdquo; Hubble reads public pages,
               answers in a few lines, and quotes the passages it used.
+            </p>
+            {/*
+             * ⚠️ SAY WHAT IT COSTS, WHERE IT IS SOLD. Hubble is gated by
+             * `requireHubbleAccess()` to the Pro + Hubble plan. Describing it
+             * as a general capability sends someone to the $28 tier expecting
+             * a feature that redirects them to an upgrade page.
+             */}
+            <p className="mt-4 text-sm font-semibold text-ink">
+              Included on the{' '}
+              <Link href="/leadengine/pricing" className="text-accent underline-offset-2 hover:underline">
+                Pro + Hubble
+              </Link>{' '}
+              plan.
             </p>
           </div>
 
@@ -337,7 +350,7 @@ export default function LeadEnginePage() {
               href="/leadengine/pricing"
               className="rounded-full bg-ink px-8 py-4 text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent"
             >
-              Get started free
+              Start 3-day trial
             </Link>
             <Link
               href="/sign-in"

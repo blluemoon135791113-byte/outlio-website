@@ -28,7 +28,7 @@ export function AuthShell({
             href="/"
             className="inline-flex items-center gap-3 rounded-xl focus-visible:outline-offset-4"
           >
-            <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-ink shadow-[var(--neo-shadow-chip)]">
+            <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-ink shadow-[var(--shadow-button)]">
               <Image
                 src="/icon.png"
                 alt=""

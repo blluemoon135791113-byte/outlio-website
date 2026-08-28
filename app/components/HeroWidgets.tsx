@@ -2,7 +2,7 @@
 
 export default function HeroWidgets() {
   return (
-    <div className="pointer-events-none absolute inset-0 hidden xl:block">
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden xl:block">
       {/* Top Left - Yellow Sticky Note with Check Button */}
       <div className="absolute left-[2%] top-[4%] hidden md:left-[3%] md:top-[6%] md:block">
         {/* 3D Board Shadow/Silhouette */}

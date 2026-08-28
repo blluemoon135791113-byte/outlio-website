@@ -25,12 +25,19 @@ export function DashboardPreview() {
           </p>
         </div>
 
-        <div className="mt-10 overflow-hidden rounded-[20px] border border-accent/15 bg-white shadow-[0_28px_80px_rgba(80,55,140,0.14)] sm:mt-12">
-          <div className="flex h-10 items-center gap-1.5 border-b border-border bg-[#fcfbff] px-4">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#ff8a80]" />
-            <span className="h-2.5 w-2.5 rounded-full bg-[#ffd180]" />
-            <span className="h-2.5 w-2.5 rounded-full bg-[#8bd3a8]" />
-            <span className="mx-auto -translate-x-5 text-[10px] font-medium tracking-wide text-muted/70">
+        <div
+          role="img"
+          aria-label="Preview of the Lead Engine workspace showing credits, extraction activity, account access and subscription status"
+          className="mt-10 overflow-hidden rounded-[20px] border border-accent/15 bg-white shadow-[0_28px_80px_color-mix(in_srgb,var(--charcoal)_16%,transparent)] sm:mt-12"
+        >
+          {/* ⚠️ Was a violet-white bar with generic macOS traffic lights
+              (#ff8a80 / #ffd180 / #8bd3a8) — four hardcoded colours belonging
+              to no palette. Now the brand's own three. */}
+          <div className="flex h-10 items-center gap-1.5 border-b border-border bg-ivory px-4">
+            <span className="h-2.5 w-2.5 rounded-full bg-coral" />
+            <span className="h-2.5 w-2.5 rounded-full bg-lilac" />
+            <span className="h-2.5 w-2.5 rounded-full bg-sage" />
+            <span className="mx-auto -translate-x-5 text-[10px] font-medium tracking-wide text-muted">
               app.outlio.io
             </span>
           </div>
@@ -117,7 +124,7 @@ export function DashboardPreview() {
                         <PreviewRow label="Access" value="Active subscription" />
                       </dl>
                     </div>
-                    <div className="rounded-xl border border-accent/15 bg-[linear-gradient(145deg,#fbf9ff,#f0eaff)] p-4">
+                    <div className="rounded-xl border border-accent/15 bg-[linear-gradient(145deg,var(--lilac-soft),color-mix(in_srgb,var(--lilac)_45%,white))] p-4">
                       <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-accent">Subscription</p>
                       <p className="mt-2 text-sm font-semibold text-ink">Professional</p>
                       <p className="mt-1 text-[10px] text-muted">Active · Monthly</p>

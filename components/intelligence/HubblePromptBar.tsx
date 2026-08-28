@@ -111,7 +111,7 @@ export function HubblePromptBar({
            * made the control flicker between two identities as you typed.
            * Availability is carried by opacity and the cursor alone.
            */
-          className={`hubble-send-action inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-[var(--clay-shadow-chip)] transition-[background-color,opacity,transform,box-shadow] duration-150 ease-out ${
+          className={`hubble-send-action inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-[var(--shadow-button)] transition-[background-color,opacity,transform,box-shadow] duration-150 ease-out ${
             canSubmit
               ? 'cursor-pointer active:scale-[0.94] active:shadow-[var(--clay-shadow-inset)]'
               : 'cursor-not-allowed opacity-45'
@@ -141,7 +141,16 @@ export function HubblePromptBar({
         <div
           aria-label="Suggested prompts"
           aria-hidden={busy}
-          className={`flex flex-wrap gap-x-4 gap-y-1.5 ${
+          /*
+           * ⚠️ ONE ROW, ENFORCED STRUCTURALLY.
+           *
+           * These used to `flex-wrap`, so a suggestion long enough to reflow
+           * silently pushed the row to two lines and shifted everything below
+           * it. `flex-nowrap` + `whitespace-nowrap` means copy can no longer
+           * change the layout; if it ever overflows it scrolls instead, which
+           * is a visible, contained failure rather than a moving page.
+           */
+          className={`flex flex-nowrap gap-2 overflow-x-auto ${
             busy ? 'pointer-events-none invisible' : 'visible'
           }`}
         >
@@ -151,7 +160,9 @@ export function HubblePromptBar({
               type="button"
               disabled={busy}
               onClick={() => onChange(suggestion)}
-              className="clay-interactive cursor-pointer rounded-lg px-1 py-1.5 text-[12px] text-muted hover:text-ink"
+              /* Same material as the micro modal's starters, so the two prompt
+                 surfaces read as one product. */
+              className="skeuo-key skeuo-key-interactive cursor-pointer whitespace-nowrap px-3 py-1.5 text-[12px] text-muted hover:text-ink"
             >
               {suggestion}
             </button>

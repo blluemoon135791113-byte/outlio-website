@@ -169,7 +169,7 @@ export function Pricing({ ctaHref, ctaLabel, billingNotice }: PricingProps = {})
               </p>
 
               <p className="mt-4 border-t border-border pt-4 text-lg font-bold tracking-tight text-ink">
-                {tier.leads} leads
+                {tier.leads} leads{' '}
                 <span className="ml-1.5 text-sm font-medium text-muted">a month</span>
               </p>
 

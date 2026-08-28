@@ -239,15 +239,14 @@ export default function Home() {
             {/* Main Content - CENTERED */}
             <div className="relative z-20 flex min-h-[590px] items-center justify-center px-5 py-20 sm:min-h-[660px] sm:px-10 sm:py-24 lg:min-h-[760px] lg:px-16 lg:py-28 xl:min-h-[800px] xl:py-32">
               <div className="mx-auto max-w-5xl text-center">
-                <h1 className="text-4xl font-bold uppercase tracking-tight text-ink sm:text-5xl">
-                  Hands-on growth accelerator for tech startups and SaaS
-                </h1>
-                <p className="mt-3 text-base leading-relaxed text-muted/80 sm:text-lg">
-                  Outlio isn't a consultancy. We research your market, identify your ideal customers, write every message by hand, and run your outbound ourselves, then show you all of it live in a shared CRM. Our approach is research-first, human-led, and built to scale with you — from the intro call through launch and beyond. We help tech startups and SaaS companies fill the pipeline so you can focus on building your product.
-                </p>
-                <div className="mt-3">
-                  <HeroHeadline />
-                </div>
+                {/*
+                  ⚠️ A SECOND <h1> USED TO SIT HERE, above `HeroHeadline` —
+                  which renders its own. Two competing headings, and the
+                  paragraph beneath it restated the concise one further down
+                  almost word for word. `HeroHeadline` is the hero; this block
+                  was crowding it.
+                */}
+                <HeroHeadline />
                 <HeroScrollFade>
                   <p className="mx-auto mt-6 max-w-3xl text-base leading-relaxed text-muted sm:text-lg">
                     Outlio isn't a consultancy. We research your market, write every message by hand, and

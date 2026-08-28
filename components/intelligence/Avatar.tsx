@@ -84,9 +84,16 @@ export function CompanyAvatar({
       <Monogram name={name} size={size} rounded="rounded-[var(--radius-lg)]" />
 
       {src ? (
-        // eslint-disable-next-line @next/next/no-img-element -- a third-party
-        // favicon, not an asset we host. next/image would proxy and cache
-        // someone else's logo on our infrastructure.
+        /*
+         * A third-party favicon, not an asset we host. next/image would proxy
+         * and cache someone else's logo on our infrastructure.
+         *
+         * ⚠️ The directive must be the LAST line before the element. It was
+         * written as the first of three comment lines, so `next-line` pointed
+         * at the comment continuation and suppressed nothing — eslint reported
+         * both an unused directive and the warning it was meant to silence.
+         */
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
           alt=""

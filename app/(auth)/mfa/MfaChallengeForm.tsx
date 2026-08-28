@@ -44,7 +44,7 @@ export function MfaChallengeForm({ next }: { next: string }) {
         <span className="text-sm font-medium text-ink">Authentication code</span>
         <input value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" autoFocus required className="auth-clay-field w-full rounded-[var(--radius-md)] border-0 bg-clay-sunken px-3 py-3 text-center font-mono text-xl tracking-[0.3em] text-ink shadow-[var(--neo-shadow-inset)] outline-none transition-shadow duration-150 focus:shadow-[var(--neo-shadow-focus)]" />
       </label>
-      <button disabled={busy} className="inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white shadow-[var(--neo-shadow-chip)] transition-[background-color,box-shadow,transform] duration-150 hover:bg-accent-deep active:scale-[0.98] active:shadow-[var(--neo-shadow-inset)] disabled:opacity-60">{busy ? 'Verifying…' : 'Verify and continue'}</button>
+      <button disabled={busy} className="inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white shadow-[var(--shadow-button)] transition-[background-color,box-shadow,transform] duration-150 hover:bg-accent-deep active:scale-[0.98] active:shadow-[var(--neo-shadow-inset)] disabled:opacity-60">{busy ? 'Verifying…' : 'Verify and continue'}</button>
     </form>
   )
 }

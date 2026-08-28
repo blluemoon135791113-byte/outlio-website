@@ -60,7 +60,13 @@ export default function Footer({ surface = "main" }: FooterProps) {
     <footer className="bg-panel">
       <div className="mx-auto max-w-7xl px-6 pb-8 pt-12 sm:px-10 sm:pt-16">
         <a href="mailto:husnain@outlio.io" className="flex w-fit items-center gap-3">
-          <Image src="/outlio logo.png" alt="Outlio" width={50} height={20} className="object-contain rounded-lg" />
+          <Image
+            src="/outlio logo.png"
+            alt="Outlio"
+            width={44}
+            height={44}
+            className="size-11 rounded-lg object-contain"
+          />
           <span className="text-xl font-semibold tracking-tight sm:text-2xl">husnain@outlio.io</span>
         </a>
 
