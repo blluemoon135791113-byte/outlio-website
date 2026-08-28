@@ -4,6 +4,75 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Split extraction board: Leads and Accounts, and an account CSV
+
+### The board
+
+`ExtractionDashboard` rendered one history list holding both run kinds. It now
+renders `HistoryBoard` twice, side by side at `xl` — **Leads** and **Accounts**
+— because the two are not comparable: a lead run yields people and exports
+person rows, an account run yields companies and has no person at all. One list
+forces every row to declare its unit and the reader to hold both at once.
+
+Verified in the running app at 1440px: both boards 568px wide, same `y`,
+`x` 248 and 840. At 744px they stack, which is the intended `xl` breakpoint.
+
+**Each board owns its own filter.** Backed by one shared `historyFilter`,
+narrowing Accounts to "Needs attention" would silently empty the Leads board
+the user was not looking at — a control that appears local while acting
+globally. Verified by clicking: Accounts on "Needs attention", Leads still on
+"All" with all 3 rows intact.
+
+Each empty state names the page type it accepts ("No account lists yet /
+Saved Sales Navigator account lists"), so a user who has only uploaded leads
+does not read the Accounts board as broken.
+
+Workspace totals gained **Companies added**, counted separately from leads and
+never summed with them — "40 records" over 25 companies and 15 people is a
+number with no unit. Six cards also fixed the orphan the five-card
+`xl:grid-cols-5` left on its last row.
+
+### The export
+
+Account runs previously had **no export at all**: `RowExportMenu` returns null
+when there is no export path and no leads, so the Accounts board offered only
+trash and delete. `lib/export/accounts.ts` now writes a companies CSV.
+
+- **Not the lead writer with blank person columns.** Full Name / Job Title /
+  Email are empty on every row of an account list, and `toCsv` drops all-empty
+  columns — so the header row would differ between runs of the same kind and no
+  importer could map it. `Company Name` and `LinkedIn URL` are pinned via
+  `alwaysKeep` for the same reason.
+- **Shares `toCsv` and therefore `sanitizeCell`.** A company named
+  `=cmd|'/c calc'!A1` is as attacker-controlled as a person's name;
+  formula-injection defence stays in one file.
+- **Built from the parsed rows, not from `companies`.** The file records what
+  the captured page held. Re-reading the table would fold in facts from other
+  runs and from research, so a run's export would change whenever something
+  unrelated was enriched.
+- Written to the same `export_storage_path` column, as `accounts.csv`, so the
+  existing signed-URL download action serves it unchanged — it only ever signs
+  the server-generated key the job carries.
+- `rebuildJobExport` cannot clobber it: it returns early on zero leads, and its
+  only caller is on the lead path.
+
+**CRM destinations stay hidden for account runs.** They are gated on
+`leadsRemaining > 0`, which is 0 for an account run and must stay 0 — pushing a
+company list to a lead CRM would create contacts for people who were never
+extracted. Commented at the call site so it is not "fixed" by passing the
+company count.
+
+### Verified on the real page
+
+The same 805 KB Account Hub page (never copied into the repo): 25 accounts →
+25 CSV rows, all 8 columns populated, BOM present, embedded commas and quotes
+correctly RFC-4180 quoted (`"""RMS"" Retail Marketing Solutions LLC"`), no
+unquoted formula prefix on any cell.
+
+Suite: **1,239 tests passing** (5 new); typecheck, lint and build clean.
+
+---
+
 ## 2026-08-28 — Real Account Hub page run; a bug found and two of my claims corrected
 
 ### The run

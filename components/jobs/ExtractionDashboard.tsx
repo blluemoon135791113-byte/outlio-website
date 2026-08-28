@@ -80,7 +80,16 @@ export function ExtractionDashboard({
   const [selectedJobId, setSelectedJobId] = useState(
     initialJobs.find(isActiveJob)?.id ?? initialJobs[0]?.id ?? null,
   )
-  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
+  /*
+   * ⚠️ ONE FILTER PER BOARD, NOT ONE SHARED FILTER.
+   *
+   * The two boards each render their own chip row. Backed by a single state,
+   * narrowing Accounts to "Needs attention" would silently empty half the
+   * Leads board the user was not looking at — a control appearing to act
+   * locally while acting globally.
+   */
+  const [leadFilter, setLeadFilter] = useState<HistoryFilter>('all')
+  const [accountFilter, setAccountFilter] = useState<HistoryFilter>('all')
   /*
    * ⚠️ SELECTED LEAD RECORDS, NOT JUST IDS.
    *
@@ -201,32 +210,52 @@ export function ExtractionDashboard({
    * Trashed runs leave the history the moment they are deleted — that is what
    * "free up workspace" means. They live in the trash box instead.
    */
-  const filteredJobs = jobs.filter((job) => {
-    if (isTrashed(job)) return false
-    if (historyFilter === 'active') return isActiveJob(job)
-    if (historyFilter === 'completed') return FINISHED_JOB_STATUSES.has(job.status)
-    if (historyFilter === 'attention') {
+  const matchesFilter = (job: DashboardJob, filter: HistoryFilter) => {
+    if (filter === 'active') return isActiveJob(job)
+    if (filter === 'completed') return FINISHED_JOB_STATUSES.has(job.status)
+    if (filter === 'attention') {
       return job.status === 'failed' || job.status === 'cancelled' || job.status === 'partially_completed'
     }
     return true
-  })
+  }
+
+  const visibleJobs = jobs.filter((job) => !isTrashed(job))
+
+  /*
+   * ⚠️ ONE BOARD PER KIND, BECAUSE THE TWO ARE NOT COMPARABLE.
+   *
+   * A lead run yields people and exports person rows; an account run yields
+   * companies and has no person at all. Interleaving them in one list forces
+   * every row to explain which kind it is, and forces the reader to hold both
+   * unit systems at once. Splitting the board means each side can state its
+   * own counts plainly.
+   */
+  const leadJobs = visibleJobs.filter(
+    (job) => job.kind !== 'account_list' && matchesFilter(job, leadFilter),
+  )
+  const accountJobs = visibleJobs.filter(
+    (job) => job.kind === 'account_list' && matchesFilter(job, accountFilter),
+  )
 
   const trashedJobs = jobs.filter(isTrashed)
-
-  const activeJobsCount = jobs.filter(isActiveJob).length
 
    const totals = jobs.reduce(
     (acc, job) => {
       acc.files += FINISHED_JOB_STATUSES.has(job.status)
         ? job.file_count
         : Math.min(job.progress_current, job.file_count)
-      // Only lead runs contribute to the lead total.
-      if (job.kind !== 'account_list') acc.leads += job.leads_kept
+      /*
+       * The two yields are counted separately and never summed. "40 records"
+       * over 25 companies and 15 people is a number with no unit — nobody can
+       * act on it.
+       */
+      if (job.kind === 'account_list') acc.companies += job.accounts_created + job.accounts_matched
+      else acc.leads += job.leads_kept
       acc.duplicates += job.duplicates_removed
       if (FINISHED_JOB_STATUSES.has(job.status)) acc.completed += 1
       return acc
     },
-    { files: 0, leads: 0, duplicates: 0, completed: 0 },
+    { files: 0, leads: 0, companies: 0, duplicates: 0, completed: 0 },
   )
 
   return (
@@ -276,7 +305,7 @@ export function ExtractionDashboard({
 
       {activeJob ? <ActiveRun job={activeJob} /> : <CaughtUp latestJob={jobs[0] ?? null} />}
 
-      <section aria-label="Workspace totals" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section aria-label="Workspace totals" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {/* ⚠️ null is "unknown", 0 is "none left". `?? 0` conflated them. */}
         <MetricCard
           featured
@@ -291,50 +320,57 @@ export function ExtractionDashboard({
         <MetricCard label="Completed extractions" value={totals.completed} detail={`${jobs.length} total in history`} />
         <MetricCard label="Files processed" value={totals.files} detail="Across extraction history" />
         <MetricCard label="Leads extracted" value={totals.leads} detail="Unique leads kept" />
+        <MetricCard label="Companies added" value={totals.companies} detail="From saved account lists" />
         <MetricCard label="Duplicates removed" value={totals.duplicates} detail="Automatically cleaned" />
       </section>
 
       {jobs.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-          <section className="relative z-20 flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
-              <div>
-                <h2 className="text-base font-semibold text-ink">Extraction history</h2>
-                <p className="mt-0.5 text-sm text-muted">
-                  {jobs.length.toLocaleString()} run{jobs.length === 1 ? '' : 's'}
-                  {activeJobsCount > 0 ? ` · ${activeJobsCount} processing` : ''} · trash deletes a run&rsquo;s lead data; the CSV is kept.
-                </p>
-              </div>
-              <HistoryFilters value={historyFilter} onChange={setHistoryFilter} />
-            </div>
+        <div className="space-y-6">
+          {/*
+           * ⚠️ TWO BOARDS, EACH HALF THE WIDTH — not one list with a "kind"
+           * column. A lead run and an account run share a queue but nothing
+           * else: one is measured in people and exports person rows, the other
+           * is measured in companies. Side by side, each board states its own
+           * counts in its own units and neither has to caveat itself.
+           */}
+          <div className="grid gap-6 xl:grid-cols-2">
+            <HistoryBoard
+              title="Leads"
+              subtitle="Saved lead search-results pages."
+              emptyLabel="No lead extractions yet."
+              jobs={leadJobs}
+              selectedId={selectedJob?.id ?? null}
+              onSelect={setSelectedJobId}
+              onChanged={refresh}
+              labelFor={(job) => jobLabel(job, files)}
+              clayConnected={clayConnected}
+              googleConnected={googleConnected}
+              ghlConnected={ghlConnected}
+              filter={leadFilter}
+              onFilterChange={setLeadFilter}
+            />
 
-            <div className="max-h-[62vh] min-h-0 overflow-y-auto">
-              {filteredJobs.length > 0 ? (
-                <ul className="divide-y divide-border">
-                  {filteredJobs.map((job) => (
-                    <JobHistoryRow
-                      key={job.id}
-                      job={job}
-                      selected={selectedJob?.id === job.id}
-                      onSelect={() => setSelectedJobId(job.id)}
-                      onPurged={refresh}
-                      onDeleted={refresh}
-                      label={jobLabel(job, files)}
-                      clayConnected={clayConnected}
-                      googleConnected={googleConnected}
-                      ghlConnected={ghlConnected}
-                    />
-                  ))}
-                </ul>
-              ) : (
-                <p className="px-5 py-10 text-center text-sm text-muted">No extractions match this filter.</p>
-              )}
-            </div>
-          </section>
+            <HistoryBoard
+              title="Accounts"
+              subtitle="Saved Sales Navigator account lists."
+              emptyLabel="No account lists yet."
+              jobs={accountJobs}
+              selectedId={selectedJob?.id ?? null}
+              onSelect={setSelectedJobId}
+              onChanged={refresh}
+              labelFor={(job) => jobLabel(job, files)}
+              clayConnected={clayConnected}
+              googleConnected={googleConnected}
+              ghlConnected={ghlConnected}
+              filter={accountFilter}
+              onFilterChange={setAccountFilter}
+            />
+          </div>
 
-          <div className="flex min-w-0 flex-col gap-6">
+          {/* The selected run's detail, whichever board it came from. */}
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
             <FilePipeline job={selectedJob} files={selectedFiles} />
             <TrashBox jobs={trashedJobs} labelFor={jobLabel} onRestore={refresh} />
           </div>
@@ -511,6 +547,97 @@ function MetricCard({ label, value, detail, featured = false }: { label: string;
   )
 }
 
+/**
+ * One extraction board.
+ *
+ * ⚠️ RENDERED TWICE — once for leads, once for accounts — rather than once
+ * with a "kind" column. The two runs share a queue and nothing else: a lead
+ * run is measured in people and exports person rows, an account run is
+ * measured in companies. A single list would force every row to declare which
+ * unit it is speaking in, and force the reader to hold both at once.
+ *
+ * Selection is shared: whichever board a run is picked in, the same detail
+ * panel below shows its files. One selected run, one detail view.
+ */
+function HistoryBoard({
+  title,
+  subtitle,
+  emptyLabel,
+  jobs,
+  selectedId,
+  onSelect,
+  onChanged,
+  labelFor,
+  clayConnected,
+  googleConnected,
+  ghlConnected,
+  filter,
+  onFilterChange,
+}: {
+  title: string
+  subtitle: string
+  emptyLabel: string
+  jobs: DashboardJob[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+  onChanged: () => void
+  labelFor: (job: DashboardJob) => string
+  clayConnected: boolean
+  googleConnected: boolean
+  ghlConnected: boolean
+  filter: HistoryFilter
+  onFilterChange: (value: HistoryFilter) => void
+}) {
+  // Counted from the rows on screen, so the line always describes what is shown.
+  const activeCount = jobs.filter(isActiveJob).length
+
+  return (
+    <section className="relative z-20 flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          <p className="mt-0.5 text-sm text-muted">
+            {jobs.length.toLocaleString()} run{jobs.length === 1 ? '' : 's'}
+            {activeCount > 0 ? ` · ${activeCount} processing` : ''}
+          </p>
+        </div>
+        <HistoryFilters value={filter} onChange={onFilterChange} />
+      </div>
+
+      <div className="max-h-[52vh] min-h-0 overflow-y-auto">
+        {jobs.length > 0 ? (
+          <ul className="divide-y divide-border">
+            {jobs.map((job) => (
+              <JobHistoryRow
+                key={job.id}
+                job={job}
+                selected={selectedId === job.id}
+                onSelect={() => onSelect(job.id)}
+                onPurged={onChanged}
+                onDeleted={onChanged}
+                label={labelFor(job)}
+                clayConnected={clayConnected}
+                googleConnected={googleConnected}
+                ghlConnected={ghlConnected}
+              />
+            ))}
+          </ul>
+        ) : (
+          /*
+           * The empty state names the page type this board accepts. "No runs"
+           * would leave a user who has only ever uploaded leads wondering
+           * whether the Accounts board is broken or simply unused.
+           */
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm text-muted">{emptyLabel}</p>
+            <p className="mt-1 text-xs text-muted">{subtitle}</p>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function HistoryFilters({
   value,
   onChange,
@@ -605,6 +732,15 @@ function JobHistoryRow({
 
         {!isActiveJob(job) ? (
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {/*
+              * ⚠️ `leadsRemaining` IS 0 FOR AN ACCOUNT RUN, AND MUST STAY 0.
+              *
+              * It gates the CRM destinations, which take person records —
+              * pushing a company list to a lead CRM would create contacts for
+              * people who were never extracted. An account run therefore
+              * offers the CSV download only. Do not "fix" this by passing the
+              * company count.
+              */}
             <RowExportMenu
               jobId={job.id}
               hasExport={Boolean(job.export_storage_path)}

@@ -23,6 +23,7 @@ import { ParseError, parseSearchResults } from '@/lib/leads/parse'
 import { detectSavedPageType } from '@/lib/leads/page-type'
 import { AccountListParseError, parseAccountList, type ParsedAccount } from '@/lib/companies/parse-account-list'
 import { ingestAccounts } from '@/lib/companies/ingest-accounts'
+import { buildAccountCsv } from '@/lib/export/accounts'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SNIFF_BYTES, sniffHtml } from '@/lib/upload/sniff'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
@@ -288,10 +289,39 @@ export async function processJob(jobId: string, userId: string): Promise<Process
 
     const ingest = await ingestAccounts(userId, allAccounts)
 
+    /*
+     * ---- account export ---------------------------------------------------
+     *
+     * Written to the SAME `export_storage_path` column the lead runs use, so
+     * the existing signed-URL download action serves it with no change: it
+     * only ever signs whatever key the job carries, and the key is
+     * server-generated from ids. The filename differs so a user with both
+     * kinds open does not end up with two `leads.csv` in their downloads.
+     *
+     * ⚠️ EXPORTED FROM THE PARSED ROWS, NOT FROM `companies`. The CSV is a
+     * record of what the captured page held; re-reading the table would fold
+     * in facts from other runs and from research, making the file for a run
+     * change every time something unrelated was enriched.
+     */
+    const accountCsv = buildAccountCsv(allAccounts)
+    const accountExportPath = `${userId}/${jobId}/accounts.csv`
+
+    const { error: accountUploadError } = await supabase.storage
+      .from(EXPORT_BUCKET)
+      .upload(accountExportPath, new TextEncoder().encode(accountCsv), {
+        contentType: 'text/csv',
+        upsert: true,
+      })
+
+    if (accountUploadError) {
+      throw new Error(`account export upload failed: ${concise(accountUploadError.message)}`)
+    }
+
     await supabase
       .from('extraction_jobs')
       .update({
         kind: 'account_list',
+        export_storage_path: accountExportPath,
         accounts_parsed: allAccounts.length,
         accounts_created: ingest.created,
         accounts_matched: ingest.matched,
