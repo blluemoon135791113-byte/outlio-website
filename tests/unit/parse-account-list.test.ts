@@ -111,19 +111,22 @@ function account(over: Partial<Parameters<typeof toIngestPayload>[0][number]> = 
 }
 
 describe('account list ingestion mapping', () => {
-  it('⚠️ converts the Sales Navigator URL to the PUBLIC company page', () => {
+  it('⚠️ KEEPS the Sales Navigator form, matching what the lead pipeline stores', () => {
     /*
-     * THE DUPLICATE THIS PREVENTS. `companies.normalized_linkedin_url` is
-     * deduped against values written by the lead pipeline, which stores the
-     * public `linkedin.com/company/<slug>` page. A `/sales/company/` URL never
-     * matches one, so the same company would land twice — once per page type.
+     * THE DUPLICATE THIS PREVENTS — and the earlier version of this test
+     * asserted the opposite, which is how the bug shipped.
+     *
+     * `normalizeCompanyLinkedInUrl` deliberately keeps `/sales/company/<id>`
+     * distinct from `/company/<slug>`: a numeric Sales Navigator id cannot be
+     * turned into a public slug without asking linkedin.com, which rule 1
+     * forbids. "Converting" it to `/company/<id>` invents a THIRD form that
+     * matches neither — measured on live data, it duplicated a company already
+     * held under its `/sales/` identity.
      */
     const { payload } = toIngestPayload([account()])
 
     expect(payload).toHaveLength(1)
-    expect(payload[0]!.linkedin_url).toContain('/company/')
-    expect(payload[0]!.linkedin_url).not.toContain('/sales/')
-    expect(payload[0]!.normalized_linkedin_url).not.toContain('/sales/')
+    expect(payload[0]!.normalized_linkedin_url).toBe('linkedin.com/sales/company/12345')
   })
 
   it('carries the captured industry through', () => {
@@ -189,10 +192,15 @@ describe('the whole chain, on the real fixture', () => {
     }
   })
 
-  it('never emits a Sales Navigator URL as the company identity', () => {
+  it('emits the same identity form the lead pipeline writes', () => {
+    // Both paths must produce `linkedin.com/sales/company/<id>` for the same
+    // company, or an account list and a lead capture create two rows.
     const { payload } = toIngestPayload(parseAccountList(html).accounts)
-    for (const row of payload) {
-      expect(row.normalized_linkedin_url ?? '').not.toContain('/sales/')
+    const withLinkedIn = payload.filter((row) => row.normalized_linkedin_url)
+
+    expect(withLinkedIn.length).toBeGreaterThan(0)
+    for (const row of withLinkedIn) {
+      expect(row.normalized_linkedin_url).toMatch(/^linkedin\.com\/sales\/company\/\d+$/)
     }
   })
 })

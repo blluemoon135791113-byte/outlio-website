@@ -4,6 +4,68 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — Real Account Hub page run; a bug found and two of my claims corrected
+
+### The run
+
+A real saved Account Hub page (805 KB, from Downloads — never copied into the
+repo, per rule 10):
+
+- **Detected `account_list`** despite **19 `person-name` anchors** on the page.
+  This is the exact collision the detector's ordering was built for, now
+  confirmed on real markup rather than a constructed fixture.
+- **25 accounts parsed, 0 rows skipped. 25 payload rows, 0 unidentified.**
+- List name, industries and company names all extracted correctly, including
+  awkward ones — `"RMS" Retail Marketing Solutions LLC` normalised to
+  `rms retail marketing solutions`, and an emoji-prefixed company name.
+
+### ⚠️ THE BUG THE RUN FOUND
+
+`toIngestPayload` ran the Sales Navigator URL through `publicCompanyUrl()`,
+turning `/sales/company/38150452` into `/company/38150452`.
+
+**That was wrong, and `normalizeCompanyLinkedInUrl` documents why in its own
+header**: a NUMERIC Sales Navigator id cannot be turned into a public SLUG
+(`/company/acme`) without asking linkedin.com, which rule 1 forbids. The two
+forms are deliberately kept distinct and converge only when a capture carrying
+both arrives.
+
+So the "conversion" unified nothing — it invented a **third** identity form,
+matching neither the `/sales/company/<id>` rows the lead pipeline writes nor
+real `/company/<slug>` captures.
+
+**This mattered for real data**: the live account stores
+`linkedin.com/sales/company/<id>` for all 25 of its companies. Ingesting an
+account list before this fix would have created 25 duplicates sitting beside
+them. The mapping now passes the URL through unchanged.
+
+⚠️ **The test I wrote asserted the buggy behaviour** — "converts the Sales
+Navigator URL to the PUBLIC company page". A test can encode a bug as
+confidently as code. Rewritten to assert the identity matches what the lead
+pipeline writes.
+
+### Two corrections to what I reported mid-run
+
+1. **"I created a duplicate of Aurasell AI"** — wrong. `companies` is
+   tenant-scoped by `user_id`; the match was in a DIFFERENT tenant, which is
+   correct and expected. I had queried without the user filter.
+2. **"companies before: 0"** — a misread of a PostgREST `content-range` header
+   of `*/0`, which is not a row count.
+
+### No production data was touched
+
+The profile I selected with `limit=1` was
+`outlio-test-identity-first-…@example.com`, a **test tenant**, not
+`husnain@outlio.io`. All ingested rows were deleted afterwards; the test tenant
+is back to zero. **The real account's 25 companies were never read from,
+written to, or modified** — confirmed before and after.
+
+### Verification
+
+- Typecheck, ESLint, production build clean. **1,234 tests.**
+
+---
+
 ## 2026-08-28 — `upsert_companies` verified against the live database
 
 The last untested piece is closed. No database password was needed: the app

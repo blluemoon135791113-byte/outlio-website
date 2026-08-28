@@ -18,7 +18,6 @@ import 'server-only'
  */
 import { resolveCompanyIdentity } from '@/lib/companies/normalize'
 import type { ParsedAccount } from '@/lib/companies/parse-account-list'
-import { publicCompanyUrl } from '@/lib/leads/parse'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 /** Matches `LINK_BATCH_SIZE` in the repository: writes go in a POST body. */
@@ -54,12 +53,24 @@ export type AccountIngestResult = {
  * PURE, and exported so the mapping is testable without a database — the part
  * most likely to be wrong is identity resolution, not the RPC call.
  *
- * ⚠️ THE SALES NAVIGATOR URL IS CONVERTED, NOT STORED AS-IS.
- * `companies.normalized_linkedin_url` is deduped against values written by the
- * lead pipeline, which stores the PUBLIC `linkedin.com/company/<slug>` page. A
- * `/sales/lead/` URL would never match one, so the same company would land
- * twice — once per page type. `publicCompanyUrl` is the same converter the
- * lead parser uses, deliberately.
+ * ⚠️ THE SALES NAVIGATOR URL IS PASSED THROUGH UNCHANGED. DO NOT "CONVERT" IT.
+ *
+ * An earlier version ran it through `publicCompanyUrl()`, turning
+ * `/sales/company/38150452` into `/company/38150452` on the theory that the
+ * public form is the shared identity. That was wrong, and
+ * `normalizeCompanyLinkedInUrl` says why in its own header: a NUMERIC Sales
+ * Navigator id cannot be turned into a public SLUG (`/company/acme`) without
+ * asking linkedin.com, which rule 1 forbids. The two are deliberately kept as
+ * distinct identities that converge when a capture carrying both arrives.
+ *
+ * So the "conversion" did not unify anything — it invented a THIRD form
+ * matching neither the `/sales/company/<id>` rows the lead pipeline writes nor
+ * real `/company/<slug>` captures. Measured on live data: it produced a
+ * duplicate of a company already held.
+ *
+ * Passing the URL through lets the normalizer emit
+ * `linkedin.com/sales/company/<id>`, which matches what the lead pipeline
+ * already stores for the same company.
  */
 export function toIngestPayload(accounts: readonly ParsedAccount[]): {
   payload: AccountIngestPayload[]
@@ -71,7 +82,7 @@ export function toIngestPayload(accounts: readonly ParsedAccount[]): {
   for (const account of accounts) {
     const identity = resolveCompanyIdentity({
       companyName: account.companyName,
-      companyLinkedInUrl: publicCompanyUrl(account.salesNavUrl) ?? account.salesNavUrl,
+      companyLinkedInUrl: account.salesNavUrl,
     })
 
     if (!identity) {
