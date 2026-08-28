@@ -15,7 +15,7 @@
  *
  * No entrance animation. CLAUDE.md forbids them on product lists.
  */
-import { CompanyAvatar, PersonAvatar } from '@/components/intelligence/Avatar'
+import { PersonAvatar } from '@/components/intelligence/Avatar'
 
 export type HubbleSavedDetail = {
   id: string
@@ -134,33 +134,43 @@ export function HubbleLeadList({
                 <span className="block truncate text-sm text-muted">
                   {lead.jobTitle ?? 'Role not listed'}
                 </span>
+                {/* On a narrow screen the company is metadata for this one
+                    person, not a second avatar/identity stacked underneath. */}
+                <span className="mt-1 block truncate text-xs text-muted sm:hidden">
+                  {lead.companyName ?? 'Company not listed'}
+                  {lead.companyLocation ? (
+                    <>
+                      {' · '}
+                      {lead.companyLocation}
+                      {lead.locationIsPersonal ? ' · lead location' : ''}
+                    </>
+                  ) : null}
+                </span>
               </span>
             </span>
 
-            {/* Company */}
-            <span className="flex min-w-0 items-center gap-3">
-              <CompanyAvatar name={lead.companyName} domain={lead.companyDomain} />
-              <span className="min-w-0">
-                <span className="block truncate text-[15px] font-medium text-ink">
-                  {lead.companyName ?? 'Company not listed'}
-                </span>
-                <span className="block truncate text-sm text-muted">
-                  {lead.companyLocation ? (
-                    <>
-                      {lead.companyLocation}
-                      {/*
-                        Labelled, because a seller filtering on "companies in
-                        Austin" must not be shown a person who lives in Austin
-                        and works for a company in Berlin.
-                      */}
-                      {lead.locationIsPersonal ? (
-                        <span className="text-muted"> · lead&apos;s location</span>
-                      ) : null}
-                    </>
-                  ) : (
-                    <span className="text-muted">Location unknown</span>
-                  )}
-                </span>
+            {/* Company is secondary information for the person in this row.
+                A second avatar made one lead look like two merged records. */}
+            <span className="hidden min-w-0 sm:block">
+              <span className="block truncate text-[15px] font-medium text-ink">
+                {lead.companyName ?? 'Company not listed'}
+              </span>
+              <span className="block truncate text-sm text-muted">
+                {lead.companyLocation ? (
+                  <>
+                    {lead.companyLocation}
+                    {/*
+                      Labelled, because a seller filtering on "companies in
+                      Austin" must not be shown a person who lives in Austin
+                      and works for a company in Berlin.
+                    */}
+                    {lead.locationIsPersonal ? (
+                      <span className="text-muted"> · lead&apos;s location</span>
+                    ) : null}
+                  </>
+                ) : (
+                  <span className="text-muted">Location unknown</span>
+                )}
               </span>
             </span>
 

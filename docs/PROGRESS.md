@@ -4,6 +4,24 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — One lead identity per Hubble strip
+
+The narrow Hubble ledger stacked a person avatar and a company avatar inside
+the same strip. Although the data model contained one lead, the two equal
+visual identities made it look like two leads had been merged.
+
+Each strip now has one person avatar and one primary identity. Company and
+location are rendered as subordinate metadata on narrow screens and as a
+secondary text column on wider screens, without a second avatar. The avatar's
+duplicate screen-reader-only name was also removed, so the accessible button
+name announces the person once.
+
+Verified in the running local app with 25 rendered strips: the first strip
+contains one person, one role, and one company metadata line. TypeScript,
+focused ESLint, and the relevant unit checks pass.
+
+---
+
 ## 2026-08-29 — Hubble workspace analysis includes saved Account Lists
 
 Unfiltered Hubble questions now use an explicit `workspace` scope. That scope

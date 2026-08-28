@@ -60,9 +60,11 @@ export function PersonAvatar({
   size?: keyof typeof SIZES
 }) {
   return (
-    <span title={name ?? undefined} className="shrink-0">
+    /* The avatar is decorative: every current use renders the person's name
+       beside it. Repeating that name in sr-only text made each row's accessible
+       label sound like two merged people. */
+    <span aria-hidden title={name ?? undefined} className="shrink-0">
       <Monogram name={name} size={size} rounded="rounded-full" />
-      <span className="sr-only">{name ?? 'Unnamed lead'}</span>
     </span>
   )
 }
