@@ -9,6 +9,7 @@ function job(overrides: Partial<DashboardJob> = {}): DashboardJob {
     status: 'processing',
     trashed_at: null,
     dedupe_mode: 'remove_exact',
+    capture_session_id: null,
     file_count: 18,
     total_bytes: 1,
     progress_step: 'Processing file 5 of 18',

@@ -5,7 +5,7 @@ import type {
 } from '@/types/database'
 
 export const DASHBOARD_JOB_SELECT =
-  'id, status, dedupe_mode, file_count, total_bytes, progress_step, progress_current, progress_total, leads_parsed, leads_kept, kind, accounts_parsed, accounts_created, accounts_matched, duplicates_found, duplicates_removed, export_storage_path, error_message, started_at, completed_at, created_at, updated_at, trashed_at' as const
+  'id, status, dedupe_mode, capture_session_id, file_count, total_bytes, progress_step, progress_current, progress_total, leads_parsed, leads_kept, kind, accounts_parsed, accounts_created, accounts_matched, duplicates_found, duplicates_removed, export_storage_path, error_message, started_at, completed_at, created_at, updated_at, trashed_at' as const
 
 export const DASHBOARD_FILE_SELECT =
   'id, extraction_job_id, original_filename, byte_size, status, leads_found, error_message, processed_at, created_at' as const
@@ -18,6 +18,8 @@ export type DashboardJob = Pick<
   | 'id'
   | 'status'
   | 'dedupe_mode'
+  // NULL means the file was uploaded; set means the extension captured it.
+  | 'capture_session_id'
   | 'file_count'
   | 'total_bytes'
   | 'progress_step'

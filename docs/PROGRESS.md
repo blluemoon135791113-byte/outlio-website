@@ -4,6 +4,45 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Runs are named by source and yield, not by the saved filename
+
+A run's title was the uploaded file's name with `.html` stripped:
+`Tech Leads 3 _ Lead Lists _ Sales Navigator`. LinkedIn names a saved page
+after its own chrome and the browser turns the pipes into underscores, so two
+thirds of that string is identical on every file a user will ever save — it
+distinguished nothing while occupying the widest line on the row.
+
+Runs are now titled `<source> · <yield>`:
+
+- `HTML · 25 leads`
+- `Browser · 25 companies`
+
+**The source is read, never guessed.** `extraction_jobs.capture_session_id` is
+set by the extension path and NULL for an upload (migration 0032), so there is
+no third state and nothing to infer. It had to be added to
+`DASHBOARD_JOB_SELECT` and `DashboardJob` — the dashboard had never selected
+it.
+
+⚠️ **An active run is titled by its file count, not its yield.** `leads_kept`
+and the account totals are only written when a job finishes, so reading them
+mid-run would title a working run "HTML · 0 leads" — failure-looks-like-empty
+again. Active runs read `HTML · 3 files`, and the live "N leads found" count
+stays on the detail line.
+
+The detail line no longer repeats the finished yield now that the title carries
+it; it shows the file count instead.
+
+`jobLabel`, `jobSource` and `jobYield` moved out of the client component into
+`lib/jobs/label.ts` so the rules above are testable — `tests/unit/job-label.test.ts`
+covers the source read, both units and their singulars, the mid-run case, and
+asserts no label can contain an underscore or LinkedIn chrome.
+
+Verified in the running app: all three rows read `HTML · N leads`, no
+underscore and no "Sales Navigator" anywhere in the history. Suite 1,246
+passing (7 new); typecheck, lint and build clean.
+
+---
+
 ## 2026-08-29 — Removed the File pipeline board and the delete confirm's prompt line
 
 Two removals, both requested after seeing the split board on screen.

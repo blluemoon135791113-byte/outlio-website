@@ -23,6 +23,7 @@ import {
   isActiveJob,
   runProgress,
 } from '@/lib/jobs/progress'
+import { jobLabel, jobYield } from '@/lib/jobs/label'
 import { createClient } from '@/lib/supabase/client'
 import type { JobStatus } from '@/types/database'
 
@@ -41,14 +42,6 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
-
-function jobLabel(job: DashboardJob, files: readonly DashboardFile[] = []) {
-  const firstFile = files.find((file) => file.extraction_job_id === job.id)
-  if (firstFile?.original_filename) {
-    return firstFile.original_filename.replace(/\.html?$/i, '')
-  }
-  return `Run ${job.id.slice(0, 8).toUpperCase()}`
-}
 
 export function ExtractionDashboard({
   userId,
@@ -340,7 +333,7 @@ export function ExtractionDashboard({
               jobs={leadJobs}
               failedFilesFor={failedFilesFor}
               onChanged={refresh}
-              labelFor={(job) => jobLabel(job, files)}
+              labelFor={jobLabel}
               clayConnected={clayConnected}
               googleConnected={googleConnected}
               ghlConnected={ghlConnected}
@@ -355,7 +348,7 @@ export function ExtractionDashboard({
               jobs={accountJobs}
               failedFilesFor={failedFilesFor}
               onChanged={refresh}
-              labelFor={(job) => jobLabel(job, files)}
+              labelFor={jobLabel}
               clayConnected={clayConnected}
               googleConnected={googleConnected}
               ghlConnected={ghlConnected}
@@ -509,23 +502,6 @@ function CaughtUp({ latestJob }: { latestJob: DashboardJob | null }) {
       </Link>
     </section>
   )
-}
-
-/**
- * What a run produced, in its own units.
- *
- * ⚠️ AN ACCOUNT RUN IS NOT A LEAD RUN WITH ZERO LEADS. Reading `leads_kept`
- * for every job renders a successful ingest of 25 companies as "0 leads kept"
- * — a run that worked, displayed as one that produced nothing. That is the
- * failure-looks-like-empty pattern, and it is worse here than a blank cell
- * because the number is confidently wrong rather than absent.
- */
-function jobYield(job: DashboardJob): string {
-  if (job.kind === 'account_list') {
-    const n = job.accounts_created + job.accounts_matched
-    return `${n.toLocaleString()} compan${n === 1 ? 'y' : 'ies'}`
-  }
-  return `${job.leads_kept.toLocaleString()} lead${job.leads_kept === 1 ? '' : 's'}`
 }
 
 function MetricCard({ label, value, detail, featured = false }: { label: string; value: number | null; detail: string; featured?: boolean }) {
@@ -700,16 +676,17 @@ function JobHistoryRow({
             </time>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
-            <span>{job.file_count.toLocaleString()} file{job.file_count === 1 ? '' : 's'}</span>
-            <span>
-              {job.status === 'processing'
-                ? job.kind === 'account_list'
+            {/* The finished yield is in the title now, so only the live
+                count — which the title deliberately omits — is repeated. */}
+            {isActiveJob(job) ? (
+              <span>
+                {job.kind === 'account_list'
                   ? `${job.accounts_parsed.toLocaleString()} companies found`
-                  : `${job.leads_parsed.toLocaleString()} leads found`
-                : job.kind === 'account_list'
-                  ? `${jobYield(job)} ingested`
-                  : `${job.leads_kept.toLocaleString()} leads kept`}
-            </span>
+                  : `${job.leads_parsed.toLocaleString()} leads found`}
+              </span>
+            ) : (
+              <span>{job.file_count.toLocaleString()} file{job.file_count === 1 ? '' : 's'}</span>
+            )}
             {job.kind === 'account_list' ? (
               // "Already known" is the account equivalent, and it is a
               // different fact from a duplicate row removed from an export.
