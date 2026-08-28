@@ -1810,6 +1810,11 @@ export type Database = {
       }
       extraction_jobs: {
         Row: {
+          accounts_created: number
+          accounts_matched: number
+          accounts_parsed: number
+          accounts_unidentified: number
+          kind: string
           capture_session_id: string | null
           completed_at: string | null
           created_at: string
@@ -1839,6 +1844,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          accounts_created?: number
+          accounts_matched?: number
+          accounts_parsed?: number
+          accounts_unidentified?: number
+          kind?: string
           capture_session_id?: string | null
           completed_at?: string | null
           created_at?: string
@@ -1868,6 +1878,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          accounts_created?: number
+          accounts_matched?: number
+          accounts_parsed?: number
+          accounts_unidentified?: number
+          kind?: string
           capture_session_id?: string | null
           completed_at?: string | null
           created_at?: string

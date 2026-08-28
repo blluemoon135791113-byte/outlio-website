@@ -21,6 +21,8 @@ import { ALWAYS_EXPORTED, EXPORT_COLUMN_HEADERS } from '@/lib/export/leads'
 import { dedupeLeads, type DedupeMode, type KeyedLead } from '@/lib/leads/dedupe'
 import { ParseError, parseSearchResults } from '@/lib/leads/parse'
 import { detectSavedPageType } from '@/lib/leads/page-type'
+import { AccountListParseError, parseAccountList, type ParsedAccount } from '@/lib/companies/parse-account-list'
+import { ingestAccounts } from '@/lib/companies/ingest-accounts'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SNIFF_BYTES, sniffHtml } from '@/lib/upload/sniff'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
@@ -150,13 +152,17 @@ export async function processJob(jobId: string, userId: string): Promise<Process
   const fileList = files ?? []
   const total = fileList.length
 
-  const allLeads: Array<Awaited<ReturnType<typeof parseOne>>['leads'][number]> = []
+  type ParsedLeadRow = Extract<Awaited<ReturnType<typeof parseOne>>, { kind: 'lead_search' }>['leads'][number]
+
+  const allLeads: Array<ParsedLeadRow & { uploadedFileId: string }> = []
+  /* Accounts accumulate alongside leads; a job resolves to one kind below. */
+  const allAccounts: ParsedAccount[] = []
   let filesProcessed = 0
   let filesFailed = 0
   const fileConcurrency = resolveFileConcurrency(process.env.WORKER_FILE_CONCURRENCY)
 
   type FileResult =
-    | { ok: true; fileId: string; leads: Awaited<ReturnType<typeof parseOne>>['leads'] }
+    | { ok: true; fileId: string; leads: ParsedLeadRow[]; accounts: ParsedAccount[] }
     | { ok: false; fileId: string }
 
   await mapInConcurrentBatches(
@@ -164,20 +170,23 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     fileConcurrency,
     async (file): Promise<FileResult> => {
       try {
-        const { leads } = await parseOne(file.storage_path, file.id, userId, jobId)
+        const parsed = await parseOne(file.storage_path, file.id, userId, jobId)
+        const leads = parsed.kind === 'lead_search' ? parsed.leads : []
+        const accounts = parsed.kind === 'account_list' ? parsed.accounts : []
 
         await supabase
           .from('uploaded_files')
           .update({
             status: 'processed',
-            leads_found: leads.length,
+            // `leads_found` counts what the file yielded, whichever kind it is.
+            leads_found: leads.length + accounts.length,
             processed_at: new Date().toISOString(),
           })
           .eq('id', file.id)
           .eq('extraction_job_id', jobId)
           .eq('user_id', userId)
 
-        return { ok: true, fileId: file.id, leads }
+        return { ok: true, fileId: file.id, leads, accounts }
       } catch (e) {
         // PER-FILE ISOLATION: record and continue. One bad file never fails the batch.
         const code = e instanceof ParseError ? e.code : 'ERR_FILE_FORMAT'
@@ -211,6 +220,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
         for (const result of results) {
           if (result.ok) {
             allLeads.push(...result.leads.map((lead) => ({ ...lead, uploadedFileId: result.fileId })))
+            allAccounts.push(...result.accounts)
             filesProcessed += 1
           } else {
             filesFailed += 1
@@ -229,6 +239,81 @@ export async function processJob(jobId: string, userId: string): Promise<Process
       },
     },
   )
+
+  /*
+   * ╔══════════════════════════════════════════════════════════════════════════╗
+   * ║  AN ACCOUNT RUN LEAVES HERE. IT IS NOT A LEAD RUN WITH DIFFERENT ROWS.   ║
+   * ║                                                                          ║
+   * ║  Everything below — credit charging per block of leads, person dedupe,   ║
+   * ║  lead inserts, the CSV export — is shaped around people. Threading       ║
+   * ║  companies through it would mean a charge computed from a lead count     ║
+   * ║  that is zero, a dedupe keyed on a person who does not exist, and an     ║
+   * ║  export with person headers. The queue, claim, retry and reaper are      ║
+   * ║  shared because they are the hard part; the OUTPUT is not.               ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  if (allAccounts.length > 0) {
+    /*
+     * ⚠️ MIXED UPLOADS ARE REFUSED, NOT SILENTLY HALVED. A batch holding both
+     * page types has no honest outcome: charging for the leads and quietly
+     * ingesting the companies would report one number for two jobs. Say so and
+     * let the user split the upload.
+     */
+    if (allLeads.length > 0) {
+      await supabase
+        .from('extraction_jobs')
+        .update({
+          status: 'failed',
+          error_code: 'ERR_FILE_FORMAT',
+          error_message:
+            'This upload mixes lead search pages with account lists. ' +
+            'Upload each kind separately.',
+          progress_step: 'Mixed page types',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+        .eq('user_id', userId)
+
+      await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
+
+      return {
+        jobId,
+        status: 'failed',
+        leadsParsed: allLeads.length,
+        leadsKept: 0,
+        filesProcessed,
+        filesFailed,
+      }
+    }
+
+    const ingest = await ingestAccounts(userId, allAccounts)
+
+    await supabase
+      .from('extraction_jobs')
+      .update({
+        kind: 'account_list',
+        accounts_parsed: allAccounts.length,
+        accounts_created: ingest.created,
+        accounts_matched: ingest.matched,
+        accounts_unidentified: ingest.unidentified,
+        status: filesFailed > 0 ? 'partially_completed' : 'completed',
+        progress_step: null,
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', jobId)
+      .eq('user_id', userId)
+
+    await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
+
+    return {
+      jobId,
+      status: filesFailed > 0 ? ('partially_completed' as const) : ('completed' as const),
+      filesProcessed,
+      filesFailed,
+      leadsParsed: 0,
+      leadsKept: 0,
+    }
+  }
 
   // ---- charge ------------------------------------------------------------
   /*
@@ -563,16 +648,27 @@ async function parseOne(storagePath: string, fileId: string, userId: string, job
    * That is a smaller lie than "malformed", and it is the honest state until
    * company ingestion exists.
    */
-  const pageType = detectSavedPageType(html)
-  if (pageType === 'account_list') {
-    throw new ParseError(
-      'ERR_FILE_FORMAT',
-      'this is a Sales Navigator account list, not a lead search-results page — ' +
-        'account lists cannot be extracted yet',
-    )
+  /*
+   * ⚠️ ROUTE BEFORE PARSING, SO A VALID FILE IS NOT CALLED BROKEN.
+   *
+   * An Account Hub page fed to the lead parser yields zero leads, which is
+   * correctly raised as ERR_FILE_FORMAT — and is nonetheless the wrong answer:
+   * the file was fine, we pointed the wrong reader at it.
+   */
+  if (detectSavedPageType(html) === 'account_list') {
+    try {
+      const result = parseAccountList(html)
+      return { kind: 'account_list' as const, accounts: result.accounts }
+    } catch (error) {
+      // The parser's own error already names what went wrong with the layout.
+      throw new ParseError(
+        'ERR_FILE_FORMAT',
+        error instanceof AccountListParseError ? error.message : 'account list could not be read',
+      )
+    }
   }
 
-  return parseSearchResults(html)
+  return { kind: 'lead_search' as const, ...parseSearchResults(html) }
 }
 
 /**

@@ -4,6 +4,53 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-28 — Account lists ingest end to end
+
+### The queue is shared; the output is not
+
+`0066` adds `kind` plus four account counters to `extraction_jobs` rather than
+creating an `account_jobs` table. The queue, `claim_next_job`,
+`FOR UPDATE SKIP LOCKED`, attempt counts, backoff and the stale-claim reaper
+are the hard parts of this pipeline and are already correct — a parallel table
+would duplicate every one of them and drift.
+
+What differs is only the OUTPUT. Reporting "25 leads kept" for a run that
+produced 25 companies would be a lie in the one place a user checks what a run
+did, so accounts get their own columns.
+
+⚠️ **`kind` defaults to `lead_search`, which is correct for every existing
+row** — account lists could not be ingested before this migration, so no
+historical job can be one. A nullable column would have forced every reader to
+handle an "unknown kind" that has never existed.
+
+### The worker branches rather than threading
+
+An account run leaves `processClaim` before the lead machinery. Everything
+below that point — credit charging per block of leads, person dedupe, lead
+inserts, the CSV export — is shaped around people. Threading companies through
+would mean a charge computed from a lead count of zero, a dedupe keyed on a
+person who does not exist, and an export with person headers.
+
+⚠️ **MIXED UPLOADS ARE REFUSED, NOT SILENTLY HALVED.** A batch holding both
+page types has no honest outcome: charging for the leads while quietly
+ingesting the companies reports one number for two jobs. The run fails with a
+message telling the user to split the upload.
+
+`parseOne` now returns a tagged result, so per-file isolation still holds: one
+unreadable file fails alone rather than failing the batch.
+
+### Verification
+
+- Typecheck, ESLint and production build clean. **1,229 tests**.
+- ⚠️ **0065 and 0066 are NOT APPLIED.** No database was reachable this session,
+  so `upsert_companies`, `kind` and the account counters are unverified against
+  Postgres, and `types/database.ts` was hand-extended in the generator's shape
+  to compile. **Apply both migrations and regenerate types before trusting an
+  account run.** The parsing, routing and mapping are covered by tests; the SQL
+  is not.
+
+---
+
 ## 2026-08-28 — Account List ingestion: companies as a first-class feature
 
 ### It is a separate feature, and the schema says so
