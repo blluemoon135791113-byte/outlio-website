@@ -4,6 +4,23 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Lead Engine orbital hero integrated
+
+The Lead Engine hero now uses the supplied interactive orbital-canvas build in
+place of the static singularity photograph. Its solar-system renderer retains
+the original Keplerian paths, star-field parallax, responsive focal point,
+edge scrim, pointer camera movement, visibility pausing, DPR cap, and
+reduced-motion behavior.
+
+The integration keeps the existing Outlio navigation and all landing-page
+sections below the hero. Lead Engine messaging and real routes replace the
+demo placeholders. The redundant Capture, Research, and Ask bar was removed so
+the orbital canvas ends cleanly at the existing workspace section; the full
+How It Works content remains farther down the page. No third-party runtime
+dependency was required.
+
+---
+
 ## 2026-08-29 — Hubble lead labels and logo rendering refined
 
 Account List decision makers now appear as ordinary individual leads on the
