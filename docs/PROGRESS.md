@@ -4,6 +4,19 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Hubble mark sharpened for interface use
+
+The Hubble mark is now rendered as native inline SVG rather than a large PNG
+scaled down into a small frame. Its telescope, orbital lines, panels, and nodes
+therefore remain as sharp as the adjacent Hubble wordmark on standard and
+high-density displays. The navigation-size version is optically simplified so
+the symbol stays recognizable at 18px instead of collapsing into fine detail.
+
+The original supplied artwork remains in `public/brand/hubble-logo.png` as the
+canonical source asset; the vector component is its interface-scale rendering.
+
+---
+
 ## 2026-08-29 — Hubble telescope logo integrated
 
 The user-supplied telescope/orbit artwork is now the canonical Hubble product
