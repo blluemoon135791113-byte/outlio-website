@@ -1,52 +1,16 @@
-'use client'
-
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
 
-import { OrbitalHeroSection } from '@/components/ui/orbital-hero-section'
-
-/**
- * Keep the orbital composition intentional on narrow screens. The canvas
- * needs different focal and scrim directions when the copy and artwork can no
- * longer sit side by side; CSS alone cannot change those renderer props.
- */
-function useNarrow(query = '(max-width: 767px)') {
-  const [narrow, setNarrow] = useState(false)
-
-  useEffect(() => {
-    const media = window.matchMedia(query)
-    const sync = () => setNarrow(media.matches)
-
-    sync()
-    media.addEventListener('change', sync)
-    return () => media.removeEventListener('change', sync)
-  }, [query])
-
-  return narrow
-}
+import { SingularityHeroScene } from '@/components/ui/singularity-hero-scene'
 
 /**
- * Lead Engine's first impression: product copy laid over the supplied orbital
- * canvas. The canvas explains the idea of continuously moving intelligence;
- * the copy stays on a deliberately quiet, scrimmed edge rather than competing
- * with it.
+ * Lead Engine's first impression: product copy laid over the supplied hand and
+ * singularity artwork, animated as a responsive interactive scene.
  */
 export function LeadEngineHero() {
-  const narrow = useNarrow()
-
   return (
     <section className="bg-black text-white">
       <div className="relative min-h-[92svh] w-full md:min-h-[720px]">
-        <OrbitalHeroSection
-          focus={narrow ? [0.5, 0.86] : [0.74, 0.42]}
-          scrim={narrow ? 'top' : 'left'}
-          scrimStrength={narrow ? 0.94 : 0.92}
-          viewRadius={narrow ? 2.1 : 3.1}
-          lead={narrow ? 0.05 : 0.12}
-          glow={narrow ? 0.5 : 1}
-          starCount={narrow ? 850 : 1500}
-          interactive={!narrow}
-        >
+        <SingularityHeroScene>
           <div className="mx-auto flex h-full min-h-[92svh] w-full max-w-[1800px] items-start px-6 pb-16 pt-16 sm:px-10 md:min-h-[720px] md:items-center md:py-20 lg:px-[121px]">
             <div className="max-w-[35rem]">
               <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60">
@@ -93,9 +57,8 @@ export function LeadEngineHero() {
               </div>
             </div>
           </div>
-        </OrbitalHeroSection>
+        </SingularityHeroScene>
       </div>
-
     </section>
   )
 }

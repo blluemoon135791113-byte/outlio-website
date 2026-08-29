@@ -25,6 +25,7 @@
     "@paddle/paddle-node-sdk": "^3.10.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
+    "@types/three": "^0.185.4",
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",
     "country-list": "^2.4.1",
@@ -37,6 +38,7 @@
     "server-only": "^0.0.1",
     "simple-icons": "^16.28.0",
     "tailwind-merge": "^3.6.0",
+    "three": "^0.185.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

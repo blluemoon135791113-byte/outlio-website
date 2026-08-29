@@ -18,6 +18,20 @@
   --jet: #262625;
   --ivory: #f2eee3;
 
+  /* ⚠️ TRUE BLACK, AND DELIBERATELY NOT `--jet`.
+     Jet is the brand's darkest NEUTRAL and reads as a warm near-black beside
+     ivory. The Lead Engine hero sits on starfield artwork whose background is
+     actual black, so jet behind it shows as a grey plate around the image
+     while it loads and wherever a scrim thins out. This token exists for
+     surfaces that must disappear into dark imagery — nothing else. */
+  --void: #000000;
+
+  /* Its counterpart. `--ivory` is the brand's warm off-white and is right on
+     paper; against a black frame it reads as beige. A plate that has to look
+     WHITE on artwork needs actual white, and it needs to be a token so the
+     next one does not arrive as a literal. */
+  --pure: #ffffff;
+
   /* ⚠️ FOCUS IS ITS OWN TOKEN, AND IT IS NOT THE ACCENT.
      The ring used `--accent`, so making the accent coral turned every focused
      control orange — a brand colour doing a job that is not branding. Focus
@@ -233,6 +247,8 @@
   --color-lilac-deep: var(--lilac-deep);
   --color-jet: var(--jet);
   --color-ivory: var(--ivory);
+  --color-void: var(--void);
+  --color-pure: var(--pure);
   --color-charcoal: var(--charcoal);
 
   /* Product tokens — see :root above */
@@ -1495,5 +1511,266 @@ details[open] .faq-mark {
 @media (prefers-reduced-motion: reduce) {
   .clay-interactive {
     transition: background-color 100ms linear;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Lead Engine hero — entrance
+   ═══════════════════════════════════════════════════════════════════════════
+
+   ⚠️ THIS PASSES THE FREQUENCY GATE, AND ALMOST NOTHING ELSE ON THE SITE DOES.
+   A staged entrance is only earned at the rare / first-view tier. This is the
+   first thing a visitor sees, once per visit, and it is the one place on the
+   product where a sequence communicates hierarchy — motto, then the sentence
+   that explains it, then the way in. The same treatment on a dashboard the
+   user opens forty times a day would be a defect.
+
+   ⚠️ OPT-IN, NOT OPT-OUT. Wrapped in `no-preference` so motion is something a
+   user opts into by not having asked for less. Under reduced motion the
+   elements are simply present — no fallback fade, because the fade IS the
+   thing being removed.
+
+   Only `opacity`, `transform` and `filter` animate: all three composite on the
+   GPU. Nothing here touches layout.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes hero-rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+      filter: blur(5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+  }
+
+  .hero-enter {
+    /* `backwards` holds the from-state during the delay. Without it each item
+       paints at full opacity first, then blinks out to start — the stagger
+       reads as a flicker. */
+    animation: hero-rise 620ms var(--ease-out-ui, ease-out) backwards;
+  }
+
+  /* ~100ms apart. Longer reads as three separate events rather than one
+     sequence; shorter and the hierarchy stops being legible. */
+  .hero-enter-1 { animation-delay: 60ms; }
+  .hero-enter-2 { animation-delay: 160ms; }
+  .hero-enter-3 { animation-delay: 260ms; }
+
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Lead Engine — dune orange
+   ═══════════════════════════════════════════════════════════════════════════
+
+   ⚠️ SCOPED TO THIS SURFACE, NOT SWAPPED GLOBALLY.
+
+   `--coral` is the brand accent for the whole of Outlio — the agency site, the
+   product shell, the dashboard. Repointing it at :root to warm the Lead Engine
+   landing page would recolour every button in the app. So the page declares
+   its own values and every widget under it inherits them through the tokens
+   they already consume: nothing downstream needs editing, and nothing outside
+   this class changes.
+
+   The hue is the same one the hero plate was graded to (26.5°), so the artwork
+   and the buttons under it are the same orange rather than two near-misses.
+
+   ⚠️ `--dune-deep` IS THE ONE THAT CARRIES TEXT, AND IT WAS CHOSEN BY
+   MEASUREMENT. The brand dune sits at 2.63:1 on cream — fine for a fill or a
+   border, nowhere near AA for a label. `#8f4f1a` reads 5.49:1, which is what
+   `--coral-deep` (5.40:1) was already delivering, so swapping the palette
+   moves no text across the AA line in either direction. */
+.leadengine-surface {
+  /* ⚠️ THE EASING TOKEN IS DECLARED HERE ON PURPOSE.
+     `--ease-out-ui` is scoped to `.app-shell` — the authenticated product —
+     so it does NOT resolve on the marketing pages. A `var()` that fails to
+     substitute makes the whole declaration invalid at computed-value time, so
+     `animation: … var(--ease-out-ui) …` silently became `animation: none` and
+     the hero's transition shorthand died with it. Nothing errors; the motion
+     just never happens. Other landing-page rules dodge this with a fallback
+     (`var(--ease-out-ui, ease-out)`); declaring it once for this surface fixes
+     the whole page instead of one rule at a time. */
+  --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
+
+  --coral: #d2803f;
+  --coral-deep: #8f4f1a;
+  --coral-soft: #fbf0e4;
+
+  --accent: var(--coral-deep);
+  --accent-deep: #77400f;
+  --accent-soft: var(--coral-soft);
+
+  /* The gradient rule allows sage↔coral only; this keeps that shape and just
+     moves the warm end onto the new hue. */
+  --grad-band: linear-gradient(
+    140deg,
+    var(--sage-deep) 0%,
+    var(--sage) 38%,
+    var(--coral) 82%,
+    var(--coral-deep) 110%
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Lead Engine hero — artwork surface
+   ═══════════════════════════════════════════════════════════════════════════
+
+   The hero is a two-column row: copy on the left, a plate of starfield art on
+   the right. It was previously a full-bleed background with the type over it,
+   and most of what lived here — three gradient scrim pools, their media
+   queries, per-breakpoint crop anchors and an edge mask — existed only to keep
+   white text legible on top of the picture. None of it is needed now that the
+   text sits on the section's own black, and all of it has gone. What remains
+   is the plate's drift and its fade-in.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ⚠️ TRANSLATION ONLY — NO OVERSCAN.
+   The plate is `object-contain` inside its column now, so it already fits
+   exactly. Scaling it up would push its edges past the box and crop the very
+   pixels `contain` is there to preserve. The drift has nothing to cover
+   because the artwork's background and the section behind it are the same
+   black: where the plate moves off, black meets black.
+
+   This is still what puts the sphere on a circular path — it is painted into
+   the artwork, so the plate carrying it is what has to move. */
+@keyframes hero-orbit {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(9px, 6px); }
+  50%  { transform: translate(0, 12px); }
+  75%  { transform: translate(-9px, 6px); }
+  100% { transform: translate(0, 0); }
+}
+
+.hero-art {
+  /* Slow enough to read as drift rather than movement. A hero that visibly
+     animates competes with the copy beside it. */
+  animation: hero-orbit 32s ease-in-out infinite;
+  will-change: transform;
+
+  /* ⚠️ NO MASK. Earlier versions needed one — first to disguise a wrist the
+     crop had severed, then to soften a contained plate's rectangular edge.
+     Neither applies: the plate is shown whole, and its own background is the
+     same black as the section, so the box has no visible boundary to dissolve.
+     A fade here would only remove artwork. */
+}
+
+@keyframes hero-art-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ⚠️ BOTH ANIMATIONS IN ONE DECLARATION, AND DELIBERATELY PLACED AFTER
+   `.hero-art`.
+   `animation` is a shorthand: a second rule setting it REPLACES the first
+   rather than adding to it. Declaring the fade on its own class silently
+   cancelled the orbit — or lost to it, depending on source order. Listing both
+   here, below the rule they would otherwise fight, is what makes the plate
+   fade in on load AND keep drifting afterwards.
+
+   The plate fades without the rise the copy gets: it is the subject of its own
+   column rather than a step in the reading sequence, and sliding a full column
+   of artwork is a lot of motion carrying no information. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-art-enter {
+    animation:
+      hero-art-fade 900ms var(--ease-out-ui, ease-out) backwards,
+      hero-orbit 32s ease-in-out infinite;
+  }
+}
+
+/* ⚠️ THE SCRIM CHANGES DIRECTION WITH THE LAYOUT, BECAUSE THE LAYOUT DOES.
+   Above, the composition is side by side — art right, words left — so the
+   gradient runs left to right. On a phone it stacks: the plate shows its full
+   height, the hand sits in the top half and the copy runs the full width
+   underneath, straight across the bright dust trail. A horizontal ramp cannot
+   help there; its dark end is only ~150px wide while the text is ~330px.
+   Measured with the left ramp still in place, the headline came out at 1.26:1.
+   Running the ramp bottom-to-top instead puts the darkness where the words
+   actually are and leaves the hand and the sphere at full strength. */
+/* The call to action, inverted from the dark reference: ivory plate, jet text.
+   Square corners on purpose — a pill would read as the product's own button
+   language, and this one belongs to the poster. */
+.hero-cta {
+  /* ⚠️ PURE WHITE, NOT IVORY.
+     Ivory is the brand's warm off-white and is correct on paper. Sat on a
+     black starfield it reads as beige — the plate looked dimmed rather than
+     bright. Nothing else on this surface is white, so there is no consistency
+     argument for keeping it warm here. */
+  background: var(--pure);
+  color: var(--jet);
+  transition:
+    transform 160ms var(--ease-out-ui, ease-out),
+    box-shadow 160ms var(--ease-out-ui, ease-out);
+}
+
+/* ⚠️ GATED. Touch devices fire :hover on tap, so an ungated hover state
+   sticks to the button after the finger lifts. */
+@media (hover: hover) and (pointer: fine) {
+  .hero-cta:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--void) 55%, transparent);
+  }
+}
+
+/* The press. Without it the button is the one element on the page that does
+   not answer back — and this is the only thing on the hero you can click. */
+.hero-cta:active {
+  transform: scale(0.96);
+  transition-duration: 100ms;
+}
+
+/* ⚠️ THE FOCUS RING IS DRAWN INSIDE THE BUTTON, ON PURPOSE.
+   Two constraints meet here. The global `:focus-visible` puts a jet ring at
+   `outline-offset: 3px` — outside the button, on the hero's black field, where
+   it measured 1.39:1 and was invisible to keyboard users. And the button must
+   carry no external border at all: anything drawn outside its edge reads as a
+   frame around a plate that is meant to sit flush on the artwork.
+
+   A NEGATIVE offset satisfies both. The ring is inset into the button's own
+   white, where jet-on-white is 15.15:1 — well past the 3:1 an indicator needs
+   — and nothing is painted beyond the button's edge. Removing it is not an
+   option; moving it inward is. */
+.hero-cta:focus-visible {
+  outline: 2px solid var(--jet);
+  outline-offset: -4px;
+}
+
+/* The arrow leaves in the direction it points. A 2px nudge is the whole
+   effect — enough to register as a response, not enough to be a movement. */
+.hero-cta-arrow {
+  transition: transform 150ms ease;
+}
+
+.hero-cta:hover .hero-cta-arrow {
+  transform: translate(2px, -2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-art {
+    animation: none;
+    /* ⚠️ NO TRANSFORM. This used to hold `scale(1.06)`, the overscan the drift
+       needed back when the plate was cropped with `cover`. Under `contain` the
+       plate already fits exactly, so scaling it up pushes its edges out of the
+       box — reduced-motion users would have been the only ones served a
+       CROPPED image, which is the opposite of gentler. */
+    transform: none;
+  }
+
+  /* Reduced motion means gentler, not none: the press feedback is the only
+     signal that the click registered, so it stays. Movement goes. */
+  .hero-cta-arrow {
+    transition: none;
+  }
+
+  .hero-cta:hover {
+    transform: none;
+  }
+
+  .hero-cta:hover .hero-cta-arrow {
+    transform: none;
   }
 }

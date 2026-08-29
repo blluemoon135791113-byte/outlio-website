@@ -246,6 +246,12 @@ export default function Home() {
                   almost word for word. `HeroHeadline` is the hero; this block
                   was crowding it.
                 */}
+                <h1 className="text-4xl font-bold uppercase tracking-tight text-ink sm:text-5xl">
+                  Hands-on growth accelerator for tech startups and SaaS
+                </h1>
+                <p className="mt-3 text-base leading-relaxed text-muted/80 sm:text-lg">
+                  Outlio isn't a consultancy. We research your market, identify your ideal customers, write every message by hand, and run your outbound ourselves, then show you all of it live in a shared CRM. Our approach is research-first, human-led, and built to scale with you — from the intro call through launch and beyond. We help tech startups and SaaS companies fill the pipeline so you can focus on building your product.
+                </p>
                 <HeroHeadline />
                 <HeroScrollFade>
                   <p className="mx-auto mt-6 max-w-3xl text-base leading-relaxed text-muted sm:text-lg">
