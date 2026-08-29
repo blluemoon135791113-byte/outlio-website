@@ -4,6 +4,15 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Original Hubble mark restored
+
+The hand-redrawn interface SVG has been removed. Every Hubble placement once
+again renders the exact user-supplied telescope/orbit artwork from
+`public/brand/hubble-logo.png`, using the original optical crop, proportions,
+and spacing introduced with the first Hubble logo integration.
+
+---
+
 ## 2026-08-29 — Account Lists became CRM-ready company records
 
 Account List imports now persist durable company membership and the real
