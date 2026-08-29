@@ -4,6 +4,14 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-30 — Original dark singularity restored
+
+The Lead Engine singularity ball has returned to its original dark-limb
+appearance. The dune-orange corona and animated emitted-energy wake remain in
+place; no hand, star, copy, layout, or motion behavior changed.
+
+---
+
 ## 2026-08-30 — Dune-orange singularity and emitted energy
 
 The Lead Engine hero now recolors only the singularity ball and the light it

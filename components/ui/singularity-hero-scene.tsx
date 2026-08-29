@@ -287,7 +287,7 @@ const ORB_VERTEX = /* glsl */ `
 const ORB_FRAGMENT = /* glsl */ `
   void main() {
     /*
-     * ⚠️ FLAT DUNE ORANGE. NO GENERATED RIM.
+     * ⚠️ FLAT BLACK. NO RIM. THE RIM WAS THE FLOATING RING.
      *
      * This shaded a fresnel edge — bright where the sphere turned away from
      * the camera. Against the hand that reads as a lit hole, but most of its
@@ -299,12 +299,18 @@ const ORB_FRAGMENT = /* glsl */ `
      * as a BLACK disc and the hand is composited additively, which drops black
      * — so deleting this would not leave the artwork's hole behind, it would
      * leave nothing, and the hand would reach toward empty sky. Alpha stays 1:
-     * the one job the sphere has is to occlude the stars behind it.
+     * the one job a hole has is to occlude the stars behind it.
      *
-     * It is deliberately flat. The painted corona supplies the edge light, so
-     * generating another fresnel rim here would create a duplicate hoop.
+     * ⚠️ NOT QUITE BLACK — THIS IS THE DARK LIMB.
+     * At pure black the body vanished into the sky and only the crescent
+     * painted into the plate survived, so the sphere read as a sliver rather
+     * than as a full one. Lifting it a few percent lets the WHOLE disc
+     * silhouette behind that crescent, the way earthshine shows the unlit part
+     * of a moon. It is deliberately flat: any falloff toward the edge is a
+     * fresnel rim, and a rim on a body this small is the floating hoop that
+     * was removed.
      */
-    gl_FragColor = vec4(206.0, 81.0, 2.0, 255.0) / 255.0;
+    gl_FragColor = vec4(0.055, 0.062, 0.085, 1.0);
   }
 `
 
