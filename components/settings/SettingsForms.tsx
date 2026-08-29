@@ -172,11 +172,8 @@ export function SubscriptionSettings({
   if (!hasActiveSubscription) {
     return (
       <p className="rounded-xl border border-border bg-app/70 p-4 text-sm leading-6 text-muted">
-        There is no active plan to cancel on this account. If that looks wrong, email{' '}
-        <a className="font-medium text-accent underline underline-offset-2" href="mailto:husnain@outlio.io">
-          husnain@outlio.io
-        </a>
-        .
+        There is no active plan to cancel on this account. If that looks wrong, use the contact
+        channel in your transaction correspondence.
       </p>
     )
   }

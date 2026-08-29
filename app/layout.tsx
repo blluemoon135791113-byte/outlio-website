@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Caveat, DM_Sans } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { serializeJsonLd } from "@/lib/json-ld";
+import { APP_ORIGIN, isAppHost } from "@/lib/site";
 import SmoothScroll from "./components/SmoothScroll";
 import "./globals.css";
 import "lenis/dist/lenis.css";
@@ -21,7 +23,7 @@ const caveat = Caveat({
   display: "swap",
 });
 
-export const metadata: Metadata = {
+const agencyMetadata: Metadata = {
   title: "Outlio | Proven Sales Systems For Tech Startups and SaaS",
   description:
     "We do research first sales outreach for Tech startups, SaaS startups, and agencies || All human written",
@@ -110,12 +112,97 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+const appMetadata: Metadata = {
+  metadataBase: new URL(APP_ORIGIN),
+  title: {
+    default: "Outlio Lead Engine | B2B Data & Business Intelligence Software",
+    template: "%s",
+  },
+  description:
+    "B2B software for extracting, enriching, organizing, scoring, and exporting source-backed lead and company data.",
+  applicationName: "Outlio Lead Engine",
+  keywords: [
+    "B2B data extraction software",
+    "lead enrichment software",
+    "business intelligence software",
+    "lead data organization",
+    "Sales Navigator data export",
+  ],
+  creator: "Outlio Lead Engine",
+  publisher: "Outlio",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  alternates: { canonical: APP_ORIGIN },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: APP_ORIGIN,
+    siteName: "Outlio Lead Engine",
+    title: "Outlio Lead Engine | B2B Data & Business Intelligence Software",
+    description:
+      "Extract, enrich, organize, score, and export source-backed B2B lead and company data.",
+    images: [{
+      url: "/social/og-card.png",
+      width: 640,
+      height: 335,
+      alt: "Outlio Lead Engine B2B data and business intelligence software",
+    }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Outlio Lead Engine | B2B Data Software",
+    description:
+      "Source-backed B2B data extraction, enrichment, organization, scoring, and export software.",
+    images: ["/social/og-card.png"],
+  },
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
+};
+
+export async function generateMetadata(): Promise<Metadata> {
+  return isAppHost((await headers()).get("host")) ? appMetadata : agencyMetadata;
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const jsonLd = {
+  const appSurface = isAppHost((await headers()).get("host"));
+  const jsonLd = appSurface ? {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Outlio Lead Engine',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    url: APP_ORIGIN,
+    description:
+      'B2B software for extracting, enriching, organizing, scoring, and exporting source-backed lead and company data.',
+    offers: {
+      '@type': 'AggregateOffer',
+      priceCurrency: 'USD',
+      lowPrice: '28',
+      highPrice: '69',
+      offerCount: '3',
+      url: `${APP_ORIGIN}/pricing`,
+    },
+    provider: {
+      '@type': 'Organization',
+      name: 'Outlio',
+    },
+  } : {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'Outlio',

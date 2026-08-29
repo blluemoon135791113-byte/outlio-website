@@ -65,6 +65,13 @@ describe('app.outlio.io software surface', () => {
     expect(getRewrittenUrl(response)).toBe('https://app.outlio.io/not-found')
   })
 
+  it('moves the old app privacy path to the public SaaS policy on the same host', async () => {
+    const response = await proxy(appRequest('/privacy'))
+
+    expect(getRedirectUrl(response)).toBe('https://app.outlio.io/privacy-policy')
+    expect(response.status).toBe(308)
+  })
+
   it('never exposes the internal rewrite targets as URLs', async () => {
     for (const [internal, canonical] of [
       ['/app-home', 'https://app.outlio.io/'],

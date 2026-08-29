@@ -55,7 +55,9 @@ export default function LeadEngineRefundPolicy() {
             <Link href="/terms" className="font-medium text-accent">
               Lead Engine Terms of Service
             </Link>
-            . Outlio&apos;s done-for-you services are governed by separate terms.
+            . Outlio Lead Engine is a standalone software product. Any consulting, agency,
+            lead-generation, or other services offered separately by Outlio are not included in
+            this subscription and are not processed through this application.
           </p>
           <Callout>
             <strong>Paid fees are non-refundable.</strong> We provide a 3-day free trial with 10
@@ -158,10 +160,8 @@ export default function LeadEngineRefundPolicy() {
 
         <Section title="8. Contact">
           <p>
-            Questions or billing-error reports: {" "}
-            <a href="mailto:husnain@outlio.io" className="font-semibold text-accent">
-              husnain@outlio.io
-            </a>
+            Questions or billing-error reports may be submitted through the contact channel shown
+            in your account or Paddle transaction correspondence.
           </p>
         </Section>
       </main>

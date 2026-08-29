@@ -45,9 +45,27 @@ export default function LeadEnginePage() {
      * page moves. See globals.css.
      */
     <div className="leadengine-surface">
-      <Nav surface="leadengine" />
+      <Nav surface="leadengine" variant="heroGlass" />
 
       <LeadEngineHero />
+
+      <section className="bg-paper px-4 py-16 sm:py-20">
+        <div className="mx-auto max-w-5xl">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
+            Software access only
+          </p>
+          <h2 className="mt-4 max-w-3xl text-3xl font-bold uppercase leading-tight tracking-tight sm:text-4xl">
+            Research infrastructure, not an outreach service
+          </h2>
+          <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted sm:text-lg">
+            Lead Engine extracts, enriches, de-duplicates, organizes, scores, and
+            exports B2B data. It does not send cold emails, automatically send
+            LinkedIn messages, perform outreach for customers, or include agency
+            or appointment-setting services. Paddle payments on this application
+            purchase access to the software only.
+          </p>
+        </div>
+      </section>
 
       <DashboardPreview />
 

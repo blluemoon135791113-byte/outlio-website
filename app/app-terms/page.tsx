@@ -71,12 +71,10 @@ export default function LeadEngineTerms() {
             bind that company. If you do not agree, do not use the Service.
           </p>
           <p>
-            These Terms apply <strong>only</strong> to Lead Engine. Outlio&apos;s done-for-you
-            outbound, lead generation, and video production services are governed separately by our{" "}
-            <Link href="/terms" className="font-medium text-accent">
-              main Terms and Conditions
-            </Link>
-            . Where both apply, these Terms control for Lead Engine.
+            These Terms apply <strong>only</strong> to Lead Engine. Outlio Lead Engine is a
+            standalone software product. Any consulting, agency, lead-generation, or other services
+            offered separately by Outlio are not included in this subscription and are not processed
+            through this application.
           </p>
         </div>
 
@@ -137,7 +135,8 @@ export default function LeadEngineTerms() {
               <li>
                 The Service <strong>never connects to LinkedIn</strong>. It sends no requests to
                 LinkedIn&apos;s servers and operates no crawler, bot, browser extension, or
-                automated browser.
+                automated browser on LinkedIn&apos;s servers. The optional extension only captures
+                the results page already open in your browser when you explicitly ask it to.
               </li>
               <li>
                 The Service <strong>never asks for, stores, or uses</strong> your LinkedIn
@@ -550,11 +549,7 @@ export default function LeadEngineTerms() {
             , which forms part of these Terms. Where we process personal data contained in your
             Uploaded Files, we do so on your instructions as your processor, on the terms set out in
             Section 12 of that policy. A separate signed data processing agreement is available on
-            request at{" "}
-            <a href="mailto:husnain@outlio.io" className="font-medium text-accent">
-              husnain@outlio.io
-            </a>
-            .
+            request through the contact channel provided in your account or transaction correspondence.
           </p>
         </Section>
 
@@ -598,10 +593,8 @@ export default function LeadEngineTerms() {
 
         <Section title="22. Contact">
           <p>
-            Questions about these Terms:{" "}
-            <a href="mailto:husnain@outlio.io" className="font-semibold text-accent">
-              husnain@outlio.io
-            </a>
+            Questions about these Terms may be submitted through the contact channel provided in
+            your account or transaction correspondence.
           </p>
         </Section>
       </main>

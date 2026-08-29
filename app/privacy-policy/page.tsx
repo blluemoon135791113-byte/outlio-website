@@ -94,12 +94,9 @@ export default function LeadEnginePrivacy() {
             people whose professional details appear inside the files those account holders upload.
           </p>
           <p>
-            It applies only to Lead Engine. Our website and our done-for-you outbound and video
-            services are covered by the{" "}
-            <Link href="/privacy" className="font-medium text-accent">
-              main Outlio Privacy Policy
-            </Link>
-            .
+            It applies only to Lead Engine. Outlio Lead Engine is a standalone software product.
+            Any consulting, agency, lead-generation, or other services offered separately by Outlio
+            are not included in this subscription and are not processed through this application.
           </p>
         </div>
 
@@ -429,7 +426,7 @@ export default function LeadEnginePrivacy() {
               ["Supabase", "Database, authentication, file storage", "EU / US"],
               ["Vercel", "Application hosting and delivery", "Global edge"],
               ["Resend", "Transactional email — verification, password reset, notices", "EU / US"],
-              ["Stripe", "Payment processing, where card payment is enabled", "EU / US"],
+              ["Paddle", "Merchant of record and subscription payment processing", "EU / US"],
               ["Calendly", "Scheduling, if you book a call with us", "US"],
             ]}
           />
@@ -437,11 +434,7 @@ export default function LeadEnginePrivacy() {
             We also disclose data where legally required, to enforce our terms, or in connection
             with a merger or acquisition — in which case we will give notice before your data
             becomes subject to a different policy. An up-to-date list of sub-processors is available
-            at{" "}
-            <a href="mailto:husnain@outlio.io" className="font-medium text-accent">
-              husnain@outlio.io
-            </a>
-            .
+            on request through the contact channel provided in your account or transaction correspondence.
           </p>
         </Section>
 
@@ -455,11 +448,8 @@ export default function LeadEnginePrivacy() {
           </p>
           <p>
             You can delete your account and its data yourself from your account settings. For
-            anything else, email{" "}
-            <a href="mailto:husnain@outlio.io" className="font-medium text-accent">
-              husnain@outlio.io
-            </a>
-            . We respond within 30 days.
+            anything else, use the contact channel provided in your account or transaction
+            correspondence. We respond within 30 days.
           </p>
         </Section>
 
@@ -485,11 +475,9 @@ export default function LeadEnginePrivacy() {
             </li>
           </ul>
           <p>
-            <strong>You can ask us directly to erase your data.</strong> Email{" "}
-            <a href="mailto:husnain@outlio.io" className="font-medium text-accent">
-              husnain@outlio.io
-            </a>{" "}
-            with the name and profile URL that identify you. We will delete any matching extracted
+            <strong>You can ask us directly to erase your data.</strong> Use the contact channel
+            provided in your account or transaction correspondence and include the name and profile
+            URL that identify you. We will delete any matching extracted
             records and duplicate-detection keys across all customer accounts, and confirm when it
             is done. We will not ask you to justify the request, and we will not charge for it.
           </p>
@@ -566,11 +554,8 @@ export default function LeadEnginePrivacy() {
           </ul>
           <p>
             No system is perfectly secure. If you believe you have found a vulnerability, please
-            report it to{" "}
-            <a href="mailto:husnain@outlio.io" className="font-medium text-accent">
-              husnain@outlio.io
-            </a>{" "}
-            rather than disclosing it publicly, and we will work with you.
+            report it through the contact channel provided in your account or transaction
+            correspondence rather than disclosing it publicly, and we will work with you.
           </p>
         </Section>
 
@@ -602,10 +587,8 @@ export default function LeadEnginePrivacy() {
 
         <Section title="17. Contact">
           <p>
-            Privacy questions, data requests, and erasure requests:{" "}
-            <a href="mailto:husnain@outlio.io" className="font-semibold text-accent">
-              husnain@outlio.io
-            </a>
+            Privacy questions, data requests, and erasure requests may be submitted through the
+            contact channel provided in your account or transaction correspondence.
           </p>
           <p>
             Outlio is the data controller for account data. If you are in the UK or EU and are not

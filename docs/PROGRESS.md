@@ -4,6 +4,27 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-30 — Lead Engine hero made viewport-responsive
+
+The Lead Engine hero, WebGL scene host, and copy layer now share one consistent
+`100svh` minimum height. The hero fills the complete initial browser viewport
+on desktop and mobile without the next section peeking through, while still
+allowing the layout to grow safely when small screens need more room for copy.
+The previous conflicting `92svh` and fixed `720px` minimums were removed.
+
+---
+
+## 2026-08-30 — Floating glass Lead Engine navigation
+
+The Lead Engine landing page now uses a fixed black glass navigation tube over
+the hero. The Outlio mark anchors the far left, followed by Platform, Pricing,
+and Get Extension; Book a Demo stays at the far right and opens the existing
+booking flow. The capsule keeps its contrast as the page scrolls, while a
+compact mobile menu preserves the same destinations on smaller screens. Other
+Lead Engine pages retain their existing light navigation.
+
+---
+
 ## 2026-08-30 — Pre-orange orb system restored
 
 The complete Lead Engine orb system now matches its state from before the dune

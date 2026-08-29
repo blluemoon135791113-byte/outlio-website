@@ -12,7 +12,6 @@ const SITE_MAP = [
 const WHERE_TO_LOOK = [
   { title: "Homepage", href: "/" },
   { title: "Documentation", href: "/" },
-  { title: "Contact", href: "mailto:husnain@outlio.io" },
 ];
 
 export default function NotFound() {

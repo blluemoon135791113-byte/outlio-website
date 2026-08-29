@@ -108,14 +108,6 @@ export default async function AccessPage() {
       ) : null}
 
       <p className="text-sm text-muted">
-        Questions?{' '}
-        <a
-          href="mailto:husnain@outlio.io"
-          className="font-medium text-accent hover:underline"
-        >
-          Contact us
-        </a>
-        {' | '}
         <Link href="/dashboard" className="font-medium text-accent hover:underline">
           Back to dashboard
         </Link>

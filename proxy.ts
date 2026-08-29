@@ -153,6 +153,12 @@ export async function proxy(request: NextRequest) {
   let rewriteTo: URL | null = null
 
   if (isAppHost(host)) {
+    if (rawPath === '/privacy') {
+      const privacy = request.nextUrl.clone()
+      privacy.pathname = '/privacy-policy'
+      return finish(NextResponse.redirect(privacy, 308))
+    }
+
     // The bare app domain IS the software storefront. It explains the product,
     // pricing and legal terms before asking anyone to sign in.
     const internal = APP_HOST_REWRITES[rawPath]

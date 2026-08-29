@@ -5,7 +5,7 @@
  * production: doing so can send a one-time verification code to an attacker.
  */
 
-const DEFAULT_APP_ORIGIN = 'https://outlio.io'
+const DEFAULT_APP_ORIGIN = 'https://app.outlio.io'
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 
 function parseOrigin(value: string, source: string): URL {

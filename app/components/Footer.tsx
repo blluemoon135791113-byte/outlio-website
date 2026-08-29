@@ -72,7 +72,7 @@ export default function Footer({ surface = "main" }: FooterProps) {
   return (
     <footer className="bg-panel">
       <div className="mx-auto max-w-7xl px-6 pb-8 pt-12 sm:px-10 sm:pt-16">
-        <a href="mailto:husnain@outlio.io" className="flex w-fit items-center gap-3">
+        <div className="flex w-fit items-center gap-3">
           <Image
             src="/outlio logo.png"
             alt="Outlio"
@@ -80,8 +80,10 @@ export default function Footer({ surface = "main" }: FooterProps) {
             height={44}
             className="size-11 rounded-lg object-contain"
           />
-          <span className="text-xl font-semibold tracking-tight sm:text-2xl">husnain@outlio.io</span>
-        </a>
+          <span className="text-xl font-semibold tracking-tight sm:text-2xl">
+            {surface === "leadengine" ? "Outlio Lead Engine" : "husnain@outlio.io"}
+          </span>
+        </div>
 
         <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           <div>
@@ -127,9 +129,10 @@ export default function Footer({ surface = "main" }: FooterProps) {
           <div>
             {surface === "leadengine" ? (
               <p className="max-w-sm text-sm leading-6 text-muted">
-                Lead Engine is self-serve software. Paddle checkout is used only
-                for software subscriptions and never for Outlio&apos;s separately
-                contracted human services.
+                Outlio Lead Engine is a standalone software product. Any consulting,
+                agency, lead-generation, or other services offered separately by
+                Outlio are not included in this subscription and are not processed
+                through this application.
               </p>
             ) : (
               <p className="text-sm text-muted">Growth, done by hand.</p>
@@ -146,7 +149,7 @@ export default function Footer({ surface = "main" }: FooterProps) {
                 : "Human-written outreach since day one. No autopilot."}
             </p>
           </div>
-          <div className="flex gap-2.5">
+          {surface === "main" ? <div className="flex gap-2.5">
             {SOCIALS.map((s) => (
               <a
                 key={s.network}
@@ -159,7 +162,7 @@ export default function Footer({ surface = "main" }: FooterProps) {
                 <Image src={s.icon} alt={`${s.network} icon`} width={40} height={40} className="size-10" />
               </a>
             ))}
-          </div>
+          </div> : null}
         </div>
       </div>
     </footer>

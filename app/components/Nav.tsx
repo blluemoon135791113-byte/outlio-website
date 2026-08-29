@@ -85,9 +85,11 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
 interface NavProps {
   /** Which product's navigation to render. */
   surface?: NavSurface;
+  /** Floating dark navigation used only over the Lead Engine hero artwork. */
+  variant?: "default" | "heroGlass";
 }
 
-export default function Nav({ surface = "agency" }: NavProps) {
+export default function Nav({ surface = "agency", variant = "default" }: NavProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const config = SURFACES[surface];
@@ -95,6 +97,111 @@ export default function Nav({ surface = "agency" }: NavProps) {
 
   const externalProps = (item: { external?: boolean }) =>
     item.external ? { target: "_blank", rel: "noopener noreferrer" } : {};
+
+  if (surface === "leadengine" && variant === "heroGlass") {
+    const glassLinks: NavLink[] = [
+      { label: "Platform", href: "/product" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Get Extension", href: CHROME_EXTENSION_URL, external: true },
+    ];
+
+    return (
+      <header className="pointer-events-none fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 sm:pt-4">
+        <div className="pointer-events-auto relative mx-auto flex min-h-16 w-full max-w-[1800px] items-center rounded-[2rem] border border-white/[0.14] bg-black/70 px-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_55px_rgba(0,0,0,0.38)] backdrop-blur-2xl supports-[backdrop-filter]:bg-black/55 sm:px-3">
+          <Link
+            href="/"
+            className="flex shrink-0 items-center rounded-[1.35rem] p-1 transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97]"
+            aria-label="Outlio home"
+          >
+            <Image
+              src="/outlio logo.png"
+              alt="Outlio"
+              width={48}
+              height={48}
+              preload
+              className="rounded-[1.1rem] object-cover"
+            />
+          </Link>
+
+          <nav
+            aria-label="Lead Engine navigation"
+            className="ml-2 hidden items-center gap-1 md:flex lg:ml-4 lg:gap-2"
+          >
+            {glassLinks.map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                {...externalProps(link)}
+                className="rounded-full border border-transparent px-4 py-2.5 text-sm font-semibold text-white transition-[transform,background-color,border-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:border-white/[0.14] hover:bg-white/[0.07] active:scale-[0.97] lg:px-5"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          <Link
+            href={CALENDLY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto inline-flex min-h-11 items-center rounded-full border border-white/20 bg-white/[0.08] px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] transition-[transform,background-color,border-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:border-white/35 hover:bg-white/[0.14] active:scale-[0.97] sm:px-5"
+          >
+            Book a Demo
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen((open) => !open)}
+            className="ml-1 flex size-11 shrink-0 items-center justify-center rounded-full text-white transition-[transform,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/[0.08] active:scale-[0.97] md:hidden"
+            aria-label="Toggle navigation"
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="lead-engine-mobile-navigation"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              className="size-5"
+            >
+              {isMobileMenuOpen ? (
+                <>
+                  <path d="m6 6 12 12" />
+                  <path d="M18 6 6 18" />
+                </>
+              ) : (
+                <>
+                  <path d="M5 8h14" />
+                  <path d="M5 16h14" />
+                </>
+              )}
+            </svg>
+          </button>
+
+          {isMobileMenuOpen && (
+            <nav
+              id="lead-engine-mobile-navigation"
+              aria-label="Lead Engine mobile navigation"
+              className="absolute inset-x-0 top-[calc(100%+0.5rem)] rounded-[1.65rem] border border-white/[0.14] bg-black/85 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_20px_55px_rgba(0,0,0,0.45)] backdrop-blur-2xl md:hidden"
+            >
+              {glassLinks.map((link) => (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  {...externalProps(link)}
+                  onClick={closeMobile}
+                  className="block rounded-full px-5 py-3 text-sm font-semibold text-white transition-[transform,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/[0.08] active:scale-[0.98]"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-50 bg-paper/90 backdrop-blur-md">

@@ -125,13 +125,16 @@ const nextConfig: NextConfig = {
       `public/leadengine/*` — the hero artwork among it. List the pages.
     */
     return [
-      { source: '/leadengine', destination: '/', permanent: true },
-      { source: '/leadengine/pricing', destination: '/pricing', permanent: true },
-      { source: '/leadengine/terms', destination: '/terms', permanent: true },
-      { source: '/leadengine/privacy', destination: '/privacy-policy', permanent: true },
+      { source: '/leadengine', destination: 'https://app.outlio.io', permanent: true },
+      { source: '/leadengine/pricing', destination: 'https://app.outlio.io/pricing', permanent: true },
+      { source: '/leadengine/product', destination: 'https://app.outlio.io/product', permanent: true },
+      { source: '/leadengine/how-it-works', destination: 'https://app.outlio.io/how-it-works', permanent: true },
+      { source: '/leadengine/terms', destination: 'https://app.outlio.io/terms', permanent: true },
+      { source: '/leadengine/privacy', destination: 'https://app.outlio.io/privacy-policy', permanent: true },
+      { source: '/leadengine/privacy-policy', destination: 'https://app.outlio.io/privacy-policy', permanent: true },
       {
         source: '/leadengine/refund-policy',
-        destination: '/refund-policy',
+        destination: 'https://app.outlio.io/refund-policy',
         permanent: true,
       },
     ];
