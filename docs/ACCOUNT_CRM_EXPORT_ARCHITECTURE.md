@@ -36,11 +36,11 @@ do not research, infer, or mutate it.
    stored values and therefore do not wait for or repeat research.
 
 The recommended person is also a normal Hubble lead: it appears on the
-Intelligence board and in the originating Account List batch. Its lead card is
-labelled as an Account List recommendation. Person evidence and contacts render
-under Person research; employer evidence and company contacts render under
-Company research. The two scopes share a company link, not a storage bucket or
-display section.
+Intelligence board and in the originating Account List batch. It is presented
+as an ordinary single lead without an origin badge. Person evidence and
+contacts render under Person research; employer evidence and company contacts
+render under Company research. The two scopes share a company link, not a
+storage bucket or display section.
 
 ## Load and safety boundaries
 

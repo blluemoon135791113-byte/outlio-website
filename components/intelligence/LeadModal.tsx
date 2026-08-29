@@ -201,12 +201,6 @@ export function LeadModal({
                 <h2 className="truncate text-2xl font-semibold tracking-[-0.02em] text-ink">
                   {lead.fullName ?? 'Unnamed lead'}
                 </h2>
-                {lead.origin === 'account_recommendation' ? (
-                  <span className="mt-1.5 inline-flex rounded-full border border-accent/20 bg-accent-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-accent">
-                    Recommended from Account List
-                  </span>
-                ) : null}
-
                 <p className="mt-2.5 flex items-center gap-2.5 text-sm text-ink">
                   <Glyph label="Role">▤</Glyph>
                   <span className="truncate">{lead.jobTitle ?? 'Role not listed'}</span>

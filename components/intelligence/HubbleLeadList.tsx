@@ -138,11 +138,6 @@ export function HubbleLeadList({
                 <span className="block truncate text-sm text-muted">
                   {lead.jobTitle ?? 'Role not listed'}
                 </span>
-                {lead.origin === 'account_recommendation' ? (
-                  <span className="mt-1 inline-flex rounded-full border border-accent/20 bg-accent-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-accent">
-                    Account recommendation
-                  </span>
-                ) : null}
                 {/* On a narrow screen the company is metadata for this one
                     person, not a second avatar/identity stacked underneath. */}
                 <span className="mt-1 block truncate text-xs text-muted sm:hidden">

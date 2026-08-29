@@ -4,6 +4,20 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Hubble lead labels and logo rendering refined
+
+Account List decision makers now appear as ordinary individual leads on the
+Intelligence board and in the lead modal; the visible “Account recommendation”
+origin badges have been removed while internal provenance remains intact.
+
+The exact supplied Hubble artwork is unchanged. A lossless 884×884 interface
+crop now contains the same source pixels that were previously selected with a
+CSS crop, and is served directly as PNG instead of being recompressed by the
+image optimizer. This removes empty-canvas scaling and lossy conversion while
+preserving the original telescope, orbit geometry, proportions, and spacing.
+
+---
+
 ## 2026-08-29 — Original Hubble mark restored
 
 The hand-redrawn interface SVG has been removed. Every Hubble placement once

@@ -30,13 +30,14 @@ export function HubbleLogo({
       className={`relative inline-flex shrink-0 overflow-hidden ${SIZE_CLASS[size]} ${className}`}
     >
       <Image
-        src="/brand/hubble-logo.png"
+        src="/brand/hubble-logo-ui.png"
         alt=""
-        width={160}
-        height={160}
-        priority={priority}
+        width={884}
+        height={884}
+        preload={priority}
+        unoptimized
         sizes="48px"
-        className="absolute left-1/2 top-1/2 h-[142%] w-[142%] max-w-none -translate-x-1/2 -translate-y-1/2 object-cover mix-blend-multiply"
+        className="h-full w-full object-cover mix-blend-multiply"
       />
     </span>
   )
