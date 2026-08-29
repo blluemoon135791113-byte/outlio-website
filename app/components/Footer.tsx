@@ -1,29 +1,41 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { appUrl } from "@/lib/site";
+
 const FOOTER_NAV = [
   { label: "Offers", href: "/#offers" },
   { label: "How it works", href: "/#how" },
   { label: "Results", href: "/#results" },
   { label: "Motion Graphic Ads", href: "/explainers" },
-  { label: "Lead Engine Pricing", href: "/leadengine/pricing" },
+  { label: "Lead Engine Pricing", href: appUrl("/pricing") },
   { label: "About", href: "/#about" },
   { label: "FAQ", href: "/#faq" },
   { label: "Book a call", href: "#book" },
 ];
 
+/*
+ * The agency surface reaches the software legal pages by absolute URL: they
+ * live on app.outlio.io and only ever render there in canonical form.
+ */
 const LEGAL_NAV = [
   { label: "Terms and Conditions", href: "/terms" },
   { label: "Privacy Policy", href: "/privacy" },
-  { label: "Lead Engine Terms", href: "/leadengine/terms" },
-  { label: "Lead Engine Privacy", href: "/leadengine/privacy" },
-  { label: "Refund Policy", href: "/leadengine/refund-policy" },
+  { label: "Lead Engine Terms", href: appUrl("/terms") },
+  { label: "Lead Engine Privacy", href: appUrl("/privacy-policy") },
+  { label: "Refund Policy", href: appUrl("/refund-policy") },
 ];
 
+/*
+ * ⚠️ PADDLE READS THIS FOOTER. A card-payment reviewer crawling
+ * app.outlio.io must find visible Terms, Privacy Policy and Refund Policy
+ * links on the homepage, each resolving on the same domain without a login.
+ * Do not hide these behind auth, and do not rename them past recognition.
+ */
 const LEAD_ENGINE_LEGAL_NAV = [
-  { label: "Lead Engine Terms", href: "/leadengine/terms" },
-  { label: "Lead Engine Privacy", href: "/leadengine/privacy" },
-  { label: "Refund Policy", href: "/leadengine/refund-policy" },
+  { label: "Terms of Service", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy-policy" },
+  { label: "Refund Policy", href: "/refund-policy" },
 ];
 
 const SOCIALS = [
@@ -45,9 +57,10 @@ type FooterProps = {
 };
 
 const LEAD_ENGINE_NAV = [
-  { label: "Product", href: "/leadengine" },
-  { label: "How it works", href: "/leadengine#how-it-works" },
-  { label: "Pricing", href: "/leadengine/pricing" },
+  { label: "Home", href: "/" },
+  { label: "Product", href: "/product" },
+  { label: "How it works", href: "/how-it-works" },
+  { label: "Pricing", href: "/pricing" },
   { label: "Sign in", href: "/sign-in" },
 ];
 

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { CALENDLY_URL, CHROME_EXTENSION_URL } from "../lib/constants";
+import { APP_ORIGIN } from "@/lib/site";
 
 /**
  * Surface-aware navigation.
@@ -16,9 +17,14 @@ import { CALENDLY_URL, CHROME_EXTENSION_URL } from "../lib/constants";
  * returns to the main site, so a product page is never a dead end.
  *
  * Anchors are REAL ids on each page — see the `id=` attributes in
- * app/page.tsx, app/leadengine/page.tsx and app/explainers/page.tsx. A link
+ * app/page.tsx, app/app-home/page.tsx and app/explainers/page.tsx. A link
  * here that points at a missing anchor silently does nothing, so check the
  * target exists before adding one.
+ *
+ * The Lead Engine links are all root-relative because that surface only ever
+ * renders on app.outlio.io, where the product lives at `/`. The agency surface
+ * reaches it with one absolute link to APP_ORIGIN and nothing else — visitors
+ * are never bounced back and forth between the two domains.
  */
 export type NavSurface = "agency" | "leadengine" | "motion";
 
@@ -48,7 +54,7 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
       { label: "Motion Graphic Ads", href: "/explainers" },
     ],
     ctas: [
-      { label: "Try Outlio's Lead Engine", href: "/leadengine", primary: true },
+      { label: "Try Outlio's Lead Engine", href: APP_ORIGIN, primary: true },
       { label: "Book a call", href: CALENDLY_URL, external: true },
     ],
   },
@@ -56,9 +62,9 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
   /* Self-serve SaaS. Its buyer wants price and proof, not agency services. */
   leadengine: {
     links: [
-      { label: "How it works", href: "/leadengine#how-it-works" },
-      { label: "Product", href: "/leadengine#product-preview" },
-      { label: "Pricing", href: "/leadengine/pricing" },
+      { label: "How it works", href: "/how-it-works" },
+      { label: "Product", href: "/product" },
+      { label: "Pricing", href: "/pricing" },
       { label: "Download the extension", href: CHROME_EXTENSION_URL, external: true },
     ],
     ctas: [

@@ -22,7 +22,7 @@ review cycle.
 | Developer account ($5, one-off) | you have it |
 | ZIP, manifest at archive root | `npm run ext:package` |
 | Icons at true 16/32/48/128 | done — verified by the packager |
-| Privacy policy URL | `https://outlio.io/leadengine/privacy` |
+| Privacy policy URL | `https://app.outlio.io/privacy-policy` |
 | Store icon 128×128 | reuse `extensions/dist/chrome/icons/icon-128.png` |
 | Screenshots 1280×800 or 640×400 | **you must make these** — at least one |
 | Justification for every permission | §4 below |
@@ -66,7 +66,7 @@ Screenshots are the only genuinely manual item. Suggested set:
 >
 > An Outlio account with an active subscription is required. Installing the extension alone does not grant access.
 >
-> Privacy policy: https://outlio.io/leadengine/privacy
+> Privacy policy: https://app.outlio.io/privacy-policy
 
 **Category** — Workflow & Planning
 

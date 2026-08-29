@@ -4,7 +4,7 @@ const SITE_MAP = [
   { title: "Home", href: "/" },
   { title: "Explainers", href: "/explainers" },
   { title: "How It Works", href: "/how" },
-  { title: "Pricing", href: "/leadengine/pricing" },
+  { title: "Pricing", href: "/pricing" },
   { title: "Terms", href: "/terms" },
   { title: "Privacy", href: "/privacy" },
 ];

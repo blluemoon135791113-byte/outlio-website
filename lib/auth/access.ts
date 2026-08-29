@@ -245,7 +245,7 @@ async function hasHubbleEntitlement(ctx: AccessContext): Promise<boolean> {
 export async function requireHubbleAccess(): Promise<AccessContext> {
   const ctx = await requireAccess()
   if (await hasHubbleEntitlement(ctx)) return ctx
-  redirect('/leadengine/pricing?upgrade=hubble')
+  redirect('/pricing?upgrade=hubble')
 }
 
 /** For admin pages. Admin status comes from `profiles.role`, never a claim. */

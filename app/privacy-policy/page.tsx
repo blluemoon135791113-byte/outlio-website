@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import Nav from "../../components/Nav";
-import Footer from "../../components/Footer";
+import Nav from "@/app/components/Nav";
+import Footer from "@/app/components/Footer";
+import { appUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Lead Engine Privacy Policy | Outlio",
   description:
     "How Outlio Lead Engine handles account data, uploaded files, and the personal data of individuals whose details appear in them.",
   alternates: {
-    canonical: "https://app.outlio.io/leadengine/privacy",
+    canonical: appUrl("/privacy-policy"),
   },
   robots: {
     index: true,
@@ -498,7 +499,7 @@ export default function LeadEnginePrivacy() {
           <p>
             This Section applies where Outlio acts as processor for personal data in your uploaded
             files, and forms part of our{" "}
-            <Link href="/leadengine/terms" className="font-medium text-accent">
+            <Link href="/terms" className="font-medium text-accent">
               Lead Engine Terms of Service
             </Link>
             . We will:

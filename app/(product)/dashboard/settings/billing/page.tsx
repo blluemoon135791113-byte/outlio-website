@@ -43,7 +43,7 @@ export default async function BillingSettingsPage() {
 
       <div className="mt-5 flex flex-wrap gap-2">
         <Link
-          href="/leadengine/pricing"
+          href="/pricing"
           className="inline-flex h-10 items-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-deep"
         >
           View plans

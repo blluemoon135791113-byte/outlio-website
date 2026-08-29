@@ -50,7 +50,7 @@ const TIERS: Tier[] = [
       'Duplicate removal across every upload',
       'Free CSV export — downloads never cost credits',
     ],
-    cta: { label: 'See monthly & yearly prices', href: '/leadengine/pricing' },
+    cta: { label: 'See monthly & yearly prices', href: '/pricing' },
   },
   {
     key: 'professional',
@@ -67,7 +67,7 @@ const TIERS: Tier[] = [
       'Longer export retention (90 days)',
       'Priority support',
     ],
-    cta: { label: 'See monthly & yearly prices', href: '/leadengine/pricing' },
+    cta: { label: 'See monthly & yearly prices', href: '/pricing' },
     featured: true,
     badge: 'Most popular',
   },
@@ -86,7 +86,7 @@ const TIERS: Tier[] = [
       'Retention and limits set with you',
       'Direct line to the team',
     ],
-    cta: { label: 'See monthly & yearly prices', href: '/leadengine/pricing' },
+    cta: { label: 'See monthly & yearly prices', href: '/pricing' },
   },
 ]
 

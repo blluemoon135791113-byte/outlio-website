@@ -1,15 +1,25 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import Nav from "../../components/Nav";
-import Footer from "../../components/Footer";
+import Nav from "@/app/components/Nav";
+import Footer from "@/app/components/Footer";
+import { appUrl } from "@/lib/site";
 
+/**
+ * ⚠️ THIS ROUTE IS AN INTERNAL REWRITE TARGET, NOT A PUBLIC URL.
+ *
+ * The public address is `app.outlio.io/terms`. `app/terms/page.tsx` already
+ * serves the agency Terms and Conditions on outlio.io, and one deployment
+ * serves both domains, so `proxy.ts` rewrites `/terms` on the app host to
+ * `/app-terms` and permanently redirects direct requests for `/app-terms`
+ * back to `/terms`.
+ */
 export const metadata: Metadata = {
   title: "Lead Engine Terms of Service | Outlio",
   description:
     "The terms governing use of Outlio Lead Engine, the software that turns saved Sales Navigator results pages into structured CSV files.",
   alternates: {
-    canonical: "https://app.outlio.io/leadengine/terms",
+    canonical: appUrl("/terms"),
   },
   robots: {
     index: true,
@@ -87,7 +97,7 @@ export default function LeadEngineTerms() {
               <strong>Duplicate-Detection Key</strong> — the short identifier the Service keeps
               after Extracted Data is cleared, so that a person already seen is not counted twice.
               See Section 11 and our{" "}
-              <Link href="/leadengine/privacy" className="font-medium text-accent">
+              <Link href="/privacy-policy" className="font-medium text-accent">
                 Lead Engine Privacy Policy
               </Link>
               .
@@ -257,7 +267,7 @@ export default function LeadEngineTerms() {
             <li>
               Plans are prepaid and allocate a number of Credits per billing period. Current plans,
               prices, and Credit allocations are shown on our{" "}
-              <Link href="/leadengine/pricing" className="font-medium text-accent">
+              <Link href="/pricing" className="font-medium text-accent">
                 pricing page
               </Link>{" "}
               and are incorporated into these Terms.
@@ -313,7 +323,7 @@ export default function LeadEngineTerms() {
             <li>
               <strong>One trial per person, business, and network.</strong> To enforce this we
               retain anti-abuse signals described in our{" "}
-              <Link href="/leadengine/privacy" className="font-medium text-accent">
+              <Link href="/privacy-policy" className="font-medium text-accent">
                 Lead Engine Privacy Policy
               </Link>
               . Creating multiple trial accounts, or using a VPN, proxy, or additional email
@@ -353,7 +363,7 @@ export default function LeadEngineTerms() {
           </ul>
           <p>
             Read the standalone{" "}
-            <Link href="/leadengine/refund-policy" className="font-medium text-accent">
+            <Link href="/refund-policy" className="font-medium text-accent">
               Lead Engine Refund Policy
             </Link>{" "}
             for the complete billing and refund rules.
@@ -394,7 +404,7 @@ export default function LeadEngineTerms() {
               clear an extraction, we keep a short key for each record so that future uploads can
               tell you which people you have already seen. These keys are retained for the life of
               your account. They are pseudonymous, not anonymous — Section 5 of our{" "}
-              <Link href="/leadengine/privacy" className="font-medium text-accent">
+              <Link href="/privacy-policy" className="font-medium text-accent">
                 Lead Engine Privacy Policy
               </Link>{" "}
               describes exactly what they contain and how to have them erased.
@@ -534,7 +544,7 @@ export default function LeadEngineTerms() {
         <Section title="19. Privacy and Data Protection">
           <p>
             Our handling of personal data is described in the{" "}
-            <Link href="/leadengine/privacy" className="font-medium text-accent">
+            <Link href="/privacy-policy" className="font-medium text-accent">
               Lead Engine Privacy Policy
             </Link>
             , which forms part of these Terms. Where we process personal data contained in your

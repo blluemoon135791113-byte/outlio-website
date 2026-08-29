@@ -4,6 +4,21 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Supplied singularity artwork became an interactive hero
+
+The Lead Engine hero now uses the exact user-supplied reaching-hand artwork as
+its visual source. The source pixels and composition remain unchanged; a
+responsive scene layer fits the image at desktop and mobile sizes, adds
+pointer-smoothed depth, converging light particles, and animated orbital rings
+around the fingertip singularity.
+
+The animation caps device pixel ratio, pauses offscreen or in hidden tabs, and
+honors reduced-motion preferences. Responsive scrims preserve copy contrast
+without baking text into the artwork. Every existing hero heading, sentence,
+CTA label, and route is unchanged.
+
+---
+
 ## 2026-08-29 — Lead Engine orbital hero integrated
 
 The Lead Engine hero now uses the supplied interactive orbital-canvas build in
@@ -6360,3 +6375,74 @@ Phase 4 needs nothing further from the user.
 - Planner, contact extraction, summary-panel tests, TypeScript, and focused
   ESLint pass. The complete suite passes 1,255 tests across 90 files, with 24
   intentionally skipped, and the Next.js 16.3 production build passes.
+
+## 2026-08-30 — app.outlio.io is the product; Lead Engine routes flattened
+
+### Changed
+
+- **`/leadengine` no longer exists.** `app.outlio.io` *is* Outlio Lead Engine,
+  and every supporting page sits directly beneath it:
+
+  | URL | Route file |
+  |---|---|
+  | `https://app.outlio.io` | `app/app-home/page.tsx` (rewritten from `/`) |
+  | `https://app.outlio.io/pricing` | `app/pricing/page.tsx` |
+  | `https://app.outlio.io/how-it-works` | `app/how-it-works/page.tsx` |
+  | `https://app.outlio.io/product` | `app/product/page.tsx` |
+  | `https://app.outlio.io/terms` | `app/app-terms/page.tsx` (rewritten from `/terms`) |
+  | `https://app.outlio.io/privacy-policy` | `app/privacy-policy/page.tsx` |
+  | `https://app.outlio.io/refund-policy` | `app/refund-policy/page.tsx` |
+
+- One deployment still serves both domains, and the agency site owns `/` and
+  `/terms` on outlio.io. Those two paths — and only those two — are served on
+  the app host by an **internal rewrite** in `proxy.ts`. `/app-home` and
+  `/app-terms` are not public: a direct request for either is 308'd to the
+  clean URL, so neither ever appears in a link, a sitemap or a crawl.
+- Old paths redirect permanently from `next.config.ts`: `/leadengine` → `/`,
+  `/leadengine/pricing` → `/pricing`, `/leadengine/terms` → `/terms`,
+  `/leadengine/privacy` → `/privacy-policy`, `/leadengine/refund-policy` →
+  `/refund-policy`. **No `/leadengine/:path*` catch-all** — next.config
+  redirects run before filesystem routes and would swallow the hero artwork in
+  `public/leadengine/`.
+- **The app host no longer redirects to outlio.io.** Agency marketing still
+  does not belong on the software domain, so unknown paths there are now a 404
+  instead of a cross-domain bounce. A payment reviewer must never be sent off
+  the domain it was asked to review.
+- `/how-it-works` and `/product` are new standalone pages built from sections
+  extracted out of the homepage (`components/leadengine/HowItWorks.tsx`,
+  `ProductOverview.tsx`), so the two surfaces cannot drift apart.
+- `lib/site.ts` is the single source of `APP_HOST`, `APP_ORIGIN`, `isAppHost()`
+  and `appUrl()`. Every Lead Engine page sets its own canonical through it;
+  previously they inherited `https://outlio.io` from the root layout.
+- Nav, footer, `not-found`, the billing page, `lib/auth/access.ts` and
+  `lib/paddle/portal.ts` all point at the new URLs. The agency surface reaches
+  the product with absolute `app.outlio.io` links; the product surface is
+  entirely root-relative and never links back off-domain.
+
+### Fixed
+
+- `public/robots.txt` and `public/sitemap.xml` shadowed `app/robots.ts` and
+  `app/sitemap.ts`, so the generated versions never shipped. The static sitemap
+  still advertised `outlio.io/leadengine/pricing` and
+  `outlio.io/leadengine/refund-policy` — URLs that resolve on neither host.
+  Both public files are deleted; robots is now `app/robots.txt/route.ts`, a
+  hand-written route handler because `MetadataRoute.Robots` cannot emit the
+  `Content-Signal:` directives the site depends on. Robots and sitemap are both
+  host-aware: each domain advertises only its own pages.
+- `ProductOverview` no longer carries `id="product-preview"`. `DashboardPreview`
+  already owned that id and both render on the homepage.
+
+### Verification
+
+- Confirmed against a dev server on both hosts: `app.localhost:3000/` serves
+  the Lead Engine homepage (200, canonical `https://app.outlio.io`),
+  `localhost:3000/` still serves the agency homepage unchanged, `/terms`
+  resolves to the correct document on each host, all five legacy `/leadengine`
+  paths 308 to their replacements, `/app-home` and `/app-terms` 308 to `/` and
+  `/terms`, and `app.localhost:3000/explainers` returns 404 with no redirect.
+- Every new page returns 200 when its URL is entered directly and emits its own
+  `app.outlio.io` canonical. The homepage renders visible footer links to
+  Terms, Privacy Policy and Refund Policy, and a header link to Pricing.
+- `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass. The
+  suite passes 1,323 tests across 95 files with 24 skipped, including a
+  rewritten `tests/unit/app-subdomain-proxy.test.ts`.

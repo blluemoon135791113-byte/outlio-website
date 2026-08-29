@@ -115,8 +115,25 @@ const nextConfig: NextConfig = {
   },
 
   async redirects() {
+    /*
+      The Lead Engine product used to live under a `/leadengine` segment. It is
+      now the app.outlio.io domain itself, with its supporting pages directly
+      beneath it, so every old path moves permanently to its replacement.
+
+      ⚠️ NO `/leadengine/:path*` CATCH-ALL. next.config redirects are evaluated
+      before filesystem routes, so a wildcard here would also swallow
+      `public/leadengine/*` — the hero artwork among it. List the pages.
+    */
     return [
-      // Add any necessary redirects here
+      { source: '/leadengine', destination: '/', permanent: true },
+      { source: '/leadengine/pricing', destination: '/pricing', permanent: true },
+      { source: '/leadengine/terms', destination: '/terms', permanent: true },
+      { source: '/leadengine/privacy', destination: '/privacy-policy', permanent: true },
+      {
+        source: '/leadengine/refund-policy',
+        destination: '/refund-policy',
+        permanent: true,
+      },
     ];
   },
 };

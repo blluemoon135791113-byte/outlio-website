@@ -60,7 +60,7 @@ the Paddle API key. Keep the destination and secret permanently.
 Open **Checkout > Checkout settings** and set the default payment link to the
 live pricing page:
 
-`https://app.outlio.io/leadengine/pricing`
+`https://app.outlio.io/pricing`
 
 The domain must be approved by Paddle. A live checkout cannot use localhost.
 Localhost is only valid with the sandbox account and sandbox credentials.

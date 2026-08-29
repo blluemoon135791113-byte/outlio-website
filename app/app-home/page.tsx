@@ -5,17 +5,31 @@ import Footer from '@/app/components/Footer'
 import Nav from '@/app/components/Nav'
 import { HubbleLogo } from '@/components/brand/HubbleLogo'
 import { DashboardPreview } from '@/components/leadengine/DashboardPreview'
+import { HowItWorks } from '@/components/leadengine/HowItWorks'
 import { LeadEngineHero } from '@/components/leadengine/LeadEngineHero'
 import { Pricing } from '@/components/leadengine/Pricing'
+import { ProductOverview } from '@/components/leadengine/ProductOverview'
+import { appUrl } from '@/lib/site'
 
+/**
+ * ⚠️ THIS ROUTE IS AN INTERNAL REWRITE TARGET, NOT A PUBLIC URL.
+ *
+ * `app.outlio.io/` IS the Lead Engine homepage. One deployment serves two
+ * domains, so `app/page.tsx` is already taken by the agency marketing site and
+ * cannot also render this. `proxy.ts` therefore rewrites `/` on the app host
+ * to `/app-home`, and permanently redirects any direct request for
+ * `/app-home` back to `/` so the path never surfaces publicly.
+ *
+ * The canonical below is the address visitors actually see.
+ */
 export const metadata: Metadata = {
   title: 'Lead Research & Enrichment Software | Outlio Lead Engine',
   description:
     'Turn a saved Sales Navigator page into a researched lead database. Outlio enriches companies from public registries, filings, funding and tech signals, finds public contacts, and answers questions in plain English with a source on every fact.',
-  alternates: { canonical: 'https://app.outlio.io/leadengine' },
+  alternates: { canonical: appUrl('/') },
   openGraph: {
     type: 'website',
-    url: 'https://app.outlio.io/leadengine',
+    url: appUrl('/'),
     siteName: 'Outlio',
     title: 'Lead Research & Enrichment Software | Outlio Lead Engine',
     description:
@@ -38,50 +52,6 @@ const PAINS = [
   },
 ]
 
-const STEPS = [
-  {
-    n: '01',
-    title: 'Bring in the list',
-    body: 'Open a Sales Navigator lead search, press Cmd+S (Ctrl+S on Windows) and save the page — or capture it with the extension while you browse. Upload one file or a batch. Duplicates are caught against every list you have uploaded before.',
-  },
-  {
-    n: '02',
-    title: 'Research it',
-    body: 'Pick what you want to know and Outlio gathers it from public sources: registries and filings, funding rounds, technology in use, hiring signals, recent news, and publicly published contact details. Nothing is guessed.',
-  },
-  {
-    n: '03',
-    title: 'Ask, score and export',
-    body: 'Ask Hubble a question about any lead and read the answer with its sources. Score the list against your ideal-customer profile. Export to CSV or XLSX when you are ready.',
-  },
-]
-
-/**
- * ⚠️ CATEGORIES, NOT A PROMISE PER LEAD. Availability depends on the company
- * and what is public. A cell we could not fill says so, with a reason.
- */
-const RESEARCH = [
-  ['Company profile', 'Domain, industry, headcount, headquarters, description and specialties'],
-  ['Registries & filings', 'Companies House, SEC EDGAR and GLEIF: status, type, incorporation, officers, filing history'],
-  ['Funding', 'Round, amount, date and named investors'],
-  ['Technology', 'Stack detected from the public site, plus churn and website signals'],
-  ['Momentum', 'Hiring signals, recent news, product launches, employee growth, competitors'],
-  ['Public contacts', 'Work email and phone where a company or person has published them'],
-  ['Reviews & presence', 'Review platforms, ratings, counts and public GitHub activity'],
-  ['Public funding', 'US federal award totals, counts and types where they exist'],
-]
-
-const CAPTURED = [
-  ['Full name', 'Exactly as shown on the profile'],
-  ['LinkedIn profile', 'A direct link to the person'],
-  ['Job title', 'Their actual role, not their tenure'],
-  ['Company', 'Plus a company link where one exists'],
-  ['Location', 'City, region, country'],
-  ['Summary', 'The short bio line under their name'],
-  ['Time in role', 'How long in this position'],
-  ['Time at company', 'How long at this employer'],
-]
-
 const HONEST = [
   {
     title: 'It never logs in as you',
@@ -99,7 +69,15 @@ const HONEST = [
 
 export default function LeadEnginePage() {
   return (
-    <>
+    /*
+     * ⚠️ THE PALETTE IS SCOPED HERE, ON THE WHOLE PAGE.
+     *
+     * `.leadengine-surface` repoints `--coral` and `--accent` at dune orange.
+     * Every widget below inherits it through the tokens it already uses, so
+     * this one class is the entire colour change — and nothing outside this
+     * page moves. See globals.css.
+     */
+    <div className="leadengine-surface">
       <Nav surface="leadengine" />
 
       <LeadEngineHero />
@@ -165,78 +143,10 @@ export default function LeadEnginePage() {
       </section>
 
       {/* ---- How it works --------------------------------------------------- */}
-      <section id="how-it-works" className="scroll-mt-20 bg-sage-soft px-4 py-20 sm:py-28">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="max-w-2xl text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
-            Three steps. No setup.
-          </h2>
-          <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-            No credentials, no browser automation, no scraping bot. You bring the
-            page; Outlio does the research.
-          </p>
-
-          <div className="mt-14 grid gap-8 md:grid-cols-3">
-            {STEPS.map((s) => (
-              <div key={s.n}>
-                <span className="text-[13px] font-bold uppercase tracking-[0.22em] text-accent">
-                  {s.n}
-                </span>
-                <h3 className="mt-3 text-2xl font-bold tracking-tight">{s.title}</h3>
-                <p className="mt-2.5 text-base leading-relaxed text-muted">{s.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <HowItWorks />
 
       {/* ---- What research returns ------------------------------------------ */}
-      <section id="product-preview" className="scroll-mt-20 bg-paper px-4 py-20 sm:py-28">
-        <div className="mx-auto max-w-5xl">
-          <div className="max-w-2xl">
-            <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
-              The intelligence
-            </p>
-            <h2 className="mt-4 text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
-              60+ researched fields, each with a source
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-muted sm:text-lg">
-              Choose the columns you actually need. Outlio gathers them from
-              public sources and records where each one came from, so any value
-              can be checked in one click.
-            </p>
-          </div>
-
-          <dl className="mt-12 grid gap-x-10 gap-y-6 sm:grid-cols-2">
-            {RESEARCH.map(([name, note]) => (
-              <div key={name} className="border-t border-border pt-4">
-                <dt className="text-base font-semibold text-ink">{name}</dt>
-                <dd className="mt-1 text-sm leading-relaxed text-muted">{note}</dd>
-              </div>
-            ))}
-          </dl>
-
-          <div className="mt-12 border-t border-border pt-10">
-            <h3 className="text-xl font-bold tracking-tight">
-              Plus everything captured from the page itself
-            </h3>
-            <dl className="mt-6 grid gap-x-10 gap-y-4 sm:grid-cols-2">
-              {CAPTURED.map(([name, note]) => (
-                <div key={name} className="flex flex-wrap items-baseline gap-x-2">
-                  <dt className="text-sm font-semibold text-ink">{name}</dt>
-                  <dd className="text-sm text-muted">— {note}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-
-          <p className="clay mt-10 max-w-2xl p-5 text-sm leading-relaxed text-muted">
-            <strong className="font-semibold text-ink">Sales Navigator only.</strong>{' '}
-            Lead Engine reads saved <em>Sales Navigator lead search-results</em>{' '}
-            pages. A regular linkedin.com search page, a company page, or a file
-            from anywhere else will be rejected rather than silently mis-parsed.
-          </p>
-        </div>
-      </section>
+      <ProductOverview />
 
       {/* ---- Hubble ---------------------------------------------------------- */}
       <section className="bg-clay-bg px-4 py-20 sm:py-28">
@@ -264,7 +174,7 @@ export default function LeadEnginePage() {
              */}
             <p className="mt-4 text-sm font-semibold text-ink">
               Included on the{' '}
-              <Link href="/leadengine/pricing" className="text-accent underline-offset-2 hover:underline">
+              <Link href="/pricing" className="text-accent underline-offset-2 hover:underline">
                 Pro + Hubble
               </Link>{' '}
               plan.
@@ -351,7 +261,7 @@ export default function LeadEnginePage() {
           </p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
             <Link
-              href="/leadengine/pricing"
+              href="/pricing"
               className="rounded-full bg-ink px-8 py-4 text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent"
             >
               Start 3-day trial
@@ -367,6 +277,6 @@ export default function LeadEnginePage() {
       </section>
 
       <Footer surface="leadengine" />
-    </>
+    </div>
   )
 }

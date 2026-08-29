@@ -10,6 +10,7 @@ import {
   getPaddleBrowserConfig,
   getPricingTiers,
 } from '@/lib/paddle/config'
+import { appUrl } from '@/lib/site'
 import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
   title: 'Lead Engine Pricing | Outlio',
   description: 'Localized monthly and annual pricing for Outlio Lead Engine.',
-  alternates: { canonical: 'https://app.outlio.io/leadengine/pricing' },
+  alternates: { canonical: appUrl('/pricing') },
 }
 
 export default async function PricingPage() {

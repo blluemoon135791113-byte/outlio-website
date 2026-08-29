@@ -39,7 +39,7 @@ export async function openPaddleCustomerPortal(): Promise<never> {
     customerId = customer?.customer_id ?? null
   }
 
-  if (!customerId) redirect('/leadengine/pricing?billing=not-ready')
+  if (!customerId) redirect('/pricing?billing=not-ready')
 
   // `redirect()` never returns, but retaining a local non-null value keeps the
   // Paddle SDK boundary explicit for TypeScript and future refactors.

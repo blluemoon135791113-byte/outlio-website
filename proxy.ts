@@ -30,12 +30,11 @@ import {
   SESSION_ABSOLUTE_SECONDS,
   SESSION_GUARD_COOKIE,
 } from '@/lib/auth/session-guard'
+import { isAppHost } from '@/lib/site'
 
 const PROTECTED_PREFIXES = ['/dashboard', '/admin']
 
 /**
- * The product subdomain. `app.outlio.io/` serves the dashboard.
- *
  * ⚠️ AUTH COOKIES ARE PER-HOST, DELIBERATELY.
  *
  * Supabase sets the session cookie for the host that issued it, so a session
@@ -43,16 +42,52 @@ const PROTECTED_PREFIXES = ['/dashboard', '/admin']
  * arrangement: widening the cookie to `.outlio.io` would send session tokens to
  * the marketing site and every future subdomain along with it.
  *
- * The consequence is that users sign in ON the app subdomain. `/leadengine`
- * links to `/sign-up`, which resolves on whichever host they are already on.
+ * The consequence is that users sign in ON the app subdomain. The Lead Engine
+ * surface links to `/sign-up`, which resolves on whichever host they are on.
  */
-const APP_HOST = process.env.NEXT_PUBLIC_APP_HOST ?? 'app.outlio.io'
 
-/** Paths the app subdomain serves. Everything else there redirects to the app. */
+/**
+ * `app.outlio.io` IS the Lead Engine product, and its supporting pages sit
+ * directly beneath it. Two of those paths — `/` and `/terms` — are already
+ * taken on this deployment by the agency site, which cannot be moved. The
+ * proxy therefore serves them from internal-only routes.
+ *
+ * ⚠️ These are REWRITES, not redirects. The address bar keeps the public URL.
+ * A direct request for an internal path is 308'd to the public one below, so
+ * `/app-home` and `/app-terms` never appear in a link, a sitemap or a crawl.
+ */
+const APP_HOST_REWRITES: Record<string, string> = {
+  '/': '/app-home',
+  '/terms': '/app-terms',
+}
+
+/** Reverse of APP_HOST_REWRITES: internal path → the URL visitors should use. */
+const INTERNAL_PATHS: Record<string, string> = Object.fromEntries(
+  Object.entries(APP_HOST_REWRITES).map(([publicPath, internal]) => [internal, publicPath]),
+)
+
+/**
+ * The complete surface of the software domain.
+ *
+ * ⚠️ ANYTHING ELSE ON THIS HOST IS A 404, NOT A REDIRECT TO outlio.io.
+ *
+ * Bouncing a visitor from app.outlio.io to the agency domain is exactly what a
+ * card-payment reviewer must never see — the software domain has to stand on
+ * its own. Keeping agency marketing off it still matters, so unknown paths are
+ * refused rather than forwarded.
+ */
 const APP_SUBDOMAIN_PATHS = [
-  '/leadengine',
+  '/',
+  '/pricing',
+  '/how-it-works',
+  '/product',
+  '/terms',
+  '/privacy-policy',
+  '/refund-policy',
   '/dashboard',
   '/admin',
+  '/welcome',
+  '/extension',
   '/sign-in',
   '/sign-up',
   '/verify-email',
@@ -100,28 +135,56 @@ export async function proxy(request: NextRequest) {
     return result
   }
 
-  if (host === APP_HOST) {
-    // The bare app domain is the reviewable software storefront. It explains
-    // the product, pricing and legal terms before asking anyone to sign in.
-    if (rawPath === '/') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/leadengine'
-      return finish(NextResponse.redirect(url))
-    }
+  const isAsset = rawPath.startsWith('/_next') || rawPath.includes('.')
 
-    // Marketing routes do not belong on the app host — send them to the
-    // canonical site rather than serving duplicate content on two domains.
-    const isAppPath = APP_SUBDOMAIN_PATHS.some(
-      (p) => rawPath === p || rawPath.startsWith(`${p}/`),
-    )
-    const isAsset = rawPath.startsWith('/_next') || rawPath.includes('.')
+  /*
+   * The internal rewrite targets are never a public address. Anyone who types
+   * one — on either host — is sent to the URL it is served under, permanently,
+   * so search engines and crawlers only ever record the clean path.
+   */
+  const publicPathForInternal = INTERNAL_PATHS[rawPath]
+  if (publicPathForInternal) {
+    const url = request.nextUrl.clone()
+    url.pathname = publicPathForInternal
+    return finish(NextResponse.redirect(url, 308))
+  }
 
-    if (!isAppPath && !isAsset) {
-      return finish(NextResponse.redirect(new URL(rawPath, 'https://outlio.io')))
+  /** Set when the app host serves a public path from an internal route. */
+  let rewriteTo: URL | null = null
+
+  if (isAppHost(host)) {
+    // The bare app domain IS the software storefront. It explains the product,
+    // pricing and legal terms before asking anyone to sign in.
+    const internal = APP_HOST_REWRITES[rawPath]
+    if (internal) {
+      rewriteTo = request.nextUrl.clone()
+      rewriteTo.pathname = internal
+    } else {
+      // '/' must match exactly; as a prefix it would swallow every path.
+      const isAppPath = APP_SUBDOMAIN_PATHS.some(
+        (p) => rawPath === p || (p !== '/' && rawPath.startsWith(`${p}/`)),
+      )
+
+      // Agency marketing does not belong on the software domain. Refuse it
+      // here rather than forwarding to outlio.io — see APP_SUBDOMAIN_PATHS.
+      if (!isAppPath && !isAsset) {
+        rewriteTo = request.nextUrl.clone()
+        rewriteTo.pathname = '/not-found'
+      }
     }
   }
 
-  let response = NextResponse.next({ request })
+  /*
+   * Every response below must carry the pending rewrite. Building it in one
+   * place is what keeps the session-refresh path from silently dropping it and
+   * serving the agency homepage on app.outlio.io.
+   */
+  const baseResponse = () =>
+    rewriteTo
+      ? NextResponse.rewrite(rewriteTo, { request })
+      : NextResponse.next({ request })
+
+  let response = baseResponse()
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
@@ -143,7 +206,7 @@ export async function proxy(request: NextRequest) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value)
         }
-        response = NextResponse.next({ request })
+        response = baseResponse()
         for (const { name, value, options } of cookiesToSet) {
           response.cookies.set(name, value, options)
         }

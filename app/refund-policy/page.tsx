@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import Nav from "../../components/Nav";
-import Footer from "../../components/Footer";
+import Nav from "@/app/components/Nav";
+import Footer from "@/app/components/Footer";
+import { appUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Lead Engine Refund Policy | Outlio",
   description:
     "Outlio Lead Engine offers a free trial before purchase. Paid subscription fees and Credits are non-refundable, subject to applicable law.",
   alternates: {
-    canonical: "https://app.outlio.io/leadengine/refund-policy",
+    canonical: appUrl("/refund-policy"),
   },
   robots: {
     index: true,
@@ -51,7 +52,7 @@ export default function LeadEngineRefundPolicy() {
           <p>
             This Refund Policy applies only to Outlio Lead Engine, our software-as-a-service
             product (the &ldquo;Service&rdquo;). It forms part of the{" "}
-            <Link href="/leadengine/terms" className="font-medium text-accent">
+            <Link href="/terms" className="font-medium text-accent">
               Lead Engine Terms of Service
             </Link>
             . Outlio&apos;s done-for-you services are governed by separate terms.
@@ -71,7 +72,7 @@ export default function LeadEngineRefundPolicy() {
             </li>
             <li>
               The trial is limited to one per person, business, and network, as described in the{" "}
-              <Link href="/leadengine/terms" className="font-medium text-accent">
+              <Link href="/terms" className="font-medium text-accent">
                 Lead Engine Terms
               </Link>
               .

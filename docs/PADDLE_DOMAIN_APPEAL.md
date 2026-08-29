@@ -50,9 +50,22 @@ Outlio
 Before sending:
 
 - Deploy the revised SaaS-only surface.
-- Confirm `app.outlio.io/leadengine`, `/leadengine/pricing`,
-  `/leadengine/terms`, `/leadengine/privacy`, and
-  `/leadengine/refund-policy` are publicly reachable.
+- Confirm every page is publicly reachable, signed out, on the software domain
+  itself — `app.outlio.io` is the product, so nothing sits under a sub-path:
+
+  | URL | Page |
+  |---|---|
+  | `https://app.outlio.io` | Lead Engine homepage |
+  | `https://app.outlio.io/pricing` | Localized pricing |
+  | `https://app.outlio.io/how-it-works` | How it works |
+  | `https://app.outlio.io/product` | What the software returns |
+  | `https://app.outlio.io/terms` | Lead Engine Terms of Service |
+  | `https://app.outlio.io/privacy-policy` | Lead Engine Privacy Policy |
+  | `https://app.outlio.io/refund-policy` | Refund Policy |
+
+- Confirm the homepage footer shows visible Terms, Privacy Policy and Refund
+  Policy links, and the header a Pricing link — all resolving on the same
+  domain, with no redirect to outlio.io anywhere in the path.
 - Submit `app.outlio.io` as the checkout domain, not the agency homepage.
 - Include a reviewer login if Paddle requests access to authenticated screens.
 - Confirm in writing that no agency-service payment will pass through Paddle.
