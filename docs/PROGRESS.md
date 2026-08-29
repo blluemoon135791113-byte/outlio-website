@@ -4,6 +4,15 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-30 — Pre-orange orb system restored
+
+The complete Lead Engine orb system now matches its state from before the dune
+orange experiment: the original dark ball, blue-white painted corona, and
+blue-white animated energy wake. The warm hand artwork and every non-orb hero
+element remain unchanged.
+
+---
+
 ## 2026-08-30 — Original dark singularity restored
 
 The Lead Engine singularity ball has returned to its original dark-limb

@@ -163,17 +163,6 @@ const HAND_FRAGMENT = /* glsl */ `
     return mix(c8, c9, stepValue - 8.0);
   }
 
-  vec3 duneEnergy(float value) {
-    vec3 deepOrange = vec3(123.0, 14.0, 0.0) / 255.0;
-    vec3 duneOrange = vec3(209.0, 59.0, 2.0) / 255.0;
-    vec3 flareOrange = vec3(224.0, 112.0, 2.0) / 255.0;
-    return mix(
-      mix(deepOrange, duneOrange, smoothstep(0.08, 0.58, value)),
-      flareOrange,
-      smoothstep(0.58, 1.0, value)
-    );
-  }
-
   void main() {
     vec4 texel = texture2D(uMap, vUv);
 
@@ -191,31 +180,6 @@ const HAND_FRAGMENT = /* glsl */ `
     texel.rgb = mix(texel.rgb, duneRamp(warmTone), warmMask);
 
     /*
-     * Recolor only the cool light already emitted by the singularity. The
-     * spatial mask follows the painted corona and diagonal wake, while the
-     * chroma mask protects the hand and the rest of the star field.
-     */
-    float sourceLum = dot(texel.rgb, vec3(0.2126, 0.7152, 0.0722));
-    float coolLead = texel.b - texel.r * 0.52;
-    float coolLight = clamp(
-      smoothstep(0.04, 0.32, coolLead) + smoothstep(0.74, 1.0, sourceLum),
-      0.0,
-      1.0
-    );
-
-    float beamAxis = 0.286 + vUv.x * 0.67;
-    float beamWidth = mix(0.092, 0.03, smoothstep(0.08, 0.84, vUv.x));
-    float beamDistance = abs(vUv.y - beamAxis) / beamWidth;
-    float beamRegion = exp(-beamDistance * beamDistance * 1.6);
-    beamRegion *= smoothstep(0.03, 0.2, vUv.x);
-    beamRegion *= 1.0 - smoothstep(0.88, 0.95, vUv.x);
-
-    vec2 orbDelta = (vUv - vec2(0.825, 0.838)) * vec2(2.502, 1.0);
-    float coronaRegion = 1.0 - smoothstep(0.018, 0.092, length(orbDelta));
-    float energyMask = clamp(max(beamRegion, coronaRegion) * coolLight, 0.0, 1.0);
-    texel.rgb = mix(texel.rgb, duneEnergy(sourceLum), energyMask);
-
-    /*
      * ⚠️ LUMINANCE BECOMES ALPHA.
      * Additive blending already drops the black background, but without this
      * the dark half of the plate still lays a faint grey rectangle over the
@@ -231,22 +195,11 @@ const NEBULA_FRAGMENT = /* glsl */ `
   uniform float uTime;
   varying vec2 vUv;
 
-  vec3 duneEnergy(float value) {
-    vec3 deepOrange = vec3(123.0, 14.0, 0.0) / 255.0;
-    vec3 duneOrange = vec3(209.0, 59.0, 2.0) / 255.0;
-    vec3 flareOrange = vec3(224.0, 112.0, 2.0) / 255.0;
-    return mix(
-      mix(deepOrange, duneOrange, smoothstep(0.08, 0.58, value)),
-      flareOrange,
-      smoothstep(0.58, 1.0, value)
-    );
-  }
-
   void main() {
     /*
-     * This is not a drawn beam. It samples only the light already present in
-     * the supplied plate, recolors that energy in dune orange, then advances
-     * alternating packets through the ball's existing diagonal wake.
+     * This is not a drawn beam. It samples only the blue-white light already
+     * present in the supplied plate, then advances alternating packets through
+     * that texture along the ball's existing diagonal wake.
      */
     float beamAxis = 0.286 + vUv.x * 0.67;
     float beamWidth = mix(0.085, 0.028, smoothstep(0.08, 0.84, vUv.x));
@@ -273,8 +226,7 @@ const NEBULA_FRAGMENT = /* glsl */ `
     float energy = 0.12 + shootingPacket * 0.7 + secondaryPacket * 0.38;
     float alpha = beamMask * existingLight * energy * nebulaBreath;
 
-    vec3 orangeEnergy = duneEnergy(pow(clamp(luminance * 1.4, 0.0, 1.0), 0.7));
-    gl_FragColor = vec4(orangeEnergy * (0.82 + energy), alpha);
+    gl_FragColor = vec4(source.rgb * (0.72 + energy), alpha);
   }
 `
 
