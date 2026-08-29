@@ -38,8 +38,8 @@ import * as THREE from 'three'
  * pointer. The hand and the ring hold still.
  */
 
-const SOURCE_WIDTH = 1983
-const SOURCE_HEIGHT = 793
+const SOURCE_WIDTH = 1985
+const SOURCE_HEIGHT = 792
 const SOURCE_ASPECT = SOURCE_WIDTH / SOURCE_HEIGHT
 
 /** The painted singularity, as a fraction of the source. Everything anchors here. */
@@ -139,8 +139,81 @@ const HAND_FRAGMENT = /* glsl */ `
   uniform sampler2D uMap;
   varying vec2 vUv;
 
+  vec3 duneRamp(float value) {
+    float stepValue = clamp(value, 0.0, 1.0) * 9.0;
+    vec3 c0 = vec3(0.0, 1.0, 0.0) / 255.0;
+    vec3 c1 = vec3(20.0, 1.0, 4.0) / 255.0;
+    vec3 c2 = vec3(50.0, 2.0, 0.0) / 255.0;
+    vec3 c3 = vec3(81.0, 6.0, 0.0) / 255.0;
+    vec3 c4 = vec3(123.0, 14.0, 0.0) / 255.0;
+    vec3 c5 = vec3(166.0, 23.0, 2.0) / 255.0;
+    vec3 c6 = vec3(209.0, 59.0, 2.0) / 255.0;
+    vec3 c7 = vec3(206.0, 81.0, 2.0) / 255.0;
+    vec3 c8 = vec3(221.0, 99.0, 0.0) / 255.0;
+    vec3 c9 = vec3(224.0, 112.0, 2.0) / 255.0;
+
+    if (stepValue < 1.0) return mix(c0, c1, stepValue);
+    if (stepValue < 2.0) return mix(c1, c2, stepValue - 1.0);
+    if (stepValue < 3.0) return mix(c2, c3, stepValue - 2.0);
+    if (stepValue < 4.0) return mix(c3, c4, stepValue - 3.0);
+    if (stepValue < 5.0) return mix(c4, c5, stepValue - 4.0);
+    if (stepValue < 6.0) return mix(c5, c6, stepValue - 5.0);
+    if (stepValue < 7.0) return mix(c6, c7, stepValue - 6.0);
+    if (stepValue < 8.0) return mix(c7, c8, stepValue - 7.0);
+    return mix(c8, c9, stepValue - 8.0);
+  }
+
+  vec3 duneEnergy(float value) {
+    vec3 deepOrange = vec3(123.0, 14.0, 0.0) / 255.0;
+    vec3 duneOrange = vec3(209.0, 59.0, 2.0) / 255.0;
+    vec3 flareOrange = vec3(224.0, 112.0, 2.0) / 255.0;
+    return mix(
+      mix(deepOrange, duneOrange, smoothstep(0.08, 0.58, value)),
+      flareOrange,
+      smoothstep(0.58, 1.0, value)
+    );
+  }
+
   void main() {
     vec4 texel = texture2D(uMap, vUv);
+
+    /*
+     * The photographed warm values are projected through the exact ten-color
+     * dune ramp. Low-saturation blue-white light is deliberately excluded so
+     * the meteor and its corona retain the source image's temperature.
+     */
+    float maximum = max(texel.r, max(texel.g, texel.b));
+    float minimum = min(texel.r, min(texel.g, texel.b));
+    float saturation = maximum - minimum;
+    float redLead = texel.r - max(texel.g, texel.b);
+    float warmMask = smoothstep(0.025, 0.18, redLead) * smoothstep(0.06, 0.32, saturation);
+    float warmTone = pow(clamp(dot(texel.rgb, vec3(0.28, 0.58, 0.14)) * 1.42, 0.0, 1.0), 0.72);
+    texel.rgb = mix(texel.rgb, duneRamp(warmTone), warmMask);
+
+    /*
+     * Recolor only the cool light already emitted by the singularity. The
+     * spatial mask follows the painted corona and diagonal wake, while the
+     * chroma mask protects the hand and the rest of the star field.
+     */
+    float sourceLum = dot(texel.rgb, vec3(0.2126, 0.7152, 0.0722));
+    float coolLead = texel.b - texel.r * 0.52;
+    float coolLight = clamp(
+      smoothstep(0.04, 0.32, coolLead) + smoothstep(0.74, 1.0, sourceLum),
+      0.0,
+      1.0
+    );
+
+    float beamAxis = 0.286 + vUv.x * 0.67;
+    float beamWidth = mix(0.092, 0.03, smoothstep(0.08, 0.84, vUv.x));
+    float beamDistance = abs(vUv.y - beamAxis) / beamWidth;
+    float beamRegion = exp(-beamDistance * beamDistance * 1.6);
+    beamRegion *= smoothstep(0.03, 0.2, vUv.x);
+    beamRegion *= 1.0 - smoothstep(0.88, 0.95, vUv.x);
+
+    vec2 orbDelta = (vUv - vec2(0.825, 0.838)) * vec2(2.502, 1.0);
+    float coronaRegion = 1.0 - smoothstep(0.018, 0.092, length(orbDelta));
+    float energyMask = clamp(max(beamRegion, coronaRegion) * coolLight, 0.0, 1.0);
+    texel.rgb = mix(texel.rgb, duneEnergy(sourceLum), energyMask);
 
     /*
      * ⚠️ LUMINANCE BECOMES ALPHA.
@@ -153,6 +226,58 @@ const HAND_FRAGMENT = /* glsl */ `
   }
 `
 
+const NEBULA_FRAGMENT = /* glsl */ `
+  uniform sampler2D uMap;
+  uniform float uTime;
+  varying vec2 vUv;
+
+  vec3 duneEnergy(float value) {
+    vec3 deepOrange = vec3(123.0, 14.0, 0.0) / 255.0;
+    vec3 duneOrange = vec3(209.0, 59.0, 2.0) / 255.0;
+    vec3 flareOrange = vec3(224.0, 112.0, 2.0) / 255.0;
+    return mix(
+      mix(deepOrange, duneOrange, smoothstep(0.08, 0.58, value)),
+      flareOrange,
+      smoothstep(0.58, 1.0, value)
+    );
+  }
+
+  void main() {
+    /*
+     * This is not a drawn beam. It samples only the light already present in
+     * the supplied plate, recolors that energy in dune orange, then advances
+     * alternating packets through the ball's existing diagonal wake.
+     */
+    float beamAxis = 0.286 + vUv.x * 0.67;
+    float beamWidth = mix(0.085, 0.028, smoothstep(0.08, 0.84, vUv.x));
+    float distanceToBeam = abs(vUv.y - beamAxis) / beamWidth;
+    float beamMask = exp(-distanceToBeam * distanceToBeam * 1.65);
+    beamMask *= smoothstep(0.03, 0.2, vUv.x);
+    beamMask *= 1.0 - smoothstep(0.86, 0.93, vUv.x);
+
+    float flutter = sin(uTime * 1.15 + vUv.x * 17.0) * 0.0028;
+    vec2 flowingUv = vUv + vec2(flutter, flutter * 0.67);
+    vec4 source = texture2D(uMap, flowingUv);
+    float luminance = dot(source.rgb, vec3(0.2126, 0.7152, 0.0722));
+    float coolLead = source.b - source.r * 0.52;
+    float existingLight = clamp(
+      smoothstep(0.04, 0.32, coolLead) + smoothstep(0.66, 0.98, luminance),
+      0.0,
+      1.0
+    );
+
+    float travel = (0.825 - vUv.x) * 48.0 - uTime * 4.6;
+    float shootingPacket = pow(0.5 + 0.5 * sin(travel), 7.0);
+    float secondaryPacket = pow(0.5 + 0.5 * sin(travel * 0.47 + 1.8), 10.0);
+    float nebulaBreath = 0.72 + 0.28 * sin(uTime * 0.82 + vUv.x * 5.0);
+    float energy = 0.12 + shootingPacket * 0.7 + secondaryPacket * 0.38;
+    float alpha = beamMask * existingLight * energy * nebulaBreath;
+
+    vec3 orangeEnergy = duneEnergy(pow(clamp(luminance * 1.4, 0.0, 1.0), 0.7));
+    gl_FragColor = vec4(orangeEnergy * (0.82 + energy), alpha);
+  }
+`
+
 const ORB_VERTEX = /* glsl */ `
   void main() {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -162,7 +287,7 @@ const ORB_VERTEX = /* glsl */ `
 const ORB_FRAGMENT = /* glsl */ `
   void main() {
     /*
-     * ⚠️ FLAT BLACK. NO RIM. THE RIM WAS THE FLOATING RING.
+     * ⚠️ FLAT DUNE ORANGE. NO GENERATED RIM.
      *
      * This shaded a fresnel edge — bright where the sphere turned away from
      * the camera. Against the hand that reads as a lit hole, but most of its
@@ -174,18 +299,12 @@ const ORB_FRAGMENT = /* glsl */ `
      * as a BLACK disc and the hand is composited additively, which drops black
      * — so deleting this would not leave the artwork's hole behind, it would
      * leave nothing, and the hand would reach toward empty sky. Alpha stays 1:
-     * the one job a hole has is to occlude the stars behind it.
+     * the one job the sphere has is to occlude the stars behind it.
      *
-     * ⚠️ NOT QUITE BLACK — THIS IS THE DARK LIMB.
-     * At pure black the body vanished into the sky and only the crescent
-     * painted into the plate survived, so the sphere read as a sliver rather
-     * than as a full one. Lifting it a few percent lets the WHOLE disc
-     * silhouette behind that crescent, the way earthshine shows the unlit part
-     * of a moon. It is deliberately flat: any falloff toward the edge is a
-     * fresnel rim, and a rim on a body this small is the floating hoop that
-     * was removed.
+     * It is deliberately flat. The painted corona supplies the edge light, so
+     * generating another fresnel rim here would create a duplicate hoop.
      */
-    gl_FragColor = vec4(0.055, 0.062, 0.085, 1.0);
+    gl_FragColor = vec4(206.0, 81.0, 2.0, 255.0) / 255.0;
   }
 `
 
@@ -283,7 +402,7 @@ export function SingularityHeroScene({
 
     // ── the hand ─────────────────────────────────────────────────────────────
     const loader = new THREE.TextureLoader()
-    const texture = loader.load('/leadengine/hero-reaching-singularity.png', () => {
+    const texture = loader.load('/leadengine/hero-reaching-singularity-dune.png', () => {
       if (fallback) fallback.style.opacity = '0'
     })
     texture.colorSpace = THREE.SRGBColorSpace
@@ -304,6 +423,21 @@ export function SingularityHeroScene({
     })
     const hand = new THREE.Mesh(handGeometry, handMaterial)
     scene.add(hand)
+
+    // ── the moving light already painted into the plate ────────────────────
+    const nebulaMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uMap: { value: texture },
+        uTime: { value: 0 },
+      },
+      vertexShader: HAND_VERTEX,
+      fragmentShader: NEBULA_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+    const nebula = new THREE.Mesh(handGeometry, nebulaMaterial)
+    scene.add(nebula)
 
     // ── the singularity ──────────────────────────────────────────────────────
     const orbMaterial = new THREE.ShaderMaterial({
@@ -338,6 +472,7 @@ export function SingularityHeroScene({
     stars.renderOrder = 0
     orb.renderOrder = 1
     hand.renderOrder = 2
+    nebula.renderOrder = 3
 
     // ── state ────────────────────────────────────────────────────────────────
     let width = 1
@@ -379,6 +514,7 @@ export function SingularityHeroScene({
         layout.imageHeight * worldPerPixel,
         1,
       )
+      nebula.scale.copy(hand.scale)
 
       // Host pixels → world: origin at the frame centre, y flipped.
       const cx = layout.imageX + layout.imageWidth / 2
@@ -389,6 +525,7 @@ export function SingularityHeroScene({
         0,
       )
       hand.position.copy(handBase)
+      nebula.position.copy(handBase)
 
       orbHost.x = layout.imageX + layout.imageWidth * ORB_SOURCE_X
       orbHost.y = layout.imageY + layout.imageHeight * ORB_SOURCE_Y
@@ -443,6 +580,7 @@ export function SingularityHeroScene({
        * frame — the plate already has one, and two is one too many.
        */
       starMaterial.uniforms.uTime.value = seconds * motion
+      nebulaMaterial.uniforms.uTime.value = seconds * motion
 
       /*
        * The CAMERA moves, not the objects. That is what makes the starfield
@@ -457,6 +595,7 @@ export function SingularityHeroScene({
       // The hand rides along with the camera, cancelling most of its drift.
       hand.position.x = handBase.x + camera.position.x * HAND_DRIFT_DAMPING
       hand.position.y = handBase.y + camera.position.y * HAND_DRIFT_DAMPING
+      nebula.position.copy(hand.position)
       orb.position.x = orbBase.x + camera.position.x * HAND_DRIFT_DAMPING
       orb.position.y = orbBase.y + camera.position.y * HAND_DRIFT_DAMPING
 
@@ -534,6 +673,7 @@ export function SingularityHeroScene({
       starMaterial.dispose()
       handGeometry.dispose()
       handMaterial.dispose()
+      nebulaMaterial.dispose()
       orb.geometry.dispose()
       orbMaterial.dispose()
       texture.dispose()
@@ -556,7 +696,7 @@ export function SingularityHeroScene({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         ref={fallbackRef}
-        src="/leadengine/hero-reaching-singularity.png"
+        src="/leadengine/hero-reaching-singularity-dune.png"
         alt=""
         aria-hidden
         draggable={false}

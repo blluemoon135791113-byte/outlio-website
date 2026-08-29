@@ -18,13 +18,13 @@ export function LeadEngineHero() {
               </p>
 
               <h1 className="mt-5 text-balance font-heading text-[clamp(2.75rem,5.6vw,5.25rem)] font-light leading-[0.98] tracking-[-0.045em] text-white">
-                Further Beyond
+                Further and Beyond
               </h1>
 
               <p className="mt-7 max-w-[34rem] text-pretty font-heading text-[1.0625rem] font-medium leading-[1.65] text-white/72 sm:text-lg">
-                Outlio channels your Sales Navigator data, enriches it with
-                AI-driven intelligence on every scale, and lands it in your
-                systems. What arrives is the signal, clear of noise.
+                The lead engine channels a database of 1.3 billion people across
+                the globe - in to your systems, enriched with our intelligence
+                and clear of noise.
               </p>
 
               <div className="mt-9 flex flex-wrap items-center gap-3">

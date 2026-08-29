@@ -4,6 +4,53 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-30 — Dune-orange singularity and emitted energy
+
+The Lead Engine hero now recolors only the singularity ball and the light it
+already emits. The ball uses the dune orange `#CE5102`; its painted corona and
+diagonal wake are masked by position and source chroma, then rendered through
+the supplied dune oranges while the existing energy packets continue moving.
+The hand, generated stars, copy, layout, and all other scene behavior remain
+unchanged.
+
+---
+
+## 2026-08-30 — Lead Engine hero copy updated
+
+The hero headline now reads “Further and Beyond.” Its supporting sentence now
+describes the 1.3-billion-person global database and intelligence-enriched
+delivery into customer systems. No hero layout, artwork, motion, CTA, or route
+changed.
+
+---
+
+## 2026-08-30 — Dune singularity palette and living nebula
+
+The Lead Engine hand artwork now uses a new, non-destructive high-fidelity edit
+whose warm values follow the supplied ten-color dune palette from `#000100` to
+`#E07002`. The original framing, hand, singularity, star field, negative space,
+and blue-white meteor light remain intact.
+
+The Three.js hand shader also projects warm pixels through the exact palette at
+runtime. A second shader samples only the blue-white light already painted into
+the source and moves luminous packets through that same diagonal wake, creating
+constant shooting-star/nebula motion without introducing a second ring or a
+foreign overlay graphic. Reduced-motion, visibility pausing, DPR limiting, and
+the static fallback remain in place.
+
+---
+
+## 2026-08-30 — Lead Engine landing page shortened
+
+The extraction workspace preview now flows directly into pricing. The
+intervening subscription disclaimer, problem/solution copy, How It Works,
+research-field list, Hubble explainer, and compliance explainer sections were
+removed from the homepage. Their standalone routes and shared components remain
+available; only the homepage composition changed. The externally revised hero
+was left untouched.
+
+---
+
 ## 2026-08-29 — Supplied singularity artwork became an interactive hero
 
 The Lead Engine hero now uses the exact user-supplied reaching-hand artwork as
