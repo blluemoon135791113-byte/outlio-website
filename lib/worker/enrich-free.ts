@@ -55,6 +55,7 @@ export type FreeEnrichOutcome = {
 export async function enrichJobFree(
   jobId: string,
   userId: string,
+  explicitLeadIds?: readonly string[],
 ): Promise<FreeEnrichOutcome> {
   const outcome: FreeEnrichOutcome = {
     leadsConsidered: 0,
@@ -75,21 +76,23 @@ export async function enrichJobFree(
 
   const supabase = createAdminClient()
 
-  const leadIds: string[] = []
-  for (let from = 0; ; from += 1_000) {
-    const { data, error } = await supabase
-      .from('extracted_leads')
-      .select('id')
-      // Service role bypasses RLS — scoping by user_id is mandatory.
-      .eq('user_id', userId)
-      .eq('extraction_job_id', jobId)
-      .eq('is_duplicate', false)
-      .order('created_at', { ascending: false })
-      .range(from, from + 999)
-    if (error) return outcome
-    if (!data?.length) break
-    leadIds.push(...data.map((row) => row.id as string))
-    if (data.length < 1_000) break
+  const leadIds: string[] = explicitLeadIds ? [...new Set(explicitLeadIds)] : []
+  if (!explicitLeadIds) {
+    for (let from = 0; ; from += 1_000) {
+      const { data, error } = await supabase
+        .from('extracted_leads')
+        .select('id')
+        // Service role bypasses RLS — scoping by user_id is mandatory.
+        .eq('user_id', userId)
+        .eq('extraction_job_id', jobId)
+        .eq('is_duplicate', false)
+        .order('created_at', { ascending: false })
+        .range(from, from + 999)
+      if (error) return outcome
+      if (!data?.length) break
+      leadIds.push(...data.map((row) => row.id as string))
+      if (data.length < 1_000) break
+    }
   }
 
   if (leadIds.length === 0) return outcome
@@ -105,8 +108,12 @@ export async function enrichJobFree(
         'company_domain',
         'company_linkedin',
         'industry',
+        'company_contact_email',
+        'company_contact_phone',
         'work_email',
         'email_status',
+        'mobile_phone',
+        'phone_status',
         'social_profiles',
       ],
       outputFields: [
@@ -114,8 +121,12 @@ export async function enrichJobFree(
         'company_domain',
         'company_linkedin',
         'industry',
+        'company_contact_email',
+        'company_contact_phone',
         'work_email',
         'email_status',
+        'mobile_phone',
+        'phone_status',
         'social_profiles',
       ],
     },
@@ -138,5 +149,78 @@ export async function enrichJobFree(
   const merged = await mergeRunIntoLeads(userId, created.runId)
   if (merged.ok) outcome.leadsUpdated = merged.leadsUpdated
 
+  return outcome
+}
+
+/**
+ * Enriches account rows that do not necessarily have a recommended person.
+ * Company contacts are deliberately stored on `companies`; they never become
+ * a guessed personal email or phone number.
+ */
+export async function enrichAccountCompaniesFree(
+  jobId: string,
+  userId: string,
+  companyIds: readonly string[],
+): Promise<FreeEnrichOutcome> {
+  const outcome: FreeEnrichOutcome = {
+    leadsConsidered: 0,
+    evidenceWritten: 0,
+    leadsUpdated: 0,
+    skippedForSafety: false,
+  }
+  if (paidProvidersEnabled()) {
+    outcome.skippedForSafety = true
+    return outcome
+  }
+
+  const scoped = [...new Set(companyIds)].slice(0, LEAD_CEILING)
+  if (scoped.length === 0) return outcome
+
+  const discovery = await createResearchRun(userId, {
+    queryText: `Automatic company enrichment for Account List ${jobId}.`,
+    scope: { type: 'company_ids', companyIds: scoped },
+    plan: {
+      entityScope: 'companies',
+      requiredFields: [
+        'company_domain',
+        'company_linkedin',
+        'industry',
+      ],
+      outputFields: [
+        'company_name',
+        'company_domain',
+        'company_linkedin',
+        'industry',
+      ],
+    },
+  })
+  if (!discovery.ok || discovery.status !== 'queued') return outcome
+
+  const discovered = await claimAndProcessResearchRun(
+    discovery.runId,
+    userId,
+    'auto-account-discovery',
+  )
+  if (discovered) outcome.evidenceWritten += discovered.evidenceWritten
+
+  /* A separate run reloads company entities after domain discovery. Keeping
+     contacts in the first company-profile task would route against the stale,
+     domain-less snapshot and every official-site provider would decline. */
+  const contacts = await createResearchRun(userId, {
+    queryText: `Automatic company contacts for Account List ${jobId}.`,
+    scope: { type: 'company_ids', companyIds: scoped },
+    plan: {
+      entityScope: 'companies',
+      requiredFields: ['company_contact_email', 'company_contact_phone'],
+      outputFields: ['company_name', 'company_contact_email', 'company_contact_phone'],
+    },
+  })
+  if (!contacts.ok || contacts.status !== 'queued') return outcome
+  const contacted = await claimAndProcessResearchRun(
+    contacts.runId,
+    userId,
+    'auto-account-contacts',
+  )
+  if (contacted) outcome.evidenceWritten += contacted.evidenceWritten
   return outcome
 }

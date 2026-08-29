@@ -130,6 +130,24 @@ export function LeadModal({
     { label: 'Summary', value: lead.personBlurb },
   ].filter((row) => row.value)
 
+  const savedGroups = [
+    {
+      key: 'person',
+      label: 'Person research',
+      details: lead.savedDetails.filter((detail) => detail.scope === 'person'),
+    },
+    {
+      key: 'company',
+      label: 'Company research',
+      details: lead.savedDetails.filter((detail) => detail.scope === 'company'),
+    },
+    {
+      key: 'answer',
+      label: 'Saved Hubble answers',
+      details: lead.savedDetails.filter((detail) => detail.scope === 'answer'),
+    },
+  ].filter((group) => group.details.length > 0)
+
   const foundCount = links.length + contacts.length
 
   // The last question asked, for ↑ recall. Derived from the answers already
@@ -183,6 +201,11 @@ export function LeadModal({
                 <h2 className="truncate text-2xl font-semibold tracking-[-0.02em] text-ink">
                   {lead.fullName ?? 'Unnamed lead'}
                 </h2>
+                {lead.origin === 'account_recommendation' ? (
+                  <span className="mt-1.5 inline-flex rounded-full border border-accent/20 bg-accent-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-accent">
+                    Recommended from Account List
+                  </span>
+                ) : null}
 
                 <p className="mt-2.5 flex items-center gap-2.5 text-sm text-ink">
                   <Glyph label="Role">▤</Glyph>
@@ -291,7 +314,7 @@ export function LeadModal({
            * and the modal has to keep them apart. Disabled and labelled beats
            * absent.
            */}
-          {lead.savedDetails.length === 0 ? (
+          {savedGroups.length === 0 ? (
             <div className="skeuo-inset mt-4 flex items-center gap-3 px-4 py-3 text-sm text-muted">
               <span className="skeuo-key inline-flex h-8 w-8 shrink-0 items-center justify-center text-xs text-muted">
                 +
@@ -299,28 +322,25 @@ export function LeadModal({
               <span className="min-w-0 flex-1">Saved research</span>
               <span className="text-xs">nothing saved yet</span>
             </div>
-          ) : (
-            <details className="skeuo-inset group mt-4 overflow-hidden">
+          ) : savedGroups.map((group) => (
+            <details key={group.key} className="skeuo-inset group mt-4 overflow-hidden">
               <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-medium text-ink transition-transform duration-150 ease-out active:scale-[0.99] [&::-webkit-details-marker]:hidden">
                 <span className="skeuo-key inline-flex h-8 w-8 shrink-0 items-center justify-center text-xs text-muted">
                   +
                 </span>
-                <span className="min-w-0 flex-1">Saved research</span>
-                <span className="text-xs font-normal text-muted">
-                  {lead.savedDetails.length}
-                </span>
+                <span className="min-w-0 flex-1">{group.label}</span>
+                <span className="text-xs font-normal text-muted">{group.details.length}</span>
                 <span aria-hidden className="text-muted transition-transform duration-150 group-open:rotate-90">
                   ›
                 </span>
               </summary>
-
               <div className="max-h-72 space-y-2 overflow-y-auto border-t border-clay-sunken p-3">
-                {lead.savedDetails.map((detail) => (
+                {group.details.map((detail) => (
                   <SavedDetailRow key={detail.id} detail={detail} />
                 ))}
               </div>
             </details>
-          )}
+          ))}
 
           {/*
            * ⚠️ NO PANEL UNTIL THERE IS SOMETHING IN IT.

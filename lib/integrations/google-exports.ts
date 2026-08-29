@@ -50,7 +50,7 @@ function failure(leads: readonly ExportLead[], code: string, message: string): E
   return {
     successfulCount: 0,
     failedCount: leads.length,
-    failures: leads.map((lead) => ({ leadId: lead.id, code, message })),
+    failures: leads.map((lead) => ({ sourceId: lead.id, code, message })),
   }
 }
 

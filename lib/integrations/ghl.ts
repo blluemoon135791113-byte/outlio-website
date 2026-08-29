@@ -59,7 +59,13 @@ export async function testGhlCredentials(credentials: GhlCredentials): Promise<C
 type CustomField = { id: string; name: string; fieldKey?: string }
 
 async function ensureCustomFields(credentials: GhlCredentials): Promise<Map<string, string>> {
-  const wanted = ['Outlio LinkedIn Profile URL', 'Outlio Sales Navigator URL', 'Outlio Company Profile URL']
+  const wanted = [
+    'Outlio Record Type',
+    'Outlio LinkedIn Profile URL',
+    'Outlio Sales Navigator URL',
+    'Outlio Company Sales Navigator URL',
+    'Outlio Company LinkedIn URL',
+  ]
   const url = `${GHL_ORIGIN}/locations/${encodeURIComponent(credentials.locationId)}/customFields?model=contact`
   const response = await fetch(url, { headers: headers(credentials.token), cache: 'no-store', signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
   if (!response.ok) return new Map()
@@ -99,18 +105,23 @@ export async function exportLeadsToGhl(credentials: GhlCredentials, leads: reado
   for (const lead of leads) {
     const names = nameParts(lead.name)
     const values = [
+      ['Outlio Record Type', lead.recordType === 'account' ? 'Account List' : 'Lead'],
       ['Outlio LinkedIn Profile URL', lead.linkedinUrl],
       ['Outlio Sales Navigator URL', lead.salesNavigatorUrl],
-      ['Outlio Company Profile URL', lead.companyUrl],
+      ['Outlio Company Sales Navigator URL', lead.companyLinkedInUrl],
+      ['Outlio Company LinkedIn URL', lead.companyPublicLinkedIn],
     ] as const
+    const displayName = lead.name ?? (lead.recordType === 'account' ? lead.companyName : null)
     const payload = {
       locationId: credentials.locationId,
-      name: lead.name ?? names.lastName,
-      firstName: names.firstName || undefined,
-      lastName: names.lastName,
+      name: displayName ?? names.lastName,
+      firstName: lead.name ? names.firstName || undefined : undefined,
+      lastName: lead.name ? names.lastName : displayName ?? names.lastName,
       companyName: lead.companyName ?? undefined,
       website: lead.companyUrl ?? undefined,
       address1: lead.location ?? undefined,
+      email: lead.workEmail ?? lead.companyContactEmail ?? undefined,
+      phone: lead.mobilePhone ?? lead.companyContactPhone ?? undefined,
       source: 'Outlio',
       customFields: values.flatMap(([name, value]) => {
         const id = customFields.get(name.toLowerCase())
@@ -131,11 +142,11 @@ export async function exportLeadsToGhl(credentials: GhlCredentials, leads: reado
     }
     const body = response ? await response.json().catch(() => null) as { contact?: { id?: string }; id?: string } | null : null
     const recordId = body?.contact?.id ?? body?.id
-    if (response?.ok && recordId) records.push({ leadId: lead.id, providerRecordId: recordId })
+    if (response?.ok && recordId) records.push({ sourceId: lead.id, providerRecordId: recordId })
     else {
       const code = response?.status === 401 ? 'GHL_AUTH_REJECTED' : response?.status === 403 ? 'GHL_INSUFFICIENT_SCOPES' : response?.status === 422 ? 'GHL_LOCATION_REJECTED' : 'GHL_CONTACT_CREATE_FAILED'
       const message = code === 'GHL_AUTH_REJECTED' ? 'HighLevel rejected the saved token. Update the token.' : code === 'GHL_INSUFFICIENT_SCOPES' ? 'The HighLevel token is missing contacts.write permission.' : code === 'GHL_LOCATION_REJECTED' ? 'HighLevel rejected the saved Location ID.' : 'HighLevel could not create this contact.'
-      failures.push({ leadId: lead.id, code, message })
+      failures.push({ sourceId: lead.id, code, message })
     }
   }
   return { successfulCount: records.length, failedCount: failures.length, records, failures }

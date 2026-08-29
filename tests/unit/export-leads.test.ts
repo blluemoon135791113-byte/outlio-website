@@ -71,14 +71,12 @@ describe('normalizeExportLead', () => {
     expect(EXPORT_COLUMN_ORDER).toContain('Connection Degree')
     expect(EXPORT_COLUMN_ORDER).toContain('Source List')
 
-    /*
-     * ⚠️ AND NOTHING THAT CANNOT BE OBTAINED. Email and phone are on neither
-     * LinkedIn nor Sales Navigator — a real saved page carries zero addresses
-     * and zero `tel:` links — so shipping the columns would promise a value no
-     * free path can ever fill.
-     */
-    expect(EXPORT_COLUMN_ORDER).not.toContain('Work Email')
-    expect(EXPORT_COLUMN_ORDER).not.toContain('Mobile Phone')
+    // Contact columns are now part of the stable contract. They stay N/A until
+    // a public-source provider finds them; no value is inferred by the export.
+    expect(EXPORT_COLUMN_ORDER).toContain('Work Email')
+    expect(EXPORT_COLUMN_ORDER).toContain('Mobile Phone')
+    expect(EXPORT_COLUMN_ORDER).toContain('Company Email')
+    expect(EXPORT_COLUMN_ORDER).toContain('Company Phone')
     expect(toCanonicalExportRecord(lead)).toMatchObject({
       Name: 'Áda Example',
       'LinkedIn Profile': 'https://www.linkedin.com/in/fabricated-1',
@@ -213,4 +211,3 @@ describe('a column that is empty on every row is dropped', () => {
     expect(csv).toContain('N/A')
   })
 })
-

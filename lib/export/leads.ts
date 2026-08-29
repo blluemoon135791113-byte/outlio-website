@@ -8,6 +8,8 @@ import type { ExtractedLeadRow } from '@/types/database'
  */
 export type ExportLead = {
   id: string
+  /** `account` means one company row with an optional recommended contact. */
+  recordType?: 'lead' | 'account'
   name: string | null
   linkedinUrl: string | null
   jobTitle: string | null
@@ -18,6 +20,14 @@ export type ExportLead = {
   companyLinkedInUrl?: string | null
   salesNavigatorUrl: string | null
   location: string | null
+  workEmail?: string | null
+  emailStatus?: string | null
+  mobilePhone?: string | null
+  phoneStatus?: string | null
+  companyContactEmail?: string | null
+  companyContactEmailStatus?: string | null
+  companyContactPhone?: string | null
+  companyContactPhoneStatus?: string | null
   /*
    * Intelligence values the user merged onto this lead, already flattened to
    * strings and keyed by their column header.
@@ -79,6 +89,15 @@ export const EXPORT_COLUMN_HEADERS = {
 
   /** Which Sales Navigator list or search the lead came from. */
   sourceList: 'Source List',
+  workEmail: 'Work Email',
+  emailStatus: 'Email Status',
+  mobilePhone: 'Mobile Phone',
+  phoneStatus: 'Phone Status',
+  companyContactEmail: 'Company Email',
+  companyContactEmailStatus: 'Company Email Status',
+  companyContactPhone: 'Company Phone',
+  companyContactPhoneStatus: 'Company Phone Status',
+  recordType: 'Record Type',
 } as const
 
 /**
@@ -112,6 +131,15 @@ export const EXPORT_COLUMN_ORDER = [
   EXPORT_COLUMN_HEADERS.companyEmployeeCount,
   EXPORT_COLUMN_HEADERS.companyDecisionMakers,
   EXPORT_COLUMN_HEADERS.companyInvestors,
+  EXPORT_COLUMN_HEADERS.companyContactEmail,
+  EXPORT_COLUMN_HEADERS.companyContactEmailStatus,
+  EXPORT_COLUMN_HEADERS.companyContactPhone,
+  EXPORT_COLUMN_HEADERS.companyContactPhoneStatus,
+
+  EXPORT_COLUMN_HEADERS.workEmail,
+  EXPORT_COLUMN_HEADERS.emailStatus,
+  EXPORT_COLUMN_HEADERS.mobilePhone,
+  EXPORT_COLUMN_HEADERS.phoneStatus,
 
   EXPORT_COLUMN_HEADERS.connectionDegree,
   EXPORT_COLUMN_HEADERS.reachable,
@@ -119,6 +147,7 @@ export const EXPORT_COLUMN_ORDER = [
   EXPORT_COLUMN_HEADERS.lastActivity,
   EXPORT_COLUMN_HEADERS.leadSource,
   EXPORT_COLUMN_HEADERS.sourceList,
+  EXPORT_COLUMN_HEADERS.recordType,
 ] as const
 
 /**
@@ -181,6 +210,15 @@ export function toCanonicalExportRecord(
       lead.listCount === null || lead.listCount === undefined ? null : String(lead.listCount),
     [EXPORT_COLUMN_HEADERS.lastActivity]: lead.lastActivity ?? null,
     [EXPORT_COLUMN_HEADERS.sourceList]: lead.sourceList ?? null,
+    [EXPORT_COLUMN_HEADERS.workEmail]: lead.workEmail ?? null,
+    [EXPORT_COLUMN_HEADERS.emailStatus]: lead.emailStatus ?? null,
+    [EXPORT_COLUMN_HEADERS.mobilePhone]: lead.mobilePhone ?? null,
+    [EXPORT_COLUMN_HEADERS.phoneStatus]: lead.phoneStatus ?? null,
+    [EXPORT_COLUMN_HEADERS.companyContactEmail]: lead.companyContactEmail ?? null,
+    [EXPORT_COLUMN_HEADERS.companyContactEmailStatus]: lead.companyContactEmailStatus ?? null,
+    [EXPORT_COLUMN_HEADERS.companyContactPhone]: lead.companyContactPhone ?? null,
+    [EXPORT_COLUMN_HEADERS.companyContactPhoneStatus]: lead.companyContactPhoneStatus ?? null,
+    [EXPORT_COLUMN_HEADERS.recordType]: lead.recordType === 'account' ? 'Account' : 'Lead',
     [EXPORT_COLUMN_HEADERS.name]: lead.name,
     [EXPORT_COLUMN_HEADERS.linkedinProfile]: lead.linkedinUrl,
     [EXPORT_COLUMN_HEADERS.jobTitle]: lead.jobTitle,
@@ -225,6 +263,10 @@ export type ExportLeadSource = Pick<
       | 'last_activity'
       | 'added_to_list_at'
       | 'source_list'
+      | 'work_email'
+      | 'email_status'
+      | 'mobile_phone'
+      | 'phone_status'
     >
   > & { enrichment?: unknown }
 
@@ -282,6 +324,10 @@ export function normalizeExportLead(row: ExportLeadSource): ExportLead {
       lastActivity: row.last_activity,
       addedToList: row.added_to_list_at,
       sourceList: row.source_list,
+      workEmail: row.work_email,
+      emailStatus: row.email_status,
+      mobilePhone: row.mobile_phone,
+      phoneStatus: row.phone_status,
     }),
   }
 }

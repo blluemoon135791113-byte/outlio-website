@@ -68,6 +68,12 @@ export function mapMcpFact(
       return [{ field: 'company_domain', entityType: 'company', value: asRecord('domain', value) }]
     case 'company.industry':
       return [{ field: 'industry', entityType: 'company', value: asRecord('industry', value) }]
+    case 'company.email':
+    case 'company.contact_email':
+      return [{ field: 'company_contact_email', entityType: 'company', value: asRecord('email', value) }]
+    case 'company.phone':
+    case 'company.contact_phone':
+      return [{ field: 'company_contact_phone', entityType: 'company', value: asRecord('phone', value) }]
     case 'company.employee_count':
       return [{ field: 'employee_count', entityType: 'company', value: asRecord('count', value) }]
     case 'company.revenue':

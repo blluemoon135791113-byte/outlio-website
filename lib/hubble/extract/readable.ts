@@ -135,6 +135,7 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
   const socials: string[] = []
   const interestingLinks: StructuredFacts['interestingLinks'] = []
   const emails: string[] = []
+  const linkedPhones: string[] = []
 
   /*
    * Cloudflare-obfuscated addresses, decoded BEFORE the strip pass.
@@ -163,6 +164,12 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
     if (href.toLowerCase().startsWith('mailto:')) {
       const address = href.slice(7).split('?')[0]
       if (address) emails.push(address)
+      return
+    }
+
+    if (href.toLowerCase().startsWith('tel:')) {
+      const phone = href.slice(4).split('?')[0]?.trim()
+      if (phone) linkedPhones.push(phone)
       return
     }
 
@@ -209,7 +216,7 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
   const bodyText = text || $.root().text().replace(/\s+/g, ' ').trim()
 
   emails.push(...(bodyText.match(EMAIL) ?? []))
-  const phones = (bodyText.match(PHONE) ?? []).filter((value) => {
+  const phones = [...linkedPhones, ...(bodyText.match(PHONE) ?? [])].filter((value) => {
     const digits = value.replace(/\D/g, '')
     // Years, prices and IDs all match a loose phone pattern.
     return digits.length >= 9 && digits.length <= 15

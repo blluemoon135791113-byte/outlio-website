@@ -99,6 +99,9 @@ export const RESEARCH_FIELDS = [
   // The PUBLIC LinkedIn company page, discovered on the company's own website.
   // Never fetched — recorded as the company's stated address (rules 1-2).
   'company_linkedin',
+  /** Public company-level inbox/telephone, never attributed to one employee. */
+  'company_contact_email',
+  'company_contact_phone',
   // What the company says it does — Apollo's keyword/tag list.
   'specialties',
   'business_model',
@@ -199,6 +202,8 @@ export const RESEARCH_FIELD_SPEC: Record<ResearchField, FieldSpec> = {
   headquarters: { category: 'company_profile', entity: 'company' },
   company_description: { category: 'company_profile', entity: 'company' },
   company_linkedin: { category: 'company_profile', entity: 'company' },
+  company_contact_email: { category: 'company_profile', entity: 'company' },
+  company_contact_phone: { category: 'company_profile', entity: 'company' },
   specialties: { category: 'company_profile', entity: 'company' },
   business_model: { category: 'company_profile', entity: 'company' },
   revenue_estimate: { category: 'company_profile', entity: 'company' },

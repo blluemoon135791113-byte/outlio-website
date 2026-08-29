@@ -1,58 +1,141 @@
 /**
- * CSV for a saved account list.
+ * Canonical Account List export mapping.
  *
- * ╔══════════════════════════════════════════════════════════════════════════╗
- * ║  A COMPANY EXPORT, NOT A LEAD EXPORT WITH BLANK PEOPLE COLUMNS.          ║
- * ║                                                                          ║
- * ║  The lead writer's headers — Full Name, Job Title, Email — have no value ║
- * ║  on any row of an account list, so reusing it would produce a file that  ║
- * ║  is mostly empty columns and reads as a failed extraction. `toCsv` drops ║
- * ║  all-empty columns, which would leave the header row differing between   ║
- * ║  runs of the same kind — unmappable by any importer.                     ║
- * ║                                                                          ║
- * ║  Sharing `toCsv` and therefore `sanitizeCell` is the part that matters:  ║
- * ║  a company named `=cmd|'/c calc'!A1` is as attacker-controlled as a      ║
- * ║  person's name, and formula-injection defence lives in exactly one file. ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
+ * Account and lead destinations now share one stable column contract. An
+ * Account List row carries a company plus an optional recommended contact; a
+ * missing recommendation stays empty and is never replaced with a guessed
+ * person.
  */
 import type { ParsedAccount } from '@/lib/companies/parse-account-list'
+import {
+  EXPORT_COLUMN_HEADERS,
+  EXPORT_COLUMN_ORDER,
+  enrichmentHeaders,
+  toCanonicalExportRecord,
+  type ExportLead,
+} from '@/lib/export/leads'
 import { toCsv, type CsvColumn } from '@/lib/export/sanitize'
 
-/**
- * Columns pinned regardless of emptiness.
- *
- * Without these an account list whose rows all lack an industry would ship a
- * two-column file, and a CRM mapping built against a fuller run would break on
- * the next upload. The company's name and its Sales Navigator URL are the two
- * facts every row of every account list carries.
- */
-export const ALWAYS_EXPORTED_ACCOUNT_COLUMNS = ['Company Name', 'LinkedIn URL'] as const
+export const ALWAYS_EXPORTED_ACCOUNT_COLUMNS = [
+  EXPORT_COLUMN_HEADERS.company,
+  EXPORT_COLUMN_HEADERS.companyLinkedInUrl,
+  EXPORT_COLUMN_HEADERS.recordType,
+  EXPORT_COLUMN_HEADERS.name,
+  EXPORT_COLUMN_HEADERS.salesNavigatorUrl,
+  EXPORT_COLUMN_HEADERS.jobTitle,
+] as const
 
-/**
- * ⚠️ PLAIN-TEXT HEADERS. No arrows, bullets, or symbols — a CSV is read by
- * spreadsheets and importers that treat punctuation as structure, and by users
- * who should not have to decode a glyph to know what a column holds.
- */
-export const ACCOUNT_CSV_COLUMNS: readonly CsvColumn<ParsedAccount>[] = [
-  { header: 'Company Name', value: (a) => a.companyName },
-  { header: 'LinkedIn URL', value: (a) => a.salesNavUrl },
-  { header: 'Industry', value: (a) => a.industry },
-  { header: 'Connection Paths', value: (a) => a.connectionPaths },
-  { header: 'Alert', value: (a) => a.alert },
-  /*
-   * The recommended person is flattened into columns rather than dropped: it
-   * is on the captured page, and rule 4 forbids inventing data but nothing
-   * requires discarding it. It is NOT a lead — no extraction ran on a profile
-   * — so the headers say "Recommended" to keep that distinction on the page.
-   */
-  { header: 'Recommended Contact', value: (a) => a.recommendation?.fullName ?? null },
-  { header: 'Recommended Contact Title', value: (a) => a.recommendation?.jobTitle ?? null },
-  { header: 'Recommended Contact URL', value: (a) => a.recommendation?.salesNavUrl ?? null },
-]
+export type AccountExportSource = {
+  id: string
+  companyId: string
+  companyName: string
+  companySalesNavigatorUrl: string
+  sourceList: string | null
+  industry: string | null
+  connectionPaths: string | null
+  alert: string | null
+  recommendedName: string | null
+  recommendedJobTitle: string | null
+  recommendedLinkedInUrl: string | null
+  recommendedSalesNavigatorUrl: string | null
+  recommendedConnectionDegree: string | null
+  companyDomain: string | null
+  companyPublicLinkedInUrl: string | null
+  companyEmployeeCount: number | null
+  companyHeadquarters: string | null
+  companyContactEmail: string | null
+  companyContactEmailStatus: string | null
+  companyContactPhone: string | null
+  companyContactPhoneStatus: string | null
+  workEmail: string | null
+  emailStatus: string | null
+  mobilePhone: string | null
+  phoneStatus: string | null
+  enrichment?: Record<string, string>
+}
 
-/** Serialises parsed accounts to the account-list CSV. */
-export function buildAccountCsv(accounts: readonly ParsedAccount[]): string {
-  return toCsv(accounts, ACCOUNT_CSV_COLUMNS, {
-    alwaysKeep: ALWAYS_EXPORTED_ACCOUNT_COLUMNS,
+/** Maps trusted stored rows into the same provider-neutral record as a lead. */
+export function normalizeExportAccount(source: AccountExportSource): ExportLead {
+  const enrichment = {
+    ...(source.enrichment ?? {}),
+    ...(source.connectionPaths ? { 'Connection Paths': source.connectionPaths } : {}),
+    ...(source.alert ? { Alert: source.alert } : {}),
+  }
+
+  return {
+    id: source.id,
+    recordType: 'account',
+    name: source.recommendedName,
+    linkedinUrl: source.recommendedLinkedInUrl,
+    salesNavigatorUrl: source.recommendedSalesNavigatorUrl,
+    jobTitle: source.recommendedJobTitle,
+    location: source.companyHeadquarters,
+    companyName: source.companyName,
+    companyLinkedInUrl: source.companySalesNavigatorUrl,
+    companyPublicLinkedIn: source.companyPublicLinkedInUrl,
+    companyUrl: source.companyDomain ? `https://${source.companyDomain}` : null,
+    companyIndustry: source.industry,
+    companyEmployeeCount: source.companyEmployeeCount,
+    companyContactEmail: source.companyContactEmail,
+    companyContactEmailStatus: source.companyContactEmailStatus,
+    companyContactPhone: source.companyContactPhone,
+    companyContactPhoneStatus: source.companyContactPhoneStatus,
+    workEmail: source.workEmail,
+    emailStatus: source.emailStatus,
+    mobilePhone: source.mobilePhone,
+    phoneStatus: source.phoneStatus,
+    connectionDegree: source.recommendedConnectionDegree,
+    leadSource: source.recommendedName ? 'Recommended decision maker' : 'Company only',
+    sourceList: source.sourceList,
+    ...(Object.keys(enrichment).length > 0 ? { enrichment } : {}),
+  }
+}
+
+function parsedAccount(account: ParsedAccount, index: number): ExportLead {
+  const recommendation = account.recommendation
+  return normalizeExportAccount({
+    id: `captured-account-${index}`,
+    companyId: account.companyId,
+    companyName: account.companyName,
+    companySalesNavigatorUrl: account.salesNavUrl,
+    sourceList: account.sourceList ?? null,
+    industry: account.industry,
+    connectionPaths: account.connectionPaths,
+    alert: account.alert,
+    recommendedName: recommendation?.fullName ?? null,
+    recommendedJobTitle: recommendation?.jobTitle ?? null,
+    recommendedLinkedInUrl: recommendation
+      ? `https://www.linkedin.com/in/${recommendation.memberId}`
+      : null,
+    recommendedSalesNavigatorUrl: recommendation?.salesNavUrl ?? null,
+    recommendedConnectionDegree: recommendation?.connectionDegree ?? null,
+    companyDomain: null,
+    companyPublicLinkedInUrl: null,
+    companyEmployeeCount: null,
+    companyHeadquarters: null,
+    companyContactEmail: null,
+    companyContactEmailStatus: null,
+    companyContactPhone: null,
+    companyContactPhoneStatus: null,
+    workEmail: null,
+    emailStatus: null,
+    mobilePhone: null,
+    phoneStatus: null,
   })
+}
+
+/** Serialises normalized Account List rows using the canonical export schema. */
+export function buildAccountRecordCsv(accounts: readonly ExportLead[]): string {
+  const records = accounts.map(toCanonicalExportRecord)
+  const columns = [...EXPORT_COLUMN_ORDER, ...enrichmentHeaders(accounts)].map((header) => ({
+    header,
+    value: (row: Record<string, string | null>) => row[header] ?? null,
+  })) satisfies CsvColumn<Record<string, string | null>>[]
+
+  return toCsv(records, columns, { alwaysKeep: ALWAYS_EXPORTED_ACCOUNT_COLUMNS })
+}
+
+/** Serialises freshly parsed accounts before background enrichment completes. */
+export function buildAccountCsv(accounts: readonly ParsedAccount[]): string {
+  return buildAccountRecordCsv(accounts.map(parsedAccount))
 }

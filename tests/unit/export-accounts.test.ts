@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ParsedAccount } from '@/lib/companies/parse-account-list'
-import { buildAccountCsv } from '@/lib/export/accounts'
+import { buildAccountCsv, normalizeExportAccount } from '@/lib/export/accounts'
 
 function account(overrides: Partial<ParsedAccount> = {}): ParsedAccount {
   return {
@@ -23,16 +23,13 @@ function lines(csv: string): string[] {
 }
 
 describe('buildAccountCsv', () => {
-  it('writes company columns, never the lead writer’s person columns', () => {
+  it('writes the shared company and optional decision-maker contract', () => {
     const header = lines(buildAccountCsv([account()]))[0]!
 
-    expect(header).toContain('Company Name')
-    expect(header).toContain('Industry')
-    // The account list holds no extracted person, so no person header may
-    // appear — a column of blanks reads as a failed extraction.
-    expect(header).not.toContain('Full Name')
-    expect(header).not.toContain('Email')
-    expect(header).not.toContain('Job Title')
+    expect(header).toContain('Company')
+    expect(header).toContain('Company Sales Navigator URL')
+    expect(header).toContain('Company Industry')
+    expect(header).toContain('Record Type')
   })
 
   it('keeps the two identifying columns even when every other field is empty', () => {
@@ -42,10 +39,11 @@ describe('buildAccountCsv', () => {
     const [header, row] = lines(csv)
 
     // Pinned, so an importer mapped against a richer run still resolves.
-    expect(header).toBe('Company Name,LinkedIn URL')
-    expect(row).toBe(
-      'Fabricated Widgets,https://www.linkedin.com/sales/company/38150452',
-    )
+    expect(header).toBe('Name,Sales Navigator URL,Job Title,Company,Company Sales Navigator URL,Lead Source,Record Type')
+    expect(row).toContain('Fabricated Widgets')
+    expect(row).toContain('https://www.linkedin.com/sales/company/38150452')
+    expect(row).toContain('Company only')
+    expect(row.endsWith(',Account')).toBe(true)
   })
 
   it('neutralises a company name that is a spreadsheet formula', () => {
@@ -57,7 +55,7 @@ describe('buildAccountCsv', () => {
     expect(lines(csv)[1]!.startsWith('=')).toBe(false)
   })
 
-  it('flattens the recommended person without calling them a lead', () => {
+  it('flattens the real recommended person into the shared person columns', () => {
     const csv = buildAccountCsv([
       account({
         recommendation: {
@@ -71,10 +69,46 @@ describe('buildAccountCsv', () => {
     ])
     const header = lines(csv)[0]!
 
-    expect(header).toContain('Recommended Contact')
-    expect(header).toContain('Recommended Contact Title')
+    expect(header).toContain('Name')
+    expect(header).toContain('Job Title')
+    expect(header).toContain('LinkedIn Profile')
     expect(lines(csv)[1]).toContain('Fabricated Person')
     expect(lines(csv)[1]).toContain('Head of Operations')
+  })
+
+  it('keeps company and decision-maker contacts distinct', () => {
+    const normalized = normalizeExportAccount({
+      id: 'account-1',
+      companyId: 'company-1',
+      companyName: 'Fabricated Widgets',
+      companySalesNavigatorUrl: 'https://www.linkedin.com/sales/company/1',
+      sourceList: 'Targets',
+      industry: 'Software',
+      connectionPaths: null,
+      alert: null,
+      recommendedName: 'Fabricated Person',
+      recommendedJobTitle: 'COO',
+      recommendedLinkedInUrl: 'https://www.linkedin.com/in/fabricated-person',
+      recommendedSalesNavigatorUrl: 'https://www.linkedin.com/sales/lead/fabricated-person',
+      recommendedConnectionDegree: '2nd',
+      companyDomain: 'fabricated.example',
+      companyPublicLinkedInUrl: 'https://www.linkedin.com/company/1',
+      companyEmployeeCount: 42,
+      companyHeadquarters: 'London',
+      companyContactEmail: 'sales@fabricated.example',
+      companyContactEmailStatus: 'publicly_found',
+      companyContactPhone: '+44 20 7946 0000',
+      companyContactPhoneStatus: 'publicly_found',
+      workEmail: 'person@fabricated.example',
+      emailStatus: 'verified',
+      mobilePhone: '+44 7700 900000',
+      phoneStatus: 'publicly_found',
+    })
+
+    expect(normalized.companyContactEmail).toBe('sales@fabricated.example')
+    expect(normalized.companyContactPhone).toBe('+44 20 7946 0000')
+    expect(normalized.workEmail).toBe('person@fabricated.example')
+    expect(normalized.mobilePhone).toBe('+44 7700 900000')
   })
 
   it('marks a looked-for but absent value rather than leaving it ambiguous', () => {

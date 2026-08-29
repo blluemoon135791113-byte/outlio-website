@@ -45,6 +45,12 @@ export type AccountIngestResult = {
    * the missing seven accounted for, or the user assumes data loss.
    */
   unidentified: number
+  /** Stable company id for every accepted captured row, in input order. */
+  entries: Array<{
+    account: ParsedAccount
+    companyId: string
+    created: boolean
+  }>
 }
 
 /**
@@ -126,11 +132,21 @@ export async function ingestAccounts(
   if (!userId) throw new Error('ingestAccounts: userId is required')
 
   const { payload, unidentified } = toIngestPayload(accounts)
-  if (payload.length === 0) return { created: 0, matched: 0, unidentified }
+  if (payload.length === 0) return { created: 0, matched: 0, unidentified, entries: [] }
+
+  /* `toIngestPayload` omits unidentified rows. Rebuild the same accepted-row
+     ordering so each RPC result can be tied back to its captured account. */
+  const identifiableAccounts = accounts.filter((account) =>
+    Boolean(resolveCompanyIdentity({
+      companyName: account.companyName,
+      companyLinkedInUrl: account.salesNavUrl,
+    })),
+  )
 
   const supabase = createAdminClient()
   let created = 0
   let matched = 0
+  const entries: AccountIngestResult['entries'] = []
 
   for (let index = 0; index < payload.length; index += INGEST_BATCH_SIZE) {
     const { data, error } = await supabase.rpc('upsert_companies', {
@@ -140,11 +156,16 @@ export async function ingestAccounts(
 
     if (error) throw new Error(`ingestAccounts failed: ${concise(error.message)}`)
 
-    for (const row of (data ?? []) as Array<{ created: boolean }>) {
+    for (const [offset, row] of ((data ?? []) as Array<{ company_id: string; created: boolean }>).entries()) {
       if (row.created) created += 1
       else matched += 1
+
+      const account = identifiableAccounts[index + offset]
+      if (account && row.company_id) {
+        entries.push({ account, companyId: row.company_id, created: row.created })
+      }
     }
   }
 
-  return { created, matched, unidentified }
+  return { created, matched, unidentified, entries }
 }

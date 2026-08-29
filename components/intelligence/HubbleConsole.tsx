@@ -28,6 +28,7 @@ import { useResearchRun, type ResearchScope } from '@/components/intelligence/us
 import type { LeadBatch } from '@/lib/intelligence/batches'
 import { dateRangeBounds } from '@/lib/intelligence/date-range'
 import { researchScopeForView } from '@/lib/intelligence/view-scope'
+import { RESEARCH_FIELD_SPEC } from '@/lib/intelligence/types'
 import { createClient } from '@/lib/supabase/client'
 
 /** One list is 25 leads. */
@@ -60,7 +61,7 @@ const SUGGESTIONS = ['Recent Series A', 'Who uses HubSpot?', 'SaaS hiring SDRs']
  * so it cannot be the sixth.
  */
 const LEAD_SELECT_BASE =
-  'id, full_name, job_title, company_name, company_id, company_website_url, linkedin_url, sales_navigator_url, company_url, person_blurb, tenure_in_role, tenure_in_company, location, extraction_job_id, created_at, work_email, email_status, mobile_phone, phone_status, companies(domain)' as const
+  'id, full_name, job_title, company_name, company_id, company_website_url, linkedin_url, sales_navigator_url, company_url, person_blurb, tenure_in_role, tenure_in_company, location, extraction_job_id, created_at, lead_source, work_email, email_status, mobile_phone, phone_status, companies(domain)' as const
 
 const LEAD_SELECT_ENRICHED = `${LEAD_SELECT_BASE}, enrichment` as const
 
@@ -82,6 +83,7 @@ type LeadRow = {
   email_status: string | null
   mobile_phone: string | null
   phone_status: string | null
+  lead_source: string | null
   companies?: { domain: string | null } | null
   enrichment?: unknown
 }
@@ -228,6 +230,7 @@ function savedDetailsFor(
       value,
       sourceUrl: record.source_url,
       status: null,
+      scope: record.entity_type,
     })
   }
 
@@ -247,6 +250,9 @@ function savedDetailsFor(
         value,
         sourceUrl: typeof entry?.source_url === 'string' ? entry.source_url : null,
         status: null,
+        scope:
+          (RESEARCH_FIELD_SPEC as Record<string, { entity: 'person' | 'company' }>)[field]?.entity ??
+          'company',
       })
     }
   }
@@ -265,6 +271,7 @@ function savedDetailsFor(
       value: answer.answer,
       sourceUrl: typeof source === 'string' ? source : null,
       status: answer.status,
+      scope: 'answer',
     })
   }
 
@@ -307,6 +314,14 @@ function toHubbleLead(
       evidenceValue(phoneEvidence?.value_json) ?? merged(row.enrichment, 'mobile_phone') ?? row.mobile_phone,
     phoneStatus:
       evidenceValue(phoneStatusEvidence?.value_json) ?? merged(row.enrichment, 'phone_status') ?? row.phone_status,
+    origin:
+      row.lead_source === 'decision_maker'
+        ? 'account_recommendation'
+        : row.lead_source === 'company_page'
+          ? 'company_page'
+          : row.lead_source === 'search'
+            ? 'lead_search'
+            : null,
     /*
      * ⚠️ CAPTURED FIELDS THE MODAL COULD NEVER SHOW.
      *

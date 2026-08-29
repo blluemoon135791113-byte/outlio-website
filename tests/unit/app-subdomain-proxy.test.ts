@@ -33,6 +33,7 @@ describe('app.outlio.io software surface', () => {
     }))
 
     expect(getRedirectUrl(response)).toBeNull()
+    expect(response.headers.get('vary')).toBe('Accept, Accept-Encoding')
   })
 
   it('keeps agency marketing routes off the software domain', async () => {

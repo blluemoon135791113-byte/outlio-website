@@ -81,6 +81,9 @@ export async function proxy(request: NextRequest) {
   }
 
   const finish = (result: NextResponse): NextResponse => {
+    // Preserve content negotiation without a second deprecated middleware
+    // file. One Next 16 Proxy is the only supported project-level boundary.
+    result.headers.set('Vary', 'Accept, Accept-Encoding')
     if (!trialDeviceCookie) return result
     result.cookies.set({
       name: TRIAL_DEVICE_COOKIE,
@@ -103,7 +106,7 @@ export async function proxy(request: NextRequest) {
     if (rawPath === '/') {
       const url = request.nextUrl.clone()
       url.pathname = '/leadengine'
-      return NextResponse.redirect(url)
+      return finish(NextResponse.redirect(url))
     }
 
     // Marketing routes do not belong on the app host — send them to the
@@ -114,7 +117,7 @@ export async function proxy(request: NextRequest) {
     const isAsset = rawPath.startsWith('/_next') || rawPath.includes('.')
 
     if (!isAppPath && !isAsset) {
-      return NextResponse.redirect(new URL(rawPath, 'https://outlio.io'))
+      return finish(NextResponse.redirect(new URL(rawPath, 'https://outlio.io')))
     }
   }
 

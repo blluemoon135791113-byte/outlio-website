@@ -42,6 +42,8 @@ export const FIELD_TTL_SECONDS: Record<ResearchField, number | null> = {
   company_description: 180 * DAY,
   /** A public page address moves about as rarely as the site itself. */
   company_linkedin: 180 * DAY,
+  company_contact_email: 90 * DAY,
+  company_contact_phone: 90 * DAY,
   /** Self-described focus areas move about as often as the description does. */
   specialties: 180 * DAY,
   business_model: 180 * DAY,

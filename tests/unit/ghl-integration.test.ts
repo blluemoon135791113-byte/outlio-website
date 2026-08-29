@@ -28,9 +28,11 @@ describe('HighLevel private integration', () => {
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
       expect(new Headers(init?.headers).get('Authorization')).toBe(`Bearer ${credentials.token}`)
       if (String(url).includes('customFields?')) return Response.json({ customFields: [
+        { id: 'record-type-field', name: 'Outlio Record Type' },
         { id: 'linkedin-field', name: 'Outlio LinkedIn Profile URL' },
         { id: 'sales-nav-field', name: 'Outlio Sales Navigator URL' },
-        { id: 'company-field', name: 'Outlio Company Profile URL' },
+        { id: 'company-sales-nav-field', name: 'Outlio Company Sales Navigator URL' },
+        { id: 'company-field', name: 'Outlio Company LinkedIn URL' },
       ] })
       const body = JSON.parse(String(init?.body))
       expect(body.locationId).toBe(credentials.locationId)

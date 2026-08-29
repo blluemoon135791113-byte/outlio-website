@@ -422,6 +422,10 @@ export type CompanyRow = {
   industry: string | null
   employee_count: number | null
   headquarters: string | null
+  contact_email: string | null
+  contact_email_status: string | null
+  contact_phone: string | null
+  contact_phone_status: string | null
   created_at: string
   updated_at: string
 }
@@ -1199,8 +1203,100 @@ export type Database = {
           },
         ]
       }
+      account_list_entries: {
+        Row: {
+          alert: string | null
+          company_id: string
+          company_name_snapshot: string
+          company_sales_navigator_url: string
+          connection_paths: string | null
+          created_at: string
+          extraction_job_id: string
+          id: string
+          industry_snapshot: string | null
+          recommended_contact_connection: string | null
+          recommended_contact_job_title: string | null
+          recommended_contact_member_id: string | null
+          recommended_contact_name: string | null
+          recommended_contact_sales_nav_url: string | null
+          recommended_lead_id: string | null
+          source_list: string | null
+          source_row_index: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          alert?: string | null
+          company_id: string
+          company_name_snapshot: string
+          company_sales_navigator_url: string
+          connection_paths?: string | null
+          created_at?: string
+          extraction_job_id: string
+          id?: string
+          industry_snapshot?: string | null
+          recommended_contact_connection?: string | null
+          recommended_contact_job_title?: string | null
+          recommended_contact_member_id?: string | null
+          recommended_contact_name?: string | null
+          recommended_contact_sales_nav_url?: string | null
+          recommended_lead_id?: string | null
+          source_list?: string | null
+          source_row_index: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          alert?: string | null
+          company_id?: string
+          company_name_snapshot?: string
+          company_sales_navigator_url?: string
+          connection_paths?: string | null
+          created_at?: string
+          extraction_job_id?: string
+          id?: string
+          industry_snapshot?: string | null
+          recommended_contact_connection?: string | null
+          recommended_contact_job_title?: string | null
+          recommended_contact_member_id?: string | null
+          recommended_contact_name?: string | null
+          recommended_contact_sales_nav_url?: string | null
+          recommended_lead_id?: string | null
+          source_list?: string | null
+          source_row_index?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_list_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_list_entries_extraction_job_id_fkey"
+            columns: ["extraction_job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_list_entries_recommended_lead_id_fkey"
+            columns: ["recommended_lead_id"]
+            isOneToOne: false
+            referencedRelation: "extracted_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
+          contact_email: string | null
+          contact_email_status: string | null
+          contact_phone: string | null
+          contact_phone_status: string | null
           created_at: string
           decision_maker_count: number | null
           domain: string | null
@@ -1221,6 +1317,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          contact_email?: string | null
+          contact_email_status?: string | null
+          contact_phone?: string | null
+          contact_phone_status?: string | null
           created_at?: string
           decision_maker_count?: number | null
           domain?: string | null
@@ -1241,6 +1341,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          contact_email?: string | null
+          contact_email_status?: string | null
+          contact_phone?: string | null
+          contact_phone_status?: string | null
           created_at?: string
           decision_maker_count?: number | null
           domain?: string | null
@@ -1460,6 +1564,7 @@ export type Database = {
       }
       export_job_errors: {
         Row: {
+          account_list_entry_id: string | null
           created_at: string
           error_code: string
           error_message: string
@@ -1469,6 +1574,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_list_entry_id?: string | null
           created_at?: string
           error_code: string
           error_message: string
@@ -1478,6 +1584,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_list_entry_id?: string | null
           created_at?: string
           error_code?: string
           error_message?: string
@@ -1487,6 +1594,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "export_job_errors_account_list_entry_id_fkey"
+            columns: ["account_list_entry_id"]
+            isOneToOne: false
+            referencedRelation: "account_list_entries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "export_job_errors_export_job_id_user_id_fkey"
             columns: ["export_job_id", "user_id"]
@@ -1505,6 +1619,7 @@ export type Database = {
       }
       export_jobs: {
         Row: {
+          account_count: number
           completed_at: string | null
           created_at: string
           destination_id: string | null
@@ -1517,6 +1632,7 @@ export type Database = {
           lead_count: number
           options: Json
           provider: string
+          record_type: string
           started_at: string | null
           status: string
           successful_count: number
@@ -1524,6 +1640,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_count?: number
           completed_at?: string | null
           created_at?: string
           destination_id?: string | null
@@ -1536,6 +1653,7 @@ export type Database = {
           lead_count?: number
           options?: Json
           provider: string
+          record_type?: string
           started_at?: string | null
           status?: string
           successful_count?: number
@@ -1543,6 +1661,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_count?: number
           completed_at?: string | null
           created_at?: string
           destination_id?: string | null
@@ -1555,6 +1674,7 @@ export type Database = {
           lead_count?: number
           options?: Json
           provider?: string
+          record_type?: string
           started_at?: string | null
           status?: string
           successful_count?: number
@@ -2218,33 +2338,43 @@ export type Database = {
       }
       integration_record_links: {
         Row: {
+          account_list_entry_id: string | null
           connection_id: string
           created_at: string
           id: string
-          lead_id: string
+          lead_id: string | null
           provider_record_id: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          account_list_entry_id?: string | null
           connection_id: string
           created_at?: string
           id?: string
-          lead_id: string
+          lead_id?: string | null
           provider_record_id: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          account_list_entry_id?: string | null
           connection_id?: string
           created_at?: string
           id?: string
-          lead_id?: string
+          lead_id?: string | null
           provider_record_id?: string
           updated_at?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "integration_record_links_account_list_entry_id_fkey"
+            columns: ["account_list_entry_id"]
+            isOneToOne: false
+            referencedRelation: "account_list_entries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "integration_record_links_connection_id_user_id_fkey"
             columns: ["connection_id", "user_id"]

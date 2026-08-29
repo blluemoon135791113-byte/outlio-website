@@ -1,6 +1,7 @@
 import 'server-only'
 
-import { normalizeExportLeads, type ExportLeadSource } from '@/lib/export/leads'
+import { loadAccountExportRecords } from '@/lib/export/account-loader'
+import { normalizeExportLeads, type ExportLead, type ExportLeadSource } from '@/lib/export/leads'
 import { ClayExportProvider } from '@/lib/integrations/clay'
 import { exportLeadsToGoogleDrive, exportLeadsToGoogleSheet } from '@/lib/integrations/google-exports'
 import { exportLeadsToGhl } from '@/lib/integrations/ghl'
@@ -21,6 +22,47 @@ import { createAdminClient } from '@/lib/supabase/admin'
 const EXPORT_LEAD_SELECT =
   'id, extraction_job_id, full_name, linkedin_url, job_title, company_name, company_url, company_website_url, sales_navigator_url, location, enrichment, company_industry, company_size, company_headquarters, connection_degree, is_reachable, list_count, last_activity, added_to_list_at, work_email, email_status, mobile_phone, phone_status' as const
 
+export type ExportSelectionInput =
+  | { userId: string; leadIds: readonly string[]; accountListJobId?: never }
+  | { userId: string; accountListJobId: string; leadIds?: never }
+
+type ExportBatch = {
+  records: ExportLead[]
+  extractionJobId: string | null
+  recordType: 'lead' | 'account'
+}
+
+async function loadExportBatch(input: ExportSelectionInput): Promise<ExportBatch> {
+  if (typeof input.accountListJobId === 'string') {
+    const records = await loadAccountExportRecords(input.userId, input.accountListJobId)
+    return { records, extractionJobId: input.accountListJobId, recordType: 'account' }
+  }
+
+  const admin = createAdminClient()
+  const requestedIds = [...new Set(input.leadIds)]
+  if (requestedIds.length === 0) throw new Error('EXPORT_EMPTY')
+  const { data: rows, error } = await admin
+    .from('extracted_leads')
+    .select(EXPORT_LEAD_SELECT)
+    .eq('user_id', input.userId)
+    .in('id', requestedIds)
+    .order('source_row_index', { ascending: true })
+  if (error) throw new Error('EXPORT_LEADS_UNAVAILABLE')
+  if (!rows || rows.length !== requestedIds.length) throw new Error('EXPORT_SOURCE_NOT_FOUND')
+  const jobIds = new Set(rows.map((row) => row.extraction_job_id))
+  return {
+    records: normalizeExportLeads(rows as ExportLeadSource[]),
+    extractionJobId: jobIds.size === 1 ? rows[0]?.extraction_job_id ?? null : null,
+    recordType: 'lead',
+  }
+}
+
+function sourceReference(recordType: ExportBatch['recordType'], sourceId: string) {
+  return recordType === 'account'
+    ? { lead_id: null, account_list_entry_id: sourceId }
+    : { lead_id: sourceId, account_list_entry_id: null }
+}
+
 export type LeadExportServiceResult = {
   exportJobId: string
   status: 'completed' | 'partial' | 'failed'
@@ -39,31 +81,35 @@ export type GhlLeadExportServiceResult = LeadExportServiceResult & {
   failures: NonNullable<import('@/lib/integrations/types').ExportResult['failures']>
 }
 
-export async function exportSelectedLeadsToGhl(input: { userId: string; leadIds: readonly string[] }): Promise<GhlLeadExportServiceResult> {
+export async function exportSelectedLeadsToGhl(input: ExportSelectionInput): Promise<GhlLeadExportServiceResult> {
   const admin = createAdminClient()
-  const requestedIds = [...new Set(input.leadIds)]
-  if (!requestedIds.length) throw new Error('EXPORT_EMPTY')
-  const { data: rows, error: leadError } = await admin.from('extracted_leads').select(EXPORT_LEAD_SELECT).eq('user_id', input.userId).in('id', requestedIds).order('source_row_index', { ascending: true })
-  if (leadError) throw new Error('EXPORT_LEADS_UNAVAILABLE')
-  if (!rows || rows.length !== requestedIds.length) throw new Error('EXPORT_SOURCE_NOT_FOUND')
+  const batch = await loadExportBatch(input)
+  const rows = batch.records
   const connection = await getGhlConnectionMetadata(input.userId)
   const stored = await getGhlCredentials(input.userId)
   if (!connection || connection.status !== 'connected' || !stored) throw new Error('GHL_NOT_CONNECTED')
-  const extractionJobIds = new Set(rows.map((row) => row.extraction_job_id))
-  const extractionJobId = extractionJobIds.size === 1 ? rows[0]?.extraction_job_id ?? null : null
   const { data: exportJob, error: createError } = await admin.from('export_jobs').insert({
-    user_id: input.userId, extraction_job_id: extractionJobId, provider: 'ghl', status: 'processing', lead_count: rows.length, started_at: new Date().toISOString(),
+    user_id: input.userId, extraction_job_id: batch.extractionJobId, provider: 'ghl', status: 'processing',
+    record_type: batch.recordType, lead_count: batch.recordType === 'lead' ? rows.length : 0,
+    account_count: batch.recordType === 'account' ? rows.length : 0, started_at: new Date().toISOString(),
   }).select('id').single()
   if (createError || !exportJob) throw new Error('EXPORT_JOB_CREATE_FAILED')
 
   try {
-    const result = await exportLeadsToGhl(stored.credentials, normalizeExportLeads(rows as ExportLeadSource[]))
+    const result = await exportLeadsToGhl(stored.credentials, rows)
     const status = result.failedCount === 0 ? 'completed' : result.successfulCount > 0 ? 'partial' : 'failed'
     if (result.records?.length) {
-      await admin.from('integration_record_links').upsert(result.records.map((record) => ({ user_id: input.userId, connection_id: connection.id, lead_id: record.leadId, provider_record_id: record.providerRecordId })), { onConflict: 'connection_id,lead_id' })
+      for (const record of result.records) {
+        await admin.from('integration_record_links').upsert({
+          user_id: input.userId,
+          connection_id: connection.id,
+          ...sourceReference(batch.recordType, record.sourceId),
+          provider_record_id: record.providerRecordId,
+        }, { onConflict: batch.recordType === 'account' ? 'connection_id,account_list_entry_id' : 'connection_id,lead_id' })
+      }
     }
     if (result.failures?.length) {
-      await admin.from('export_job_errors').insert(result.failures.map((failure) => ({ export_job_id: exportJob.id, user_id: input.userId, lead_id: failure.leadId, error_code: failure.code, error_message: failure.message })))
+      await admin.from('export_job_errors').insert(result.failures.map((failure) => ({ export_job_id: exportJob.id, user_id: input.userId, ...sourceReference(batch.recordType, failure.sourceId), error_code: failure.code, error_message: failure.message })))
     }
     await admin.from('export_jobs').update({
       status, successful_count: result.successfulCount, failed_count: result.failedCount,
@@ -74,57 +120,46 @@ export async function exportSelectedLeadsToGhl(input: { userId: string; leadIds:
     const authFailure = result.failures?.find((failure) => failure.code === 'GHL_AUTH_REJECTED')
     if (authFailure) await updateGhlConnectionTest(input.userId, { ok: false, reconnectRequired: true, message: authFailure.message })
     else if (result.successfulCount > 0) await markGhlConnectionUsed(input.userId)
-    return { exportJobId: exportJob.id, status, totalRequested: requestedIds.length, successfulCount: result.successfulCount, failedCount: result.failedCount, failures: result.failures ?? [] }
+    return { exportJobId: exportJob.id, status, totalRequested: rows.length, successfulCount: result.successfulCount, failedCount: result.failedCount, failures: result.failures ?? [] }
   } catch (error) {
     await admin.from('export_jobs').update({ status: 'failed', failed_count: rows.length, error_code: 'GHL_EXPORT_FAILED', error_message: 'HighLevel could not accept this export.', completed_at: new Date().toISOString() }).eq('id', exportJob.id).eq('user_id', input.userId)
     throw error
   }
 }
 
-export async function exportSelectedLeadsToGoogle(input: {
-  userId: string
-  leadIds: readonly string[]
+export async function exportSelectedLeadsToGoogle(input: ExportSelectionInput & {
   destination: GoogleExportDestination
   name?: string
 }): Promise<GoogleLeadExportServiceResult> {
   const admin = createAdminClient()
-  const requestedIds = [...new Set(input.leadIds)]
-  if (requestedIds.length === 0) throw new Error('EXPORT_EMPTY')
-  const { data: rows, error: leadError } = await admin
-    .from('extracted_leads')
-    .select(EXPORT_LEAD_SELECT)
-    .eq('user_id', input.userId)
-    .in('id', requestedIds)
-    .order('source_row_index', { ascending: true })
-  if (leadError) throw new Error('EXPORT_LEADS_UNAVAILABLE')
-  if (!rows || rows.length !== requestedIds.length) throw new Error('EXPORT_SOURCE_NOT_FOUND')
+  const batch = await loadExportBatch(input)
+  const rows = batch.records
 
   const connection = await getGoogleConnectionMetadata(input.userId)
   if (!connection || connection.status !== 'connected') throw new Error('GOOGLE_NOT_CONNECTED')
-  const extractionJobIds = new Set(rows.map((row) => row.extraction_job_id))
-  const extractionJobId = extractionJobIds.size === 1 ? rows[0]?.extraction_job_id ?? null : null
   const { data: exportJob, error: createError } = await admin.from('export_jobs').insert({
     user_id: input.userId,
-    extraction_job_id: extractionJobId,
+    extraction_job_id: batch.extractionJobId,
     provider: input.destination,
     status: 'processing',
-    lead_count: rows.length,
+    record_type: batch.recordType,
+    lead_count: batch.recordType === 'lead' ? rows.length : 0,
+    account_count: batch.recordType === 'account' ? rows.length : 0,
     started_at: new Date().toISOString(),
   }).select('id').single()
   if (createError || !exportJob) throw new Error('EXPORT_JOB_CREATE_FAILED')
 
   try {
     const accessToken = await getGoogleAccessToken(input.userId)
-    const leads = normalizeExportLeads(rows as ExportLeadSource[])
     const result = input.destination === 'google_sheets'
-      ? await exportLeadsToGoogleSheet(accessToken, leads, input.name)
-      : await exportLeadsToGoogleDrive(accessToken, leads, input.name)
+      ? await exportLeadsToGoogleSheet(accessToken, rows, input.name)
+      : await exportLeadsToGoogleDrive(accessToken, rows, input.name)
     const status = result.failedCount === 0 ? 'completed' : result.successfulCount > 0 ? 'partial' : 'failed'
     if (result.failures?.length) {
       await admin.from('export_job_errors').insert(result.failures.map((failure) => ({
         export_job_id: exportJob.id,
         user_id: input.userId,
-        lead_id: failure.leadId,
+        ...sourceReference(batch.recordType, failure.sourceId),
         error_code: failure.code,
         error_message: failure.message,
       })))
@@ -163,27 +198,10 @@ export async function exportSelectedLeadsToGoogle(input: {
   }
 }
 
-export async function exportSelectedLeadsToClay(input: {
-  userId: string
-  leadIds: readonly string[]
-}): Promise<LeadExportServiceResult> {
+export async function exportSelectedLeadsToClay(input: ExportSelectionInput): Promise<LeadExportServiceResult> {
   const admin = createAdminClient()
-  const requestedIds = [...new Set(input.leadIds)]
-  if (requestedIds.length === 0) throw new Error('EXPORT_EMPTY')
-
-  const { data: rows, error: leadError } = await admin
-    .from('extracted_leads')
-    .select(EXPORT_LEAD_SELECT)
-    .eq('user_id', input.userId)
-    .in('id', requestedIds)
-    .order('source_row_index', { ascending: true })
-  if (leadError) throw new Error('EXPORT_LEADS_UNAVAILABLE')
-  // Service-role reads bypass RLS. A partial match means at least one id was
-  // missing or belonged to someone else, so fail the whole request.
-  if (!rows || rows.length !== requestedIds.length) throw new Error('EXPORT_SOURCE_NOT_FOUND')
-
-  const extractionJobIds = new Set(rows.map((row) => row.extraction_job_id))
-  const extractionJobId = extractionJobIds.size === 1 ? rows[0]?.extraction_job_id ?? null : null
+  const batch = await loadExportBatch(input)
+  const rows = batch.records
 
   const stored = await getClayCredentials(input.userId)
   if (!stored) throw new Error('CLAY_NOT_CONNECTED')
@@ -192,10 +210,12 @@ export async function exportSelectedLeadsToClay(input: {
     .from('export_jobs')
     .insert({
       user_id: input.userId,
-      extraction_job_id: extractionJobId,
+      extraction_job_id: batch.extractionJobId,
       provider: 'clay',
       status: 'processing',
-      lead_count: rows.length,
+      record_type: batch.recordType,
+      lead_count: batch.recordType === 'lead' ? rows.length : 0,
+      account_count: batch.recordType === 'account' ? rows.length : 0,
       started_at: new Date().toISOString(),
     })
     .select('id')
@@ -211,14 +231,13 @@ export async function exportSelectedLeadsToClay(input: {
 
   try {
     const provider = new ClayExportProvider(stored.credentials)
-    const leads = normalizeExportLeads(rows as ExportLeadSource[])
     const result = await provider.exportLeads(
       {
         userId: input.userId,
         connectionId: stored.connectionId,
         existingRecordIds: new Map(),
       },
-      leads,
+      rows,
     )
     const status =
       result.failedCount === 0
@@ -232,7 +251,7 @@ export async function exportSelectedLeadsToClay(input: {
       const errorRows = result.failures.map((failure) => ({
         export_job_id: exportJob.id,
         user_id: input.userId,
-        lead_id: failure.leadId,
+        ...sourceReference(batch.recordType, failure.sourceId),
         error_code: failure.code,
         error_message: failure.message,
       }))
@@ -298,4 +317,3 @@ export async function exportSelectedLeadsToClay(input: {
     throw new Error('CLAY_EXPORT_FAILED')
   }
 }
-

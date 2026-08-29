@@ -21,11 +21,13 @@ export default async function HubblePage() {
   const [jobs, files] = await Promise.all([
     supabase
       .from('extraction_jobs')
-      .select('id, leads_kept, created_at')
+      .select('id, leads_kept, kind, created_at')
       // Service role bypasses RLS — scoping by user_id is mandatory.
       .eq('user_id', userId)
       .in('status', ['completed', 'partially_completed'])
-      .gt('leads_kept', 0)
+      // Account runs report company counts, so their historical leads_kept is
+      // zero even when real recommendations now exist in extracted_leads.
+      .or('leads_kept.gt.0,kind.eq.account_list')
       .order('created_at', { ascending: false })
       .limit(200),
     /*

@@ -42,6 +42,7 @@ export function clayConnectionLabel(webhookUrl: string): string {
 
 export function toClayLeadPayload(lead: ExportLead): Record<string, string | null> {
   return {
+    record_type: lead.recordType ?? 'lead',
     name: lead.name,
     linkedin_profile_url: lead.linkedinUrl,
     job_title: lead.jobTitle,
@@ -49,6 +50,17 @@ export function toClayLeadPayload(lead: ExportLead): Record<string, string | nul
     company_url: lead.companyUrl,
     location: lead.location,
     sales_navigator_url: lead.salesNavigatorUrl,
+    work_email: lead.workEmail ?? null,
+    email_status: lead.emailStatus ?? null,
+    mobile_phone: lead.mobilePhone ?? null,
+    phone_status: lead.phoneStatus ?? null,
+    company_linkedin_url: lead.companyLinkedInUrl ?? null,
+    company_public_linkedin_url: lead.companyPublicLinkedIn ?? null,
+    company_email: lead.companyContactEmail ?? null,
+    company_email_status: lead.companyContactEmailStatus ?? null,
+    company_phone: lead.companyContactPhone ?? null,
+    company_phone_status: lead.companyContactPhoneStatus ?? null,
+    source_list: lead.sourceList ?? null,
   }
 }
 
@@ -218,7 +230,7 @@ export class ClayExportProvider implements LeadExportProvider {
         if (result.ok) successfulCount += 1
         else {
           failures.push({
-            leadId: lead.id,
+            sourceId: lead.id,
             code: result.code,
             message: result.message,
           })

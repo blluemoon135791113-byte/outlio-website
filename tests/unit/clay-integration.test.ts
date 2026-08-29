@@ -34,6 +34,7 @@ describe('Clay integration', () => {
 
   it('uses stable field names and preserves missing data as null', () => {
     expect(toClayLeadPayload(lead)).toEqual({
+      record_type: 'lead',
       name: 'Ada Example',
       linkedin_profile_url: lead.linkedinUrl,
       job_title: 'Founder',
@@ -41,6 +42,17 @@ describe('Clay integration', () => {
       company_url: 'https://example.com',
       location: 'London, United Kingdom',
       sales_navigator_url: lead.salesNavigatorUrl,
+      work_email: null,
+      email_status: null,
+      mobile_phone: null,
+      phone_status: null,
+      company_linkedin_url: null,
+      company_public_linkedin_url: null,
+      company_email: null,
+      company_email_status: null,
+      company_phone: null,
+      company_phone_status: null,
+      source_list: null,
     })
   })
 

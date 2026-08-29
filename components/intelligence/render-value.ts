@@ -55,6 +55,8 @@ const COLUMN_LABELS: Record<string, string> = {
   // columns would leave nobody able to tell whose account they were looking at.
   social_profiles: 'Company socials',
   company_linkedin: 'Company LinkedIn',
+  company_contact_email: 'Company email',
+  company_contact_phone: 'Company phone',
   specialties: 'Specialties',
   person_seniority: 'Seniority',
   person_department: 'Department',

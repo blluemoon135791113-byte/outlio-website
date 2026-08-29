@@ -599,6 +599,33 @@ async function persistDiscoveredDomains(
   }
 }
 
+/** Projects public company contacts for bounded list/export reads. */
+async function persistCompanyContacts(
+  userId: string,
+  evidence: readonly { field: string; entityId: string; value: Record<string, unknown> }[],
+): Promise<void> {
+  const supabase = createAdminClient()
+  for (const item of evidence) {
+    const patch = item.field === 'company_contact_email'
+      ? {
+          contact_email: typeof item.value.email === 'string' ? item.value.email : null,
+          contact_email_status: 'publicly_found',
+        }
+      : item.field === 'company_contact_phone'
+        ? {
+            contact_phone: typeof item.value.phone === 'string' ? item.value.phone : null,
+            contact_phone_status: 'publicly_found',
+          }
+        : null
+    if (!patch || (!patch.contact_email && !patch.contact_phone)) continue
+    try {
+      await supabase.from('companies').update(patch).eq('id', item.entityId).eq('user_id', userId)
+    } catch {
+      // Evidence is durable; this projection can be repaired later.
+    }
+  }
+}
+
 /** Processes one claimed run end to end. Never throws for a provider problem. */
 export async function processResearchRun(
   runId: string,
@@ -774,6 +801,10 @@ export async function processResearchRun(
       ...companyReport.evidence,
       ...companyReport.bonusEvidence,
     ])
+    await persistCompanyContacts(userId, [
+      ...companyReport.evidence,
+      ...companyReport.bonusEvidence,
+    ])
   }
 
   // ---- 4b/5b. contact phase, against freshly resolved domains -------------
@@ -804,6 +835,10 @@ export async function processResearchRun(
       writtenTotal += (await writeEvidence(userId, runId, personReport.bonusEvidence)).written
       await recordToolCalls(userId, runId, personReport.toolCalls)
       await persistDiscoveredDomains(userId, [
+        ...personReport.evidence,
+        ...personReport.bonusEvidence,
+      ])
+      await persistCompanyContacts(userId, [
         ...personReport.evidence,
         ...personReport.bonusEvidence,
       ])

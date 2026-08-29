@@ -23,7 +23,9 @@ import { ParseError, parseSearchResults } from '@/lib/leads/parse'
 import { detectSavedPageType } from '@/lib/leads/page-type'
 import { AccountListParseError, parseAccountList, type ParsedAccount } from '@/lib/companies/parse-account-list'
 import { ingestAccounts } from '@/lib/companies/ingest-accounts'
-import { buildAccountCsv } from '@/lib/export/accounts'
+import { persistAccountList } from '@/lib/companies/account-list-store'
+import { buildAccountRecordCsv } from '@/lib/export/accounts'
+import { loadAccountExportRecords } from '@/lib/export/account-loader'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SNIFF_BYTES, sniffHtml } from '@/lib/upload/sniff'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
@@ -31,7 +33,8 @@ import {
   mapInConcurrentBatches,
   resolveFileConcurrency,
 } from '@/lib/worker/concurrency'
-import { enrichJobFree } from '@/lib/worker/enrich-free'
+import { enrichAccountCompaniesFree, enrichJobFree } from '@/lib/worker/enrich-free'
+import { rebuildAccountListExport } from '@/lib/worker/rebuild-account-export'
 import { rebuildJobExport } from '@/lib/worker/rebuild-export'
 
 /**
@@ -101,6 +104,16 @@ export const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
   { header: EXPORT_COLUMN_HEADERS.companyEmployeeCount, value: () => null },
   { header: EXPORT_COLUMN_HEADERS.companyDecisionMakers, value: () => null },
   { header: EXPORT_COLUMN_HEADERS.companyInvestors, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyContactEmail, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyContactEmailStatus, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyContactPhone, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyContactPhoneStatus, value: () => null },
+
+  // Populated by the post-extraction rebuild, once public research completes.
+  { header: EXPORT_COLUMN_HEADERS.workEmail, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.emailStatus, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.mobilePhone, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.phoneStatus, value: () => null },
 
   // The relationship.
   { header: EXPORT_COLUMN_HEADERS.connectionDegree, value: (l) => l.connectionDegree },
@@ -115,6 +128,7 @@ export const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
   // Provenance.
   { header: EXPORT_COLUMN_HEADERS.leadSource, value: () => 'search' },
   { header: EXPORT_COLUMN_HEADERS.sourceList, value: (l) => l.sourceList },
+  { header: EXPORT_COLUMN_HEADERS.recordType, value: () => 'Lead' },
 ]
 
 /** Truncates upstream error text so an HTML error page never reaches a log. */
@@ -288,6 +302,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     }
 
     const ingest = await ingestAccounts(userId, allAccounts)
+    const persisted = await persistAccountList(userId, jobId, ingest)
 
     /*
      * ---- account export ---------------------------------------------------
@@ -298,12 +313,12 @@ export async function processJob(jobId: string, userId: string): Promise<Process
      * server-generated from ids. The filename differs so a user with both
      * kinds open does not end up with two `leads.csv` in their downloads.
      *
-     * ⚠️ EXPORTED FROM THE PARSED ROWS, NOT FROM `companies`. The CSV is a
-     * record of what the captured page held; re-reading the table would fold
-     * in facts from other runs and from research, making the file for a run
-     * change every time something unrelated was enriched.
+     * The durable account rows are joined with the current trusted company and
+     * recommended-contact projections. This is the same provider-neutral
+     * dataset used by every CRM adapter, so exports cannot drift by provider.
      */
-    const accountCsv = buildAccountCsv(allAccounts)
+    const accountRecords = await loadAccountExportRecords(userId, jobId)
+    const accountCsv = buildAccountRecordCsv(accountRecords)
     const accountExportPath = `${userId}/${jobId}/accounts.csv`
 
     const { error: accountUploadError } = await supabase.storage
@@ -327,13 +342,31 @@ export async function processJob(jobId: string, userId: string): Promise<Process
         accounts_matched: ingest.matched,
         accounts_unidentified: ingest.unidentified,
         status: filesFailed > 0 ? 'partially_completed' : 'completed',
-        progress_step: null,
+        progress_step: filesFailed > 0 ? 'Completed with errors' : 'Completed',
         completed_at: new Date().toISOString(),
       })
       .eq('id', jobId)
       .eq('user_id', userId)
 
     await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
+
+    /*
+     * Company rows are researched even if LinkedIn supplied no person. Real
+     * recommendations use the ordinary lead contact pipeline. Both passes are
+     * free-only, bounded, and happen after the account list is already usable.
+     */
+    void Promise.all([
+      enrichAccountCompaniesFree(jobId, userId, persisted.companyIds),
+      persisted.recommendedLeadIds.length > 0
+        ? enrichJobFree(jobId, userId, persisted.recommendedLeadIds)
+        : Promise.resolve(null),
+    ])
+      .then(async () => {
+        await rebuildAccountListExport(jobId, userId)
+      })
+      .catch(() => {
+        // Account membership and CRM export remain available without research.
+      })
 
     return {
       jobId,

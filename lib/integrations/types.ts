@@ -47,14 +47,15 @@ export type ExportOptions = {
 }
 
 export type ExportItemFailure = {
-  leadId: string
+  /** Lead id for lead exports; Account List entry id for account exports. */
+  sourceId: string
   code: string
   /** Safe for an end user. Raw provider responses are never stored here. */
   message: string
 }
 
 export type ExportedRecord = {
-  leadId: string
+  sourceId: string
   providerRecordId: string
 }
 

@@ -31,6 +31,7 @@ import {
 import { hasWebSearch } from '@/lib/search'
 import { apolloEmailProvider } from './apollo'
 import { companiesHouseProvider } from './companies-house'
+import { companyContactProvider } from './company-contact'
 import { dnsTechProvider } from './dns-tech'
 import { domainDiscoveryProvider } from './domain-discovery'
 import { domainProbeProvider } from './domain-probe'
@@ -60,6 +61,7 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(githubProvider),
   eraseProviderType(hackerNewsProvider),
   eraseProviderType(companiesHouseProvider),
+  eraseProviderType(companyContactProvider),
   eraseProviderType(gleifProvider),
   eraseProviderType(secEdgarProvider),
   eraseProviderType(domainDiscoveryProvider),
@@ -106,6 +108,7 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
     // just verified, and inventories the accounts the company publishes —
     // LinkedIn recorded first-class, never fetched.
     'social-scout-company',
+    'company-contact',
     'usaspending',
   ],
   funding: ['search-funding', 'tavily-funding', 'gdelt-funding'],
@@ -226,6 +229,7 @@ function isConfigured(name: string): boolean {
     case 'hackernews':
       return true
     case 'scout':
+    case 'company-contact':
       // Website harvesting works everywhere; SMTP probing additionally
       // requires the SCOUT_SMTP_VERIFY opt-in, checked at execution time so a
       // Vercel deployment still gets published-address answers.

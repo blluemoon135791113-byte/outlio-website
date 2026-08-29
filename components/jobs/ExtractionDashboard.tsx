@@ -706,19 +706,10 @@ function JobHistoryRow({
 
         {!isActiveJob(job) ? (
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {/*
-              * ⚠️ `leadsRemaining` IS 0 FOR AN ACCOUNT RUN, AND MUST STAY 0.
-              *
-              * It gates the CRM destinations, which take person records —
-              * pushing a company list to a lead CRM would create contacts for
-              * people who were never extracted. An account run therefore
-              * offers the CSV download only. Do not "fix" this by passing the
-              * company count.
-              */}
             <RowExportMenu
               jobId={job.id}
               hasExport={Boolean(job.export_storage_path)}
-              leadsRemaining={job.leads_kept}
+              recordCount={job.kind === 'account_list' ? job.accounts_parsed : job.leads_kept}
               clayConnected={clayConnected}
               googleConnected={googleConnected}
               ghlConnected={ghlConnected}

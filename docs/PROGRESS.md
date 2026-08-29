@@ -4,6 +4,44 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-29 — Account Lists became CRM-ready company records
+
+Account List imports now persist durable company membership and the real
+recommended decision maker shown on each captured LinkedIn row. The canonical
+account export combines company identity, Sales Navigator/public LinkedIn,
+domain, industry, employee count, headquarters and public company contacts with
+the optional decision maker's title, LinkedIn, work email and mobile phone.
+
+CSV, Google Sheets, Google Drive, GoHighLevel and Clay now share this same
+record contract. The history export menu exposes connected destinations for
+account runs instead of silently limiting them to CSV. Company-only rows stay
+company-only; no fake person or guessed personal contact is created.
+
+Real Account List recommendations now also appear as individual people on the
+Hubble Intelligence board and in the originating batch filter. Their strips
+and modals identify them as Account List recommendations. The modal separates
+Person research, Company research, and saved Hubble answers, preventing an
+employer switchboard/inbox or company-level signal from being presented as the
+person's own contact or fact.
+
+Free, bounded post-import research now runs for account companies and real
+recommendations, stores provenance-bearing evidence, projects current company
+email/phone values for fast list reads, and rebuilds the downloadable snapshot
+after enrichment. Provider-link and export-audit rows distinguish account
+sources from lead sources so repeated exports remain traceable.
+
+See `docs/ACCOUNT_CRM_EXPORT_ARCHITECTURE.md` and migration 0067.
+
+Verification: migrations 0065–0067 were applied to the linked Supabase
+project; the pre-existing 25-company run was backfilled to 25 durable account
+entries with 19 real recommendations. Its free enrichment found six published
+company emails and three published company phone numbers. The rendered Account
+List menu exposes CSV, Google Sheets, Google Drive, GoHighLevel and Clay. All
+1,316 active tests pass (24 skipped), TypeScript/focused ESLint pass, and the
+Next.js 16.3 production build succeeds.
+
+---
+
 ## 2026-08-29 — Hubble mark sharpened for interface use
 
 The Hubble mark is now rendered as native inline SVG rather than a large PNG

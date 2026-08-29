@@ -8,6 +8,7 @@ import {
   exportSelectedLeadsToClay,
   exportSelectedLeadsToGoogle,
   exportSelectedLeadsToGhl,
+  type ExportSelectionInput,
 } from '@/lib/export/service'
 import { ACTION_LIMITS } from '@/lib/security/action-limits'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -30,12 +31,20 @@ const selectedLeadIdsSchema = z
 
 const jobIdSchema = z.string().uuid()
 
-async function leadIdsFromForm(userId: string, formData: FormData): Promise<string[] | null> {
+function recordNoun(selection: ExportSelectionInput, count: number): string {
+  const noun = 'accountListJobId' in selection ? 'account' : 'lead'
+  return `${noun}${count === 1 ? '' : 's'}`
+}
+
+async function exportSelectionFromForm(
+  userId: string,
+  formData: FormData,
+): Promise<ExportSelectionInput | null> {
   const rawLeadIds = formData.get('lead_ids')
   if (rawLeadIds) {
     try {
       const parsed = selectedLeadIdsSchema.safeParse(JSON.parse(String(rawLeadIds)))
-      return parsed.success ? parsed.data : null
+      return parsed.success ? { userId, leadIds: parsed.data } : null
     } catch {
       return null
     }
@@ -43,6 +52,16 @@ async function leadIdsFromForm(userId: string, formData: FormData): Promise<stri
 
   const jobId = jobIdSchema.safeParse(formData.get('job_id'))
   if (!jobId.success) return null
+  const admin = createAdminClient()
+  const { data: job, error: jobError } = await admin
+    .from('extraction_jobs')
+    .select('id, kind')
+    .eq('id', jobId.data)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (jobError || !job) return null
+  if (job.kind === 'account_list') return { userId, accountListJobId: job.id }
+
   const { data, error } = await createAdminClient()
     .from('extracted_leads')
     .select('id')
@@ -51,7 +70,7 @@ async function leadIdsFromForm(userId: string, formData: FormData): Promise<stri
     .order('source_row_index', { ascending: true })
     .limit(1_000)
   if (error || !data?.length) return null
-  return data.map((row) => row.id)
+  return { userId, leadIds: data.map((row) => row.id) }
 }
 
 export async function exportSelectedLeadsToClayAction(
@@ -65,17 +84,17 @@ export async function exportSelectedLeadsToClayAction(
     return { status: 'error', message: 'Too many export requests. Please wait and try again.' }
   }
 
-  const leadIds = await leadIdsFromForm(userId, formData)
-  if (!leadIds) {
-    return { status: 'error', message: 'Select between 1 and 1,000 leads to export.' }
+  const selection = await exportSelectionFromForm(userId, formData)
+  if (!selection) {
+    return { status: 'error', message: 'Select between 1 and 1,000 records to export.' }
   }
 
   try {
-    const result = await exportSelectedLeadsToClay({ userId, leadIds })
+    const result = await exportSelectedLeadsToClay(selection)
     if (result.status === 'failed') {
       return {
         status: 'error',
-        message: `Clay did not accept ${result.failedCount.toLocaleString()} selected lead${result.failedCount === 1 ? '' : 's'}. Test the connection and try again.`,
+        message: `Clay did not accept ${result.failedCount.toLocaleString()} selected ${recordNoun(selection, result.failedCount)}. Test the connection and try again.`,
       }
     }
 
@@ -84,14 +103,14 @@ export async function exportSelectedLeadsToClayAction(
       message:
         result.failedCount > 0
           ? `Export completed with some errors. ${result.successfulCount.toLocaleString()} exported, ${result.failedCount.toLocaleString()} failed.`
-          : `${result.successfulCount.toLocaleString()} selected lead${result.successfulCount === 1 ? '' : 's'} exported to Clay.`,
+          : `${result.successfulCount.toLocaleString()} selected ${recordNoun(selection, result.successfulCount)} exported to Clay.`,
       successfulCount: result.successfulCount,
       failedCount: result.failedCount,
     }
   } catch (error) {
     const code = error instanceof Error ? error.message : ''
     if (code === 'CLAY_NOT_CONNECTED') {
-      return { status: 'error', message: 'Connect Clay in Settings before exporting leads.' }
+      return { status: 'error', message: 'Connect Clay in Settings before exporting records.' }
     }
     if (code === 'EXPORT_SOURCE_NOT_FOUND') {
       return { status: 'error', message: 'One or more selected leads are no longer available.' }
@@ -112,13 +131,12 @@ export async function exportSelectedLeadsToGoogleAction(
   const limit = await consume(ACTION_LIMITS.export, `user:${userId}`)
   if (!limit.allowed) return { status: 'error', message: 'Too many export requests. Please wait and try again.' }
   const destination = z.enum(['google_sheets', 'google_drive']).safeParse(formData.get('destination'))
-  const leadIds = await leadIdsFromForm(userId, formData)
-  if (!destination.success || !leadIds) return { status: 'error', message: 'Select between 1 and 1,000 leads to export.' }
+  const selection = await exportSelectionFromForm(userId, formData)
+  if (!destination.success || !selection) return { status: 'error', message: 'Select between 1 and 1,000 records to export.' }
 
   try {
     const result = await exportSelectedLeadsToGoogle({
-      userId,
-      leadIds,
+      ...selection,
       destination: destination.data,
       name: String(formData.get('name') ?? '').trim() || undefined,
     })
@@ -126,7 +144,7 @@ export async function exportSelectedLeadsToGoogleAction(
     const label = destination.data === 'google_sheets' ? 'Google Sheets' : 'Google Drive'
     return {
       status: 'success',
-      message: `${result.successfulCount.toLocaleString()} lead${result.successfulCount === 1 ? '' : 's'} exported to ${label}.`,
+      message: `${result.successfulCount.toLocaleString()} ${recordNoun(selection, result.successfulCount)} exported to ${label}.`,
       successfulCount: result.successfulCount,
       failedCount: result.failedCount,
       destinationUrl: result.destinationUrl ?? undefined,
@@ -147,14 +165,14 @@ export async function exportSelectedLeadsToGhlAction(
   const userId = ctx.userId!
   const limit = await consume(ACTION_LIMITS.export, `user:${userId}`)
   if (!limit.allowed) return { status: 'error', message: 'Too many export requests. Please wait and try again.' }
-  const leadIds = await leadIdsFromForm(userId, formData)
-  if (!leadIds) return { status: 'error', message: 'Select between 1 and 1,000 leads to export.' }
+  const selection = await exportSelectionFromForm(userId, formData)
+  if (!selection) return { status: 'error', message: 'Select between 1 and 1,000 records to export.' }
   try {
-    const result = await exportSelectedLeadsToGhl({ userId, leadIds })
-    if (result.status === 'failed') return { status: 'error', message: `HighLevel did not accept ${result.failedCount.toLocaleString()} lead${result.failedCount === 1 ? '' : 's'}. Update the token or check its scopes.` }
+    const result = await exportSelectedLeadsToGhl(selection)
+    if (result.status === 'failed') return { status: 'error', message: `HighLevel did not accept ${result.failedCount.toLocaleString()} ${recordNoun(selection, result.failedCount)}. Update the token or check its scopes.` }
     return {
       status: 'success',
-      message: result.failedCount ? `HighLevel export completed with errors. ${result.successfulCount.toLocaleString()} exported, ${result.failedCount.toLocaleString()} failed.` : `${result.successfulCount.toLocaleString()} lead${result.successfulCount === 1 ? '' : 's'} exported to HighLevel.`,
+      message: result.failedCount ? `HighLevel export completed with errors. ${result.successfulCount.toLocaleString()} exported, ${result.failedCount.toLocaleString()} failed.` : `${result.successfulCount.toLocaleString()} ${recordNoun(selection, result.successfulCount)} exported to HighLevel.`,
       successfulCount: result.successfulCount,
       failedCount: result.failedCount,
     }

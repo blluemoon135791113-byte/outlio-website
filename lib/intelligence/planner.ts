@@ -36,6 +36,8 @@ const FIELD_DESCRIPTIONS: Record<ResearchField, string> = {
   headquarters: 'where the company is based; country, city, or region',
   company_description: 'what the company does, in prose',
   company_linkedin: "the company's public LinkedIn page address",
+  company_contact_email: "a public company-level inbox such as sales, contact, or info",
+  company_contact_phone: "a public telephone number published by the company",
   specialties: 'the focus areas, offerings, or tags the company lists for itself',
   business_model: 'B2B, B2C, marketplace, agency, SaaS and similar',
   revenue_estimate: 'estimated annual revenue',

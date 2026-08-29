@@ -34,6 +34,8 @@ export type ParsedAccount = {
   connectionPaths: string | null
   alert: string | null
   recommendation: ParsedAccountRecommendation | null
+  /** The saved Account List name, when LinkedIn rendered it in the file. */
+  sourceList?: string | null
   sourceRowIndex: number
 }
 
@@ -114,6 +116,7 @@ function readListName($: cheerio.CheerioAPI): string | null {
 export function parseAccountList(html: string): AccountListParseResult {
   const $ = cheerio.load(html)
   const rows = $('[data-x--account-hub--table-data-row]')
+  const listName = readListName($)
 
   if (rows.length === 0) {
     throw new AccountListParseError('no account rows matched the validated Account Hub layout')
@@ -175,6 +178,7 @@ export function parseAccountList(html: string): AccountListParseResult {
               connectionDegree: degreeMatch?.[1]?.toLowerCase() ?? null,
             }
           : null,
+      sourceList: listName,
       sourceRowIndex: index,
     })
   })
@@ -183,5 +187,5 @@ export function parseAccountList(html: string): AccountListParseResult {
     throw new AccountListParseError('Account Hub rows contained no usable company identities')
   }
 
-  return { listName: readListName($), accounts, skippedRows }
+  return { listName, accounts, skippedRows }
 }

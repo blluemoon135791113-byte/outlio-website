@@ -54,14 +54,14 @@ function ConnectRow({ logo, label }: { logo: ConnectorLogoName; label: string })
 export function RowExportMenu({
   jobId,
   hasExport,
-  leadsRemaining,
+  recordCount,
   clayConnected,
   googleConnected,
   ghlConnected,
 }: {
   jobId: string
   hasExport: boolean
-  leadsRemaining: number
+  recordCount: number
   clayConnected: boolean
   googleConnected: boolean
   ghlConnected: boolean
@@ -78,7 +78,7 @@ export function RowExportMenu({
     if (download.status === 'ready') window.location.href = download.url
   }, [download])
 
-  if (!hasExport && leadsRemaining === 0) return null
+  if (!hasExport && recordCount === 0) return null
 
   return (
     <div className="space-y-1">
@@ -94,7 +94,7 @@ export function RowExportMenu({
               <input type="hidden" name="job_id" value={jobId} />
               <MenuSubmit logo="csv" label="Download CSV" />
             </form>
-            {leadsRemaining > 0 ? (
+            {recordCount > 0 ? (
               <>
                 <div className="my-1 border-t border-border" />
                 {googleConnected ? (
