@@ -150,11 +150,13 @@ const BOOK_ROWS: Book[][] = [
 
 const leadById = new Map(LEADS.map((lead) => [lead.id, lead]))
 
-function FieldIcon({ type }: { type: 'email' | 'phone' | 'linkedin' | 'website' }) {
+function FieldIcon({ type }: { type: 'company' | 'email' | 'linkedin' | 'phone' | 'role' | 'website' }) {
   const paths = {
+    company: <path d="M4.5 20.5v-15h10v15m0-10h5v10M8 9h3M8 13h3M8 17h3M17.5 14h.1M17.5 17.5h.1M3 20.5h18" />,
     email: <path d="M3.5 6.5h17v11h-17zM4 7l8 6 8-6" />,
     phone: <path d="M8.1 3.5 5.4 5.2c-.7.5-.9 1.4-.5 2.2 2.7 5.3 6.5 9.1 11.8 11.8.8.4 1.7.2 2.2-.5l1.7-2.7-4.5-2.1-1.4 1.8a15.8 15.8 0 0 1-6.4-6.4l1.8-1.4z" />,
     linkedin: <path d="M6.2 9.4v8.4M6.2 6.2v.1M10.1 17.8v-8.4m0 3.7c.8-2.1 5.8-2.5 5.8 1.5v3.2" />,
+    role: <path d="M8 7V5.5c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2V7M3.5 8h17v11.5h-17zM3.5 12.5c4.4 2 12.6 2 17 0M10 13.5h4" />,
     website: <path d="M3.5 12h17M12 3.5c3.4 3.6 3.4 13.4 0 17m0-17c-3.4 3.6-3.4 13.4 0 17M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17Z" />,
   }
 
@@ -219,7 +221,6 @@ export function LeadLibrary() {
         <h2 id="lead-library-title" className={styles.heading}>
           It&apos;s not that big. Just know where to look
         </h2>
-        <p className={styles.instruction}>Move through the shelf. A few records are ready to open.</p>
       </div>
 
       <div className={styles.libraryStage}>
@@ -303,11 +304,17 @@ export function LeadLibrary() {
 
               <div className={styles.profileHeader}>
                 <div className={styles.avatar} aria-hidden>{activeLead.initials}</div>
-                <div>
+                <div className={styles.profileCopy}>
                   <p className={styles.modalEyebrow}>Synthetic lead insight</p>
                   <h3 id="lead-insight-name">{activeLead.name}</h3>
-                  <p>{activeLead.role}</p>
-                  <p>{activeLead.company}</p>
+                  <div className={styles.identityRow}>
+                    <span className={styles.identityIcon}><FieldIcon type="role" /></span>
+                    <span><small>Role</small>{activeLead.role}</span>
+                  </div>
+                  <div className={styles.identityRow}>
+                    <span className={styles.identityIcon}><FieldIcon type="company" /></span>
+                    <span><small>Company</small>{activeLead.company}</span>
+                  </div>
                 </div>
               </div>
 

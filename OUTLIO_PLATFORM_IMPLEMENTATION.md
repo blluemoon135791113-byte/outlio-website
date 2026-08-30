@@ -800,3 +800,91 @@ seat_limit / ok / already_member / burned), `guard_last_workspace_owner()` and
 
 None added by M0 or M1. No new vendor, no new runtime, no new hosted service.
 Rate limiting, queues and audit all remain in Postgres.
+
+---
+
+## 20. Metric definitions (M4 Phase 9)
+
+⚠️ **WRITTEN BEFORE THE CODE, DELIBERATELY.** The M4 brief requires it, and the
+reason is that a metric is a definition first and a query second. "Reply rate"
+sounds unambiguous until two dashboards disagree, and by then both have
+shipped. Everything in `lib/crm/metrics.ts` implements exactly what is written
+here; if the two ever disagree, THIS is wrong and must be corrected first.
+
+### The three attribution rules
+
+1. **Credit the ACTOR for work.** "Emails sent by Sam" counts events where
+   `actor_user_id = Sam`.
+2. **Credit the OWNER AT EVENT TIME for outcomes.** "Sam's pipeline" counts
+   events where `owner_user_id_at_event = Sam`. ⚠️ Never
+   `crm_contacts.owner_user_id` — that is the CURRENT owner, and using it makes
+   last quarter's numbers move when a book is reassigned.
+3. **Bucket by `occurred_at`, never `created_at`.** Ingested history happened
+   before we recorded it; a funnel that buckets by `created_at` puts a year of
+   backfilled events in the week of the import.
+
+### Setter metrics
+
+| Metric | Formula | Notes |
+|---|---|---|
+| Contacts assigned | `count(distinct contact_id)` where `activity_type = 'OWNER_ASSIGNED'` and `metadata->>'to' = user` | The event, not the current column, so a reassignment away does not erase the fact it happened |
+| Engagements | `count(*)` where `activity_type in (ENGAGEMENT, OPENER_SENT, PERSONALIZED_DM, FOLLOW_UP)` and `actor_user_id = user` | |
+| Openers sent | `count(*)` where `activity_type = 'OPENER_SENT'` | |
+| Personalized DMs | `count(*)` where `activity_type = 'PERSONALIZED_DM'` | |
+| Emails sent | `count(*)` where `activity_type = 'EMAIL_SENT'` | The event count, not the recipient count |
+| **Contacts emailed** | `count(distinct contact_id)` where `activity_type = 'EMAIL_SENT'` | ⚠️ DISTINCT. Four emails to one person is one contact emailed |
+| Replies | `count(distinct contact_id)` where `activity_type = 'EMAIL_REPLIED'` | ⚠️ Distinct, and auto-replies are never written as this type — see below |
+| **Reply rate** | `replies / contacts_emailed` | ⚠️ Denominator is CONTACTS EMAILED, not emails sent. Otherwise a four-step sequence quarters the rate of a team that follows up properly |
+| Follow-ups | `count(*)` where `activity_type = 'FOLLOW_UP'` | |
+| Qualified | `count(distinct contact_id)` where `activity_type = 'QUALIFIED'` | |
+| Calls booked | `count(*)` where `activity_type = 'CALL_BOOKED'` | |
+| Calls held | `count(*)` where `activity_type = 'CALL_HELD'` | Distinct from booked: no-shows are the number that matters |
+| Tasks completed | `count(*)` where `activity_type = 'TASK_COMPLETED'` | |
+| Opportunities created | `count(*)` from `crm_opportunities` where `created_by = user` | |
+| **Pipeline value** | `sum(value_amount)` where `status = 'open'`, **in SQL** | ⚠️ Ledger D25: never summed in JavaScript |
+| Weighted pipeline | `sum(value_amount * probability / 100)` where `status = 'open'` | The forecast (Phase 10.5) |
+| Won deals | `count(*)` where `status = 'won'`, bucketed by `closed_at` | |
+| Won revenue | `sum(value_amount)` where `status = 'won'` | |
+
+### What is deliberately NOT counted
+
+- **Auto-replies and bounces never count as replies** (M4 criterion 3). The
+  deterministic OOO/autoresponder pre-filter in M6 Phase 17 runs BEFORE
+  anything is written, so an out-of-office is never recorded as
+  `EMAIL_REPLIED` in the first place. Excluding it at read time would mean
+  every report had to remember to; excluding it at write time means none of
+  them can forget.
+- **`COLLISION_OVERRIDE` is not an engagement.** It is an audit event that
+  happens to live on the timeline.
+- **`CONTACT_CREATED` is not work.** It marks the funnel's first step and
+  nothing else.
+
+### Lead-batch funnel
+
+Each step is `count(distinct contact_id)` over contacts in the batch, so a
+person counted at one step is counted at every later step they reach.
+
+| Step | Source |
+|---|---|
+| Extracted | `crm_lead_batches.rows_seen` — the only step NOT from the event stream, because a row that identified nobody never became a contact |
+| Canonical contacts | `crm_batch_members` count |
+| With a valid email | contacts in the batch having a `crm_contact_emails` row |
+| Assigned | `crm_contacts.owner_user_id is not null` |
+| Emailed or engaged | distinct contacts with `EMAIL_SENT` or an engagement type |
+| Replied | distinct contacts with `EMAIL_REPLIED` |
+| Qualified | distinct contacts with `QUALIFIED` |
+| Call booked | distinct contacts with `CALL_BOOKED` |
+| Opportunity | distinct contacts with an opportunity |
+| Won / revenue | opportunities `status = 'won'`, count and `sum(value_amount)` |
+
+### Period bucketing
+
+Aggregates are stored **per day, per workspace, per user**, and any longer
+period is a sum of days. A month is not stored separately: storing both means
+they can disagree, and the day grain is the only one that can answer an
+arbitrary date range.
+
+Days are bucketed in **UTC**. ⚠️ A workspace in Sydney will see its day
+boundaries shifted; per-workspace timezone is deferred and recorded, because
+the fix belongs with a workspace settings surface rather than hidden in a
+rollup.
