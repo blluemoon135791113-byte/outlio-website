@@ -3056,6 +3056,94 @@ export type Database = {
           },
         ]
       }
+      crm_reporting_daily: {
+        Row: {
+          amount_value: number
+          basis: string
+          computed_at: string
+          count_value: number
+          day: string
+          id: string
+          metric: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          amount_value?: number
+          basis: string
+          computed_at?: string
+          count_value?: number
+          day: string
+          id?: string
+          metric: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          amount_value?: number
+          basis?: string
+          computed_at?: string
+          count_value?: number
+          day?: string
+          id?: string
+          metric?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_reporting_daily_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_reporting_runs: {
+        Row: {
+          discrepancies: number | null
+          error: string | null
+          finished_at: string | null
+          from_day: string
+          id: string
+          rows_written: number
+          started_at: string
+          to_day: string
+          workspace_id: string
+        }
+        Insert: {
+          discrepancies?: number | null
+          error?: string | null
+          finished_at?: string | null
+          from_day: string
+          id?: string
+          rows_written?: number
+          started_at?: string
+          to_day: string
+          workspace_id: string
+        }
+        Update: {
+          discrepancies?: number | null
+          error?: string | null
+          finished_at?: string | null
+          from_day?: string
+          id?: string
+          rows_written?: number
+          started_at?: string
+          to_day?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_reporting_runs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_saved_views: {
         Row: {
           created_at: string
@@ -6033,6 +6121,15 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_reconcile_reporting: {
+        Args: { p_from_day: string; p_to_day: string; p_workspace_id: string }
+        Returns: {
+          aggregate_value: number
+          day: string
+          metric: string
+          raw_value: number
+        }[]
+      }
       crm_record_collision_override: {
         Args: {
           p_actor_id: string
@@ -6041,6 +6138,10 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: string
+      }
+      crm_rollup_activity_metrics: {
+        Args: { p_from_day: string; p_to_day: string; p_workspace_id: string }
+        Returns: number
       }
       crm_undo_batch: {
         Args: { p_batch_id: string; p_workspace_id: string }

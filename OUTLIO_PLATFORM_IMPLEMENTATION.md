@@ -10,8 +10,8 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (CRM UI pass: contacts list + detail)
-- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0081` are all
+- **Last updated:** 2026-08-30 (M4 Phase 9 complete)
+- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0082` are all
   applied and types are regenerated.
 - **Next milestone:** M4 — CRM reporting foundation and dashboards.
 - **Next milestone:** M3 — opportunities, pipelines, native Kanban, collision
@@ -28,7 +28,7 @@ disagree, the repository wins and the conflict is recorded under
 | Styling | Tailwind CSS v4 (`@theme`), Geist fonts | `app/globals.css`, `postcss.config.mjs` |
 | Database | Supabase Postgres, project `ptewhpmxzenbmxlizxhu` | `CLAUDE.md` |
 | ORM | **None.** `supabase-js` query builder + SQL functions | `lib/supabase/` |
-| Migrations | Hand-written, numbered SQL, `0001`–`0081` | `supabase/migrations/` |
+| Migrations | Hand-written, numbered SQL, `0001`–`0082` | `supabase/migrations/` |
 | Generated types | `types/database.ts` (6,433 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
 | Validation | Zod 4 | `lib/limits/plans.ts` and throughout |
 | Tests | **Vitest 4** — 1,754 unit / 97 files, plus 126 integration | `vitest.config.mts`, `tests/` |
@@ -680,12 +680,24 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
 | M2 | CRM core: identity, ingestion, dedup, operations | ✅ **Complete** (2026-08-30). Two UIs deferred: DR12, DR14 |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ✅ **Complete** (2026-08-30) |
-| M4 | CRM reporting foundation & dashboards | ⬜ Next |
+| M4 | CRM reporting foundation & dashboards | 🔨 **Phase 9 ✅.** Phase 10 (dashboards) and 10.5 (forecasting, export) not started |
 | M5 | Email foundation | ⬜ Not started |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
 | M7 | Flow engine, Hubble boundary, visual builder | ⬜ Not started |
 | M8 | Integrations, Calendly, unified inbox | ⬜ Not started |
 | M9 | Onboarding, UI refinement, hardening | ⬜ Not started |
+
+### M4 acceptance criteria
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Dashboard numbers == raw activity counts for a seeded scenario | ✅ `tests/integration/crm-metrics.test.ts` — 4 emails to 2 people gives `emails_sent = 4`, `contacts_emailed = 2`, reply rate 0.50, and `reconcileReporting` returns `[]` |
+| 2 | Activities before reassignment still credit the original actor | ✅ same file — both contacts are handed to another user, the range is recomputed from scratch, and every one of the original setter's numbers is unchanged while the new owner gets none of the work |
+| 3 | Auto-replies and bounces excluded from reply-rate metrics | ⬜ M6 — the deterministic pre-filter runs BEFORE anything is written, so an OOO is never recorded as `EMAIL_REPLIED` in the first place |
+| 4 | Batch funnel ties source batch to revenue | ⬜ Phase 10 |
+| 5 | Report queries paginated/indexed | ✅ day-grain aggregate with `(workspace_id, metric, day desc)`; reads never scan the event stream |
+| 6 | Forecast reconciles with raw opportunity data | ⬜ Phase 10.5 |
+| 7 | Export matches on-screen numbers; blocked for unauthorised roles | ⬜ Phase 10.5 |
 
 ### M3 acceptance criteria
 

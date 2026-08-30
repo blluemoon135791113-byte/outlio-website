@@ -7680,3 +7680,62 @@ future ingestions and does not backfill.
 
 1,761 unit tests, 19 ingestion integration tests re-run against the changed
 function, typecheck, lint (0 errors) and build all pass.
+
+## 2026-08-30 — M4 Phase 9 complete: reporting foundation
+
+0082 applied. 14 integration tests. Criteria 1 and 2 met.
+
+### Metric formulas were written before the code
+
+Ledger §20 defines every one, as the M4 brief requires. Three rules: credit the
+ACTOR for work, credit the OWNER AT EVENT TIME for outcomes, and bucket by
+`occurred_at` rather than `created_at`.
+
+The sharpest definition is reply rate — replies over CONTACTS EMAILED, not
+emails sent. Over the event count, a team that follows up four times would show
+a quarter of the rate of one that gives up after the first email.
+
+### Attribution survives reassignment — the point of the whole design
+
+The test sends five emails and receives one reply as one setter, hands BOTH
+contacts to another user, then recomputes the entire range from scratch. Every
+one of the original setter's numbers is unchanged, and the new owner is
+credited with none of the work. Reassigning a book does not move last quarter's
+numbers.
+
+### Late arrivals, and why the rollup deletes before it inserts
+
+An event can arrive after the fact — ingested history, a replayed webhook, the
+backfill that gave 19 contacts their creation events. A rollup that only ever
+added would double-count it. Recomputing a bounded range is cheap and cannot
+drift, and the default lookback is seven days rather than one so yesterday is
+never left permanently wrong.
+
+### Two bugs found by executing, not reading
+
+**Workspace totals could not be written at all.** The natural key includes
+`user_id`, which is NULL on a total row, and a PRIMARY KEY makes every column
+NOT NULL. Replaced with a surrogate key and `UNIQUE ... NULLS NOT DISTINCT` —
+load-bearing, because under the default rule two NULLs are distinct and every
+recompute would insert a second total, silently doubling every workspace-level
+number.
+
+**The reconciliation reported phantom drift.** It recounted seven metrics but
+compared against all of them, so any metric it could not recount appeared with
+a raw value of zero. A checker that cries wolf is worse than none: the real
+discrepancy becomes one line among many. The checked list is now used on both
+sides, and adding a metric to the rollup does not silently pretend to verify it.
+
+### Reports, never repairs
+
+The reconciliation detects a tampered aggregate and records the count on the
+run — and deliberately leaves it wrong. A job that fixed itself would hide the
+bug that caused the drift, and the drift is that bug's only symptom. A fresh
+rollup is what repairs it.
+
+### Verification
+
+- `crm-metrics` 14 · unit 1,761 across 97 files · typecheck, lint (0 errors),
+  build.
+- First real rollup on the owner workspace: **44 `contacts_created`, 0
+  discrepancies.**
