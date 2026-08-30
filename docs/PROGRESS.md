@@ -7012,3 +7012,69 @@ duplicated.
   deliberately NOT written yet: writing it before `npm run db:types` would mean
   hand-declaring ten tables and then deleting the lot, which is exactly what
   0070 taught.
+
+## 2026-08-30 — M2 Phase 2 complete: the CRM repository and identity proof
+
+0071 is applied and types regenerated (71 tables). The repository layer is now
+written against real generated types rather than hand-declared ones.
+
+### Added
+
+- **`lib/crm/repository.ts`** — the one path every CRM write goes through.
+  `upsertContact`, `upsertCrmCompany`, `attachContactEmails`,
+  `attachContactPhones`, `linkContactToCompany`, `upsertTag`, `tagContact`,
+  plus `resolveContactIdentity` / `resolveCrmCompanyIdentity` exported so
+  Phase 3's bulk path builds the same payload without duplicating the rules.
+
+  Manual entry, CSV import, the API and Lead Engine ingestion are four write
+  paths and one identity rule. The path that reimplements the rule is the one
+  that creates the duplicate, so none of them may.
+
+- **`tests/integration/crm-identity.test.ts`** — 25 tests against the live
+  project, proving the A3 invariant that cannot be checked without a database.
+
+### How identity actually holds
+
+- Match precedence is LinkedIn, then email. Both are exact blocks; the order
+  only decides which is reported when a record matches on both.
+- **Match-then-create is two statements**, so two simultaneous imports of one
+  person can both find nothing and both insert. The partial unique indexes in
+  0071 are what enforce identity: the loser gets a 23505 and the code re-reads
+  rather than failing.
+- That closes the race for a SHARED key. It does not close the case where one
+  caller writes a person by LinkedIn and another writes the same person by
+  email in the same instant — those collide on no index and produce two rows.
+  Deliberately left: that is the "possible duplicate" Phase 4's Duplicate
+  Center exists to surface, with a human deciding. Never silently merge
+  uncertain people.
+- An address already held by another contact is SKIPPED, not stolen and not
+  fatal. Stealing it would move a mailbox between people; failing would lose
+  the rest of the import row.
+- The first address a contact gets stays primary. A later sighting must not
+  silently change where campaigns send.
+
+### Verified against the live database
+
+- One person, many spellings, one row: `LINKEDIN.com/in/DANA/?trk=nav` matches
+  `https://www.linkedin.com/in/dana`, and `g.mail.person+newsletter@googlemail.com`
+  matches `gmailperson@gmail.com`.
+- Two colleagues sharing `+1 415 555 0100` stay two contacts with two phone
+  rows — a unique index on the number would have refused the second.
+- `07400 123456` with no country is stored raw with a null E.164; with
+  `defaultCountry: 'GB'` the same input resolves to `+447400123456`.
+- Company matching: domain ignores `www` and scheme; `Nameonly Inc` matches
+  `Nameonly` by name, but the same name WITH a domain creates a separate
+  company, because two unrelated firms share a name far more often than a
+  domain.
+- A job change keeps BOTH relationship rows, the old one marked not-current
+  with an end date.
+- Cross-workspace: the same real person in two workspaces is two rows, and
+  Alice can read neither Bob's contacts nor his contact emails. Positive
+  controls confirm she can read her own, so the denials cannot pass vacuously.
+- Alice cannot insert a contact directly — no INSERT grant for `authenticated`.
+
+### Verification
+
+- `npx vitest run tests/unit` — 1,687 across 95 files.
+  `npx vitest run tests/integration/crm-identity.test.ts` — 25.
+  `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass.

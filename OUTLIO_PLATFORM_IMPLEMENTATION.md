@@ -10,10 +10,10 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M2 Phase 2 schema)
+- **Last updated:** 2026-08-30 (M2 Phase 2 complete)
 - **Next milestone:** M2 — CRM core: identity, ingestion, dedup, operations
-- **Blocked on a human:** apply migration `0071` (`supabase/APPLY_PENDING.sql`)
-  then `npm run db:types`; plan seat counts (Q6). `0070` is applied.
+- **Blocked on a human:** plan seat counts (Q6) only. `0070` and `0071` are
+  both applied and types are regenerated.
 
 ---
 
@@ -26,10 +26,10 @@ disagree, the repository wins and the conflict is recorded under
 | Styling | Tailwind CSS v4 (`@theme`), Geist fonts | `app/globals.css`, `postcss.config.mjs` |
 | Database | Supabase Postgres, project `ptewhpmxzenbmxlizxhu` | `CLAUDE.md` |
 | ORM | **None.** `supabase-js` query builder + SQL functions | `lib/supabase/` |
-| Migrations | Hand-written, numbered SQL, `0001`–`0070` | `supabase/migrations/` |
+| Migrations | Hand-written, numbered SQL, `0001`–`0071` | `supabase/migrations/` |
 | Generated types | `types/database.ts` (4,970 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
 | Validation | Zod 4 | `lib/limits/plans.ts` and throughout |
-| Tests | **Vitest 4** — 1,646 unit tests / 94 files | `vitest.config.mts`, `tests/` |
+| Tests | **Vitest 4** — 1,687 unit tests / 95 files, plus integration | `vitest.config.mts`, `tests/` |
 | Package manager | npm | `package-lock.json` |
 | Edge guard | `proxy.ts` (Next 16 renamed `middleware`) | `proxy.ts` |
 | Hosting | Vercel; background work via `after()` | `CLAUDE.md`, `lib/worker/` |
@@ -57,7 +57,7 @@ is therefore already implemented, not pending.
 
 ## 2. Current data model
 
-**61 tables, ~63 SQL functions.** Extracted from `types/database.ts`.
+**71 tables, ~63 SQL functions.** Extracted from `types/database.ts`.
 
 ### Identity, access, billing
 `profiles`, `plans`, `subscriptions`, `access_requests`, `invitation_codes`,
@@ -108,6 +108,12 @@ FastSpring (**current**): `fastspring_accounts`, `fastspring_subscriptions`,
 `fastspring_orders`, `fastspring_charges`, `fastspring_webhook_events`.
 Paddle (**superseded**, tables retained): `paddle_customers`,
 `paddle_subscriptions`, `paddle_transactions`, `paddle_webhook_events`.
+
+### CRM (added by M2 Phase 2, migration 0071)
+`crm_contacts`, `crm_companies`, `crm_contact_emails`, `crm_contact_phones`,
+`crm_contact_company_relationships`, `crm_tags`, `crm_contact_tags`,
+`crm_custom_field_definitions`, `crm_custom_field_values`, `crm_saved_views`.
+Enums: `crm_record_source`, `crm_custom_field_type`, `crm_custom_field_entity`.
 
 ### Workspaces (added by M1, migration 0070)
 `workspaces`, `workspace_memberships`, `workspace_invitations`,
@@ -301,8 +307,8 @@ Adapt these; do not duplicate.
 | Permission layer | `lib/workspaces/permissions.ts` ✅ (M1) + `lib/auth/decide.ts` | Workspace roles decided by the former, platform access by the latter |
 | Entitlements | `plans.limits` module flags ✅ (M1) + `grant_entitlement()` | Done. ⚠️ No plan sets `workspace_member_limit > 1` yet (Q6) |
 | Team invitation | `workspace_invitations` ✅ (M1) | Done. Separate from `invitation_codes` ([D6](#d6-two-kinds-of-invitation)) |
-| Contact | `extracted_leads` (per-extraction rows) | **Create** canonical `crm_contacts`; leads remain the immutable extraction record |
-| Company | `companies` ✅ with normalization | **Reuse and extend** |
+| Contact | `crm_contacts` ✅ (M2 P2) | Done. `extracted_leads` remains the immutable extraction record, linked by `source_lead_id` |
+| Company | `crm_companies` ✅ (M2 P2) + `companies` | Two entities, both kept ([D13](#d13-crm_companies-is-not-companies)) |
 | Field normalization | `lib/crm/normalize.ts` ✅ (M2 Phase 2) | Email, phone, person LinkedIn, person name. Delegates company domain/name/page to `lib/companies/normalize.ts` and the LinkedIn key to `lib/leads/canonical-url.ts` |
 | Dedup | `lead_keys`, `lib/companies/` normalizers, `pg_trgm` | **Reuse** for M4 |
 | Activities | `system_events`, `admin_audit_logs` | Create `crm_activities`; append-only precedent exists |
@@ -488,7 +494,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 |---|---|---|
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
-| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phase 2 — normalization + schema written; migration awaits application |
+| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 **Phase 2 ✅ complete.** Phases 3–5 not started |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Not started |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
@@ -496,6 +502,18 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | M7 | Flow engine, Hubble boundary, visual builder | ⬜ Not started |
 | M8 | Integrations, Calendly, unified inbox | ⬜ Not started |
 | M9 | Onboarding, UI refinement, hardening | ⬜ Not started |
+
+### M2 Phase 2 acceptance criteria
+
+Phase 2 has no acceptance list of its own; these are the M2 criteria it can
+satisfy. Criteria 1, 3, 4 and 6 belong to Phases 3–5.
+
+| # | Criterion | Status |
+|---|---|---|
+| 2 | Normalization unit tests pass for email/phone/LinkedIn/domain edge cases | ✅ `tests/unit/crm-normalize.test.ts` (65) + `crm-custom-fields.test.ts` (41) |
+| — | One person = one contact per workspace | ✅ `tests/integration/crm-identity.test.ts` (25) — enforced by partial unique indexes, proven against the live database |
+| — | Cross-workspace isolation on the ten new tables | ✅ Same file, with positive controls |
+| 5 | Activity rows immutable | ⬜ Phase 5 — `crm_activities` does not exist yet |
 
 ### M1 acceptance criteria
 
