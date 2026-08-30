@@ -590,6 +590,7 @@ Recorded, never dropped.
 | ~~KI4~~ | ~~Migration 0070 unapplied.~~ **Resolved 2026-08-30.** Applied; `npm run db:types` regenerated the types; `lib/workspaces/db.ts` deleted. Backfill verified against the live project: 61 profiles → 61 workspaces → 61 owner memberships, no profile without one, no user in two. | — |
 | KI5 | No plan sells more than one seat (Q6), so the invite flow is reachable but always refused. | Team features are dark until seat counts are set on `plans.limits`. |
 | KI6 | Ownership cannot be transferred and a second owner cannot be created (DR9). | A sole owner can never leave their workspace. Support-only until M2. |
+| KI8 | **The remote migration-history table is stale from 0068 onward.** `supabase migration list` shows 0001–0067 recorded remotely; 0068–0073 are applied to the schema but absent from history, because every one of them was applied by hand in the SQL editor, which records nothing. | ⚠️ **`supabase db push` is UNSAFE on this project.** It would try to replay 0068–0073, including the FastSpring migrations, whose idempotency is unverified. Apply by hand and verify, or repair the history table first. |
 | KI7 | `tests/integration/signup-ip-gate.test.ts` reserves real signup IPs against the live project and fails when the suite is run repeatedly from one machine — the gate blocks its own runner. Pre-existing, confirmed by stashing this branch. | 3 tests fail on a re-run. Use `npx vitest run tests/unit` for iteration; the gate's claims age out. |
 
 ---
