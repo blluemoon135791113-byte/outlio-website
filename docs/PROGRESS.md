@@ -8108,3 +8108,51 @@ error the customer did not cause, and saying nothing until after the fact.
 
 1,932 unit tests plus three live integration suites, typecheck, lint (0 errors)
 and build all pass.
+
+---
+
+## M6 — Email campaigns, composer, events and reporting ✅ COMPLETE
+
+Phases 15–19. Migrations 0088–0092. **All five criteria met**, two of them
+proven against a real mail server and real HTTP rather than mocks.
+
+| # | Criterion | Proven by |
+|---|---|---|
+| 1 | Reply stops the sequence in one cycle; OOO does not | GreenMail: SMTP out, IMAP back |
+| 2 | One-click unsubscribe: suppression, stop, events | Real DB + real HTTP |
+| 3 | Template edit never mutates sent history | Structural — rewrite AND delete |
+| 4 | Duplicate webhooks processed exactly once | 5 deliveries → 1 row |
+| 5 | Reports reconcile with raw events | Every figure vs a direct count |
+
+### Two real bugs, both found by exercising real infrastructure
+
+**`ON DELETE SET NULL` on an append-only table** (0090 → fixed in 0091).
+Nulling a foreign key is an UPDATE, which the guard rejects — so every row an
+event referenced became permanently undeletable, **including through
+`crm_erase_contact`, the GDPR erasure path**. 0090's own smoke test passed,
+because it never deleted a row an event pointed at.
+
+**A 500 on the unsubscribe route** when the write failed. The person seeing
+that page just asked to stop being contacted; their next action is "report
+spam". Now catches, logs, and still shows the page.
+
+Both had passing smoke tests. Neither would have been found by review.
+
+### Decisions
+
+- **Four campaign types are four products** (0088). A sales sequence that keeps
+  mailing someone who replied, and a broadcast that stops when someone says
+  "thanks", are opposite failures produced by the same collapse.
+- **Step state lives on the enrollment, never the contact.** One person in
+  three sequences keeps one contact row and three step pointers.
+- **A missing template variable refuses to render.** "Hi ," is the most
+  recognisable mass-mail failure there is; `{{first_name|there}}` is the
+  one-keystroke answer.
+- **Unsubscribe suppresses workspace-wide** (D43), and the route fails safe for
+  the recipient (D44).
+- **`replied` never includes `auto_replied`** (D45).
+- **Every skipped contact in a bulk enrollment is named with a reason.**
+  "Enrolled 28" of 40 selected is a lie by omission.
+
+2,025 unit tests plus five live integration suites, typecheck, lint (0 errors)
+and build all pass.

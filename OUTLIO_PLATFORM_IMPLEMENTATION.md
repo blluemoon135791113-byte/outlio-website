@@ -10,10 +10,10 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M6 Phases 15–17 complete — all 5 M6 criteria met)
+- **Last updated:** 2026-08-31 (M6 COMPLETE — Phases 15–19, all 5 criteria met)
 - **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0083` are all
   applied and types are regenerated.
-- **Next milestone:** M6 — email campaigns, composer, replies and email reporting.
+- **Next milestone:** M7 — Flow engine, email automation, Hubble boundary and the visual builder.
 - **Next milestone:** M3 — opportunities, pipelines, native Kanban, collision
   guard. Two M2 UIs remain deferred (DR12 CSV import, DR14 Duplicate Center).
 
@@ -889,10 +889,45 @@ two healthy mailboxes (95, 90) and one damaged one (30) average to a
 comfortable **71.7**, which is precisely the number that would hide the mailbox
 that needs stopping.
 
+### D43. An unsubscribe suppresses the whole workspace, not one campaign
+
+The token carries a campaign id, and the narrow reading would stop only that
+campaign. **Someone clicking unsubscribe in a cold email is not saying "just
+this campaign, keep the others coming."** Honouring it narrowly would be
+technically defensible and would obviously infuriate the recipient, whose next
+click is "report spam" — which costs the sending domain far more than the
+contact was worth. The campaign id is still recorded on the event, so reporting
+can attribute which campaign lost them.
+
+### D44. The unsubscribe route shows success even when the write fails
+
+Found by exercising the real route: any error inside `recordUnsubscribe`
+returned a 500. The person seeing that page is someone who just asked to stop
+being contacted, and their next action after an error is "report spam".
+
+So the route catches, logs loudly for manual follow-up (domain only, never the
+address), and still shows the neutral page. Showing success for a write that
+failed is not ideal; it is the lesser harm by a wide margin, because the failure
+is recoverable on our side and the recipient must never be made to try again.
+An error response would also have let anyone probe which tokens are real.
+
+### D45. `replied` never includes `auto_replied`, anywhere
+
+One real reply from four sends is a 25% reply rate. Counting two out-of-office
+replies would report 75%, and someone would conclude the message is working and
+send more of it. **An inflated reply rate is worse than no reply rate, because
+people act on it.** The separation is enforced in the event enum, in
+`campaign_event_totals`, and in `email_campaign_report`.
+
 ## 14. Migrations added by the platform build
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0092 | `0092_email_reporting.sql` | M6 P19 | `email_campaign_report()`, `email_mailbox_report()`, `email_batch_funnel()`, `email_contact_timeline()`. Every figure counted from the append-only stream — no counter columns to drift. |
+| 0091 | `0091_fix_event_fk_append_only.sql` | M6 P17 | **BUG FIX for 0090.** `on delete set null` on an append-only table is an UPDATE the guard rejects, making every referenced row permanently undeletable — including via `crm_erase_contact`. Replaced with NO ACTION, matching `crm_activities`. |
+| 0090 | `0090_email_events.sql` | M6 P17 | `email_event_type` enum; `email_events` (append-only), `email_webhook_deliveries`; `record_email_event()` (ON CONFLICT DO NOTHING = criterion 4) and `campaign_event_totals()`. |
+| 0089 | `0089_email_templates.sql` | M6 P16 | `email_templates`; `template_id` on messages and steps for REPORTING attribution only — content is copied at queue time, never joined. |
+| 0088 | `0088_email_campaigns.sql` | M6 P15 | `email_campaigns`, `email_sequence_steps`, `email_enrollments`; `stop_enrollments_for_email()` which stops enrollments AND cancels their queued mail in one call. |
 | 0087 | `0087_email_readiness.sql` | M5 P13 | `email_check_status` enum; ramp columns on `email_accounts` (conservative defaults 20/+5/200); `email_domain_checks` (keyed by DOMAIN, not mailbox), `email_readiness_checks` (history, not a snapshot); `email_account_volume()`, `email_sent_today()` (the mailbox's own day, not the server's) and `email_domain_health()` (worst mailbox, not the average). |
 | 0086 | `0086_email_messages.sql` | M5 P14 | `email_message_status`, `email_suppression_reason` enums; `email_messages` (content frozen after send by trigger, unique idempotency key per workspace), `email_suppressions`; `claim_email_messages()` (suppression check INSIDE the claim) and `reap_expired_email_claims()` (→ `needs_verification`, **never** back to `queued`). |
 | 0085 | `0085_email_accounts.sql` | M5 P11 | `email_provider`, `email_account_scope`, `email_account_status` enums; `email_accounts` (many mailboxes per workspace, each with scope, schedule, limits, health) and `email_account_secrets` (service-role only, **no RLS policy at all**). Purely additive. |
@@ -1048,7 +1083,7 @@ Recorded, never dropped.
 
 ## 18. Test status
 
-`npx vitest run tests/unit` — **1,932 passed, 0 failed**, 107 files. Integration adds the SMTP adapter, the send worker and the readiness runner, all run against a real mail server in Docker.
+`npx vitest run tests/unit` — **2,025 passed, 0 failed**, 112 files. Integration adds the SMTP adapter, the send worker and the readiness runner, all run against a real mail server in Docker.
 `npm run typecheck` passes. `npm run lint` reports 0 errors (95 pre-existing
 warnings, all in generated or vendored files). `npm run build` passes.
 
