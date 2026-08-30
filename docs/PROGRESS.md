@@ -7155,3 +7155,64 @@ export that already exists is for the user, never a stage in our own pipeline.
   deliberately not written yet: without regenerated types it would mean
   hand-declaring the new function and then deleting it, which is what 0070
   taught.
+
+## 2026-08-30 — M2 Phase 3 engine complete: ingestion proven idempotent
+
+0072 and 0073 applied; 19 ingestion integration tests pass.
+
+### M2 acceptance criterion 1 is met, on both paths
+
+"Importing the same file/batch twice produces zero new contacts."
+
+- **Extraction:** the batch is unique per `(workspace, extraction_job)`, so a
+  second call reuses it and `crm_ingest_contacts` matches all three people
+  instead of creating them. The contact count is unchanged, no second batch
+  appears, and membership does not duplicate.
+- **CSV:** re-running the same file creates zero and matches two.
+- A re-run does NOT flip `created_contact` back to false, so undo still knows
+  what it may delete.
+
+### The bug that only a real database could catch
+
+0072 shipped `crm_ingest_contacts` broken. It is declared
+`returns table (ref text, contact_id uuid, ...)`, and in PL/pgSQL those output
+columns are variables in scope for the whole body — so four unqualified
+`contact_id` references were ambiguous between the output column and the table
+column.
+
+**Postgres raises that at RUNTIME, not at creation.** The migration applied
+cleanly, `npm run db:types` generated a perfectly correct signature, typecheck
+passed, and the first real call failed. Nothing short of an integration test
+against the live database would have found it.
+
+0073 replaces the function with every table aliased and every column qualified,
+and drops the explicit `on conflict (batch_id, contact_id)` target that
+re-introduced the same ambiguity. **0072 was not edited in place** — an applied
+migration stays as it shipped, and the history should show the bug existed.
+
+### Also fixed
+
+- A `.select()` built by string concatenation silently degraded every column to
+  `GenericStringError`. supabase-js parses that string at the TYPE level, and
+  `'a, b' + 'c'` is not a literal type. One string literal, always.
+
+### Verified
+
+- `tests/integration/crm-ingestion.test.ts` — 19 passed.
+- `tests/integration/crm-identity.test.ts` + `workspace-tenancy.test.ts` — 51
+  passed, no regression.
+- `npx vitest run tests/unit` — 1,719 across 96 files.
+- `npm run typecheck`, `npm run lint` (0 errors), `npm run build` pass.
+
+### Known issue recorded
+
+`supabase migration list` shows the remote history tracking 0001–0067 only.
+0068–0073 are applied to the schema but absent from history, because each was
+applied by hand in the SQL editor, which records nothing. **`supabase db push`
+is therefore unsafe here** — it would replay six migrations including the
+FastSpring billing pair, whose idempotency is unverified. Ledger KI8.
+
+### Outstanding for Phase 3
+
+The CSV import UI — upload, mapping screen, validation report, undo button —
+is Ledger DR12. The engine beneath it is complete and tested.

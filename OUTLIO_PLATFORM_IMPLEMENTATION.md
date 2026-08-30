@@ -10,10 +10,10 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M2 Phase 3 in progress)
+- **Last updated:** 2026-08-30 (M2 Phase 3 engine complete)
 - **Next milestone:** M2 — CRM core: identity, ingestion, dedup, operations
-- **Blocked on a human:** apply migration `0072` (`supabase/APPLY_PENDING.sql`)
-  then `npm run db:types`; plan seat counts (Q6). `0070` and `0071` are applied.
+- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0073` are all
+  applied and types are regenerated.
 
 ---
 
@@ -26,7 +26,7 @@ disagree, the repository wins and the conflict is recorded under
 | Styling | Tailwind CSS v4 (`@theme`), Geist fonts | `app/globals.css`, `postcss.config.mjs` |
 | Database | Supabase Postgres, project `ptewhpmxzenbmxlizxhu` | `CLAUDE.md` |
 | ORM | **None.** `supabase-js` query builder + SQL functions | `lib/supabase/` |
-| Migrations | Hand-written, numbered SQL, `0001`–`0071` | `supabase/migrations/` |
+| Migrations | Hand-written, numbered SQL, `0001`–`0073` | `supabase/migrations/` |
 | Generated types | `types/database.ts` (4,970 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
 | Validation | Zod 4 | `lib/limits/plans.ts` and throughout |
 | Tests | **Vitest 4** — 1,687 unit tests / 95 files, plus integration | `vitest.config.mts`, `tests/` |
@@ -57,7 +57,7 @@ is therefore already implemented, not pending.
 
 ## 2. Current data model
 
-**71 tables, ~63 SQL functions.** Extracted from `types/database.ts`.
+**76 tables, ~65 SQL functions.** Extracted from `types/database.ts`.
 
 ### Identity, access, billing
 `profiles`, `plans`, `subscriptions`, `access_requests`, `invitation_codes`,
@@ -514,6 +514,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0073 | `0073_fix_ingest_ambiguity.sql` | M2 P3 | Replaces `crm_ingest_contacts`. 0072 shipped it with four unqualified `contact_id` references that were ambiguous with the `RETURNS TABLE` output column — an error Postgres raises at RUNTIME, not at creation, so the migration applied cleanly and failed on the first real call. |
 | 0072 | `0072_crm_ingestion.sql` | M2 P3 | `crm_lead_batches`, `crm_batch_members`, `crm_lists`, `crm_list_members`, `crm_import_jobs`; `crm_ingest_contacts()` (set-based atomic upsert) and `crm_undo_batch()`; RLS on all five. **Additive — no column added to an existing table, no function replaced.** |
 | 0071 | `0071_crm_core_identity.sql` | M2 P2 | `crm_record_source`, `crm_custom_field_type`, `crm_custom_field_entity` enums; `crm_companies`, `crm_contacts`, `crm_contact_emails`, `crm_contact_phones`, `crm_contact_company_relationships`, `crm_tags`, `crm_contact_tags`, `crm_custom_field_definitions`, `crm_custom_field_values`, `crm_saved_views`; RLS on all ten. **Purely additive — touches no existing table and replaces no function.** |
 | 0070 | `0070_workspaces.sql` | M1 | `workspace_role` enum; `workspaces`, `workspace_memberships`, `workspace_invitations`, `workspace_feature_flags`; `is_workspace_member()`, `workspace_role_of()`, `redeem_workspace_invitation()`, `protect_workspace_columns()`, `guard_last_workspace_owner()`; RLS on all four; `handle_new_user()` extended; idempotent backfill |
@@ -526,7 +527,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 |---|---|---|
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
-| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phase 2 ✅. **Phase 3 in progress** — schema + CSV engine done, ingestion service pending `0072` |
+| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phases 2 ✅ and 3 ✅ (engine; UI is DR12). Phases 4–5 not started |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Not started |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
@@ -535,17 +536,19 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | M8 | Integrations, Calendly, unified inbox | ⬜ Not started |
 | M9 | Onboarding, UI refinement, hardening | ⬜ Not started |
 
-### M2 Phase 2 acceptance criteria
-
-Phase 2 has no acceptance list of its own; these are the M2 criteria it can
-satisfy. Criteria 1, 3, 4 and 6 belong to Phases 3–5.
+### M2 acceptance criteria
 
 | # | Criterion | Status |
 |---|---|---|
-| 2 | Normalization unit tests pass for email/phone/LinkedIn/domain edge cases | ✅ `tests/unit/crm-normalize.test.ts` (65) + `crm-custom-fields.test.ts` (41) |
-| — | One person = one contact per workspace | ✅ `tests/integration/crm-identity.test.ts` (25) — enforced by partial unique indexes, proven against the live database |
-| — | Cross-workspace isolation on the ten new tables | ✅ Same file, with positive controls |
+| 1 | Importing the same file/batch twice → zero new contacts | ✅ `tests/integration/crm-ingestion.test.ts` — proven for BOTH paths: re-ingesting an extraction reuses the batch and matches all three people; re-running a CSV import creates zero and matches two |
+| 2 | Normalization unit tests pass for email/phone/LinkedIn/domain edge cases | ✅ `crm-normalize.test.ts` (66) + `crm-custom-fields.test.ts` (41) + `crm-csv-import.test.ts` (31) |
+| 3 | Merge preserves child records; concurrent merge fails safely | ⬜ Phase 4 |
+| 4 | Duplicate Center shows reasons + confidence | ⬜ Phase 4 |
 | 5 | Activity rows immutable | ⬜ Phase 5 — `crm_activities` does not exist yet |
+| 6 | GDPR erasure removes contact + PII cascade | ⬜ Phase 5 |
+| — | One person = one contact per workspace | ✅ `crm-identity.test.ts` (25), enforced by partial unique indexes |
+| — | Cross-workspace isolation on all CRM tables | ✅ `crm-identity.test.ts` + `workspace-tenancy.test.ts`, with positive controls |
+| — | Import rollback / undo | ✅ `crm-ingestion.test.ts` — deletes only what an import created, never a contact it merely matched |
 
 ### M1 acceptance criteria
 
