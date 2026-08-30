@@ -7274,3 +7274,77 @@ That the integration tests passed first time is the local harness paying for
 itself: `crm_merge_contacts` had already been executed against real rows in a
 throwaway Postgres, so the two bugs in it were found before it ever reached the
 project database.
+
+## 2026-08-30 — M2 Phase 5 schema: activities, operations and GDPR erasure
+
+The event stream every M4 metric will derive from, plus tasks, notes,
+notifications, workspace audit, and the right to erasure.
+
+### Added
+
+- **`supabase/migrations/0075_crm_operations.sql`** — `crm_activities`,
+  `crm_tasks`, `crm_notes`, `crm_note_mentions`, `crm_notifications`,
+  `crm_notification_preferences`, `crm_audit_logs`, three enums, and two
+  functions.
+
+### Attribution is frozen at event time
+
+Every activity carries `actor_user_id`, `owner_user_id_at_event` and
+`team_id_at_event` as VALUES, never as a join to a current owner. A report asks
+"who owned the contact WHEN this happened". Reassign a setter's book on Monday
+and last quarter's numbers must not move. The smoke test proves it: after
+reassigning the contact, `owner_at_event` still names the original owner.
+
+`team_id_at_event` is nullable and unused until M4, so Teams (DR1) arrive
+without backfilling history that never had a team.
+
+### Append-only is a trigger, not a convention
+
+`crm_activities`, `crm_audit_logs` and — newly — `crm_merge_events` refuse
+UPDATE and DELETE at the database. Grants stop the application; they do not
+stop a migration, a support script, or the service role. Criterion 5 is "no
+update path exposed", and a path nobody has taken yet is still exposed. 0074
+declared merge events append-only on grants alone; this makes it true.
+
+Two escape hatches, both narrow: GDPR erasure sets `outlio.erasure` for its own
+transaction, and a DELETE is allowed once the parent workspace is already gone
+— otherwise a workspace could never be deleted, the same trap
+`guard_last_workspace_owner` documents in 0070.
+
+### Erasure outranks append-only
+
+`crm_erase_contact` is the only hard delete in the CRM. Activities are deleted
+and merge snapshots are scrubbed: the fact that two records became one is ours
+to keep, the copy of the person inside is not. This is deliberately the
+opposite of `lead_keys`, which survives a purge because a hash carries no
+readable personal data.
+
+An audit row proving the erasure happened survives, carrying the contact's id
+and nothing about the person. Being unable to show an erasure was performed is
+its own compliance problem.
+
+### Decisions
+
+- **Assignment is an activity, not a second table.** The brief lists
+  `assignment_events` separately; A3 says all metrics derive from events. A
+  parallel table would be a second source of truth for "who owned this and
+  when", and the two would disagree the first time one was written without the
+  other.
+- `crm_audit_logs` is distinct from both `crm_activities` (what happened to a
+  contact — reported on) and `admin_audit_logs` (platform staff acting on an
+  account). This is a workspace acting on itself.
+
+### Verification
+
+Validated locally before it reaches the project database:
+
+    ./scripts/check-migration.sh supabase/migrations/0075_crm_operations.sql \
+        supabase/smoke/0075_operations.sql
+
+Applies cleanly, and the smoke test EXECUTES it: UPDATE and DELETE on an
+activity are both refused and the row is untouched; attribution survives
+reassignment; erasure removes the contact, its emails, activities, notes, tasks
+and notifications; the audit proof survives; and the guard is back up
+afterwards.
+
+The harness now replays 0070–0074 as prerequisites.

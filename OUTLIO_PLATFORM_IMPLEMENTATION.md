@@ -10,10 +10,10 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M2 Phase 4 complete)
+- **Last updated:** 2026-08-30 (M2 Phase 5 schema)
 - **Next milestone:** M2 — CRM core: identity, ingestion, dedup, operations
-- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0074` are all
-  applied and types are regenerated.
+- **Blocked on a human:** apply migration `0075` (`supabase/APPLY_PENDING.sql`)
+  then `npm run db:types`; plan seat counts (Q6). `0070`–`0074` are applied.
 
 ---
 
@@ -410,6 +410,41 @@ it. It is a rule, not an enforcement point — a policy layer cannot put a WHERE
 clause on someone else's query. There is nothing to scope yet: no CRM record
 exists. Every M2 query that returns workspace data MUST consult `dataScope`.
 
+### D22. Append-only is enforced by a trigger, not by grants
+`crm_activities`, `crm_audit_logs` and `crm_merge_events` carry a BEFORE
+UPDATE OR DELETE trigger that raises.
+
+*Rationale:* grants stop the application. They do not stop a migration, a
+support script, or the service role. M2 criterion 5 is "no update path
+exposed", and a path nobody has taken yet is still exposed. 0074 declared
+`crm_merge_events` append-only on grants alone; 0075 makes that true.
+
+Two narrow escape hatches, both deliberate: GDPR erasure sets
+`outlio.erasure` for its own transaction, and a DELETE is allowed when the
+parent workspace is already gone — otherwise a workspace could never be
+deleted, the same trap `guard_last_workspace_owner` documents.
+
+### D23. Assignment is an activity, not a second table
+The M2 brief lists `assignment_events` alongside `activities`. There is one
+table: an `OWNER_ASSIGNED` row in `crm_activities`.
+
+*Rationale:* A3 says ALL metrics derive from events. A parallel assignment
+table would be a second source of truth for "who owned this and when", and the
+two would disagree the first time one was written without the other.
+
+### D24. Erasure outranks append-only
+`crm_erase_contact` hard-deletes activities and SCRUBS merge snapshots. The
+fact that two records became one is ours to keep and matters for attribution;
+the copy of the person inside the snapshot is not.
+
+*Contrast with `lead_keys`:* `lib/leads/dedupe.ts` keeps hashed keys after a
+lead is purged, because a hash carries no readable personal data. A CRM
+contact's row carries names, addresses and phone numbers, so the row goes.
+
+An audit row recording that an erasure happened survives, carrying the
+contact's id and nothing about the person — being unable to prove an erasure
+was performed is its own compliance problem.
+
 ### D21. Blocking on three keys is COMPLETE, not a heuristic
 Detection only compares pairs sharing a company, a phone number or an email
 domain — never all pairs, which is O(n²).
@@ -558,6 +593,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0075 | `0075_crm_operations.sql` | M2 P5 | `crm_activities` (append-only, frozen attribution), `crm_tasks`, `crm_notes`, `crm_note_mentions`, `crm_notifications`, `crm_notification_preferences`, `crm_audit_logs`; `crm_guard_append_only()` and `crm_erase_contact()`. Adds the append-only trigger to `crm_merge_events`. |
 | 0074 | `0074_crm_deduplication.sql` | M2 P4 | `crm_duplicate_candidates` (one row per pair, `record_a_id < record_b_id` enforced), `crm_merge_events` (append-only), `crm_contacts.merged_into_id`, and `crm_merge_contacts()` — atomic, deadlock-safe, moves every child table. |
 | 0073 | `0073_fix_ingest_ambiguity.sql` | M2 P3 | Replaces `crm_ingest_contacts`. 0072 shipped it with four unqualified `contact_id` references that were ambiguous with the `RETURNS TABLE` output column — an error Postgres raises at RUNTIME, not at creation, so the migration applied cleanly and failed on the first real call. |
 | 0072 | `0072_crm_ingestion.sql` | M2 P3 | `crm_lead_batches`, `crm_batch_members`, `crm_lists`, `crm_list_members`, `crm_import_jobs`; `crm_ingest_contacts()` (set-based atomic upsert) and `crm_undo_batch()`; RLS on all five. **Additive — no column added to an existing table, no function replaced.** |
@@ -572,7 +608,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 |---|---|---|
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
-| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phases 2 ✅ 3 ✅ 4 ✅ (UIs are DR12/DR14). **Phase 5 not started** |
+| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phases 2 ✅ 3 ✅ 4 ✅. **Phase 5 schema done**, pending `0075` |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Not started |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
@@ -589,8 +625,8 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | 2 | Normalization unit tests pass for email/phone/LinkedIn/domain edge cases | ✅ `crm-normalize.test.ts` (66) + `crm-custom-fields.test.ts` (41) + `crm-csv-import.test.ts` (31) |
 | 3 | Merge preserves child records; concurrent merge fails safely | ✅ `tests/integration/crm-duplicates.test.ts` — every child table moves, collisions collapse rather than duplicate, the snapshot records what was lost, and a second merge of the same pair raises `MergeConflictError` |
 | 4 | Duplicate Center shows reasons + confidence | ✅ `crm-dedupe.test.ts` (35) + `crm-duplicates.test.ts` — nothing is flagged without both, and reasons carry no schema jargon |
-| 5 | Activity rows immutable | ⬜ Phase 5 — `crm_activities` does not exist yet |
-| 6 | GDPR erasure removes contact + PII cascade | ⬜ Phase 5 |
+| 5 | Activity rows immutable | ✅ enforced by trigger, proven by `supabase/smoke/0075_operations.sql`: UPDATE and DELETE both refused, row untouched |
+| 6 | GDPR erasure removes contact + PII cascade | ✅ same smoke test: contact, emails, activities, notes, tasks and notifications all gone; an audit row proving the erasure survives, carrying no personal data |
 | — | One person = one contact per workspace | ✅ `crm-identity.test.ts` (25), enforced by partial unique indexes |
 | — | Cross-workspace isolation on all CRM tables | ✅ `crm-identity.test.ts` + `workspace-tenancy.test.ts`, with positive controls |
 | — | Import rollback / undo | ✅ `crm-ingestion.test.ts` — deletes only what an import created, never a contact it merely matched |
