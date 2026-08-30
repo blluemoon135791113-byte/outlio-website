@@ -8208,3 +8208,50 @@ version is refused with `23514`.
 
 2,059 unit tests plus the live flow suite, typecheck, lint (0 errors) and build
 all pass.
+
+---
+
+## M7 Phases 21–22 — email actions, the Hubble boundary ✅ — ALL 5 CRITERIA MET
+
+`lib/flows/send-gate.ts`, `lib/flows/actions/`, `lib/hubble/execute.ts`,
+`lib/hubble/pricing.ts`, migration `0094_hubble_credits.sql`.
+
+### A billing bug found before writing the boundary
+
+`consume_credit` returns `-1` for an unlimited plan **and** for an exhausted
+one. A boundary built on it must guess: treat `-1` as unlimited and exhausted
+customers get free AI forever; treat it as exhausted and paying unlimited
+customers are blocked from a feature they bought. Criterion 4 is
+unimplementable while the two are indistinguishable, so the fix came first
+(D48). `consume_credit` is untouched — it has existing callers.
+
+### Criterion 4, against a real exhausted allowance
+
+The trial plan's 10 credits, really spent. The refusal charges **nothing** (the
+exhausted spend is rolled back in full), and with `onNoCredits: continue` the
+run completes and the step *after* the AI one really executes. With `fail`, it
+stops and the later step does not.
+
+### The send gate exists because SEND_EMAIL is irreversible
+
+Every other flow action can be undone. An email cannot be unsent, and a flow
+can fire thousands before anyone looks. All six of the brief's conditions are
+checked every time, the gate fails closed, and its ORDER is a product decision:
+a suppressed recipient is reported as suppressed even when the mailbox is also
+over its limit, because fixing the limit would not make the send acceptable.
+
+### Three bugs found by running it
+
+- **`role: 'user'` is not a `user_role` value** (it is `registered_user`), so a
+  profile UPDATE failed entirely and took `plan_id` with it — the user read as
+  unlimited and every exhaustion assertion failed while looking like a boundary
+  defect. Mine; the error is checked now.
+- **`plans.id` is a uuid, not a slug.** The test now uses the real trial plan
+  and seeds usage, and deliberately does not delete it in teardown.
+- **A real bug in `ADD_TAG`:** `crm_tags_name_uniq` is a PARTIAL unique index,
+  and `ON CONFLICT` cannot use one unless the statement repeats its predicate.
+  The upsert failed outright, so *every flow containing a tag step* failed at
+  that step. Replaced with select-then-insert plus a race fallback.
+
+2,084 unit tests plus three live flow suites, typecheck, lint (0 errors) and
+build all pass.

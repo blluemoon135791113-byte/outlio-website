@@ -10,7 +10,7 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-31 (M7 Phase 20 complete — 4 of 5 M7 criteria met)
+- **Last updated:** 2026-08-31 (M7 Phases 20–22 complete — ALL 5 M7 criteria met)
 - **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0083` are all
   applied and types are regenerated.
 - **Next milestone:** M7 — Flow engine, email automation, Hubble boundary and the visual builder.
@@ -948,10 +948,50 @@ The same walk rejects dangling targets and unreachable steps. All three pass
 per-step validation and then strand a run mid-execution, when the contact is
 already halfway through.
 
+### D48. `consume_credit` is ambiguous, so Hubble uses its own spend
+
+`consume_credit` (0015) returns `-1` for an unlimited plan **and** for an
+exhausted one:
+
+```
+if v_allowance is null then return -1;          -- UNLIMITED
+if v_used > v_allowance then ... return -1;     -- EXHAUSTED
+```
+
+A caller cannot tell them apart, so any boundary built on it must guess —
+treat `-1` as unlimited and exhausted customers get free AI forever; treat it as
+exhausted and paying unlimited customers are blocked from a feature they bought.
+**M7 criterion 4 is unimplementable while the two are indistinguishable.**
+
+`hubble_spend_credits` returns an explicit outcome. `consume_credit` is left
+untouched because it has existing callers whose behaviour must not change.
+
+Two consequences worth keeping: an exhausted spend is **rolled back in full**,
+so a refused call costs the customer nothing; and refunds are a **separate
+function**, because making the one entry point that charges customers also the
+one that can silently un-charge them is exactly the thing that should require
+typing a different name.
+
+### D49. `onNoCredits` defaults to `continue`
+
+Criterion 4's two halves pull against each other. "Fails gracefully" means
+exhaustion must not abort a run; "per config" means the author decides, because
+a flow whose next branch reads the AI's answer should stop rather than send
+every contact down the default path silently.
+
+`continue` is the default because the common case is enrichment — nice to have,
+not load-bearing — and a customer who has run out of credits should not also
+lose the deterministic automation they are still paying for.
+
+⚠️ **An unregistered Hubble task fails loudly rather than returning an invented
+answer.** Fabricating one would break CLAUDE.md rule 4 *and* charge the customer
+for it.
+
 ## 14. Migrations added by the platform build
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0094 | `0094_hubble_credits.sql` | M7 P22 | `credit_spend_outcome` enum; `hubble_spend_credits()` (explicit spent/unlimited/exhausted — `consume_credit` returns -1 for BOTH unlimited and exhausted), `hubble_refund_credits()`, and `hubble_calls` (every execution INCLUDING refusals). |
 | 0093 | `0093_flow_engine.sql` | M7 P20 | `flow_status`, `flow_run_status`, `flow_step_status` enums; `flows`, `flow_versions` (immutable once published), `flow_runs` (pins `version_id`), `flow_step_runs` (the execution log AND the exactly-once claim); `flow_claim_step()`, `flow_check_loop_protection()` (returns the REASON, not a boolean) and `flow_publish()`. |
 | 0092 | `0092_email_reporting.sql` | M6 P19 | `email_campaign_report()`, `email_mailbox_report()`, `email_batch_funnel()`, `email_contact_timeline()`. Every figure counted from the append-only stream — no counter columns to drift. |
 | 0091 | `0091_fix_event_fk_append_only.sql` | M6 P17 | **BUG FIX for 0090.** `on delete set null` on an append-only table is an UPDATE the guard rejects, making every referenced row permanently undeletable — including via `crm_erase_contact`. Replaced with NO ACTION, matching `crm_activities`. |
@@ -990,7 +1030,7 @@ already halfway through.
 | M4 | CRM reporting foundation & dashboards | ✅ **Phases 9, 10 and 10.5 complete.** 6 of 7 criteria met; criterion 3 (auto-reply exclusion) belongs to M6, where the pre-filter runs before anything is written |
 | M5 | Email foundation | ✅ **COMPLETE.** Phases 11, 12 (SMTP+IMAP), 13 (readiness) and 14 (message engine). All 5 criteria met. Gmail/Microsoft adapters deferred on Google verification + CASA (D33) — SMTP is the shipping path |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
-| M7 | Flow engine, email automation, Hubble & builder | 🔨 **Phase 20 ✅ — criteria 1, 2, 3 and 5 met.** Criterion 4 needs Phase 22 (Hubble). Phases 21 (email actions) and 23 (visual builder) open |
+| M7 | Flow engine, email automation, Hubble & builder | 🔨 **Phases 20, 21, 22 ✅ — all 5 criteria met.** Phase 23 (visual builder) open, and the brief gates it on "only after runtime is proven" |
 | M8 | Integrations, Calendly, unified inbox | ⬜ Not started |
 | M9 | Onboarding, UI refinement, hardening | ⬜ Not started |
 
@@ -1013,7 +1053,7 @@ already halfway through.
 | 1 | Worker kill/retry mid-flow never duplicates an action | ✅ `tests/integration/flow-engine.test.ts` with a REAL side effect: the action increments a counter, the worker claims and acts then dies before recording, and after a full retry the counter still reads ONE. Guaranteed by `flow_claim_step` (`ON CONFLICT DO NOTHING`), not by a flag |
 | 2 | Loop-protection halts a self-triggering flow and surfaces the reason | ✅ Halts BEFORE the run is created — creating it first would let the first action fire on a fast worker. The halt is RECORDED with a reason naming the cause ("triggered itself 5 times in a row"), and `halt_reason` is required by constraint |
 | 3 | Editing a published flow creates a draft; in-flight runs finish on the old version | ✅ Verified against the LIVE database: a run started on v1 still points at v1 after a re-publish, v1's definition is untouched, the flow's pointer moved to v2, and editing a published version is refused with 23514 |
-| 4 | Credit-exhausted Hubble step fails gracefully; deterministic path continues | ⬜ Phase 22 — the `credits_used` column and the free/paid split in `ACTION_TYPES` exist; there is no Hubble step yet |
+| 4 | Credit-exhausted Hubble step fails gracefully; deterministic path continues | ✅ `tests/integration/hubble-credits.test.ts` against a REAL exhausted allowance (the trial plan's 10 credits). The refusal charges NOTHING — the exhausted spend is rolled back in full — and with `onNoCredits: continue` the run completes and the step after the AI one really executes. With `fail`, it stops and the later step does not run |
 | 5 | Execution log shows every step with status/duration/error | ✅ `flow_step_runs` carries status, duration, error code and safe output per step; the step after a failure is absent because a failed run stops |
 
 ### M6 acceptance criteria
@@ -1114,6 +1154,7 @@ Recorded, never dropped.
 | ~~KI4~~ | ~~Migration 0070 unapplied.~~ **Resolved 2026-08-30.** Applied; `npm run db:types` regenerated the types; `lib/workspaces/db.ts` deleted. Backfill verified against the live project: 61 profiles → 61 workspaces → 61 owner memberships, no profile without one, no user in two. | — |
 | KI5 | No plan sells more than one seat (Q6), so the invite flow is reachable but always refused. | Team features are dark until seat counts are set on `plans.limits`. |
 | KI6 | Ownership cannot be transferred and a second owner cannot be created (DR9). | A sole owner can never leave their workspace. Support-only until M2. |
+| KI11 | **Credits are USER-scoped while everything else has moved to workspaces.** `usage_counters` keys on `user_id`, so two members of one workspace draw from separate pools and a flow must carry whose allowance it spends (`config.userId`). Fine for single-operator accounts; wrong the moment teams ship. | Needs a decision before team billing: either pool credits per workspace, or make the per-user split explicit in the UI. Related to Q6, which blocks team invitations anyway. |
 | KI10 | **Every RLS assertion in the local migration harness was vacuously true until 0085.** `auth.uid()` was stubbed to return a constant NULL, so a policy that denies everyone passes a test expecting a member to see their own rows — both sides are empty. | **Fixed.** The stub now reads the `sub` claim from `request.jwt.claims` like the real function. Verified by the fix changing behaviour: 0085's policy assertions failed until the policy was correct. No earlier smoke test used `set local role authenticated`, so nothing previously verified was affected. |
 | KI9 | **The forecast and win-rate UI has never been rendered with data in a browser.** The SQL is verified twice over (harness smoke and a live-database reconciliation), the readers typecheck and the page builds, but the owner's workspace has 0 opportunities — the earlier pipeline seed created the "Sales" pipeline and its 6 stages and no deals — and the preview session had expired, so only the EMPTY states of the forecast table and the win-rate table could be reached. | Same gap as the pipeline board. Seed a few opportunities into a workspace and open `/crm/reports`; three UI defects in this build were found only by opening a page. |
 | KI8 | **The remote migration-history table is stale from 0068 onward.** `supabase migration list` shows 0001–0067 recorded remotely; 0068–0073 are applied to the schema but absent from history, because every one of them was applied by hand in the SQL editor, which records nothing. | ⚠️ **`supabase db push` is UNSAFE on this project.** It would try to replay 0068–0073, including the FastSpring migrations, whose idempotency is unverified. Apply by hand and verify, or repair the history table first. |
@@ -1123,7 +1164,7 @@ Recorded, never dropped.
 
 ## 18. Test status
 
-`npx vitest run tests/unit` — **2,059 passed, 0 failed**, 114 files. Integration adds the SMTP adapter, the send worker and the readiness runner, all run against a real mail server in Docker.
+`npx vitest run tests/unit` — **2,084 passed, 0 failed**, 117 files. Integration adds the SMTP adapter, the send worker and the readiness runner, all run against a real mail server in Docker.
 `npm run typecheck` passes. `npm run lint` reports 0 errors (95 pre-existing
 warnings, all in generated or vendored files). `npm run build` passes.
 
