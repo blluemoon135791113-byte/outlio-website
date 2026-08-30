@@ -151,6 +151,38 @@ describe('module entitlements', () => {
   })
 })
 
+describe('a platform admin is unlocked', () => {
+  it('gets every module even with no plan at all', () => {
+    // profiles.role = 'admin' is Outlio staff. decideAccess already exempts
+    // them from scraper limits and hasHubbleEntitlement from the Hubble gate;
+    // this keeps one rule rather than three.
+    const modules = resolveModules(null, NO_FLAGS, { platformAdmin: true })
+    expect([...modules].sort()).toEqual([...MODULES].sort())
+  })
+
+  it('gets unlimited seats', () => {
+    expect(resolveMemberLimit(null, null, { platformAdmin: true })).toBeNull()
+  })
+
+  it('still respects a seat override, so support can pin a number', () => {
+    expect(resolveMemberLimit(null, 3, { platformAdmin: true })).toBe(3)
+  })
+
+  it('STILL RESPECTS A KILL SWITCH', () => {
+    // A kill switch the one person most likely to need it cannot use is not a
+    // kill switch.
+    const flags = new Map([[MODULE_FLAG.crm, false]])
+    const modules = resolveModules(null, flags, { platformAdmin: true })
+    expect(modules.has('crm')).toBe(false)
+    expect(modules.has('email')).toBe(true)
+  })
+
+  it('changes nothing for an ordinary owner', () => {
+    expect(resolveModules(null, NO_FLAGS).size).toBe(0)
+    expect(resolveMemberLimit(null, null)).toBe(1)
+  })
+})
+
 describe('seat limits', () => {
   it('falls back to one seat when the plan says nothing', () => {
     expect(resolveMemberLimit(null, null)).toBe(1)

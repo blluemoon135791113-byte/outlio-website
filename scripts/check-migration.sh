@@ -65,7 +65,7 @@ create table public.companies (id uuid primary key default gen_random_uuid());
 SQL
 
 # Prerequisites, in order. Extend this list as the platform grows.
-for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities; do
+for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break

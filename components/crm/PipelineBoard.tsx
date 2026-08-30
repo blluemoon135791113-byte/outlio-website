@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useCallback, useState, useTransition } from 'react'
 
+import { useBoardRealtime } from '@/components/crm/useBoardRealtime'
 import { moveCardAction, type MoveCardState } from '@/lib/crm/board-actions'
 import type { BoardColumn } from '@/lib/crm/opportunities'
 
@@ -27,15 +28,29 @@ import type { BoardColumn } from '@/lib/crm/opportunities'
 export function PipelineBoard({
   columns,
   canMove,
+  workspaceId,
+  pipelineId,
 }: {
   columns: BoardColumn[]
   canMove: boolean
+  workspaceId: string
+  pipelineId: string
 }) {
   const [board, setBoard] = useState(columns)
   const [dragging, setDragging] = useState<string | null>(null)
   const [over, setOver] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<MoveCardState>({ status: 'idle' })
   const [pending, startTransition] = useTransition()
+
+  // Everyone looking at this pipeline sees each other's moves. Best-effort by
+  // nature — a dropped socket or a backgrounded tab means a stale card is
+  // always possible, which is why the optimistic lock remains the actual
+  // guarantee rather than a backstop.
+  useBoardRealtime(
+    workspaceId,
+    pipelineId,
+    useCallback((update: (c: BoardColumn[]) => BoardColumn[]) => setBoard(update), []),
+  )
 
   function move(opportunityId: string, toStageId: string) {
     const from = board.find((c) => c.cards.some((card) => card.id === opportunityId))

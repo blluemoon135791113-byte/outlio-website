@@ -70,6 +70,8 @@ export default async function PipelinePage({
       <PipelineBoard
         columns={columns}
         canMove={can({ role: ctx.role, modules: ctx.modules }, 'crm.opportunity.edit')}
+        workspaceId={ctx.workspace.id}
+        pipelineId={pipelineId}
       />
     </div>
   )
