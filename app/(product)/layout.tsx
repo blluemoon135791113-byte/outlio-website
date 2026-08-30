@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import { ProductShell } from '@/components/product/ProductShell'
 import { requireUser } from '@/lib/auth/access'
+import { getWorkspaceContext } from '@/lib/workspaces/context'
 import { appOrigin } from '@/lib/auth/redirects'
 import { signedAvatarUrl } from '@/lib/profile/avatar'
 import { referralLink } from '@/lib/referrals/constants'
@@ -20,6 +21,11 @@ import { referralLink } from '@/lib/referrals/constants'
 export default async function ProductLayout({ children }: { children: ReactNode }) {
   const ctx = await requireUser()
   const avatarUrl = await signedAvatarUrl(ctx.userId!, ctx.profile?.avatar_path)
+
+  // The CRM nav entry appears only when the workspace's plan includes the
+  // module. The routes refuse it independently — hiding a link is not access
+  // control (CLAUDE.md rule 8).
+  const workspace = await getWorkspaceContext()
   // Built here so the client never has to guess the canonical origin.
   const code = ctx.profile?.referral_code ?? null
 
@@ -30,6 +36,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       planName={ctx.plan?.name ?? null}
       isAdmin={ctx.isAdmin}
       canUseScraper={ctx.canUseScraper}
+      showCrm={workspace?.modules.has('crm') ?? false}
       avatarUrl={avatarUrl}
       referralLink={code ? referralLink(appOrigin(), code) : null}
     >

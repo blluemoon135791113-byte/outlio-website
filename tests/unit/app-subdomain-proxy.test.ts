@@ -57,6 +57,18 @@ describe('app.outlio.io software surface', () => {
     },
   )
 
+  it.each(['/crm', '/crm/pipeline'])(
+    'resolves %s on the software domain rather than 404ing it',
+    async (path) => {
+      // Omitting /crm from APP_SUBDOMAIN_PATHS would rewrite the whole CRM to
+      // /not-found on the only host it is ever reached from.
+      const response = await proxy(appRequest(path))
+
+      expect(getRewrittenUrl(response)).not.toBe('https://app.outlio.io/not-found')
+      expect(getRedirectUrl(response)).toBeNull()
+    },
+  )
+
   it('keeps agency marketing off the software domain without leaving it', async () => {
     const response = await proxy(appRequest('/explainers'))
 

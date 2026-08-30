@@ -8,6 +8,7 @@ import { HubbleLogo } from '@/components/brand/HubbleLogo'
 
 type IconName =
   | 'admin'
+  | 'crm'
   | 'dashboard'
   | 'extract'
   | 'gift'
@@ -41,17 +42,27 @@ const SETTINGS_LINK = {
   icon: 'settings' as const,
 }
 
+const CRM_LINK = { href: '/crm', label: 'CRM', icon: 'crm' as const }
+
 export function ProductNav({
   isAdmin,
   canUseScraper,
+  showCrm = false,
   onNavigate,
 }: {
   isAdmin: boolean
   canUseScraper: boolean
+  /**
+   * Entitlement, resolved on the server. A workspace whose plan does not
+   * include CRM never sees the link — and the routes refuse it anyway, because
+   * hiding a nav item is not access control (CLAUDE.md rule 8).
+   */
+  showCrm?: boolean
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
-  const links = canUseScraper ? PRODUCT_LINKS : [ACCESS_LINK]
+  const base = canUseScraper ? PRODUCT_LINKS : [ACCESS_LINK]
+  const links = showCrm ? [...base, CRM_LINK] : base
   const allLinks = isAdmin
     ? [...links, SETTINGS_LINK, { href: '/admin', label: 'User admin', icon: 'admin' as const }]
     : [...links, SETTINGS_LINK]
@@ -127,6 +138,13 @@ export function ProductIcon({
       <>
         <rect x="4" y="10" width="16" height="11" rx="2" />
         <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      </>
+    ),
+    crm: (
+      <>
+        <rect x="3" y="4" width="5" height="16" rx="1.5" />
+        <rect x="10" y="4" width="5" height="10" rx="1.5" />
+        <rect x="17" y="4" width="4" height="7" rx="1.5" />
       </>
     ),
     admin: (

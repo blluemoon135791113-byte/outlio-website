@@ -13,6 +13,8 @@ import { signOutAction } from '@/lib/auth/actions'
 
 function pageLabel(pathname: string) {
   if (pathname.startsWith('/admin')) return 'User administration'
+  if (pathname.startsWith('/crm/pipeline')) return 'Pipeline'
+  if (pathname.startsWith('/crm')) return 'CRM'
   if (pathname.startsWith('/dashboard/extract/new')) return 'New extraction'
   if (pathname.startsWith('/dashboard/jobs')) return 'Extraction workspace'
   if (pathname.startsWith('/dashboard/intelligence')) return 'Intelligence'
@@ -30,11 +32,13 @@ function initials(name: string | null, email: string) {
 function SidebarContent({
   isAdmin,
   canUseScraper,
+  showCrm,
   referralLink,
   onNavigate,
 }: {
   isAdmin: boolean
   canUseScraper: boolean
+  showCrm: boolean
   /** `null` until a profile has a code allocated. */
   referralLink: string | null
   onNavigate?: () => void
@@ -66,6 +70,7 @@ function SidebarContent({
         <ProductNav
           isAdmin={isAdmin}
           canUseScraper={canUseScraper}
+          showCrm={showCrm}
           onNavigate={onNavigate}
         />
       </div>
@@ -97,6 +102,7 @@ export function ProductShell({
   planName,
   isAdmin,
   canUseScraper,
+  showCrm = false,
   avatarUrl,
   referralLink = null,
 }: {
@@ -106,6 +112,7 @@ export function ProductShell({
   planName: string | null
   isAdmin: boolean
   canUseScraper: boolean
+  showCrm?: boolean
   avatarUrl?: string | null
   referralLink?: string | null
 }) {
@@ -120,6 +127,7 @@ export function ProductShell({
         <SidebarContent
           isAdmin={isAdmin}
           canUseScraper={canUseScraper}
+          showCrm={showCrm}
           referralLink={referralLink}
         />
       </aside>
@@ -144,6 +152,7 @@ export function ProductShell({
             <SidebarContent
               isAdmin={isAdmin}
               canUseScraper={canUseScraper}
+              showCrm={showCrm}
               referralLink={referralLink}
               onNavigate={() => setMobileOpen(false)}
             />

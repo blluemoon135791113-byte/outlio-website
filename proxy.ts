@@ -37,7 +37,7 @@ import { isAppHost } from '@/lib/site'
  * carrying the invitee back to the invitation after they sign in. Letting the
  * page redirect instead would drop the token and strand them on the dashboard.
  */
-const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/join']
+const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/join', '/crm']
 
 /**
  * ⚠️ AUTH COOKIES ARE PER-HOST, DELIBERATELY.
@@ -95,6 +95,7 @@ const APP_SUBDOMAIN_PATHS = [
   // Workspace invitation links. Omitting this would 404 every invitation on
   // the software domain, which is the only host they are ever issued for.
   '/join',
+  '/crm',
   '/extension',
   '/sign-in',
   '/sign-up',
