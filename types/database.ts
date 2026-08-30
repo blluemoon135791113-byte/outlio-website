@@ -5305,6 +5305,69 @@ export type Database = {
           },
         ]
       }
+      hubble_calls: {
+        Row: {
+          created_at: string
+          credits_quoted: number
+          credits_spent: number
+          duration_ms: number | null
+          error_code: string | null
+          error_message: string | null
+          flow_run_id: string | null
+          id: string
+          outcome: string
+          source: string | null
+          task: string
+          user_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          credits_quoted?: number
+          credits_spent?: number
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          flow_run_id?: string | null
+          id?: string
+          outcome: string
+          source?: string | null
+          task: string
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          credits_quoted?: number
+          credits_spent?: number
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          flow_run_id?: string | null
+          id?: string
+          outcome?: string
+          source?: string | null
+          task?: string
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubble_calls_flow_run_id_fkey"
+            columns: ["flow_run_id"]
+            isOneToOne: false
+            referencedRelation: "flow_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hubble_calls_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hubble_chunks: {
         Row: {
           company_id: string | null
@@ -7500,6 +7563,24 @@ export type Database = {
         Args: { p_period_start: string; p_user_id: string }
         Returns: number
       }
+      hubble_refund_credits: {
+        Args: { p_amount: number; p_period_start?: string; p_user_id: string }
+        Returns: number
+      }
+      hubble_spend_credits: {
+        Args: {
+          p_amount?: number
+          p_period_end?: string
+          p_period_start?: string
+          p_user_id: string
+        }
+        Returns: {
+          allowance: number
+          outcome: Database["public"]["Enums"]["credit_spend_outcome"]
+          remaining: number
+          used: number
+        }[]
+      }
       increment_usage: {
         Args: {
           p_by?: number
@@ -7930,6 +8011,7 @@ export type Database = {
         | "duplicate"
         | "failed"
       capture_session_status: "active" | "completed" | "abandoned"
+      credit_spend_outcome: "spent" | "unlimited" | "exhausted"
       crm_activity_channel:
         | "linkedin"
         | "email"
@@ -8239,6 +8321,7 @@ export const Constants = {
         "failed",
       ],
       capture_session_status: ["active", "completed", "abandoned"],
+      credit_spend_outcome: ["spent", "unlimited", "exhausted"],
       crm_activity_channel: [
         "linkedin",
         "email",

@@ -151,16 +151,52 @@ const addTag: ActionHandler = async (ctx, config) => {
   // that render identically (the rule 0071 already encodes).
   const normalized = name.toLowerCase().replace(/\s+/g, ' ').trim()
 
-  const { data: tag, error } = await db
+  /*
+   * ⚠️ SELECT-THEN-INSERT, NOT UPSERT. `crm_tags_name_uniq` is a PARTIAL unique
+   * index (`where deleted_at is null`), and `ON CONFLICT (workspace_id,
+   * normalized_name)` cannot use a partial index unless the statement repeats
+   * its predicate — Postgres answers "no unique or exclusion constraint
+   * matching the ON CONFLICT specification" and the whole action fails.
+   *
+   * The insert can still lose a race with another flow tagging the same
+   * contact, so a unique violation falls back to reading the winner's row
+   * rather than failing.
+   */
+  const existing = await db
     .from('crm_tags')
-    .upsert(
-      { workspace_id: ctx.workspaceId, name, normalized_name: normalized },
-      { onConflict: 'workspace_id,normalized_name' },
-    )
     .select('id')
-    .single()
+    .eq('workspace_id', ctx.workspaceId)
+    .eq('normalized_name', normalized)
+    .is('deleted_at', null)
+    .maybeSingle()
 
-  if (error) return fail('TAG_FAILED', 'Could not create the tag.', true)
+  let tag = existing.data
+
+  if (!tag) {
+    const created = await db
+      .from('crm_tags')
+      .insert({ workspace_id: ctx.workspaceId, name, normalized_name: normalized })
+      .select('id')
+      .single()
+
+    if (created.error) {
+      if (created.error.code !== '23505') {
+        return fail('TAG_FAILED', 'Could not create the tag.', true)
+      }
+      // Someone else created it between the read and the write.
+      const raced = await db
+        .from('crm_tags')
+        .select('id')
+        .eq('workspace_id', ctx.workspaceId)
+        .eq('normalized_name', normalized)
+        .is('deleted_at', null)
+        .maybeSingle()
+      if (!raced.data) return fail('TAG_FAILED', 'Could not create the tag.', true)
+      tag = raced.data
+    } else {
+      tag = created.data
+    }
+  }
 
   const { error: linkError } = await db
     .from('crm_contact_tags')

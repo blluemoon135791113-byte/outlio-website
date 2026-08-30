@@ -2,17 +2,21 @@
  * What a flow IS — M7 Phase 20.
  *
  * ╔═══════════════════════════════════════════════════════════════════════════╗
- * ║  EVERY ACTION HERE IS DETERMINISTIC AND COSTS ZERO CREDITS.               ║
+ * ║  THE CATALOGUE IS SPLIT: DETERMINISTIC ACTIONS ARE FREE, HUBBLE ACTIONS   ║
+ * ║  COST THE CUSTOMER MONEY.                                                 ║
  * ║                                                                           ║
- * ║  The brief lists the free actions explicitly, and the reason is           ║
- * ║  commercial as much as technical: a customer building a flow must be able ║
- * ║  to see, before they run it on 10,000 contacts, exactly which steps will  ║
- * ║  charge them. Hubble steps arrive in Phase 22 through ONE boundary and    ║
- * ║  are badged separately — they are never mixed into this list.             ║
+ * ║  The split is commercial as much as technical: a customer building a flow ║
+ * ║  must be able to see, before running it on 10,000 contacts, exactly which ║
+ * ║  steps will charge them. `creditBearingSteps()` answers that from a       ║
+ * ║  definition alone, with no run required.                                  ║
  * ║                                                                           ║
- * ║  ⚠️ `costsCredits` IS ON EVERY ACTION TYPE, not just the AI ones. Listing ║
- * ║  it as `false` explicitly means anyone adding an action has to state the  ║
- * ║  answer, rather than inheriting `undefined` and quietly becoming free.    ║
+ * ║  ⚠️ `costsCredits` IS STATED ON EVERY ACTION TYPE, not just the AI ones.  ║
+ * ║  Writing `false` explicitly means anyone adding an action has to answer   ║
+ * ║  the question, rather than inheriting `undefined` and quietly becoming    ║
+ * ║  free.                                                                    ║
+ * ║                                                                           ║
+ * ║  ⚠️ EVERY `HUBBLE_*` ACTION GOES THROUGH `hubbleExecute`. None may call a ║
+ * ║  model directly — that is the constitution's "never scatter LLM calls".   ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 import { z } from 'zod'
@@ -74,6 +78,23 @@ export const ACTION_TYPES = {
   CREATE_EMAIL_TASK: { costsCredits: false, reversible: true },
   /** ⚠️ Irreversible: an email cannot be unsent. Guarded in Phase 21. */
   SEND_EMAIL: { costsCredits: false, reversible: false },
+
+  /*
+   * ⚠️ EVERYTHING BELOW COSTS THE CUSTOMER MONEY. These are the only actions
+   * with `costsCredits: true`, and the split is what lets the editor badge an
+   * AI step differently from a free one — the brief requires exactly that
+   * distinction to be visible before a flow is published.
+   *
+   * All of them go through the single `hubbleExecute` boundary. None may call
+   * a model directly.
+   */
+  HUBBLE_ICP_SCORE: { costsCredits: true, reversible: true },
+  HUBBLE_RESEARCH: { costsCredits: true, reversible: true },
+  HUBBLE_CLASSIFY: { costsCredits: true, reversible: true },
+  HUBBLE_PERSONALIZE: { costsCredits: true, reversible: true },
+  HUBBLE_REPLY_DRAFT: { costsCredits: true, reversible: true },
+  HUBBLE_CLASSIFY_REPLY: { costsCredits: true, reversible: true },
+  HUBBLE_ACCOUNT_SUMMARY: { costsCredits: true, reversible: true },
 } as const
 
 export type ActionType = keyof typeof ACTION_TYPES

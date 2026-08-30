@@ -33,20 +33,47 @@ const valid = {
   ],
 }
 
-describe('every deterministic action is free', () => {
-  it('costs zero credits, all of them', () => {
+describe('the free/paid split is explicit', () => {
+  it('makes every deterministic action free', () => {
     /*
      * A customer building a flow must see, before running it on 10,000
-     * contacts, exactly which steps will charge them. Hubble steps arrive in
-     * Phase 22 through one boundary and are badged separately.
+     * contacts, exactly which steps will charge them.
      */
-    for (const type of Object.keys(ACTION_TYPES) as (keyof typeof ACTION_TYPES)[]) {
+    const deterministic = (Object.keys(ACTION_TYPES) as (keyof typeof ACTION_TYPES)[])
+      .filter((t) => !t.startsWith('HUBBLE_'))
+
+    for (const type of deterministic) {
       expect(actionCostsCredits(type)).toBe(false)
+    }
+  })
+
+  it('makes every HUBBLE_ action cost credits', () => {
+    // If one of these were ever free, the customer would be charged by a
+    // provider for work the product told them was included.
+    const hubble = (Object.keys(ACTION_TYPES) as (keyof typeof ACTION_TYPES)[])
+      .filter((t) => t.startsWith('HUBBLE_'))
+
+    expect(hubble.length).toBeGreaterThan(0)
+    for (const type of hubble) {
+      expect(actionCostsCredits(type)).toBe(true)
     }
   })
 
   it('reports no credit-bearing steps in a deterministic flow', () => {
     expect(creditBearingSteps(validateFlowDefinition(valid))).toEqual([])
+  })
+
+  it('names the credit-bearing steps in a mixed flow, before it runs', () => {
+    const mixed = validateFlowDefinition({
+      ...valid,
+      entryStepId: 'score',
+      steps: [
+        { id: 'score', type: 'ACTION', action: 'HUBBLE_ICP_SCORE', config: {}, next: 'tag' },
+        { id: 'tag', type: 'ACTION', action: 'ADD_TAG', config: {}, next: null },
+      ],
+    })
+    // Only the AI step, named — so the editor can badge it.
+    expect(creditBearingSteps(mixed)).toEqual(['score'])
   })
 
   it('marks SEND_EMAIL irreversible even though it is free', () => {

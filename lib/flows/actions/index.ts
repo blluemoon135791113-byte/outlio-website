@@ -11,6 +11,7 @@ import 'server-only'
  */
 import { registerCrmActions } from '@/lib/flows/actions/crm'
 import { registerEmailActions } from '@/lib/flows/actions/email'
+import { registerHubbleActions } from '@/lib/flows/actions/hubble'
 
 let registered = false
 
@@ -19,5 +20,6 @@ export function registerAllActions(): void {
   if (registered) return
   registerCrmActions()
   registerEmailActions()
+  registerHubbleActions()
   registered = true
 }
