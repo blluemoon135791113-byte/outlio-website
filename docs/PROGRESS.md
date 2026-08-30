@@ -7977,3 +7977,66 @@ password at all. A local-only key was generated; production's key is separate
 and already set in Vercel.
 
 1,860 unit + integration tests, typecheck, lint (0 errors) and build all pass.
+
+---
+
+## M5 Phase 14 — the message engine ✅
+
+Migration `0086_email_messages.sql`, `lib/email/schedule.ts`, `lib/email/send.ts`.
+**M5 criteria 3 and 4 both met.** Only Phase 13 (readiness) remains.
+
+### At-most-once, deliberately — the central decision
+
+Exactly-once delivery is not achievable across a network boundary. The real
+choice is retry-when-unsure (needs provider dedupe, which **SMTP does not
+have** — proven in Phase 12: same idempotency key, delivered twice) versus
+never-retry-when-unsure (a message can be lost).
+
+For cold outbound the costs are wildly asymmetric. A duplicate is a spam
+complaint, a domain reputation hit, and a threat to every other mailbox on that
+domain. A miss is recovered by the sequence's next step.
+
+So a message whose claim expires becomes `needs_verification` and is **never**
+auto-requeued. That is what makes criterion 3 true rather than merely claimed.
+
+### Criterion 3, measured at the mail server
+
+The test claims a message, lets the provider **accept** it, then dies before
+recording — exactly what `kill -9` leaves behind. The claim is reaped to
+`needs_verification`, a restarted worker runs, and GreenMail's own log shows
+**exactly one client submission** of that subject.
+
+Asserting our own row says `sent` would only prove we agree with ourselves. The
+question is how many emails a human received.
+
+### Criterion 4, all five reasons, tested twice each
+
+Refused at enqueue, **and** refused at claim for a message queued *before* the
+suppression existed — the race that a check-then-send would lose. Zero
+suppressed subjects ever reached the mail server.
+
+### Decisions
+
+- **The suppression check lives inside the claim** (D37), in the same statement
+  that removes the row from the queue, so nobody can unsubscribe in the gap.
+- **The first suppression reason wins.** Unsubscribed outranks hard_bounce: a
+  stated wish is not a delivery accident, and overwriting it destroys consent
+  provenance the customer may have to produce.
+- **Sending windows store an IANA zone, never an offset** (D38). An offset is
+  silently wrong for half the year and the only symptom is mail arriving an
+  hour early — which looks automated.
+- **The caller supplies the idempotency key.** Only the caller knows what "the
+  same message" means; a key generated inside the engine would be unique every
+  call and guarantee nothing.
+- **Sent content is frozen by trigger**, not convention — M6 requires that
+  editing a template never mutates sent history.
+
+### ⚠️ Two things that must never be added
+
+Do not claim inside the send loop, and do not retry a claimed row in-process
+after an ambiguous failure. A timeout or dropped socket may well have been
+accepted upstream. Both changes silently convert this to at-least-once without
+the dedupe that would make it safe.
+
+1,870 unit tests plus the live send-worker suite, typecheck, lint (0 errors)
+and build all pass.

@@ -3447,6 +3447,172 @@ export type Database = {
           },
         ]
       }
+      email_messages: {
+        Row: {
+          account_id: string
+          attempts: number
+          body_html: string | null
+          body_text: string
+          campaign_id: string | null
+          claim_expires_at: string | null
+          claimed_at: string | null
+          claimed_by: string | null
+          contact_id: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          idempotency_key: string
+          max_attempts: number
+          provider_message_id: string | null
+          scheduled_at: string
+          sent_at: string | null
+          sequence_id: string | null
+          status: Database["public"]["Enums"]["email_message_status"]
+          step_index: number | null
+          subject: string
+          suppression_reason:
+            | Database["public"]["Enums"]["email_suppression_reason"]
+            | null
+          thread_id: string | null
+          to_email: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          account_id: string
+          attempts?: number
+          body_html?: string | null
+          body_text: string
+          campaign_id?: string | null
+          claim_expires_at?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          contact_id?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          idempotency_key: string
+          max_attempts?: number
+          provider_message_id?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          sequence_id?: string | null
+          status?: Database["public"]["Enums"]["email_message_status"]
+          step_index?: number | null
+          subject: string
+          suppression_reason?:
+            | Database["public"]["Enums"]["email_suppression_reason"]
+            | null
+          thread_id?: string | null
+          to_email: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string
+          attempts?: number
+          body_html?: string | null
+          body_text?: string
+          campaign_id?: string | null
+          claim_expires_at?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          contact_id?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string
+          max_attempts?: number
+          provider_message_id?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          sequence_id?: string | null
+          status?: Database["public"]["Enums"]["email_message_status"]
+          step_index?: number | null
+          subject?: string
+          suppression_reason?:
+            | Database["public"]["Enums"]["email_suppression_reason"]
+            | null
+          thread_id?: string | null
+          to_email?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_messages_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_messages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_suppressions: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          email: string
+          id: string
+          reason: Database["public"]["Enums"]["email_suppression_reason"]
+          source: string | null
+          workspace_id: string
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          email: string
+          id?: string
+          reason: Database["public"]["Enums"]["email_suppression_reason"]
+          source?: string | null
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          id?: string
+          reason?: Database["public"]["Enums"]["email_suppression_reason"]
+          source?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_suppressions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_suppressions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       export_destinations: {
         Row: {
           access_token: string | null
@@ -6146,6 +6312,25 @@ export type Database = {
           status: string
         }[]
       }
+      claim_email_messages: {
+        Args: {
+          p_claim_seconds?: number
+          p_claimed_by: string
+          p_limit?: number
+        }
+        Returns: {
+          account_id: string
+          attempts: number
+          body_html: string
+          body_text: string
+          idempotency_key: string
+          message_id: string
+          subject: string
+          thread_id: string
+          to_email: string
+          workspace_id: string
+        }[]
+      }
       claim_job: {
         Args: { p_claimed_by: string; p_job_id: string; p_user_id: string }
         Returns: {
@@ -6417,6 +6602,7 @@ export type Database = {
         Args: { p_job_id: string; p_user_id: string }
         Returns: number
       }
+      reap_expired_email_claims: { Args: never; Returns: number }
       reap_orphaned_uploads: {
         Args: { p_older_than_minutes?: number }
         Returns: {
@@ -6848,7 +7034,21 @@ export type Database = {
         | "paused"
         | "disconnected"
         | "error"
+      email_message_status:
+        | "queued"
+        | "sending"
+        | "sent"
+        | "failed"
+        | "cancelled"
+        | "needs_verification"
+        | "suppressed"
       email_provider: "gmail" | "microsoft" | "smtp"
+      email_suppression_reason:
+        | "unsubscribed"
+        | "hard_bounce"
+        | "complaint"
+        | "manual"
+        | "invalid_address"
       export_destination_kind: "device" | "google_drive" | "onedrive"
       file_status: "pending" | "processing" | "processed" | "failed"
       job_status:
@@ -7089,7 +7289,23 @@ export const Constants = {
         "disconnected",
         "error",
       ],
+      email_message_status: [
+        "queued",
+        "sending",
+        "sent",
+        "failed",
+        "cancelled",
+        "needs_verification",
+        "suppressed",
+      ],
       email_provider: ["gmail", "microsoft", "smtp"],
+      email_suppression_reason: [
+        "unsubscribed",
+        "hard_bounce",
+        "complaint",
+        "manual",
+        "invalid_address",
+      ],
       export_destination_kind: ["device", "google_drive", "onedrive"],
       file_status: ["pending", "processing", "processed", "failed"],
       job_status: [

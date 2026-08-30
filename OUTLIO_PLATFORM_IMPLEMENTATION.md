@@ -10,7 +10,7 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M5 Phase 12 complete — SMTP+IMAP adapter)
+- **Last updated:** 2026-08-30 (M5 Phase 14 complete — message engine)
 - **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0083` are all
   applied and types are regenerated.
 - **Next milestone:** M5 — email foundation (Phases 11 ✅, 12–14 open).
@@ -780,10 +780,66 @@ upgrade, which would put the customer's password and every recipient address on
 the wire in plaintext. `requireTLS` is set on ports 25/587. Localhost is exempt
 so the integration test can run against a container with no certificate.
 
+### D36. At-most-once delivery, not at-least-once
+
+**The single most consequential decision in M5, and it is a product decision as
+much as a technical one.**
+
+Exactly-once delivery is not achievable across a network boundary. The real
+choice is:
+
+- **at-least-once** — retry when the outcome is unknown. Safe only with
+  provider-side dedupe. **SMTP has no dedupe verb**: hand the same message to
+  the same server twice and it is delivered twice, identical `Message-ID` or
+  not. This is proven, not assumed, in `tests/integration/email-smtp.test.ts`.
+- **at-most-once** — never retry when the outcome is unknown. A message can be
+  lost.
+
+For cold outbound the costs are wildly asymmetric. A duplicate email is a spam
+complaint, a domain reputation hit, and a threat to every other mailbox on that
+domain. A missed email is recovered by the sequence's next step.
+
+So a message whose claim expires becomes `needs_verification` and is **never**
+automatically requeued. `reap_expired_email_claims()` is that guarantee made
+concrete, and it is what makes criterion 3 true: a restarted worker finds the
+row already out of the queue.
+
+⚠️ **Two things must never be added.** Do not claim inside the send loop, and
+do not retry a claimed row in-process after an ambiguous failure — a timeout or
+a dropped socket may well have been accepted upstream. A failure is retried
+only when the provider stated plainly that nothing was sent
+(`classifySmtpError` decides), and even then via a fresh claim.
+
+### D37. The suppression check lives inside the claim
+
+Checking in application code and then sending leaves a window in which someone
+unsubscribes between the two. `claim_email_messages()` suppresses
+do-not-contact recipients in the same statement that removes rows from the
+queue, so a suppressed address is never handed to a worker at all.
+
+`enqueueEmail` also checks, so a caller gets an immediate honest answer rather
+than a row that quietly dies later. Neither check makes the other redundant.
+
+**The first suppression reason wins.** If someone unsubscribed and later hard
+bounced, `unsubscribed` is the fact that matters — it is a stated wish rather
+than a delivery accident, and overwriting it would destroy the consent
+provenance the customer may one day have to produce.
+
+### D38. Sending windows store an IANA zone, never an offset
+
+"09:00–17:00 Europe/London" must mean 09:00 local in both March and July, which
+are different UTC instants. An offset captured at setup is silently wrong for
+half the year, and the only symptom is mail arriving at 08:00 — early enough to
+look automated, which is exactly what cold outbound must not look like.
+
+The scheduler also walks forward in the **account's own calendar** rather than
+adding 24h to a UTC instant: across a DST change a day is 23 or 25 hours.
+
 ## 14. Migrations added by the platform build
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0086 | `0086_email_messages.sql` | M5 P14 | `email_message_status`, `email_suppression_reason` enums; `email_messages` (content frozen after send by trigger, unique idempotency key per workspace), `email_suppressions`; `claim_email_messages()` (suppression check INSIDE the claim) and `reap_expired_email_claims()` (→ `needs_verification`, **never** back to `queued`). |
 | 0085 | `0085_email_accounts.sql` | M5 P11 | `email_provider`, `email_account_scope`, `email_account_status` enums; `email_accounts` (many mailboxes per workspace, each with scope, schedule, limits, health) and `email_account_secrets` (service-role only, **no RLS policy at all**). Purely additive. |
 | 0084 | `0084_crm_forecast.sql` | M4 P10.5 | `crm_forecast_by_period()` — weighted pipeline by expected close MONTH, with undated deals returned under a NULL period rather than dropped — and `crm_win_rates()` — won ÷ closed, bucketed by `closed_at`, open deals excluded, NULL rather than 0% when nothing closed. Two functions; no table touched, none replaced. |
 | 0083 | `0083_crm_funnel.sql` | M4 P10 | `crm_batch_funnel()` — one batch from extracted through to won revenue, each step counted from the step above it so the funnel can only narrow — and `crm_pipeline_totals()`. |
@@ -812,7 +868,7 @@ so the integration test can run against a container with no certificate.
 | M2 | CRM core: identity, ingestion, dedup, operations | ✅ **Complete** (2026-08-30). Two UIs deferred: DR12, DR14 |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ✅ **Complete** (2026-08-30) |
 | M4 | CRM reporting foundation & dashboards | ✅ **Phases 9, 10 and 10.5 complete.** 6 of 7 criteria met; criterion 3 (auto-reply exclusion) belongs to M6, where the pre-filter runs before anything is written |
-| M5 | Email foundation | 🔨 **Phases 11 ✅ and 12 ✅ (SMTP+IMAP).** Gmail and Microsoft adapters blocked on credentials + scope verification (D33). Phases 13 (readiness) and 14 (message engine) open |
+| M5 | Email foundation | 🔨 **Phases 11 ✅, 12 ✅ (SMTP+IMAP), 14 ✅ (message engine).** 4 of 5 criteria met. Phase 13 (readiness) is the remainder; Gmail/Microsoft adapters blocked on Google verification + CASA (D33) |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
 | M7 | Flow engine, Hubble boundary, visual builder | ⬜ Not started |
 | M8 | Integrations, Calendly, unified inbox | ⬜ Not started |
@@ -836,9 +892,9 @@ so the integration test can run against a container with no certificate.
 |---|---|---|
 | 1 | Secrets unreadable via any API after save; encryption verified | ✅ Proven twice. In Postgres, `supabase/smoke/0085_email_accounts.sql` runs four read shapes as `authenticated` — direct, joined, by `secret_reference`, column-only — and all four are DENIED. Against the LIVE PostgREST API with the publishable key, all four including a resource embed return `401 / 42501`. The result is `permission denied` rather than an empty set: the grant refuses before RLS is consulted, so two independent layers hold. Encryption is `lib/integrations/crypto.ts`, already covered by `tests/unit/integration-crypto.test.ts`; the one uncovered branch (unknown version, no fallback) is pinned in `tests/unit/email-accounts.test.ts` |
 | 2 | Capability model gates features per provider (SMTP w/o IMAP reports no replies) | ✅ `lib/email/capabilities.ts` + 15 tests, and **enforced by the adapter**: `syncReplies` on an account with no IMAP host throws `EmailCapabilityError` rather than returning an empty list that would read as "no replies yet" (`tests/integration/email-smtp.test.ts`). SMTP alone reports `replies: unconfigured`; adding `imapHost` promotes it to `supported`; an SMTP *host* alone does not, because submission settings say nothing about reading. `webhookEvents` stays `unsupported` for SMTP even with IMAP — IMAP is polling and no configuration would give a plain mail server a push channel |
-| 3 | Kill-and-retry on the send worker produces exactly one delivered message | ⬜ Phase 14 — `idempotencyKey` is on `OutboundMessage` in the contract, enforced by the engine |
-| 4 | A suppressed recipient is never sent to, for every suppression reason | ⬜ Phase 14 |
-| 5 | Readiness state transitions + domain rollup tested; ramp limits enforced | ⬜ Phase 13 — the nine states and the `from_domain` index exist; nothing drives them yet |
+| 3 | Kill-and-retry on the send worker produces exactly one delivered message | ✅ `tests/integration/email-send-worker.test.ts` — a message is claimed, the provider ACCEPTS it, and the process dies before recording; the claim is reaped to `needs_verification` and a restarted worker sends nothing. **Counted at the mail server, not in our own rows:** GreenMail logs exactly ONE client submission of that subject. Guaranteed by at-most-once (D36), not by dedupe |
+| 4 | A suppressed recipient is never sent to, for every suppression reason | ✅ All five reasons, each tested twice — refused at enqueue AND refused at claim for a message queued BEFORE the suppression existed, which is the race the in-claim check closes. Zero suppressed subjects reach the mail server. Suppression is proven not to leak across workspaces (`0086` smoke) |
+| 5 | Readiness state transitions + domain rollup tested; ramp limits enforced | ⬜ Phase 13 — the nine states, the `from_domain` index and the scheduler that will enforce ramp all exist; nothing computes readiness yet |
 
 ### M3 acceptance criteria
 
@@ -927,7 +983,7 @@ Recorded, never dropped.
 
 ## 18. Test status
 
-`npx vitest run tests/unit` — **1,860 passed, 0 failed**, 103 files (includes the SMTP adapter run against a real mail server in Docker).
+`npx vitest run tests/unit` — **1,870 passed, 0 failed**, 104 files. Integration adds the SMTP adapter and the send worker, both run against a real mail server in Docker.
 `npm run typecheck` passes. `npm run lint` reports 0 errors (95 pre-existing
 warnings, all in generated or vendored files). `npm run build` passes.
 
