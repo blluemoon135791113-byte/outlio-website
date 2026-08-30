@@ -26,6 +26,8 @@ import 'server-only'
  */
 import { getEmailAccount } from '@/lib/email/accounts'
 import { providerFor } from '@/lib/email/providers/registry'
+import { checkRampAllowance } from '@/lib/email/ramp'
+import { isAccountSendable, rampSettingsOf, todayIn } from '@/lib/email/readiness-runner'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   applyMinimumDelay,
@@ -59,6 +61,10 @@ export type EnqueueResult =
   | { queued: false; reason: 'suppressed' }
   | { queued: false; reason: 'no_account' }
   | { queued: false; reason: 'unusable_schedule'; message: string }
+  /** The mailbox has used its allowance for today. Try again tomorrow. */
+  | { queued: false; reason: 'daily_limit'; message: string; allowance: number; sentToday: number }
+  /** Readiness says this mailbox must not send at all right now. */
+  | { queued: false; reason: 'unhealthy'; message: string }
 
 function scheduleOf(account: {
   timezone: string
@@ -97,6 +103,41 @@ export async function enqueueEmail(input: EnqueueInput): Promise<EnqueueResult> 
     .maybeSingle()
 
   if (suppressed) return { queued: false, reason: 'suppressed' }
+
+  /*
+   * ⚠️ THE SAFETY GATE AND THE RAMP ARE ENFORCED HERE, AT ENQUEUE — M5
+   * criterion 5, "ramp limits enforced by scheduler".
+   *
+   * Refusing at SEND time instead would leave the message claimed and then
+   * failed: it burns an attempt, writes an error the customer did not cause,
+   * and tells them nothing until after the fact. Refusing here gives an answer
+   * the caller can act on while it still has the message in hand.
+   */
+  const gate = await isAccountSendable(input.workspaceId, input.accountId)
+  if (!gate.sendable) {
+    return { queued: false, reason: 'unhealthy', message: gate.reason ?? 'This mailbox cannot send right now.' }
+  }
+
+  const { data: sentToday } = await db.rpc('email_sent_today', {
+    p_account_id: input.accountId,
+    p_timezone: account.timezone,
+  })
+
+  const allowance = checkRampAllowance(
+    rampSettingsOf(account),
+    Number(sentToday ?? 0),
+    todayIn(account.timezone),
+  )
+
+  if (!allowance.allowed) {
+    return {
+      queued: false,
+      reason: 'daily_limit',
+      message: allowance.reason,
+      allowance: allowance.allowance,
+      sentToday: allowance.sentToday,
+    }
+  }
 
   let scheduledAt: Date
   try {

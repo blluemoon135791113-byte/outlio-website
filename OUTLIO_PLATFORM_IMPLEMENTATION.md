@@ -10,10 +10,10 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M5 Phase 14 complete — message engine)
+- **Last updated:** 2026-08-30 (M5 COMPLETE — all 5 criteria met)
 - **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0083` are all
   applied and types are regenerated.
-- **Next milestone:** M5 — email foundation (Phases 11 ✅, 12–14 open).
+- **Next milestone:** M6 — email campaigns, composer, replies and email reporting.
 - **Next milestone:** M3 — opportunities, pipelines, native Kanban, collision
   guard. Two M2 UIs remain deferred (DR12 CSV import, DR14 Duplicate Center).
 
@@ -835,10 +835,65 @@ look automated, which is exactly what cold outbound must not look like.
 The scheduler also walks forward in the **account's own calendar** rather than
 adding 24h to a UTC instant: across a DST change a day is 23 or 25 hours.
 
+### D39. No warmup network, and the score never claims inbox placement
+
+A warmup network is a pool of accounts that email each other and mark the
+results as important, manufacturing engagement signals no human produced in
+order to persuade a mailbox provider that strangers want this mail. **That is
+deception aimed at the recipient's spam filter**, and it is the same category
+of thing as the LinkedIn automation this product refuses to do. The brief rules
+it out and the brief is right.
+
+What replaces it: verify the domain (SPF, DKIM, DMARC, alignment), start at a
+low daily volume, climb slowly, and watch REAL bounce and complaint rates.
+
+⚠️ **The score is `Setup and sending health`, never inbox placement.** Nobody
+outside Google and Microsoft can measure whether a message reached an inbox; a
+vendor showing "94% inbox placement" is extrapolating from seed accounts that
+are not your customers. `SCORE_CAVEAT` ships with the number, says so, and is
+asserted by a test.
+
+### D40. `unknown` is not `fail`, and scores half
+
+DKIM cannot be verified without knowing the selector, which is chosen by
+whoever configured the domain and cannot be enumerated from DNS. A domain using
+a custom selector is correctly set up and simply invisible to us.
+
+Scoring it zero would panic a working customer and teach them to distrust every
+other check on the page; scoring it full would tell someone with no DKIM at all
+that they are fine. **Half is the honest position.** The same applies to any
+DNS lookup that fails outright — a resolver timeout says nothing about the
+customer's configuration.
+
+### D41. Two thresholds taken from the standards, not from taste
+
+- **Two SPF records is a hard failure.** RFC 7208 requires receivers to treat a
+  domain publishing more than one as `permerror` and stop authenticating it
+  entirely. It is a common, invisible misconfiguration: someone adds a second
+  record for a new provider instead of merging.
+- **DMARC `p=none` warns rather than fails.** It is monitoring only, but it
+  satisfies the 2024 Google/Yahoo bulk-sender requirement and is the correct
+  FIRST step. Failing it would push customers straight to `p=reject`, which
+  without prior monitoring blocks their own legitimate mail.
+
+Also: **rates return `null` below 20 messages.** One bounce in three sends is
+not a 33% bounce rate, and reporting it as one would pause a brand-new mailbox
+on its first afternoon — exactly when a ramping account looks worst and matters
+least.
+
+### D42. The domain rollup reports the worst mailbox, not the average
+
+Reputation is shared across a sending domain: one mailbox at a 12% bounce rate
+damages every other mailbox on that domain. The smoke test makes it concrete —
+two healthy mailboxes (95, 90) and one damaged one (30) average to a
+comfortable **71.7**, which is precisely the number that would hide the mailbox
+that needs stopping.
+
 ## 14. Migrations added by the platform build
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0087 | `0087_email_readiness.sql` | M5 P13 | `email_check_status` enum; ramp columns on `email_accounts` (conservative defaults 20/+5/200); `email_domain_checks` (keyed by DOMAIN, not mailbox), `email_readiness_checks` (history, not a snapshot); `email_account_volume()`, `email_sent_today()` (the mailbox's own day, not the server's) and `email_domain_health()` (worst mailbox, not the average). |
 | 0086 | `0086_email_messages.sql` | M5 P14 | `email_message_status`, `email_suppression_reason` enums; `email_messages` (content frozen after send by trigger, unique idempotency key per workspace), `email_suppressions`; `claim_email_messages()` (suppression check INSIDE the claim) and `reap_expired_email_claims()` (→ `needs_verification`, **never** back to `queued`). |
 | 0085 | `0085_email_accounts.sql` | M5 P11 | `email_provider`, `email_account_scope`, `email_account_status` enums; `email_accounts` (many mailboxes per workspace, each with scope, schedule, limits, health) and `email_account_secrets` (service-role only, **no RLS policy at all**). Purely additive. |
 | 0084 | `0084_crm_forecast.sql` | M4 P10.5 | `crm_forecast_by_period()` — weighted pipeline by expected close MONTH, with undated deals returned under a NULL period rather than dropped — and `crm_win_rates()` — won ÷ closed, bucketed by `closed_at`, open deals excluded, NULL rather than 0% when nothing closed. Two functions; no table touched, none replaced. |
@@ -868,7 +923,7 @@ adding 24h to a UTC instant: across a DST change a day is 23 or 25 hours.
 | M2 | CRM core: identity, ingestion, dedup, operations | ✅ **Complete** (2026-08-30). Two UIs deferred: DR12, DR14 |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ✅ **Complete** (2026-08-30) |
 | M4 | CRM reporting foundation & dashboards | ✅ **Phases 9, 10 and 10.5 complete.** 6 of 7 criteria met; criterion 3 (auto-reply exclusion) belongs to M6, where the pre-filter runs before anything is written |
-| M5 | Email foundation | 🔨 **Phases 11 ✅, 12 ✅ (SMTP+IMAP), 14 ✅ (message engine).** 4 of 5 criteria met. Phase 13 (readiness) is the remainder; Gmail/Microsoft adapters blocked on Google verification + CASA (D33) |
+| M5 | Email foundation | ✅ **COMPLETE.** Phases 11, 12 (SMTP+IMAP), 13 (readiness) and 14 (message engine). All 5 criteria met. Gmail/Microsoft adapters deferred on Google verification + CASA (D33) — SMTP is the shipping path |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
 | M7 | Flow engine, Hubble boundary, visual builder | ⬜ Not started |
 | M8 | Integrations, Calendly, unified inbox | ⬜ Not started |
@@ -894,7 +949,7 @@ adding 24h to a UTC instant: across a DST change a day is 23 or 25 hours.
 | 2 | Capability model gates features per provider (SMTP w/o IMAP reports no replies) | ✅ `lib/email/capabilities.ts` + 15 tests, and **enforced by the adapter**: `syncReplies` on an account with no IMAP host throws `EmailCapabilityError` rather than returning an empty list that would read as "no replies yet" (`tests/integration/email-smtp.test.ts`). SMTP alone reports `replies: unconfigured`; adding `imapHost` promotes it to `supported`; an SMTP *host* alone does not, because submission settings say nothing about reading. `webhookEvents` stays `unsupported` for SMTP even with IMAP — IMAP is polling and no configuration would give a plain mail server a push channel |
 | 3 | Kill-and-retry on the send worker produces exactly one delivered message | ✅ `tests/integration/email-send-worker.test.ts` — a message is claimed, the provider ACCEPTS it, and the process dies before recording; the claim is reaped to `needs_verification` and a restarted worker sends nothing. **Counted at the mail server, not in our own rows:** GreenMail logs exactly ONE client submission of that subject. Guaranteed by at-most-once (D36), not by dedupe |
 | 4 | A suppressed recipient is never sent to, for every suppression reason | ✅ All five reasons, each tested twice — refused at enqueue AND refused at claim for a message queued BEFORE the suppression existed, which is the race the in-claim check closes. Zero suppressed subjects reach the mail server. Suppression is proven not to leak across workspaces (`0086` smoke) |
-| 5 | Readiness state transitions + domain rollup tested; ramp limits enforced | ⬜ Phase 13 — the nine states, the `from_domain` index and the scheduler that will enforce ramp all exist; nothing computes readiness yet |
+| 5 | Readiness state transitions + domain rollup tested; ramp limits enforced | ✅ Transitions in `tests/unit/email-readiness.test.ts` (precedence is most-severe-first: a disconnected mailbox with a 50% bounce rate reports DISCONNECTED, not WARNING). Rollup in `supabase/smoke/0087` — two healthy mailboxes and one damaged one average to 71.7, and the rollup surfaces the worst (30) instead. **Ramp enforced by the real enqueue path** (`tests/integration/email-readiness.test.ts`): a mailbox at its allowance is refused with `daily_limit` and no row is written |
 
 ### M3 acceptance criteria
 
@@ -983,7 +1038,7 @@ Recorded, never dropped.
 
 ## 18. Test status
 
-`npx vitest run tests/unit` — **1,870 passed, 0 failed**, 104 files. Integration adds the SMTP adapter and the send worker, both run against a real mail server in Docker.
+`npx vitest run tests/unit` — **1,932 passed, 0 failed**, 107 files. Integration adds the SMTP adapter, the send worker and the readiness runner, all run against a real mail server in Docker.
 `npm run typecheck` passes. `npm run lint` reports 0 errors (95 pre-existing
 warnings, all in generated or vendored files). `npm run build` passes.
 

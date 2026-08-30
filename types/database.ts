@@ -3364,6 +3364,11 @@ export type Database = {
           min_delay_seconds: number
           owner_user_id: string
           provider: Database["public"]["Enums"]["email_provider"]
+          ramp_daily_increment: number
+          ramp_enabled: boolean
+          ramp_initial_daily: number
+          ramp_started_on: string | null
+          ramp_target_daily: number
           reply_to_email: string | null
           scope: Database["public"]["Enums"]["email_account_scope"]
           secret_reference: string
@@ -3395,6 +3400,11 @@ export type Database = {
           min_delay_seconds?: number
           owner_user_id: string
           provider: Database["public"]["Enums"]["email_provider"]
+          ramp_daily_increment?: number
+          ramp_enabled?: boolean
+          ramp_initial_daily?: number
+          ramp_started_on?: string | null
+          ramp_target_daily?: number
           reply_to_email?: string | null
           scope?: Database["public"]["Enums"]["email_account_scope"]
           secret_reference?: string
@@ -3426,6 +3436,11 @@ export type Database = {
           min_delay_seconds?: number
           owner_user_id?: string
           provider?: Database["public"]["Enums"]["email_provider"]
+          ramp_daily_increment?: number
+          ramp_enabled?: boolean
+          ramp_initial_daily?: number
+          ramp_started_on?: string | null
+          ramp_target_daily?: number
           reply_to_email?: string | null
           scope?: Database["public"]["Enums"]["email_account_scope"]
           secret_reference?: string
@@ -3440,6 +3455,71 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "email_accounts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_domain_checks: {
+        Row: {
+          checked_at: string
+          created_at: string
+          dkim_detail: string | null
+          dkim_selector: string | null
+          dkim_status: Database["public"]["Enums"]["email_check_status"]
+          dmarc_detail: string | null
+          dmarc_policy: string | null
+          dmarc_record: string | null
+          dmarc_status: Database["public"]["Enums"]["email_check_status"]
+          domain: string
+          id: string
+          spf_detail: string | null
+          spf_record: string | null
+          spf_status: Database["public"]["Enums"]["email_check_status"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          checked_at?: string
+          created_at?: string
+          dkim_detail?: string | null
+          dkim_selector?: string | null
+          dkim_status?: Database["public"]["Enums"]["email_check_status"]
+          dmarc_detail?: string | null
+          dmarc_policy?: string | null
+          dmarc_record?: string | null
+          dmarc_status?: Database["public"]["Enums"]["email_check_status"]
+          domain: string
+          id?: string
+          spf_detail?: string | null
+          spf_record?: string | null
+          spf_status?: Database["public"]["Enums"]["email_check_status"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          checked_at?: string
+          created_at?: string
+          dkim_detail?: string | null
+          dkim_selector?: string | null
+          dkim_status?: Database["public"]["Enums"]["email_check_status"]
+          dmarc_detail?: string | null
+          dmarc_policy?: string | null
+          dmarc_record?: string | null
+          dmarc_status?: Database["public"]["Enums"]["email_check_status"]
+          domain?: string
+          id?: string
+          spf_detail?: string | null
+          spf_record?: string | null
+          spf_status?: Database["public"]["Enums"]["email_check_status"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_domain_checks_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -3558,6 +3638,66 @@ export type Database = {
           },
           {
             foreignKeyName: "email_messages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_readiness_checks: {
+        Row: {
+          account_id: string
+          bounce_rate: number | null
+          checked_at: string
+          checks: Json
+          complaint_rate: number | null
+          daily_limit: number | null
+          id: string
+          score: number
+          sent_24h: number
+          sent_7d: number
+          state: Database["public"]["Enums"]["email_account_status"]
+          workspace_id: string
+        }
+        Insert: {
+          account_id: string
+          bounce_rate?: number | null
+          checked_at?: string
+          checks?: Json
+          complaint_rate?: number | null
+          daily_limit?: number | null
+          id?: string
+          score: number
+          sent_24h?: number
+          sent_7d?: number
+          state: Database["public"]["Enums"]["email_account_status"]
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string
+          bounce_rate?: number | null
+          checked_at?: string
+          checks?: Json
+          complaint_rate?: number | null
+          daily_limit?: number | null
+          id?: string
+          score?: number
+          sent_24h?: number
+          sent_7d?: number
+          state?: Database["public"]["Enums"]["email_account_status"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_readiness_checks_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_readiness_checks_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -6520,6 +6660,31 @@ export type Database = {
         Args: { p_provider: string; p_user_id: string }
         Returns: boolean
       }
+      email_account_volume: {
+        Args: { p_account_id: string; p_since: string }
+        Returns: {
+          bounced: number
+          complained: number
+          failed: number
+          sent: number
+        }[]
+      }
+      email_domain_health: {
+        Args: { p_workspace_id: string }
+        Returns: {
+          average_score: number
+          blocked: number
+          domain: string
+          mailboxes: number
+          ready: number
+          worst_score: number
+          worst_state: Database["public"]["Enums"]["email_account_status"]
+        }[]
+      }
+      email_sent_today: {
+        Args: { p_account_id: string; p_timezone?: string }
+        Returns: number
+      }
       enqueue_job: { Args: { p_job_id: string }; Returns: undefined }
       enqueue_research_run: { Args: { p_run_id: string }; Returns: undefined }
       expired_export_paths: {
@@ -7034,6 +7199,12 @@ export type Database = {
         | "paused"
         | "disconnected"
         | "error"
+      email_check_status:
+        | "pass"
+        | "warn"
+        | "fail"
+        | "unknown"
+        | "not_applicable"
       email_message_status:
         | "queued"
         | "sending"
@@ -7289,6 +7460,7 @@ export const Constants = {
         "disconnected",
         "error",
       ],
+      email_check_status: ["pass", "warn", "fail", "unknown", "not_applicable"],
       email_message_status: [
         "queued",
         "sending",

@@ -68,6 +68,13 @@ export type EmailAccount = {
   sendDays: number[]
   healthScore: number | null
   healthCheckedAt: string | null
+  // Gradual volume increase (Phase 13). The honest alternative to a warmup
+  // network: start low, climb slowly, watch real bounce and complaint rates.
+  rampEnabled: boolean
+  rampStartedOn: string | null
+  rampInitialDaily: number
+  rampDailyIncrement: number
+  rampTargetDaily: number
   lastSyncAt: string | null
   lastSendAt: string | null
   lastError: string | null
@@ -86,7 +93,7 @@ export type EmailAccount = {
  * there is no join here that could pull it in.
  */
 const ACCOUNT_COLUMNS =
-  'id, workspace_id, provider, scope, owner_user_id, display_name, from_email, from_name, reply_to_email, from_domain, status, configuration, daily_send_limit, hourly_send_limit, min_delay_seconds, timezone, send_window_start, send_window_end, send_days, health_score, health_checked_at, last_sync_at, last_send_at, last_error, connected_at, secret_reference'
+  'id, workspace_id, provider, scope, owner_user_id, display_name, from_email, from_name, reply_to_email, from_domain, status, configuration, daily_send_limit, hourly_send_limit, min_delay_seconds, timezone, send_window_start, send_window_end, send_days, health_score, health_checked_at, last_sync_at, last_send_at, last_error, connected_at, secret_reference, ramp_enabled, ramp_started_on, ramp_initial_daily, ramp_daily_increment, ramp_target_daily'
 
 type AccountRow = {
   id: string
@@ -110,6 +117,11 @@ type AccountRow = {
   send_days: number[] | null
   health_score: number | null
   health_checked_at: string | null
+  ramp_enabled: boolean
+  ramp_started_on: string | null
+  ramp_initial_daily: number
+  ramp_daily_increment: number
+  ramp_target_daily: number
   last_sync_at: string | null
   last_send_at: string | null
   last_error: string | null
@@ -141,6 +153,11 @@ function toAccount(row: AccountRow): EmailAccount {
     sendDays: row.send_days ?? [],
     healthScore: row.health_score,
     healthCheckedAt: row.health_checked_at,
+    rampEnabled: row.ramp_enabled,
+    rampStartedOn: row.ramp_started_on,
+    rampInitialDaily: row.ramp_initial_daily,
+    rampDailyIncrement: row.ramp_daily_increment,
+    rampTargetDaily: row.ramp_target_daily,
     lastSyncAt: row.last_sync_at,
     lastSendAt: row.last_send_at,
     lastError: row.last_error,
@@ -259,6 +276,10 @@ export async function createEmailAccount(input: CreateEmailAccountInput): Promis
       status: 'ramping',
       configuration: input.configuration ?? {},
       connected_at: new Date().toISOString(),
+      // ⚠️ The ramp starts the day the mailbox connects. Leaving it null would
+      // pin the account to its opening allowance forever, since day zero would
+      // never arrive.
+      ramp_started_on: new Date().toISOString().slice(0, 10),
     })
     .select(ACCOUNT_COLUMNS)
     .single()

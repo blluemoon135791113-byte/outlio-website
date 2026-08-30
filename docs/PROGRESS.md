@@ -8040,3 +8040,71 @@ the dedupe that would make it safe.
 
 1,870 unit tests plus the live send-worker suite, typecheck, lint (0 errors)
 and build all pass.
+
+---
+
+## M5 Phase 13 — readiness, ramp and the safety gate ✅ — **M5 COMPLETE**
+
+Migration `0087_email_readiness.sql`, `lib/email/dns.ts`, `readiness.ts`,
+`ramp.ts`, `readiness-runner.ts`, plus ramp enforcement wired into
+`enqueueEmail`. **All five M5 criteria are met.**
+
+### The line the brief drew, and why it is right
+
+A warmup network is a pool of accounts emailing each other and marking the
+results as important — manufacturing engagement no human produced, to persuade
+a spam filter that strangers want this mail. That is deception aimed at the
+recipient's provider, the same category as the LinkedIn automation this product
+already refuses. No warmup network was built.
+
+**And the score never claims inbox placement.** Nobody outside Google and
+Microsoft can measure it; "94% inbox placement" is extrapolation from seed
+accounts that are not your customers. Claiming it would be inventing data. The
+caveat ships with the number and a test asserts it.
+
+### Criterion 5, both halves
+
+- **State transitions** — precedence is most-severe-first. A disconnected
+  mailbox with a 50% bounce rate reports DISCONNECTED, not WARNING; telling
+  someone to clean their list when the real problem is that we cannot sign in
+  sends them to fix the wrong thing.
+- **Ramp enforced by the scheduler** — proven through the real `enqueueEmail`
+  path, not a unit stub: a mailbox at its allowance is refused with
+  `daily_limit`, and **no row is written**, so nothing sends later.
+
+Enforcement is at enqueue rather than at send. Refusing at send time would
+leave the message claimed and then failed — burning an attempt, writing an
+error the customer did not cause, and saying nothing until after the fact.
+
+### Decisions
+
+- **`unknown` is not `fail`, and scores half** (D40). DKIM cannot be verified
+  without the selector, which cannot be enumerated. Zero would panic a working
+  customer; full would reassure someone with no DKIM at all.
+- **Two SPF records is a hard failure** (D41) — RFC 7208 makes it `permerror`
+  and receivers stop authenticating the domain entirely.
+- **DMARC `p=none` warns, does not fail.** It is the correct first step;
+  failing it pushes customers to `p=reject` and blocks their own mail.
+- **Rates return `null` below 20 messages.** One bounce in three sends is not
+  33%, and reporting it as such would pause a new mailbox on day one.
+- **The rollup reports the worst mailbox, not the average** (D42). Two healthy
+  mailboxes and one damaged one average to 71.7 — the number that would hide
+  the one needing attention.
+- **An unassessed mailbox is not blocked.** Otherwise the first campaign after
+  connecting an account fails for a reason nobody can act on.
+- **Assessment never overwrites `disconnected` or `paused`** — those are
+  decisions a person made, and a computed state must not silently un-pause a
+  mailbox someone deliberately stopped.
+
+### M5 final state
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Secrets unreadable via any API | ✅ 4 read shapes denied in Postgres AND on live PostgREST |
+| 2 | Capability model gates per provider | ✅ 15 unit tests + adapter enforcement |
+| 3 | Kill-and-retry → exactly one delivered | ✅ counted at the mail server |
+| 4 | Suppressed recipient never sent to | ✅ all 5 reasons, twice each |
+| 5 | Readiness transitions, rollup, ramp | ✅ unit + smoke + live enqueue path |
+
+1,932 unit tests plus three live integration suites, typecheck, lint (0 errors)
+and build all pass.
