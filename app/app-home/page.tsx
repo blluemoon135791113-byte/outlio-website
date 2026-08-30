@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 
 import Footer from '@/app/components/Footer'
 import Nav from '@/app/components/Nav'
 import { DashboardPreview } from '@/components/leadengine/DashboardPreview'
 import { LeadEngineHero } from '@/components/leadengine/LeadEngineHero'
+import { LeadLibrary } from '@/components/leadengine/LeadLibrary'
 import { Pricing } from '@/components/leadengine/Pricing'
 import { appUrl } from '@/lib/site'
 
@@ -71,34 +71,7 @@ export default function LeadEnginePage() {
 
       <Pricing />
 
-      {/* ---- Final CTA ------------------------------------------------------ */}
-      <section className="bg-cream px-4 py-20 sm:py-28">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
-            Start with your next search
-          </h2>
-          <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
-            Try the complete workflow — capture, research, Hubble and export —
-            with 10 credits for three days. A payment method is required, but
-            there is no charge until the trial ends, and your LinkedIn
-            credentials are never requested.
-          </p>
-          <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link
-              href="/pricing"
-              className="rounded-full bg-ink px-8 py-4 text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent"
-            >
-              Start 3-day trial
-            </Link>
-            <Link
-              href="/sign-in"
-              className="rounded-full border border-ink px-8 py-4 text-base font-semibold transition-colors duration-150 hover:bg-paper"
-            >
-              Sign in
-            </Link>
-          </div>
-        </div>
-      </section>
+      <LeadLibrary />
 
       <Footer surface="leadengine" />
     </div>

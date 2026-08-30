@@ -13,6 +13,7 @@ import { signOutAction } from '@/lib/auth/actions'
 
 function pageLabel(pathname: string) {
   if (pathname.startsWith('/admin')) return 'User administration'
+  if (pathname.startsWith('/crm/contacts')) return 'Contacts'
   if (pathname.startsWith('/crm/pipeline')) return 'Pipeline'
   if (pathname.startsWith('/crm')) return 'CRM'
   if (pathname.startsWith('/dashboard/extract/new')) return 'New extraction'

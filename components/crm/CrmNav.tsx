@@ -7,11 +7,14 @@ import { usePathname } from 'next/navigation'
  * CRM section navigation.
  *
  * ⚠️ ONLY SURFACES THAT EXIST ARE LISTED. The M9 route plan also names
- * /crm/contacts, /crm/companies, /crm/tasks, /crm/lists, /crm/duplicates and
- * /crm/reports; each appears here as its phase lands. A nav full of links to
- * nothing teaches people the product is broken.
+ * /crm/companies, /crm/tasks, /crm/lists, /crm/duplicates and /crm/reports;
+ * each appears here as its phase lands. A nav full of links to nothing teaches
+ * people the product is broken.
  */
-const SECTIONS = [{ href: '/crm/pipeline', label: 'Pipeline' }] as const
+const SECTIONS = [
+  { href: '/crm/contacts', label: 'Contacts' },
+  { href: '/crm/pipeline', label: 'Pipeline' },
+] as const
 
 export function CrmNav() {
   const pathname = usePathname()
