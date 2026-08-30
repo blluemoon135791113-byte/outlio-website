@@ -237,6 +237,16 @@ describe('normalizePhoneNumber', () => {
     }
   })
 
+  it('separates "not a number" from "cannot tell which country"', () => {
+    // The distinction decides whether a CSV importer keeps the value. Prose
+    // must not survive into a phone field; a real but unregionalized number
+    // must, because a human can still dial it.
+    for (const prose of ['call reception', 'n/a', 'see notes', 'ext 42', '-']) {
+      expect(normalizePhoneNumber(prose)?.reason).toBe('invalid')
+    }
+    expect(normalizePhoneNumber('07400 123456')?.reason).toBe('ambiguous_no_country')
+  })
+
   it('gives an identity key only when it is certain', () => {
     expect(normalizePhoneNumber('+447400123456')?.identityKey).toBe('+447400123456')
     expect(normalizePhoneNumber('07400 123456')?.identityKey).toBeNull()

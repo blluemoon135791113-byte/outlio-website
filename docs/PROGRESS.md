@@ -7078,3 +7078,80 @@ written against real generated types rather than hand-declared ones.
 - `npx vitest run tests/unit` — 1,687 across 95 files.
   `npx vitest run tests/integration/crm-identity.test.ts` — 25.
   `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass.
+
+## 2026-08-30 — M2 Phase 3 (part 1): ingestion schema and the CSV engine
+
+The ingestion contract — extraction (or CSV) → lead batch → normalization →
+dedup → canonical contact → batch membership — plus the CSV engine. **No CSV
+round-tripping:** nothing in this path writes a file and reads it back. The CSV
+export that already exists is for the user, never a stage in our own pipeline.
+
+### Added
+
+- **`supabase/migrations/0072_crm_ingestion.sql`** — `crm_lead_batches`,
+  `crm_batch_members`, `crm_lists`, `crm_list_members`, `crm_import_jobs`, and
+  two functions. Additive: no column added to an existing table, no function
+  replaced.
+
+  - `crm_ingest_contacts(workspace, batch, jsonb)` — the set-based atomic
+    upsert. A 500-lead extraction is 500 matches, 500 inserts and 1,000 child
+    inserts; in application code that is thousands of round trips, and
+    `after()` can process two extractions for one workspace concurrently, so a
+    read-then-write would let both create the same person. One statement per
+    batch with the unique indexes as arbiter — the same reasoning 0043 records
+    for companies. It receives values already normalized by TypeScript.
+  - `crm_undo_batch(workspace, batch)` — import rollback.
+
+- **`lib/crm/csv-import.ts`** — an RFC 4180 reader plus mapping and per-row
+  validation. Handles what real tools emit: Excel's BOM (which otherwise turns
+  the first header into `﻿name` and silently empties the whole mapping),
+  European semicolons, tabs, CRLF, quoted commas and newlines, doubled quotes.
+
+- `tests/unit/crm-csv-import.test.ts` — 31 tests.
+
+### Decisions
+
+- **A batch is history; a list is a working set.** A batch records what one
+  ingestion run contained, fixed forever — the unit M4's funnel groups by. A
+  list is curated. Conflating them means you cannot remove someone from a list
+  without rewriting what an import contained.
+
+- **Undo deletes only what an import CREATED.**
+  `crm_batch_members.created_contact` is true only when that batch created the
+  contact. A contact the import merely MATCHED already existed and may since
+  have been emailed, assigned or moved through a pipeline; deleting them
+  because an import that only recognised them was undone would destroy work
+  nobody asked to undo. Those lose their batch membership and nothing else.
+
+- **Partial failure is the normal case.** A 5,000-row file with nine bad rows
+  imports 4,991 people and reports exactly which nine failed and why. Refusing
+  the whole file teaches users to strip their data until it is accepted, losing
+  information nobody wanted lost. The error report is capped at 100 entries;
+  the counts stay honest regardless, and `summarizePlan` reports whether the
+  report was truncated.
+
+- **Auto-mapping is a suggestion, never a decision.** A mapping that silently
+  reads "Owner" as a contact name imports the salesperson as the lead, and
+  nothing downstream can tell that happened. Each field is claimed at most
+  once, so a file with both "Email" and "Work Email" maps one and leaves the
+  other to the user.
+
+### Fixed
+
+- `normalizePhoneNumber` returned `ambiguous_no_country` for "call reception",
+  "n/a" and "see notes" — anything unparseable, because without a country
+  there is nothing to parse against, so the region branch was reached before
+  any sanity check. Callers could not distinguish a real number they should
+  keep from prose they should drop. It now returns `invalid` for anything with
+  fewer than six digits, checked BEFORE the region branch. Caught by a CSV test
+  asserting that a bad phone costs the number, not the person.
+
+### Verification
+
+- `npx vitest run tests/unit` — **1,719 tests across 96 files, all passing**
+  (32 new). `npm run typecheck` passes; `npm run lint` reports 0 errors.
+- Migration staged in `supabase/APPLY_PENDING.sql`. The ingestion SERVICE — the
+  TypeScript that reads `extracted_leads` and calls `crm_ingest_contacts` — is
+  deliberately not written yet: without regenerated types it would mean
+  hand-declaring the new function and then deleting it, which is what 0070
+  taught.

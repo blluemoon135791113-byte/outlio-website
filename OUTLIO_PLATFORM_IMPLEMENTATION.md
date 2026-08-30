@@ -10,10 +10,10 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M2 Phase 2 complete)
+- **Last updated:** 2026-08-30 (M2 Phase 3 in progress)
 - **Next milestone:** M2 — CRM core: identity, ingestion, dedup, operations
-- **Blocked on a human:** plan seat counts (Q6) only. `0070` and `0071` are
-  both applied and types are regenerated.
+- **Blocked on a human:** apply migration `0072` (`supabase/APPLY_PENDING.sql`)
+  then `npm run db:types`; plan seat counts (Q6). `0070` and `0071` are applied.
 
 ---
 
@@ -410,6 +410,37 @@ it. It is a rule, not an enforcement point — a policy layer cannot put a WHERE
 clause on someone else's query. There is nothing to scope yet: no CRM record
 exists. Every M2 query that returns workspace data MUST consult `dataScope`.
 
+### D15. A batch is history; a list is a working set
+`crm_lead_batches` records what one ingestion run contained, fixed forever —
+it is the unit M4's funnel groups by (extracted → canonical → emailed →
+replied → won). `crm_lists` is a set a person curates.
+
+*Rationale:* conflating them means you cannot remove someone from a list
+without rewriting what an import contained, and the funnel starts reporting
+numbers that change retroactively.
+
+### D16. Undo deletes only what an import created
+`crm_batch_members.created_contact` is true only when that batch created the
+contact. `crm_undo_batch` soft-deletes those and merely removes membership for
+everyone else.
+
+*Rationale:* a contact an import MATCHED already existed, and may since have
+been emailed, assigned or moved through a pipeline. Deleting them because an
+import that only recognised them was undone would destroy work nobody asked to
+undo.
+
+### D17. "Not a number" and "unknown country" are different answers
+`normalizePhoneNumber` returns `invalid` for anything with fewer than six
+digits, checked **before** the region branch, and `ambiguous_no_country` only
+for a plausible number it cannot regionalize.
+
+*Rationale:* without a country there is nothing to parse against, so every
+unparseable string used to come back `ambiguous_no_country` — including "call
+reception" and "n/a", which CSV phone columns are full of. Callers could not
+tell a real number they should keep from prose they should drop, and prose
+ended up in a phone field that a dialler, an export and a duplicate check all
+have to pretend is a number.
+
 ### D13. `crm_companies` is not `companies`
 They are different entities that share a word, and both stay.
 
@@ -483,6 +514,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0072 | `0072_crm_ingestion.sql` | M2 P3 | `crm_lead_batches`, `crm_batch_members`, `crm_lists`, `crm_list_members`, `crm_import_jobs`; `crm_ingest_contacts()` (set-based atomic upsert) and `crm_undo_batch()`; RLS on all five. **Additive — no column added to an existing table, no function replaced.** |
 | 0071 | `0071_crm_core_identity.sql` | M2 P2 | `crm_record_source`, `crm_custom_field_type`, `crm_custom_field_entity` enums; `crm_companies`, `crm_contacts`, `crm_contact_emails`, `crm_contact_phones`, `crm_contact_company_relationships`, `crm_tags`, `crm_contact_tags`, `crm_custom_field_definitions`, `crm_custom_field_values`, `crm_saved_views`; RLS on all ten. **Purely additive — touches no existing table and replaces no function.** |
 | 0070 | `0070_workspaces.sql` | M1 | `workspace_role` enum; `workspaces`, `workspace_memberships`, `workspace_invitations`, `workspace_feature_flags`; `is_workspace_member()`, `workspace_role_of()`, `redeem_workspace_invitation()`, `protect_workspace_columns()`, `guard_last_workspace_owner()`; RLS on all four; `handle_new_user()` extended; idempotent backfill |
 
@@ -494,7 +526,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 |---|---|---|
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
-| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 **Phase 2 ✅ complete.** Phases 3–5 not started |
+| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phase 2 ✅. **Phase 3 in progress** — schema + CSV engine done, ingestion service pending `0072` |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Not started |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
@@ -543,6 +575,7 @@ Recorded, never dropped.
 | DR8 | VoIP / dialer adapter for call logging | M8 v2.1 | M8 Phase 25 | Adapter candidate. Never invent telephony capability. |
 | DR9 | Ownership transfer flow | M1 | M2 | The `workspace.transfer_ownership` permission and the last-owner guard exist; the UI does not. An owner can promote a second owner only via support today. |
 | DR10 | `crm_saved_views.definition` validation | M2 P2 | M2 P3 | Its schema IS the list query language. Inventing one before the query builder exists would mean guessing. Nothing reads the column until then; when it does, it must validate on READ as well as write — a stored filter is untrusted input however it got there. |
+| DR12 | CSV import UI (upload, mapping screen, validation report, undo button) | M2 P3 | M2 P3 (next) | The engine — parse, suggest mapping, validate, plan, ingest, undo — is complete and tested. Only the screens are outstanding. |
 | DR11 | Custom fields on companies and opportunities | M2 P2 | M2 P5 / M3 | The `crm_custom_field_entity` enum and the values table already carry all three entities, so no migration is needed later — only the UI and the write path. |
 
 ---

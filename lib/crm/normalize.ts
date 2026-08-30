@@ -255,6 +255,21 @@ export function normalizePhoneNumber(
     reason,
   })
 
+  // ⚠️ CHECKED BEFORE THE REGION BRANCH, AND THAT ORDER MATTERS.
+  //
+  // Without a country there is nothing to parse against, so every unparseable
+  // string would come back `ambiguous_no_country` — including "call
+  // reception", "n/a" and "see notes", which a CSV column is full of. Callers
+  // then cannot tell "a real number we cannot regionalize" (keep it: a human
+  // can still dial it) from "not a number at all" (drop it, or prose ends up
+  // in a phone field that a dialler, an export and a duplicate check must all
+  // pretend is a number).
+  //
+  // Six is the shortest a real contact number gets. Shorter strings are
+  // extensions and typos, not numbers we could ever call.
+  const digitCount = (raw.match(/\d/g) ?? []).length
+  if (digitCount < 6) return miss('invalid')
+
   // Extensions are part of a dial string but not of an identity, and
   // libphonenumber keeps them out of E.164. Strip them before parsing so
   // "+1 555 0100 ext. 42" is not simply rejected.
