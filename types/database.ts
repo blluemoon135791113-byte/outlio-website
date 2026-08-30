@@ -1535,6 +1535,62 @@ export type Database = {
           },
         ]
       }
+      crm_batch_members: {
+        Row: {
+          batch_id: string
+          contact_id: string
+          created_at: string
+          created_contact: boolean
+          source_lead_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          batch_id: string
+          contact_id: string
+          created_at?: string
+          created_contact?: boolean
+          source_lead_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          batch_id?: string
+          contact_id?: string
+          created_at?: string
+          created_contact?: boolean
+          source_lead_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_batch_members_batch_fk"
+            columns: ["batch_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_lead_batches"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_batch_members_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_batch_members_source_lead_id_fkey"
+            columns: ["source_lead_id"]
+            isOneToOne: false
+            referencedRelation: "extracted_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_batch_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_companies: {
         Row: {
           created_at: string
@@ -2016,6 +2072,234 @@ export type Database = {
           },
           {
             foreignKeyName: "crm_custom_field_values_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_import_jobs: {
+        Row: {
+          batch_id: string | null
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          errors: Json
+          filename: string
+          id: string
+          mapping: Json
+          rows_imported: number
+          rows_skipped: number
+          rows_total: number
+          status: string
+          undone_at: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          batch_id?: string | null
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          errors?: Json
+          filename: string
+          id?: string
+          mapping?: Json
+          rows_imported?: number
+          rows_skipped?: number
+          rows_total?: number
+          status?: string
+          undone_at?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          batch_id?: string | null
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          errors?: Json
+          filename?: string
+          id?: string
+          mapping?: Json
+          rows_imported?: number
+          rows_skipped?: number
+          rows_total?: number
+          status?: string
+          undone_at?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_import_jobs_batch_fk"
+            columns: ["batch_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_lead_batches"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_import_jobs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_lead_batches: {
+        Row: {
+          contacts_created: number
+          contacts_matched: number
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          name: string
+          rows_seen: number
+          rows_skipped: number
+          source: Database["public"]["Enums"]["crm_record_source"]
+          source_extraction_job_id: string | null
+          source_import_job_id: string | null
+          undone_at: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          contacts_created?: number
+          contacts_matched?: number
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name: string
+          rows_seen?: number
+          rows_skipped?: number
+          source: Database["public"]["Enums"]["crm_record_source"]
+          source_extraction_job_id?: string | null
+          source_import_job_id?: string | null
+          undone_at?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          contacts_created?: number
+          contacts_matched?: number
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name?: string
+          rows_seen?: number
+          rows_skipped?: number
+          source?: Database["public"]["Enums"]["crm_record_source"]
+          source_extraction_job_id?: string | null
+          source_import_job_id?: string | null
+          undone_at?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_lead_batches_source_extraction_job_id_fkey"
+            columns: ["source_extraction_job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_lead_batches_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_list_members: {
+        Row: {
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          list_id: string
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          list_id: string
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          list_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_list_members_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_list_members_list_fk"
+            columns: ["list_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_lists"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_list_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_lists: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          name: string
+          normalized_name: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          normalized_name: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          normalized_name?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_lists_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -4884,6 +5168,22 @@ export type Database = {
           granted: number
           remaining: number
           used: number
+        }[]
+      }
+      crm_ingest_contacts: {
+        Args: { p_batch_id: string; p_contacts: Json; p_workspace_id: string }
+        Returns: {
+          contact_id: string
+          created: boolean
+          matched_by: string
+          ref: string
+        }[]
+      }
+      crm_undo_batch: {
+        Args: { p_batch_id: string; p_workspace_id: string }
+        Returns: {
+          contacts_deleted: number
+          memberships_removed: number
         }[]
       }
       disconnect_integration: {
