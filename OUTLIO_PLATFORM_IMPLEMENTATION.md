@@ -10,7 +10,7 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M4 Phase 10 complete)
+- **Last updated:** 2026-08-30 (M4 Phase 10.5 complete — M4 closed)
 - **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0083` are all
   applied and types are regenerated.
 - **Next milestone:** M4 — CRM reporting foundation and dashboards.
@@ -657,10 +657,43 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 
 ---
 
+### D29. The forecast is arithmetic, not a model
+
+`crm_forecast_by_period` is `value × probability` grouped by close month, and
+`crm_win_rates` is won ÷ closed. No inference, nothing metered, no credits. The
+brief permits optional Hubble commentary on top, clearly labelled — that is
+commentary ABOUT these numbers and must never become the source of them. **A
+forecast a customer cannot reproduce by hand is one they cannot argue with, and
+a forecast is exactly the thing people need to argue with.**
+
+Three sub-decisions that a reader will otherwise assume are bugs:
+
+- **Undated deals are returned under a NULL period**, not dropped and not
+  bucketed into "this month". They are real pipeline, and a rep with a large
+  undated pipeline has a forecasting problem the report should surface. The UI
+  labels that row *not forecast*.
+- **Win rates bucket by `closed_at`, not `created_at`.** Bucketing by creation
+  would mean this quarter's rate kept changing for months as its deals closed.
+- **Open deals are excluded from win rate entirely.** Counting them as
+  not-yet-won drags every rate toward zero and makes a healthy pipeline look
+  like failure.
+
+Two more in the UI: a trend against a **zero base returns `null`**, never a
+percentage (0 → 5 is not "+500%", and the page shows the previous figure
+instead), and the previous window **never overlaps** the current one, or a
+single shared day would let the same activity count on both sides.
+
 ## 14. Migrations added by the platform build
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0084 | `0084_crm_forecast.sql` | M4 P10.5 | `crm_forecast_by_period()` — weighted pipeline by expected close MONTH, with undated deals returned under a NULL period rather than dropped — and `crm_win_rates()` — won ÷ closed, bucketed by `closed_at`, open deals excluded, NULL rather than 0% when nothing closed. Two functions; no table touched, none replaced. |
+| 0083 | `0083_crm_funnel.sql` | M4 P10 | `crm_batch_funnel()` — one batch from extracted through to won revenue, each step counted from the step above it so the funnel can only narrow — and `crm_pipeline_totals()`. |
+| 0082 | `0082_reporting_aggregates.sql` | M4 P9 | `crm_reporting_daily` (day grain), `crm_reporting_runs`, `crm_rollup_activity_metrics()`, `crm_reconcile_reporting()`. ⚠️ The natural key is a `UNIQUE ... NULLS NOT DISTINCT` constraint over a surrogate `id`, NOT a primary key: `user_id` is NULL on a workspace-total row, and a PK would have made that column `NOT NULL` and the totals impossible to store. |
+| 0081 | `0081_ingest_contact_created.sql` | M4 P9 | Replaces `crm_ingest_contacts` to write a `CONTACT_CREATED` activity inside the create branch. Found by opening a contact's detail page and seeing an EMPTY timeline for a contact that demonstrably existed — every ingested contact was missing its own creation event, so no funnel could start from one. |
+| 0080 | `0080_crm_contact_search.sql` | M3 P8 | `pg_trgm` GIN indexes on contact and company name so search does not table-scan. |
+| 0079 | `0079_crm_collision_guard.sql` | M3 P8 | `crm_collision_settings`, `crm_reassignment_requests`, `crm_record_collision_override()`. |
+| 0078 | `0078_crm_realtime.sql` | M3 P7 | Adds the CRM tables to the realtime publication and sets `REPLICA IDENTITY FULL` so a board subscriber can tell WHICH row changed. |
 | 0077 | `0077_fix_move_errcode.sql` | M3 P6 | Replaces `crm_move_opportunity_stage`. 0076 raised SQLSTATE 40001 for a stale lock; PostgREST retries 40001, so the rejection never reached the client and the request hung until it timed out. Now `check_violation`. |
 | 0076 | `0076_crm_opportunities.sql` | M3 P6 | `crm_pipelines`, `crm_pipeline_stages`, `crm_opportunities` (with `version` for optimistic locking), `crm_opportunity_stage_history` (append-only); `crm_move_opportunity_stage()`. Enums `crm_opportunity_status`, `crm_stage_kind`. |
 | 0075 | `0075_crm_operations.sql` | M2 P5 | `crm_activities` (append-only, frozen attribution), `crm_tasks`, `crm_notes`, `crm_note_mentions`, `crm_notifications`, `crm_notification_preferences`, `crm_audit_logs`; `crm_guard_append_only()` and `crm_erase_contact()`. Adds the append-only trigger to `crm_merge_events`. |
@@ -680,7 +713,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
 | M2 | CRM core: identity, ingestion, dedup, operations | ✅ **Complete** (2026-08-30). Two UIs deferred: DR12, DR14 |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ✅ **Complete** (2026-08-30) |
-| M4 | CRM reporting foundation & dashboards | 🔨 **Phases 9 ✅ and 10 ✅.** Phase 10.5 (forecast detail, CSV/XLSX export) not started |
+| M4 | CRM reporting foundation & dashboards | ✅ **Phases 9, 10 and 10.5 complete.** 6 of 7 criteria met; criterion 3 (auto-reply exclusion) belongs to M6, where the pre-filter runs before anything is written |
 | M5 | Email foundation | ⬜ Not started |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
 | M7 | Flow engine, Hubble boundary, visual builder | ⬜ Not started |
@@ -696,8 +729,8 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | 3 | Auto-replies and bounces excluded from reply-rate metrics | ⬜ M6 — the deterministic pre-filter runs BEFORE anything is written, so an OOO is never recorded as `EMAIL_REPLIED` in the first place |
 | 4 | Batch funnel ties source batch to revenue | ✅ `crm_batch_funnel` — 5 extracted → 3 canonical → 2 engaged (from four emails to two people) → 1 replied → 1 won → 10000.50, proven to narrow rather than widen |
 | 5 | Report queries paginated/indexed | ✅ day-grain aggregate with `(workspace_id, metric, day desc)`; reads never scan the event stream |
-| 6 | Forecast reconciles with raw opportunity data | 🔨 `crm_pipeline_totals` computes the weighted forecast in SQL and is verified (20000 × 40% = 8000.00). Phase 10.5 adds per-period grouping and historical win rates |
-| 7 | Export matches on-screen numbers; blocked for unauthorised roles | ⬜ Phase 10.5 |
+| 6 | Forecast reconciles with raw opportunity data | ✅ `crm_forecast_by_period` grouped by close month, reconciled TWICE: the harness smoke gives forecast total `49900.00` == raw `49900.00`, and a check against the live database gives `12500.50` open / `1250.05` weighted from `crm_forecast_by_period` matching `crm_pipeline_totals` exactly. Undated deals are returned under a NULL period rather than dropped, and `crm_win_rates` gives the historical rate over deals CLOSED in the window |
+| 7 | Export matches on-screen numbers; blocked for unauthorised roles | ✅ `lib/crm/report-export.ts` + `/crm/reports/export`. Verified by DOWNLOADING the files, which is what caught the real defect: `toCsv` drops a column empty on every row, so `Reply rate` vanished from the one-row personal report and the file stopped listing a metric the screen showed. Every column is now pinned and `tests/unit/crm-report-export.test.ts` (13) holds it. `report.export` is checked in the ROUTE, not on the button; `my_activity` needs only `report.own.view` because it contains only the reader's own figures |
 
 ### M3 acceptance criteria
 
@@ -757,6 +790,7 @@ Recorded, never dropped.
 | DR8 | VoIP / dialer adapter for call logging | M8 v2.1 | M8 Phase 25 | Adapter candidate. Never invent telephony capability. |
 | DR9 | Ownership transfer flow | M1 | M2 | The `workspace.transfer_ownership` permission and the last-owner guard exist; the UI does not. An owner can promote a second owner only via support today. |
 | DR10 | `crm_saved_views.definition` validation | M2 P2 | M2 P3 | Its schema IS the list query language. Inventing one before the query builder exists would mean guessing. Nothing reads the column until then; when it does, it must validate on READ as well as write — a stored filter is untrusted input however it got there. |
+| DR18 | XLSX export writer | M4 P10.5 | M9 | `lib/export/sanitize.ts` references an XLSX writer that was never built, and the project has NO spreadsheet library. Adding one is a dependency decision, not something to slip into a reporting phase — SheetJS has had advisories and a licence change, ExcelJS is heavy. CSV opens in every spreadsheet program; XLSX would only add formatting. |
 | DR16 | Collision guard UI on the OUTREACH path, and the settings page | M3 P8 | M6 / M9 | The ASSIGN path is done: `/crm/contacts/[id]` shows the warning, refuses an unacknowledged reassignment, records the override and offers a reassignment request. What remains is the first-outreach check (there is no outreach surface until M6) and a screen for editing the modes — until then they are changed in `crm_collision_settings` directly. |
 | DR15 | A real domain-event bus | M3 P6 | M7 | A3 wants normalized domain events (`crm.opportunity.stage_changed`, …) powering Flows, Reports, Notifications, Realtime and Integrations. Today `crm_activities` IS the event record, written in the same transaction as the change. That satisfies "exactly one activity" but there is no PUBLISHER yet, so nothing can subscribe. The Flow engine in M7 is what needs one; until then a consumer would have nothing to consume. |
 | DR14 | Duplicate Center UI (four tabs, side-by-side merge screen) | M2 P4 | M2 P5 / M9 | Detection, scoring, listing, ignore and merge are complete and tested. Only the screens are outstanding. |
@@ -775,6 +809,7 @@ Recorded, never dropped.
 | ~~KI4~~ | ~~Migration 0070 unapplied.~~ **Resolved 2026-08-30.** Applied; `npm run db:types` regenerated the types; `lib/workspaces/db.ts` deleted. Backfill verified against the live project: 61 profiles → 61 workspaces → 61 owner memberships, no profile without one, no user in two. | — |
 | KI5 | No plan sells more than one seat (Q6), so the invite flow is reachable but always refused. | Team features are dark until seat counts are set on `plans.limits`. |
 | KI6 | Ownership cannot be transferred and a second owner cannot be created (DR9). | A sole owner can never leave their workspace. Support-only until M2. |
+| KI9 | **The forecast and win-rate UI has never been rendered with data in a browser.** The SQL is verified twice over (harness smoke and a live-database reconciliation), the readers typecheck and the page builds, but the owner's workspace has 0 opportunities — the earlier pipeline seed created the "Sales" pipeline and its 6 stages and no deals — and the preview session had expired, so only the EMPTY states of the forecast table and the win-rate table could be reached. | Same gap as the pipeline board. Seed a few opportunities into a workspace and open `/crm/reports`; three UI defects in this build were found only by opening a page. |
 | KI8 | **The remote migration-history table is stale from 0068 onward.** `supabase migration list` shows 0001–0067 recorded remotely; 0068–0073 are applied to the schema but absent from history, because every one of them was applied by hand in the SQL editor, which records nothing. | ⚠️ **`supabase db push` is UNSAFE on this project.** It would try to replay 0068–0073, including the FastSpring migrations, whose idempotency is unverified. Apply by hand and verify, or repair the history table first. |
 | KI7 | `tests/integration/signup-ip-gate.test.ts` reserves real signup IPs against the live project and fails when the suite is run repeatedly from one machine — the gate blocks its own runner. Pre-existing, confirmed by stashing this branch. | 3 tests fail on a re-run. Use `npx vitest run tests/unit` for iteration; the gate's claims age out. |
 
@@ -782,7 +817,7 @@ Recorded, never dropped.
 
 ## 18. Test status
 
-`npx vitest run tests/unit` — **1,646 passed, 0 failed**, 94 files.
+`npx vitest run tests/unit` — **1,784 passed, 0 failed**, 99 files.
 `npm run typecheck` passes. `npm run lint` reports 0 errors (95 pre-existing
 warnings, all in generated or vendored files). `npm run build` passes.
 

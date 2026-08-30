@@ -5,11 +5,16 @@ import { getLastRollupRun } from '@/lib/crm/metrics'
 import { getSetterDashboard } from '@/lib/crm/metrics'
 import {
   countOverdueTasks,
+  getForecast,
   getLeaderboard,
   getPipelineTotals,
+  getWinRates,
   listBatchFunnels,
+  previousRange,
   RANGES,
   resolveRange,
+  trend,
+  type ForecastPeriod,
   type RangeKey,
 } from '@/lib/crm/reports'
 import { requireWorkspace } from '@/lib/workspaces/context'
@@ -44,20 +49,35 @@ export default async function ReportsPage({
   const canExport = can(policy, 'report.export')
   const scopedToSelf = dataScope(ctx.role) === 'assigned'
 
-  const [mine, myPipeline, lastRun] = await Promise.all([
+  // The window immediately before this one, for the trend column. It never
+  // overlaps the current one, so no day's activity counts on both sides.
+  const prior = previousRange(range)
+
+  const [mine, myPipeline, lastRun, minePrior] = await Promise.all([
     getSetterDashboard(ctx.workspace.id, ctx.userId, range.fromDay, range.toDay),
     getPipelineTotals(ctx.workspace.id, ctx.userId),
     getLastRollupRun(ctx.workspace.id),
+    getSetterDashboard(ctx.workspace.id, ctx.userId, prior.fromDay, prior.toDay),
   ])
 
-  const [leaderboard, teamPipeline, overdue, funnels] = canSeeTeam
+  /*
+   * ⚠️ THE FORECAST IS SCOPED THE SAME WAY THE PIPELINE PANELS ARE. A setter
+   * sees their own deals; a manager sees the workspace. Passing null for a
+   * setter would show them the whole company's forecast on a page that says
+   * "your activity" (Ledger D24).
+   */
+  const forecastOwner = scopedToSelf ? ctx.userId : null
+  const forecast = await getForecast(ctx.workspace.id, forecastOwner)
+
+  const [leaderboard, teamPipeline, overdue, funnels, winRates] = canSeeTeam
     ? await Promise.all([
         getLeaderboard(ctx.workspace.id, range.fromDay, range.toDay),
         getPipelineTotals(ctx.workspace.id, null),
         countOverdueTasks(ctx.workspace.id, null),
         listBatchFunnels(ctx.workspace.id),
+        getWinRates(ctx.workspace.id, range.fromDay, range.toDay),
       ])
-    : [[], null, await countOverdueTasks(ctx.workspace.id, ctx.userId), []]
+    : [[], null, await countOverdueTasks(ctx.workspace.id, ctx.userId), [], []]
 
   return (
     <div className="space-y-5">
@@ -67,6 +87,8 @@ export default async function ReportsPage({
           <p className="mt-0.5 text-xs text-muted">
             {RANGES[range.key].label}
             {scopedToSelf ? ' · your activity' : ''}
+            {' · vs '}
+            {prior.fromDay} to {prior.toDay}
           </p>
         </div>
         <nav aria-label="Date range" className="flex gap-1">
@@ -114,10 +136,30 @@ export default async function ReportsPage({
           <ExportLink kind="my_activity" range={range.key} label="Export mine" />
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Contacts created" value={mine.contactsCreated} />
-          <Stat label="Contacts emailed" value={mine.contactsEmailed} />
-          <Stat label="Emails sent" value={mine.emailsSent} />
-          <Stat label="Replies" value={mine.replies} />
+          <Stat
+            label="Contacts created"
+            value={mine.contactsCreated}
+            change={trend(mine.contactsCreated, minePrior.contactsCreated)}
+            previous={minePrior.contactsCreated}
+          />
+          <Stat
+            label="Contacts emailed"
+            value={mine.contactsEmailed}
+            change={trend(mine.contactsEmailed, minePrior.contactsEmailed)}
+            previous={minePrior.contactsEmailed}
+          />
+          <Stat
+            label="Emails sent"
+            value={mine.emailsSent}
+            change={trend(mine.emailsSent, minePrior.emailsSent)}
+            previous={minePrior.emailsSent}
+          />
+          <Stat
+            label="Replies"
+            value={mine.replies}
+            change={trend(mine.replies, minePrior.replies)}
+            previous={minePrior.replies}
+          />
           <Stat
             label="Reply rate"
             // null, not 0%: a person who has emailed nobody has no rate, and
@@ -126,7 +168,12 @@ export default async function ReportsPage({
           />
           <Stat label="Engagements" value={mine.engagements} />
           <Stat label="Openers sent" value={mine.openersSent} />
-          <Stat label="Calls booked" value={mine.callsBooked} />
+          <Stat
+            label="Calls booked"
+            value={mine.callsBooked}
+            change={trend(mine.callsBooked, minePrior.callsBooked)}
+            previous={minePrior.callsBooked}
+          />
           <Stat label="Tasks completed" value={mine.tasksCompleted} />
         </div>
       </section>
@@ -142,6 +189,76 @@ export default async function ReportsPage({
         <p className="text-xs text-muted">
           Overdue tasks: <span className="font-semibold text-ink">{overdue}</span>
         </p>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-sm font-semibold text-ink">Forecast by close month</h3>
+          <p className="text-xs text-muted">
+            Value × probability. {scopedToSelf ? 'Your deals.' : 'Whole workspace.'}
+          </p>
+        </div>
+        {forecast.length === 0 ? (
+          <p className="text-sm text-muted">
+            No open deals to forecast. A month appears here once a deal has a value.
+          </p>
+        ) : (
+          <div className="clay overflow-x-auto p-0">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs uppercase tracking-[0.08em] text-muted">
+                  <th scope="col" className="px-4 py-3 font-semibold">Expected close</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Open deals</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Open value</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Weighted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forecast.map((row) => (
+                  <tr
+                    key={row.period ?? 'undated'}
+                    className="border-b border-border last:border-b-0"
+                  >
+                    <td className="px-4 py-3 font-semibold text-ink">
+                      {monthLabel(row.period)}
+                      {/*
+                        ⚠️ THE UNDATED BUCKET IS CALLED OUT, not quietly listed.
+                        Deals with no expected close date cannot be forecast into
+                        any month, and a rep with a large undated pipeline has a
+                        forecasting problem this line exists to surface.
+                      */}
+                      {row.period === null ? (
+                        <span
+                          className="ml-2 rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning"
+                          title="These deals have no expected close date, so they are in no month's forecast."
+                        >
+                          not forecast
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 text-muted">{row.openDeals}</td>
+                    <td className="px-4 py-3 text-muted">{money(row.openValue)}</td>
+                    <td className="px-4 py-3 font-semibold text-ink">
+                      {money(row.weightedValue)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t border-border bg-surface-muted">
+                  <td className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+                    Total
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-ink">{total(forecast, 'openDeals')}</td>
+                  <td className="px-4 py-3 font-semibold text-ink">
+                    {money(total(forecast, 'openValue'))}
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-ink">
+                    {money(total(forecast, 'weightedValue'))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {canSeeTeam && teamPipeline ? (
@@ -195,6 +312,53 @@ export default async function ReportsPage({
                 </table>
               </div>
             )}
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-sm font-semibold text-ink">Win rate</h3>
+              <p className="text-xs text-muted">Deals closed in this period</p>
+            </div>
+            {winRates.length === 0 ? (
+              <p className="text-sm text-muted">
+                Nothing closed in this period, so there is no rate to report.
+              </p>
+            ) : (
+              <div className="clay overflow-x-auto p-0">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-xs uppercase tracking-[0.08em] text-muted">
+                      <th scope="col" className="px-4 py-3 font-semibold">Person</th>
+                      <th scope="col" className="px-4 py-3 font-semibold">Won</th>
+                      <th scope="col" className="px-4 py-3 font-semibold">Lost</th>
+                      <th scope="col" className="px-4 py-3 font-semibold">Win rate</th>
+                      <th scope="col" className="px-4 py-3 font-semibold">Won revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {winRates.map((row) => (
+                      <tr
+                        key={row.ownerUserId ?? 'unassigned'}
+                        className="border-b border-border last:border-b-0"
+                      >
+                        <td className="px-4 py-3 font-semibold text-ink">{row.name}</td>
+                        <td className="px-4 py-3 text-muted">{row.wonDeals}</td>
+                        <td className="px-4 py-3 text-muted">{row.lostDeals}</td>
+                        <td className="px-4 py-3 font-semibold text-ink">
+                          {/* Never "0%" for "closed nothing" — see the SQL. */}
+                          {row.winRate === null ? '—' : `${Math.round(row.winRate * 100)}%`}
+                        </td>
+                        <td className="px-4 py-3 text-muted">{money(row.wonValue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="text-xs text-muted">
+              Open deals are excluded. Counting them as not-yet-won would drag every rate
+              towards zero.
+            </p>
           </section>
 
           <section className="space-y-3">
@@ -283,13 +447,63 @@ function ExportLink({
   )
 }
 
-function Stat({ label, value }: { label: string; value: number | string }) {
+function Stat({
+  label,
+  value,
+  change,
+  previous,
+}: {
+  label: string
+  value: number | string
+  /** Fraction, or `null` when the previous period was zero. */
+  change?: number | null
+  previous?: number
+}) {
   return (
     <div className="clay p-4">
       <p className="text-xs uppercase tracking-[0.08em] text-muted">{label}</p>
       <p className="mt-1 text-xl font-semibold tracking-[-0.02em] text-ink">{value}</p>
+      {previous === undefined ? null : (
+        <p className="mt-1 text-xs">
+          {change === null || change === undefined ? (
+            /*
+              ⚠️ NO PERCENTAGE FROM A ZERO BASE. Going from 0 to 5 is not
+              "+500%" and not "+100%" — any percentage there is invented. The
+              previous figure is shown instead so the reader can judge it.
+            */
+            <span className="text-muted">
+              {previous === 0 ? 'none last period' : `was ${previous}`}
+            </span>
+          ) : (
+            <span className={change >= 0 ? 'text-success' : 'text-danger'}>
+              {change >= 0 ? '▲' : '▼'} {Math.abs(Math.round(change * 100))}%
+              <span className="ml-1 text-muted">was {previous}</span>
+            </span>
+          )}
+        </p>
+      )}
     </div>
   )
+}
+
+/** "September 2026", or the undated bucket's own label. */
+function monthLabel(period: string | null): string {
+  if (period === null) return 'No close date'
+  return new Date(`${period}T00:00:00Z`).toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
+/**
+ * ⚠️ SUMS A COLUMN THAT POSTGRES ALREADY GROUPED. This is the one place the
+ * page adds money, and it adds per-month subtotals that came from a single
+ * query — it never re-derives a total from rows fetched separately (Ledger
+ * D25). The result must equal `crm_pipeline_totals` for the same scope.
+ */
+function total(rows: ForecastPeriod[], key: 'openDeals' | 'openValue' | 'weightedValue'): number {
+  return rows.reduce((sum, row) => sum + row[key], 0)
 }
 
 /**

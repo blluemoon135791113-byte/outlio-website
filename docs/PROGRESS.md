@@ -7788,3 +7788,69 @@ Reports renders 17 stat tiles across five sections with **Contacts created =
 (25 and 19 extracted), and the coverage badge on the email step.
 
 1,761 unit tests, typecheck, lint (0 errors) and build all pass.
+
+---
+
+## M4 Phase 10.5 — forecasting and report export ✅
+
+Migration `0084_crm_forecast.sql`, `lib/crm/report-export.ts`,
+`app/(product)/crm/reports/export/route.ts`, forecast and win-rate sections on
+`/crm/reports`, period-over-period trends.
+
+### The forecast is arithmetic, not a model
+
+`value × probability` grouped by close month, and won ÷ closed for a win rate.
+No inference, nothing metered, no credits. The brief permits optional Hubble
+commentary on top, clearly labelled — but that is commentary ABOUT these
+numbers and must never become the source of them. **A forecast a customer
+cannot reproduce by hand is one they cannot argue with, and a forecast is
+exactly the thing people need to argue with.**
+
+### What was found by downloading the file rather than reading the code
+
+**`Reply rate` was missing entirely from the personal CSV.** `toCsv` drops a
+column that is empty on every row — correct for a lead export, where an all-N/A
+column reads as the extractor having failed, and wrong for a report of ONE row,
+where a person with no replies has a null rate and the column simply vanished.
+The file then no longer listed a metric the screen was showing, which fails M4
+criterion 7 as surely as a wrong number does. Every column is now pinned and a
+unit test holds it there.
+
+### Decisions
+
+- **Undated deals appear under a NULL period**, labelled *not forecast*, rather
+  than being dropped or bucketed into this month. A rep with a large undated
+  pipeline has a forecasting problem the report should surface.
+- **Win rates bucket by `closed_at`**, not `created_at` — otherwise this
+  quarter's rate keeps changing for months as its deals close.
+- **Open deals are excluded from win rate.** Counting them as not-yet-won drags
+  every rate toward zero and makes a healthy pipeline look like failure.
+- **A trend from a zero base is `null`, never a percentage.** 0 → 5 is not
+  "+500%"; the tile shows the previous figure instead. A drop TO zero is a real
+  −100% and is shown as one.
+- **The previous window never overlaps the current one.** A single shared day
+  would let the same activity count on both sides of the comparison.
+- **`my_activity` needs only `report.own.view`**; the leaderboard and funnels
+  need `report.export`. Exporting the whole team's numbers is a different act
+  from reading your own dashboard. The check is in the ROUTE — a download
+  handler is reachable by typing a URL.
+- **Report exports are synchronous.** A report is an aggregate, bounded by team
+  size rather than contact count. Record-level exports are the large case and
+  are Ledger DR17.
+- **XLSX is not shipped** (Ledger DR18) — there is no spreadsheet library in
+  the project and adding one is a dependency decision.
+
+### Verified
+
+`crm_forecast_by_period` reconciled with `crm_pipeline_totals` twice: the
+harness smoke gives forecast total `49900.00` == raw `49900.00`, and a check
+against the LIVE database gives `12500.50` open / `1250.05` weighted from both
+functions — M4 criterion 6. All three CSV downloads were fetched and their
+headers matched the screen.
+
+**Not verified:** the forecast and win-rate UI has never been rendered with
+data (Ledger KI9). The owner's workspace has no opportunities and the preview
+session had expired, so only the empty states were reachable.
+
+1,784 unit tests, typecheck, lint (0 errors) and build all pass. **M4 is
+closed** — 6 of 7 criteria met; criterion 3 belongs to M6.

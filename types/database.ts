@@ -6108,6 +6108,15 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_forecast_by_period: {
+        Args: { p_owner_user_id?: string; p_workspace_id: string }
+        Returns: {
+          open_deals: number
+          open_value: number
+          period: string
+          weighted_value: number
+        }[]
+      }
       crm_ingest_contacts: {
         Args: { p_batch_id: string; p_contacts: Json; p_workspace_id: string }
         Returns: {
@@ -6174,6 +6183,16 @@ export type Database = {
         Returns: {
           contacts_deleted: number
           memberships_removed: number
+        }[]
+      }
+      crm_win_rates: {
+        Args: { p_from_day: string; p_to_day: string; p_workspace_id: string }
+        Returns: {
+          lost_deals: number
+          owner_user_id: string
+          win_rate: number
+          won_deals: number
+          won_value: number
         }[]
       }
       disconnect_integration: {

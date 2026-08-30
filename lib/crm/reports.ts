@@ -199,6 +199,93 @@ export async function countOverdueTasks(
   return count ?? 0
 }
 
+// ---------------------------------------------------------------------------
+// Forecasting (Phase 10.5)
+// ---------------------------------------------------------------------------
+
+export type ForecastPeriod = {
+  /** ISO date of the first of the month, or `null` for the undated bucket. */
+  period: string | null
+  openDeals: number
+  openValue: number
+  weightedValue: number
+}
+
+/**
+ * Weighted pipeline by expected close month.
+ *
+ * ⚠️ THE UNDATED BUCKET IS REAL PIPELINE, returned with `period: null` rather
+ * than dropped. A rep with a large undated pipeline has a forecasting problem
+ * the report should show, and hiding it would make the forecast look tidier
+ * than the business is.
+ */
+export async function getForecast(
+  workspaceId: string,
+  ownerUserId: string | null,
+): Promise<ForecastPeriod[]> {
+  const { data, error } = await createAdminClient().rpc('crm_forecast_by_period', {
+    p_workspace_id: workspaceId,
+    ...(ownerUserId ? { p_owner_user_id: ownerUserId } : {}),
+  })
+
+  if (error) throw new Error(`getForecast failed: ${error.message}`)
+
+  return (data ?? []).map((row) => ({
+    period: row.period,
+    openDeals: Number(row.open_deals),
+    openValue: Number(row.open_value),
+    weightedValue: Number(row.weighted_value),
+  }))
+}
+
+export type WinRate = {
+  ownerUserId: string | null
+  name: string
+  wonDeals: number
+  lostDeals: number
+  wonValue: number
+  /** `null` when nothing closed — a rep who closed nothing has no rate. */
+  winRate: number | null
+}
+
+/** Historical win rate per owner, over deals CLOSED in the period. */
+export async function getWinRates(
+  workspaceId: string,
+  fromDay: string,
+  toDay: string,
+): Promise<WinRate[]> {
+  const db = createAdminClient()
+
+  const { data, error } = await db.rpc('crm_win_rates', {
+    p_workspace_id: workspaceId,
+    p_from_day: fromDay,
+    p_to_day: toDay,
+  })
+
+  if (error) throw new Error(`getWinRates failed: ${error.message}`)
+
+  const ids = (data ?? []).map((r) => r.owner_user_id).filter((id): id is string => Boolean(id))
+  const names = new Map<string, string>()
+  if (ids.length > 0) {
+    const { data: profiles } = await db
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', ids)
+    for (const p of profiles ?? []) {
+      names.set(p.id, p.full_name?.trim() || p.email || 'Unknown')
+    }
+  }
+
+  return (data ?? []).map((row) => ({
+    ownerUserId: row.owner_user_id,
+    name: row.owner_user_id ? (names.get(row.owner_user_id) ?? 'Unknown') : 'Unassigned',
+    wonDeals: Number(row.won_deals),
+    lostDeals: Number(row.lost_deals),
+    wonValue: Number(row.won_value),
+    winRate: row.win_rate === null ? null : Number(row.win_rate),
+  }))
+}
+
 /** The date-range presets the dashboard offers. */
 export const RANGES = {
   '7d': { label: 'Last 7 days', days: 7 },
@@ -223,4 +310,39 @@ export function resolveRange(key: string | undefined): {
     fromDay: day(new Date(Date.now() - (days - 1) * 86_400_000)),
     toDay: day(new Date()),
   }
+}
+
+/**
+ * The window immediately BEFORE the selected one, same length, no overlap.
+ *
+ * ⚠️ THE PREVIOUS PERIOD ENDS THE DAY BEFORE THIS ONE STARTS. Overlapping the
+ * two windows by even a day would let the same activity count on both sides of
+ * a comparison, which flatters or flattens every trend depending on where the
+ * good day fell.
+ */
+export function previousRange(range: { fromDay: string; toDay: string }): {
+  fromDay: string
+  toDay: string
+} {
+  const day = (d: Date) => d.toISOString().slice(0, 10)
+  const from = new Date(`${range.fromDay}T00:00:00Z`)
+  const to = new Date(`${range.toDay}T00:00:00Z`)
+  const span = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1
+
+  return {
+    fromDay: day(new Date(from.getTime() - span * 86_400_000)),
+    toDay: day(new Date(from.getTime() - 86_400_000)),
+  }
+}
+
+/**
+ * Percentage change, or `null` when there is nothing to compare against.
+ *
+ * ⚠️ NULL WHEN THE PREVIOUS PERIOD WAS ZERO. Going from 0 to 5 is not "+500%"
+ * and not "+100%" — it is a start, and any percentage there is invented. The
+ * caller shows the raw previous value instead.
+ */
+export function trend(current: number, previous: number): number | null {
+  if (previous === 0) return null
+  return (current - previous) / previous
 }
