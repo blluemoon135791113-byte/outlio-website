@@ -3311,6 +3311,142 @@ export type Database = {
           },
         ]
       }
+      email_account_secrets: {
+        Row: {
+          account_id: string
+          created_at: string
+          encrypted_payload: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          encrypted_payload: string
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          encrypted_payload?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_account_secrets_account_id_id_fkey"
+            columns: ["account_id", "id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id", "secret_reference"]
+          },
+        ]
+      }
+      email_accounts: {
+        Row: {
+          configuration: Json
+          connected_at: string | null
+          created_at: string
+          daily_send_limit: number | null
+          deleted_at: string | null
+          display_name: string
+          from_domain: string
+          from_email: string
+          from_name: string | null
+          health_checked_at: string | null
+          health_score: number | null
+          hourly_send_limit: number | null
+          id: string
+          last_error: string | null
+          last_send_at: string | null
+          last_sync_at: string | null
+          min_delay_seconds: number
+          owner_user_id: string
+          provider: Database["public"]["Enums"]["email_provider"]
+          reply_to_email: string | null
+          scope: Database["public"]["Enums"]["email_account_scope"]
+          secret_reference: string
+          send_days: number[]
+          send_window_end: string
+          send_window_start: string
+          status: Database["public"]["Enums"]["email_account_status"]
+          timezone: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          configuration?: Json
+          connected_at?: string | null
+          created_at?: string
+          daily_send_limit?: number | null
+          deleted_at?: string | null
+          display_name: string
+          from_domain: string
+          from_email: string
+          from_name?: string | null
+          health_checked_at?: string | null
+          health_score?: number | null
+          hourly_send_limit?: number | null
+          id?: string
+          last_error?: string | null
+          last_send_at?: string | null
+          last_sync_at?: string | null
+          min_delay_seconds?: number
+          owner_user_id: string
+          provider: Database["public"]["Enums"]["email_provider"]
+          reply_to_email?: string | null
+          scope?: Database["public"]["Enums"]["email_account_scope"]
+          secret_reference?: string
+          send_days?: number[]
+          send_window_end?: string
+          send_window_start?: string
+          status?: Database["public"]["Enums"]["email_account_status"]
+          timezone?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          configuration?: Json
+          connected_at?: string | null
+          created_at?: string
+          daily_send_limit?: number | null
+          deleted_at?: string | null
+          display_name?: string
+          from_domain?: string
+          from_email?: string
+          from_name?: string | null
+          health_checked_at?: string | null
+          health_score?: number | null
+          hourly_send_limit?: number | null
+          id?: string
+          last_error?: string | null
+          last_send_at?: string | null
+          last_sync_at?: string | null
+          min_delay_seconds?: number
+          owner_user_id?: string
+          provider?: Database["public"]["Enums"]["email_provider"]
+          reply_to_email?: string | null
+          scope?: Database["public"]["Enums"]["email_account_scope"]
+          secret_reference?: string
+          send_days?: number[]
+          send_window_end?: string
+          send_window_start?: string
+          status?: Database["public"]["Enums"]["email_account_status"]
+          timezone?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_accounts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       export_destinations: {
         Row: {
           access_token: string | null
@@ -6701,6 +6837,18 @@ export type Database = {
         | "name_company"
         | "name_title_company"
         | "row_hash"
+      email_account_scope: "personal" | "workspace"
+      email_account_status:
+        | "not_configured"
+        | "authentication_required"
+        | "ramping"
+        | "ready"
+        | "warning"
+        | "throttled"
+        | "paused"
+        | "disconnected"
+        | "error"
+      email_provider: "gmail" | "microsoft" | "smtp"
       export_destination_kind: "device" | "google_drive" | "onedrive"
       file_status: "pending" | "processing" | "processed" | "failed"
       job_status:
@@ -6929,6 +7077,19 @@ export const Constants = {
         "name_title_company",
         "row_hash",
       ],
+      email_account_scope: ["personal", "workspace"],
+      email_account_status: [
+        "not_configured",
+        "authentication_required",
+        "ramping",
+        "ready",
+        "warning",
+        "throttled",
+        "paused",
+        "disconnected",
+        "error",
+      ],
+      email_provider: ["gmail", "microsoft", "smtp"],
       export_destination_kind: ["device", "google_drive", "onedrive"],
       file_status: ["pending", "processing", "processed", "failed"],
       job_status: [

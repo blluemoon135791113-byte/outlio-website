@@ -10,10 +10,10 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M4 Phase 10.5 complete — M4 closed)
+- **Last updated:** 2026-08-30 (M5 Phase 11 complete)
 - **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0083` are all
   applied and types are regenerated.
-- **Next milestone:** M4 — CRM reporting foundation and dashboards.
+- **Next milestone:** M5 — email foundation (Phases 11 ✅, 12–14 open).
 - **Next milestone:** M3 — opportunities, pipelines, native Kanban, collision
   guard. Two M2 UIs remain deferred (DR12 CSV import, DR14 Duplicate Center).
 
@@ -683,10 +683,54 @@ percentage (0 → 5 is not "+500%", and the page shows the previous figure
 instead), and the previous window **never overlaps** the current one, or a
 single shared day would let the same activity count on both sides.
 
+### D30. Email accounts are their own table, not `integration_connections`
+
+**This reverses earlier Ledger guidance**, which said M5 should extend
+`integration_connections` rather than build a parallel system. That advice
+predates the M5 detail. It is right about the CRYPTO and wrong about the ROW
+SHAPE.
+
+`integration_connections` carries `unique (user_id, provider)` — one Google
+connection per user. Cold outbound needs MANY mailboxes per workspace, each
+with its own schedule, limits, ramp and health. Relaxing that constraint is not
+a small change, and the evidence is concrete: every existing read is
+`.eq(user_id).eq(provider).maybeSingle()` (`lib/integrations/repository.ts`,
+`google-repository.ts`) and `save_google_connection` upserts
+`onConflict: 'user_id,provider'`. **The moment a user connected a second
+mailbox, every export integration would throw on a two-row `maybeSingle()`.**
+
+What IS shared: `lib/integrations/crypto.ts` (the AES-256-GCM envelope), the
+`integration_secrets` storage pattern, and `integration_oauth_transactions` for
+the OAuth dance in Phase 12. Sharing the part that carries security risk is the
+point; sharing a shape that forbids the product's core cardinality is not.
+
+### D31. Capabilities are derived from (provider, configuration), never declared
+
+A lookup table keyed on provider alone cannot express the case the M5 brief
+names: SMTP is send-only, but SMTP **with an IMAP companion** can read replies.
+One provider, two capability sets, decided by configuration.
+
+`Support` is a three-state (`supported` / `unsupported` / `unconfigured`)
+rather than a boolean. "This provider can never do this" is a dead end;
+"you have not set this up yet" is a prompt with a fix attached, and collapsing
+them to `false` throws away the only actionable thing the UI can say.
+
+Capabilities are computed from the non-secret `configuration` column ONLY, so
+the campaign engine can ask "can this account read replies?" on a hot path
+without decrypting anything — and a decrypt on a hot path is how credentials
+reach logs and error traces.
+
+### D32. A newly connected mailbox is `ramping`, never `ready`
+
+`ready` asserts that readiness checks passed, and in Phase 11 none have run.
+The conservative state is also the correct one: a brand-new mailbox sending at
+full volume is exactly how a domain gets burned. Phase 13 promotes it.
+
 ## 14. Migrations added by the platform build
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0085 | `0085_email_accounts.sql` | M5 P11 | `email_provider`, `email_account_scope`, `email_account_status` enums; `email_accounts` (many mailboxes per workspace, each with scope, schedule, limits, health) and `email_account_secrets` (service-role only, **no RLS policy at all**). Purely additive. |
 | 0084 | `0084_crm_forecast.sql` | M4 P10.5 | `crm_forecast_by_period()` — weighted pipeline by expected close MONTH, with undated deals returned under a NULL period rather than dropped — and `crm_win_rates()` — won ÷ closed, bucketed by `closed_at`, open deals excluded, NULL rather than 0% when nothing closed. Two functions; no table touched, none replaced. |
 | 0083 | `0083_crm_funnel.sql` | M4 P10 | `crm_batch_funnel()` — one batch from extracted through to won revenue, each step counted from the step above it so the funnel can only narrow — and `crm_pipeline_totals()`. |
 | 0082 | `0082_reporting_aggregates.sql` | M4 P9 | `crm_reporting_daily` (day grain), `crm_reporting_runs`, `crm_rollup_activity_metrics()`, `crm_reconcile_reporting()`. ⚠️ The natural key is a `UNIQUE ... NULLS NOT DISTINCT` constraint over a surrogate `id`, NOT a primary key: `user_id` is NULL on a workspace-total row, and a PK would have made that column `NOT NULL` and the totals impossible to store. |
@@ -714,7 +758,7 @@ single shared day would let the same activity count on both sides.
 | M2 | CRM core: identity, ingestion, dedup, operations | ✅ **Complete** (2026-08-30). Two UIs deferred: DR12, DR14 |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ✅ **Complete** (2026-08-30) |
 | M4 | CRM reporting foundation & dashboards | ✅ **Phases 9, 10 and 10.5 complete.** 6 of 7 criteria met; criterion 3 (auto-reply exclusion) belongs to M6, where the pre-filter runs before anything is written |
-| M5 | Email foundation | ⬜ Not started |
+| M5 | Email foundation | 🔨 **Phase 11 ✅.** Phases 12 (adapters), 13 (readiness) and 14 (message engine) open |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
 | M7 | Flow engine, Hubble boundary, visual builder | ⬜ Not started |
 | M8 | Integrations, Calendly, unified inbox | ⬜ Not started |
@@ -731,6 +775,16 @@ single shared day would let the same activity count on both sides.
 | 5 | Report queries paginated/indexed | ✅ day-grain aggregate with `(workspace_id, metric, day desc)`; reads never scan the event stream |
 | 6 | Forecast reconciles with raw opportunity data | ✅ `crm_forecast_by_period` grouped by close month, reconciled TWICE: the harness smoke gives forecast total `49900.00` == raw `49900.00`, and a check against the live database gives `12500.50` open / `1250.05` weighted from `crm_forecast_by_period` matching `crm_pipeline_totals` exactly. Undated deals are returned under a NULL period rather than dropped, and `crm_win_rates` gives the historical rate over deals CLOSED in the window |
 | 7 | Export matches on-screen numbers; blocked for unauthorised roles | ✅ `lib/crm/report-export.ts` + `/crm/reports/export`. Verified by DOWNLOADING the files, which is what caught the real defect: `toCsv` drops a column empty on every row, so `Reply rate` vanished from the one-row personal report and the file stopped listing a metric the screen showed. Every column is now pinned and `tests/unit/crm-report-export.test.ts` (13) holds it. `report.export` is checked in the ROUTE, not on the button; `my_activity` needs only `report.own.view` because it contains only the reader's own figures |
+
+### M5 acceptance criteria
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Secrets unreadable via any API after save; encryption verified | ✅ Proven twice. In Postgres, `supabase/smoke/0085_email_accounts.sql` runs four read shapes as `authenticated` — direct, joined, by `secret_reference`, column-only — and all four are DENIED. Against the LIVE PostgREST API with the publishable key, all four including a resource embed return `401 / 42501`. The result is `permission denied` rather than an empty set: the grant refuses before RLS is consulted, so two independent layers hold. Encryption is `lib/integrations/crypto.ts`, already covered by `tests/unit/integration-crypto.test.ts`; the one uncovered branch (unknown version, no fallback) is pinned in `tests/unit/email-accounts.test.ts` |
+| 2 | Capability model gates features per provider (SMTP w/o IMAP reports no replies) | ✅ `lib/email/capabilities.ts` + 15 tests. SMTP alone reports `replies: unconfigured`; adding `imapHost` promotes it to `supported`; an SMTP *host* alone does not, because submission settings say nothing about reading. `webhookEvents` stays `unsupported` for SMTP even with IMAP — IMAP is polling and no configuration would give a plain mail server a push channel |
+| 3 | Kill-and-retry on the send worker produces exactly one delivered message | ⬜ Phase 14 — `idempotencyKey` is on `OutboundMessage` in the contract, enforced by the engine |
+| 4 | A suppressed recipient is never sent to, for every suppression reason | ⬜ Phase 14 |
+| 5 | Readiness state transitions + domain rollup tested; ramp limits enforced | ⬜ Phase 13 — the nine states and the `from_domain` index exist; nothing drives them yet |
 
 ### M3 acceptance criteria
 
@@ -809,6 +863,7 @@ Recorded, never dropped.
 | ~~KI4~~ | ~~Migration 0070 unapplied.~~ **Resolved 2026-08-30.** Applied; `npm run db:types` regenerated the types; `lib/workspaces/db.ts` deleted. Backfill verified against the live project: 61 profiles → 61 workspaces → 61 owner memberships, no profile without one, no user in two. | — |
 | KI5 | No plan sells more than one seat (Q6), so the invite flow is reachable but always refused. | Team features are dark until seat counts are set on `plans.limits`. |
 | KI6 | Ownership cannot be transferred and a second owner cannot be created (DR9). | A sole owner can never leave their workspace. Support-only until M2. |
+| KI10 | **Every RLS assertion in the local migration harness was vacuously true until 0085.** `auth.uid()` was stubbed to return a constant NULL, so a policy that denies everyone passes a test expecting a member to see their own rows — both sides are empty. | **Fixed.** The stub now reads the `sub` claim from `request.jwt.claims` like the real function. Verified by the fix changing behaviour: 0085's policy assertions failed until the policy was correct. No earlier smoke test used `set local role authenticated`, so nothing previously verified was affected. |
 | KI9 | **The forecast and win-rate UI has never been rendered with data in a browser.** The SQL is verified twice over (harness smoke and a live-database reconciliation), the readers typecheck and the page builds, but the owner's workspace has 0 opportunities — the earlier pipeline seed created the "Sales" pipeline and its 6 stages and no deals — and the preview session had expired, so only the EMPTY states of the forecast table and the win-rate table could be reached. | Same gap as the pipeline board. Seed a few opportunities into a workspace and open `/crm/reports`; three UI defects in this build were found only by opening a page. |
 | KI8 | **The remote migration-history table is stale from 0068 onward.** `supabase migration list` shows 0001–0067 recorded remotely; 0068–0073 are applied to the schema but absent from history, because every one of them was applied by hand in the SQL editor, which records nothing. | ⚠️ **`supabase db push` is UNSAFE on this project.** It would try to replay 0068–0073, including the FastSpring migrations, whose idempotency is unverified. Apply by hand and verify, or repair the history table first. |
 | KI7 | `tests/integration/signup-ip-gate.test.ts` reserves real signup IPs against the live project and fails when the suite is run repeatedly from one machine — the gate blocks its own runner. Pre-existing, confirmed by stashing this branch. | 3 tests fail on a re-run. Use `npx vitest run tests/unit` for iteration; the gate's claims age out. |
@@ -817,7 +872,7 @@ Recorded, never dropped.
 
 ## 18. Test status
 
-`npx vitest run tests/unit` — **1,784 passed, 0 failed**, 99 files.
+`npx vitest run tests/unit` — **1,808 passed, 0 failed**, 101 files.
 `npm run typecheck` passes. `npm run lint` reports 0 errors (95 pre-existing
 warnings, all in generated or vendored files). `npm run build` passes.
 

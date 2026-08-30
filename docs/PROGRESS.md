@@ -7854,3 +7854,55 @@ session had expired, so only the empty states were reachable.
 
 1,784 unit tests, typecheck, lint (0 errors) and build all pass. **M4 is
 closed** — 6 of 7 criteria met; criterion 3 belongs to M6.
+
+---
+
+## M5 Phase 11 — provider foundation ✅
+
+Migration `0085_email_accounts.sql`, `lib/email/capabilities.ts`,
+`lib/email/provider.ts`, `lib/email/accounts.ts`.
+
+### Capabilities are derived, never declared
+
+The obvious design is a table keyed on provider: gmail gets everything, SMTP
+gets sending. It cannot express the case the brief names — **SMTP with an IMAP
+companion can read replies; SMTP alone cannot.** One provider, two capability
+sets, decided by configuration. So capability is a function of
+`(provider, configuration)` and of nothing else.
+
+Reporting `replies: supported` without IMAP would be the most expensive lie in
+the system: a sequence whose stop-on-reply never fires keeps mailing people who
+already answered, and the customer hears about it from the person they annoyed.
+
+Support is a three-state, not a boolean. *"This provider can never do this"* is
+a dead end; *"you have not set this up yet"* is a prompt with a fix attached.
+
+### Reversing earlier Ledger guidance
+
+The Ledger said M5 should extend `integration_connections`. It carries
+`unique (user_id, provider)` — one Google connection per user — and cold
+outbound needs many mailboxes per workspace. Relaxing it would break every
+existing export integration, which all read
+`.eq(user_id).eq(provider).maybeSingle()`. Same crypto, same secrets pattern,
+different resource. Recorded as Ledger D30.
+
+### The harness was passing tests that could not fail
+
+0085 is the first smoke test to use `set local role authenticated`, and its RLS
+assertions failed for the wrong reason: `auth.uid()` was stubbed to return a
+constant NULL. **Every RLS assertion in the harness had been vacuously true** —
+a policy denying everyone passes a test expecting a member to see their own
+rows, because both sides are empty. The stub now reads the `sub` claim.
+Recorded as Ledger KI10.
+
+### Verified
+
+Criterion 1 twice: four read shapes denied in Postgres, and the same four
+denied against the **live PostgREST API** with the publishable key — including
+a resource embed through `email_accounts`. All return `401 / 42501`, which is
+`permission denied` rather than an empty set: the grant refuses before RLS is
+consulted.
+
+Criterion 2 by 15 unit tests.
+
+1,808 unit tests, typecheck, lint (0 errors) and build all pass.
