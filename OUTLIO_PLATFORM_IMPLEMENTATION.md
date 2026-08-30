@@ -10,7 +10,7 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M5 COMPLETE — all 5 criteria met)
+- **Last updated:** 2026-08-30 (M6 Phases 15–17 complete — all 5 M6 criteria met)
 - **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0083` are all
   applied and types are regenerated.
 - **Next milestone:** M6 — email campaigns, composer, replies and email reporting.
@@ -940,6 +940,16 @@ that needs stopping.
 | 5 | Report queries paginated/indexed | ✅ day-grain aggregate with `(workspace_id, metric, day desc)`; reads never scan the event stream |
 | 6 | Forecast reconciles with raw opportunity data | ✅ `crm_forecast_by_period` grouped by close month, reconciled TWICE: the harness smoke gives forecast total `49900.00` == raw `49900.00`, and a check against the live database gives `12500.50` open / `1250.05` weighted from `crm_forecast_by_period` matching `crm_pipeline_totals` exactly. Undated deals are returned under a NULL period rather than dropped, and `crm_win_rates` gives the historical rate over deals CLOSED in the window |
 | 7 | Export matches on-screen numbers; blocked for unauthorised roles | ✅ `lib/crm/report-export.ts` + `/crm/reports/export`. Verified by DOWNLOADING the files, which is what caught the real defect: `toCsv` drops a column empty on every row, so `Reply rate` vanished from the one-row personal report and the file stopped listing a metric the screen showed. Every column is now pinned and `tests/unit/crm-report-export.test.ts` (13) holds it. `report.export` is checked in the ROUTE, not on the button; `my_activity` needs only `report.own.view` because it contains only the reader's own figures |
+
+### M6 acceptance criteria
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Reply stops the sequence within one sync cycle; OOO does not | ✅ `tests/integration/email-reply-sync.test.ts` against a REAL mail server. Reply and OOO are delivered by SMTP and read back over IMAP; the only difference is the `Auto-Submitted` header. The reply stops the sales sequence in ONE cycle and cancels its queued follow-up; the OOO leaves the enrollment active and the follow-up queued, recorded as `auto_replied` so it never reaches the reply rate. A reply to a marketing broadcast leaves it running; a bounce suppresses instead; a rewound cursor re-reading the same message produces one event, not two |
+| 2 | Unsubscribe one-click, updates suppression, stops campaigns, records events | ✅ `tests/integration/email-unsubscribe.test.ts` — all three consequences asserted separately, because any one missing looks identical to the recipient. Suppression is WORKSPACE-WIDE even when the token names one campaign (D43). The route was also exercised over real HTTP: every path returns 200 with the neutral page, including a valid token whose write FAILS (D44) |
+| 3 | Editing a template never mutates previously sent message history | ✅ Structural, not procedural. `supabase/smoke/0089` rewrites the template's subject and body completely, then DELETES the template; the sent message is unchanged both times, losing only its attribution |
+| 4 | Duplicate provider webhook deliveries processed exactly once | ✅ `supabase/smoke/0090` — the same provider event delivered five times yields exactly ONE row; the same id in another workspace is not a duplicate; our own events (no provider id) are never deduped against each other |
+| 5 | Campaign reports reconcile with raw email_events | ✅ `campaign_event_totals()` counts from the append-only stream — there are no counter columns to drift. The totals equal a direct count of the stream, and `auto_replied` is excluded from `replied` |
 
 ### M5 acceptance criteria
 

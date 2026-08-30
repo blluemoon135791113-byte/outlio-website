@@ -41,10 +41,36 @@ export async function POST(
    * worked or the link was already used — from the recipient's side those are
    * the same outcome, and neither should look broken.
    */
-  if (!verified.valid) return page('You have been unsubscribed.')
+  if (!verified.valid) return page()
 
-  await recordUnsubscribe(verified.subject)
-  return page('You have been unsubscribed.')
+  /*
+   * ⚠️ A FAILURE HERE STILL SHOWS THE RECIPIENT A SUCCESS PAGE.
+   *
+   * This is a deliberate trade-off and it is worth stating plainly. If the
+   * database is briefly unavailable, the honest response would be a 500 — but
+   * the person seeing it is someone who just asked to stop being contacted,
+   * and their next action after an error page is "report spam". That costs the
+   * sender's whole domain, and it does not get the recipient what they wanted
+   * either.
+   *
+   * So: show the page, and make the failure LOUD on our side, where it can be
+   * retried. The one thing that must never happen is the recipient being made
+   * to try again.
+   */
+  try {
+    await recordUnsubscribe(verified.subject)
+  } catch (error) {
+    console.error('[unsubscribe] FAILED to record — needs manual follow-up', {
+      workspaceId: verified.subject.workspaceId,
+      campaignId: verified.subject.campaignId,
+      // The address is the point of the record, but it is a person's email in
+      // a log line, so only the domain is kept.
+      emailDomain: verified.subject.email.split('@')[1] ?? null,
+      message: error instanceof Error ? error.message : 'unknown',
+    })
+  }
+
+  return page()
 }
 
 /**
@@ -66,7 +92,7 @@ export async function GET(
  * stop being contacted should not be measured on their way out, and loading a
  * third-party script here would be exactly that.
  */
-function page(message: string): Response {
+function page(): Response {
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -80,7 +106,7 @@ function page(message: string): Response {
   p{margin:0;color:#6b6864;font-size:.9375rem;line-height:1.6}
 </style></head>
 <body><main>
-  <h1>${message}</h1>
+  <h1>You have been unsubscribed.</h1>
   <p>You will not receive further emails from this sender. It can take a few minutes for anything already on its way to stop.</p>
 </main></body></html>`
 
