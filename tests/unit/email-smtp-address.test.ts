@@ -132,3 +132,41 @@ describe('ordinary mail servers still work', () => {
     expect(strict(host)).not.toThrow()
   })
 })
+
+/**
+ * Connection failures must say something the customer can act on.
+ *
+ * ⚠️ A HOSTNAME TYPO IS THE MOST LIKELY MISTAKE when connecting a mailbox, and
+ * it was originally reported as "The mail server returned an error" — which
+ * sends someone to check their password. Found by actually using the connect
+ * form against a host that does not exist.
+ */
+import { classifySmtpErrorForTest } from '@/lib/email/providers/smtp'
+
+describe('connection error messages are actionable', () => {
+  it('names a hostname that does not resolve, rather than blaming the server', () => {
+    const result = classifySmtpErrorForTest({ code: 'ENOTFOUND' })
+    expect(result.code).toBe('SMTP_HOST_NOT_FOUND')
+    expect(result.message).toContain('typo')
+    // Retrying a name that does not exist will never succeed.
+    expect(result.retryable).toBe(false)
+  })
+
+  it('distinguishes unreachable from not-found', () => {
+    const refused = classifySmtpErrorForTest({ code: 'ECONNREFUSED' })
+    expect(refused.code).toBe('SMTP_UNREACHABLE')
+    // A refused connection can succeed later; the host is real.
+    expect(refused.retryable).toBe(true)
+  })
+
+  it('treats a bad password as permanent and says so', () => {
+    const auth = classifySmtpErrorForTest({ code: 'EAUTH' })
+    expect(auth.code).toBe('SMTP_AUTH')
+    expect(auth.retryable).toBe(false)
+  })
+
+  it('never leaks the provider’s own text, which can echo recipients', () => {
+    const unknown = classifySmtpErrorForTest({ message: '550 no such user bob@private.example' })
+    expect(unknown.message).not.toContain('bob@private.example')
+  })
+})

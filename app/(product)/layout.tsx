@@ -37,6 +37,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       isAdmin={ctx.isAdmin}
       canUseScraper={ctx.canUseScraper}
       showCrm={workspace?.modules.has('crm') ?? false}
+      showEmail={workspace?.modules.has('email') ?? false}
       avatarUrl={avatarUrl}
       referralLink={code ? referralLink(appOrigin(), code) : null}
     >

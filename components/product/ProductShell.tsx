@@ -35,12 +35,14 @@ function SidebarContent({
   isAdmin,
   canUseScraper,
   showCrm,
+  showEmail,
   referralLink,
   onNavigate,
 }: {
   isAdmin: boolean
   canUseScraper: boolean
   showCrm: boolean
+  showEmail: boolean
   /** `null` until a profile has a code allocated. */
   referralLink: string | null
   onNavigate?: () => void
@@ -73,6 +75,7 @@ function SidebarContent({
           isAdmin={isAdmin}
           canUseScraper={canUseScraper}
           showCrm={showCrm}
+          showEmail={showEmail}
           onNavigate={onNavigate}
         />
       </div>
@@ -105,6 +108,7 @@ export function ProductShell({
   isAdmin,
   canUseScraper,
   showCrm = false,
+  showEmail = false,
   avatarUrl,
   referralLink = null,
 }: {
@@ -115,6 +119,7 @@ export function ProductShell({
   isAdmin: boolean
   canUseScraper: boolean
   showCrm?: boolean
+  showEmail?: boolean
   avatarUrl?: string | null
   referralLink?: string | null
 }) {
@@ -130,6 +135,7 @@ export function ProductShell({
           isAdmin={isAdmin}
           canUseScraper={canUseScraper}
           showCrm={showCrm}
+          showEmail={showEmail}
           referralLink={referralLink}
         />
       </aside>
@@ -155,6 +161,7 @@ export function ProductShell({
               isAdmin={isAdmin}
               canUseScraper={canUseScraper}
               showCrm={showCrm}
+              showEmail={showEmail}
               referralLink={referralLink}
               onNavigate={() => setMobileOpen(false)}
             />

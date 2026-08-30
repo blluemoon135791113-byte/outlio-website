@@ -10,6 +10,7 @@ type IconName =
   | 'admin'
   | 'crm'
   | 'dashboard'
+  | 'email'
   | 'extract'
   | 'gift'
   | 'history'
@@ -43,11 +44,13 @@ const SETTINGS_LINK = {
 }
 
 const CRM_LINK = { href: '/crm', label: 'CRM', icon: 'crm' as const }
+const EMAIL_LINK = { href: '/email', label: 'Email', icon: 'email' as const }
 
 export function ProductNav({
   isAdmin,
   canUseScraper,
   showCrm = false,
+  showEmail = false,
   onNavigate,
 }: {
   isAdmin: boolean
@@ -58,11 +61,18 @@ export function ProductNav({
    * hiding a nav item is not access control (CLAUDE.md rule 8).
    */
   showCrm?: boolean
+  /**
+   * Same rule as `showCrm`: a workspace whose plan excludes email never sees
+   * the link, and `/email` refuses it anyway — hiding a nav item is not access
+   * control (CLAUDE.md rule 8).
+   */
+  showEmail?: boolean
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
   const base = canUseScraper ? PRODUCT_LINKS : [ACCESS_LINK]
-  const links = showCrm ? [...base, CRM_LINK] : base
+  const withCrm = showCrm ? [...base, CRM_LINK] : base
+  const links = showEmail ? [...withCrm, EMAIL_LINK] : withCrm
   const allLinks = isAdmin
     ? [...links, SETTINGS_LINK, { href: '/admin', label: 'User admin', icon: 'admin' as const }]
     : [...links, SETTINGS_LINK]
@@ -138,6 +148,12 @@ export function ProductIcon({
       <>
         <rect x="4" y="10" width="16" height="11" rx="2" />
         <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      </>
+    ),
+    email: (
+      <>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="m3 7 9 6 9-6" />
       </>
     ),
     crm: (

@@ -197,11 +197,31 @@ function classifySmtpError(error: unknown): { retryable: boolean; code: string; 
     }
   }
 
-  if (err?.code === 'ETIMEDOUT' || err?.code === 'ECONNECTION' || err?.code === 'ESOCKET') {
+  /*
+   * ⚠️ DNS FAILURES BELONG HERE, NOT IN THE CATCH-ALL. A typo in the hostname
+   * is the single most likely mistake when someone connects a mailbox, and
+   * "The mail server returned an error" sends them looking at their password.
+   * `ENOTFOUND`/`EAI_AGAIN` mean the NAME did not resolve, which is a
+   * different and much more actionable fact.
+   */
+  if (err?.code === 'ENOTFOUND' || err?.code === 'EAI_AGAIN' || err?.code === 'EDNS') {
+    return {
+      retryable: false,
+      code: 'SMTP_HOST_NOT_FOUND',
+      message: 'That mail server hostname does not exist. Check it for a typo.',
+    }
+  }
+
+  if (
+    err?.code === 'ETIMEDOUT' ||
+    err?.code === 'ECONNECTION' ||
+    err?.code === 'ESOCKET' ||
+    err?.code === 'ECONNREFUSED'
+  ) {
     return {
       retryable: true,
       code: 'SMTP_UNREACHABLE',
-      message: 'Could not reach the mail server.',
+      message: 'Could not reach the mail server. Check the hostname and port.',
     }
   }
 
@@ -209,6 +229,13 @@ function classifySmtpError(error: unknown): { retryable: boolean; code: string; 
   // recipient address and internal hostnames back to the client.
   return { retryable: true, code: 'SMTP_UNKNOWN', message: 'The mail server returned an error.' }
 }
+
+/**
+ * ⚠️ EXPORTED FOR TESTS ONLY. The classifier decides whether a failure is
+ * retryable, which is the difference between a message that eventually sends
+ * and one that hammers a server that already said no — worth pinning directly.
+ */
+export const classifySmtpErrorForTest = classifySmtpError
 
 export class SmtpProvider implements EmailProvider {
   readonly id = 'smtp' as const
