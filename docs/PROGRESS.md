@@ -7417,3 +7417,68 @@ up afterwards.
 All six acceptance criteria met. Two UIs remain deferred and recorded: DR12
 (CSV import screens) and DR14 (Duplicate Center screens). Both engines beneath
 them are complete and tested.
+
+## 2026-08-30 — M3 Phase 6 schema: opportunities and pipelines
+
+### Added
+
+- **`supabase/migrations/0076_crm_opportunities.sql`** — `crm_pipelines`,
+  `crm_pipeline_stages`, `crm_opportunities`, `crm_opportunity_stage_history`,
+  two enums and `crm_move_opportunity_stage()`. Purely additive.
+
+### An opportunity is not a field on a contact
+
+One person can be sold to twice — a renewal, a second department, a new role at
+a new company. Stage on the contact caps them at one deal forever and makes
+"how many deals did we run at Acme" unanswerable.
+
+### Optimistic locking ships with the schema, not with the board
+
+Two people dragging one card is the normal case in a shared pipeline, not an
+edge case, and last-write-wins silently discards one of them. `version` and
+`crm_move_opportunity_stage` land here rather than in Phase 7 so the Kanban is
+built against a store that already refuses stale writes.
+
+The version check doubles as the idempotency key: a retry of a move that
+already succeeded arrives with the OLD version and is refused, so it cannot
+write a second activity. That is M3 acceptance criterion 2, and the smoke test
+demonstrates it — after four refused attempts the activity count is still one.
+
+### Money is numeric, never float
+
+`value_amount` is `numeric(14,2)`. Binary floating point cannot represent 0.1,
+and a pipeline total sums thousands of these; the error compounds until the
+forecast stops reconciling with the deals behind it. The smoke test carries
+12500.50 through a two-stage move and out the other side unchanged.
+
+### Rules that bite at the moment of closing
+
+- A lost deal needs a reason. Asked for when losing, because it is never filled
+  in retrospectively — and "why did we lose" is the most useful field in a
+  pipeline review.
+- Won is 100% and lost is 0%, by definition. Otherwise the stage default
+  applies only while the deal is open.
+- A move to the stage the deal is already in is refused, not quietly recorded:
+  a card dropped back where it started is not a stage change, and counting it
+  corrupts velocity.
+- A cross-pipeline move is refused. It means something different to every
+  velocity metric and needs its own operation.
+
+### Verification
+
+    ./scripts/check-migration.sh supabase/migrations/0076_crm_opportunities.sql \
+        supabase/smoke/0076_opportunities.sql
+
+Applies cleanly, and every guarantee above is demonstrated by execution:
+version 1→2 with the stage default picked up, exactly one STAGE_CHANGED
+activity carrying the deal in `refs`, stage history with time-in-stage and
+frozen ownership, four distinct refusals, and a won close at 100% with the
+value intact.
+
+### Recorded
+
+There is still no domain-event PUBLISHER (Ledger DR15). `crm_activities` is the
+event record and is written in the same transaction as the change, which
+satisfies "exactly one activity" — but nothing can subscribe yet. The Flow
+engine in M7 is what needs one; until then a consumer would have nothing to
+consume.

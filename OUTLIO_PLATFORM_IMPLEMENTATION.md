@@ -10,9 +10,9 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (**M2 complete**)
-- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0075` are all
-  applied and types are regenerated.
+- **Last updated:** 2026-08-30 (M3 Phase 6 schema)
+- **Blocked on a human:** apply migration `0076` (`supabase/APPLY_PENDING.sql`)
+  then `npm run db:types`; plan seat counts (Q6). `0070`–`0075` are applied.
 - **Next milestone:** M3 — opportunities, pipelines, native Kanban, collision
   guard. Two M2 UIs remain deferred (DR12 CSV import, DR14 Duplicate Center).
 
@@ -421,6 +421,27 @@ it. It is a rule, not an enforcement point — a policy layer cannot put a WHERE
 clause on someone else's query. There is nothing to scope yet: no CRM record
 exists. Every M2 query that returns workspace data MUST consult `dataScope`.
 
+### D25. Money is `numeric`, never a float
+`crm_opportunities.value_amount` is `numeric(14,2)`.
+
+*Rationale:* binary floating point cannot represent 0.1, and a pipeline total
+sums thousands of these. The error compounds until the forecast stops
+reconciling with the deals behind it, and the bug surfaces as "the numbers are
+slightly wrong" — the hardest kind to trace.
+
+### D26. Optimistic locking ships with the schema, not with the Kanban
+`crm_opportunities.version` and `crm_move_opportunity_stage` land in Phase 6
+rather than Phase 7.
+
+*Rationale:* two people dragging one card is the normal case in a shared
+pipeline, not an edge case, and last-write-wins silently discards one of them.
+Building the board against a store that already refuses stale writes is much
+easier than retrofitting the check afterwards.
+
+The version check doubles as the idempotency key M3 criterion 2 needs: a retry
+of a move that already succeeded arrives with the OLD version and is refused,
+so it cannot write a second activity.
+
 ### D22. Append-only is enforced by a trigger, not by grants
 `crm_activities`, `crm_audit_logs` and `crm_merge_events` carry a BEFORE
 UPDATE OR DELETE trigger that raises.
@@ -604,6 +625,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0076 | `0076_crm_opportunities.sql` | M3 P6 | `crm_pipelines`, `crm_pipeline_stages`, `crm_opportunities` (with `version` for optimistic locking), `crm_opportunity_stage_history` (append-only); `crm_move_opportunity_stage()`. Enums `crm_opportunity_status`, `crm_stage_kind`. |
 | 0075 | `0075_crm_operations.sql` | M2 P5 | `crm_activities` (append-only, frozen attribution), `crm_tasks`, `crm_notes`, `crm_note_mentions`, `crm_notifications`, `crm_notification_preferences`, `crm_audit_logs`; `crm_guard_append_only()` and `crm_erase_contact()`. Adds the append-only trigger to `crm_merge_events`. |
 | 0074 | `0074_crm_deduplication.sql` | M2 P4 | `crm_duplicate_candidates` (one row per pair, `record_a_id < record_b_id` enforced), `crm_merge_events` (append-only), `crm_contacts.merged_into_id`, and `crm_merge_contacts()` — atomic, deadlock-safe, moves every child table. |
 | 0073 | `0073_fix_ingest_ambiguity.sql` | M2 P3 | Replaces `crm_ingest_contacts`. 0072 shipped it with four unqualified `contact_id` references that were ambiguous with the `RETURNS TABLE` output column — an error Postgres raises at RUNTIME, not at creation, so the migration applied cleanly and failed on the first real call. |
@@ -620,7 +642,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
 | M2 | CRM core: identity, ingestion, dedup, operations | ✅ **Complete** (2026-08-30). Two UIs deferred: DR12, DR14 |
-| M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Next |
+| M3 | Opportunities, pipelines, Kanban, collision guard | 🔨 **Phase 6 schema done**, pending `0076`. Phases 7–8 not started |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
@@ -671,6 +693,7 @@ Recorded, never dropped.
 | DR8 | VoIP / dialer adapter for call logging | M8 v2.1 | M8 Phase 25 | Adapter candidate. Never invent telephony capability. |
 | DR9 | Ownership transfer flow | M1 | M2 | The `workspace.transfer_ownership` permission and the last-owner guard exist; the UI does not. An owner can promote a second owner only via support today. |
 | DR10 | `crm_saved_views.definition` validation | M2 P2 | M2 P3 | Its schema IS the list query language. Inventing one before the query builder exists would mean guessing. Nothing reads the column until then; when it does, it must validate on READ as well as write — a stored filter is untrusted input however it got there. |
+| DR15 | A real domain-event bus | M3 P6 | M7 | A3 wants normalized domain events (`crm.opportunity.stage_changed`, …) powering Flows, Reports, Notifications, Realtime and Integrations. Today `crm_activities` IS the event record, written in the same transaction as the change. That satisfies "exactly one activity" but there is no PUBLISHER yet, so nothing can subscribe. The Flow engine in M7 is what needs one; until then a consumer would have nothing to consume. |
 | DR14 | Duplicate Center UI (four tabs, side-by-side merge screen) | M2 P4 | M2 P5 / M9 | Detection, scoring, listing, ignore and merge are complete and tested. Only the screens are outstanding. |
 | DR12 | CSV import UI (upload, mapping screen, validation report, undo button) | M2 P3 | M2 P3 (next) | The engine — parse, suggest mapping, validate, plan, ingest, undo — is complete and tested. Only the screens are outstanding. |
 | DR11 | Custom fields on companies and opportunities | M2 P2 | M2 P5 / M3 | The `crm_custom_field_entity` enum and the values table already carry all three entities, so no migration is needed later — only the UI and the write path. |
