@@ -1535,6 +1535,123 @@ export type Database = {
           },
         ]
       }
+      crm_activities: {
+        Row: {
+          activity_type: Database["public"]["Enums"]["crm_activity_type"]
+          actor_user_id: string | null
+          channel: Database["public"]["Enums"]["crm_activity_channel"]
+          company_id: string | null
+          contact_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          occurred_at: string
+          owner_user_id_at_event: string | null
+          refs: Json
+          team_id_at_event: string | null
+          workspace_id: string
+        }
+        Insert: {
+          activity_type: Database["public"]["Enums"]["crm_activity_type"]
+          actor_user_id?: string | null
+          channel: Database["public"]["Enums"]["crm_activity_channel"]
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          owner_user_id_at_event?: string | null
+          refs?: Json
+          team_id_at_event?: string | null
+          workspace_id: string
+        }
+        Update: {
+          activity_type?: Database["public"]["Enums"]["crm_activity_type"]
+          actor_user_id?: string | null
+          channel?: Database["public"]["Enums"]["crm_activity_channel"]
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          owner_user_id_at_event?: string | null
+          refs?: Json
+          team_id_at_event?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_activities_company_fk"
+            columns: ["company_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_companies"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_activities_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_activities_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_audit_logs: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          created_at: string
+          id: string
+          reason: string | null
+          target_id: string | null
+          target_type: string
+          workspace_id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          target_id?: string | null
+          target_type: string
+          workspace_id: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          target_id?: string | null
+          target_type?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_audit_logs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_batch_members: {
         Row: {
           batch_id: string
@@ -2420,6 +2537,176 @@ export type Database = {
           },
         ]
       }
+      crm_note_mentions: {
+        Row: {
+          created_at: string
+          mentioned_user_id: string
+          note_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          mentioned_user_id: string
+          note_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          mentioned_user_id?: string
+          note_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_note_mentions_note_fk"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "crm_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_note_mentions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_notes: {
+        Row: {
+          body: string
+          company_id: string | null
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          body: string
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          body?: string
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_notes_company_fk"
+            columns: ["company_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_companies"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_notes_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_notes_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_notification_preferences: {
+        Row: {
+          in_app: boolean
+          kind: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          in_app?: boolean
+          kind: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          in_app?: boolean
+          kind?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_notification_preferences_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          kind: string
+          read_at: string | null
+          refs: Json
+          title: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          read_at?: string | null
+          refs?: Json
+          title: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          read_at?: string | null
+          refs?: Json
+          title?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_notifications_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_saved_views: {
         Row: {
           created_at: string
@@ -2504,6 +2791,82 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "crm_tags_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_tasks: {
+        Row: {
+          assigned_to_user_id: string | null
+          body: string | null
+          company_id: string | null
+          completed_at: string | null
+          completed_by: string | null
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          due_at: string | null
+          id: string
+          status: Database["public"]["Enums"]["crm_task_status"]
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          assigned_to_user_id?: string | null
+          body?: string | null
+          company_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          due_at?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["crm_task_status"]
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          assigned_to_user_id?: string | null
+          body?: string | null
+          company_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          due_at?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["crm_task_status"]
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_tasks_company_fk"
+            columns: ["company_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_companies"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_tasks_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_tasks_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -5283,6 +5646,15 @@ export type Database = {
           used: number
         }[]
       }
+      crm_erase_contact: {
+        Args: {
+          p_actor_id?: string
+          p_contact_id: string
+          p_reason?: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       crm_ingest_contacts: {
         Args: { p_batch_id: string; p_contacts: Json; p_workspace_id: string }
         Returns: {
@@ -5756,6 +6128,35 @@ export type Database = {
         | "duplicate"
         | "failed"
       capture_session_status: "active" | "completed" | "abandoned"
+      crm_activity_channel:
+        | "linkedin"
+        | "email"
+        | "phone"
+        | "meeting"
+        | "manual"
+        | "system"
+      crm_activity_type:
+        | "ENGAGEMENT"
+        | "OPENER_SENT"
+        | "PERSONALIZED_DM"
+        | "REPLY_RECEIVED"
+        | "FOLLOW_UP"
+        | "EMAIL_SENT"
+        | "EMAIL_REPLIED"
+        | "EMAIL_BOUNCED"
+        | "EMAIL_UNSUBSCRIBED"
+        | "CALL_BOOKED"
+        | "CALL_HELD"
+        | "CALL_NO_SHOW"
+        | "CONTACT_CREATED"
+        | "OWNER_ASSIGNED"
+        | "TASK_COMPLETED"
+        | "NOTE_ADDED"
+        | "STAGE_CHANGED"
+        | "OPPORTUNITY_WON"
+        | "OPPORTUNITY_LOST"
+        | "QUALIFIED"
+        | "MERGED"
       crm_custom_field_entity: "contact" | "company" | "opportunity"
       crm_custom_field_type:
         | "text"
@@ -5772,6 +6173,7 @@ export type Database = {
         | "manual"
         | "api"
         | "flow"
+      crm_task_status: "open" | "completed" | "cancelled"
       dedupe_mode: "keep_all" | "remove_exact" | "remove_likely" | "review"
       dedupe_strategy:
         | "linkedin_url_canonical"
@@ -5950,6 +6352,37 @@ export const Constants = {
         "failed",
       ],
       capture_session_status: ["active", "completed", "abandoned"],
+      crm_activity_channel: [
+        "linkedin",
+        "email",
+        "phone",
+        "meeting",
+        "manual",
+        "system",
+      ],
+      crm_activity_type: [
+        "ENGAGEMENT",
+        "OPENER_SENT",
+        "PERSONALIZED_DM",
+        "REPLY_RECEIVED",
+        "FOLLOW_UP",
+        "EMAIL_SENT",
+        "EMAIL_REPLIED",
+        "EMAIL_BOUNCED",
+        "EMAIL_UNSUBSCRIBED",
+        "CALL_BOOKED",
+        "CALL_HELD",
+        "CALL_NO_SHOW",
+        "CONTACT_CREATED",
+        "OWNER_ASSIGNED",
+        "TASK_COMPLETED",
+        "NOTE_ADDED",
+        "STAGE_CHANGED",
+        "OPPORTUNITY_WON",
+        "OPPORTUNITY_LOST",
+        "QUALIFIED",
+        "MERGED",
+      ],
       crm_custom_field_entity: ["contact", "company", "opportunity"],
       crm_custom_field_type: [
         "text",
@@ -5962,6 +6395,7 @@ export const Constants = {
         "multi_select",
       ],
       crm_record_source: ["lead_engine", "csv_import", "manual", "api", "flow"],
+      crm_task_status: ["open", "completed", "cancelled"],
       dedupe_mode: ["keep_all", "remove_exact", "remove_likely", "review"],
       dedupe_strategy: [
         "linkedin_url_canonical",

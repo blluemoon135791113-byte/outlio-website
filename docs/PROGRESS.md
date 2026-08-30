@@ -7348,3 +7348,72 @@ and notifications; the audit proof survives; and the guard is back up
 afterwards.
 
 The harness now replays 0070–0074 as prerequisites.
+
+## 2026-08-30 — M2 COMPLETE: CRM operations layer
+
+0075 applied. 23 integration tests. All six M2 acceptance criteria met.
+
+### Added
+
+- **`lib/crm/activities.ts`** — `recordActivity`, `assignContact`,
+  `listContactTimeline`, tasks, notes with mentions, notifications,
+  `recordAudit`, `eraseContact`.
+
+  ⚠️ There is no update or delete for an activity, and there cannot be. If a
+  recorded event is wrong the answer is a corrective event, not an edit.
+
+### Attribution, proven
+
+`recordActivity` resolves the contact's owner once, at write time, and stores
+it. Every report then reads the stored value. The test reassigns the contact to
+a different user and asserts `owner_user_id_at_event` still names the original
+— reassigning a book does not move last quarter's numbers.
+
+`assignContact` writes the activity BEFORE changing the owner, so the handover
+is credited to the owner it left rather than the one receiving the book. It is
+also a no-op when the owner is unchanged, so re-saving a form does not
+manufacture an assignment event.
+
+### Immutability, proven against the service role
+
+UPDATE and DELETE on `crm_activities` both fail with "append-only", **from the
+service role, which bypasses RLS**. That is the point of enforcing it with a
+trigger rather than a grant. `crm_merge_events` and `crm_audit_logs` are
+equally protected.
+
+One test was initially vacuous and said so: the merge-history assertion ran an
+UPDATE matching zero rows, which fires no row-level trigger and returns no
+error. It would have passed with the guard removed entirely. It now inserts a
+row first.
+
+### Erasure, proven
+
+`eraseContact` removes the contact, emails, phones, activities, notes, tasks
+and notifications. The audit row proving it happened survives, and the test
+asserts it contains neither the erased name nor the erased address — a proof of
+erasure that quoted the person would defeat itself. The guard is confirmed back
+up afterwards.
+
+### Small guarantees worth keeping
+
+- Completing a task twice writes ONE activity. Completions are a dashboard
+  metric and a double-click cannot be allowed to inflate it.
+- Mentioning yourself notifies nobody.
+- A notification preference row means "switched off"; its ABSENCE means the
+  default, so a new notification kind reaches everyone without backfilling a
+  row per user per kind. Both directions are tested.
+- Timelines page by keyset, not OFFSET: a timeline grows at the head, so an
+  offset page shifts under the reader as new events land.
+
+### Verification
+
+- `crm-operations` 23 · `crm-duplicates` + `crm-ingestion` + `crm-identity` +
+  `workspace-tenancy` 84, no regression.
+- `npx vitest run tests/unit` — 1,754 across 97 files.
+- `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass.
+
+### M2 is complete
+
+All six acceptance criteria met. Two UIs remain deferred and recorded: DR12
+(CSV import screens) and DR14 (Duplicate Center screens). Both engines beneath
+them are complete and tested.

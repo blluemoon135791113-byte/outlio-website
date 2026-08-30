@@ -10,10 +10,12 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M2 Phase 5 schema)
+- **Last updated:** 2026-08-30 (**M2 complete**)
 - **Next milestone:** M2 — CRM core: identity, ingestion, dedup, operations
-- **Blocked on a human:** apply migration `0075` (`supabase/APPLY_PENDING.sql`)
-  then `npm run db:types`; plan seat counts (Q6). `0070`–`0074` are applied.
+- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0075` are all
+  applied and types are regenerated.
+- **Next milestone:** M3 — opportunities, pipelines, native Kanban, collision
+  guard. Two M2 UIs remain deferred (DR12 CSV import, DR14 Duplicate Center).
 
 ---
 
@@ -26,7 +28,7 @@ disagree, the repository wins and the conflict is recorded under
 | Styling | Tailwind CSS v4 (`@theme`), Geist fonts | `app/globals.css`, `postcss.config.mjs` |
 | Database | Supabase Postgres, project `ptewhpmxzenbmxlizxhu` | `CLAUDE.md` |
 | ORM | **None.** `supabase-js` query builder + SQL functions | `lib/supabase/` |
-| Migrations | Hand-written, numbered SQL, `0001`–`0074` | `supabase/migrations/` |
+| Migrations | Hand-written, numbered SQL, `0001`–`0075` | `supabase/migrations/` |
 | Generated types | `types/database.ts` (4,970 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
 | Validation | Zod 4 | `lib/limits/plans.ts` and throughout |
 | Tests | **Vitest 4** — 1,687 unit tests / 95 files, plus integration | `vitest.config.mts`, `tests/` |
@@ -57,7 +59,7 @@ is therefore already implemented, not pending.
 
 ## 2. Current data model
 
-**78 tables, ~66 SQL functions.** Extracted from `types/database.ts`.
+**85 tables, ~69 SQL functions.** Extracted from `types/database.ts`.
 
 ### Identity, access, billing
 `profiles`, `plans`, `subscriptions`, `access_requests`, `invitation_codes`,
@@ -608,8 +610,8 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 |---|---|---|
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
-| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phases 2 ✅ 3 ✅ 4 ✅. **Phase 5 schema done**, pending `0075` |
-| M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Not started |
+| M2 | CRM core: identity, ingestion, dedup, operations | ✅ **Complete** (2026-08-30). Two UIs deferred: DR12, DR14 |
+| M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Next |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
@@ -625,8 +627,9 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | 2 | Normalization unit tests pass for email/phone/LinkedIn/domain edge cases | ✅ `crm-normalize.test.ts` (66) + `crm-custom-fields.test.ts` (41) + `crm-csv-import.test.ts` (31) |
 | 3 | Merge preserves child records; concurrent merge fails safely | ✅ `tests/integration/crm-duplicates.test.ts` — every child table moves, collisions collapse rather than duplicate, the snapshot records what was lost, and a second merge of the same pair raises `MergeConflictError` |
 | 4 | Duplicate Center shows reasons + confidence | ✅ `crm-dedupe.test.ts` (35) + `crm-duplicates.test.ts` — nothing is flagged without both, and reasons carry no schema jargon |
-| 5 | Activity rows immutable | ✅ enforced by trigger, proven by `supabase/smoke/0075_operations.sql`: UPDATE and DELETE both refused, row untouched |
-| 6 | GDPR erasure removes contact + PII cascade | ✅ same smoke test: contact, emails, activities, notes, tasks and notifications all gone; an audit row proving the erasure survives, carrying no personal data |
+| 5 | Activity rows immutable | ✅ `tests/integration/crm-operations.test.ts` — UPDATE and DELETE both refused **from the service role**, rows untouched, merge history equally protected |
+| 6 | GDPR erasure removes contact + PII cascade | ✅ same file — contact, emails, phones, activities, notes, tasks and notifications all gone; the audit proof survives and is asserted to contain neither the name nor the address |
+| — | Attribution survives reassignment | ✅ same file — the contact is reassigned and `owner_user_id_at_event` still names the original owner |
 | — | One person = one contact per workspace | ✅ `crm-identity.test.ts` (25), enforced by partial unique indexes |
 | — | Cross-workspace isolation on all CRM tables | ✅ `crm-identity.test.ts` + `workspace-tenancy.test.ts`, with positive controls |
 | — | Import rollback / undo | ✅ `crm-ingestion.test.ts` — deletes only what an import created, never a contact it merely matched |
