@@ -38,6 +38,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       canUseScraper={ctx.canUseScraper}
       showCrm={workspace?.modules.has('crm') ?? false}
       showEmail={workspace?.modules.has('email') ?? false}
+      showFlows={workspace?.modules.has('flows') ?? false}
       avatarUrl={avatarUrl}
       referralLink={code ? referralLink(appOrigin(), code) : null}
     >

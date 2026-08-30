@@ -11,6 +11,7 @@ type IconName =
   | 'crm'
   | 'dashboard'
   | 'email'
+  | 'flows'
   | 'extract'
   | 'gift'
   | 'history'
@@ -45,12 +46,14 @@ const SETTINGS_LINK = {
 
 const CRM_LINK = { href: '/crm', label: 'CRM', icon: 'crm' as const }
 const EMAIL_LINK = { href: '/email', label: 'Email', icon: 'email' as const }
+const FLOWS_LINK = { href: '/flows', label: 'Flows', icon: 'flows' as const }
 
 export function ProductNav({
   isAdmin,
   canUseScraper,
   showCrm = false,
   showEmail = false,
+  showFlows = false,
   onNavigate,
 }: {
   isAdmin: boolean
@@ -67,12 +70,15 @@ export function ProductNav({
    * control (CLAUDE.md rule 8).
    */
   showEmail?: boolean
+  /** Same module gate again; `/flows` refuses independently. */
+  showFlows?: boolean
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
   const base = canUseScraper ? PRODUCT_LINKS : [ACCESS_LINK]
   const withCrm = showCrm ? [...base, CRM_LINK] : base
-  const links = showEmail ? [...withCrm, EMAIL_LINK] : withCrm
+  const withEmail = showEmail ? [...withCrm, EMAIL_LINK] : withCrm
+  const links = showFlows ? [...withEmail, FLOWS_LINK] : withEmail
   const allLinks = isAdmin
     ? [...links, SETTINGS_LINK, { href: '/admin', label: 'User admin', icon: 'admin' as const }]
     : [...links, SETTINGS_LINK]
@@ -148,6 +154,14 @@ export function ProductIcon({
       <>
         <rect x="4" y="10" width="16" height="11" rx="2" />
         <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      </>
+    ),
+    flows: (
+      <>
+        <circle cx="6" cy="6" r="2.5" />
+        <circle cx="18" cy="12" r="2.5" />
+        <circle cx="6" cy="18" r="2.5" />
+        <path d="M8.5 6h3a2 2 0 0 1 2 2v2M8.5 18h3a2 2 0 0 0 2-2v-2" />
       </>
     ),
     email: (
