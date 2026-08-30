@@ -26,7 +26,6 @@ import {
   actionCostsCredits,
   validateFlowDefinition,
   type ActionType,
-  type FlowDefinition,
   type FlowStep,
 } from '@/lib/flows/definition'
 import { createAdminClient } from '@/lib/supabase/admin'
