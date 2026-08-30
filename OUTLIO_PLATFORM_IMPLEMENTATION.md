@@ -10,7 +10,7 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-31 (M6 COMPLETE — Phases 15–19, all 5 criteria met)
+- **Last updated:** 2026-08-31 (M7 Phase 20 complete — 4 of 5 M7 criteria met)
 - **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0083` are all
   applied and types are regenerated.
 - **Next milestone:** M7 — Flow engine, email automation, Hubble boundary and the visual builder.
@@ -919,10 +919,40 @@ send more of it. **An inflated reply rate is worse than no reply rate, because
 people act on it.** The separation is enforced in the event enum, in
 `campaign_event_totals`, and in `email_campaign_report`.
 
+### D46. The Flow engine is at-most-once, like the email engine
+
+`flow_claim_step` inserts a unique row and reports whether the caller now owns
+the step. A worker killed after performing a side effect but before recording
+it leaves a `running` row; the retry claims, gets `false`, and **moves on
+without repeating the action**.
+
+The cost is that the abandoned step's OUTPUT is lost, so the run continues
+without it — visible in the log rather than silent. That is the same trade
+[D36](#d36-at-most-once-delivery-not-at-least-once) makes for email, for the
+same reason: a duplicate action is worse than a stalled one, and here the
+action may BE an email.
+
+⚠️ **Two things must never be added.** Do not claim inside a retry loop, and do
+not re-claim a step in-process after an ambiguous failure. Either silently
+converts this to at-least-once.
+
+### D47. A waitless cycle is rejected at publish time, not caught at runtime
+
+The database's loop protection catches a flow that RE-TRIGGERS itself. It
+cannot help with a cycle **inside a single run**, which would spin a worker
+until something else killed it. `validateFlowDefinition` walks the graph and
+refuses a cycle containing no `WAIT`, while allowing one that does — a nurture
+loop checking back weekly is legitimate.
+
+The same walk rejects dangling targets and unreachable steps. All three pass
+per-step validation and then strand a run mid-execution, when the contact is
+already halfway through.
+
 ## 14. Migrations added by the platform build
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0093 | `0093_flow_engine.sql` | M7 P20 | `flow_status`, `flow_run_status`, `flow_step_status` enums; `flows`, `flow_versions` (immutable once published), `flow_runs` (pins `version_id`), `flow_step_runs` (the execution log AND the exactly-once claim); `flow_claim_step()`, `flow_check_loop_protection()` (returns the REASON, not a boolean) and `flow_publish()`. |
 | 0092 | `0092_email_reporting.sql` | M6 P19 | `email_campaign_report()`, `email_mailbox_report()`, `email_batch_funnel()`, `email_contact_timeline()`. Every figure counted from the append-only stream — no counter columns to drift. |
 | 0091 | `0091_fix_event_fk_append_only.sql` | M6 P17 | **BUG FIX for 0090.** `on delete set null` on an append-only table is an UPDATE the guard rejects, making every referenced row permanently undeletable — including via `crm_erase_contact`. Replaced with NO ACTION, matching `crm_activities`. |
 | 0090 | `0090_email_events.sql` | M6 P17 | `email_event_type` enum; `email_events` (append-only), `email_webhook_deliveries`; `record_email_event()` (ON CONFLICT DO NOTHING = criterion 4) and `campaign_event_totals()`. |
@@ -960,7 +990,7 @@ people act on it.** The separation is enforced in the event enum, in
 | M4 | CRM reporting foundation & dashboards | ✅ **Phases 9, 10 and 10.5 complete.** 6 of 7 criteria met; criterion 3 (auto-reply exclusion) belongs to M6, where the pre-filter runs before anything is written |
 | M5 | Email foundation | ✅ **COMPLETE.** Phases 11, 12 (SMTP+IMAP), 13 (readiness) and 14 (message engine). All 5 criteria met. Gmail/Microsoft adapters deferred on Google verification + CASA (D33) — SMTP is the shipping path |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
-| M7 | Flow engine, Hubble boundary, visual builder | ⬜ Not started |
+| M7 | Flow engine, email automation, Hubble & builder | 🔨 **Phase 20 ✅ — criteria 1, 2, 3 and 5 met.** Criterion 4 needs Phase 22 (Hubble). Phases 21 (email actions) and 23 (visual builder) open |
 | M8 | Integrations, Calendly, unified inbox | ⬜ Not started |
 | M9 | Onboarding, UI refinement, hardening | ⬜ Not started |
 
@@ -975,6 +1005,16 @@ people act on it.** The separation is enforced in the event enum, in
 | 5 | Report queries paginated/indexed | ✅ day-grain aggregate with `(workspace_id, metric, day desc)`; reads never scan the event stream |
 | 6 | Forecast reconciles with raw opportunity data | ✅ `crm_forecast_by_period` grouped by close month, reconciled TWICE: the harness smoke gives forecast total `49900.00` == raw `49900.00`, and a check against the live database gives `12500.50` open / `1250.05` weighted from `crm_forecast_by_period` matching `crm_pipeline_totals` exactly. Undated deals are returned under a NULL period rather than dropped, and `crm_win_rates` gives the historical rate over deals CLOSED in the window |
 | 7 | Export matches on-screen numbers; blocked for unauthorised roles | ✅ `lib/crm/report-export.ts` + `/crm/reports/export`. Verified by DOWNLOADING the files, which is what caught the real defect: `toCsv` drops a column empty on every row, so `Reply rate` vanished from the one-row personal report and the file stopped listing a metric the screen showed. Every column is now pinned and `tests/unit/crm-report-export.test.ts` (13) holds it. `report.export` is checked in the ROUTE, not on the button; `my_activity` needs only `report.own.view` because it contains only the reader's own figures |
+
+### M7 acceptance criteria
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Worker kill/retry mid-flow never duplicates an action | ✅ `tests/integration/flow-engine.test.ts` with a REAL side effect: the action increments a counter, the worker claims and acts then dies before recording, and after a full retry the counter still reads ONE. Guaranteed by `flow_claim_step` (`ON CONFLICT DO NOTHING`), not by a flag |
+| 2 | Loop-protection halts a self-triggering flow and surfaces the reason | ✅ Halts BEFORE the run is created — creating it first would let the first action fire on a fast worker. The halt is RECORDED with a reason naming the cause ("triggered itself 5 times in a row"), and `halt_reason` is required by constraint |
+| 3 | Editing a published flow creates a draft; in-flight runs finish on the old version | ✅ Verified against the LIVE database: a run started on v1 still points at v1 after a re-publish, v1's definition is untouched, the flow's pointer moved to v2, and editing a published version is refused with 23514 |
+| 4 | Credit-exhausted Hubble step fails gracefully; deterministic path continues | ⬜ Phase 22 — the `credits_used` column and the free/paid split in `ACTION_TYPES` exist; there is no Hubble step yet |
+| 5 | Execution log shows every step with status/duration/error | ✅ `flow_step_runs` carries status, duration, error code and safe output per step; the step after a failure is absent because a failed run stops |
 
 ### M6 acceptance criteria
 
@@ -1083,7 +1123,7 @@ Recorded, never dropped.
 
 ## 18. Test status
 
-`npx vitest run tests/unit` — **2,025 passed, 0 failed**, 112 files. Integration adds the SMTP adapter, the send worker and the readiness runner, all run against a real mail server in Docker.
+`npx vitest run tests/unit` — **2,059 passed, 0 failed**, 114 files. Integration adds the SMTP adapter, the send worker and the readiness runner, all run against a real mail server in Docker.
 `npm run typecheck` passes. `npm run lint` reports 0 errors (95 pre-existing
 warnings, all in generated or vendored files). `npm run build` passes.
 

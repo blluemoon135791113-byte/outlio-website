@@ -8156,3 +8156,55 @@ Both had passing smoke tests. Neither would have been found by review.
 
 2,025 unit tests plus five live integration suites, typecheck, lint (0 errors)
 and build all pass.
+
+---
+
+## M7 Phase 20 — the Flow engine ✅
+
+Migration `0093_flow_engine.sql`, `lib/flows/definition.ts`, `lib/flows/engine.ts`.
+**Criteria 1, 2, 3 and 5 met.** Criterion 4 needs Phase 22's Hubble boundary.
+
+### Four criteria decided by the schema, not the code
+
+Each becomes a property of the data model rather than a rule to remember: a
+step's completion is a unique ROW claimed before the side effect; `halt_reason`
+is required by constraint; a run pins `version_id` and published versions are
+immutable by trigger; `flow_step_runs` IS the log.
+
+### Criterion 1 tested with a real kill
+
+The action increments a counter. The worker claims the step, performs the
+effect, and dies before recording — exactly what `kill -9` leaves. The retry
+drives the same run and the counter still reads **one**.
+
+The cost is honest: the abandoned step's output is lost, so the run continues
+without it and the gap shows in the log. Same at-most-once trade as the email
+engine (D36), and here the action may *be* an email.
+
+### Docker died mid-verification, so criterion 3 was proven differently
+
+The harness was unavailable, so criterion 3 was verified against the **live
+database** instead — stronger evidence anyway. A run started on v1 still points
+at v1 after a re-publish, v1's definition is untouched, and editing a published
+version is refused with `23514`.
+
+### Decisions
+
+- **A waitless cycle is rejected at publish time** (D47). The database's loop
+  protection catches re-triggering; it cannot help with a cycle inside one run,
+  which would spin a worker until something killed it. A cycle *containing* a
+  wait is allowed.
+- **Loop protection halts before the run is created.** Creating it first and
+  halting second would let the first action fire on a fast worker.
+- **An unknown branch operator returns false.** A branch that always takes the
+  true path looks like it worked, and the flow that silently emails everyone is
+  the failure that matters.
+- **Facts are read once per run**, not per condition — a contact changing
+  mid-run would make adjacent conditions disagree.
+- **`costsCredits` is stated on every action**, so anyone adding one has to
+  answer rather than inheriting `undefined` and quietly becoming free.
+- **An action with no handler is absent, not stubbed.** `SEND_EMAIL` fails with
+  `ACTION_NOT_AVAILABLE` until Phase 21 registers it.
+
+2,059 unit tests plus the live flow suite, typecheck, lint (0 errors) and build
+all pass.
