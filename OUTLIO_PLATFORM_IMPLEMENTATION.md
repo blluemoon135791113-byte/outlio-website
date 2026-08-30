@@ -10,10 +10,10 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M2 Phase 4 scoring + schema)
+- **Last updated:** 2026-08-30 (M2 Phase 4 complete)
 - **Next milestone:** M2 — CRM core: identity, ingestion, dedup, operations
-- **Blocked on a human:** apply migration `0074` (`supabase/APPLY_PENDING.sql`)
-  then `npm run db:types`; plan seat counts (Q6). `0070`–`0073` are applied.
+- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0074` are all
+  applied and types are regenerated.
 
 ---
 
@@ -26,7 +26,7 @@ disagree, the repository wins and the conflict is recorded under
 | Styling | Tailwind CSS v4 (`@theme`), Geist fonts | `app/globals.css`, `postcss.config.mjs` |
 | Database | Supabase Postgres, project `ptewhpmxzenbmxlizxhu` | `CLAUDE.md` |
 | ORM | **None.** `supabase-js` query builder + SQL functions | `lib/supabase/` |
-| Migrations | Hand-written, numbered SQL, `0001`–`0073` | `supabase/migrations/` |
+| Migrations | Hand-written, numbered SQL, `0001`–`0074` | `supabase/migrations/` |
 | Generated types | `types/database.ts` (4,970 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
 | Validation | Zod 4 | `lib/limits/plans.ts` and throughout |
 | Tests | **Vitest 4** — 1,687 unit tests / 95 files, plus integration | `vitest.config.mts`, `tests/` |
@@ -57,7 +57,7 @@ is therefore already implemented, not pending.
 
 ## 2. Current data model
 
-**76 tables, ~65 SQL functions.** Extracted from `types/database.ts`.
+**78 tables, ~66 SQL functions.** Extracted from `types/database.ts`.
 
 ### Identity, access, billing
 `profiles`, `plans`, `subscriptions`, `access_requests`, `invitation_codes`,
@@ -410,6 +410,22 @@ it. It is a rule, not an enforcement point — a policy layer cannot put a WHERE
 clause on someone else's query. There is nothing to scope yet: no CRM record
 exists. Every M2 query that returns workspace data MUST consult `dataScope`.
 
+### D21. Blocking on three keys is COMPLETE, not a heuristic
+Detection only compares pairs sharing a company, a phone number or an email
+domain — never all pairs, which is O(n²).
+
+That is provably exhaustive rather than a corner cut: in `lib/crm/dedupe.ts` a
+name alone carries at most 55 against a threshold of 60, so every candidate
+needs at least one corroborating signal, and those three are the only
+corroborating signals that exist.
+
+⚠️ **Adding a fourth corroborating signal to the scorer breaks this.**
+`tests/unit/crm-dedupe.test.ts` asserts the ceiling the argument depends on.
+
+Large blocks are sub-divided by a three-character surname prefix (so "ellis"
+and "elliss" still collide) and anything still oversized is skipped and
+*reported* in `blocksSkipped`, rather than silently producing a partial scan.
+
 ### D18. Name similarity is a GATE, not a weight
 Company, phone and shared email domain only ever amplify a name that already
 matches. Below a similarity of 0.62 a pair is not a candidate at any score.
@@ -556,7 +572,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 |---|---|---|
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
-| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phases 2 ✅ 3 ✅. **Phase 4 in progress** — scoring done, merge pending `0074`. Phase 5 not started |
+| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phases 2 ✅ 3 ✅ 4 ✅ (UIs are DR12/DR14). **Phase 5 not started** |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Not started |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
@@ -571,8 +587,8 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 |---|---|---|
 | 1 | Importing the same file/batch twice → zero new contacts | ✅ `tests/integration/crm-ingestion.test.ts` — proven for BOTH paths: re-ingesting an extraction reuses the batch and matches all three people; re-running a CSV import creates zero and matches two |
 | 2 | Normalization unit tests pass for email/phone/LinkedIn/domain edge cases | ✅ `crm-normalize.test.ts` (66) + `crm-custom-fields.test.ts` (41) + `crm-csv-import.test.ts` (31) |
-| 3 | Merge preserves child records; concurrent merge fails safely | 🔨 `crm_merge_contacts` written; integration tests pending `0074` |
-| 4 | Duplicate Center shows reasons + confidence | ✅ scoring — `tests/unit/crm-dedupe.test.ts` asserts nothing can be flagged without both, and that reasons carry no schema jargon |
+| 3 | Merge preserves child records; concurrent merge fails safely | ✅ `tests/integration/crm-duplicates.test.ts` — every child table moves, collisions collapse rather than duplicate, the snapshot records what was lost, and a second merge of the same pair raises `MergeConflictError` |
+| 4 | Duplicate Center shows reasons + confidence | ✅ `crm-dedupe.test.ts` (35) + `crm-duplicates.test.ts` — nothing is flagged without both, and reasons carry no schema jargon |
 | 5 | Activity rows immutable | ⬜ Phase 5 — `crm_activities` does not exist yet |
 | 6 | GDPR erasure removes contact + PII cascade | ⬜ Phase 5 |
 | — | One person = one contact per workspace | ✅ `crm-identity.test.ts` (25), enforced by partial unique indexes |
@@ -607,6 +623,7 @@ Recorded, never dropped.
 | DR8 | VoIP / dialer adapter for call logging | M8 v2.1 | M8 Phase 25 | Adapter candidate. Never invent telephony capability. |
 | DR9 | Ownership transfer flow | M1 | M2 | The `workspace.transfer_ownership` permission and the last-owner guard exist; the UI does not. An owner can promote a second owner only via support today. |
 | DR10 | `crm_saved_views.definition` validation | M2 P2 | M2 P3 | Its schema IS the list query language. Inventing one before the query builder exists would mean guessing. Nothing reads the column until then; when it does, it must validate on READ as well as write — a stored filter is untrusted input however it got there. |
+| DR14 | Duplicate Center UI (four tabs, side-by-side merge screen) | M2 P4 | M2 P5 / M9 | Detection, scoring, listing, ignore and merge are complete and tested. Only the screens are outstanding. |
 | DR12 | CSV import UI (upload, mapping screen, validation report, undo button) | M2 P3 | M2 P3 (next) | The engine — parse, suggest mapping, validate, plan, ingest, undo — is complete and tested. Only the screens are outstanding. |
 | DR11 | Custom fields on companies and opportunities | M2 P2 | M2 P5 / M3 | The `crm_custom_field_entity` enum and the values table already carry all three entities, so no migration is needed later — only the UI and the write path. |
 

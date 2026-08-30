@@ -1907,6 +1907,7 @@ export type Database = {
           linkedin_identity_key: string | null
           linkedin_url: string | null
           location: string | null
+          merged_into_id: string | null
           owner_user_id: string | null
           primary_company_id: string | null
           source: Database["public"]["Enums"]["crm_record_source"]
@@ -1927,6 +1928,7 @@ export type Database = {
           linkedin_identity_key?: string | null
           linkedin_url?: string | null
           location?: string | null
+          merged_into_id?: string | null
           owner_user_id?: string | null
           primary_company_id?: string | null
           source?: Database["public"]["Enums"]["crm_record_source"]
@@ -1947,6 +1949,7 @@ export type Database = {
           linkedin_identity_key?: string | null
           linkedin_url?: string | null
           location?: string | null
+          merged_into_id?: string | null
           owner_user_id?: string | null
           primary_company_id?: string | null
           source?: Database["public"]["Enums"]["crm_record_source"]
@@ -1955,6 +1958,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_contacts_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "crm_contacts_primary_company_fk"
             columns: ["primary_company_id", "workspace_id"]
@@ -2072,6 +2082,68 @@ export type Database = {
           },
           {
             foreignKeyName: "crm_custom_field_values_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_duplicate_candidates: {
+        Row: {
+          confidence: string
+          detected_at: string
+          entity: Database["public"]["Enums"]["crm_custom_field_entity"]
+          id: string
+          record_a_id: string
+          record_b_id: string
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          score: number
+          signals: Json
+          status: string
+          summary: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          confidence: string
+          detected_at?: string
+          entity: Database["public"]["Enums"]["crm_custom_field_entity"]
+          id?: string
+          record_a_id: string
+          record_b_id: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          score: number
+          signals?: Json
+          status?: string
+          summary: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          confidence?: string
+          detected_at?: string
+          entity?: Database["public"]["Enums"]["crm_custom_field_entity"]
+          id?: string
+          record_a_id?: string
+          record_b_id?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          score?: number
+          signals?: Json
+          status?: string
+          summary?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_duplicate_candidates_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2300,6 +2372,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "crm_lists_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_merge_events: {
+        Row: {
+          created_at: string
+          entity: Database["public"]["Enums"]["crm_custom_field_entity"]
+          id: string
+          merged_id: string
+          performed_by: string | null
+          snapshot: Json
+          surviving_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity: Database["public"]["Enums"]["crm_custom_field_entity"]
+          id?: string
+          merged_id: string
+          performed_by?: string | null
+          snapshot?: Json
+          surviving_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          entity?: Database["public"]["Enums"]["crm_custom_field_entity"]
+          id?: string
+          merged_id?: string
+          performed_by?: string | null
+          snapshot?: Json
+          surviving_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_merge_events_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -5178,6 +5291,15 @@ export type Database = {
           matched_by: string
           ref: string
         }[]
+      }
+      crm_merge_contacts: {
+        Args: {
+          p_actor_id?: string
+          p_merged_id: string
+          p_survivor_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       crm_undo_batch: {
         Args: { p_batch_id: string; p_workspace_id: string }

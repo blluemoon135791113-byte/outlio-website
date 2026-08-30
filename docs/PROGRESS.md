@@ -7216,3 +7216,61 @@ FastSpring billing pair, whose idempotency is unverified. Ledger KI8.
 
 The CSV import UI — upload, mapping screen, validation report, undo button —
 is Ledger DR12. The engine beneath it is complete and tested.
+
+## 2026-08-30 — M2 Phase 4 complete: deduplication
+
+0074 applied. 14 integration tests plus 35 unit tests.
+
+### Acceptance criteria 3 and 4 are met
+
+**Merge preserves 100% of child records.** Emails, phones, tags and employment
+all move onto the survivor; collisions collapse rather than duplicate — a phone
+both contacts carried is one number, a tag both carried is one tag. Nothing is
+left on the merged record. Gaps on the survivor are filled from the loser, but
+a value someone chose is never overwritten.
+
+**A concurrent merge fails safely.** `crm_merge_contacts` locks both rows in
+ascending id order — locking "survivor first" would let two callers merging
+A→B and B→A deadlock — and the second caller finds the record already retired
+and stops. `mergeContacts` translates that into a `MergeConflictError` a UI can
+show, rather than a stack trace.
+
+**Every flagged pair carries a confidence, a score and readable reasons**, and
+the tests assert reasons contain no schema jargon.
+
+### The property that makes detection affordable
+
+Detection compares only pairs sharing a company, a phone number or an email
+domain. That is not a corner cut — it is complete. A name alone carries at most
+55 points against a threshold of 60, so every candidate needs at least one
+corroborating signal, and those three are the only ones that exist. Adding a
+fourth to the scorer would break the guarantee, which is why the unit test
+pins the ceiling.
+
+Large blocks are sub-divided by a three-character surname prefix, so "ellis"
+and "elliss" still collide while a 400-person company does not become 79,800
+comparisons. Anything still oversized is skipped and REPORTED in
+`blocksSkipped` rather than silently producing a partial scan.
+
+The single most important test in the suite asserts a NEGATIVE: a colleague
+who shares the company and the switchboard is not flagged.
+
+### A rejected pair stays rejected
+
+`ignoreCandidate` records `not_duplicate` permanently, and the scan skips any
+pair already resolved or ignored. Without it the same rejected pair reappears
+on every scan and the Center becomes a list of questions the user has already
+answered.
+
+### Verification
+
+- `tests/integration/crm-duplicates.test.ts` — 14 passed, first run.
+- `crm-ingestion` + `crm-identity` + `workspace-tenancy` — 70 passed, no
+  regression.
+- `npx vitest run tests/unit` — 1,754 across 97 files.
+- `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass.
+
+That the integration tests passed first time is the local harness paying for
+itself: `crm_merge_contacts` had already been executed against real rows in a
+throwaway Postgres, so the two bugs in it were found before it ever reached the
+project database.
