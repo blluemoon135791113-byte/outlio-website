@@ -21,7 +21,7 @@ import { cache } from 'react'
 
 import { requireUser, assertUser } from '@/lib/auth/access'
 import { AppError } from '@/lib/errors/catalog'
-import { platformDb } from '@/lib/workspaces/db'
+import { createAdminClient } from '@/lib/supabase/admin'
 import {
   getWorkspaceEntitlements,
   type WorkspaceEntitlements,
@@ -62,7 +62,7 @@ export type WorkspaceContext = {
 
 /** Every workspace the user belongs to, most recently joined last. */
 export async function listMemberships(userId: string): Promise<WorkspaceSummary[]> {
-  const db = platformDb()
+  const db = createAdminClient()
 
   const { data, error } = await db
     .from('workspace_memberships')
@@ -72,13 +72,7 @@ export async function listMemberships(userId: string): Promise<WorkspaceSummary[
 
   if (error) throw new Error(`listMemberships failed: ${error.message}`)
 
-  type Joined = {
-    workspace_id: string
-    role: WorkspaceRole
-    workspaces: { id: string; name: string; owner_user_id: string; deleted_at: string | null }
-  }
-
-  return ((data ?? []) as unknown as Joined[])
+  return (data ?? [])
     .filter((row) => row.workspaces && !row.workspaces.deleted_at)
     .map((row) => ({
       id: row.workspace_id,
@@ -89,7 +83,7 @@ export async function listMemberships(userId: string): Promise<WorkspaceSummary[
 }
 
 async function countMembers(workspaceId: string): Promise<number> {
-  const { count, error } = await platformDb()
+  const { count, error } = await createAdminClient()
     .from('workspace_memberships')
     .select('id', { count: 'exact', head: true })
     .eq('workspace_id', workspaceId)

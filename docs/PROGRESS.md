@@ -6853,3 +6853,64 @@ silently, the failure mode `lib/companies/normalize.ts` already warns about:
 - Fixtures must not use Ofcom's `07700 900xxx` drama range: libphonenumber
   classes it possible-but-not-valid, so every phone case fails for a reason
   unrelated to the code. Noted in the test file.
+
+## 2026-08-30 — Migration 0070 applied; workspace types generated; tenancy proven
+
+### Changed
+
+- `npm run db:types` regenerated `types/database.ts` against the live project.
+  It now carries `workspaces`, `workspace_memberships`, `workspace_invitations`
+  and `workspace_feature_flags`, the three workspace functions, and the
+  `workspace_role` enum. 61 tables, ~63 functions.
+- **`lib/workspaces/db.ts` is deleted.** It existed only to hand-declare the
+  0070 tables while the generated types lacked them, and it documented how to
+  remove itself. All five consumers now call `createAdminClient()` directly,
+  which is what the rest of the repository does.
+- Two hand-written casts came out with it: the `Joined` cast in
+  `listMemberships` and the row cast in `describeInvitation`. The generated
+  types infer both embedded relations correctly.
+
+### Fixed
+
+- Regenerating caught real drift that a hand-written type had hidden: the
+  generated signature is `p_member_limit?: number`, not `number | null`.
+  Unlimited seats are now expressed by OMITTING the argument, which is the same
+  statement — the function defaults it to null and skips the seat check — and
+  is the only form the real signature accepts.
+
+### Added
+
+- `tests/integration/workspace-tenancy.test.ts` — 26 tests, the M1 acceptance
+  criterion that was blocked on the migration. It covers what only exists in
+  Postgres and no unit test can reach:
+
+  - **Cross-workspace isolation.** Alice cannot read or write Bob's workspace,
+    memberships, invitations or feature flags. Positive controls confirm she
+    can reach her own, so the assertions cannot pass vacuously.
+  - `handle_new_user()` gives every signup exactly one owned workspace.
+  - `redeem_workspace_invitation()` across all seven outcomes: invalid,
+    wrong_email, expired, revoked, seat_limit, ok, already_member — plus proof
+    that an accepted link cannot then seat a second person.
+  - `guard_last_workspace_owner()` refuses to delete or demote a sole owner and
+    permits both once a second owner exists.
+  - `protect_workspace_columns()` lets an owner rename a workspace but not
+    raise their own seat ceiling.
+  - The invitation CHECK constraints: no invitation may grant ownership, and a
+    non-lowercased email is rejected rather than quietly creating a second live
+    invite.
+
+### Verification
+
+- Backfill checked against the live project: **61 profiles → 61 workspaces →
+  61 owner memberships**, zero profiles without one, zero users in two.
+- `npx vitest run tests/unit` — 1,646 passed across 94 files.
+  `npx vitest run tests/integration/workspace-tenancy.test.ts` — 26 passed.
+  `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass.
+
+### Notes
+
+- Two `@ts-expect-error` directives in the new test were wrong and are removed.
+  Generated types describe a table's SHAPE, not who may write it, so an
+  unauthorised insert typechecks fine — only the missing grant stops it at
+  runtime. That is the entire reason the test exists, and the comments now say
+  so.

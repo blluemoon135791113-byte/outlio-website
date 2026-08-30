@@ -18,7 +18,6 @@ import 'server-only'
  */
 import { getPlanById } from '@/lib/limits/plans'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { platformDb } from '@/lib/workspaces/db'
 import { MODULES, type Module } from '@/lib/workspaces/permissions'
 import type { PlanLimits } from '@/types/database'
 
@@ -104,7 +103,7 @@ export function resolveMemberLimit(
 export async function getWorkspaceEntitlements(
   workspaceId: string,
 ): Promise<WorkspaceEntitlements> {
-  const db = platformDb()
+  const db = createAdminClient()
 
   const { data: workspace, error: workspaceError } = await db
     .from('workspaces')
@@ -118,7 +117,7 @@ export async function getWorkspaceEntitlements(
   }
   if (!workspace) return { modules: new Set(), memberLimit: 0 }
 
-  const { data: owner, error: ownerError } = await createAdminClient()
+  const { data: owner, error: ownerError } = await db
     .from('profiles')
     .select('plan_id')
     .eq('id', workspace.owner_user_id)

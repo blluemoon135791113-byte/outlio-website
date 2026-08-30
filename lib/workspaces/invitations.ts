@@ -8,7 +8,7 @@ import 'server-only'
  * or a corporate mail scanner would otherwise burn the invitation before the
  * invitee ever saw it.
  */
-import { platformDb } from '@/lib/workspaces/db'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { WorkspaceRole } from '@/lib/workspaces/permissions'
 import { hashInvitationToken, isInvitationTokenShape } from '@/lib/workspaces/tokens'
 
@@ -30,7 +30,7 @@ export async function describeInvitation(
 ): Promise<InvitationPreview | null> {
   if (!isInvitationTokenShape(token)) return null
 
-  const { data, error } = await platformDb()
+  const { data, error } = await createAdminClient()
     .from('workspace_invitations')
     .select('email, role, expires_at, accepted_at, revoked_at, workspaces!inner(name)')
     .eq('token_hash', hashInvitationToken(token))
@@ -39,23 +39,14 @@ export async function describeInvitation(
   if (error) throw new Error(`describeInvitation failed: ${error.message}`)
   if (!data) return null
 
-  const row = data as unknown as {
-    email: string
-    role: WorkspaceRole
-    expires_at: string
-    accepted_at: string | null
-    revoked_at: string | null
-    workspaces: { name: string } | null
-  }
-
-  if (row.accepted_at || row.revoked_at) return null
-  if (new Date(row.expires_at).getTime() <= Date.now()) return null
-  if (!row.workspaces) return null
+  if (data.accepted_at || data.revoked_at) return null
+  if (new Date(data.expires_at).getTime() <= Date.now()) return null
+  if (!data.workspaces) return null
 
   return {
-    workspaceName: row.workspaces.name,
-    role: row.role,
-    email: row.email,
-    expiresAt: row.expires_at,
+    workspaceName: data.workspaces.name,
+    role: data.role,
+    email: data.email,
+    expiresAt: data.expires_at,
   }
 }

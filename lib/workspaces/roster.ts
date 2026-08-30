@@ -8,7 +8,6 @@ import 'server-only'
  * `workspace.member.view`.
  */
 import { createAdminClient } from '@/lib/supabase/admin'
-import { platformDb } from '@/lib/workspaces/db'
 import type { WorkspaceRole } from '@/lib/workspaces/permissions'
 
 export type TeamMember = {
@@ -31,13 +30,12 @@ export type PendingInvitation = {
 /**
  * Members of one workspace, owners first.
  *
- * Two queries rather than a join: `profiles` and `workspace_memberships` are
- * reached through differently-typed clients until 0070 lands in the generated
- * types (see `lib/workspaces/db.ts`). Both are scoped in code — the service
- * role bypasses RLS.
+ * Two queries rather than a join: `profiles` lives in the `public` schema but
+ * membership joins to `auth.users`, and PostgREST cannot embed across that
+ * boundary. Both queries are scoped in code — the service role bypasses RLS.
  */
 export async function listMembers(workspaceId: string): Promise<TeamMember[]> {
-  const { data: memberships, error } = await platformDb()
+  const { data: memberships, error } = await createAdminClient()
     .from('workspace_memberships')
     .select('id, user_id, role, created_at')
     .eq('workspace_id', workspaceId)
@@ -75,7 +73,7 @@ export async function listMembers(workspaceId: string): Promise<TeamMember[]> {
 export async function listPendingInvitations(
   workspaceId: string,
 ): Promise<PendingInvitation[]> {
-  const { data, error } = await platformDb()
+  const { data, error } = await createAdminClient()
     .from('workspace_invitations')
     .select('id, email, role, expires_at, created_at')
     .eq('workspace_id', workspaceId)

@@ -28,7 +28,7 @@ import {
   assertWorkspacePermission,
   listMemberships,
 } from '@/lib/workspaces/context'
-import { platformDb } from '@/lib/workspaces/db'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getWorkspaceEntitlements } from '@/lib/workspaces/entitlements'
 import { canManageRole, WORKSPACE_ROLES, type WorkspaceRole } from '@/lib/workspaces/permissions'
 import {
@@ -120,7 +120,7 @@ export async function inviteMemberAction(
       return fail('You are already a member of this workspace.')
     }
 
-    const db = platformDb()
+    const db = createAdminClient()
 
     // Seats are counted as members PLUS outstanding invitations. Counting only
     // members would let an admin issue fifty invitations against two seats and
@@ -195,7 +195,7 @@ export async function revokeInvitationAction(
 
     // Scoped by workspace_id: the service role would otherwise happily revoke
     // another tenant's invitation given its id.
-    const { error } = await platformDb()
+    const { error } = await createAdminClient()
       .from('workspace_invitations')
       .update({ revoked_at: new Date().toISOString() })
       .eq('id', idResult.data)
@@ -227,7 +227,7 @@ export async function changeMemberRoleAction(
     const roleResult = roleSchema.safeParse(formData.get('role'))
     if (!idResult.success || !roleResult.success) return fail(GENERIC_ERROR)
 
-    const db = platformDb()
+    const db = createAdminClient()
     const { data: membership, error: readError } = await db
       .from('workspace_memberships')
       .select('id, user_id, role')
@@ -278,7 +278,7 @@ export async function removeMemberAction(
     const idResult = uuidSchema.safeParse(formData.get('membership_id'))
     if (!idResult.success) return fail(GENERIC_ERROR)
 
-    const db = platformDb()
+    const db = createAdminClient()
     const { data: membership, error: readError } = await db
       .from('workspace_memberships')
       .select('id, user_id, role')
@@ -324,7 +324,7 @@ export async function leaveWorkspaceAction(
     // Leaving needs no management permission — only membership.
     const ctx = await assertWorkspacePermission('workspace.view')
 
-    const { error } = await platformDb()
+    const { error } = await createAdminClient()
       .from('workspace_memberships')
       .delete()
       .eq('workspace_id', ctx.workspace.id)
@@ -375,7 +375,7 @@ export async function acceptInvitationAction(
     if (!isInvitationTokenShape(token)) return fail(INVALID_INVITATION)
 
     const tokenHash = hashInvitationToken(token)
-    const db = platformDb()
+    const db = createAdminClient()
 
     // Read the target workspace first, only to learn its seat allowance. The
     // count that actually enforces the limit is re-taken inside the function's
@@ -391,10 +391,14 @@ export async function acceptInvitationAction(
 
     const { memberLimit } = await getWorkspaceEntitlements(invitation.workspace_id)
 
+    // UNLIMITED IS EXPRESSED BY OMITTING THE ARGUMENT, not by passing null.
+    // The function defaults `p_member_limit` to null and skips the seat check
+    // when it is null, so leaving it out is the same statement — and it is the
+    // only form the generated signature (`p_member_limit?: number`) accepts.
     const { data: status, error } = await db.rpc('redeem_workspace_invitation', {
       p_token_hash: tokenHash,
       p_user_id: auth.userId,
-      p_member_limit: memberLimit,
+      ...(memberLimit === null ? {} : { p_member_limit: memberLimit }),
     })
 
     if (error) throw new Error(error.message)

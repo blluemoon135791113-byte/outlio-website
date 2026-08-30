@@ -12,8 +12,8 @@ disagree, the repository wins and the conflict is recorded under
 - **Ledger opened:** 2026-08-30 (M0)
 - **Last updated:** 2026-08-30 (M1 complete)
 - **Next milestone:** M2 — CRM core: identity, ingestion, dedup, operations
-- **Blocked on a human:** apply migration `0070` (KI4) and set plan seat counts
-  (Q6). Neither blocks M2 development; both block M1 being usable in production.
+- **Blocked on a human:** plan seat counts (Q6). Migration `0070` is applied and
+  types are regenerated as of 2026-08-30.
 
 ---
 
@@ -26,10 +26,10 @@ disagree, the repository wins and the conflict is recorded under
 | Styling | Tailwind CSS v4 (`@theme`), Geist fonts | `app/globals.css`, `postcss.config.mjs` |
 | Database | Supabase Postgres, project `ptewhpmxzenbmxlizxhu` | `CLAUDE.md` |
 | ORM | **None.** `supabase-js` query builder + SQL functions | `lib/supabase/` |
-| Migrations | Hand-written, numbered SQL, `0001`–`0069` | `supabase/migrations/` |
-| Generated types | `types/database.ts` (4,788 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
+| Migrations | Hand-written, numbered SQL, `0001`–`0070` | `supabase/migrations/` |
+| Generated types | `types/database.ts` (4,970 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
 | Validation | Zod 4 | `lib/limits/plans.ts` and throughout |
-| Tests | **Vitest 4** — 1,323 tests / 95 files / 24 skipped | `vitest.config.mts`, `tests/` |
+| Tests | **Vitest 4** — 1,646 unit tests / 94 files | `vitest.config.mts`, `tests/` |
 | Package manager | npm | `package-lock.json` |
 | Edge guard | `proxy.ts` (Next 16 renamed `middleware`) | `proxy.ts` |
 | Hosting | Vercel; background work via `after()` | `CLAUDE.md`, `lib/worker/` |
@@ -57,7 +57,7 @@ is therefore already implemented, not pending.
 
 ## 2. Current data model
 
-**57 tables, ~60 SQL functions.** Extracted from `types/database.ts`.
+**61 tables, ~63 SQL functions.** Extracted from `types/database.ts`.
 
 ### Identity, access, billing
 `profiles`, `plans`, `subscriptions`, `access_requests`, `invitation_codes`,
@@ -109,6 +109,12 @@ FastSpring (**current**): `fastspring_accounts`, `fastspring_subscriptions`,
 Paddle (**superseded**, tables retained): `paddle_customers`,
 `paddle_subscriptions`, `paddle_transactions`, `paddle_webhook_events`.
 
+### Workspaces (added by M1, migration 0070)
+`workspaces`, `workspace_memberships`, `workspace_invitations`,
+`workspace_feature_flags`. Functions: `is_workspace_member()`,
+`workspace_role_of()`, `redeem_workspace_invitation()`.
+`workspace_role` enum: `owner | admin | manager | setter | viewer`.
+
 ### Queues
 `job_queue`, `research_job_queue`, `system_events`.
 
@@ -147,20 +153,28 @@ only the workspace/role dimension.
 
 ## 4. Current workspace / tenancy model
 
-**None. This is the central gap.**
+**Workspaces exist as of migration 0070 (applied 2026-08-30).** Every profile
+owns exactly one — verified against the live project: 61 profiles → 61
+workspaces → 61 owner memberships, none missing, none duplicated.
 
-Outlio is single-user today. Every tenant-scoped table carries
-`user_id uuid references auth.users(id)` and every RLS policy reads
-`auth.uid() = user_id or public.is_admin()`
-(pattern: `supabase/migrations/0067_account_list_crm_exports.sql:53`).
+⚠️ **TWO TENANCY MODELS COEXIST, AND THAT IS DELIBERATE FOR NOW.**
 
-There is no `workspaces`, no `memberships`, no `teams`, no concept of a second
-person in an account. **Every M2+ entity must be workspace-scoped from birth**,
-and the existing single-user tables need a workspace backfill path.
+| Surface | Scoped by | Policy |
+|---|---|---|
+| Lead Engine, billing, extraction, Hubble (pre-0070) | `user_id` | `auth.uid() = user_id or public.is_admin()` (e.g. `0067:53`) |
+| Workspaces and everything M2+ builds | `workspace_id` | `public.is_workspace_member(workspace_id) or public.is_admin()` |
+
+0070 touched no existing table, so nothing about today's Lead Engine changed on
+deploy. Whether the pre-existing tables gain `workspace_id` is Ledger Q4/DR5,
+decided in M2 when CRM ingestion defines the boundary.
+
+**Every M2+ entity must be workspace-scoped from birth.**
 
 Service-role queries scope by `user_id` **in code** because RLS is bypassed —
-see the comment at `lib/auth/access.ts:111`. That discipline must extend to
-`workspace_id`.
+see the comment at `lib/auth/access.ts:111`. That discipline extends to
+`workspace_id`: see the guards in `lib/workspaces/context.ts`, and
+`assertWorkspaceMembership` for actions that carry a workspace id in their
+payload rather than relying on the active-workspace cookie.
 
 ---
 
@@ -281,12 +295,12 @@ Adapt these; do not duplicate.
 
 | Planned | Exists today | Action |
 |---|---|---|
-| Workspace | — | **Create** (M1) |
-| Membership / Role | `profiles.role` (platform access only) | **Create** `workspace_memberships.role`; keep `profiles.role` for platform access ([D4](#d4-two-role-axes)) |
+| Workspace | `workspaces` ✅ (M1) | Done |
+| Membership / Role | `workspace_memberships.role` ✅ (M1) + `profiles.role` | Done. Two axes, never merged ([D4](#d4-two-role-axes)) |
 | Team | — | Create (M1, deferred to M2 if unblocking) |
-| Permission layer | `lib/auth/decide.ts` + `access.ts` | **Extend** the same pure-function pattern |
-| Entitlements | `plans.limits` JSONB + `grant_entitlement()` | **Extend** the blob with module flags ([D5](#d5-entitlements-come-from-planslimits)) |
-| Team invitation | `invitation_codes` (entitlement codes) | **Create separately** ([D6](#d6-two-kinds-of-invitation)) |
+| Permission layer | `lib/workspaces/permissions.ts` ✅ (M1) + `lib/auth/decide.ts` | Workspace roles decided by the former, platform access by the latter |
+| Entitlements | `plans.limits` module flags ✅ (M1) + `grant_entitlement()` | Done. ⚠️ No plan sets `workspace_member_limit > 1` yet (Q6) |
+| Team invitation | `workspace_invitations` ✅ (M1) | Done. Separate from `invitation_codes` ([D6](#d6-two-kinds-of-invitation)) |
 | Contact | `extracted_leads` (per-extraction rows) | **Create** canonical `crm_contacts`; leads remain the immutable extraction record |
 | Company | `companies` ✅ with normalization | **Reuse and extend** |
 | Field normalization | `lib/crm/normalize.ts` ✅ (M2 Phase 2) | Email, phone, person LinkedIn, person name. Delegates company domain/name/page to `lib/companies/normalize.ts` and the LinkedIn key to `lib/leads/canonical-url.ts` |
@@ -451,7 +465,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | # | Criterion | Status |
 |---|---|---|
 | 1 | Policy tests cover every role × resource, allow **and** deny | ✅ `tests/unit/workspace-permissions.test.ts` — 5 roles × 40 permissions, generated, plus a completeness test that fails if a permission is added without a matrix row |
-| 2 | Tenancy isolation: no cross-workspace reads/writes | ⚠️ **Partial.** Every write is scoped by `workspace_id` in code and re-asserted by `assertWorkspaceMembership`; RLS backs it with `is_workspace_member()`. The end-to-end leak test needs migration 0070 applied — see [KI4](#17-known-issues). |
+| 2 | Tenancy isolation: no cross-workspace reads/writes | ✅ `tests/integration/workspace-tenancy.test.ts` — 26 tests against the live project. Alice cannot read or write Bob's workspace, memberships, invitations or feature flags; positive controls confirm she can reach her own. |
 | 3 | Invitation flow end-to-end with role selection | ✅ Issue → link → `/join/[token]` → atomic redeem → membership. Roles chosen from `assignableRoles(actor)`. |
 | 4 | Entitlement toggle blocks at the **API** level, not just UI | ✅ `decidePermission` checks the module before the role; `assertWorkspacePermission` throws `ERR_FORBIDDEN` before any query runs. Tested both directions. |
 | 5 | Ledger updated | ✅ This document. |
@@ -483,7 +497,7 @@ Recorded, never dropped.
 | KI1 | GitLab mirror is stale and diverged. | Cosmetic; GitHub is authoritative per D1. |
 | KI2 | Paddle tables and code remain alongside FastSpring. | None functionally; cleanup candidate. |
 | KI3 | No `hubble.execute()` boundary. | Blocks M7 credit accounting until introduced. |
-| KI4 | **Migration 0070 has not been applied to any environment.** It is written and reviewed but unrun; the generated types in `types/database.ts` therefore do not contain the workspace tables, which is why `lib/workspaces/db.ts` declares them by hand. | Nothing workspace-related works until `0070` is applied and `npm run db:types` is run. The tenancy leak test (M1 criterion 2) is blocked on the same step. |
+| ~~KI4~~ | ~~Migration 0070 unapplied.~~ **Resolved 2026-08-30.** Applied; `npm run db:types` regenerated the types; `lib/workspaces/db.ts` deleted. Backfill verified against the live project: 61 profiles → 61 workspaces → 61 owner memberships, no profile without one, no user in two. | — |
 | KI5 | No plan sells more than one seat (Q6), so the invite flow is reachable but always refused. | Team features are dark until seat counts are set on `plans.limits`. |
 | KI6 | Ownership cannot be transferred and a second owner cannot be created (DR9). | A sole owner can never leave their workspace. Support-only until M2. |
 | KI7 | `tests/integration/signup-ip-gate.test.ts` reserves real signup IPs against the live project and fails when the suite is run repeatedly from one machine — the gate blocks its own runner. Pre-existing, confirmed by stashing this branch. | 3 tests fail on a re-run. Use `npx vitest run tests/unit` for iteration; the gate's claims age out. |
@@ -509,9 +523,12 @@ M1 added 270 tests across two files:
 | `tests/unit/workspace-permissions.test.ts` | 5 roles × 40 permissions allow/deny, non-member denial, the setter boundary by name, entitlement gating, `dataScope`, `canManageRole`, `assignableRoles` |
 | `tests/unit/workspace-invitations.test.ts` | Token uniqueness/shape/hashing, constant-time comparison, TTL, email normalization, module resolution, seat limits |
 
-**Not yet covered:** anything requiring migration 0070 to be applied — the
-atomic redeem function, the last-owner trigger, the column-protection trigger,
-the backfill, and the cross-workspace RLS leak test. See KI4.
+M1's database behaviour is covered by:
+`npx vitest run tests/integration/workspace-tenancy.test.ts` — **26 passed**,
+covering what only exists in Postgres: the RLS policies, `handle_new_user()`,
+`redeem_workspace_invitation()` (invalid / wrong_email / expired / revoked /
+seat_limit / ok / already_member / burned), `guard_last_workspace_owner()` and
+`protect_workspace_columns()`.
 
 ---
 
