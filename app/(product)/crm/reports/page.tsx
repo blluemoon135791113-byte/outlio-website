@@ -39,6 +39,9 @@ export default async function ReportsPage({
 
   const policy = { role: ctx.role, modules: ctx.modules }
   const canSeeTeam = can(policy, 'report.team.view')
+  // ⚠️ The button follows the permission; the ROUTE enforces it. A download
+  // handler is reachable by typing a URL (CLAUDE.md rule 8).
+  const canExport = can(policy, 'report.export')
   const scopedToSelf = dataScope(ctx.role) === 'assigned'
 
   const [mine, myPipeline, lastRun] = await Promise.all([
@@ -104,9 +107,12 @@ export default async function ReportsPage({
       )}
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-ink">
-          {scopedToSelf ? 'Your activity' : 'Your activity'}
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-ink">Your activity</h3>
+          {/* Always available: it contains only numbers this person can
+              already see on this page. */}
+          <ExportLink kind="my_activity" range={range.key} label="Export mine" />
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Contacts created" value={mine.contactsCreated} />
           <Stat label="Contacts emailed" value={mine.contactsEmailed} />
@@ -151,7 +157,12 @@ export default async function ReportsPage({
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-ink">Team</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-ink">Team</h3>
+              {canExport ? (
+                <ExportLink kind="leaderboard" range={range.key} label="Export team" />
+              ) : null}
+            </div>
             {leaderboard.length === 0 ? (
               <p className="text-sm text-muted">No members yet.</p>
             ) : (
@@ -187,7 +198,12 @@ export default async function ReportsPage({
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-ink">Lead batches</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-ink">Lead batches</h3>
+              {canExport ? (
+                <ExportLink kind="funnels" range={range.key} label="Export funnels" />
+              ) : null}
+            </div>
             {funnels.length === 0 ? (
               <p className="text-sm text-muted">
                 No batches yet. A funnel appears once an extraction or an import has run.
@@ -240,6 +256,30 @@ export default async function ReportsPage({
         </>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * A plain link, not a fetch. The browser's own download handling gets the
+ * filename from Content-Disposition and streams straight to disk, and it keeps
+ * working with JavaScript disabled.
+ */
+function ExportLink({
+  kind,
+  range,
+  label,
+}: {
+  kind: 'leaderboard' | 'funnels' | 'my_activity'
+  range: string
+  label: string
+}) {
+  return (
+    <a
+      href={`/crm/reports/export?kind=${kind}&range=${range}`}
+      className="rounded-[var(--radius-md)] border border-border px-3 py-1.5 text-xs font-semibold text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+    >
+      {label}
+    </a>
   )
 }
 
