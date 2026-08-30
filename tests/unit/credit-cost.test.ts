@@ -32,6 +32,13 @@ function limits(over: Partial<PlanLimits>): PlanLimits {
     contact_enrichments_per_month: null,
     exports_per_month: null,
     retention_days: null,
+    crm_enabled: false,
+    email_enabled: false,
+    flows_enabled: false,
+    reports_enabled: false,
+    integrations_enabled: true,
+    hubble_enabled: true,
+    workspace_member_limit: 1,
     ...over,
   }
 }

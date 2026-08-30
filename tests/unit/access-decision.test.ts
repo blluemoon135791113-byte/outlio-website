@@ -21,6 +21,15 @@ const LIMITS: PlanLimits = {
   exports_per_month: 50,
   retention_days: 90,
   contact_enrichments_per_month: 250,
+  // Platform module entitlements (migration 0070). Irrelevant to the scraper
+  // access decision, but part of the shape `planLimitsSchema` produces.
+  crm_enabled: false,
+  email_enabled: false,
+  flows_enabled: false,
+  reports_enabled: false,
+  integrations_enabled: true,
+  hubble_enabled: true,
+  workspace_member_limit: 1,
 }
 
 const USAGE = { extractionsToday: 0, extractionsThisMonth: 0, recordsThisMonth: 0 }

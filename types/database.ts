@@ -110,6 +110,23 @@ export type PlanLimits = {
    * `planLimitsSchema`.
    */
   contact_enrichments_per_month: number | null
+
+  /**
+   * Platform module entitlements (Ledger D5).
+   *
+   * ABSENT means the default in `planLimitsSchema`, not `false` — existing plan
+   * rows predate these keys and must keep behaving exactly as they do now. A
+   * workspace feature flag can additionally switch a module off, never on.
+   */
+  crm_enabled: boolean
+  email_enabled: boolean
+  flows_enabled: boolean
+  reports_enabled: boolean
+  integrations_enabled: boolean
+  hubble_enabled: boolean
+
+  /** Seats per workspace, owner included. `null` means unlimited. */
+  workspace_member_limit: number | null
 }
 
 // ---------------------------------------------------------------------------

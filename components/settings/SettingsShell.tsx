@@ -27,6 +27,7 @@ const SECTIONS = [
   { href: '/dashboard/settings', label: 'Profile' },
   { href: '/dashboard/settings/email', label: 'Email address' },
   { href: '/dashboard/settings/security', label: 'Security' },
+  { href: '/dashboard/settings/team', label: 'Team' },
   { href: '/dashboard/settings/billing', label: 'Subscription and billing' },
   { href: '/dashboard/settings/integrations', label: 'Integrations' },
   { href: '/dashboard/settings/extension', label: 'Browser extension' },

@@ -6690,3 +6690,95 @@ Phase 4 needs nothing further from the user.
 - `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass. The
   suite passes 1,323 tests across 95 files with 24 skipped, including a
   rewritten `tests/unit/app-subdomain-proxy.test.ts`.
+
+## 2026-08-30 — Platform build M0/M1: the Ledger and the workspace backbone
+
+The first two milestones of the GTM platform expansion (Lead Engine → CRM →
+Email → Flows → Reports). `OUTLIO_PLATFORM_IMPLEMENTATION.md` at the repo root
+is the Ledger and must be read before every phase and updated after it.
+
+### Added
+
+- **`OUTLIO_PLATFORM_IMPLEMENTATION.md` (M0).** Architecture inventory taken
+  from repository evidence with file citations: 57 tables, ~60 SQL functions,
+  the auth/access layer, queues, integrations, Hubble, billing and UI shell.
+  Includes a planned-entity → existing-equivalent map so later milestones adapt
+  rather than duplicate, ten recorded decisions, six open questions and nine
+  deferred requirements. **No feature code, no migrations** — M0's whole point.
+- **`supabase/migrations/0070_workspaces.sql` (M1).** The tenancy backbone:
+  `workspace_role` enum; `workspaces`, `workspace_memberships`,
+  `workspace_invitations`, `workspace_feature_flags`; RLS on all four;
+  `is_workspace_member()` / `workspace_role_of()` as SECURITY DEFINER helpers
+  (a policy on `workspace_memberships` that queries `workspace_memberships`
+  recurses and Postgres refuses it); an atomic `redeem_workspace_invitation()`
+  in the same style as `grant_entitlement()`; a last-owner guard; a
+  column-protection trigger so an owner cannot raise their own seat ceiling;
+  and an idempotent backfill giving every existing profile a personal workspace.
+  **It touches no existing table** — Lead Engine rows stay `user_id`-scoped
+  until CRM ingestion defines the boundary (Ledger DR5).
+- **`lib/workspaces/permissions.ts`** — the policy layer. 40 named permissions
+  × 5 roles (owner/admin/manager/setter/viewer), pure and I/O-free in the same
+  shape as `lib/auth/decide.ts`, so every branch is testable without a request
+  context. Denials carry a reason: "your plan does not include this" and "your
+  role does not permit this" are different support calls.
+- `lib/workspaces/` — `context.ts` (guards), `entitlements.ts` (module
+  resolution), `actions.ts` (eight Server Actions), `tokens.ts`, `roster.ts`,
+  `invitations.ts`, `db.ts`.
+- `/dashboard/settings/team` and `/join/[token]`, plus `WorkspaceInvite` /
+  `workspaceJoin` rate-limit rules.
+
+### Changed
+
+- `plans.limits` gained module entitlements (`crm_enabled`, `email_enabled`,
+  `flows_enabled`, `reports_enabled`, `integrations_enabled`, `hubble_enabled`)
+  and `workspace_member_limit`, validated in `planLimitsSchema`. Defaults
+  describe TODAY's product so existing plan rows behave exactly as before —
+  `integrations` and `hubble` default true, the unbuilt modules false. The real
+  Hubble boundary remains `requireHubbleAccess`.
+- `handle_new_user()` now creates a workspace and an owner membership in the
+  same transaction as the profile.
+- `proxy.ts`: `/join` added to `APP_SUBDOMAIN_PATHS` (invitation links would
+  otherwise 404 on the only host that issues them) and to `PROTECTED_PREFIXES`
+  (so sign-in carries `?next=/join/<token>` and the invitee lands back on the
+  invitation instead of the dashboard).
+
+### Notes
+
+- A feature flag can only ever RESTRICT a module. `enabled: true` on a module
+  the plan does not include grants nothing — otherwise the kill switch A3
+  requires would double as a way to hand out unpaid modules.
+- Invitation tokens are 32 CSPRNG bytes; only the SHA-256 reaches the database,
+  and redemption additionally requires the invitee's own verified email, so a
+  forwarded link is useless.
+- Redeeming is a Server Action behind an explicit button, never a page render:
+  a link preview or a mail scanner would otherwise burn the invitation before
+  the invitee saw it.
+
+### Verification
+
+- `npm run typecheck` passes. `npm run lint` reports 0 errors (95 pre-existing
+  warnings, all in generated or vendored files). `npm run build` passes and
+  emits both new routes.
+- The suite passes **1,644 tests across 100 files with 24 skipped**, including
+  270 new: `workspace-permissions.test.ts` generates all 5 roles × 40
+  permissions in both directions and fails if a permission is added without a
+  matrix row; `workspace-invitations.test.ts` covers token uniqueness, shape,
+  hashing, constant-time comparison, TTL, email normalization, module
+  resolution and seat limits.
+- The seat-limit test caught a real defect before it shipped: `?? 1` in
+  `resolveMemberLimit` collapsed a plan's `null` (unlimited) into one seat,
+  because `??` fires on null.
+
+### Known limitations
+
+- **Migration 0070 has not been applied anywhere.** Until it is run and
+  `npm run db:types` regenerates the types, the workspace tables are absent
+  from `types/database.ts`; `lib/workspaces/db.ts` declares them by hand and
+  says how to remove itself. Nothing workspace-related works before that step,
+  and the cross-workspace RLS leak test is blocked on it.
+- No plan sells a second seat, so `workspace_member_limit` defaults to 1 and
+  every invitation is refused. That is a pricing decision (Ledger Q6);
+  `workspaces.member_limit_override` widens one account meanwhile.
+- Ownership cannot be transferred and a second owner cannot be created, so a
+  sole owner cannot leave their workspace (Ledger DR9, M2).
+- Membership changes are not audited yet (Ledger DR6, M2 Phase 5).

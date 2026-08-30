@@ -32,7 +32,12 @@ import {
 } from '@/lib/auth/session-guard'
 import { isAppHost } from '@/lib/site'
 
-const PROTECTED_PREFIXES = ['/dashboard', '/admin']
+/*
+ * `/join` is protected so the proxy redirects with `?next=/join/<token>`,
+ * carrying the invitee back to the invitation after they sign in. Letting the
+ * page redirect instead would drop the token and strand them on the dashboard.
+ */
+const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/join']
 
 /**
  * ⚠️ AUTH COOKIES ARE PER-HOST, DELIBERATELY.
@@ -87,6 +92,9 @@ const APP_SUBDOMAIN_PATHS = [
   '/dashboard',
   '/admin',
   '/welcome',
+  // Workspace invitation links. Omitting this would 404 every invitation on
+  // the software domain, which is the only host they are ever issued for.
+  '/join',
   '/extension',
   '/sign-in',
   '/sign-up',

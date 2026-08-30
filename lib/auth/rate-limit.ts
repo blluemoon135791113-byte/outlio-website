@@ -85,6 +85,30 @@ export const RULES = {
     windowSeconds: 60,
     blockSeconds: 5 * 60,
   },
+  /*
+   * Workspace team management.
+   *
+   * Issuing an invitation is an outbound message addressed to an arbitrary
+   * email, so it is spam-shaped whatever we do with delivery later. Capped per
+   * inviter rather than per IP — a whole office behind one address must not
+   * lock each other out, and the inviter is already an authenticated identity
+   * by the time we get here.
+   *
+   * Redemption is capped per IP: the token is unguessable, so this exists to
+   * stop someone grinding through candidate tokens, not to bound a real user.
+   */
+  workspaceInvite: {
+    bucket: 'workspace:invite',
+    maxAttempts: 20,
+    windowSeconds: 60 * 60,
+    blockSeconds: 60 * 60,
+  },
+  workspaceJoin: {
+    bucket: 'workspace:join',
+    maxAttempts: 10,
+    windowSeconds: 15 * 60,
+    blockSeconds: 60 * 60,
+  },
 } as const satisfies Record<string, RateLimitRule>
 
 function windowStart(windowSeconds: number, now = Date.now()): Date {

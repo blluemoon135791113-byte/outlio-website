@@ -52,6 +52,44 @@ export const planLimitsSchema = z.object({
    * Absent means a safe number, never unlimited. Unlimited has to be stated.
    */
   contact_enrichments_per_month: nullableInt.catch(250).default(250),
+
+  /*
+   * ── Platform module entitlements (Ledger D5) ────────────────────────────
+   *
+   * The GTM platform's modules are entitled here rather than in a new table,
+   * because `plans.limits` is already THE runtime source of every allowance
+   * and CLAUDE.md forbids a second one.
+   *
+   * A workspace feature flag can additionally switch a module OFF, never on:
+   * the effective answer is `entitlement AND flag`. See
+   * `lib/workspaces/entitlements.ts`.
+   *
+   * Defaults describe TODAY's product, so existing plan rows — none of which
+   * carry these keys yet — keep behaving exactly as they do now:
+   *   • crm/email/flows/reports  → false. Not built. Nothing to grant.
+   *   • integrations             → true.  Shipped and in use.
+   *   • hubble                   → true.  The real Hubble boundary remains
+   *     `requireHubbleAccess`, which resolves the paid tier from
+   *     fastspring_subscriptions. Defaulting false here would silently revoke
+   *     Hubble from every paying customer on deploy.
+   */
+  crm_enabled: z.boolean().catch(false).default(false),
+  email_enabled: z.boolean().catch(false).default(false),
+  flows_enabled: z.boolean().catch(false).default(false),
+  reports_enabled: z.boolean().catch(false).default(false),
+  integrations_enabled: z.boolean().catch(true).default(true),
+  hubble_enabled: z.boolean().catch(true).default(true),
+
+  /*
+   * Seats per workspace, owner included. `null` is unlimited.
+   *
+   * Defaults to 1 — one person, which is exactly what every plan sells today.
+   * ⚠️ No plan can be invited into until a seat count is set on it. That is a
+   * PRICING decision, not an engineering one, and is recorded as Ledger Q6.
+   * Support can widen a single account meanwhile via
+   * `workspaces.member_limit_override`.
+   */
+  workspace_member_limit: nullableInt.catch(1).default(1),
 })
 
 export type Plan = {
