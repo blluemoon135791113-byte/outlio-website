@@ -1046,6 +1046,94 @@ export type Database = {
         }
         Relationships: []
       }
+      account_list_entries: {
+        Row: {
+          alert: string | null
+          company_id: string
+          company_name_snapshot: string
+          company_sales_navigator_url: string
+          connection_paths: string | null
+          created_at: string
+          extraction_job_id: string
+          id: string
+          industry_snapshot: string | null
+          recommended_contact_connection: string | null
+          recommended_contact_job_title: string | null
+          recommended_contact_member_id: string | null
+          recommended_contact_name: string | null
+          recommended_contact_sales_nav_url: string | null
+          recommended_lead_id: string | null
+          source_list: string | null
+          source_row_index: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          alert?: string | null
+          company_id: string
+          company_name_snapshot: string
+          company_sales_navigator_url: string
+          connection_paths?: string | null
+          created_at?: string
+          extraction_job_id: string
+          id?: string
+          industry_snapshot?: string | null
+          recommended_contact_connection?: string | null
+          recommended_contact_job_title?: string | null
+          recommended_contact_member_id?: string | null
+          recommended_contact_name?: string | null
+          recommended_contact_sales_nav_url?: string | null
+          recommended_lead_id?: string | null
+          source_list?: string | null
+          source_row_index: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          alert?: string | null
+          company_id?: string
+          company_name_snapshot?: string
+          company_sales_navigator_url?: string
+          connection_paths?: string | null
+          created_at?: string
+          extraction_job_id?: string
+          id?: string
+          industry_snapshot?: string | null
+          recommended_contact_connection?: string | null
+          recommended_contact_job_title?: string | null
+          recommended_contact_member_id?: string | null
+          recommended_contact_name?: string | null
+          recommended_contact_sales_nav_url?: string | null
+          recommended_lead_id?: string | null
+          source_list?: string | null
+          source_row_index?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_list_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_list_entries_extraction_job_id_fkey"
+            columns: ["extraction_job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_list_entries_recommended_lead_id_fkey"
+            columns: ["recommended_lead_id"]
+            isOneToOne: false
+            referencedRelation: "extracted_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_audit_logs: {
         Row: {
           action: string
@@ -1206,94 +1294,6 @@ export type Database = {
             columns: ["device_id"]
             isOneToOne: false
             referencedRelation: "extension_devices"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      account_list_entries: {
-        Row: {
-          alert: string | null
-          company_id: string
-          company_name_snapshot: string
-          company_sales_navigator_url: string
-          connection_paths: string | null
-          created_at: string
-          extraction_job_id: string
-          id: string
-          industry_snapshot: string | null
-          recommended_contact_connection: string | null
-          recommended_contact_job_title: string | null
-          recommended_contact_member_id: string | null
-          recommended_contact_name: string | null
-          recommended_contact_sales_nav_url: string | null
-          recommended_lead_id: string | null
-          source_list: string | null
-          source_row_index: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          alert?: string | null
-          company_id: string
-          company_name_snapshot: string
-          company_sales_navigator_url: string
-          connection_paths?: string | null
-          created_at?: string
-          extraction_job_id: string
-          id?: string
-          industry_snapshot?: string | null
-          recommended_contact_connection?: string | null
-          recommended_contact_job_title?: string | null
-          recommended_contact_member_id?: string | null
-          recommended_contact_name?: string | null
-          recommended_contact_sales_nav_url?: string | null
-          recommended_lead_id?: string | null
-          source_list?: string | null
-          source_row_index: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          alert?: string | null
-          company_id?: string
-          company_name_snapshot?: string
-          company_sales_navigator_url?: string
-          connection_paths?: string | null
-          created_at?: string
-          extraction_job_id?: string
-          id?: string
-          industry_snapshot?: string | null
-          recommended_contact_connection?: string | null
-          recommended_contact_job_title?: string | null
-          recommended_contact_member_id?: string | null
-          recommended_contact_name?: string | null
-          recommended_contact_sales_nav_url?: string | null
-          recommended_lead_id?: string | null
-          source_list?: string | null
-          source_row_index?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "account_list_entries_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "account_list_entries_extraction_job_id_fkey"
-            columns: ["extraction_job_id"]
-            isOneToOne: false
-            referencedRelation: "extraction_jobs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "account_list_entries_recommended_lead_id_fkey"
-            columns: ["recommended_lead_id"]
-            isOneToOne: false
-            referencedRelation: "extracted_leads"
             referencedColumns: ["id"]
           },
         ]
@@ -2222,7 +2222,15 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fastspring_orders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "fastspring_accounts"
+            referencedColumns: ["account_id"]
+          },
+        ]
       }
       fastspring_subscriptions: {
         Row: {
@@ -2288,7 +2296,15 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fastspring_subscriptions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "fastspring_accounts"
+            referencedColumns: ["account_id"]
+          },
+        ]
       }
       fastspring_webhook_events: {
         Row: {
@@ -3706,11 +3722,11 @@ export type Database = {
           created_at: string
           current_period_end: string | null
           current_period_start: string
-          granted_by: string | null
-          id: string
           fastspring_account_id: string | null
           fastspring_event_at: string | null
           fastspring_product_path: string | null
+          granted_by: string | null
+          id: string
           paddle_customer_id: string | null
           paddle_event_at: string | null
           paddle_price_id: string | null
@@ -3731,11 +3747,11 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string
-          granted_by?: string | null
-          id?: string
           fastspring_account_id?: string | null
           fastspring_event_at?: string | null
           fastspring_product_path?: string | null
+          granted_by?: string | null
+          id?: string
           paddle_customer_id?: string | null
           paddle_event_at?: string | null
           paddle_price_id?: string | null
@@ -3756,11 +3772,11 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string
-          granted_by?: string | null
-          id?: string
           fastspring_account_id?: string | null
           fastspring_event_at?: string | null
           fastspring_product_path?: string | null
+          granted_by?: string | null
+          id?: string
           paddle_customer_id?: string | null
           paddle_event_at?: string | null
           paddle_price_id?: string | null
@@ -4141,15 +4157,15 @@ export type Database = {
           user_id: string
         }[]
       }
+      fastspring_subscription_grants_access: {
+        Args: { p_active: boolean; p_state: string }
+        Returns: boolean
+      }
       finalize_upload_job: {
         Args: { p_job_id: string; p_user_id: string }
         Returns: string
       }
       generate_referral_code: { Args: never; Returns: string }
-      grant_fastspring_period_credits: {
-        Args: { p_event_id: string; p_plan_key: string; p_user_id: string }
-        Returns: number
-      }
       grant_entitlement: {
         Args: {
           p_duration_days?: number
@@ -4161,6 +4177,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: string
+      }
+      grant_fastspring_period_credits: {
+        Args: { p_event_id: string; p_plan_key: string; p_user_id: string }
+        Returns: number
       }
       granted_credits: {
         Args: { p_period_start: string; p_user_id: string }
@@ -4175,96 +4195,6 @@ export type Database = {
           p_user_id: string
         }
         Returns: number
-      }
-      fastspring_subscription_grants_access: {
-        Args: { p_active: boolean; p_state: string }
-        Returns: boolean
-      }
-      reconcile_fastspring_entitlement: {
-        Args: { p_subscription_id: string }
-        Returns: undefined
-      }
-      resolve_fastspring_user: {
-        Args: { p_account_id: string; p_email: string; p_tags: Json }
-        Returns: string
-      }
-      sync_fastspring_account: {
-        Args: {
-          p_account_id: string
-          p_company: string
-          p_country: string
-          p_email: string
-          p_event_id: string
-          p_event_type: string
-          p_language: string
-          p_name: string
-          p_occurred_at: string
-          p_tags: Json
-        }
-        Returns: boolean
-      }
-      sync_fastspring_charge: {
-        Args: {
-          p_account_id: string
-          p_charge_id: string
-          p_currency: string
-          p_decline_reason: string
-          p_email: string
-          p_event_id: string
-          p_event_type: string
-          p_occurred_at: string
-          p_plan_key: string
-          p_product_path: string
-          p_status: string
-          p_subscription_id: string
-          p_tags: Json
-          p_total: number
-        }
-        Returns: Json
-      }
-      sync_fastspring_order: {
-        Args: {
-          p_account_id: string
-          p_completed_at: string
-          p_currency: string
-          p_email: string
-          p_event_id: string
-          p_event_type: string
-          p_live: boolean
-          p_occurred_at: string
-          p_order_id: string
-          p_plan_key: string
-          p_product_path: string
-          p_reference: string
-          p_subscription_id: string
-          p_tags: Json
-          p_total: number
-        }
-        Returns: Json
-      }
-      sync_fastspring_subscription: {
-        Args: {
-          p_account_id: string
-          p_active: boolean
-          p_auto_renew: boolean
-          p_begin_at: string
-          p_billing_interval: string
-          p_canceled_at: string
-          p_currency: string
-          p_deactivated_at: string
-          p_email: string
-          p_event_id: string
-          p_event_type: string
-          p_next_charge_at: string
-          p_occurred_at: string
-          p_plan_key: string
-          p_price: number
-          p_product_path: string
-          p_state: string
-          p_subscription_id: string
-          p_tags: Json
-        }
-        Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
       lead_credit_cost: {
@@ -4306,6 +4236,10 @@ export type Database = {
       reap_stale_research_runs: {
         Args: { p_timeout_seconds?: number }
         Returns: number
+      }
+      reconcile_fastspring_entitlement: {
+        Args: { p_subscription_id: string }
+        Returns: undefined
       }
       reconcile_paddle_entitlement: {
         Args: { p_subscription_id: string }
@@ -4354,6 +4288,10 @@ export type Database = {
           p_token_hash: string
         }
         Returns: boolean
+      }
+      resolve_fastspring_user: {
+        Args: { p_account_id: string; p_email?: string; p_tags: Json }
+        Returns: string
       }
       resolve_paddle_user: {
         Args: { p_custom_data: Json; p_customer_id: string; p_email?: string }
@@ -4441,6 +4379,84 @@ export type Database = {
       }
       sweep_rate_limits: { Args: never; Returns: number }
       sweep_signup_ip_reservations: { Args: never; Returns: number }
+      sync_fastspring_account: {
+        Args: {
+          p_account_id: string
+          p_company: string
+          p_country: string
+          p_email: string
+          p_event_id: string
+          p_event_type: string
+          p_language: string
+          p_name: string
+          p_occurred_at: string
+          p_tags: Json
+        }
+        Returns: boolean
+      }
+      sync_fastspring_charge: {
+        Args: {
+          p_account_id: string
+          p_charge_id: string
+          p_currency: string
+          p_decline_reason: string
+          p_email: string
+          p_event_id: string
+          p_event_type: string
+          p_occurred_at: string
+          p_plan_key: string
+          p_product_path: string
+          p_status: string
+          p_subscription_id: string
+          p_tags: Json
+          p_total: number
+        }
+        Returns: Json
+      }
+      sync_fastspring_order: {
+        Args: {
+          p_account_id: string
+          p_completed_at: string
+          p_currency: string
+          p_email: string
+          p_event_id: string
+          p_event_type: string
+          p_live: boolean
+          p_occurred_at: string
+          p_order_id: string
+          p_plan_key: string
+          p_product_path: string
+          p_reference: string
+          p_subscription_id: string
+          p_tags: Json
+          p_total: number
+        }
+        Returns: Json
+      }
+      sync_fastspring_subscription: {
+        Args: {
+          p_account_id: string
+          p_active: boolean
+          p_auto_renew: boolean
+          p_begin_at: string
+          p_billing_interval: string
+          p_canceled_at: string
+          p_currency: string
+          p_deactivated_at: string
+          p_email: string
+          p_event_id: string
+          p_event_type: string
+          p_next_charge_at: string
+          p_occurred_at: string
+          p_plan_key: string
+          p_price: number
+          p_product_path: string
+          p_state: string
+          p_subscription_id: string
+          p_tags: Json
+        }
+        Returns: boolean
+      }
       sync_paddle_customer: {
         Args: {
           p_custom_data: Json

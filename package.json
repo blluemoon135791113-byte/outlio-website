@@ -14,7 +14,7 @@
     "ext:chrome": "node extensions/scripts/build.mjs --target=chrome",
     "ext:firefox": "node extensions/scripts/build.mjs --target=firefox",
     "ext:dev": "node extensions/scripts/build.mjs --target=chrome --dev",
-    "db:types": "supabase gen types typescript --project-id ptewhpmxzenbmxlizxhu --schema public > types/database.tmp.ts && test -s types/database.tmp.ts && mv types/database.tmp.ts types/database.ts || (rm -f types/database.tmp.ts && echo 'db:types failed — types/database.ts left untouched. Run `supabase login` first.' && exit 1)",
+    "db:types": "node scripts/gen-db-types.mjs",
     "ext:package": "node extensions/scripts/build.mjs --target=chrome && node extensions/scripts/package.mjs --target=chrome",
     "ext:package:firefox": "node extensions/scripts/build.mjs --target=firefox && node extensions/scripts/package.mjs --target=firefox",
     "ext:assets": "node extensions/scripts/build.mjs --target=chrome && node extensions/scripts/screenshots.mjs"
