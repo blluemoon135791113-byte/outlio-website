@@ -10,10 +10,10 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M2 Phase 3 engine complete)
+- **Last updated:** 2026-08-30 (M2 Phase 4 scoring + schema)
 - **Next milestone:** M2 — CRM core: identity, ingestion, dedup, operations
-- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0073` are all
-  applied and types are regenerated.
+- **Blocked on a human:** apply migration `0074` (`supabase/APPLY_PENDING.sql`)
+  then `npm run db:types`; plan seat counts (Q6). `0070`–`0073` are applied.
 
 ---
 
@@ -410,6 +410,34 @@ it. It is a rule, not an enforcement point — a policy layer cannot put a WHERE
 clause on someone else's query. There is nothing to scope yet: no CRM record
 exists. Every M2 query that returns workspace data MUST consult `dataScope`.
 
+### D18. Name similarity is a GATE, not a weight
+Company, phone and shared email domain only ever amplify a name that already
+matches. Below a similarity of 0.62 a pair is not a candidate at any score.
+
+*Rationale:* score those signals additively and every pair of colleagues
+becomes a "duplicate" — they share a switchboard and an employer by
+definition. The Duplicate Center fills with noise and the one real duplicate is
+buried in it. A Center nobody trusts is worse than no Center.
+
+A corollary: an identical name alone (weight 55) never reaches the threshold of
+60. Two people in one workspace can genuinely both be called John Smith.
+
+### D19. 100% is reserved for certainties
+Only the two exact blocks — same mailbox, same canonical LinkedIn identity —
+score 100. Every judgement is capped at 99, however many signals corroborate
+it, so "100%" in the UI always means a certainty rather than a strong hunch.
+
+### D20. Trigram similarity is Dice, not pg_trgm's Jaccard
+`pg_trgm.similarity()` is `shared / (a + b - shared)`; `trigramSimilarity` is
+`2·shared / (a + b)`.
+
+*Rationale:* Jaccard badly underrates the commonest real defect — one mistyped
+character in one word of a two-word name. "Samuel Ellis" vs "Samual Ellis"
+scores 0.63 under Jaccard, barely above the gate, and 0.77 under Dice. A SQL
+pre-filter using `similarity()` is still fine for BLOCKING, with a
+correspondingly lower threshold, but the final score must always come from
+`lib/crm/dedupe.ts`.
+
 ### D15. A batch is history; a list is a working set
 `crm_lead_batches` records what one ingestion run contained, fixed forever —
 it is the unit M4's funnel groups by (extracted → canonical → emailed →
@@ -514,6 +542,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0074 | `0074_crm_deduplication.sql` | M2 P4 | `crm_duplicate_candidates` (one row per pair, `record_a_id < record_b_id` enforced), `crm_merge_events` (append-only), `crm_contacts.merged_into_id`, and `crm_merge_contacts()` — atomic, deadlock-safe, moves every child table. |
 | 0073 | `0073_fix_ingest_ambiguity.sql` | M2 P3 | Replaces `crm_ingest_contacts`. 0072 shipped it with four unqualified `contact_id` references that were ambiguous with the `RETURNS TABLE` output column — an error Postgres raises at RUNTIME, not at creation, so the migration applied cleanly and failed on the first real call. |
 | 0072 | `0072_crm_ingestion.sql` | M2 P3 | `crm_lead_batches`, `crm_batch_members`, `crm_lists`, `crm_list_members`, `crm_import_jobs`; `crm_ingest_contacts()` (set-based atomic upsert) and `crm_undo_batch()`; RLS on all five. **Additive — no column added to an existing table, no function replaced.** |
 | 0071 | `0071_crm_core_identity.sql` | M2 P2 | `crm_record_source`, `crm_custom_field_type`, `crm_custom_field_entity` enums; `crm_companies`, `crm_contacts`, `crm_contact_emails`, `crm_contact_phones`, `crm_contact_company_relationships`, `crm_tags`, `crm_contact_tags`, `crm_custom_field_definitions`, `crm_custom_field_values`, `crm_saved_views`; RLS on all ten. **Purely additive — touches no existing table and replaces no function.** |
@@ -527,7 +556,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 |---|---|---|
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
-| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phases 2 ✅ and 3 ✅ (engine; UI is DR12). Phases 4–5 not started |
+| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phases 2 ✅ 3 ✅. **Phase 4 in progress** — scoring done, merge pending `0074`. Phase 5 not started |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Not started |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
@@ -542,8 +571,8 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 |---|---|---|
 | 1 | Importing the same file/batch twice → zero new contacts | ✅ `tests/integration/crm-ingestion.test.ts` — proven for BOTH paths: re-ingesting an extraction reuses the batch and matches all three people; re-running a CSV import creates zero and matches two |
 | 2 | Normalization unit tests pass for email/phone/LinkedIn/domain edge cases | ✅ `crm-normalize.test.ts` (66) + `crm-custom-fields.test.ts` (41) + `crm-csv-import.test.ts` (31) |
-| 3 | Merge preserves child records; concurrent merge fails safely | ⬜ Phase 4 |
-| 4 | Duplicate Center shows reasons + confidence | ⬜ Phase 4 |
+| 3 | Merge preserves child records; concurrent merge fails safely | 🔨 `crm_merge_contacts` written; integration tests pending `0074` |
+| 4 | Duplicate Center shows reasons + confidence | ✅ scoring — `tests/unit/crm-dedupe.test.ts` asserts nothing can be flagged without both, and that reasons carry no schema jargon |
 | 5 | Activity rows immutable | ⬜ Phase 5 — `crm_activities` does not exist yet |
 | 6 | GDPR erasure removes contact + PII cascade | ⬜ Phase 5 |
 | — | One person = one contact per workspace | ✅ `crm-identity.test.ts` (25), enforced by partial unique indexes |
