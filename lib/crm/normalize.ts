@@ -414,6 +414,35 @@ export function normalizeContactLinkedInUrl(
 }
 
 // ---------------------------------------------------------------------------
+// Tags
+// ---------------------------------------------------------------------------
+
+export type TagName = {
+  /** Shown to the user, with their own capitalisation. */
+  name: string
+  /** Uniqueness key. Matches the CHECK constraint in migration 0071. */
+  normalizedName: string
+}
+
+/**
+ * Normalizes a tag name.
+ *
+ * Casing is preserved for display but ignored for identity: "Hot Lead" and
+ * "hot lead" are one tag. Two tags that render identically in a filter list
+ * are indistinguishable to the person using them, and they silently split
+ * every count that filters on either.
+ */
+export function normalizeTagName(value: string | null | undefined): TagName | null {
+  if (!value) return null
+
+  const name = value.normalize('NFKC').replace(/\s+/g, ' ').trim()
+  if (!name || name.length > 60) return null
+  if (!/[\p{L}\p{N}]/u.test(name)) return null
+
+  return { name, normalizedName: name.toLowerCase() }
+}
+
+// ---------------------------------------------------------------------------
 // Person name
 // ---------------------------------------------------------------------------
 

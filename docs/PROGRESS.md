@@ -6914,3 +6914,101 @@ silently, the failure mode `lib/companies/normalize.ts` already warns about:
   unauthorised insert typechecks fine — only the missing grant stops it at
   runtime. That is the entire reason the test exists, and the comments now say
   so.
+
+## 2026-08-30 — Platform build M2 Phase 2: CRM core identity
+
+Canonical contacts and accounts, workspace-scoped, with the association tables
+that let one person belong to many lists, batches and campaigns WITHOUT being
+duplicated.
+
+### Added
+
+- **`supabase/migrations/0071_crm_core_identity.sql`** — ten tables and three
+  enums. Purely additive: it touches no existing table and replaces no
+  function, so unlike 0070 there is nothing here that runs on a live path.
+
+  `crm_contacts`, `crm_companies`, `crm_contact_emails`, `crm_contact_phones`,
+  `crm_contact_company_relationships`, `crm_tags`, `crm_contact_tags`,
+  `crm_custom_field_definitions`, `crm_custom_field_values`,
+  `crm_saved_views`. RLS on all ten via `is_workspace_member()`.
+
+- **`lib/crm/custom-fields.ts`** — typed custom fields. Eight types, each
+  validated AND normalized so one real value has one stored form. Plus
+  definition validation, because a broken definition silently invalidates every
+  value already stored against it.
+
+- `normalizeTagName` in `lib/crm/normalize.ts`: display casing preserved,
+  identity lowercased, so "Hot Lead" and "hot lead" cannot become two tags that
+  render identically in a filter list and split every count.
+
+- `tests/unit/crm-custom-fields.test.ts` — 41 tests.
+
+### Decisions
+
+- **`crm_companies` is NOT `public.companies`, and both stay.** They are
+  different entities that share a word. `companies` is the Lead Engine's
+  research unit, scoped per USER and deduped so a company fact is researched
+  once per company rather than once per employee (0043). `crm_companies` is the
+  CRM account, scoped per WORKSPACE, owned and human-edited.
+
+  Two members of one workspace who each extract Acme must end up with one CRM
+  account and two research rows — one per user, because that is how research
+  spend is attributed and cached. One table could not do both without either
+  re-scoping the extraction pipeline's dedup, changing live Lead Engine
+  behaviour, or duplicating CRM accounts per member.
+
+  The risk of two tables is drifting identity rules, and it is avoided the way
+  0043 already avoids it: normalization lives in TypeScript and both tables
+  receive already-normalized values. `source_company_id` links an account to
+  the research row it came from. The same reasoning gives `crm_contacts` a
+  `source_lead_id`: `extracted_leads` is the immutable record of what a saved
+  page said, `crm_contacts` is the living person.
+
+  This resolves the open question the Ledger has been carrying since M0 about
+  whether Lead Engine tables gain a `workspace_id`. They do not.
+
+- **Email is a dedup block; phone is not.** `crm_contact_emails` has a unique
+  index on `(workspace_id, identity_key)` — one mailbox belongs to one person,
+  enforced by the DATABASE because ingestion, CSV import, the API and manual
+  entry are four write paths and the one that forgets is the one that creates
+  the duplicate. `crm_contact_phones` deliberately has no such index: an email
+  is a mailbox, a phone is routinely a switchboard, and ten colleagues sharing
+  one main line must not be refused or "merged".
+
+- **Custom-field types are validated in TypeScript, not SQL.** A CHECK
+  constraint cannot express "this JSONB matches the type named by a row in
+  another table", and an approximation would be a second source of truth that
+  drifts. The database enforces shape; `lib/crm/custom-fields.ts` enforces type
+  at the single choke point every write goes through.
+
+### Notes
+
+- Every table carries `deleted_at`, and every partial unique index excludes
+  deleted rows. Without that, deleting a contact and re-importing the same
+  person would be blocked forever by a row nobody can see.
+- `crm_contacts.primary_company_id` is a projection of the current primary
+  relationship row, which remains the source of truth. Denormalized because
+  every contact list renders a company name.
+- Employment history is kept rather than overwritten: "left Acme for Globex
+  last month" is a buying signal, and overwriting destroys it.
+- ⚠️ RLS grants a member the WHOLE workspace. Narrowing a setter to their own
+  assignments is `dataScope()` applied as a WHERE clause by the caller — a
+  policy cannot express "rows assigned to you" without embedding the ownership
+  model of every future table in SQL. Every M2+ query that returns workspace
+  data must consult it.
+- URL custom fields reject `javascript:` and `data:`. Those parse fine as URLs,
+  get stored, get rendered, and get clicked; the scheme allow-list belongs at
+  validation rather than at every render site.
+
+### Verification
+
+- `npx vitest run tests/unit` — **1,687 tests across 95 files, all passing**
+  (41 new). `npm run typecheck` passes; `npm run lint` reports 0 errors.
+- A test fixture asserted `2026-02-29` was a valid date. It is not — 2026 is
+  not a leap year — so the validator was right and the fixture was wrong. The
+  case now sits in the rejection list alongside `2100-02-29` (a century, not a
+  leap year) and `2000-02-29` (divisible by 400, so it is one).
+- Migration staged in `supabase/APPLY_PENDING.sql`. The repository layer is
+  deliberately NOT written yet: writing it before `npm run db:types` would mean
+  hand-declaring ten tables and then deleting the lot, which is exactly what
+  0070 taught.

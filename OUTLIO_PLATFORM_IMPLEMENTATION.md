@@ -10,10 +10,10 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M1 complete)
+- **Last updated:** 2026-08-30 (M2 Phase 2 schema)
 - **Next milestone:** M2 — CRM core: identity, ingestion, dedup, operations
-- **Blocked on a human:** plan seat counts (Q6). Migration `0070` is applied and
-  types are regenerated as of 2026-08-30.
+- **Blocked on a human:** apply migration `0071` (`supabase/APPLY_PENDING.sql`)
+  then `npm run db:types`; plan seat counts (Q6). `0070` is applied.
 
 ---
 
@@ -321,7 +321,7 @@ Adapt these; do not duplicate.
 | Q1 | GitLab mirror `outlio-group/outlio-website` holds an earlier M0/M1 attempt (MRs !10, !11) that is unreachable from the development machine and conflicts on migration numbers `0068`/`0069`. | **Resolved — [D1](#d1-repository-of-record).** GitHub is the repository of record; the GitLab MRs are abandoned, not merged. |
 | Q2 | When does the long-running worker container replace `after()`? | **Open.** Not blocking until M5 (email scheduling needs a real scheduler). |
 | Q3 | Global search: Postgres FTS vs external? | **Open**, deferred to M9 Phase 28 per plan. |
-| Q4 | Do existing single-user Lead Engine tables get `workspace_id`, or stay `user_id`-scoped behind a view? | **Open**, decided in M2 when CRM ingestion lands. M1 does not migrate them. |
+| Q4 | Do existing single-user Lead Engine tables get `workspace_id`? | **Resolved — [D13](#d13-crm_companies-is-not-companies).** They stay `user_id`-scoped. The CRM gets its own workspace-scoped tables, linked by `source_company_id` / `source_lead_id`. |
 | Q5 | `plan_key` enum has no `team`/`seats` tier. Member limits need a home. | **Resolved — [D5](#d5-entitlements-come-from-planslimits).** |
 | Q6 | **No plan currently sells a second seat.** `workspace_member_limit` defaults to `1`, so invitations are refused on every existing plan until seat counts are set on `plans.limits`. That is a PRICING decision, not an engineering one. | **Open — needs a human.** Interim path: `workspaces.member_limit_override` widens one account. The invite flow is complete and tested; it is gated, not missing. |
 
@@ -404,6 +404,42 @@ it. It is a rule, not an enforcement point — a policy layer cannot put a WHERE
 clause on someone else's query. There is nothing to scope yet: no CRM record
 exists. Every M2 query that returns workspace data MUST consult `dataScope`.
 
+### D13. `crm_companies` is not `companies`
+They are different entities that share a word, and both stay.
+
+| | Scope | Purpose |
+|---|---|---|
+| `companies` | per **user** | The Lead Engine's research unit. Deduped so a company fact is researched once per company, not once per employee (0043). Written by `link_leads_to_companies` on the live extraction path. |
+| `crm_companies` | per **workspace** | The CRM account. Owned, human-edited, carries relationships, tags and custom fields. |
+
+*Rationale:* two members of one workspace who each extract Acme must end up
+with ONE CRM account and TWO research rows — one per user, because that is how
+research spend is attributed and cached. One table could not do both without
+either re-scoping the extraction pipeline's dedup (changing live Lead Engine
+behaviour) or duplicating CRM accounts per member.
+
+**The risk of two tables is drifting identity rules, and it is avoided the way
+0043 already avoids it:** normalization lives in TypeScript and both tables
+receive already-normalized values. There is one implementation of "what is this
+company's domain". `crm_companies.source_company_id` links an account back to
+the research row it came from; Phase 3 populates it.
+
+The same reasoning applies to `crm_contacts` vs `extracted_leads`:
+`extracted_leads` is the immutable record of what a saved page said,
+`crm_contacts` is the living person. `source_lead_id` links them.
+
+### D14. Phone is a duplicate candidate, never a block
+`crm_contact_emails` has a unique index on `(workspace_id, identity_key)` —
+one mailbox belongs to one person, enforced by the database because ingestion,
+CSV import, the API and manual entry are four write paths and the one that
+forgets is the one that creates the duplicate.
+
+`crm_contact_phones` deliberately has **no** such index. An email address is a
+mailbox; a phone number is routinely a switchboard. Ten colleagues legitimately
+share one main line, and a unique index would either refuse the second person
+or invite an importer to "merge" ten different people. Phase 4 treats a phone
+match as a strong signal that raises a candidate for a human.
+
 ### D11. Stored value ≠ identity key
 Every normalized contact field produces **two** values, and they are
 deliberately different:
@@ -441,6 +477,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0071 | `0071_crm_core_identity.sql` | M2 P2 | `crm_record_source`, `crm_custom_field_type`, `crm_custom_field_entity` enums; `crm_companies`, `crm_contacts`, `crm_contact_emails`, `crm_contact_phones`, `crm_contact_company_relationships`, `crm_tags`, `crm_contact_tags`, `crm_custom_field_definitions`, `crm_custom_field_values`, `crm_saved_views`; RLS on all ten. **Purely additive — touches no existing table and replaces no function.** |
 | 0070 | `0070_workspaces.sql` | M1 | `workspace_role` enum; `workspaces`, `workspace_memberships`, `workspace_invitations`, `workspace_feature_flags`; `is_workspace_member()`, `workspace_role_of()`, `redeem_workspace_invitation()`, `protect_workspace_columns()`, `guard_last_workspace_owner()`; RLS on all four; `handle_new_user()` extended; idempotent backfill |
 
 ---
@@ -451,7 +488,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 |---|---|---|
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
-| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phase 2 started — normalization library complete |
+| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phase 2 — normalization + schema written; migration awaits application |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Not started |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
@@ -487,6 +524,8 @@ Recorded, never dropped.
 | DR7 | WhatsApp Business API integration | M8 v2.1 | M8 Phase 25 | Framework candidate, customer's own account. Not committed by the brief. |
 | DR8 | VoIP / dialer adapter for call logging | M8 v2.1 | M8 Phase 25 | Adapter candidate. Never invent telephony capability. |
 | DR9 | Ownership transfer flow | M1 | M2 | The `workspace.transfer_ownership` permission and the last-owner guard exist; the UI does not. An owner can promote a second owner only via support today. |
+| DR10 | `crm_saved_views.definition` validation | M2 P2 | M2 P3 | Its schema IS the list query language. Inventing one before the query builder exists would mean guessing. Nothing reads the column until then; when it does, it must validate on READ as well as write — a stored filter is untrusted input however it got there. |
+| DR11 | Custom fields on companies and opportunities | M2 P2 | M2 P5 / M3 | The `crm_custom_field_entity` enum and the values table already carry all three entities, so no migration is needed later — only the UI and the write path. |
 
 ---
 
