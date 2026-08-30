@@ -4963,6 +4963,282 @@ export type Database = {
         }
         Relationships: []
       }
+      flow_runs: {
+        Row: {
+          chain_depth: number
+          contact_id: string | null
+          created_at: string
+          current_step: string | null
+          finished_at: string | null
+          flow_id: string
+          halt_reason: string | null
+          id: string
+          idempotency_key: string | null
+          parent_run_id: string | null
+          resume_at: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["flow_run_status"]
+          trigger_type: string
+          updated_at: string
+          version_id: string
+          workspace_id: string
+        }
+        Insert: {
+          chain_depth?: number
+          contact_id?: string | null
+          created_at?: string
+          current_step?: string | null
+          finished_at?: string | null
+          flow_id: string
+          halt_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          parent_run_id?: string | null
+          resume_at?: string | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["flow_run_status"]
+          trigger_type: string
+          updated_at?: string
+          version_id: string
+          workspace_id: string
+        }
+        Update: {
+          chain_depth?: number
+          contact_id?: string | null
+          created_at?: string
+          current_step?: string | null
+          finished_at?: string | null
+          flow_id?: string
+          halt_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          parent_run_id?: string | null
+          resume_at?: string | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["flow_run_status"]
+          trigger_type?: string
+          updated_at?: string
+          version_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flow_runs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_runs_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_runs_parent_run_id_fkey"
+            columns: ["parent_run_id"]
+            isOneToOne: false
+            referencedRelation: "flow_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_runs_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "flow_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_runs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flow_step_runs: {
+        Row: {
+          attempt: number
+          created_at: string
+          credits_used: number
+          duration_ms: number | null
+          error_code: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          input: Json
+          output: Json
+          run_id: string
+          started_at: string
+          status: Database["public"]["Enums"]["flow_step_status"]
+          step_id: string
+          step_type: string
+          workspace_id: string
+        }
+        Insert: {
+          attempt?: number
+          created_at?: string
+          credits_used?: number
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json
+          output?: Json
+          run_id: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["flow_step_status"]
+          step_id: string
+          step_type: string
+          workspace_id: string
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          credits_used?: number
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json
+          output?: Json
+          run_id?: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["flow_step_status"]
+          step_id?: string
+          step_type?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flow_step_runs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "flow_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_step_runs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flow_versions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          definition: Json
+          flow_id: string
+          id: string
+          published_at: string | null
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          definition: Json
+          flow_id: string
+          id?: string
+          published_at?: string | null
+          version: number
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          definition?: Json
+          flow_id?: string
+          id?: string
+          published_at?: string | null
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flow_versions_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_versions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flows: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          max_chain_depth: number
+          max_runs_per_contact_per_day: number
+          name: string
+          published_version_id: string | null
+          status: Database["public"]["Enums"]["flow_status"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          max_chain_depth?: number
+          max_runs_per_contact_per_day?: number
+          name: string
+          published_version_id?: string | null
+          status?: Database["public"]["Enums"]["flow_status"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          max_chain_depth?: number
+          max_runs_per_contact_per_day?: number
+          name?: string
+          published_version_id?: string | null
+          status?: Database["public"]["Enums"]["flow_status"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flows_published_version_fk"
+            columns: ["published_version_id"]
+            isOneToOne: false
+            referencedRelation: "flow_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flows_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hubble_answers: {
         Row: {
           answer: string
@@ -7083,6 +7359,49 @@ export type Database = {
           sent: number
         }[]
       }
+      email_batch_funnel: {
+        Args: { p_batch_id: string; p_workspace_id: string }
+        Returns: {
+          bounced: number
+          contacts: number
+          delivered: number
+          enrolled: number
+          replied: number
+          sent: number
+          unsubscribed: number
+          with_email: number
+        }[]
+      }
+      email_campaign_report: {
+        Args: { p_campaign_id: string }
+        Returns: {
+          auto_replied: number
+          bounce_rate: number
+          bounced: number
+          complaints: number
+          delivered: number
+          eligible: number
+          recipients: number
+          replied: number
+          reply_rate: number
+          sent: number
+          still_active: number
+          stopped_replied: number
+          stopped_unsub: number
+          unsubscribed: number
+        }[]
+      }
+      email_contact_timeline: {
+        Args: { p_contact_id: string; p_limit?: number; p_workspace_id: string }
+        Returns: {
+          campaign_id: string
+          detail: string
+          kind: string
+          message_id: string
+          occurred_at: string
+          subject: string
+        }[]
+      }
       email_domain_health: {
         Args: { p_workspace_id: string }
         Returns: {
@@ -7093,6 +7412,26 @@ export type Database = {
           ready: number
           worst_score: number
           worst_state: Database["public"]["Enums"]["email_account_status"]
+        }[]
+      }
+      email_mailbox_report: {
+        Args: { p_from_day: string; p_to_day: string; p_workspace_id: string }
+        Returns: {
+          account_id: string
+          bounce_rate: number
+          bounced: number
+          delivered: number
+          display_name: string
+          failed: number
+          from_domain: string
+          from_email: string
+          health_score: number
+          last_healthy_send: string
+          needs_verification: number
+          queued: number
+          replied: number
+          sent: number
+          status: Database["public"]["Enums"]["email_account_status"]
         }[]
       }
       email_sent_today: {
@@ -7115,6 +7454,29 @@ export type Database = {
       }
       finalize_upload_job: {
         Args: { p_job_id: string; p_user_id: string }
+        Returns: string
+      }
+      flow_check_loop_protection: {
+        Args: { p_chain_depth: number; p_contact_id: string; p_flow_id: string }
+        Returns: string
+      }
+      flow_claim_step: {
+        Args: {
+          p_input?: Json
+          p_run_id: string
+          p_step_id: string
+          p_step_type: string
+          p_workspace_id: string
+        }
+        Returns: boolean
+      }
+      flow_publish: {
+        Args: {
+          p_created_by?: string
+          p_definition: Json
+          p_flow_id: string
+          p_workspace_id: string
+        }
         Returns: string
       }
       generate_referral_code: { Args: never; Returns: string }
@@ -7694,6 +8056,20 @@ export type Database = {
         | "invalid_address"
       export_destination_kind: "device" | "google_drive" | "onedrive"
       file_status: "pending" | "processing" | "processed" | "failed"
+      flow_run_status:
+        | "running"
+        | "waiting"
+        | "completed"
+        | "failed"
+        | "halted"
+        | "cancelled"
+      flow_status: "draft" | "published" | "paused" | "archived"
+      flow_step_status:
+        | "pending"
+        | "running"
+        | "succeeded"
+        | "failed"
+        | "skipped"
       job_status:
         | "uploaded"
         | "queued"
@@ -7990,6 +8366,22 @@ export const Constants = {
       ],
       export_destination_kind: ["device", "google_drive", "onedrive"],
       file_status: ["pending", "processing", "processed", "failed"],
+      flow_run_status: [
+        "running",
+        "waiting",
+        "completed",
+        "failed",
+        "halted",
+        "cancelled",
+      ],
+      flow_status: ["draft", "published", "paused", "archived"],
+      flow_step_status: [
+        "pending",
+        "running",
+        "succeeded",
+        "failed",
+        "skipped",
+      ],
       job_status: [
         "uploaded",
         "queued",
