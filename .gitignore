@@ -83,3 +83,6 @@ __pycache__/
 # commits a broken submodule pointer rather than the files.
 /Scout/
 types/database.tmp.ts
+
+# graphify knowledge-graph output (generated dev tool data, never committed)
+graphify-out/

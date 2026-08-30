@@ -3462,6 +3462,72 @@ export type Database = {
           },
         ]
       }
+      email_campaigns: {
+        Row: {
+          account_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          name: string
+          scheduled_at: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["email_campaign_status"]
+          timezone: string | null
+          type: Database["public"]["Enums"]["email_campaign_type"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name: string
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["email_campaign_status"]
+          timezone?: string | null
+          type: Database["public"]["Enums"]["email_campaign_type"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name?: string
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["email_campaign_status"]
+          timezone?: string | null
+          type?: Database["public"]["Enums"]["email_campaign_type"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_domain_checks: {
         Row: {
           checked_at: string
@@ -3527,6 +3593,166 @@ export type Database = {
           },
         ]
       }
+      email_enrollments: {
+        Row: {
+          campaign_id: string
+          completed_at: string | null
+          contact_id: string
+          created_at: string
+          current_step: number
+          id: string
+          last_sent_at: string | null
+          next_action_at: string | null
+          replied_at: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["email_enrollment_status"]
+          stop_reason: Database["public"]["Enums"]["email_stop_reason"] | null
+          stopped_at: string | null
+          to_email: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id: string
+          completed_at?: string | null
+          contact_id: string
+          created_at?: string
+          current_step?: number
+          id?: string
+          last_sent_at?: string | null
+          next_action_at?: string | null
+          replied_at?: string | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["email_enrollment_status"]
+          stop_reason?: Database["public"]["Enums"]["email_stop_reason"] | null
+          stopped_at?: string | null
+          to_email: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string
+          completed_at?: string | null
+          contact_id?: string
+          created_at?: string
+          current_step?: number
+          id?: string
+          last_sent_at?: string | null
+          next_action_at?: string | null
+          replied_at?: string | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["email_enrollment_status"]
+          stop_reason?: Database["public"]["Enums"]["email_stop_reason"] | null
+          stopped_at?: string | null
+          to_email?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_enrollments_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_enrollments_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_enrollments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_events: {
+        Row: {
+          campaign_id: string | null
+          contact_id: string | null
+          created_at: string
+          email: string
+          enrollment_id: string | null
+          id: string
+          message_id: string | null
+          metadata: Json
+          occurred_at: string
+          provider_event_id: string | null
+          type: Database["public"]["Enums"]["email_event_type"]
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          email: string
+          enrollment_id?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json
+          occurred_at?: string
+          provider_event_id?: string | null
+          type: Database["public"]["Enums"]["email_event_type"]
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          email?: string
+          enrollment_id?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json
+          occurred_at?: string
+          provider_event_id?: string | null
+          type?: Database["public"]["Enums"]["email_event_type"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "email_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "email_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_messages: {
         Row: {
           account_id: string
@@ -3539,6 +3765,7 @@ export type Database = {
           claimed_by: string | null
           contact_id: string | null
           created_at: string
+          enrollment_id: string | null
           error_code: string | null
           error_message: string | null
           id: string
@@ -3554,6 +3781,7 @@ export type Database = {
           suppression_reason:
             | Database["public"]["Enums"]["email_suppression_reason"]
             | null
+          template_id: string | null
           thread_id: string | null
           to_email: string
           updated_at: string
@@ -3570,6 +3798,7 @@ export type Database = {
           claimed_by?: string | null
           contact_id?: string | null
           created_at?: string
+          enrollment_id?: string | null
           error_code?: string | null
           error_message?: string | null
           id?: string
@@ -3585,6 +3814,7 @@ export type Database = {
           suppression_reason?:
             | Database["public"]["Enums"]["email_suppression_reason"]
             | null
+          template_id?: string | null
           thread_id?: string | null
           to_email: string
           updated_at?: string
@@ -3601,6 +3831,7 @@ export type Database = {
           claimed_by?: string | null
           contact_id?: string | null
           created_at?: string
+          enrollment_id?: string | null
           error_code?: string | null
           error_message?: string | null
           id?: string
@@ -3616,6 +3847,7 @@ export type Database = {
           suppression_reason?:
             | Database["public"]["Enums"]["email_suppression_reason"]
             | null
+          template_id?: string | null
           thread_id?: string | null
           to_email?: string
           updated_at?: string
@@ -3634,6 +3866,20 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_messages_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "email_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_messages_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
             referencedColumns: ["id"]
           },
           {
@@ -3705,6 +3951,73 @@ export type Database = {
           },
         ]
       }
+      email_sequence_steps: {
+        Row: {
+          body_html: string | null
+          body_text: string
+          campaign_id: string
+          created_at: string
+          id: string
+          step_index: number
+          stop_on_reply: boolean | null
+          subject: string
+          template_id: string | null
+          updated_at: string
+          wait_hours: number
+          workspace_id: string
+        }
+        Insert: {
+          body_html?: string | null
+          body_text: string
+          campaign_id: string
+          created_at?: string
+          id?: string
+          step_index: number
+          stop_on_reply?: boolean | null
+          subject: string
+          template_id?: string | null
+          updated_at?: string
+          wait_hours?: number
+          workspace_id: string
+        }
+        Update: {
+          body_html?: string | null
+          body_text?: string
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          step_index?: number
+          stop_on_reply?: boolean | null
+          subject?: string
+          template_id?: string | null
+          updated_at?: string
+          wait_hours?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_sequence_steps_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sequence_steps_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sequence_steps_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_suppressions: {
         Row: {
           contact_id: string | null
@@ -3746,6 +4059,94 @@ export type Database = {
           },
           {
             foreignKeyName: "email_suppressions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_templates: {
+        Row: {
+          body_html: string | null
+          body_text: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          name: string
+          subject: string
+          updated_at: string
+          variables: string[]
+          workspace_id: string
+        }
+        Insert: {
+          body_html?: string | null
+          body_text: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name: string
+          subject: string
+          updated_at?: string
+          variables?: string[]
+          workspace_id: string
+        }
+        Update: {
+          body_html?: string | null
+          body_text?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name?: string
+          subject?: string
+          updated_at?: string
+          variables?: string[]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_templates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_webhook_deliveries: {
+        Row: {
+          delivery_key: string
+          event_count: number
+          id: string
+          processed_at: string | null
+          provider: Database["public"]["Enums"]["email_provider"]
+          received_at: string
+          workspace_id: string | null
+        }
+        Insert: {
+          delivery_key: string
+          event_count?: number
+          id?: string
+          processed_at?: string | null
+          provider: Database["public"]["Enums"]["email_provider"]
+          received_at?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          delivery_key?: string
+          event_count?: number
+          id?: string
+          processed_at?: string | null
+          provider?: Database["public"]["Enums"]["email_provider"]
+          received_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_webhook_deliveries_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -6430,6 +6831,19 @@ export type Database = {
         Returns: string
       }
       bootstrap_admin: { Args: { p_email: string }; Returns: string }
+      campaign_event_totals: {
+        Args: { p_campaign_id: string }
+        Returns: {
+          auto_replied: number
+          bounced: number
+          complaints: number
+          delivered: number
+          failed: number
+          replied: number
+          sent: number
+          unsubscribed: number
+        }[]
+      }
       charge_extraction_leads: {
         Args: { p_job_id: string; p_lead_count: number; p_user_id: string }
         Returns: {
@@ -6788,6 +7202,21 @@ export type Database = {
         Args: { p_subscription_id: string }
         Returns: undefined
       }
+      record_email_event: {
+        Args: {
+          p_campaign_id?: string
+          p_contact_id?: string
+          p_email: string
+          p_enrollment_id?: string
+          p_message_id?: string
+          p_metadata?: Json
+          p_occurred_at?: string
+          p_provider_event_id?: string
+          p_type: Database["public"]["Enums"]["email_event_type"]
+          p_workspace_id: string
+        }
+        Returns: boolean
+      }
       record_referral: {
         Args: { p_code: string; p_referred_user_id: string }
         Returns: string
@@ -6927,6 +7356,15 @@ export type Database = {
       set_user_suspension: {
         Args: { p_admin_id: string; p_suspend: boolean; p_user_id: string }
         Returns: undefined
+      }
+      stop_enrollments_for_email: {
+        Args: {
+          p_campaign_id?: string
+          p_email: string
+          p_reason: Database["public"]["Enums"]["email_stop_reason"]
+          p_workspace_id: string
+        }
+        Returns: number
       }
       sweep_rate_limits: { Args: never; Returns: number }
       sweep_signup_ip_reservations: { Args: never; Returns: number }
@@ -7199,12 +7637,37 @@ export type Database = {
         | "paused"
         | "disconnected"
         | "error"
+      email_campaign_status:
+        | "draft"
+        | "scheduled"
+        | "running"
+        | "paused"
+        | "stopped"
+        | "completed"
+      email_campaign_type:
+        | "sales_sequence"
+        | "marketing_broadcast"
+        | "flow_driven"
+        | "manual"
       email_check_status:
         | "pass"
         | "warn"
         | "fail"
         | "unknown"
         | "not_applicable"
+      email_enrollment_status: "active" | "paused" | "completed" | "stopped"
+      email_event_type:
+        | "queued"
+        | "sent"
+        | "delivered"
+        | "replied"
+        | "auto_replied"
+        | "bounced"
+        | "failed"
+        | "unsubscribed"
+        | "complaint"
+        | "opened"
+        | "clicked"
       email_message_status:
         | "queued"
         | "sending"
@@ -7214,6 +7677,15 @@ export type Database = {
         | "needs_verification"
         | "suppressed"
       email_provider: "gmail" | "microsoft" | "smtp"
+      email_stop_reason:
+        | "replied"
+        | "unsubscribed"
+        | "bounced"
+        | "complained"
+        | "suppressed"
+        | "manual"
+        | "campaign_stopped"
+        | "goal_met"
       email_suppression_reason:
         | "unsubscribed"
         | "hard_bounce"
@@ -7460,7 +7932,35 @@ export const Constants = {
         "disconnected",
         "error",
       ],
+      email_campaign_status: [
+        "draft",
+        "scheduled",
+        "running",
+        "paused",
+        "stopped",
+        "completed",
+      ],
+      email_campaign_type: [
+        "sales_sequence",
+        "marketing_broadcast",
+        "flow_driven",
+        "manual",
+      ],
       email_check_status: ["pass", "warn", "fail", "unknown", "not_applicable"],
+      email_enrollment_status: ["active", "paused", "completed", "stopped"],
+      email_event_type: [
+        "queued",
+        "sent",
+        "delivered",
+        "replied",
+        "auto_replied",
+        "bounced",
+        "failed",
+        "unsubscribed",
+        "complaint",
+        "opened",
+        "clicked",
+      ],
       email_message_status: [
         "queued",
         "sending",
@@ -7471,6 +7971,16 @@ export const Constants = {
         "suppressed",
       ],
       email_provider: ["gmail", "microsoft", "smtp"],
+      email_stop_reason: [
+        "replied",
+        "unsubscribed",
+        "bounced",
+        "complained",
+        "suppressed",
+        "manual",
+        "campaign_stopped",
+        "goal_met",
+      ],
       email_suppression_reason: [
         "unsubscribed",
         "hard_bounce",
