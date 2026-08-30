@@ -14,18 +14,17 @@ export function LeadEngineHero() {
           <div className="mx-auto flex min-h-[100svh] w-full max-w-[1800px] items-start px-6 pb-16 pt-28 sm:px-10 sm:pt-32 md:items-center md:py-20 lg:px-[121px]">
             <div className="max-w-[35rem]">
               <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60">
-                B2B data and business intelligence software
+                Lead Engine
               </p>
 
               <h1 className="mt-5 text-balance font-heading text-[clamp(2.75rem,5.6vw,5.25rem)] font-light leading-[0.98] tracking-[-0.045em] text-white">
-                Turn lead lists into sourced business intelligence
+                Further and Beyond
               </h1>
 
               <p className="mt-7 max-w-[34rem] text-pretty font-heading text-[1.0625rem] font-medium leading-[1.65] text-white/72 sm:text-lg">
-                Outlio Lead Engine extracts and organizes lead records from a
-                Sales Navigator results page you save or capture, enriches them
-                with public company and contact data, and returns a source-backed
-                database you can score, question, and export.
+                The lead engine channels a database of 1.3 billion people across
+                the globe - in to your systems, enriched with our intelligence
+                and clear of noise.
               </p>
 
               <div className="mt-9 flex flex-wrap items-center gap-3">

@@ -7500,3 +7500,62 @@ event record and is written in the same transaction as the change, which
 satisfies "exactly one activity" — but nothing can subscribe yet. The Flow
 engine in M7 is what needs one; until then a consumer would have nothing to
 consume.
+
+## 2026-08-30 — M3 Phase 6 complete: opportunities, pipelines and the board
+
+0076 and 0077 applied. 19 integration tests.
+
+### Added
+
+- **`lib/crm/opportunities.ts`** — pipelines (stages created in array order,
+  so position cannot drift from a field the caller maintains separately),
+  opportunities, `getBoard`, stage history, and `moveStage` as the ONLY path
+  that changes a stage. A direct `.update({ stage_id })` would skip the version
+  check, the history row and the activity.
+
+### Both M3 criteria that Phase 6 can satisfy
+
+**Two people drag the same card.** Tested as a REAL race — both moves fired
+from the same version via `Promise.allSettled`, not a sequential stand-in that
+would pass whether or not the row were locked. One fulfils, one rejects with
+`StaleOpportunityError`, the board shows exactly one of the two moves and never
+a blend, and there is one activity and one history row.
+
+**A retry writes nothing.** The version check is the idempotency key: a retry
+carries the old version, is refused, and the activity count stays at one.
+
+The "one domain event" half of criterion 2 remains Ledger DR15 — `crm_activities`
+is the event record, written in the same transaction, but there is no publisher
+yet and nothing could subscribe.
+
+### The bug the integration tests found, and the harness could not
+
+0076 raised `serialization_failure` (SQLSTATE 40001) for a stale optimistic
+lock. **PostgREST reads 40001 as a transient conflict and retries the request.**
+An optimistic-lock rejection is the opposite of transient — the caller holds a
+card that has since moved and a retry fails identically — so the symptom was
+not an error reaching the client but a HANG, until the 30-second timeout.
+
+What isolated it: the three neighbouring refusals in the same function (same
+stage, wrong pipeline, lost-without-reason) use `check_violation` and returned
+instantly. Same function, same call path, one differing error code. Fixing it
+took the suite from 104s to 48s.
+
+⚠️ The local migration harness cannot catch this class of bug: `psql` does not
+retry. It is a client-protocol behaviour that only appears through PostgREST.
+Recorded as Ledger D27.
+
+### Correction
+
+An earlier entry said `value_amount` is kept as a string end-to-end. It cannot
+be: supabase-js types `numeric` as `number`. What is STORED is exact; what
+PostgREST hands JavaScript is a double — fine for one value, wrong for a total.
+The rule is now stated correctly in the code: **never sum these in JS**.
+Nothing computes a pipeline total yet, because doing it wrong is worse than not
+having it.
+
+### Verification
+
+- `crm-opportunities` 19 · the other five suites 107, no regression.
+- `npx vitest run tests/unit` — 1,754 across 97 files.
+- `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass.

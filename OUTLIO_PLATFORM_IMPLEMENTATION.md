@@ -10,9 +10,9 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M3 Phase 6 schema)
-- **Blocked on a human:** apply migration `0076` (`supabase/APPLY_PENDING.sql`)
-  then `npm run db:types`; plan seat counts (Q6). `0070`–`0075` are applied.
+- **Last updated:** 2026-08-30 (M3 Phase 6 complete)
+- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0077` are all
+  applied and types are regenerated.
 - **Next milestone:** M3 — opportunities, pipelines, native Kanban, collision
   guard. Two M2 UIs remain deferred (DR12 CSV import, DR14 Duplicate Center).
 
@@ -27,10 +27,10 @@ disagree, the repository wins and the conflict is recorded under
 | Styling | Tailwind CSS v4 (`@theme`), Geist fonts | `app/globals.css`, `postcss.config.mjs` |
 | Database | Supabase Postgres, project `ptewhpmxzenbmxlizxhu` | `CLAUDE.md` |
 | ORM | **None.** `supabase-js` query builder + SQL functions | `lib/supabase/` |
-| Migrations | Hand-written, numbered SQL, `0001`–`0075` | `supabase/migrations/` |
+| Migrations | Hand-written, numbered SQL, `0001`–`0077` | `supabase/migrations/` |
 | Generated types | `types/database.ts` (6,433 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
 | Validation | Zod 4 | `lib/limits/plans.ts` and throughout |
-| Tests | **Vitest 4** — 1,754 unit / 97 files, plus 107 integration | `vitest.config.mts`, `tests/` |
+| Tests | **Vitest 4** — 1,754 unit / 97 files, plus 126 integration | `vitest.config.mts`, `tests/` |
 | Package manager | npm | `package-lock.json` |
 | Edge guard | `proxy.ts` (Next 16 renamed `middleware`) | `proxy.ts` |
 | Hosting | Vercel; background work via `after()` | `CLAUDE.md`, `lib/worker/` |
@@ -58,7 +58,7 @@ is therefore already implemented, not pending.
 
 ## 2. Current data model
 
-**85 tables, ~69 SQL functions.** Extracted from `types/database.ts`.
+**89 tables, ~70 SQL functions.** Extracted from `types/database.ts`.
 
 ### Identity, access, billing
 `profiles`, `plans`, `subscriptions`, `access_requests`, `invitation_codes`,
@@ -421,6 +421,21 @@ it. It is a rule, not an enforcement point — a policy layer cannot put a WHERE
 clause on someone else's query. There is nothing to scope yet: no CRM record
 exists. Every M2 query that returns workspace data MUST consult `dataScope`.
 
+### D27. Never raise SQLSTATE 40001 for an application conflict
+`crm_move_opportunity_stage` rejects a stale optimistic lock with
+`check_violation`, not `serialization_failure`.
+
+*Rationale:* 40001 has protocol meaning — PostgREST reads it as a transient
+conflict and RETRIES the request. An optimistic-lock rejection is the opposite
+of transient: the caller holds a card that has since moved, and a retry fails
+identically. 0076 used 40001 and the symptom was not an error but a HANG, until
+the client timed out.
+
+⚠️ **The local migration harness cannot catch this class of bug** — `psql` does
+not retry. It is a client-protocol behaviour that only appears through
+PostgREST, which is what the integration suite is for. Reserve 40001 for
+genuine serialization conflicts a retry could actually resolve.
+
 ### D25. Money is `numeric`, never a float
 `crm_opportunities.value_amount` is `numeric(14,2)`.
 
@@ -428,6 +443,13 @@ exists. Every M2 query that returns workspace data MUST consult `dataScope`.
 sums thousands of these. The error compounds until the forecast stops
 reconciling with the deals behind it, and the bug surfaces as "the numbers are
 slightly wrong" — the hardest kind to trace.
+
+⚠️ **Correction to the first version of this decision.** supabase-js types
+`numeric` as `number`, so a value cannot be kept as a string end-to-end. What
+is STORED is exact; what PostgREST hands JavaScript is a double. That is fine
+for one value and wrong for a total, so the rule is: **never sum these in JS,
+aggregate in SQL.** Nothing computes a pipeline total yet — M4 Phase 10.5 will
+— because doing it wrong is worse than not having it.
 
 ### D26. Optimistic locking ships with the schema, not with the Kanban
 `crm_opportunities.version` and `crm_move_opportunity_stage` land in Phase 6
@@ -625,6 +647,7 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 
 | # | File | Milestone | Contents |
 |---|---|---|---|
+| 0077 | `0077_fix_move_errcode.sql` | M3 P6 | Replaces `crm_move_opportunity_stage`. 0076 raised SQLSTATE 40001 for a stale lock; PostgREST retries 40001, so the rejection never reached the client and the request hung until it timed out. Now `check_violation`. |
 | 0076 | `0076_crm_opportunities.sql` | M3 P6 | `crm_pipelines`, `crm_pipeline_stages`, `crm_opportunities` (with `version` for optimistic locking), `crm_opportunity_stage_history` (append-only); `crm_move_opportunity_stage()`. Enums `crm_opportunity_status`, `crm_stage_kind`. |
 | 0075 | `0075_crm_operations.sql` | M2 P5 | `crm_activities` (append-only, frozen attribution), `crm_tasks`, `crm_notes`, `crm_note_mentions`, `crm_notifications`, `crm_notification_preferences`, `crm_audit_logs`; `crm_guard_append_only()` and `crm_erase_contact()`. Adds the append-only trigger to `crm_merge_events`. |
 | 0074 | `0074_crm_deduplication.sql` | M2 P4 | `crm_duplicate_candidates` (one row per pair, `record_a_id < record_b_id` enforced), `crm_merge_events` (append-only), `crm_contacts.merged_into_id`, and `crm_merge_contacts()` — atomic, deadlock-safe, moves every child table. |
@@ -642,13 +665,22 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
 | M2 | CRM core: identity, ingestion, dedup, operations | ✅ **Complete** (2026-08-30). Two UIs deferred: DR12, DR14 |
-| M3 | Opportunities, pipelines, Kanban, collision guard | 🔨 **Phase 6 schema done**, pending `0076`. Phases 7–8 not started |
+| M3 | Opportunities, pipelines, Kanban, collision guard | 🔨 **Phase 6 ✅.** Phases 7 (Kanban UI) and 8 (collision guard) not started |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
 | M7 | Flow engine, Hubble boundary, visual builder | ⬜ Not started |
 | M8 | Integrations, Calendly, unified inbox | ⬜ Not started |
 | M9 | Onboarding, UI refinement, hardening | ⬜ Not started |
+
+### M3 acceptance criteria
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Two simultaneous drags of the same card resolve deterministically | ✅ `tests/integration/crm-opportunities.test.ts` — a real race via `Promise.allSettled`, not a sequential stand-in: one fulfils, one rejects with `StaleOpportunityError`, the board shows exactly one of the two moves, and there is one activity and one history row |
+| 2 | Stage change emits exactly one activity, verified under retry | ✅ same file — a retry carries the old version and is refused, leaving the activity count at one. ⚠️ The "one domain event" half is Ledger DR15: there is no publisher yet |
+| 3 | Collision guard fires at contact and company level | ⬜ Phase 8 |
+| 4 | Kanban paginates; never loads the full pipeline | ✅ `getBoard` returns a capped page per column plus a true total; tested |
 
 ### M2 acceptance criteria
 
