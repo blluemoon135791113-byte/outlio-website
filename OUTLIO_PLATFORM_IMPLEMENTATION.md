@@ -11,7 +11,6 @@ disagree, the repository wins and the conflict is recorded under
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
 - **Last updated:** 2026-08-30 (**M2 complete**)
-- **Next milestone:** M2 — CRM core: identity, ingestion, dedup, operations
 - **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0075` are all
   applied and types are regenerated.
 - **Next milestone:** M3 — opportunities, pipelines, native Kanban, collision
@@ -29,9 +28,9 @@ disagree, the repository wins and the conflict is recorded under
 | Database | Supabase Postgres, project `ptewhpmxzenbmxlizxhu` | `CLAUDE.md` |
 | ORM | **None.** `supabase-js` query builder + SQL functions | `lib/supabase/` |
 | Migrations | Hand-written, numbered SQL, `0001`–`0075` | `supabase/migrations/` |
-| Generated types | `types/database.ts` (4,970 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
+| Generated types | `types/database.ts` (6,433 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
 | Validation | Zod 4 | `lib/limits/plans.ts` and throughout |
-| Tests | **Vitest 4** — 1,687 unit tests / 95 files, plus integration | `vitest.config.mts`, `tests/` |
+| Tests | **Vitest 4** — 1,754 unit / 97 files, plus 107 integration | `vitest.config.mts`, `tests/` |
 | Package manager | npm | `package-lock.json` |
 | Edge guard | `proxy.ts` (Next 16 renamed `middleware`) | `proxy.ts` |
 | Hosting | Vercel; background work via `after()` | `CLAUDE.md`, `lib/worker/` |
@@ -111,11 +110,21 @@ FastSpring (**current**): `fastspring_accounts`, `fastspring_subscriptions`,
 Paddle (**superseded**, tables retained): `paddle_customers`,
 `paddle_subscriptions`, `paddle_transactions`, `paddle_webhook_events`.
 
-### CRM (added by M2 Phase 2, migration 0071)
-`crm_contacts`, `crm_companies`, `crm_contact_emails`, `crm_contact_phones`,
-`crm_contact_company_relationships`, `crm_tags`, `crm_contact_tags`,
-`crm_custom_field_definitions`, `crm_custom_field_values`, `crm_saved_views`.
-Enums: `crm_record_source`, `crm_custom_field_type`, `crm_custom_field_entity`.
+### CRM (added by M2, migrations 0071–0075)
+**Identity (0071):** `crm_contacts`, `crm_companies`, `crm_contact_emails`,
+`crm_contact_phones`, `crm_contact_company_relationships`, `crm_tags`,
+`crm_contact_tags`, `crm_custom_field_definitions`, `crm_custom_field_values`,
+`crm_saved_views`.
+**Ingestion (0072–0073):** `crm_lead_batches`, `crm_batch_members`,
+`crm_lists`, `crm_list_members`, `crm_import_jobs`; `crm_ingest_contacts()`,
+`crm_undo_batch()`.
+**Dedup (0074):** `crm_duplicate_candidates`, `crm_merge_events`;
+`crm_merge_contacts()`.
+**Operations (0075):** `crm_activities`, `crm_tasks`, `crm_notes`,
+`crm_note_mentions`, `crm_notifications`, `crm_notification_preferences`,
+`crm_audit_logs`; `crm_guard_append_only()`, `crm_erase_contact()`.
+Enums: `crm_record_source`, `crm_custom_field_type`, `crm_custom_field_entity`,
+`crm_activity_type`, `crm_activity_channel`, `crm_task_status`.
 
 ### Workspaces (added by M1, migration 0070)
 `workspaces`, `workspace_memberships`, `workspace_invitations`,
