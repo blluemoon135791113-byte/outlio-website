@@ -163,6 +163,24 @@ customer cancelled, mid paid period. `overdue` is denied, matching the old
 
 ---
 
+## 2026-08-30 — Original navigation roundel scale restored
+
+The Lead Engine navigation logo now keeps the roundel at its original 65.6%
+size within the 48px logo canvas. A precise circular clip removes the charcoal
+square outside the mark without adding a border, background, ring, scaling, or
+replacement artwork.
+
+---
+
+## 2026-08-30 — Lead Engine navigation logo simplified
+
+The floating Lead Engine navigation now shows only the circular Outlio roundel.
+The existing high-resolution source is centered and enlarged inside a circular
+mask, removing its dark square canvas without altering or duplicating the
+original logo asset.
+
+---
+
 ## 2026-08-30 — Lead Engine hero made viewport-responsive
 
 The Lead Engine hero, WebGL scene host, and copy layer now share one consistent

@@ -2707,6 +2707,266 @@ export type Database = {
           },
         ]
       }
+      crm_opportunities: {
+        Row: {
+          closed_at: string | null
+          company_id: string | null
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          deleted_at: string | null
+          expected_close_date: string | null
+          id: string
+          lost_reason: string | null
+          owner_user_id: string | null
+          pipeline_id: string
+          probability: number
+          stage_id: string
+          status: Database["public"]["Enums"]["crm_opportunity_status"]
+          title: string
+          updated_at: string
+          value_amount: number | null
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          deleted_at?: string | null
+          expected_close_date?: string | null
+          id?: string
+          lost_reason?: string | null
+          owner_user_id?: string | null
+          pipeline_id: string
+          probability?: number
+          stage_id: string
+          status?: Database["public"]["Enums"]["crm_opportunity_status"]
+          title: string
+          updated_at?: string
+          value_amount?: number | null
+          version?: number
+          workspace_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          deleted_at?: string | null
+          expected_close_date?: string | null
+          id?: string
+          lost_reason?: string | null
+          owner_user_id?: string | null
+          pipeline_id?: string
+          probability?: number
+          stage_id?: string
+          status?: Database["public"]["Enums"]["crm_opportunity_status"]
+          title?: string
+          updated_at?: string
+          value_amount?: number | null
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_opportunities_company_fk"
+            columns: ["company_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_companies"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_opportunities_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_opportunities_pipeline_fk"
+            columns: ["pipeline_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_pipelines"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_opportunities_stage_fk"
+            columns: ["stage_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_pipeline_stages"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_opportunities_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_opportunity_stage_history: {
+        Row: {
+          actor_user_id: string | null
+          from_stage_id: string | null
+          id: string
+          occurred_at: string
+          opportunity_id: string
+          owner_user_id_at_event: string | null
+          seconds_in_previous_stage: number | null
+          to_stage_id: string
+          workspace_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          from_stage_id?: string | null
+          id?: string
+          occurred_at?: string
+          opportunity_id: string
+          owner_user_id_at_event?: string | null
+          seconds_in_previous_stage?: number | null
+          to_stage_id: string
+          workspace_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          from_stage_id?: string | null
+          id?: string
+          occurred_at?: string
+          opportunity_id?: string
+          owner_user_id_at_event?: string | null
+          seconds_in_previous_stage?: number | null
+          to_stage_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_opportunity_stage_history_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_osh_opportunity_fk"
+            columns: ["opportunity_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_opportunities"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
+      crm_pipeline_stages: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          default_probability: number
+          id: string
+          kind: Database["public"]["Enums"]["crm_stage_kind"]
+          name: string
+          pipeline_id: string
+          sort_order: number
+          stale_after_days: number | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          default_probability?: number
+          id?: string
+          kind?: Database["public"]["Enums"]["crm_stage_kind"]
+          name: string
+          pipeline_id: string
+          sort_order: number
+          stale_after_days?: number | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          default_probability?: number
+          id?: string
+          kind?: Database["public"]["Enums"]["crm_stage_kind"]
+          name?: string
+          pipeline_id?: string
+          sort_order?: number
+          stale_after_days?: number | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_pipeline_stages_pipeline_fk"
+            columns: ["pipeline_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_pipelines"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_pipeline_stages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_pipelines: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_pipelines_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_saved_views: {
         Row: {
           created_at: string
@@ -5673,6 +5933,17 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_move_opportunity_stage: {
+        Args: {
+          p_actor_id?: string
+          p_expected_version: number
+          p_lost_reason?: string
+          p_opportunity_id: string
+          p_to_stage_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       crm_undo_batch: {
         Args: { p_batch_id: string; p_workspace_id: string }
         Returns: {
@@ -6167,12 +6438,14 @@ export type Database = {
         | "email"
         | "select"
         | "multi_select"
+      crm_opportunity_status: "open" | "won" | "lost"
       crm_record_source:
         | "lead_engine"
         | "csv_import"
         | "manual"
         | "api"
         | "flow"
+      crm_stage_kind: "open" | "won" | "lost"
       crm_task_status: "open" | "completed" | "cancelled"
       dedupe_mode: "keep_all" | "remove_exact" | "remove_likely" | "review"
       dedupe_strategy:
@@ -6394,7 +6667,9 @@ export const Constants = {
         "select",
         "multi_select",
       ],
+      crm_opportunity_status: ["open", "won", "lost"],
       crm_record_source: ["lead_engine", "csv_import", "manual", "api", "flow"],
+      crm_stage_kind: ["open", "won", "lost"],
       crm_task_status: ["open", "completed", "cancelled"],
       dedupe_mode: ["keep_all", "remove_exact", "remove_likely", "review"],
       dedupe_strategy: [

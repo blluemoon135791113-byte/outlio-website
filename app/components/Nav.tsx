@@ -113,14 +113,16 @@ export default function Nav({ surface = "agency", variant = "default" }: NavProp
             className="flex shrink-0 items-center rounded-[1.35rem] p-1 transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97]"
             aria-label="Outlio home"
           >
-            <Image
-              src="/outlio logo.png"
-              alt="Outlio"
-              width={48}
-              height={48}
-              preload
-              className="rounded-[1.1rem] object-cover"
-            />
+            <span className="relative flex size-12">
+              <Image
+                src="/outlio logo.png"
+                alt="Outlio"
+                width={48}
+                height={48}
+                preload
+                className="object-cover [clip-path:circle(32.8%_at_50%_50%)]"
+              />
+            </span>
           </Link>
 
           <nav
