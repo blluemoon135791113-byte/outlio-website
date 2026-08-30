@@ -7906,3 +7906,74 @@ consulted.
 Criterion 2 by 15 unit tests.
 
 1,808 unit tests, typecheck, lint (0 errors) and build all pass.
+
+---
+
+## M5 Phase 12 — SMTP + IMAP adapter ✅
+
+`lib/email/providers/smtp.ts`, `smtp-address.ts`, `registry.ts`.
+Dependencies added: `nodemailer`, `imapflow`, `mailparser` (all MIT, same
+maintainer, 0 vulnerabilities).
+
+### SMTP first, and Gmail is blocked on Google — not on us
+
+The brief orders adapters "in safest order… **Ledger evidence decides**". The
+evidence: there are no Google OAuth client credentials in this environment at
+all, and the existing grant is `drive.file` + `spreadsheets`. Sending needs
+`gmail.send` and reply sync needs `gmail.readonly` — **restricted scopes**
+requiring Google app verification plus an annual third-party CASA security
+assessment. That is money and weeks of lead time, and it is a decision the
+business has to start now if Gmail is wanted at launch. Recorded as D33.
+
+SMTP needs none of it and is verifiable today. It is also the adapter that
+exercises the capability model hardest, since its reply support depends on
+configuration rather than provider.
+
+### Verified against a real mail server, not a mock
+
+A mocked transport proves only that the mock was called. This runs **GreenMail
+in Docker** — real SMTP, real IMAPS. Confirmed independently from the server's
+own logs: 15 SMTP transactions accepted, real IMAP `FETCH` responses, and the
+UID cursor advancing 1 → 2.
+
+The test that matters most pins an uncomfortable truth: **sending twice with
+the same idempotency key delivers twice.** SMTP has no dedupe verb, so a stable
+Message-ID makes a duplicate *provable*, not *impossible*. The exactly-once
+guarantee (criterion 3) belongs to Phase 14's engine, which must record the key
+before handing the message over. Pinning it here stops anyone mistaking the
+stable id for the guarantee.
+
+### Decisions
+
+- **Customer-supplied mail hosts are an SSRF surface** (D34). "Connect here and
+  tell me if it worked" is a port scanner otherwise, and `169.254.169.254` is
+  the case that turns a settings form into a credential leak. Private,
+  loopback, link-local, CGNAT and multicast ranges are refused in v4 and v6
+  including IPv4-mapped forms, as are hosts carrying a scheme, userinfo, port
+  or path; only real mail ports are allowed. **Not a complete defence** — a
+  hostname that resolves to a private address still gets through (DR19).
+- **STARTTLS is required, not attempted** (D35). nodemailer's default continues
+  in the clear when a server refuses to upgrade, putting the password and every
+  recipient address on the wire.
+- **Acceptance is not delivery.** A 250 means the server took responsibility,
+  nothing more. `delivered` is a separate event.
+- **A 5xx is never retried.** Retrying a permanent rejection burns a healthy
+  account's send budget and earns the domain a reputation problem.
+- **IMAP failure does not fail the connection.** An account whose submission
+  works but whose retrieval does not is still a usable sending account.
+- **The UID cursor is a UID, not a date.** IMAP date search has day
+  granularity, so a date cursor either re-reads a whole day every sync or drops
+  messages arriving later the same day — either way a reply gets processed, and
+  a sequence stopped, twice.
+- **SMTP reports no quota rather than guessing one.** A plausible invented
+  ceiling would have the scheduler pacing against a number nobody verified.
+- **Gmail and Microsoft have no registry entry rather than a stub.**
+
+### Also fixed
+
+`INTEGRATION_ENCRYPTION_KEY` was missing from `.env.local` entirely, so every
+credential operation threw locally — the email feature could not have stored a
+password at all. A local-only key was generated; production's key is separate
+and already set in Vercel.
+
+1,860 unit + integration tests, typecheck, lint (0 errors) and build all pass.

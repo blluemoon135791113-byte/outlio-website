@@ -10,7 +10,7 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (M5 Phase 11 complete)
+- **Last updated:** 2026-08-30 (M5 Phase 12 complete — SMTP+IMAP adapter)
 - **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0083` are all
   applied and types are regenerated.
 - **Next milestone:** M5 — email foundation (Phases 11 ✅, 12–14 open).
@@ -726,6 +726,60 @@ reach logs and error traces.
 The conservative state is also the correct one: a brand-new mailbox sending at
 full volume is exactly how a domain gets burned. Phase 13 promotes it.
 
+### D33. SMTP is the first adapter, not Gmail — and Gmail is blocked on Google
+
+The M5 brief orders adapters "Gmail / Microsoft 365 / SMTP(+IMAP) in safest
+order based on existing Outlio OAuth infra (**Ledger evidence decides**)". The
+evidence decides SMTP:
+
+1. **There are no Google OAuth client credentials in this environment.**
+   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are absent from `.env.local`, so
+   even the existing Drive/Sheets integration cannot run locally. A Gmail
+   adapter could not be exercised against Google at all, and the brief forbids
+   inventing provider behaviour.
+2. **The scopes are the real blocker.** The existing grant is `drive.file` +
+   `spreadsheets`. Sending needs `gmail.send`; reply sync needs
+   `gmail.readonly` or `gmail.modify`. **All three are RESTRICTED scopes**,
+   requiring Google app verification plus an annual third-party CASA security
+   assessment — real money and weeks of lead time, not an afternoon. This is a
+   business decision the customer has to start now if Gmail is wanted at
+   launch.
+3. **Microsoft 365** needs an Entra app registration, and `Mail.Send` requires
+   admin consent in most tenants.
+4. **SMTP+IMAP needs none of it** — no OAuth, no verification, no restricted
+   scopes — and is verifiable end to end today.
+
+SMTP is also the adapter that exercises D31 hardest, since its reply support
+depends on configuration rather than on the provider.
+
+⚠️ **Gmail and Microsoft have NO registry entry rather than a stub.**
+`providerFor()` returns `undefined` for them, so a caller must handle the gap
+where it exists rather than discovering a placeholder throwing three layers
+away.
+
+### D34. Customer-supplied mail hosts are an SSRF surface
+
+"Connect to this host and port and tell me whether it worked" is a port scanner
+if the host may be internal — and the answer is readable from the connection
+test's own error message. `lib/email/providers/smtp-address.ts` refuses private,
+loopback, link-local, CGNAT and multicast ranges (v4 and v6, including
+IPv4-mapped forms), refuses hosts carrying a scheme/userinfo/port/path, and
+allows only real mail ports. Loopback is permitted outside production only, so
+the integration test can reach a container — the same carve-out the existing
+Google OAuth redirect check makes.
+
+⚠️ **This is a hostname-shape check, not a complete SSRF defence.** A hostname
+that RESOLVES to a private address defeats it, because resolution happens later
+inside the socket layer. Closing that needs DNS pinned to the connection —
+Ledger DR19.
+
+### D35. STARTTLS is required on plaintext submission ports, not merely attempted
+
+nodemailer's default silently continues in the clear when a server refuses to
+upgrade, which would put the customer's password and every recipient address on
+the wire in plaintext. `requireTLS` is set on ports 25/587. Localhost is exempt
+so the integration test can run against a container with no certificate.
+
 ## 14. Migrations added by the platform build
 
 | # | File | Milestone | Contents |
@@ -758,7 +812,7 @@ full volume is exactly how a domain gets burned. Phase 13 promotes it.
 | M2 | CRM core: identity, ingestion, dedup, operations | ✅ **Complete** (2026-08-30). Two UIs deferred: DR12, DR14 |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ✅ **Complete** (2026-08-30) |
 | M4 | CRM reporting foundation & dashboards | ✅ **Phases 9, 10 and 10.5 complete.** 6 of 7 criteria met; criterion 3 (auto-reply exclusion) belongs to M6, where the pre-filter runs before anything is written |
-| M5 | Email foundation | 🔨 **Phase 11 ✅.** Phases 12 (adapters), 13 (readiness) and 14 (message engine) open |
+| M5 | Email foundation | 🔨 **Phases 11 ✅ and 12 ✅ (SMTP+IMAP).** Gmail and Microsoft adapters blocked on credentials + scope verification (D33). Phases 13 (readiness) and 14 (message engine) open |
 | M6 | Campaigns, composer, replies, email reporting | ⬜ Not started |
 | M7 | Flow engine, Hubble boundary, visual builder | ⬜ Not started |
 | M8 | Integrations, Calendly, unified inbox | ⬜ Not started |
@@ -781,7 +835,7 @@ full volume is exactly how a domain gets burned. Phase 13 promotes it.
 | # | Criterion | Status |
 |---|---|---|
 | 1 | Secrets unreadable via any API after save; encryption verified | ✅ Proven twice. In Postgres, `supabase/smoke/0085_email_accounts.sql` runs four read shapes as `authenticated` — direct, joined, by `secret_reference`, column-only — and all four are DENIED. Against the LIVE PostgREST API with the publishable key, all four including a resource embed return `401 / 42501`. The result is `permission denied` rather than an empty set: the grant refuses before RLS is consulted, so two independent layers hold. Encryption is `lib/integrations/crypto.ts`, already covered by `tests/unit/integration-crypto.test.ts`; the one uncovered branch (unknown version, no fallback) is pinned in `tests/unit/email-accounts.test.ts` |
-| 2 | Capability model gates features per provider (SMTP w/o IMAP reports no replies) | ✅ `lib/email/capabilities.ts` + 15 tests. SMTP alone reports `replies: unconfigured`; adding `imapHost` promotes it to `supported`; an SMTP *host* alone does not, because submission settings say nothing about reading. `webhookEvents` stays `unsupported` for SMTP even with IMAP — IMAP is polling and no configuration would give a plain mail server a push channel |
+| 2 | Capability model gates features per provider (SMTP w/o IMAP reports no replies) | ✅ `lib/email/capabilities.ts` + 15 tests, and **enforced by the adapter**: `syncReplies` on an account with no IMAP host throws `EmailCapabilityError` rather than returning an empty list that would read as "no replies yet" (`tests/integration/email-smtp.test.ts`). SMTP alone reports `replies: unconfigured`; adding `imapHost` promotes it to `supported`; an SMTP *host* alone does not, because submission settings say nothing about reading. `webhookEvents` stays `unsupported` for SMTP even with IMAP — IMAP is polling and no configuration would give a plain mail server a push channel |
 | 3 | Kill-and-retry on the send worker produces exactly one delivered message | ⬜ Phase 14 — `idempotencyKey` is on `OutboundMessage` in the contract, enforced by the engine |
 | 4 | A suppressed recipient is never sent to, for every suppression reason | ⬜ Phase 14 |
 | 5 | Readiness state transitions + domain rollup tested; ramp limits enforced | ⬜ Phase 13 — the nine states and the `from_domain` index exist; nothing drives them yet |
@@ -844,6 +898,7 @@ Recorded, never dropped.
 | DR8 | VoIP / dialer adapter for call logging | M8 v2.1 | M8 Phase 25 | Adapter candidate. Never invent telephony capability. |
 | DR9 | Ownership transfer flow | M1 | M2 | The `workspace.transfer_ownership` permission and the last-owner guard exist; the UI does not. An owner can promote a second owner only via support today. |
 | DR10 | `crm_saved_views.definition` validation | M2 P2 | M2 P3 | Its schema IS the list query language. Inventing one before the query builder exists would mean guessing. Nothing reads the column until then; when it does, it must validate on READ as well as write — a stored filter is untrusted input however it got there. |
+| DR19 | DNS-pinned connection for mail hosts (full SSRF defence) | M5 P12 | M9 / hardening | `assertSafeMailEndpoint` blocks literal private addresses and non-mail ports, but a hostname that RESOLVES to a private address still gets through, because resolution happens inside the socket layer. Closing it means resolving first, checking the resolved address, and connecting to that exact IP. |
 | DR18 | XLSX export writer | M4 P10.5 | M9 | `lib/export/sanitize.ts` references an XLSX writer that was never built, and the project has NO spreadsheet library. Adding one is a dependency decision, not something to slip into a reporting phase — SheetJS has had advisories and a licence change, ExcelJS is heavy. CSV opens in every spreadsheet program; XLSX would only add formatting. |
 | DR16 | Collision guard UI on the OUTREACH path, and the settings page | M3 P8 | M6 / M9 | The ASSIGN path is done: `/crm/contacts/[id]` shows the warning, refuses an unacknowledged reassignment, records the override and offers a reassignment request. What remains is the first-outreach check (there is no outreach surface until M6) and a screen for editing the modes — until then they are changed in `crm_collision_settings` directly. |
 | DR15 | A real domain-event bus | M3 P6 | M7 | A3 wants normalized domain events (`crm.opportunity.stage_changed`, …) powering Flows, Reports, Notifications, Realtime and Integrations. Today `crm_activities` IS the event record, written in the same transaction as the change. That satisfies "exactly one activity" but there is no PUBLISHER yet, so nothing can subscribe. The Flow engine in M7 is what needs one; until then a consumer would have nothing to consume. |
@@ -872,7 +927,7 @@ Recorded, never dropped.
 
 ## 18. Test status
 
-`npx vitest run tests/unit` — **1,808 passed, 0 failed**, 101 files.
+`npx vitest run tests/unit` — **1,860 passed, 0 failed**, 103 files (includes the SMTP adapter run against a real mail server in Docker).
 `npm run typecheck` passes. `npm run lint` reports 0 errors (95 pre-existing
 warnings, all in generated or vendored files). `npm run build` passes.
 
