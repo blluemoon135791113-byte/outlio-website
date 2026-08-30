@@ -15,6 +15,7 @@ function pageLabel(pathname: string) {
   if (pathname.startsWith('/admin')) return 'User administration'
   if (pathname.startsWith('/crm/contacts')) return 'Contacts'
   if (pathname.startsWith('/crm/pipeline')) return 'Pipeline'
+  if (pathname.startsWith('/crm/reports')) return 'Reports'
   if (pathname.startsWith('/crm')) return 'CRM'
   if (pathname.startsWith('/dashboard/extract/new')) return 'New extraction'
   if (pathname.startsWith('/dashboard/jobs')) return 'Extraction workspace'

@@ -7739,3 +7739,52 @@ rollup is what repairs it.
   build.
 - First real rollup on the owner workspace: **44 `contacts_created`, 0
   discrepancies.**
+
+## 2026-08-30 — M4 Phase 10: dashboards and the lead-batch funnel
+
+0083 applied. `/crm/reports` is live and verified against real data.
+
+### Added
+
+- `crm_batch_funnel` and `crm_pipeline_totals` (0083), both SQL because the
+  funnel is nine distinct-count questions per batch and because money must be
+  summed in Postgres (Ledger D25).
+- `lib/crm/reports.ts` and `/crm/reports`: own activity and pipeline for
+  everyone, plus leaderboard, workspace totals, overdue tasks and a funnel per
+  batch behind `report.team.view`.
+
+### Three things fixed by looking at the page
+
+**"Figures have not been computed yet" on a workspace with figures.** The
+earlier rollup was invoked as a bare RPC, so no `crm_reporting_runs` row
+existed. Accurate, but misleading. Running it through `rollupWorkspace()` —
+which records the run — is what the app will always do.
+
+**The only metric this workspace has was not displayed.** `contactsCreated` was
+in the dashboard type and absent from the page, so a workspace with 44 contacts
+showed nothing but zeroes.
+
+**The funnel implied a sequence it does not have.** "With an email" sits
+between "Canonical" and "Assigned" because the M4 brief orders it there, but it
+is not a gate — a contact can be assigned and worked without an address. On
+real data that renders 25 → 25 → 0 → 25, which reads as a bug. It is now marked
+COVERAGE and drawn in a muted bar.
+
+### Decisions
+
+- The leaderboard ranks on **contacts emailed**, not emails sent. Ranking on
+  volume rewards blasting the same person repeatedly.
+- Funnel bar widths are relative to the FIRST step, so the bars show attrition.
+  Scaling each to its own maximum would make every funnel look full at the top.
+- The page states when the figures were computed. A dashboard that never says
+  so is one nobody can tell has stopped updating, and a stalled job looks
+  exactly like a quiet week.
+- Reply rate renders "—" rather than "0%" when nobody was emailed.
+
+### Verified in the browser
+
+Reports renders 17 stat tiles across five sections with **Contacts created =
+44**, staleness "Figures computed 8/30/2026, 7:23:18 PM", both batch funnels
+(25 and 19 extracted), and the coverage badge on the email step.
+
+1,761 unit tests, typecheck, lint (0 errors) and build all pass.

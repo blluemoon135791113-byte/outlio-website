@@ -6083,6 +6083,22 @@ export type Database = {
           used: number
         }[]
       }
+      crm_batch_funnel: {
+        Args: { p_batch_id: string; p_workspace_id: string }
+        Returns: {
+          assigned: number
+          call_booked: number
+          canonical: number
+          engaged: number
+          extracted: number
+          opportunities: number
+          qualified: number
+          replied: number
+          with_email: number
+          won_deals: number
+          won_revenue: number
+        }[]
+      }
       crm_erase_contact: {
         Args: {
           p_actor_id?: string
@@ -6120,6 +6136,16 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: Json
+      }
+      crm_pipeline_totals: {
+        Args: { p_owner_user_id?: string; p_workspace_id: string }
+        Returns: {
+          open_deals: number
+          open_value: number
+          weighted_value: number
+          won_deals: number
+          won_value: number
+        }[]
       }
       crm_reconcile_reporting: {
         Args: { p_from_day: string; p_to_day: string; p_workspace_id: string }
