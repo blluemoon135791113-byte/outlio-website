@@ -51,7 +51,14 @@ create role authenticated;
 create role service_role;
 create schema if not exists auth;
 create table auth.users (id uuid primary key default gen_random_uuid(), email text);
-create or replace function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+-- Mirrors Supabase's real auth.uid(): reads the sub claim from the request
+-- GUC. The previous stub returned a constant NULL, which made every RLS
+-- assertion in every smoke test VACUOUSLY TRUE -- a policy that denies
+-- everyone passes a test that expects a member to see their own rows, because
+-- both sides are empty. A test that cannot fail is worse than no test.
+create or replace function auth.uid() returns uuid language sql stable as $$
+  select nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid
+$$;
 create or replace function public.set_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at := now(); return new; end $$;
 create or replace function public.is_admin() returns boolean language sql stable as $$ select false $$;
@@ -65,7 +72,7 @@ create table public.companies (id uuid primary key default gen_random_uuid());
 SQL
 
 # Prerequisites, in order. Extend this list as the platform grows.
-for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel; do
+for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break
