@@ -10,8 +10,8 @@ disagree, the repository wins and the conflict is recorded under
 - **Repository of record:** `github.com/blluemoon135791113-byte/outlio--website`
   (local `origin`). See [D1](#d1-repository-of-record).
 - **Ledger opened:** 2026-08-30 (M0)
-- **Last updated:** 2026-08-30 (**M3 complete**)
-- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0079` are all
+- **Last updated:** 2026-08-30 (CRM UI pass: contacts list + detail)
+- **Blocked on a human:** plan seat counts (Q6) only. `0070`–`0081` are all
   applied and types are regenerated.
 - **Next milestone:** M4 — CRM reporting foundation and dashboards.
 - **Next milestone:** M3 — opportunities, pipelines, native Kanban, collision
@@ -28,7 +28,7 @@ disagree, the repository wins and the conflict is recorded under
 | Styling | Tailwind CSS v4 (`@theme`), Geist fonts | `app/globals.css`, `postcss.config.mjs` |
 | Database | Supabase Postgres, project `ptewhpmxzenbmxlizxhu` | `CLAUDE.md` |
 | ORM | **None.** `supabase-js` query builder + SQL functions | `lib/supabase/` |
-| Migrations | Hand-written, numbered SQL, `0001`–`0079` | `supabase/migrations/` |
+| Migrations | Hand-written, numbered SQL, `0001`–`0081` | `supabase/migrations/` |
 | Generated types | `types/database.ts` (6,433 lines) via `npm run db:types` | `scripts/gen-db-types.mjs` |
 | Validation | Zod 4 | `lib/limits/plans.ts` and throughout |
 | Tests | **Vitest 4** — 1,754 unit / 97 files, plus 126 integration | `vitest.config.mts`, `tests/` |
@@ -696,10 +696,11 @@ it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
 | 3 | Collision fires at contact AND company level per config; overrides audited | ✅ `tests/integration/crm-collision.test.ts` (21) — including the negatives: ownership alone does not fire, a dormant contact does not fire, and company level says nothing until the workspace turns it on |
 | 4 | Kanban paginates; never loads the full pipeline | ✅ `getBoard` returns a capped page per column plus a true total; tested |
 
-⚠️ **The board UI itself has not been seen by a human.** It builds, its data
-path is covered, and `/crm/pipeline` was verified to resolve and gate
-correctly — but signing in requires credentials the agent must not handle, so
-the rendered board is unverified until someone looks at it.
+**The CRM surface is live and verified in the browser** against 44 real
+contacts ingested from two of the owner's own extractions. The contacts list,
+its pagination (25 + 19 across two pages), trigram search and the detail page
+with its timeline were all confirmed rendering. The PIPELINE board still has
+not been seen with deals on it, because no opportunities exist yet.
 
 ### M2 acceptance criteria
 
@@ -744,7 +745,7 @@ Recorded, never dropped.
 | DR8 | VoIP / dialer adapter for call logging | M8 v2.1 | M8 Phase 25 | Adapter candidate. Never invent telephony capability. |
 | DR9 | Ownership transfer flow | M1 | M2 | The `workspace.transfer_ownership` permission and the last-owner guard exist; the UI does not. An owner can promote a second owner only via support today. |
 | DR10 | `crm_saved_views.definition` validation | M2 P2 | M2 P3 | Its schema IS the list query language. Inventing one before the query builder exists would mean guessing. Nothing reads the column until then; when it does, it must validate on READ as well as write — a stored filter is untrusted input however it got there. |
-| DR16 | Collision guard UI (warning banner on assign and first outreach, request-reassignment button, settings page) | M3 P8 | M9 | `checkCollision`, `recordCollisionOverride`, `requestReassignment` and `resolveReassignment` are complete and tested. Nothing calls them from a screen yet, because the screens they belong on — contact detail and outreach — do not exist. |
+| DR16 | Collision guard UI on the OUTREACH path, and the settings page | M3 P8 | M6 / M9 | The ASSIGN path is done: `/crm/contacts/[id]` shows the warning, refuses an unacknowledged reassignment, records the override and offers a reassignment request. What remains is the first-outreach check (there is no outreach surface until M6) and a screen for editing the modes — until then they are changed in `crm_collision_settings` directly. |
 | DR15 | A real domain-event bus | M3 P6 | M7 | A3 wants normalized domain events (`crm.opportunity.stage_changed`, …) powering Flows, Reports, Notifications, Realtime and Integrations. Today `crm_activities` IS the event record, written in the same transaction as the change. That satisfies "exactly one activity" but there is no PUBLISHER yet, so nothing can subscribe. The Flow engine in M7 is what needs one; until then a consumer would have nothing to consume. |
 | DR14 | Duplicate Center UI (four tabs, side-by-side merge screen) | M2 P4 | M2 P5 / M9 | Detection, scoring, listing, ignore and merge are complete and tested. Only the screens are outstanding. |
 | DR12 | CSV import UI (upload, mapping screen, validation report, undo button) | M2 P3 | M2 P3 (next) | The engine — parse, suggest mapping, validate, plan, ingest, undo — is complete and tested. Only the screens are outstanding. |

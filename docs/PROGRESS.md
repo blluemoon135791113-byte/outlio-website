@@ -7625,3 +7625,58 @@ handle, so the rendered board is unverified until someone looks at it.
 
 The collision guard has no UI either (Ledger DR16): the screens it belongs on —
 contact detail and outreach — do not exist yet.
+
+## 2026-08-30 — CRM UI pass: contacts list and detail, verified against real data
+
+### Added
+
+- `/crm/contacts` — server-filtered, paged, trigram-backed search.
+- `/crm/contacts/[id]` — detail with timeline, notes, owner picker and the
+  collision guard.
+- 0080 (trigram indexes) and 0081 (CONTACT_CREATED on ingestion).
+
+### The bug that only opening the page could find
+
+Every ingested contact had a completely empty timeline. `CONTACT_CREATED` had
+been in the enum since 0075 and nothing wrote it. No test failed — the event was
+never asserted anywhere, because nothing had ever produced it.
+
+Two consequences, not one: a real person with a real company and no history
+reads as a failed import, and M4's funnel had no event marking the moment a
+lead becomes a contact, so its first step would have been inferred from a batch
+count rather than derived from the event stream like every other metric.
+
+0081 writes it inside the create branch so the event and the contact share a
+transaction, and only on CREATE — the smoke test proves re-ingesting a batch
+does not manufacture a second birth.
+
+### Verified in the browser, against real data
+
+Two of the owner's own extractions were ingested rather than fabricating
+contacts: 19 leads (2026-08-28) and 25 (2026-08-14) → **44 contacts, 44
+companies, two batches, zero skipped**.
+
+- List renders 25 rows, pager reads "Page 1 of 2"; page 2 renders the
+  remaining 19.
+- `?q=chen` returns exactly "Johnathan Chen" — trigram search works.
+- A contact from the second batch shows "contact created … · system" on its
+  timeline.
+
+The 19 contacts from the FIRST batch still have no creation event: 0081 changes
+future ingestions and does not backfill.
+
+### Notes
+
+- Search is trigram, not full-text. A tsvector tokenises "Sam" and "Samuel" as
+  unrelated lexemes and cannot match a partial word, so typing "sam" would find
+  neither.
+- The search term lives in the URL, so a search is shareable, survives a
+  refresh and works with the back button. Debounced at 300ms.
+- The detail page closes the assign half of DR16: the collision warning is
+  shown, an unacknowledged reassignment is refused by the SERVER, an override
+  is recorded, and a reassignment request is offered instead.
+
+### Verification
+
+1,761 unit tests, 19 ingestion integration tests re-run against the changed
+function, typecheck, lint (0 errors) and build all pass.
