@@ -7559,3 +7559,69 @@ having it.
 - `crm-opportunities` 19 · the other five suites 107, no regression.
 - `npx vitest run tests/unit` — 1,754 across 97 files.
 - `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass.
+
+## 2026-08-30 — M3 complete: Kanban, realtime and the collision guard
+
+0078 and 0079 applied. 21 new integration tests; all four M3 acceptance
+criteria met.
+
+### Added
+
+- **`lib/crm/collision.ts`** — `checkCollision`, `recordCollisionOverride`,
+  `requestReassignment`, `resolveReassignment`.
+- `tests/integration/crm-collision.test.ts` — 21 tests.
+- Board realtime (0078) and the CRM shell, board and move action (Phase 7).
+
+### A collision needs ownership AND recent activity
+
+The assertions that matter most in this suite are the NEGATIVES:
+
+- **Ownership alone does not fire.** Half a CRM is assigned to people who have
+  never touched it, so firing on ownership would warn on every row of the first
+  import — and a guard people learn to click through protects nothing.
+- **A dormant contact does not fire**, even when a colleague owns it, and
+  activity that ages out of the window stops counting.
+- **Company level says nothing until the workspace turns it on.** In a
+  5,000-person enterprise two setters working two departments is normal.
+- **Your own contact never fires.**
+
+Warn is the default; blocking is opt-in. A guard that stops work by default is
+switched off in week one. An absent settings row means the defaults, so a
+workspace that never opens the settings page is still guarded.
+
+### Overrides are auditable, both halves
+
+`crm_record_collision_override` writes the activity and the audit row in one
+function, so it is both or neither — two records disagreeing about whether an
+override happened is worse than one missing. The activity freezes the owner who
+was stepped over and appears on the contact timeline, so a manager reviewing it
+does not have to go to a separate log.
+
+Approving a reassignment goes through `assignContact` rather than updating the
+owner directly: a handover nobody can see in the timeline is one nobody can
+report on.
+
+### Realtime
+
+0078 publishes `crm_opportunities` with REPLICA IDENTITY FULL. The replica
+identity is the load-bearing part — the default sends only the primary key for
+an update's old row, so a subscriber could tell a deal changed but not which
+stage it LEFT. RLS is evaluated per subscriber, so the channel filter is a
+bandwidth optimisation rather than the security boundary. Updates apply
+idempotently because a client receives the echo of its own move.
+
+### Verification
+
+- `crm-collision` 21 · `crm-opportunities` + `crm-operations` 42, no
+  regression · unit 1,761 across 97 files.
+- `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass.
+
+### Known limitation, recorded
+
+⚠️ **The board UI has not been seen by a human.** It builds, its data path is
+covered by tests, and `/crm/pipeline` was verified to resolve on the app host
+and gate correctly — but signing in needs credentials the agent must not
+handle, so the rendered board is unverified until someone looks at it.
+
+The collision guard has no UI either (Ledger DR16): the screens it belongs on —
+contact detail and outreach — do not exist yet.

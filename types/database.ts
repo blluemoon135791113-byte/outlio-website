@@ -1708,6 +1708,41 @@ export type Database = {
           },
         ]
       }
+      crm_collision_settings: {
+        Row: {
+          active_within_days: number
+          company_mode: Database["public"]["Enums"]["crm_collision_mode"]
+          contact_mode: Database["public"]["Enums"]["crm_collision_mode"]
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          active_within_days?: number
+          company_mode?: Database["public"]["Enums"]["crm_collision_mode"]
+          contact_mode?: Database["public"]["Enums"]["crm_collision_mode"]
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          active_within_days?: number
+          company_mode?: Database["public"]["Enums"]["crm_collision_mode"]
+          contact_mode?: Database["public"]["Enums"]["crm_collision_mode"]
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_collision_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_companies: {
         Row: {
           created_at: string
@@ -2960,6 +2995,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "crm_pipelines_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_reassignment_requests: {
+        Row: {
+          contact_id: string
+          created_at: string
+          current_owner_user_id: string | null
+          id: string
+          note: string | null
+          requested_by: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: Database["public"]["Enums"]["crm_reassignment_status"]
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          current_owner_user_id?: string | null
+          id?: string
+          note?: string | null
+          requested_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: Database["public"]["Enums"]["crm_reassignment_status"]
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          current_owner_user_id?: string | null
+          id?: string
+          note?: string | null
+          requested_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: Database["public"]["Enums"]["crm_reassignment_status"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_reassignment_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_reassignment_requests_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -5944,6 +6033,15 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_record_collision_override: {
+        Args: {
+          p_actor_id: string
+          p_contact_id: string
+          p_reason?: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
       crm_undo_batch: {
         Args: { p_batch_id: string; p_workspace_id: string }
         Returns: {
@@ -6428,6 +6526,8 @@ export type Database = {
         | "OPPORTUNITY_LOST"
         | "QUALIFIED"
         | "MERGED"
+        | "COLLISION_OVERRIDE"
+      crm_collision_mode: "off" | "warn" | "require_approval"
       crm_custom_field_entity: "contact" | "company" | "opportunity"
       crm_custom_field_type:
         | "text"
@@ -6439,6 +6539,7 @@ export type Database = {
         | "select"
         | "multi_select"
       crm_opportunity_status: "open" | "won" | "lost"
+      crm_reassignment_status: "pending" | "approved" | "declined" | "withdrawn"
       crm_record_source:
         | "lead_engine"
         | "csv_import"
@@ -6655,7 +6756,9 @@ export const Constants = {
         "OPPORTUNITY_LOST",
         "QUALIFIED",
         "MERGED",
+        "COLLISION_OVERRIDE",
       ],
+      crm_collision_mode: ["off", "warn", "require_approval"],
       crm_custom_field_entity: ["contact", "company", "opportunity"],
       crm_custom_field_type: [
         "text",
@@ -6668,6 +6771,7 @@ export const Constants = {
         "multi_select",
       ],
       crm_opportunity_status: ["open", "won", "lost"],
+      crm_reassignment_status: ["pending", "approved", "declined", "withdrawn"],
       crm_record_source: ["lead_engine", "csv_import", "manual", "api", "flow"],
       crm_stage_kind: ["open", "won", "lost"],
       crm_task_status: ["open", "completed", "cancelled"],
