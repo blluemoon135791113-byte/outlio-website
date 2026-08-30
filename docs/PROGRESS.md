@@ -6782,3 +6782,74 @@ is the Ledger and must be read before every phase and updated after it.
 - Ownership cannot be transferred and a second owner cannot be created, so a
   sole owner cannot leave their workspace (Ledger DR9, M2).
 - Membership changes are not audited yet (Ledger DR6, M2 Phase 5).
+
+## 2026-08-30 — Platform build M2 Phase 2 (part 1): CRM field normalization
+
+The schema-independent half of CRM core identity. Built while migration 0070
+awaits application, so it adds no table and no migration.
+
+### Added
+
+- **`lib/crm/normalize.ts`** — pure normalization for the fields M2 keys
+  contacts on: email, phone, a person's LinkedIn URL, and a person's name.
+
+  The organising idea is that every field yields **two** values and they are
+  deliberately different: `address` / `e164` / `canonicalUrl` are what we STORE
+  AND CONTACT, `identityKey` is what we COMPARE. An identity key is folded —
+  Gmail dots removed, `+tags` dropped — because those addresses reach one
+  mailbox. Sending to the folded form would mail an address the person never
+  gave us, breaking their filters and any reply threading. **An identityKey
+  must never appear in a To: header.**
+
+  Folding is applied only where the provider documents the behaviour. At an
+  unknown corporate domain nothing is folded: `+` can be an ordinary character
+  in a real address there, and folding it would merge two different people —
+  which M2 Phase 4 forbids outright. Not folding leaves a duplicate a human can
+  merge; folding wrongly destroys a record.
+
+  A phone region is **never guessed**. A national-format number with no
+  explicitly supplied country is stored and shown but gets no identity key and
+  never blocks a merge. `07400 123456` is a UK mobile and a valid landline in a
+  dozen other countries; assuming a region silently rewrites the numbers of
+  everyone outside it. This matches the reasoning already recorded in
+  `lib/auth/profile-fields.ts` for sign-up.
+
+- `tests/unit/crm-normalize.test.ts` — 65 tests over the edge cases M2's
+  acceptance criteria name.
+
+### Reused rather than rebuilt
+
+Prime rule: the repository is the source of truth. These already existed and
+are delegated to, not reimplemented — a second copy of any of them would drift
+silently, the failure mode `lib/companies/normalize.ts` already warns about:
+
+| Need | Existing implementation |
+|---|---|
+| Company registrable domain (strip `www`) | `normalizeDomain` — also used for the `companyDomain` on an email |
+| Company name comparison | `normalizeCompanyName` |
+| Company LinkedIn page | `normalizeCompanyLinkedInUrl` |
+| LinkedIn dedup key | `canonicalizeLeadUrl`, so a contact ingested from an extraction and the same person typed in by hand land on ONE key |
+
+### Notes
+
+- `normalizePersonName` splits a name for `{{first_name}}` merge variables
+  only. Name order and multi-word surnames vary by culture and no split is
+  right everywhere, so it is never an identity or a dedup input — casing is
+  preserved, because "McDonald" and "van der Berg" are how those people write
+  their names.
+- Sales Navigator lead URLs get no canonical URL. Their id cannot be turned
+  into a public profile without a request to linkedin.com, which CLAUDE.md
+  rule 1 forbids.
+
+### Verification
+
+- `npx vitest run tests/unit` — **1,646 tests across 94 files, all passing.**
+  `npm run typecheck` passes; `npm run lint` reports 0 errors.
+- ⚠️ `npm test` also runs the live integration suite, where 3 tests in
+  `tests/integration/signup-ip-gate.test.ts` fail after the suite is run
+  several times in quick succession: the signup IP gate blocks its own test
+  runner. **Confirmed pre-existing** — the same 3 fail with this branch's
+  changes stashed. Recorded as Ledger KI7.
+- Fixtures must not use Ofcom's `07700 900xxx` drama range: libphonenumber
+  classes it possible-but-not-valid, so every phone case fails for a reason
+  unrelated to the code. Noted in the test file.

@@ -289,6 +289,7 @@ Adapt these; do not duplicate.
 | Team invitation | `invitation_codes` (entitlement codes) | **Create separately** ([D6](#d6-two-kinds-of-invitation)) |
 | Contact | `extracted_leads` (per-extraction rows) | **Create** canonical `crm_contacts`; leads remain the immutable extraction record |
 | Company | `companies` ✅ with normalization | **Reuse and extend** |
+| Field normalization | `lib/crm/normalize.ts` ✅ (M2 Phase 2) | Email, phone, person LinkedIn, person name. Delegates company domain/name/page to `lib/companies/normalize.ts` and the LinkedIn key to `lib/leads/canonical-url.ts` |
 | Dedup | `lead_keys`, `lib/companies/` normalizers, `pg_trgm` | **Reuse** for M4 |
 | Activities | `system_events`, `admin_audit_logs` | Create `crm_activities`; append-only precedent exists |
 | Background jobs | `job_queue` ✅ | **Reuse** |
@@ -389,6 +390,37 @@ it. It is a rule, not an enforcement point — a policy layer cannot put a WHERE
 clause on someone else's query. There is nothing to scope yet: no CRM record
 exists. Every M2 query that returns workspace data MUST consult `dataScope`.
 
+### D11. Stored value ≠ identity key
+Every normalized contact field produces **two** values, and they are
+deliberately different:
+
+| | Purpose | Example |
+|---|---|---|
+| `address` / `e164` / `canonicalUrl` | What we **store and contact** | `j.doe+outlio@gmail.com` |
+| `identityKey` | What we **compare** for dedup blocking | `jdoe@gmail.com` |
+
+*Rationale:* those two addresses reach one mailbox, so dedup must fold them —
+but sending to the folded form mails an address the person never gave us,
+breaking their filters and any reply threading. Collapsing the two into one
+field is a silent failure in both directions. **An `identityKey` must never
+appear in a `To:` header.**
+
+Folding is applied only where the provider **documents** the behaviour (Gmail
+dots, `+` sub-addressing at a short allow-list of hosts). At an unknown
+corporate domain nothing is folded: not folding leaves a duplicate a human can
+merge, while folding wrongly destroys a person's record — and M2 Phase 4
+forbids silently merging uncertain people.
+
+### D12. A phone region is never guessed
+A national-format number with no explicitly supplied country is stored and
+displayed, but gets **no identity key** and never blocks a merge
+(`reason: 'ambiguous_no_country'`). `defaultCountry` must come from an explicit
+user choice — a CSV import mapping or a workspace setting — never a locale
+header.
+*Rationale:* `07400 123456` is a UK mobile and a valid landline in a dozen other
+countries. Assuming a region silently rewrites the numbers of everyone outside
+it. `lib/auth/profile-fields.ts` reached the same conclusion for sign-up.
+
 ---
 
 ## 14. Migrations added by the platform build
@@ -405,7 +437,7 @@ exists. Every M2 query that returns workspace data MUST consult `dataScope`.
 |---|---|---|
 | M0 | Repository discovery & Ledger | ✅ Complete (2026-08-30) |
 | M1 | Workspace, auth, roles, permissions, entitlements | ✅ Complete (2026-08-30) — see below |
-| M2 | CRM core: identity, ingestion, dedup, operations | ⬜ Not started |
+| M2 | CRM core: identity, ingestion, dedup, operations | 🔨 Phase 2 started — normalization library complete |
 | M3 | Opportunities, pipelines, Kanban, collision guard | ⬜ Not started |
 | M4 | CRM reporting foundation & dashboards | ⬜ Not started |
 | M5 | Email foundation | ⬜ Not started |
@@ -454,14 +486,21 @@ Recorded, never dropped.
 | KI4 | **Migration 0070 has not been applied to any environment.** It is written and reviewed but unrun; the generated types in `types/database.ts` therefore do not contain the workspace tables, which is why `lib/workspaces/db.ts` declares them by hand. | Nothing workspace-related works until `0070` is applied and `npm run db:types` is run. The tenancy leak test (M1 criterion 2) is blocked on the same step. |
 | KI5 | No plan sells more than one seat (Q6), so the invite flow is reachable but always refused. | Team features are dark until seat counts are set on `plans.limits`. |
 | KI6 | Ownership cannot be transferred and a second owner cannot be created (DR9). | A sole owner can never leave their workspace. Support-only until M2. |
+| KI7 | `tests/integration/signup-ip-gate.test.ts` reserves real signup IPs against the live project and fails when the suite is run repeatedly from one machine — the gate blocks its own runner. Pre-existing, confirmed by stashing this branch. | 3 tests fail on a re-run. Use `npx vitest run tests/unit` for iteration; the gate's claims age out. |
 
 ---
 
 ## 18. Test status
 
-`npm test` — **1,644 passed, 24 skipped, 0 failed**, 100 files (8 skipped), as
-of the M1 branch. `npm run typecheck` passes. `npm run lint` reports 0 errors
-(95 pre-existing warnings, all in generated or vendored files).
+`npx vitest run tests/unit` — **1,646 passed, 0 failed**, 94 files.
+`npm run typecheck` passes. `npm run lint` reports 0 errors (95 pre-existing
+warnings, all in generated or vendored files). `npm run build` passes.
+
+⚠️ **`npm test` runs the live integration suite too**, and 3 tests in
+`tests/integration/signup-ip-gate.test.ts` fail on a machine that has run the
+suite several times in quick succession — the signup IP gate blocks its own
+test runner. **Verified pre-existing:** the same 3 fail with this branch's
+changes stashed. See [KI7](#17-known-issues).
 
 M1 added 270 tests across two files:
 
