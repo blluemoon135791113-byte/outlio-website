@@ -24,7 +24,7 @@
 - Purpose: Agent-to-agent communication for lead intelligence
 
 ## Webhooks
-- Paddle webhook handler: /api/webhooks/paddle
+- FastSpring webhook handler: /api/webhooks/fastspring
 - Payment events and status updates
 
 ## Search & Discovery
@@ -47,7 +47,7 @@
 ## Integrations
 - Supabase (database & auth)
 - Google Calendar (booking)
-- Paddle (payments)
+- FastSpring (payments)
 - Various AI providers (Gemini, Groq, Cerebras)
 
 ## Deployment

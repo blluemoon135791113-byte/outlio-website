@@ -61,7 +61,7 @@ export default function LeadEnginePage() {
             Lead Engine extracts, enriches, de-duplicates, organizes, scores, and
             exports B2B data. It does not send cold emails, automatically send
             LinkedIn messages, perform outreach for customers, or include agency
-            or appointment-setting services. Paddle payments on this application
+            or appointment-setting services. FastSpring payments on this application
             purchase access to the software only.
           </p>
         </div>

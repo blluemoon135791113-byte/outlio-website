@@ -27,7 +27,7 @@ const LEGAL_NAV = [
 ];
 
 /*
- * ⚠️ PADDLE READS THIS FOOTER. A card-payment reviewer crawling
+ * ⚠️ FASTSPRING READS THIS FOOTER. A card-payment reviewer crawling
  * app.outlio.io must find visible Terms, Privacy Policy and Refund Policy
  * links on the homepage, each resolving on the same domain without a login.
  * Do not hide these behind auth, and do not rename them past recognition.

@@ -10,6 +10,7 @@ import { decideAccess, decideLimits, withinLimit, type DecisionInput } from '@/l
 import type { PlanLimits, UserRole } from '@/types/database'
 
 const LIMITS: PlanLimits = {
+  credits_per_month: 100,
   files_per_extraction: 25,
   leads_per_credit: 10,
   extractions_per_day: 10,

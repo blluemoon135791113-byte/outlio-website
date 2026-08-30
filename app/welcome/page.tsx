@@ -24,7 +24,7 @@ export default async function WelcomePage() {
           Welcome to Outlio.
         </h1>
         <p className="mt-4 text-base leading-7 text-muted">
-          Paddle is confirming your subscription for {user.email}. Access is granted only from the
+          FastSpring is confirming your subscription for {user.email}. Access is granted only from the
           verified webhook, so it may take a few seconds to appear in your account.
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">

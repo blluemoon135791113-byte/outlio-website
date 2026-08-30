@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 import { planLimitsSchema } from '@/lib/limits/plans'
 
 const BASE = {
+  credits_per_month: 100,
   files_per_extraction: 10,
   leads_per_credit: 25,
   extractions_per_day: null,
@@ -70,14 +71,37 @@ describe('contact_enrichments_per_month', () => {
   })
 })
 
+describe('credits_per_month', () => {
+  /*
+   * ⚠️ Deliberately NOT defaulted. It is the paid product: an absent key must
+   * fail loudly rather than parse as `null`, because `null` means unlimited
+   * everywhere it is read — consume_credit, credit_balance, and
+   * grant_fastspring_period_credits would all hand out free extractions.
+   */
+  it('rejects a plan whose allowance is missing', () => {
+    const { credits_per_month: _omitted, ...withoutCredits } = BASE
+    expect(planLimitsSchema.safeParse(withoutCredits).success).toBe(false)
+  })
+
+  it('honours an EXPLICIT null as genuinely unlimited', () => {
+    expect(
+      planLimitsSchema.parse({ ...BASE, credits_per_month: null }).credits_per_month,
+    ).toBeNull()
+  })
+
+  it('reads the seeded allowance back unchanged', () => {
+    expect(planLimitsSchema.parse({ ...BASE, credits_per_month: 300 }).credits_per_month).toBe(300)
+  })
+})
+
 describe('every live plan parses', () => {
   it('accepts the shapes seeded in the database', () => {
     // These are the real blobs from `plans.limits`, none of which carry the new
     // key — the case the default exists for.
     const live = [
-      { ...BASE, retention_days: 730, records_per_month: 300000, extractions_per_day: 100 },
-      { ...BASE, retention_days: 3, records_per_month: 250, files_per_extraction: 5 },
-      { ...BASE, retention_days: 90, records_per_month: 7500, files_per_extraction: 30 },
+      { ...BASE, credits_per_month: 1000, retention_days: 730, records_per_month: 300000, extractions_per_day: 100 },
+      { ...BASE, credits_per_month: 10, retention_days: 3, records_per_month: 250, files_per_extraction: 5 },
+      { ...BASE, credits_per_month: 300, retention_days: 90, records_per_month: 7500, files_per_extraction: 30 },
     ]
 
     for (const limits of live) {

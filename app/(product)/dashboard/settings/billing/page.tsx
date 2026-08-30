@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { SubscriptionSettings } from '@/components/settings/SettingsForms'
 import { SettingsShell } from '@/components/settings/SettingsShell'
 import { requireUser } from '@/lib/auth/access'
-import { openPaddleCustomerPortal } from '@/lib/paddle/portal'
+import { openFastSpringAccountPortal } from '@/lib/fastspring/portal'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const metadata: Metadata = { title: 'Billing settings | Outlio', robots: { index: false, follow: false } }
@@ -25,7 +25,7 @@ export default async function BillingSettingsPage() {
   return (
     <SettingsShell
       title="Subscription and billing"
-      description="Review your plan or open Paddle's secure billing portal."
+      description="Review your plan or open FastSpring's secure billing portal."
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Info label="Current plan" value={ctx.plan?.name ?? 'No active plan'} />
@@ -48,8 +48,8 @@ export default async function BillingSettingsPage() {
         >
           View plans
         </Link>
-        {subscription?.provider === 'paddle' && subscription.provider_ref ? (
-          <form action={openPaddleCustomerPortal}>
+        {subscription?.provider === 'fastspring' && subscription.provider_ref ? (
+          <form action={openFastSpringAccountPortal}>
             <button
               type="submit"
               className="inline-flex h-10 items-center rounded-[var(--radius-md)] border border-border px-4 text-sm font-semibold text-ink hover:border-accent/40"
@@ -60,10 +60,10 @@ export default async function BillingSettingsPage() {
         ) : null}
       </div>
 
-      {subscription?.provider === 'paddle' ? (
+      {subscription?.provider === 'fastspring' ? (
         <p className="mt-6 border-t border-clay-sunken pt-6 text-sm leading-6 text-muted">
-          Paddle handles payment methods, invoices, and cancellations. A scheduled cancellation
-          does not remove access before your current paid period ends.
+          FastSpring handles payment methods, invoices, and cancellations. A cancellation does not
+          remove access before your current paid period ends.
         </p>
       ) : (
         <div className="mt-6 border-t border-clay-sunken pt-6">

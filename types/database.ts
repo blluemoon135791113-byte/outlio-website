@@ -86,6 +86,8 @@ export type LeadExportJobStatus =
  * Read at runtime — never hardcode a limit in application code.
  */
 export type PlanLimits = {
+  /** Monthly extraction-credit allowance. `null` means unlimited. */
+  credits_per_month: number | null
   files_per_extraction: number | null
   /**
    * Leads per credit for one extraction, aggregated across the whole run:
@@ -181,6 +183,9 @@ export type SubscriptionRow = {
   paddle_customer_id: string | null
   paddle_price_id: string | null
   paddle_product_id: string | null
+  fastspring_account_id: string | null
+  fastspring_product_path: string | null
+  fastspring_event_at: string | null
   scheduled_change_action: string | null
   scheduled_change_at: string | null
   paddle_event_at: string | null
@@ -189,60 +194,62 @@ export type SubscriptionRow = {
   updated_at: string
 }
 
-export type PaddleWebhookEventRow = {
+export type FastSpringWebhookEventRow = {
   event_id: string
   event_type: string
   occurred_at: string
   processed_at: string
 }
 
-export type PaddleCustomerRow = {
-  customer_id: string
+export type FastSpringAccountRow = {
+  account_id: string
   user_id: string | null
   email: string | null
   name: string | null
-  status: string
-  marketing_consent: boolean
-  custom_data: Json | null
-  paddle_created_at: string | null
-  paddle_updated_at: string | null
+  company: string | null
+  country: string | null
+  language: string | null
+  tags: Json | null
   last_event_at: string
   created_at: string
   updated_at: string
 }
 
-export type PaddleSubscriptionRow = {
+export type FastSpringSubscriptionRow = {
   subscription_id: string
-  customer_id: string
+  account_id: string
   user_id: string | null
-  status: string
-  price_id: string
-  product_id: string
+  state: string
+  /** FastSpring keeps this true on a canceled subscription until its paid period ends. */
+  active: boolean
+  product_path: string
   plan_key: string | null
-  scheduled_change_action: string | null
-  scheduled_change_at: string | null
-  current_period_start: string | null
-  current_period_end: string | null
+  billing_interval: string | null
+  auto_renew: boolean | null
+  currency: string | null
+  price: number | null
+  begin_at: string | null
+  next_charge_at: string | null
   canceled_at: string | null
-  paused_at: string | null
-  custom_data: Json | null
+  deactivated_at: string | null
+  tags: Json | null
   last_event_at: string
   created_at: string
   updated_at: string
 }
 
-export type PaddleTransactionRow = {
-  transaction_id: string
-  customer_id: string | null
+export type FastSpringOrderRow = {
+  order_id: string
+  account_id: string | null
   subscription_id: string | null
   user_id: string | null
-  status: string
-  price_id: string | null
-  product_id: string | null
-  currency_code: string
-  total: string | null
-  custom_data: Json | null
-  billed_at: string | null
+  reference: string | null
+  live: boolean
+  currency: string
+  total: number | null
+  product_path: string | null
+  tags: Json | null
+  completed_at: string | null
   last_event_at: string
   created_at: string
   updated_at: string
@@ -1467,6 +1474,7 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          fastspring_event_id: string | null
           id: string
           period_start: string
           reason: string
@@ -1476,6 +1484,7 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string
+          fastspring_event_id?: string | null
           id?: string
           period_start: string
           reason: string
@@ -1485,6 +1494,7 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          fastspring_event_id?: string | null
           id?: string
           period_start?: string
           reason?: string
@@ -2063,6 +2073,243 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      fastspring_accounts: {
+        Row: {
+          account_id: string
+          company: string | null
+          country: string | null
+          created_at: string
+          email: string | null
+          language: string | null
+          last_event_at: string
+          name: string | null
+          tags: Json | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          account_id: string
+          company?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          language?: string | null
+          last_event_at: string
+          name?: string | null
+          tags?: Json | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          company?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          language?: string | null
+          last_event_at?: string
+          name?: string | null
+          tags?: Json | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      fastspring_charges: {
+        Row: {
+          account_id: string | null
+          charge_id: string | null
+          created_at: string
+          credits_allocated: number
+          currency: string | null
+          decline_reason: string | null
+          event_id: string
+          event_type: string
+          occurred_at: string
+          plan_key: string | null
+          product_path: string | null
+          status: string
+          subscription_id: string | null
+          total: number | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          charge_id?: string | null
+          created_at?: string
+          credits_allocated?: number
+          currency?: string | null
+          decline_reason?: string | null
+          event_id: string
+          event_type: string
+          occurred_at: string
+          plan_key?: string | null
+          product_path?: string | null
+          status: string
+          subscription_id?: string | null
+          total?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          charge_id?: string | null
+          created_at?: string
+          credits_allocated?: number
+          currency?: string | null
+          decline_reason?: string | null
+          event_id?: string
+          event_type?: string
+          occurred_at?: string
+          plan_key?: string | null
+          product_path?: string | null
+          status?: string
+          subscription_id?: string | null
+          total?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      fastspring_orders: {
+        Row: {
+          account_id: string | null
+          completed_at: string | null
+          created_at: string
+          currency: string
+          last_event_at: string
+          live: boolean
+          order_id: string
+          product_path: string | null
+          reference: string | null
+          subscription_id: string | null
+          tags: Json | null
+          total: number | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          currency: string
+          last_event_at: string
+          live?: boolean
+          order_id: string
+          product_path?: string | null
+          reference?: string | null
+          subscription_id?: string | null
+          tags?: Json | null
+          total?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          currency?: string
+          last_event_at?: string
+          live?: boolean
+          order_id?: string
+          product_path?: string | null
+          reference?: string | null
+          subscription_id?: string | null
+          tags?: Json | null
+          total?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      fastspring_subscriptions: {
+        Row: {
+          account_id: string
+          active: boolean
+          auto_renew: boolean | null
+          begin_at: string | null
+          billing_interval: string | null
+          canceled_at: string | null
+          created_at: string
+          currency: string | null
+          deactivated_at: string | null
+          last_event_at: string
+          next_charge_at: string | null
+          plan_key: string | null
+          price: number | null
+          product_path: string
+          state: string
+          subscription_id: string
+          tags: Json | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          account_id: string
+          active: boolean
+          auto_renew?: boolean | null
+          begin_at?: string | null
+          billing_interval?: string | null
+          canceled_at?: string | null
+          created_at?: string
+          currency?: string | null
+          deactivated_at?: string | null
+          last_event_at: string
+          next_charge_at?: string | null
+          plan_key?: string | null
+          price?: number | null
+          product_path: string
+          state: string
+          subscription_id: string
+          tags?: Json | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          active?: boolean
+          auto_renew?: boolean | null
+          begin_at?: string | null
+          billing_interval?: string | null
+          canceled_at?: string | null
+          created_at?: string
+          currency?: string | null
+          deactivated_at?: string | null
+          last_event_at?: string
+          next_charge_at?: string | null
+          plan_key?: string | null
+          price?: number | null
+          product_path?: string
+          state?: string
+          subscription_id?: string
+          tags?: Json | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      fastspring_webhook_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          occurred_at: string
+          processed_at: string
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          occurred_at: string
+          processed_at?: string
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          occurred_at?: string
+          processed_at?: string
+        }
+        Relationships: []
       }
       hubble_answers: {
         Row: {
@@ -3461,6 +3708,9 @@ export type Database = {
           current_period_start: string
           granted_by: string | null
           id: string
+          fastspring_account_id: string | null
+          fastspring_event_at: string | null
+          fastspring_product_path: string | null
           paddle_customer_id: string | null
           paddle_event_at: string | null
           paddle_price_id: string | null
@@ -3483,6 +3733,9 @@ export type Database = {
           current_period_start?: string
           granted_by?: string | null
           id?: string
+          fastspring_account_id?: string | null
+          fastspring_event_at?: string | null
+          fastspring_product_path?: string | null
           paddle_customer_id?: string | null
           paddle_event_at?: string | null
           paddle_price_id?: string | null
@@ -3505,6 +3758,9 @@ export type Database = {
           current_period_start?: string
           granted_by?: string | null
           id?: string
+          fastspring_account_id?: string | null
+          fastspring_event_at?: string | null
+          fastspring_product_path?: string | null
           paddle_customer_id?: string | null
           paddle_event_at?: string | null
           paddle_price_id?: string | null
@@ -3890,6 +4146,10 @@ export type Database = {
         Returns: string
       }
       generate_referral_code: { Args: never; Returns: string }
+      grant_fastspring_period_credits: {
+        Args: { p_event_id: string; p_plan_key: string; p_user_id: string }
+        Returns: number
+      }
       grant_entitlement: {
         Args: {
           p_duration_days?: number
@@ -3915,6 +4175,96 @@ export type Database = {
           p_user_id: string
         }
         Returns: number
+      }
+      fastspring_subscription_grants_access: {
+        Args: { p_active: boolean; p_state: string }
+        Returns: boolean
+      }
+      reconcile_fastspring_entitlement: {
+        Args: { p_subscription_id: string }
+        Returns: undefined
+      }
+      resolve_fastspring_user: {
+        Args: { p_account_id: string; p_email: string; p_tags: Json }
+        Returns: string
+      }
+      sync_fastspring_account: {
+        Args: {
+          p_account_id: string
+          p_company: string
+          p_country: string
+          p_email: string
+          p_event_id: string
+          p_event_type: string
+          p_language: string
+          p_name: string
+          p_occurred_at: string
+          p_tags: Json
+        }
+        Returns: boolean
+      }
+      sync_fastspring_charge: {
+        Args: {
+          p_account_id: string
+          p_charge_id: string
+          p_currency: string
+          p_decline_reason: string
+          p_email: string
+          p_event_id: string
+          p_event_type: string
+          p_occurred_at: string
+          p_plan_key: string
+          p_product_path: string
+          p_status: string
+          p_subscription_id: string
+          p_tags: Json
+          p_total: number
+        }
+        Returns: Json
+      }
+      sync_fastspring_order: {
+        Args: {
+          p_account_id: string
+          p_completed_at: string
+          p_currency: string
+          p_email: string
+          p_event_id: string
+          p_event_type: string
+          p_live: boolean
+          p_occurred_at: string
+          p_order_id: string
+          p_plan_key: string
+          p_product_path: string
+          p_reference: string
+          p_subscription_id: string
+          p_tags: Json
+          p_total: number
+        }
+        Returns: Json
+      }
+      sync_fastspring_subscription: {
+        Args: {
+          p_account_id: string
+          p_active: boolean
+          p_auto_renew: boolean
+          p_begin_at: string
+          p_billing_interval: string
+          p_canceled_at: string
+          p_currency: string
+          p_deactivated_at: string
+          p_email: string
+          p_event_id: string
+          p_event_type: string
+          p_next_charge_at: string
+          p_occurred_at: string
+          p_plan_key: string
+          p_price: number
+          p_product_path: string
+          p_state: string
+          p_subscription_id: string
+          p_tags: Json
+        }
+        Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
       lead_credit_cost: {

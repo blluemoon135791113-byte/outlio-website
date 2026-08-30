@@ -317,7 +317,7 @@ export default function LeadEngineTerms() {
               The free trial grants a limited number of Credits for a limited number of days, as
               shown at checkout. A payment method is required. Unless you cancel
               before the trial ends, the subscription automatically begins and
-              Paddle charges the monthly or annual price shown at checkout.
+              FastSpring charges the monthly or annual price shown at checkout.
             </li>
             <li>
               <strong>One trial per person, business, and network.</strong> To enforce this we

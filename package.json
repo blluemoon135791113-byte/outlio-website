@@ -14,15 +14,13 @@
     "ext:chrome": "node extensions/scripts/build.mjs --target=chrome",
     "ext:firefox": "node extensions/scripts/build.mjs --target=firefox",
     "ext:dev": "node extensions/scripts/build.mjs --target=chrome --dev",
-    "db:types": "supabase gen types typescript --project-id ptewhpmxzenbmxlizxhu --schema public > types/database.ts",
+    "db:types": "supabase gen types typescript --project-id ptewhpmxzenbmxlizxhu --schema public > types/database.tmp.ts && test -s types/database.tmp.ts && mv types/database.tmp.ts types/database.ts || (rm -f types/database.tmp.ts && echo 'db:types failed — types/database.ts left untouched. Run `supabase login` first.' && exit 1)",
     "ext:package": "node extensions/scripts/build.mjs --target=chrome && node extensions/scripts/package.mjs --target=chrome",
     "ext:package:firefox": "node extensions/scripts/build.mjs --target=firefox && node extensions/scripts/package.mjs --target=firefox",
     "ext:assets": "node extensions/scripts/build.mjs --target=chrome && node extensions/scripts/screenshots.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "^2.0.0",
-    "@paddle/paddle-js": "^1.6.4",
-    "@paddle/paddle-node-sdk": "^3.10.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
     "@types/three": "^0.185.4",

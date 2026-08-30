@@ -82,3 +82,4 @@ __pycache__/
 # Third-party repo cloned in for reference, with its own .git. Staging it
 # commits a broken submodule pointer rather than the files.
 /Scout/
+types/database.tmp.ts

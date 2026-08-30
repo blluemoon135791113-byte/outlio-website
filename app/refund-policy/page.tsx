@@ -70,7 +70,7 @@ export default function LeadEngineRefundPolicy() {
             <li>The free trial lasts 3 days and includes 10 Credits.</li>
             <li>
               A payment method is required. Unless you cancel before the trial ends, the subscription
-              automatically begins and Paddle charges the monthly or annual price shown at checkout.
+              automatically begins and FastSpring charges the monthly or annual price shown at checkout.
             </li>
             <li>
               The trial is limited to one per person, business, and network, as described in the{" "}
@@ -161,7 +161,7 @@ export default function LeadEngineRefundPolicy() {
         <Section title="8. Contact">
           <p>
             Questions or billing-error reports may be submitted through the contact channel shown
-            in your account or Paddle transaction correspondence.
+            in your account or FastSpring transaction correspondence.
           </p>
         </Section>
       </main>

@@ -21,6 +21,7 @@ const BLOCK = 25
 
 function limits(over: Partial<PlanLimits>): PlanLimits {
   return {
+    credits_per_month: null,
     files_per_extraction: null,
     leads_per_credit: null,
     extractions_per_day: null,

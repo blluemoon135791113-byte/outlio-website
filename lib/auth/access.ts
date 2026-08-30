@@ -228,13 +228,16 @@ async function hasHubbleEntitlement(ctx: AccessContext): Promise<boolean> {
   if (!ctx.userId) return false
 
   // A Pro + Hubble trial intentionally uses the generic 10-credit trial plan,
-  // so the originating Paddle tier remains the source for feature access.
+  // so the originating FastSpring tier remains the source for feature access.
+  // `active` is the access flag — a canceled subscription is still paid through
+  // its current period. See `fastSpringSubscriptionGrantsAccess`.
   const { data, error } = await createAdminClient()
-    .from('paddle_subscriptions')
+    .from('fastspring_subscriptions')
     .select('subscription_id')
     .eq('user_id', ctx.userId)
     .eq('plan_key', 'custom')
-    .in('status', ['active', 'trialing'])
+    .eq('active', true)
+    .in('state', ['active', 'trial', 'canceled'])
     .limit(1)
 
   if (error) throw new Error(`Hubble entitlement lookup failed: ${error.message}`)

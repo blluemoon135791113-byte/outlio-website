@@ -21,6 +21,14 @@ const nullableInt = z.number().int().nonnegative().nullable()
  * unlimited usage.
  */
 export const planLimitsSchema = z.object({
+  /*
+   * The monthly extraction-credit allowance, and the number the whole credit
+   * system is built on — `consume_credit`, `credit_balance` and
+   * `grant_fastspring_period_credits` all read it from this blob. It was
+   * absent from this schema (so silently stripped) until FastSpring needed to
+   * report a plan's allowance; `null` means unlimited.
+   */
+  credits_per_month: nullableInt,
   files_per_extraction: nullableInt,
   // Leads billed per credit. Absent on legacy tiers seeded before 0030 — those
   // bill a flat 1 credit per run.

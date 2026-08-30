@@ -22,9 +22,30 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 */
 const isDev = process.env.NODE_ENV !== 'production';
 
+/*
+  FastSpring is the merchant of record. Checkout needs three separate grants:
+  the Store Builder Library loads from a fixed CDN host, the popup renders as an
+  iframe on the storefront host, and the library calls its store over XHR.
+  Without all three the Subscribe button is dead — CSP blocks the script before
+  any of our code runs.
+*/
+const FASTSPRING_SBL = 'https://sbl.onfastspring.com';
+const FASTSPRING_STORE = 'https://*.onfastspring.com';
+
+/*
+  Payment Request (Apple Pay, Google Pay) is delegated to the FastSpring popup
+  by exact origin — the Permissions-Policy allowlist takes no wildcards. Derived
+  from the configured storefront so only the store we actually use is granted;
+  with no storefront configured the feature stays fully disabled.
+*/
+const storefrontHost = process.env.NEXT_PUBLIC_FASTSPRING_STOREFRONT?.trim().split('/')[0];
+const paymentPolicy = storefrontHost
+  ? `payment=(self "https://${storefrontHost}")`
+  : 'payment=()';
+
 const scriptSrc = isDev
-  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com"
-  : "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com";
+  ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com ${FASTSPRING_SBL}`
+  : `script-src 'self' 'unsafe-inline' https://www.googletagmanager.com ${FASTSPRING_SBL}`;
 
 /*
   Turbopack's hot-reload channel is a WebSocket to the dev server. `'self'` does
@@ -33,8 +54,8 @@ const scriptSrc = isDev
   talks to Supabase over wss: and nothing else.
 */
 const connectSrc = isDev
-  ? "connect-src 'self' ws: wss: https://*.supabase.co wss://*.supabase.co https://www.googletagmanager.com https://*.google-analytics.com"
-  : "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.googletagmanager.com https://*.google-analytics.com";
+  ? `connect-src 'self' ws: wss: https://*.supabase.co wss://*.supabase.co https://www.googletagmanager.com https://*.google-analytics.com ${FASTSPRING_SBL} ${FASTSPRING_STORE}`
+  : `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.googletagmanager.com https://*.google-analytics.com ${FASTSPRING_SBL} ${FASTSPRING_STORE}`;
 
 const securityHeaders = [
   {
@@ -42,7 +63,7 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       "base-uri 'self'",
-      "form-action 'self'",
+      `form-action 'self' ${FASTSPRING_STORE}`,
       "frame-ancestors 'none'",
       /*
         The Calendly scheduler is embedded as an iframe (components/leadengine/
@@ -50,12 +71,12 @@ const securityHeaders = [
         the modal renders empty. Framing only — Calendly runs no script on our
         origin, so script-src stays closed.
       */
-      'frame-src https://calendly.com https://*.calendly.com https://www.googletagmanager.com',
+      `frame-src https://calendly.com https://*.calendly.com https://www.googletagmanager.com ${FASTSPRING_STORE}`,
       "object-src 'none'",
       scriptSrc,
-      "style-src 'self' 'unsafe-inline'",
+      `style-src 'self' 'unsafe-inline' ${FASTSPRING_STORE}`,
       "font-src 'self' data:",
-      "img-src 'self' data: blob: https://*.supabase.co https://www.googletagmanager.com https://*.google-analytics.com",
+      `img-src 'self' data: blob: https://*.supabase.co https://www.googletagmanager.com https://*.google-analytics.com ${FASTSPRING_STORE}`,
       connectSrc,
       "worker-src 'self' blob:",
       "manifest-src 'self'",
@@ -65,7 +86,7 @@ const securityHeaders = [
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
   { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+  { key: 'Permissions-Policy', value: `camera=(), microphone=(), geolocation=(), ${paymentPolicy}, usb=()` },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   {
     key: 'Strict-Transport-Security',

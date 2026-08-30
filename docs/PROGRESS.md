@@ -4,6 +4,165 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-08-30 — FastSpring charge records and paid-period credit allocation
+
+The webhook now handles the money half of the integration: every charge attempt
+is recorded, and a successful one replenishes credits. 0068 mirrored FastSpring
+state and reconciled entitlement but never touched credits.
+
+### Added
+
+- `supabase/migrations/0069_fastspring_charges_and_credits.sql` —
+  `fastspring_charges` (one row per charge attempt, keyed by event ID),
+  `credit_grants.fastspring_event_id` under a unique index,
+  `grant_fastspring_period_credits`, `sync_fastspring_charge`, and a replaced
+  `sync_fastspring_order` that allocates credits on the first paid order. The
+  order and charge functions now return `{claimed, user_id, credits_allocated}`
+  instead of a bare boolean so the route can log what actually happened.
+- `lib/fastspring/catalog.ts` — the server-side product mapping: path → plan →
+  monthly allowance → interval.
+- `lib/fastspring/log.ts` — structured `[fastspring]` JSON logging.
+- `subscription.charge.failed` handling, which was the one required event with
+  no code path at all.
+
+### Credit replenishment, and why it is not a counter reset
+
+Credits are allowanced per CALENDAR month; FastSpring rebills on the
+subscription ANNIVERSARY. Re-periodising the credit system would have meant
+touching `consume_credit`, `credit_balance`, `granted_credits`,
+`charge_extraction_leads` and `finalize_upload_job` — the path that bills
+extractions. Instead a successful charge grants `max(0, used - already_granted)`
+through the existing `credit_grants` mechanism, which restores remaining to
+exactly the plan's `credits_per_month`.
+
+That arithmetic is self-limiting: run it twice and the second run grants
+nothing, because `granted` already equals `used`. So `order.completed` and
+`subscription.charge.completed` both firing for one payment tops the user up
+once, a mid-month renewal cannot hand out two allowances, and a referral bonus
+larger than consumption survives untouched.
+
+Credits are allocated only when the subscription currently grants access, which
+is what closes the `subscription.deactivated` requirement — no live
+subscription, no top-up. A free-trial order totals zero and allocates nothing.
+
+### Payload shapes that are not what they look like
+
+- `subscription.charge.completed` is an ORDER at the root with the order ID
+  under `order`, not `id`, and the subscription nested at the top level.
+- `subscription.charge.failed` carries no order object at all — only
+  `{reason, account, subscription}`, with currency, price and `declineReason`
+  on the nested subscription.
+
+Both were confirmed against FastSpring's reference rather than assumed; the
+parser accepts either spelling of the order ID and both account/product
+expansion states.
+
+### Fixed
+
+- **`credits_per_month` was missing from `planLimitsSchema` and `PlanLimits`.**
+  Zod strips unknown keys, so the number the entire credit system runs on was
+  being silently dropped from every parsed plan. Added as a REQUIRED nullable
+  int, not a defaulted one: `null` means unlimited everywhere it is read, so a
+  plan blob missing the key must fail loudly rather than quietly grant free
+  extractions. Three fixtures that predated the field were corrected.
+
+### Verification
+
+- `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass. The
+  suite passes 1,374 tests across 98 files with 24 skipped — 67 of them
+  FastSpring, including new coverage for both charge payload shapes, event
+  routing, failed charges never reaching the credit path, plan derivation
+  ignoring a hostile payload's `plan_key`/`credits`, and duplicate reporting.
+- **0068 and 0069 were executed against a scratch PostgreSQL 17 database**
+  before being offered for production, over stubs for the objects they depend
+  on. Both apply cleanly, and the full lifecycle was driven through the SQL:
+  trial → 10-credit trial plan; activation → purchased tier and a `fastspring`
+  subscription row; spend 120 of 300 → a rebill grants exactly 120 and restores
+  remaining to 300; the same event replayed returns `claimed: false` and leaves
+  one grant row; a *different* charge event with nothing further consumed grants
+  0, confirming the arithmetic is self-limiting; a failed charge records
+  `EXPIRED_CARD: Card expired` with 0 credits; `canceled` + `active: true`
+  keeps `subscriber` and the purchased plan while scheduling `cancel_at`;
+  `deactivated` drops the user to `registered_user` with access expired; and a
+  charge arriving after deactivation allocates 0.
+
+---
+
+## 2026-08-30 — FastSpring replaces Paddle as merchant of record
+
+Billing moved from Paddle to FastSpring across the whole stack. `/pricing` on
+`app.outlio.io` now opens FastSpring's popup checkout via the Store Builder
+Library; Paddle's code, packages, environment variables, docs and tests are
+gone.
+
+### Added
+
+- `supabase/migrations/0068_fastspring_billing.sql` — `fastspring_accounts`,
+  `fastspring_subscriptions`, `fastspring_orders`, the
+  `fastspring_webhook_events` idempotency ledger, RLS on all four,
+  `resolve_fastspring_user`, `fastspring_subscription_grants_access`,
+  `reconcile_fastspring_entitlement`, and three `sync_fastspring_*` functions
+  granted to `service_role` only. `subscriptions` gains `fastspring_account_id`,
+  `fastspring_product_path` and `fastspring_event_at`.
+- `lib/fastspring/` — config, server API client, HMAC signature verification,
+  Zod event parsing, sync, entitlement predicate, account portal, price lookup.
+- `app/api/webhooks/fastspring/route.ts`, `components/leadengine/FastSpringPricing.tsx`,
+  `docs/FASTSPRING_LIVE_SETUP.md`.
+
+### The one behavioural difference from Paddle
+
+**Access follows FastSpring's `active` boolean, not the state string.** A
+cancelled FastSpring subscription arrives as `state: 'canceled'` with
+`active: true` and stays that way until the paid period ends, when
+`subscription.deactivated` flips `active` to false. Gating on `state` alone —
+the shape the Paddle code used — would have cut off access the moment a
+customer cancelled, mid paid period. `overdue` is denied, matching the old
+`past_due` behaviour.
+
+### Other decisions
+
+- Test versus live is decided solely by `NEXT_PUBLIC_FASTSPRING_STOREFRONT`.
+  While it names a `*.test.onfastspring.com` store the webhook route processes
+  `live: false` events; against a live store it drops them, so test money can
+  never grant real access.
+- A purchase binds to an Outlio user through FastSpring **tags**
+  (`outlio_user_id`), which survive into every webhook. Fallbacks are a known
+  account, then a case-insensitive profile email match.
+- One POST may bundle several events. Each sync claims its event ID first, so a
+  retried batch is a no-op for events already applied.
+- Localized prices are read server-side from FastSpring's product price API and
+  rendered from FastSpring's own `display` string — never locally formatted. If
+  that lookup fails the page still renders and checkout still opens; the card
+  reads "Your local price is shown at checkout".
+- The Paddle tables from 0059 are left in place as historical record. Nothing
+  writes to them and no entitlement decision reads them. Dropping them is a
+  separate, deliberate migration.
+
+### Fixed
+
+- **The Content Security Policy blocked checkout outright.** `script-src` never
+  allowed a payment provider — Paddle's checkout would have been blocked too.
+  `next.config.ts` now allows `https://sbl.onfastspring.com` in `script-src` and
+  `https://*.onfastspring.com` in `frame-src`, `connect-src`, `img-src`,
+  `style-src` and `form-action`. `Permissions-Policy` was `payment=()`, which
+  disables Apple Pay and Google Pay inside the popup; it now delegates to the
+  configured storefront origin by exact host, since that allowlist takes no
+  wildcards.
+
+### Verification
+
+- `npm run typecheck`, `npm run lint` (0 errors) and `npm run build` pass. The
+  suite passes 1,352 tests across 96 files with 24 skipped, including five new
+  FastSpring files covering config validation, the access predicate, HMAC
+  verification, event parsing and the webhook route.
+- Confirmed in a browser against `app.localhost:3000/pricing` with the test
+  storefront configured: the SBL loads with no CSP violations,
+  `window.fastspring.builder` is present, and clicking Subscribe reaches the
+  real storefront — it answers `400 variation-not-found` because the product
+  paths were placeholders, which is the store confirming the round trip.
+
+---
+
 ## 2026-08-30 — Lead Engine hero made viewport-responsive
 
 The Lead Engine hero, WebGL scene host, and copy layer now share one consistent

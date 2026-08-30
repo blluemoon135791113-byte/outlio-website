@@ -426,7 +426,7 @@ export default function LeadEnginePrivacy() {
               ["Supabase", "Database, authentication, file storage", "EU / US"],
               ["Vercel", "Application hosting and delivery", "Global edge"],
               ["Resend", "Transactional email — verification, password reset, notices", "EU / US"],
-              ["Paddle", "Merchant of record and subscription payment processing", "EU / US"],
+              ["FastSpring", "Merchant of record and subscription payment processing", "EU / US"],
               ["Calendly", "Scheduling, if you book a call with us", "US"],
             ]}
           />
