@@ -13,7 +13,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { GET as getContacts } from '@/app/api/v1/contacts/route'
+import { GET as getActivities } from '@/app/api/v1/activities/route'
+import { GET as getCompanies } from '@/app/api/v1/companies/route'
+import { GET as getLists } from '@/app/api/v1/lists/route'
 import { GET as getOpportunities } from '@/app/api/v1/opportunities/route'
+import { GET as getTasks } from '@/app/api/v1/tasks/route'
 import { generateApiKey } from '@/lib/api/signing'
 import { adminClient, createAuthUser, deleteTestUser, hasSupabaseEnv } from './helpers'
 
@@ -307,5 +311,87 @@ describeIf('the audit log', () => {
 
     expect(data!.path).toBe('/api/v1/contacts')
     expect(data!.path).not.toContain('confidential-project')
+  }, 60_000)
+})
+
+describeIf('every endpoint is scoped, not just the ones tested first', () => {
+  /*
+   * ⚠️ SCOPING HAS TO HOLD ON EVERY ROUTE. The failure mode this catches is a
+   * new endpoint that forgets `.eq('workspace_id', ...)` — which is precisely
+   * why they all go through `apiRoute` and receive a workspace they did not
+   * choose. Enumerated so that adding a route without adding it here is
+   * visible in review.
+   */
+  const routes = [
+    ['contacts', getContacts, 'contacts:read'],
+    ['companies', getCompanies, 'companies:read'],
+    ['opportunities', getOpportunities, 'opportunities:read'],
+    ['activities', getActivities, 'activities:read'],
+    ['tasks', getTasks, 'tasks:read'],
+    ['lists', getLists, 'lists:read'],
+  ] as const
+
+  it.each(routes)('%s refuses a request with no key', async (name, handler) => {
+    const response = await call(handler, `/api/v1/${name}`)
+    expect(response.status).toBe(401)
+  })
+
+  it.each(routes)('%s refuses a key without its scope', async (name, handler) => {
+    // Alice holds contacts:read and opportunities:read only.
+    const response = await call(handler, `/api/v1/${name}`, alice!.key)
+    const expected = ['contacts', 'opportunities'].includes(name) ? 200 : 403
+    expect(response.status).toBe(expected)
+  }, 60_000)
+
+  it.each(routes)('%s caps its page size', async (name, handler) => {
+    const wide = await makeTenant(`Wide-${name}`, [`${name}:read`] as string[])
+    const response = await call(handler, `/api/v1/${name}?limit=99999`, wide.key)
+    expect(response.status).toBe(200)
+    expect((await response.json()).pagination.limit).toBeLessThanOrEqual(100)
+
+    const db = adminClient()
+    await db.from('workspaces').delete().eq('id', wide.workspaceId)
+    await deleteTestUser(wide.user.id)
+  }, 90_000)
+})
+
+describeIf('what the API deliberately does NOT return', () => {
+  it('omits activity metadata, which carries message and note contents', async () => {
+    /*
+     * A customer's own staff see this in the UI; an integration key should not
+     * stream it out wholesale. The SHAPE of an activity is published, its
+     * contents are not.
+     */
+    const reader = await makeTenant('Meta', ['activities:read'])
+    const response = await call(getActivities, '/api/v1/activities', reader.key)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    for (const row of body.data) {
+      expect(row).not.toHaveProperty('metadata')
+    }
+
+    const db = adminClient()
+    await db.from('workspaces').delete().eq('id', reader.workspaceId)
+    await deleteTestUser(reader.user.id)
+  }, 90_000)
+
+  it('never returns a soft-deleted record', async () => {
+    const db = adminClient()
+    const { data: contact } = await db
+      .from('crm_contacts')
+      .insert({
+        workspace_id: alice!.workspaceId,
+        first_name: 'Deleted', last_name: 'Person',
+        full_name: `Deleted Person ${RUN}`,
+        deleted_at: new Date().toISOString(),
+      })
+      .select('id').single()
+
+    const body = await (await call(getContacts, '/api/v1/contacts', alice!.key)).json()
+    const names = body.data.map((c: { full_name: string }) => c.full_name)
+    expect(names).not.toContain(`Deleted Person ${RUN}`)
+
+    await db.from('crm_contacts').delete().eq('id', contact!.id)
   }, 60_000)
 })
