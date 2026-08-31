@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
-import { can } from '@/lib/workspaces/permissions'
+import { can, dataScope } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
   title: 'Companies | Outlio',
@@ -39,14 +39,28 @@ export default async function CompaniesPage({
   const from = (page - 1) * PAGE_SIZE
   const db = createAdminClient()
 
+  /*
+   * ⚠️ THE OWNER FILTER, WHICH THIS PAGE SHIPPED WITHOUT. Every other CRM
+   * surface applies `dataScope` — contacts, contact detail, the board,
+   * reports — and this one did not, so a setter saw every company in the
+   * workspace. RLS does not catch it: RLS grants a MEMBER the whole
+   * workspace, and narrowing to "only assigned" is a policy decision that has
+   * to be applied to the QUERY.
+   */
+  const scopedToSelf = dataScope(ctx.role) === 'assigned'
+
   // Scoped by workspace in code — the service role bypasses RLS.
-  const { data: companies } = await db
+  let query = db
     .from('crm_companies')
     .select('id, name, domain, industry, employee_count, headquarters')
     .eq('workspace_id', ctx.workspace.id)
     .is('deleted_at', null)
     .order('name')
     .range(from, from + PAGE_SIZE - 1)
+
+  if (scopedToSelf) query = query.eq('owner_user_id', ctx.userId)
+
+  const { data: companies } = await query
 
   const rows = companies ?? []
   const counts = new Map<string, number>()
@@ -70,7 +84,9 @@ export default async function CompaniesPage({
       <div>
         <h2 className="text-base font-semibold tracking-[-0.02em] text-ink">Companies</h2>
         <p className="mt-0.5 text-sm text-muted">
-          Created automatically from the people you bring in, matched on registrable domain.
+          {scopedToSelf
+            ? 'The companies you own, matched on registrable domain.'
+            : 'Created automatically from the people you bring in, matched on registrable domain.'}
         </p>
       </div>
 

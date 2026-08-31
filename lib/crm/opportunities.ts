@@ -482,3 +482,125 @@ export async function getStageHistory(
     occurredAt: row.occurred_at,
   }))
 }
+
+// ---------------------------------------------------------------------------
+// Pipeline management — R5
+//
+// ⚠️ `createPipeline` EXISTED FROM M3 AND NOTHING EVER CALLED IT. The R0 audit
+// found six engines in that state; this is the one customers hit first, because
+// a workspace with no pipeline shows an empty board with no way out of it.
+// These three fill the rest of the lifecycle so the board is manageable, not
+// just creatable.
+// ---------------------------------------------------------------------------
+
+/** Renames a pipeline. */
+export async function renamePipeline(
+  workspaceId: string,
+  pipelineId: string,
+  name: string,
+): Promise<void> {
+  const { error } = await createAdminClient()
+    .from('crm_pipelines')
+    .update({ name: name.trim() })
+    // Scoped by workspace in code — the service role bypasses RLS, so an id
+    // from a form is a claim and not authorisation.
+    .eq('workspace_id', workspaceId)
+    .eq('id', pipelineId)
+
+  if (error) throw new Error(`renamePipeline failed: ${error.message}`)
+}
+
+/**
+ * Archives a pipeline.
+ *
+ * ⚠️ ARCHIVED, NEVER DELETED. Opportunities reference their pipeline and their
+ * stage history references its stages; deleting one would either cascade away
+ * real sales history or fail on a foreign key. Archiving hides it from the
+ * picker and leaves every closed deal explicable.
+ */
+export async function archivePipeline(
+  workspaceId: string,
+  pipelineId: string,
+): Promise<void> {
+  const db = createAdminClient()
+
+  /*
+   * ⚠️ THE DEFAULT FLAG IS CLEARED IN THE SAME UPDATE. The partial unique
+   * index only counts non-archived rows, so an archived pipeline still holding
+   * `is_default` would silently block the next pipeline from becoming the
+   * default — an error whose cause is invisible from the screen where it
+   * appears.
+   */
+  const { error } = await db
+    .from('crm_pipelines')
+    .update({ archived_at: new Date().toISOString(), is_default: false })
+    .eq('workspace_id', workspaceId)
+    .eq('id', pipelineId)
+
+  if (error) throw new Error(`archivePipeline failed: ${error.message}`)
+}
+
+/** Makes one pipeline the default, and no other. */
+export async function setDefaultPipeline(
+  workspaceId: string,
+  pipelineId: string,
+): Promise<void> {
+  const db = createAdminClient()
+
+  /*
+   * ⚠️ CLEARED FIRST, THEN SET. The partial unique index permits exactly one
+   * default per workspace, so setting the new one before clearing the old
+   * fails on the constraint. Two statements rather than one, and the order is
+   * the whole point.
+   */
+  await db
+    .from('crm_pipelines')
+    .update({ is_default: false })
+    .eq('workspace_id', workspaceId)
+    .eq('is_default', true)
+
+  const { error } = await db
+    .from('crm_pipelines')
+    .update({ is_default: true })
+    .eq('workspace_id', workspaceId)
+    .eq('id', pipelineId)
+
+  if (error) throw new Error(`setDefaultPipeline failed: ${error.message}`)
+}
+
+/** Every pipeline in the workspace, for the picker. */
+export async function listPipelines(
+  workspaceId: string,
+): Promise<{ id: string; name: string; isDefault: boolean; stageCount: number }[]> {
+  const db = createAdminClient()
+
+  const { data: pipelines } = await db
+    .from('crm_pipelines')
+    .select('id, name, is_default')
+    .eq('workspace_id', workspaceId)
+    .is('archived_at', null)
+    .order('sort_order')
+    .order('name')
+
+  const rows = pipelines ?? []
+  if (rows.length === 0) return []
+
+  // One batched count rather than one query per pipeline.
+  const { data: stages } = await db
+    .from('crm_pipeline_stages')
+    .select('pipeline_id')
+    .eq('workspace_id', workspaceId)
+    .in('pipeline_id', rows.map((p) => p.id))
+
+  const counts = new Map<string, number>()
+  for (const s of stages ?? []) {
+    counts.set(s.pipeline_id, (counts.get(s.pipeline_id) ?? 0) + 1)
+  }
+
+  return rows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    isDefault: p.is_default,
+    stageCount: counts.get(p.id) ?? 0,
+  }))
+}

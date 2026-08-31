@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
+import { NewPipelineButton, PipelineSetup } from '@/components/crm/PipelineSetup'
 import { getBoard, getPipeline } from '@/lib/crm/opportunities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
@@ -29,13 +30,23 @@ export default async function PipelinePage({
 
   const pipelineId = params.pipeline ?? (await defaultPipelineId(ctx.workspace.id))
 
+  const canManage = can({ role: ctx.role, modules: ctx.modules }, 'crm.pipeline.manage')
+
   if (!pipelineId) {
-    return (
+    /*
+     * ⚠️ THIS EMPTY STATE USED TO BE A DEAD END. It said "once one exists, your
+     * board appears here" and offered no way to make one — `createPipeline`
+     * had no caller anywhere in the product. The onboarding checklist sent
+     * people straight to it.
+     */
+    return canManage ? (
+      <PipelineSetup isFirstPipeline />
+    ) : (
       <section className="clay p-10 text-center">
         <h2 className="text-base font-semibold text-ink">No pipeline yet</h2>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
-          A pipeline defines the stages a deal moves through. Once one exists, your
-          board appears here.
+          A pipeline defines the stages a deal moves through. Ask a manager to set one
+          up and your board appears here.
         </p>
       </section>
     )
@@ -61,10 +72,20 @@ export default async function PipelinePage({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold tracking-[-0.02em] text-ink">{pipeline.name}</h2>
-        {scopedToSelf ? (
-          <p className="text-xs text-muted">Showing deals assigned to you</p>
-        ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold tracking-[-0.02em] text-ink">
+              {pipeline.name}
+            </h2>
+            {scopedToSelf ? (
+              <p className="text-xs text-muted">Showing deals assigned to you</p>
+            ) : null}
+          </div>
+
+          {/* A second pipeline is a normal thing to want — different products,
+              different motions — so the way to make one is on the board. */}
+          {canManage ? <NewPipelineButton /> : null}
+        </div>
       </div>
 
       <PipelineBoard

@@ -172,9 +172,16 @@ Status values: `COMPLETE` · `PARTIAL` · `UI_ONLY` · `BACKEND_ONLY` · `BROKEN
 events in the brief's trigger list are never emitted, so the flow triggers that
 depend on them can never fire.
 
-**Permission gaps.** "Only assigned data" is enforced in the inbox and task
-list, and **not** in contacts, opportunities, search or Hubble context. A setter
-can currently read every contact in the workspace.
+**Permission gaps.** ⚠️ **CORRECTED 2026-09-01 — the original claim here was
+wrong.** It said "only assigned data" was not enforced on contacts or
+opportunities and that a setter could read every contact. That was a bad read:
+`dataScope` **is** applied to the contacts list, contact detail, the pipeline
+board and reports.
+
+The real gap was narrower and newer: **`/crm/companies` had no owner filter**,
+shipped that way on 2026-08-31. `crm_companies` carries `owner_user_id` and is
+indexed on it, so a setter saw every company in the workspace. Fixed in R5.
+Still unscoped: global search and Hubble context.
 
 **Test gaps.** Coverage is strong at the engine layer (2,213 unit + ~350
 integration) and **absent at the wiring layer**. Every one of the failures above

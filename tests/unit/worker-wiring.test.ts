@@ -92,6 +92,20 @@ describe('every background worker has a trigger', () => {
     })
   }
 
+  /*
+   * ⚠️ PROMOTED OUT OF THE RATCHET BY R5, which is exactly how the ratchet is
+   * meant to end: `createPipeline` got a caller, the `it.fails` below started
+   * failing, and the fix was to move the line up here where it is enforced
+   * from now on.
+   */
+  it('createPipeline has a caller — otherwise the board is permanently empty', () => {
+    const callers = callersOf('createPipeline', 'lib/crm/opportunities.ts')
+    expect(
+      callers,
+      'createPipeline has no caller, so nobody can create a pipeline.',
+    ).not.toHaveLength(0)
+  })
+
   it('the tick is reachable from a route, not just defined', () => {
     /*
      * The workers above could all be called by `runTick` and still never run
@@ -148,11 +162,6 @@ describe('engines the R0 audit found unreachable', () => {
    * WIRED, not that a particular button exists.
    */
   const ENGINES: { name: string; definedIn: string; without: string }[] = [
-    {
-      name: 'createPipeline',
-      definedIn: 'lib/crm/opportunities.ts',
-      without: 'nobody can create a pipeline, so the board is permanently empty',
-    },
     {
       name: 'createOpportunity',
       definedIn: 'lib/crm/opportunities.ts',
