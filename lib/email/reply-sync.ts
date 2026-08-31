@@ -160,7 +160,7 @@ async function processInbound(
     p_provider_thread_key: reply.threadId ?? reply.providerMessageId,
     p_provider_message_id: reply.providerMessageId,
     p_from_email: from,
-    p_subject: reply.subject,
+    p_subject: reply.subject ?? undefined,
     p_body_text: reply.text,
     p_received_at: reply.receivedAt,
     p_classification: classification.kind === 'bounce'

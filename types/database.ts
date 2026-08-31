@@ -3857,6 +3857,70 @@ export type Database = {
           },
         ]
       }
+      email_inbound_messages: {
+        Row: {
+          account_id: string
+          body_text: string | null
+          classification: string
+          created_at: string
+          from_email: string
+          id: string
+          provider_message_id: string
+          received_at: string
+          subject: string | null
+          thread_id: string
+          workspace_id: string
+        }
+        Insert: {
+          account_id: string
+          body_text?: string | null
+          classification?: string
+          created_at?: string
+          from_email: string
+          id?: string
+          provider_message_id: string
+          received_at: string
+          subject?: string | null
+          thread_id: string
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string
+          body_text?: string | null
+          classification?: string
+          created_at?: string
+          from_email?: string
+          id?: string
+          provider_message_id?: string
+          received_at?: string
+          subject?: string | null
+          thread_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_inbound_messages_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_inbound_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "email_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_inbound_messages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_messages: {
         Row: {
           account_id: string
@@ -4213,6 +4277,79 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "email_templates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_threads: {
+        Row: {
+          account_id: string
+          assigned_to: string | null
+          contact_id: string | null
+          created_at: string
+          id: string
+          last_direction: Database["public"]["Enums"]["email_message_direction"]
+          last_message_at: string
+          message_count: number
+          provider_thread_key: string
+          read_at: string | null
+          status: Database["public"]["Enums"]["email_thread_status"]
+          subject: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          account_id: string
+          assigned_to?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          last_direction?: Database["public"]["Enums"]["email_message_direction"]
+          last_message_at?: string
+          message_count?: number
+          provider_thread_key: string
+          read_at?: string | null
+          status?: Database["public"]["Enums"]["email_thread_status"]
+          subject?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          account_id?: string
+          assigned_to?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          last_direction?: Database["public"]["Enums"]["email_message_direction"]
+          last_message_at?: string
+          message_count?: number
+          provider_thread_key?: string
+          read_at?: string | null
+          status?: Database["public"]["Enums"]["email_thread_status"]
+          subject?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_threads_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_threads_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_threads_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -7987,9 +8124,35 @@ export type Database = {
           status: Database["public"]["Enums"]["email_account_status"]
         }[]
       }
+      email_record_inbound: {
+        Args: {
+          p_account_id: string
+          p_body_text: string
+          p_classification: string
+          p_contact_id?: string
+          p_from_email: string
+          p_provider_message_id: string
+          p_provider_thread_key: string
+          p_received_at: string
+          p_subject: string
+          p_workspace_id: string
+        }
+        Returns: {
+          is_new: boolean
+          thread_id: string
+        }[]
+      }
       email_sent_today: {
         Args: { p_account_id: string; p_timezone?: string }
         Returns: number
+      }
+      email_thread_mark_outbound: {
+        Args: {
+          p_sent_at: string
+          p_thread_key: string
+          p_workspace_id: string
+        }
+        Returns: undefined
       }
       enqueue_job: { Args: { p_job_id: string }; Returns: undefined }
       enqueue_research_run: { Args: { p_run_id: string }; Returns: undefined }
@@ -8643,6 +8806,7 @@ export type Database = {
         | "complaint"
         | "opened"
         | "clicked"
+      email_message_direction: "inbound" | "outbound"
       email_message_status:
         | "queued"
         | "sending"
@@ -8667,6 +8831,7 @@ export type Database = {
         | "complaint"
         | "manual"
         | "invalid_address"
+      email_thread_status: "open" | "resolved"
       export_destination_kind: "device" | "google_drive" | "onedrive"
       file_status: "pending" | "processing" | "processed" | "failed"
       flow_run_status:
@@ -8974,6 +9139,7 @@ export const Constants = {
         "opened",
         "clicked",
       ],
+      email_message_direction: ["inbound", "outbound"],
       email_message_status: [
         "queued",
         "sending",
@@ -9001,6 +9167,7 @@ export const Constants = {
         "manual",
         "invalid_address",
       ],
+      email_thread_status: ["open", "resolved"],
       export_destination_kind: ["device", "google_drive", "onedrive"],
       file_status: ["pending", "processing", "processed", "failed"],
       flow_run_status: [

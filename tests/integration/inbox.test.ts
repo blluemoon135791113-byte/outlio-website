@@ -14,7 +14,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { getThread, listThreads, seesAllThreads, viewCounts } from '@/lib/email/inbox'
-import type { WorkspacePolicy } from '@/lib/workspaces/permissions'
+import type { Module, PolicyInput } from '@/lib/workspaces/permissions'
 import { adminClient, createAuthUser, deleteTestUser, hasSupabaseEnv } from './helpers'
 
 const RUN = Date.now().toString(36)
@@ -25,9 +25,11 @@ let accountId = ''
 let setterId = ''
 
 /** Every module on, so only the ROLE varies between these policies. */
-const MODULES = ['crm', 'email', 'flows', 'reports', 'integrations', 'hubble']
-const managerPolicy: WorkspacePolicy = { role: 'manager', modules: MODULES }
-const setterPolicy: WorkspacePolicy = { role: 'setter', modules: MODULES }
+const MODULES: ReadonlySet<Module> = new Set<Module>([
+  'crm', 'email', 'flows', 'reports', 'integrations', 'hubble',
+])
+const managerPolicy: PolicyInput = { role: 'manager', modules: MODULES }
+const setterPolicy: PolicyInput = { role: 'setter', modules: MODULES }
 
 beforeAll(async () => {
   if (!hasSupabaseEnv) return
@@ -83,7 +85,7 @@ async function receive(opts: {
     p_body_text: opts.body ?? 'Yes, worth a chat.',
     p_received_at: opts.receivedAt ?? new Date().toISOString(),
     p_classification: opts.classification ?? 'reply',
-    p_contact_id: opts.contactId ?? null,
+    p_contact_id: opts.contactId ?? undefined,
   })
   if (error) throw new Error(`email_record_inbound failed: ${error.message}`)
   return data![0]!
@@ -128,7 +130,7 @@ describeIf('CRITERION 5 — permissions', () => {
     // A viewer cannot see the whole inbox either.
     expect(seesAllThreads({ role: 'viewer', modules: MODULES })).toBe(false)
     // Nor can anyone whose plan excludes the email module, whatever their role.
-    expect(seesAllThreads({ role: 'owner', modules: ['crm'] })).toBe(false)
+    expect(seesAllThreads({ role: 'owner', modules: new Set<Module>(['crm']) })).toBe(false)
   })
 
   it('refuses a thread the setter is not assigned, without confirming it exists', async () => {

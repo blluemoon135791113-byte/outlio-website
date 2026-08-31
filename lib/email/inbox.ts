@@ -13,7 +13,7 @@ import 'server-only'
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 import { createAdminClient } from '@/lib/supabase/admin'
-import { can, type WorkspacePolicy } from '@/lib/workspaces/permissions'
+import { can, type PolicyInput } from '@/lib/workspaces/permissions'
 
 export const INBOX_VIEWS = [
   { value: 'all', label: 'All' },
@@ -72,14 +72,14 @@ const PAGE_SIZE = 25
  * point of a shared mailbox is that everyone's replies land in one place, so
  * without this a setter reads the entire company's conversations.
  */
-export function seesAllThreads(policy: WorkspacePolicy): boolean {
+export function seesAllThreads(policy: PolicyInput): boolean {
   return can(policy, 'email.inbox.view.all')
 }
 
 export async function listThreads(input: {
   workspaceId: string
   userId: string
-  policy: WorkspacePolicy
+  policy: PolicyInput
   view: InboxView
   cursor?: string | null
 }): Promise<InboxPage> {
@@ -219,7 +219,7 @@ export type ThreadDetail = {
 export async function getThread(input: {
   workspaceId: string
   userId: string
-  policy: WorkspacePolicy
+  policy: PolicyInput
   threadId: string
 }): Promise<ThreadDetail | null> {
   const db = createAdminClient()
@@ -272,7 +272,7 @@ export async function getThread(input: {
 export async function viewCounts(input: {
   workspaceId: string
   userId: string
-  policy: WorkspacePolicy
+  policy: PolicyInput
 }): Promise<Record<InboxView, number>> {
   const db = createAdminClient()
   const all = seesAllThreads(input.policy)
