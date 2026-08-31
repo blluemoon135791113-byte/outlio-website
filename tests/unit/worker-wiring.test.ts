@@ -110,6 +110,24 @@ describe('every background worker has a trigger', () => {
     expect(vercel.crons ?? []).not.toHaveLength(0)
     expect(vercel.crons!.some((c) => c.path === '/api/cron')).toBe(true)
   })
+
+  it('the REAL scheduler exists, because Vercel Hobby allows one run per day', () => {
+    /*
+     * ⚠️ THE vercel.json ENTRY ABOVE IS A FLOOR, NOT THE SCHEDULE. On the
+     * Hobby plan it can only fire once a day, which for a paced email sender
+     * means a campaign takes weeks and a reply is noticed tomorrow. The
+     * GitHub Action drives the real 5-minute cadence, so its absence is the
+     * same "nothing runs" defect wearing a different hat.
+     */
+    const workflow = readFileSync('.github/workflows/cron.yml', 'utf8')
+
+    expect(workflow).toContain('/api/cron')
+    expect(workflow).toContain('cron:')
+    // The secret must travel in a header; a URL is logged by proxies and by
+    // GitHub itself.
+    expect(workflow).toContain('Authorization: Bearer')
+    expect(workflow).not.toMatch(/api\/cron\?[^"']*secret/i)
+  })
 })
 
 describe('engines the R0 audit found unreachable', () => {

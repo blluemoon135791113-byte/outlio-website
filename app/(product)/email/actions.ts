@@ -12,11 +12,13 @@
  * the form field is write-only for the same reason.
  */
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 
 import { createEmailAccount, disconnectEmailAccount, normalizeSendingAddress } from '@/lib/email/accounts'
 import { assertLaunchable, type CampaignType } from '@/lib/email/campaign-policy'
 import { bulkEnroll, summarize } from '@/lib/email/enrollment'
 import { assessAccount } from '@/lib/email/readiness-runner'
+import { runTick } from '@/lib/workers/tick'
 import { requireProvider } from '@/lib/email/providers/registry'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
@@ -252,8 +254,32 @@ export async function launchCampaign(
     .eq('status', 'active')
     .is('next_action_at', null)
 
+  /*
+   * ⚠️ A NUDGE, NOT THE SCHEDULE. The scheduled tick runs every five minutes,
+   * and someone who clicks Launch and sees nothing happen for five minutes
+   * concludes the product is broken. `after()` runs the tick once the response
+   * is already on its way, so the first messages go out immediately.
+   *
+   * It is safe to be cut short mid-send: the send worker CLAIMS before it
+   * sends and the reaper releases expired claims, which is exactly the
+   * kill-and-retry case proven in `email-send-worker.test.ts` to deliver
+   * once and only once. The scheduled tick picks up whatever is left.
+   *
+   * It must never THROW into the response path — the campaign really did
+   * launch, and a failed nudge is a delayed send, not a failed launch.
+   */
+  after(async () => {
+    try {
+      await runTick()
+    } catch (error) {
+      console.error('[launch] post-launch tick failed', {
+        message: error instanceof Error ? error.message : 'failed',
+      })
+    }
+  })
+
   revalidatePath('/email/campaigns')
-  return { ok: true, message: `${campaign.name} is running.` }
+  return { ok: true, message: `${campaign.name} is running. The first emails go out now.` }
 }
 
 export async function pauseCampaign(

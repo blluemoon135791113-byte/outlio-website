@@ -1,0 +1,56 @@
+# The real scheduler — R10.
+#
+# WHY THIS EXISTS AND NOT vercel.json
+#
+# Vercel's Hobby plan allows ONE cron invocation per DAY. For a product whose
+# send worker paces email through a ramp and a sending window, one tick a day
+# means a campaign takes weeks to go out and a reply is noticed tomorrow. That
+# is not a slower product, it is a broken one.
+#
+# GitHub Actions runs a schedule on the free tier, and the repository is
+# already here. All it does is make one authenticated request; every decision
+# and all the work stays in the app.
+#
+# ⚠️ GITHUB DELAYS SCHEDULED RUNS UNDER LOAD, sometimes by several minutes,
+# and skips them entirely during incidents. That is acceptable BECAUSE the tick
+# is idempotent and claim-based: a late tick does the same work, and a missed
+# one leaves the queue for the next. It would not be acceptable for anything
+# that had to happen exactly on time.
+name: Background tick
+
+on:
+  schedule:
+    # Every 5 minutes. GitHub treats this as a floor, not a guarantee.
+    - cron: '*/5 * * * *'
+  # So it can be triggered by hand while debugging, without waiting.
+  workflow_dispatch:
+
+# A slow tick must not stack up behind itself. The claim queues make overlap
+# safe, but there is no reason to pay for it.
+concurrency:
+  group: background-tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Run the tick
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL || 'https://app.outlio.io' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not set in this repository's secrets."
+            echo "The endpoint fails closed, so every request would be refused."
+            exit 1
+          fi
+
+          # --fail-with-body so a non-2xx fails the job AND shows why.
+          # ⚠️ The secret goes in a HEADER, never a query string: URLs are
+          # logged by proxies and by GitHub itself.
+          curl --silent --show-error --fail-with-body \
+               --max-time 120 \
+               --header "Authorization: Bearer $CRON_SECRET" \
+               "$APP_URL/api/cron"
