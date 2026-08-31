@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { FlowBuilder } from '@/components/flows/FlowBuilder'
 import { FlowEditor } from '@/components/flows/FlowEditor'
 import { creditBearingSteps, validateFlowDefinition } from '@/lib/flows/definition'
 import { quoteCredits, type HubbleTask } from '@/lib/hubble/pricing'
@@ -87,9 +88,11 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
   // What this flow costs per contact, answered BEFORE it runs.
   let creditSteps: string[] = []
   let creditsPerContact = 0
+  let parsedDefinition: ReturnType<typeof validateFlowDefinition> | null = null
   try {
     if (current?.definition) {
       const definition = validateFlowDefinition(current.definition)
+      parsedDefinition = definition
       creditSteps = creditBearingSteps(definition)
       for (const step of definition.steps) {
         if (step.type === 'ACTION' && TASK_FOR[step.action]) {
@@ -137,15 +140,35 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
       ) : null}
 
       {canManage ? (
-        <FlowEditor
-          flowId={id}
-          status={flow.status}
-          definition={
-            current?.definition
-              ? JSON.stringify(current.definition, null, 2)
-              : STARTER_DEFINITION
-          }
-        />
+        <>
+          {/*
+            ⚠️ THE BUILDER IS THE DEFAULT, and the JSON editor stays as the
+            escape hatch. The builder covers triggers, actions and waits; branch
+            CONDITIONS are still JSON, and a published version that no longer
+            validates (because the schema tightened) can only be repaired as
+            text. Hiding that would strand someone with an unfixable flow.
+          */}
+          <FlowBuilder
+            flowId={id}
+            initialDefinition={parsedDefinition ?? validateFlowDefinition(JSON.parse(STARTER_DEFINITION))}
+          />
+          <details className="clay p-4">
+            <summary className="cursor-pointer text-xs font-semibold text-muted">
+              Edit as JSON
+            </summary>
+            <div className="mt-3">
+              <FlowEditor
+                flowId={id}
+                status={flow.status}
+                definition={
+                  current?.definition
+                    ? JSON.stringify(current.definition, null, 2)
+                    : STARTER_DEFINITION
+                }
+              />
+            </div>
+          </details>
+        </>
       ) : null}
 
       <section className="space-y-3">
