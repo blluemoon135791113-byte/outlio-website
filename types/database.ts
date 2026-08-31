@@ -5785,6 +5785,202 @@ export type Database = {
         }
         Relationships: []
       }
+      meeting_bookings: {
+        Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          contact_id: string | null
+          created_at: string
+          ends_at: string | null
+          id: string
+          invitee_email: string
+          invitee_name: string | null
+          join_url: string | null
+          originally_scheduled_at: string
+          owner_user_id: string | null
+          provider: string
+          provider_event_id: string
+          reschedule_count: number
+          scheduled_at: string
+          status: Database["public"]["Enums"]["meeting_status"]
+          title: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          invitee_email: string
+          invitee_name?: string | null
+          join_url?: string | null
+          originally_scheduled_at: string
+          owner_user_id?: string | null
+          provider: string
+          provider_event_id: string
+          reschedule_count?: number
+          scheduled_at: string
+          status?: Database["public"]["Enums"]["meeting_status"]
+          title?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          invitee_email?: string
+          invitee_name?: string | null
+          join_url?: string | null
+          originally_scheduled_at?: string
+          owner_user_id?: string | null
+          provider?: string
+          provider_event_id?: string
+          reschedule_count?: number
+          scheduled_at?: string
+          status?: Database["public"]["Enums"]["meeting_status"]
+          title?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_bookings_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_bookings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_events: {
+        Row: {
+          booking_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          new_scheduled_at: string | null
+          occurred_at: string
+          previous_scheduled_at: string | null
+          provider: string
+          provider_delivery_id: string | null
+          type: Database["public"]["Enums"]["meeting_event_type"]
+          workspace_id: string
+        }
+        Insert: {
+          booking_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          new_scheduled_at?: string | null
+          occurred_at?: string
+          previous_scheduled_at?: string | null
+          provider: string
+          provider_delivery_id?: string | null
+          type: Database["public"]["Enums"]["meeting_event_type"]
+          workspace_id: string
+        }
+        Update: {
+          booking_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          new_scheduled_at?: string | null
+          occurred_at?: string
+          previous_scheduled_at?: string | null
+          provider?: string
+          provider_delivery_id?: string | null
+          type?: Database["public"]["Enums"]["meeting_event_type"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_events_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_unmatched_invitees: {
+        Row: {
+          booking_id: string
+          created_at: string
+          id: string
+          invitee_email: string
+          invitee_name: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_contact_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          id?: string
+          invitee_email: string
+          invitee_name?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_contact_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          id?: string
+          invitee_email?: string
+          invitee_name?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_contact_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_unmatched_invitees_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_unmatched_invitees_resolved_contact_id_fkey"
+            columns: ["resolved_contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_unmatched_invitees_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       paddle_customers: {
         Row: {
           created_at: string
@@ -7660,6 +7856,30 @@ export type Database = {
         }
         Returns: boolean
       }
+      record_meeting_event: {
+        Args: {
+          p_cancel_reason?: string
+          p_contact_id?: string
+          p_delivery_id?: string
+          p_ends_at?: string
+          p_invitee_email: string
+          p_invitee_name?: string
+          p_join_url?: string
+          p_metadata?: Json
+          p_owner_user_id?: string
+          p_provider: string
+          p_provider_event_id: string
+          p_scheduled_at: string
+          p_title?: string
+          p_type: Database["public"]["Enums"]["meeting_event_type"]
+          p_workspace_id: string
+        }
+        Returns: {
+          booking_id: string
+          is_new: boolean
+          was_matched: boolean
+        }[]
+      }
       record_referral: {
         Args: { p_code: string; p_referred_user_id: string }
         Returns: string
@@ -8160,6 +8380,13 @@ export type Database = {
         | "partially_completed"
         | "failed"
         | "cancelled"
+      meeting_event_type:
+        | "booked"
+        | "cancelled"
+        | "rescheduled"
+        | "no_show"
+        | "completed"
+      meeting_status: "scheduled" | "cancelled" | "completed" | "no_show"
       plan_key: "trial" | "starter" | "professional" | "agency" | "custom"
       queue_status: "pending" | "claimed" | "done" | "failed"
       referral_status: "pending" | "rewarded" | "void"
@@ -8474,6 +8701,14 @@ export const Constants = {
         "failed",
         "cancelled",
       ],
+      meeting_event_type: [
+        "booked",
+        "cancelled",
+        "rescheduled",
+        "no_show",
+        "completed",
+      ],
+      meeting_status: ["scheduled", "cancelled", "completed", "no_show"],
       plan_key: ["trial", "starter", "professional", "agency", "custom"],
       queue_status: ["pending", "claimed", "done", "failed"],
       referral_status: ["pending", "rewarded", "void"],
