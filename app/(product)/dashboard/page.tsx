@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { ExtensionCard } from '@/components/extension/ExtensionCard'
+import { FirstRun } from '@/components/onboarding/FirstRun'
 import { LiveCapture } from '@/components/extension/LiveCapture'
 import { CreditsSummary } from '@/components/product/CreditsSummary'
 import { ReferralCard } from '@/components/product/ReferralCard'
@@ -9,9 +10,12 @@ import { requireAccess } from '@/lib/auth/access'
 import { getActiveSession } from '@/lib/extension/capture'
 import { countDevices } from '@/lib/extension/devices'
 import { appOrigin } from '@/lib/auth/redirects'
+import { loadFirstRun, shouldShowFirstRun } from '@/lib/onboarding/steps'
 import { referralLink } from '@/lib/referrals/constants'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveUploadLimits } from '@/lib/upload/limits'
+import { getWorkspaceContext } from '@/lib/workspaces/context'
+import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
   title: 'Dashboard | Outlio',
@@ -43,6 +47,20 @@ export default async function DashboardPage() {
       .limit(1)
       .maybeSingle(),
   ])
+  /*
+   * ⚠️ THE CHECKLIST IS LOADED SEPARATELY AND FAILS SOFT. A workspace context
+   * that cannot be resolved -- a Lead Engine account with no workspace yet --
+   * must not take the whole dashboard down with it. No workspace simply means
+   * no checklist.
+   */
+  const workspace = await getWorkspaceContext()
+  const firstRun = workspace
+    ? await loadFirstRun(workspace.workspace.id, {
+        role: workspace.role,
+        modules: workspace.modules,
+      })
+    : null
+
   const referral = Array.isArray(referralRows) ? referralRows[0] : null
   const balance = Array.isArray(balanceRows) ? balanceRows[0] : null
   const limits = ctx.plan?.limits
@@ -117,6 +135,22 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </header>
+
+      {/*
+        ⚠️ ABOVE THE USAGE NUMBERS ON PURPOSE, and only until it is finished.
+        Someone on their first day has no usage to read; a row of zeroes is a
+        worse first screen than a list of what to do next. It disappears on its
+        own once every step is done -- see `shouldShowFirstRun`.
+      */}
+      {firstRun && shouldShowFirstRun(firstRun) && workspace ? (
+        <FirstRun
+          data={firstRun}
+          canDismiss={can(
+            { role: workspace.role, modules: workspace.modules },
+            'workspace.settings.manage',
+          )}
+        />
+      ) : null}
 
       <section aria-label="Usage this period" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {metrics.map((metric) => (
