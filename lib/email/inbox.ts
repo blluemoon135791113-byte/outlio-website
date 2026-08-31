@@ -15,35 +15,20 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { can, type PolicyInput } from '@/lib/workspaces/permissions'
 
-export const INBOX_VIEWS = [
-  { value: 'all', label: 'All' },
-  { value: 'unread', label: 'Unread' },
-  { value: 'mine', label: 'Mine' },
-  { value: 'unassigned', label: 'Unassigned' },
-  { value: 'needs_reply', label: 'Needs reply' },
-  { value: 'resolved', label: 'Resolved' },
-] as const
+/*
+ * ⚠️ RE-EXPORTED FROM A CLIENT-SAFE MODULE. These live in
+ * `lib/email/inbox-views.ts` because `InboxList.tsx` is a client component and
+ * this file is `server-only` with the service-role client in it. Server-side
+ * callers can keep importing them from here.
+ */
+export {
+  INBOX_VIEWS,
+  isInboxView,
+  type InboxThread,
+  type InboxView,
+} from '@/lib/email/inbox-views'
 
-export type InboxView = (typeof INBOX_VIEWS)[number]['value']
-
-export function isInboxView(value: string): value is InboxView {
-  return INBOX_VIEWS.some((v) => v.value === value)
-}
-
-export type InboxThread = {
-  id: string
-  subject: string | null
-  contactId: string | null
-  contactName: string | null
-  assignedTo: string | null
-  status: 'open' | 'resolved'
-  lastMessageAt: string
-  lastDirection: 'inbound' | 'outbound'
-  messageCount: number
-  isRead: boolean
-  /** First line of the latest inbound message, for the list preview. */
-  preview: string | null
-}
+import type { InboxThread, InboxView } from '@/lib/email/inbox-views'
 
 export type InboxPage = {
   threads: InboxThread[]

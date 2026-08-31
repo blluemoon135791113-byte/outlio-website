@@ -9,7 +9,7 @@ import {
   setThreadRead,
   type InboxActionState,
 } from '@/app/(product)/email/inbox/actions'
-import { INBOX_VIEWS, type InboxThread, type InboxView } from '@/lib/email/inbox'
+import { INBOX_VIEWS, type InboxThread, type InboxView } from '@/lib/email/inbox-views'
 
 function timeAgo(iso: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000)
