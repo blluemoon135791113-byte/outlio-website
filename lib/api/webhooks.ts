@@ -17,6 +17,7 @@ import 'server-only'
  */
 import { createAdminClient } from '@/lib/supabase/admin'
 import { backoffSeconds, signWebhookPayload, type WebhookEvent } from '@/lib/api/signing'
+import { assertSafeWebhookUrl, UnsafeWebhookUrlError } from '@/lib/api/webhook-url'
 
 export { backoffSeconds, signWebhookPayload, WEBHOOK_EVENTS } from '@/lib/api/signing'
 export type { WebhookEvent } from '@/lib/api/signing'
@@ -88,6 +89,29 @@ export async function deliverPendingWebhooks(limit = 20): Promise<DeliveryOutcom
       await db
         .from('webhook_deliveries')
         .update({ status: 'exhausted', last_error: 'The subscription is no longer active.' })
+        .eq('id', delivery.id)
+      outcome.exhausted += 1
+      continue
+    }
+
+    /*
+     * ⚠️ RE-CHECKED AT DELIVERY, not only when the subscription was saved. A
+     * hostname that was public when it was created can later resolve
+     * elsewhere, and a row written before this guard existed would otherwise
+     * keep being delivered to wherever it points.
+     */
+    try {
+      assertSafeWebhookUrl(subscription.url)
+    } catch (unsafe) {
+      await db
+        .from('webhook_deliveries')
+        .update({
+          status: 'exhausted',
+          last_error:
+            unsafe instanceof UnsafeWebhookUrlError
+              ? unsafe.message
+              : 'That webhook URL is not allowed.',
+        })
         .eq('id', delivery.id)
       outcome.exhausted += 1
       continue
