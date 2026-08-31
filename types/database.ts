@@ -1196,6 +1196,110 @@ export type Database = {
         }
         Relationships: []
       }
+      api_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          name: string
+          rate_limit_per_minute: number | null
+          revoked_at: string | null
+          scopes: Database["public"]["Enums"]["api_scope"][]
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          name: string
+          rate_limit_per_minute?: number | null
+          revoked_at?: string | null
+          scopes?: Database["public"]["Enums"]["api_scope"][]
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          name?: string
+          rate_limit_per_minute?: number | null
+          revoked_at?: string | null
+          scopes?: Database["public"]["Enums"]["api_scope"][]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_request_log: {
+        Row: {
+          api_key_id: string | null
+          created_at: string
+          denied_reason: string | null
+          duration_ms: number | null
+          id: string
+          method: string
+          path: string
+          status: number
+          workspace_id: string | null
+        }
+        Insert: {
+          api_key_id?: string | null
+          created_at?: string
+          denied_reason?: string | null
+          duration_ms?: number | null
+          id?: string
+          method: string
+          path: string
+          status: number
+          workspace_id?: string | null
+        }
+        Update: {
+          api_key_id?: string | null
+          created_at?: string
+          denied_reason?: string | null
+          duration_ms?: number | null
+          id?: string
+          method?: string
+          path?: string
+          status?: number
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_request_log_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_request_log_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       capture_pages: {
         Row: {
           capture_session_id: string
@@ -7209,6 +7313,131 @@ export type Database = {
           },
         ]
       }
+      webhook_deliveries: {
+        Row: {
+          attempts: number
+          created_at: string
+          delivered_at: string | null
+          event_id: string
+          event_type: string
+          id: string
+          last_error: string | null
+          last_status_code: number | null
+          max_attempts: number
+          next_attempt_at: string
+          payload: Json
+          status: Database["public"]["Enums"]["webhook_delivery_status"]
+          subscription_id: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          delivered_at?: string | null
+          event_id?: string
+          event_type: string
+          id?: string
+          last_error?: string | null
+          last_status_code?: number | null
+          max_attempts?: number
+          next_attempt_at?: string
+          payload: Json
+          status?: Database["public"]["Enums"]["webhook_delivery_status"]
+          subscription_id: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          delivered_at?: string | null
+          event_id?: string
+          event_type?: string
+          id?: string
+          last_error?: string | null
+          last_status_code?: number | null
+          max_attempts?: number
+          next_attempt_at?: string
+          payload?: Json
+          status?: Database["public"]["Enums"]["webhook_delivery_status"]
+          subscription_id?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_deliveries_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_deliveries_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webhook_subscriptions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          disabled_at: string | null
+          disabled_reason: string | null
+          events: string[]
+          failure_count: number
+          id: string
+          is_active: boolean
+          name: string
+          signing_secret: string
+          updated_at: string
+          url: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          disabled_at?: string | null
+          disabled_reason?: string | null
+          events?: string[]
+          failure_count?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          signing_secret: string
+          updated_at?: string
+          url: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          disabled_at?: string | null
+          disabled_reason?: string | null
+          events?: string[]
+          failure_count?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          signing_secret?: string
+          updated_at?: string
+          url?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_subscriptions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_feature_flags: {
         Row: {
           enabled: boolean
@@ -7361,6 +7590,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      api_key_for_hash: {
+        Args: { p_key_hash: string }
+        Returns: {
+          api_key_id: string
+          rate_limit_per_minute: number
+          scopes: Database["public"]["Enums"]["api_scope"][]
+          workspace_id: string
+        }[]
+      }
       await_provider_request_slot: {
         Args: { p_min_interval_ms: number; p_provider: string }
         Returns: string
@@ -7699,6 +7937,10 @@ export type Database = {
       }
       enqueue_job: { Args: { p_job_id: string }; Returns: undefined }
       enqueue_research_run: { Args: { p_run_id: string }; Returns: undefined }
+      enqueue_webhook_delivery: {
+        Args: { p_event_type: string; p_payload: Json; p_workspace_id: string }
+        Returns: number
+      }
       expired_export_paths: {
         Args: { p_limit?: number }
         Returns: {
@@ -8224,6 +8466,19 @@ export type Database = {
         | "manual_approval"
         | "trial"
         | "invitation"
+      api_scope:
+        | "contacts:read"
+        | "contacts:write"
+        | "companies:read"
+        | "companies:write"
+        | "opportunities:read"
+        | "opportunities:write"
+        | "activities:read"
+        | "activities:write"
+        | "tasks:read"
+        | "tasks:write"
+        | "lists:read"
+        | "lists:write"
       capture_page_status:
         | "received"
         | "queued"
@@ -8398,6 +8653,7 @@ export type Database = {
         | "subscriber"
         | "admin"
         | "suspended_user"
+      webhook_delivery_status: "pending" | "delivered" | "failed" | "exhausted"
       workspace_role: "owner" | "admin" | "manager" | "setter" | "viewer"
     }
     CompositeTypes: {
@@ -8539,6 +8795,20 @@ export const Constants = {
         "manual_approval",
         "trial",
         "invitation",
+      ],
+      api_scope: [
+        "contacts:read",
+        "contacts:write",
+        "companies:read",
+        "companies:write",
+        "opportunities:read",
+        "opportunities:write",
+        "activities:read",
+        "activities:write",
+        "tasks:read",
+        "tasks:write",
+        "lists:read",
+        "lists:write",
       ],
       capture_page_status: [
         "received",
@@ -8721,6 +8991,7 @@ export const Constants = {
         "admin",
         "suspended_user",
       ],
+      webhook_delivery_status: ["pending", "delivered", "failed", "exhausted"],
       workspace_role: ["owner", "admin", "manager", "setter", "viewer"],
     },
   },
