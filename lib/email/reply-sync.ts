@@ -141,6 +141,37 @@ async function processInbound(
   const campaignId = matched[0]?.campaign_id ?? null
 
   /*
+   * ⚠️ STORED BEFORE THE DEDUPE GATE BELOW, and deliberately so. The message
+   * itself must survive even when the EVENT was already recorded by an earlier
+   * run that crashed part-way — otherwise a reply is acted on but never
+   * readable, which is the one outcome an inbox exists to prevent.
+   * `email_record_inbound` carries its own idempotency on the provider message
+   * id, so calling it every time is safe.
+   *
+   * Bounces and auto-replies are stored too, tagged with the classification.
+   * The inbox hides bounces (they are already surfaced as suppressions) and
+   * shows auto-replies, because "they are away until Tuesday" is something a
+   * person wants to read, even though it must never count as a reply.
+   */
+  await db.rpc('email_record_inbound', {
+    p_workspace_id: workspaceId,
+    p_account_id: accountId,
+    // A provider that gives no thread id means the message is its own thread.
+    p_provider_thread_key: reply.threadId ?? reply.providerMessageId,
+    p_provider_message_id: reply.providerMessageId,
+    p_from_email: from,
+    p_subject: reply.subject,
+    p_body_text: reply.text,
+    p_received_at: reply.receivedAt,
+    p_classification: classification.kind === 'bounce'
+      ? 'bounce'
+      : classification.kind === 'auto_reply'
+        ? 'auto_reply'
+        : 'reply',
+    p_contact_id: contactId,
+  })
+
+  /*
    * ⚠️ THE PROVIDER'S MESSAGE ID IS THE DEDUPE KEY. A sync that overlaps a
    * previous one — or a mailbox that returns the same message twice — must not
    * stop a sequence twice or count a reply twice. `record_email_event` returns

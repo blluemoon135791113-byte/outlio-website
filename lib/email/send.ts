@@ -293,6 +293,22 @@ export async function runSendWorker(
         .update({ last_send_at: sentAt })
         .eq('id', account.id)
 
+      /*
+       * ⚠️ THE THREAD LEAVES "NEEDS REPLY" ONLY ONCE THE MAIL IS ACTUALLY OUT.
+       * Doing this at enqueue time would clear the flag for a message that
+       * later fails to send, and the conversation would quietly disappear from
+       * the one view whose job is making sure somebody answers. A no-op when
+       * the thread is not in the inbox, which is the normal case for a first
+       * cold email.
+       */
+      if (outcome.threadId) {
+        await db.rpc('email_thread_mark_outbound', {
+          p_workspace_id: message.workspace_id,
+          p_thread_key: outcome.threadId,
+          p_sent_at: sentAt,
+        })
+      }
+
       result.sent += 1
       continue
     }

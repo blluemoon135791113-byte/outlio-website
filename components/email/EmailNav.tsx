@@ -12,6 +12,7 @@ import { usePathname } from 'next/navigation'
 const SECTIONS = [
   { href: '/email', label: 'Mailboxes', exact: true },
   { href: '/email/campaigns', label: 'Campaigns', exact: false },
+  { href: '/email/inbox', label: 'Inbox', exact: false },
 ] as const
 
 export function EmailNav() {

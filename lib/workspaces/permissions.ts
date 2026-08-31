@@ -95,6 +95,8 @@ export type Permission =
   | 'email.campaign.create'
   | 'email.campaign.launch'
   | 'email.inbox.view'
+  | 'email.inbox.view.all'
+  | 'email.inbox.manage'
   | 'email.suppression.manage'
   // Flows
   | 'flow.view'
@@ -176,6 +178,17 @@ const PERMISSIONS: Record<Permission, PermissionSpec> = {
   // Gmail/Yahoo bulk-sender rules (A5).
   'email.campaign.launch': { minRole: 'manager', module: 'email' },
   'email.inbox.view': { minRole: 'setter', module: 'email' },
+  /*
+   * ⚠️ THE CONSTITUTION'S "ONLY ASSIGNED DATA" RULE, AND THE INBOX IS WHERE IT
+   * BITES HARDEST. A shared mailbox exists so everyone's replies land in one
+   * place — so without this a setter reads every conversation in the company,
+   * including the ones about their own compensation. A setter sees threads
+   * assigned to them; a manager sees the workspace.
+   */
+  'email.inbox.view.all': { minRole: 'manager', module: 'email' },
+  // Assigning a thread to someone else, and resolving one. A setter can act on
+  // their own threads; handing work to another person is a manager's call.
+  'email.inbox.manage': { minRole: 'manager', module: 'email' },
   'email.suppression.manage': { minRole: 'manager', module: 'email' },
 
   // Flows -------------------------------------------------------------------

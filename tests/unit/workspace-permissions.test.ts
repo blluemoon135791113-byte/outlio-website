@@ -76,6 +76,10 @@ const EXPECTED_MIN_ROLE: Record<Permission, WorkspaceRole> = {
   'email.campaign.create': 'manager',
   'email.campaign.launch': 'manager',
   'email.inbox.view': 'setter',
+  // A setter sees the inbox, but only the threads assigned to them, and cannot
+  // hand a conversation to somebody else.
+  'email.inbox.view.all': 'manager',
+  'email.inbox.manage': 'manager',
   'email.suppression.manage': 'manager',
 
   'flow.view': 'manager',
