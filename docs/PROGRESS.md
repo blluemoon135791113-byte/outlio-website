@@ -8610,3 +8610,47 @@ refinement) cannot be called done.
 - Migration 0102 rehearsed and smoke-tested, including proof that the shared
   `updated_at` trigger fires — by backdating first, since `now()` is the
   transaction timestamp and a naive comparison would pass either way.
+
+## 2026-09-01 — R0: Functional Reality Audit
+
+`docs/OUTLIO_FUNCTIONAL_GAP_MATRIX.md`. No code changed.
+
+### Two findings that invalidate parts of this Ledger
+
+**1. The email send worker is never invoked.** `runSendWorker` is referenced by
+its own definition and by five calls in its test file, and **nowhere else in the
+repository**. There is no cron route, no `after()` trigger and no
+`vercel.json`. `syncWorkspaceReplies` has *zero* callers, including tests.
+
+So a campaign can be created, enrolled and launched, and **no email is ever
+sent** — messages accumulate as `queued` forever. Replies are never fetched, so
+stop-on-reply cannot fire and the unified Inbox is permanently empty.
+
+⚠️ **This Ledger's M5 criteria 3 and 4 were not wrong, and were not enough.**
+The tests call `runSendWorker` directly, so at-most-once delivery and
+suppression really are proven — of a worker that never runs. The same shape as
+`/email` 404ing on the software domain: correct code, unreachable.
+
+**2. Six engines have no caller outside their own module** —
+`ingestExtractionJob`, `runCsvImport`, `undoBatch`, `buildImportPlan`,
+`createOpportunity`, `createPipeline`. All built, all covered by integration
+tests that invoke them directly, none reachable by a user. This is the reported
+"I cannot create a pipeline": `createPipeline` exists and nothing calls it.
+
+### What this says about the test strategy
+
+Coverage is strong at the engine layer and **absent at the wiring layer**. Every
+failure above is a wiring failure and none was caught, because unit tests,
+typecheck and `next build` all pass whether or not anything calls the code.
+Two guards are missing and should be added during R10:
+
+- every background worker has a trigger;
+- every exported engine entry point has a caller outside its own module.
+
+### Also recorded
+
+- "Only assigned data" is enforced in the inbox and tasks and **not** in
+  contacts, opportunities or search. A setter can currently read every contact.
+- The onboarding checklist's "Set up your pipeline" step is a dead end.
+- Repair order revised: R10 first (the only BROKEN entry), then pipeline and
+  opportunity creation, then Lead Engine → CRM.
