@@ -8127,14 +8127,14 @@ export type Database = {
       email_record_inbound: {
         Args: {
           p_account_id: string
-          p_body_text: string
-          p_classification: string
+          p_body_text?: string
+          p_classification?: string
           p_contact_id?: string
           p_from_email: string
           p_provider_message_id: string
           p_provider_thread_key: string
-          p_received_at: string
-          p_subject: string
+          p_received_at?: string
+          p_subject?: string
           p_workspace_id: string
         }
         Returns: {

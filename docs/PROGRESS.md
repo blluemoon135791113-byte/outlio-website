@@ -8402,3 +8402,96 @@ nine pass: **criterion 4 is proven for every suppression reason, not skipped.**
   Slack is having an afternoon. ⚠️ Needs 0099 applied before it can run.
 - Full integration suite: 307 passing, 3 failing — all three the documented
   KI7 signup-IP-gate self-block, unchanged by this work.
+
+## M8 Phase 26 — the unified inbox ✅ — CRITERION 5 — **M8 COMPLETE**
+
+`lib/email/inbox.ts`, `app/(product)/email/inbox/`, `components/email/InboxList.tsx`,
+migrations `0100_unified_inbox.sql`, `0101_inbound_optional_args.sql`.
+
+### Reply sync already worked and stored nothing to read
+
+It fetched inbound mail, classified it, recorded a domain event, stopped the
+sequence and wrote a CRM activity — then discarded the message. That was right
+for M6, whose job was to STOP A SEQUENCE when someone answers. An inbox needs
+the answer itself. This is why the brief gated Phase 26 on reply sync: not
+because sync was unstable, but because nothing was persisted.
+
+### A separate table, not a `direction` column on `email_messages`
+
+`email_messages` is the outbound send QUEUE. It carries claim ownership, claim
+expiry, attempts, idempotency keys and a send status, and the worker claims
+from it with `FOR UPDATE SKIP LOCKED`. Inbound rows in that table would mean
+every one of those queries needs `and direction = 'outbound'` forever, and the
+first one that forgets either **sends a received email back out** or stalls the
+queue behind rows no worker can ever complete.
+
+### Read state is shared, not per-user
+
+A deliberate product decision with a real cost. This is a TEAM inbox, so
+"unread" should mean nobody has looked at it yet. Per-user read state would
+show a shared queue of 100 threads as 100 unread to each of five people — the
+badge would measure attendance rather than work outstanding. The cost is that
+"unread by me" is not expressible; if it is wanted later it is a join table,
+not a change to that column.
+
+### Keyset pagination, because an inbox receives mail while it is being read
+
+With `OFFSET 25`, a thread arriving between two requests shifts every later row
+down, so page two silently repeats one thread and hides another. The cursor is
+anchored to a row instead. **Tested directly**: a message is received between
+the two page fetches and the overlap is asserted empty.
+
+### The permission matrix test caught a scattered role check
+
+`seesAllThreads` was first written as `can('email.campaign.view') &&
+can('email.template.manage')` — inferring access from two unrelated
+permissions, which is exactly the scattered role check the constitution
+forbids. Adding `email.inbox.view.all` and `email.inbox.manage` as real catalogue
+entries made `workspace-permissions.test.ts` fail with 7 errors for unregistered
+permissions. That is the guard working. 260/260 after registering them.
+
+⚠️ **The inbox is where "only assigned data" matters most.** A shared mailbox
+exists so that everyone's replies land in one place — so without the owner
+filter a setter reads every conversation in the company, including the ones
+about their own compensation.
+
+### `0101` exists because a cast would have been a lie
+
+0100 declared every argument except `p_contact_id` without a default, so the
+generated types made them required and non-null. But a received email genuinely
+may have no subject and no text body — a bare attachment, or HTML-only content.
+The quiet fix was `null as string` at the call site; the honest one was making
+the signature say what is true. Postgres requires every parameter after the
+first defaulted one to have a default, so `p_received_at` and `p_classification`
+gained the values they were already being passed.
+
+### Verification
+
+- `tests/integration/inbox.test.ts` — **10/10 against the real database.**
+  Covers the setter filter, cross-workspace refusal, keyset paging with no
+  repeats or skips, a thread moving through every view, a resolved thread
+  REOPENING when they write back, a replayed provider message filed once
+  without resurfacing the thread, and an unmatched sender kept rather than
+  dropped or invented.
+- Both migrations were **smoke-tested by CALLING the functions**, not merely
+  creating them — the trap that broke 0072 and 0095.
+- `tsc --noEmit`: 0 errors. Lint: 0 errors.
+
+### M8 criteria
+
+| # | Criterion | State |
+|---|---|---|
+| 1 | Replayed Calendly webhook → exactly one activity | ✅ |
+| 2 | Unmatched invitee handled gracefully, no orphans | ✅ |
+| 3 | Reschedule preserves original booking history | ✅ |
+| 4 | No integration logic inside CRM controllers | ✅ |
+| 5 | Inbox respects permissions + pagination; threads resolve | ✅ |
+| 6 | Ledger updated | ✅ (this entry) |
+| 7 | Public API scopes + rate limits | ✅ |
+| 8 | Signed, retried, idempotent webhooks + delivery logs | ✅ |
+| 9 | Slack/Teams Flow notification action | ✅ |
+
+⚠️ **Phase 24.5 (Google/Outlook calendar sync) remains BLOCKED** and is the one
+committed M8 item not built. It needs Google and Microsoft OAuth credentials
+that do not exist in this project — a credential problem, not a code one.
+Recorded as a deferred requirement, to be resolved under M9 criterion 4.
