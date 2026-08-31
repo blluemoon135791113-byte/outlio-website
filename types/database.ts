@@ -6085,6 +6085,62 @@ export type Database = {
           },
         ]
       }
+      notification_channels: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          events: string[]
+          failure_count: number
+          id: string
+          is_active: boolean
+          last_error: string | null
+          last_sent_at: string | null
+          name: string
+          provider: Database["public"]["Enums"]["notification_provider"]
+          updated_at: string
+          url: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          events?: string[]
+          failure_count?: number
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_sent_at?: string | null
+          name: string
+          provider: Database["public"]["Enums"]["notification_provider"]
+          updated_at?: string
+          url: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          events?: string[]
+          failure_count?: number
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_sent_at?: string | null
+          name?: string
+          provider?: Database["public"]["Enums"]["notification_provider"]
+          updated_at?: string
+          url?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_channels_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       paddle_customers: {
         Row: {
           created_at: string
@@ -8642,6 +8698,7 @@ export type Database = {
         | "no_show"
         | "completed"
       meeting_status: "scheduled" | "cancelled" | "completed" | "no_show"
+      notification_provider: "slack" | "teams"
       plan_key: "trial" | "starter" | "professional" | "agency" | "custom"
       queue_status: "pending" | "claimed" | "done" | "failed"
       referral_status: "pending" | "rewarded" | "void"
@@ -8979,6 +9036,7 @@ export const Constants = {
         "completed",
       ],
       meeting_status: ["scheduled", "cancelled", "completed", "no_show"],
+      notification_provider: ["slack", "teams"],
       plan_key: ["trial", "starter", "professional", "agency", "custom"],
       queue_status: ["pending", "claimed", "done", "failed"],
       referral_status: ["pending", "rewarded", "void"],
