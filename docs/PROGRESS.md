@@ -8654,3 +8654,81 @@ Two guards are missing and should be added during R10:
 - The onboarding checklist's "Set up your pipeline" step is a dead end.
 - Repair order revised: R10 first (the only BROKEN entry), then pipeline and
   opportunity creation, then Lead Engine → CRM.
+
+## 2026-09-01 — R10: every background worker has a trigger
+
+`lib/workers/tick.ts`, `app/api/cron/route.ts`, `.github/workflows/cron.yml`,
+`vercel.json`, `docs/SCHEDULING.md`.
+
+### What was broken
+
+**Nothing in this product ran on a schedule.** Five workers were written,
+covered by passing tests that call them directly, and never invoked:
+`runSendWorker`, `reapExpiredClaims`, `syncWorkspaceReplies`,
+`deliverPendingWebhooks`, `claimWaitingRuns`. A launched campaign sent nothing,
+replies were never fetched, webhooks never delivered, and any flow that hit a
+WAIT step never resumed.
+
+⚠️ **This invalidated the "proven" status of M5 criteria 3–4 and M8 criterion 8
+in the sense that mattered.** The tests were correct and the workers were
+correct. They simply never ran.
+
+### The tick
+
+One entry point runs all five in a deliberate order: reap first, so rows
+abandoned by a killed worker are claimable on the same tick; send before reply
+sync, so a reply is not fetched before the send that caused it is recorded.
+Each job is isolated — one workspace's misconfigured mailbox must not stop
+webhook delivery for everyone — and each is bounded, because a tick runs inside
+a request with a function timeout.
+
+### Scheduling on the free tier
+
+**Vercel Hobby allows one cron invocation per DAY**, which for a paced sender
+means a campaign takes weeks and a reply is noticed tomorrow. So the real
+schedule is a GitHub Actions workflow every 5 minutes, and the `vercel.json`
+entry stays as a once-daily **floor** — if the Action is disabled or its secret
+rotates, the queue drains once a day rather than never.
+
+GitHub delays scheduled runs under load and skips them during incidents. That
+is acceptable *because the tick is idempotent and claim-based*; it would not be
+for anything needing an exact time.
+
+### Two guards, because this class of bug had no coverage at all
+
+Coverage was strong at the engine layer and absent at the wiring layer. Every
+failure above was a wiring failure and none was caught, because tests,
+typecheck and `next build` all pass whether or not anything calls the code.
+
+- `tests/unit/worker-wiring.test.ts` asserts each worker has a caller, the tick
+  has a route, and the real scheduler exists.
+- The six engines R0 found unreachable use **`it.fails` — a ratchet, not a
+  skip.** The suite stays green and the defect stays documented, and the moment
+  someone wires one up the test fails and says to move it to the passing block.
+
+### The deployment failure worth recording
+
+The first production deploy **errored in 5 seconds**: `CRON_SECRET` contained
+newlines at positions 44 and 89 — two `openssl rand -base64 32` outputs pasted
+together. Vercel injects the value into an HTTP header for its own cron and a
+newline there is illegal, so it refused before building. Production was
+unaffected; it kept serving the prior deploy. Recommend `openssl rand -hex 32`
+for future secrets: no `+`, `/` or `=` to mangle when copying.
+
+### Verified
+
+- 2,229 unit tests passing + 6 expected-fail; typecheck 0; lint 0; build clean.
+- `tests/integration/worker-tick.test.ts` — the tick runs every job, does not
+  throw, records a failing job rather than aborting, and reports its duration.
+- **Against the real database:** the tick claimed both queued messages,
+  attempted SMTP and recorded "Could not reach the mail server" (GreenMail down
+  locally). `attempts` went 0 → 1 — the send worker executing outside a test
+  for the first time.
+- **In production:** `/api/cron` returns `401 {"error":"unauthorized"}` both
+  unauthenticated and with a wrong secret. Live and failing closed.
+
+### Not verified
+
+Whether the GitHub Action is running. The repository is private and the agent
+has no token, so this needs a human to check the Actions tab. `workflow_dispatch`
+is enabled so it can be triggered by hand.
