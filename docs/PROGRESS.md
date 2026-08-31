@@ -8732,3 +8732,76 @@ for future secrets: no `+`, `/` or `=` to mangle when copying.
 Whether the GitHub Action is running. The repository is private and the agent
 has no token, so this needs a human to check the Actions tab. `workflow_dispatch`
 is enabled so it can be triggered by hand.
+
+## 2026-09-01 — R5 and R4: pipelines and deals can finally be created
+
+`lib/crm/opportunities.ts` (+4 functions), `app/(product)/crm/pipeline/actions.ts`,
+`app/(product)/crm/opportunities-actions.ts`, `components/crm/PipelineSetup.tsx`,
+`components/crm/NewOpportunity.tsx`.
+
+### The reported bug, and its sibling
+
+`createPipeline` and `createOpportunity` both shipped with M3 and **neither was
+ever called**. A workspace had no pipeline, the board showed an empty state
+saying "once one exists, your board appears here" with no way to make one, and
+the onboarding checklist pointed straight at it. Two of the six engines R0 found
+stranded.
+
+### Stages are prefilled, not imposed
+
+The brief forbids baking in one sales methodology, and seeding stages behind the
+customer's back would do exactly that. They arrive in an editable form —
+rename, reorder, remove. Someone who sells differently rewrites them; someone
+who does not want to think about it on day one gets a working board.
+
+⚠️ **A pipeline with no Won stage is refused, with the reason.** Without one no
+deal can ever close and the pipeline never appears in revenue reports — a defect
+someone would otherwise discover a quarter later.
+
+### Two constraint traps in the pipeline lifecycle
+
+- **Archiving clears `is_default` in the same update.** The partial unique index
+  counts only non-archived rows, so an archived pipeline still holding the flag
+  would silently block the next one from becoming default, and the error would
+  surface somewhere unrelated.
+- **Setting a default clears the old one FIRST.** Same index; doing it in the
+  other order fails on the constraint.
+
+### Blank value means unknown, not zero
+
+An empty value field becomes NULL. A deal worth nothing and a deal whose value
+nobody has filled in are different, and a forecast that summed them would
+under-report silently (CLAUDE.md rule 4). The form says so on screen.
+
+### ⚠️ No activity is recorded on opportunity creation, deliberately
+
+`crm_activity_type` has no `OPPORTUNITY_CREATED` value — only WON, LOST and
+STAGE_CHANGED. Adding one needs a migration; reusing a neighbouring value to
+keep a comment honest would poison every report reading it. It is not needed:
+`crm_batch_funnel` (0083) counts opportunities from `crm_opportunities`
+directly, so batch-to-revenue attribution still works.
+
+**This is a real inconsistency with the constitution's "ALL metrics derive from
+events", and it predates these phases.** Recorded rather than papered over.
+
+### The ratchet did its job, twice
+
+Wiring each engine made its `it.fails` guard start failing — the designed
+signal to promote it into the enforced block. **Four engines remain ratcheted:**
+`ingestExtractionJob`, `runCsvImport`, `buildImportPlan`, `undoBatch` — all R1.
+
+### Correction to the R0 audit
+
+R0 claimed "only assigned data" was not enforced on contacts or opportunities,
+and that a setter could read every contact. **That was wrong.** `dataScope` is
+applied to the contacts list, contact detail, the board and reports.
+
+The real gap was narrower and newer: `/crm/companies`, shipped 2026-08-31 by
+this agent, had **no owner filter**, so a setter saw every company. RLS does not
+catch it — RLS grants a member the whole workspace, and narrowing to "only
+assigned" must be applied to the query. Fixed. Still unscoped: global search and
+Hubble context.
+
+### Verified
+
+2,231 unit tests + 4 expected-fail; typecheck 0; lint 0; build clean.

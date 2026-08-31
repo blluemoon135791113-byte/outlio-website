@@ -1622,6 +1622,105 @@ details[open] .faq-mark {
   );
 }
 
+/* Clay-inspired editorial rhythm: one interactive proof stage at a time.
+   The widgets themselves remain intact; these frames only establish a shared
+   page cadence, contained canvases, and consistent depth between sections. */
+.leadengine-story {
+  overflow: clip;
+  background: #f7eee2;
+}
+
+.leadengine-story-flow {
+  position: relative;
+  padding: clamp(1rem, 2.4vw, 2.5rem) 0 clamp(3rem, 7vw, 7rem);
+  background:
+    radial-gradient(circle at 14% 18%, rgba(224, 112, 2, 0.08), transparent 24rem),
+    radial-gradient(circle at 86% 64%, rgba(119, 143, 132, 0.1), transparent 28rem),
+    #f7eee2;
+}
+
+.leadengine-story-panel {
+  position: relative;
+  width: min(calc(100% - clamp(1rem, 3vw, 3.5rem)), 112rem);
+  margin: clamp(1rem, 2.5vw, 2.75rem) auto;
+  overflow: clip;
+  border: 1px solid rgba(81, 6, 0, 0.1);
+  border-radius: clamp(1.6rem, 3vw, 3rem);
+  background: var(--paper);
+  box-shadow:
+    0 2.25rem 5.5rem rgba(81, 6, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.84);
+  isolation: isolate;
+}
+
+.leadengine-story-panel > section {
+  border-radius: inherit;
+}
+
+.leadengine-story-panel-immersive {
+  background: #000100;
+}
+
+.leadengine-story-panel-dark {
+  border-color: rgba(255, 247, 235, 0.14);
+  background: #000100;
+  box-shadow: 0 2.5rem 6.5rem rgba(20, 1, 4, 0.2);
+}
+
+.leadengine-story-note {
+  display: grid;
+  width: min(calc(100% - clamp(2rem, 8vw, 10rem)), 84rem);
+  grid-template-columns: minmax(10rem, 0.34fr) minmax(0, 1fr);
+  gap: clamp(2rem, 7vw, 8rem);
+  align-items: start;
+  margin: clamp(5rem, 9vw, 9rem) auto;
+  padding: clamp(2rem, 4vw, 4rem) 0;
+  border-top: 1px solid rgba(81, 6, 0, 0.16);
+  border-bottom: 1px solid rgba(81, 6, 0, 0.16);
+}
+
+.leadengine-story-kicker {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 760;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.leadengine-story-note-title {
+  max-width: 48rem;
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(2rem, 4.5vw, 4.75rem);
+  font-weight: var(--leadengine-heading-weight);
+  letter-spacing: -0.052em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.leadengine-story-note-copy {
+  max-width: 48rem;
+  margin-top: 1.5rem;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.45vw, 1.18rem);
+  font-weight: var(--leadengine-copy-weight);
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+@media (max-width: 48rem) {
+  .leadengine-story-panel {
+    width: calc(100% - 0.75rem);
+    border-radius: 1.5rem;
+  }
+
+  .leadengine-story-note {
+    width: calc(100% - 2rem);
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-block: 3.5rem;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Lead Engine hero — artwork surface
    ═══════════════════════════════════════════════════════════════════════════

@@ -11,11 +11,11 @@ import * as THREE from 'three'
  * ║                                                                          ║
  * ║  · The starfield is ~2,600 real points spread through depth, so it       ║
  * ║    parallaxes AGAINST the hand instead of sliding with it.               ║
- * ║  · The hand is a mesh carrying the artwork as a texture.                 ║
- * ║  · The singularity is a flat black sphere held on the hole painted into  ║
- * ║    the plate. It has no rim and emits nothing; it exists only to occlude ║
- * ║    the stars behind it, because additive blending erases the painted     ║
- * ║    hole and something has to put it back.                                ║
+ * ║  · The hand is a subdivided relief mesh carrying the supplied artwork.   ║
+ * ║    Its shallow curvature responds to pointer depth without stretching    ║
+ * ║    the fingers or separating the hand from the singularity.              ║
+ * ║  · The singularity is a shaded sphere with a restrained volumetric       ║
+ * ║    corona, welded to the hole and light already painted into the plate.   ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
  * ⚠️ ADDITIVE BLENDING IS WHAT MAKES THE SOURCE USABLE AS A LAYER.
@@ -27,15 +27,13 @@ import * as THREE from 'three'
  * The painted singularity is a BLACK disc, so it vanishes for the same reason,
  * leaving its place free for the real one.
  *
- * ⚠️ THE HAND IS NOT DEFORMED, AND THAT IS A DECISION.
+ * ⚠️ THE RELIEF IS SHALLOW BY DESIGN.
  *
- * It was: the mesh curled toward the palm on cursor proximity. Closing a
- * photographed hand needs pixels for what sits behind the fingers and a single
- * 2D plate has none, so the texture smeared at the tips and the light painted
- * around the singularity tore away from the singularity itself. The artwork is
- * carried exactly as drawn. The only motion in this scene is the starfield:
- * its slow roll, and the parallax that comes from the camera panning with the
- * pointer. The hand and the ring hold still.
+ * A photographed hand cannot fully close without inventing pixels behind its
+ * fingers. The mesh therefore uses only a few hundredths of a world unit of
+ * convex depth, locks the vertices around the orb anchor, and leaves the source
+ * silhouette intact. It reads as dimensional under parallax without warping
+ * the supplied art.
  */
 
 const SOURCE_WIDTH = 1985
@@ -119,25 +117,39 @@ function sceneLayout(width: number, height: number): SceneLayout {
 }
 
 const HAND_VERTEX = /* glsl */ `
+  uniform float uTime;
+  uniform float uDepth;
+  uniform vec2 uPointer;
   varying vec2 vUv;
+  varying float vRelief;
+
   void main() {
-    /*
-     * ⚠️ DELIBERATELY UNDEFORMED.
-     * An earlier version curled this mesh toward the palm on cursor proximity.
-     * Closing a photographed hand needs pixels for what sits behind the
-     * fingers, and a single 2D plate has none — past a small amplitude the
-     * texture smeared, and the light painted around the singularity tore away
-     * from the singularity itself. The mesh stays flat and the artwork stays
-     * exactly as drawn.
-     */
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+
+    vec2 orbAnchor = vec2(0.825, 0.838);
+    float edgeLock = smoothstep(0.0, 0.12, uv.x)
+      * smoothstep(0.0, 0.12, uv.y)
+      * smoothstep(0.0, 0.12, 1.0 - uv.x)
+      * smoothstep(0.0, 0.12, 1.0 - uv.y);
+    float orbLock = smoothstep(0.045, 0.16, distance(uv, orbAnchor));
+    float palm = exp(-dot((uv - vec2(0.68, 0.34)) * vec2(2.4, 1.7), (uv - vec2(0.68, 0.34)) * vec2(2.4, 1.7)) * 3.4);
+    float pointerLift = exp(-dot((uv - uPointer) * vec2(2.2, 1.5), (uv - uPointer) * vec2(2.2, 1.5)) * 4.0);
+    float surface = sin(uv.x * 3.14159) * sin(uv.y * 3.14159);
+    float breath = 0.92 + 0.08 * sin(uTime * 0.55 + uv.x * 2.2);
+    float relief = (palm * 0.052 + pointerLift * 0.022 + surface * 0.012) * edgeLock * orbLock * breath * uDepth;
+
+    vec3 displaced = position;
+    displaced.z += relief;
+    displaced.x += (uv.y - 0.5) * relief * 0.07;
+    vRelief = clamp(relief / 0.086, 0.0, 1.0);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
   }
 `
 
 const HAND_FRAGMENT = /* glsl */ `
   uniform sampler2D uMap;
   varying vec2 vUv;
+  varying float vRelief;
 
   vec3 duneRamp(float value) {
     float stepValue = clamp(value, 0.0, 1.0) * 9.0;
@@ -178,6 +190,7 @@ const HAND_FRAGMENT = /* glsl */ `
     float warmMask = smoothstep(0.025, 0.18, redLead) * smoothstep(0.06, 0.32, saturation);
     float warmTone = pow(clamp(dot(texel.rgb, vec3(0.28, 0.58, 0.14)) * 1.42, 0.0, 1.0), 0.72);
     texel.rgb = mix(texel.rgb, duneRamp(warmTone), warmMask);
+    texel.rgb *= 0.97 + vRelief * 0.12;
 
     /*
      * ⚠️ LUMINANCE BECOMES ALPHA.
@@ -231,38 +244,54 @@ const NEBULA_FRAGMENT = /* glsl */ `
 `
 
 const ORB_VERTEX = /* glsl */ `
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+
   void main() {
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    vNormal = normalize(normalMatrix * normal);
+    vViewDirection = normalize(-viewPosition.xyz);
+    gl_Position = projectionMatrix * viewPosition;
   }
 `
 
 const ORB_FRAGMENT = /* glsl */ `
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+
   void main() {
-    /*
-     * ⚠️ FLAT BLACK. NO RIM. THE RIM WAS THE FLOATING RING.
-     *
-     * This shaded a fresnel edge — bright where the sphere turned away from
-     * the camera. Against the hand that reads as a lit hole, but most of its
-     * circumference sits on empty starfield, where the black core is invisible
-     * and only the glowing edge survives. What you see is a hoop hanging in
-     * space with nothing inside it.
-     *
-     * The object still has to exist. The singularity is painted into the plate
-     * as a BLACK disc and the hand is composited additively, which drops black
-     * — so deleting this would not leave the artwork's hole behind, it would
-     * leave nothing, and the hand would reach toward empty sky. Alpha stays 1:
-     * the one job a hole has is to occlude the stars behind it.
-     *
-     * ⚠️ NOT QUITE BLACK — THIS IS THE DARK LIMB.
-     * At pure black the body vanished into the sky and only the crescent
-     * painted into the plate survived, so the sphere read as a sliver rather
-     * than as a full one. Lifting it a few percent lets the WHOLE disc
-     * silhouette behind that crescent, the way earthshine shows the unlit part
-     * of a moon. It is deliberately flat: any falloff toward the edge is a
-     * fresnel rim, and a rim on a body this small is the floating hoop that
-     * was removed.
-     */
-    gl_FragColor = vec4(0.055, 0.062, 0.085, 1.0);
+    vec3 lightDirection = normalize(vec3(-0.55, 0.72, 0.65));
+    float diffuse = max(dot(vNormal, lightDirection), 0.0);
+    float facing = max(dot(vNormal, vViewDirection), 0.0);
+    float bodyLight = diffuse * 0.028 + pow(facing, 3.0) * 0.012;
+    vec3 darkBody = vec3(0.035, 0.039, 0.052) + vec3(0.24, 0.3, 0.42) * bodyLight;
+    gl_FragColor = vec4(darkBody, 1.0);
+  }
+`
+
+const CORONA_VERTEX = /* glsl */ `
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+
+  void main() {
+    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    vNormal = normalize(normalMatrix * normal);
+    vViewDirection = normalize(-viewPosition.xyz);
+    gl_Position = projectionMatrix * viewPosition;
+  }
+`
+
+const CORONA_FRAGMENT = /* glsl */ `
+  uniform float uTime;
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+
+  void main() {
+    float fresnel = pow(1.0 - max(dot(vNormal, vViewDirection), 0.0), 3.6);
+    float pulse = 0.82 + 0.18 * sin(uTime * 1.35);
+    float alpha = fresnel * 0.2 * pulse;
+    vec3 corona = mix(vec3(0.44, 0.64, 0.94), vec3(0.93, 0.97, 1.0), fresnel);
+    gl_FragColor = vec4(corona * (0.7 + fresnel * 0.5), alpha);
   }
 `
 

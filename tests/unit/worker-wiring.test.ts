@@ -106,6 +106,15 @@ describe('every background worker has a trigger', () => {
     ).not.toHaveLength(0)
   })
 
+  /* Promoted out of the ratchet by R4. */
+  it('createOpportunity has a caller — otherwise a CRM cannot record a deal', () => {
+    const callers = callersOf('createOpportunity', 'lib/crm/opportunities.ts')
+    expect(
+      callers,
+      'createOpportunity has no caller, so nobody can create a deal.',
+    ).not.toHaveLength(0)
+  })
+
   it('the tick is reachable from a route, not just defined', () => {
     /*
      * The workers above could all be called by `runTick` and still never run
@@ -162,11 +171,6 @@ describe('engines the R0 audit found unreachable', () => {
    * WIRED, not that a particular button exists.
    */
   const ENGINES: { name: string; definedIn: string; without: string }[] = [
-    {
-      name: 'createOpportunity',
-      definedIn: 'lib/crm/opportunities.ts',
-      without: 'nobody can create a deal, which is the point of a CRM',
-    },
     {
       name: 'ingestExtractionJob',
       definedIn: 'lib/crm/ingest.ts',

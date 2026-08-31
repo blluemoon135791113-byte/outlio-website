@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
+import { NewOpportunityButton } from '@/components/crm/NewOpportunity'
 import { NewPipelineButton, PipelineSetup } from '@/components/crm/PipelineSetup'
 import { getBoard, getPipeline } from '@/lib/crm/opportunities'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -82,9 +83,28 @@ export default async function PipelinePage({
             ) : null}
           </div>
 
-          {/* A second pipeline is a normal thing to want — different products,
-              different motions — so the way to make one is on the board. */}
-          {canManage ? <NewPipelineButton /> : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
+              ⚠️ THE PRIMARY ACTION ON THIS SCREEN. A board you cannot add a
+              deal to is a report, not a pipeline — and until R4 there was no
+              way to create one anywhere in the product.
+            */}
+            {can({ role: ctx.role, modules: ctx.modules }, 'crm.opportunity.create') ? (
+              <NewOpportunityButton
+                pipelineId={pipelineId}
+                stages={pipeline.stages.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  kind: s.kind,
+                }))}
+                contacts={await pickableContacts(ctx.workspace.id, scopedToSelf ? ctx.userId : null)}
+              />
+            ) : null}
+
+            {/* A second pipeline is a normal thing to want — different products,
+                different motions — so the way to make one is on the board. */}
+            {canManage ? <NewPipelineButton /> : null}
+          </div>
         </div>
       </div>
 
@@ -96,6 +116,33 @@ export default async function PipelinePage({
       />
     </div>
   )
+}
+
+/**
+ * Contacts offered in the deal form.
+ *
+ * ⚠️ BOUNDED AND SCOPED. Loading every contact would put a 100,000-row select
+ * in a page render, and a setter must only see their own — the same
+ * `dataScope` rule the rest of the CRM follows.
+ */
+async function pickableContacts(
+  workspaceId: string,
+  ownerUserId: string | null,
+): Promise<{ id: string; name: string }[]> {
+  const db = createAdminClient()
+
+  let query = db
+    .from('crm_contacts')
+    .select('id, full_name')
+    .eq('workspace_id', workspaceId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  if (ownerUserId) query = query.eq('owner_user_id', ownerUserId)
+
+  const { data } = await query
+  return (data ?? []).map((c) => ({ id: c.id, name: c.full_name ?? 'Unnamed contact' }))
 }
 
 async function defaultPipelineId(workspaceId: string): Promise<string | null> {

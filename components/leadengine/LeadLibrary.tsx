@@ -306,6 +306,8 @@ export function LeadLibrary() {
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const lastTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const tiltHostRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
 
   const closeLead = useCallback(() => {
     const trigger = lastTriggerRef.current
@@ -348,6 +350,52 @@ export function LeadLibrary() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [activeLead, closeLead])
 
+  useEffect(() => {
+    const host = tiltHostRef.current
+    const stage = stageRef.current
+    if (!host || !stage) return
+
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    let frame = 0
+
+    const reset = () => {
+      window.cancelAnimationFrame(frame)
+      stage.style.transform = ''
+    }
+
+    const move = (event: PointerEvent) => {
+      if (!finePointer.matches || reducedMotion.matches || stage.dataset.modalOpen === 'true') {
+        reset()
+        return
+      }
+
+      const bounds = host.getBoundingClientRect()
+      const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 2
+      const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 2
+      const rotateX = Math.max(-2.4, Math.min(2.4, y * -2.4))
+      const rotateY = Math.max(-3.2, Math.min(3.2, x * 3.2))
+
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        stage.style.transform = `translate3d(${x * 2}px, ${y * 1.5}px, 0) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`
+      })
+    }
+
+    host.addEventListener('pointermove', move)
+    host.addEventListener('pointerleave', reset)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      host.removeEventListener('pointermove', move)
+      host.removeEventListener('pointerleave', reset)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeLead && stageRef.current) stageRef.current.style.transform = ''
+  }, [activeLead])
+
   return (
     <section className={styles.section} aria-labelledby="lead-library-title">
       <div className={styles.headingWrap}>
@@ -358,7 +406,12 @@ export function LeadLibrary() {
         <p className={styles.instruction}>Move through the shelf. A few records are ready to open.</p>
       </div>
 
-      <div className={styles.libraryStage}>
+      <div ref={tiltHostRef} className={styles.libraryPerspective}>
+        <div
+          ref={stageRef}
+          className={styles.libraryStage}
+          data-modal-open={activeLead ? 'true' : 'false'}
+        >
         <div className={styles.shelfFrame} aria-label="Interactive lead intelligence library">
           <div className={styles.shelfInterior}>
             <span className={`${styles.divider} ${styles.dividerOne}`} aria-hidden />
@@ -500,6 +553,7 @@ export function LeadLibrary() {
             </div>
           </div>
         ) : null}
+        </div>
       </div>
 
       <Link href="/sign-in" className={styles.signIn}>

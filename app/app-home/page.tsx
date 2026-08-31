@@ -48,33 +48,43 @@ export default function LeadEnginePage() {
     <div className="leadengine-surface">
       <Nav surface="leadengine" variant="heroGlass" />
 
-      <LeadEngineHero />
+      <main className="leadengine-story">
+        <LeadEngineHero />
 
-      <CrmEnrichmentExperience />
+        <div className="leadengine-story-flow">
+          <div className="leadengine-story-panel leadengine-story-panel-immersive">
+            <CrmEnrichmentExperience />
+          </div>
 
-      <section className="bg-paper px-4 py-16 sm:py-20">
-        <div className="mx-auto max-w-5xl">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
-            Software access only
-          </p>
-          <h2 className="mt-4 max-w-3xl font-heading text-3xl uppercase leading-tight tracking-[-0.035em] [font-weight:var(--leadengine-heading-weight)] sm:text-4xl">
-            Research infrastructure, not an outreach service
-          </h2>
-          <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted [font-weight:var(--leadengine-copy-weight)] sm:text-lg">
-            Lead Engine extracts, enriches, de-duplicates, organizes, scores, and
-            exports B2B data. It does not send cold emails, automatically send
-            LinkedIn messages, perform outreach for customers, or include agency
-            or appointment-setting services. FastSpring payments on this application
-            purchase access to the software only.
-          </p>
+          <aside className="leadengine-story-note" aria-labelledby="software-access-title">
+            <p className="leadengine-story-kicker">Software access only</p>
+            <div>
+              <h2 id="software-access-title" className="leadengine-story-note-title">
+                Research infrastructure, not an outreach service
+              </h2>
+              <p className="leadengine-story-note-copy">
+                Lead Engine extracts, enriches, de-duplicates, organizes, scores, and
+                exports B2B data. It does not send cold emails, automatically send
+                LinkedIn messages, perform outreach for customers, or include agency
+                or appointment-setting services. FastSpring payments on this application
+                purchase access to the software only.
+              </p>
+            </div>
+          </aside>
+
+          <div className="leadengine-story-panel">
+            <DashboardPreview />
+          </div>
+
+          <div className="leadengine-story-panel">
+            <Pricing />
+          </div>
+
+          <div className="leadengine-story-panel leadengine-story-panel-dark">
+            <LeadLibrary />
+          </div>
         </div>
-      </section>
-
-      <DashboardPreview />
-
-      <Pricing />
-
-      <LeadLibrary />
+      </main>
 
       <Footer surface="leadengine" />
     </div>
