@@ -44,13 +44,24 @@ export default async function ContactsPage({
 
   const lastPage = Math.max(Math.ceil(result.total / result.pageSize), 1)
 
+  /*
+   * ⚠️ THE COUNT IS ESTIMATED ABOVE A THRESHOLD (see `listContacts`), and the
+   * response does not say which side of it we landed on. So anything large
+   * enough to plausibly be an estimate is shown as "about N" rather than as a
+   * precise-looking figure we cannot stand behind. Erring this way understates
+   * our precision on a mid-sized workspace, which is the safe direction: it
+   * never claims accuracy it does not have.
+   */
+  const formatTotal = (total: number) =>
+    total >= 1000 ? `about ${total.toLocaleString()}` : String(total)
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-[-0.02em] text-ink">Contacts</h2>
           <p className="mt-0.5 text-xs text-muted">
-            {result.total} {result.total === 1 ? 'contact' : 'contacts'}
+            {formatTotal(result.total)} {result.total === 1 ? 'contact' : 'contacts'}
             {scopedToSelf ? ' assigned to you' : ''}
             {search ? ` matching “${search}”` : ''}
           </p>

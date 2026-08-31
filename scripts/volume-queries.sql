@@ -62,6 +62,34 @@ from public.crm_contacts
 where workspace_id = '00000000-0000-0000-0000-0000000000aa'
   and deleted_at is null;
 
+\echo ''
+\echo '=== 3b. the same count in a MULTI-TENANT table (half the rows are ours) ==='
+explain (analyze, buffers, costs off)
+select count(*)
+from public.crm_contacts
+where workspace_id = '00000000-0000-0000-0000-0000000000ab'
+  and deleted_at is null;
+
+-- ---------------------------------------------------------------------------
+-- 3c. What `count: 'estimated'` would cost instead.
+--
+-- PostgREST's estimated count asks the PLANNER for a row estimate rather than
+-- counting. This measures both halves of whether that is a good trade: what
+-- the estimate COSTS, and how far off it is.
+-- ---------------------------------------------------------------------------
+\echo ''
+\echo '=== 3c. planner estimate: cost of the alternative ==='
+explain (analyze, buffers, costs on, timing off, summary on)
+select 1 from public.crm_contacts
+where workspace_id = '00000000-0000-0000-0000-0000000000aa'
+  and deleted_at is null;
+
+\echo ''
+\echo '=== 3c-ii. how ACCURATE that estimate is (estimated vs true) ==='
+select
+  (select reltuples::bigint from pg_class where relname = 'crm_contacts') as table_estimate,
+  (select count(*) from public.crm_contacts)                             as table_true;
+
 -- ---------------------------------------------------------------------------
 -- 4. Search — the trigram index from 0080
 -- ---------------------------------------------------------------------------

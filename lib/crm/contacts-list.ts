@@ -79,8 +79,28 @@ export async function listContacts(
 
   let query = db
     .from('crm_contacts')
+    /*
+     * ⚠️ `estimated`, NOT `exact` — M9 Phase 28, measured at 100k contacts.
+     *
+     * An exact count is a SECOND query that PostgREST runs alongside EVERY
+     * page request, and it is O(rows in the workspace): at 100,000 contacts it
+     * touched all 100,000 of them on every page load (18.8ms, 1,720 buffers
+     * locally — worse on Supabase over the network with a cold cache). Page 1
+     * itself costs 4 buffers, so the count was ~430x the cost of the data it
+     * accompanied.
+     *
+     * `estimated` asks the PLANNER instead, which is answered during planning
+     * without executing: 0.05ms, and measured 0.2% off at 100k (100,207 vs
+     * 100,000). Below PostgREST's threshold it still returns an exact count,
+     * so a small workspace is unaffected.
+     *
+     * The cost is real and accepted: at large volumes the last page number is
+     * approximate, so paging to the very end can land on an empty page or
+     * leave a few rows reachable only by search. Nobody pages to row 99,999 —
+     * they search, which is indexed.
+     */
     .select('id, full_name, job_title, owner_user_id, created_at, primary_company_id', {
-      count: 'exact',
+      count: 'estimated',
     })
     .eq('workspace_id', workspaceId)
     .is('deleted_at', null)

@@ -131,6 +131,18 @@ select
   true
 from public.crm_contacts;
 
+-- ⚠️ A SECOND WORKSPACE, so the count query below is measured under a
+-- realistic multi-tenant shape rather than one where every row in the table
+-- belongs to the workspace being counted. Without this a sequential scan looks
+-- like a planner failure when it is simply the right plan for "all of them".
+insert into public.workspaces (id, owner_user_id, name)
+  values ('00000000-0000-0000-0000-0000000000ab',
+          '00000000-0000-0000-0000-0000000000dd', 'Neighbour');
+insert into public.crm_contacts (workspace_id, full_name, created_at)
+select '00000000-0000-0000-0000-0000000000ab', 'Neighbour Person ' || g,
+       now() - (g || ' minutes')::interval
+from generate_series(1, $CONTACTS) g;
+
 analyze public.crm_contacts;
 analyze public.crm_contact_emails;
 SQL
