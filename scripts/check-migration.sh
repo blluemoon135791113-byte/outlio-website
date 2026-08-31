@@ -62,17 +62,49 @@ $$;
 create or replace function public.set_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at := now(); return new; end $$;
 create or replace function public.is_admin() returns boolean language sql stable as $$ select false $$;
+create type public.user_role as enum (
+  'registered_user', 'pending_user', 'approved_user',
+  'subscriber', 'admin', 'suspended_user');
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  email text, full_name text, company_name text, deleted_at timestamptz);
-create table public.plans (id uuid primary key default gen_random_uuid());
+  email text, full_name text, company_name text, deleted_at timestamptz,
+  role public.user_role not null default 'registered_user',
+  plan_id uuid);
+/*
+ * ⚠️ THE SCAFFOLD MUST MODEL WHAT THE EARLY MIGRATIONS CREATE, not just enough
+ * to make the CRM tables link. 0094 references `public.user_role`, `plans.limits`
+ * and `usage_counters` — all from 0001/0004/0015, which this harness does not
+ * replay — and without them it fails to apply here while working perfectly on
+ * the real database. A harness that reports a false failure gets ignored, which
+ * is worse than not having one.
+ */
+create table public.plans (
+  id uuid primary key default gen_random_uuid(),
+  key text,
+  name text,
+  limits jsonb not null default '{}'::jsonb);
+create table public.usage_counters (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  metric text not null,
+  period_start timestamptz not null,
+  period_end timestamptz not null,
+  count bigint not null default 0,
+  unique (user_id, metric, period_start));
+create table public.rate_limits (
+  bucket text not null,
+  subject text not null,
+  window_start timestamptz not null,
+  attempts int not null default 0,
+  blocked_until timestamptz,
+  primary key (bucket, subject, window_start));
 create table public.extraction_jobs (id uuid primary key default gen_random_uuid());
 create table public.extracted_leads (id uuid primary key default gen_random_uuid());
 create table public.companies (id uuid primary key default gen_random_uuid());
 SQL
 
 # Prerequisites, in order. Extend this list as the platform grows.
-for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting; do
+for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break
