@@ -7748,6 +7748,38 @@ export type Database = {
           },
         ]
       }
+      workspace_onboarding_state: {
+        Row: {
+          created_at: string
+          dismissed_at: string | null
+          dismissed_by: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_onboarding_state_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           created_at: string

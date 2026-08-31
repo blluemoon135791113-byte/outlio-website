@@ -8495,3 +8495,118 @@ gained the values they were already being passed.
 committed M8 item not built. It needs Google and Microsoft OAuth credentials
 that do not exist in this project — a credential problem, not a code one.
 Recorded as a deferred requirement, to be resolved under M9 criterion 4.
+
+## M9 — hardening, onboarding, and the deferred-requirements audit
+
+`tests/integration/security-suite.test.ts`, `scripts/volume-test.sh`,
+`scripts/volume-queries.sql`, `lib/onboarding/`, `components/onboarding/`,
+migration `0102_onboarding_state.sql`.
+
+### Criterion 1 — the pen-style suite ✅ 39/39
+
+It uses the **anon client, not the service role**. A suite written with the
+service role passes no matter how broken RLS is, because the service role
+bypasses it entirely — which makes a security suite worse than none, since it
+certifies an isolation nobody checked.
+
+Three **positive controls** keep the rest honest. Every negative assertion is
+"Bob sees nothing", which passes equally well if Bob is not signed in, or the
+client is misconfigured, or RLS denies everyone everything. So the suite first
+proves Bob CAN read his own workspace and Alice CAN read the very contact and
+mailbox row Bob cannot.
+
+The secret tests run as **Alice, the legitimate owner** — not as Bob. That a
+stranger cannot read a secret is the easy half; the claim these tables make is
+that *nobody* reads them over the API, including the person they belong to.
+
+Cross-tenant **writes** are covered as well as reads, including the escalation
+that would make every other check moot: inserting your own membership row into
+someone else's workspace.
+
+### Criterion 2 — volume ✅, and it found a real problem
+
+At 100k contacts, `count: 'exact'` — a second query PostgREST runs alongside
+**every** page request — touched all 100,000 rows on every page load: 18.8ms
+and 1,720 buffers. Page 1 itself costs 4 buffers, so **the count was ~430× the
+cost of the data it accompanied**.
+
+Checked it was not an artifact of seeding one workspace, since a sequential
+scan over a table where every row is yours is simply the right plan. It was
+not: with two workspaces the plan changes to a bitmap index scan and the work
+is identical.
+
+`estimated` asks the planner instead, answered during planning without
+executing: 0.05ms, measured 0.2% off (100,207 vs 100,000). Below PostgREST's
+threshold it still returns an exact count. **Accepted cost:** at large volumes
+the last page number is approximate, so paging to the very end can land on an
+empty page. The UI now says "about 100,000" rather than a precise-looking
+figure it cannot stand behind.
+
+Everything else met budget: contacts page 1 is an index scan at 4 buffers;
+name and email search both use the 0080 trigram indexes; the inbox keyset page
+is flat at 2 buffers at any depth, against OFFSET page 400 which reads 10,025
+rows to return 25.
+
+⚠️ **What this does and does not prove.** It measures query PLANS — index
+usage, bounded pagination, no degradation to sequential scans — which are
+properties of the schema and hold anywhere. It does **not** measure wall-clock
+latency on Supabase hardware over the network. The live project was
+deliberately not seeded: putting 100k rows into the database the app runs on,
+to see how slow it gets, is an outage with a stopwatch.
+
+### Criterion 3 — first run ✅ 11/11 (checklist), empty states audited
+
+Progress is **derived, never stored**. A `completed_steps` array rots on
+contact: a workspace that imported contacts and then deleted them still reads
+"contacts: done", and nothing can say whether the flag or the data is right.
+The test that matters most runs it backwards — delete the contacts and the
+tick disappears, which a stored flag could never do. The only stored state is
+dismissal, which genuinely cannot be derived.
+
+Reports empty states were audited and already explain what activity is needed
+("A funnel appears once an extraction or an import has run"), so they were
+left alone rather than rewritten.
+
+⚠️ A test assertion here was **wrong and the code was right**: it demanded an
+empty checklist when the plan excludes every module, but `workspace.member.manage`
+is declared `module: null` deliberately — adding people to a workspace is not a
+CRM or email feature. Satisfying that test would have meant breaking a correct
+distinction.
+
+### Criterion 4 — the deferred-requirements audit
+
+| Item | What it is | Status |
+|---|---|---|
+| D35 | STARTTLS required, not merely attempted | ✅ implemented |
+| DR15 | Domain-event publisher | ✅ implemented — `publishEvent`, M8 Phase 25.5 |
+| DR16 | Collision-guard UI | ✅ implemented — contact detail + `ContactPanels` |
+| KI10 | RLS harness stubbed `auth.uid()` to NULL | ✅ fixed |
+| DR1 | Teams: membership, team-scoped visibility, rollups | ⏳ re-deferred — `team_id_at_event` is captured on every activity, so history is being recorded for a feature not yet built. No backfill will be needed. |
+| DR5 / KI11 | Lead Engine rows and credits stay `user_id`-scoped while everything else is workspace-scoped | ⛔ **needs a human decision.** Moving credits to the workspace changes what a customer is buying. |
+| DR6 | Membership changes are not audited | ⏳ re-deferred — `admin_audit_logs` covers platform admin only. |
+| DR9 | No ownership transfer; a sole owner cannot leave | ⏳ re-deferred |
+| DR12 | CSV import UI (mapping, validation report, undo) | ⏳ re-deferred — engine complete and tested (`lib/crm/csv-import.ts`), screens not built |
+| DR14 | Duplicate Center screens | ⏳ re-deferred — engine complete (`lib/crm/duplicates.ts`), screens not built |
+| DR17 | Record-level export as a background job | ⏳ re-deferred — report exports are synchronous and bounded by team size |
+| DR18 | XLSX export | ⛔ **needs a human decision** — requires adding a spreadsheet dependency |
+| DR19 | SSRF guard is hostname-shape only; a hostname that RESOLVES to a private address still passes | ⏳ re-deferred — closing it needs DNS pinned to the connection. Same gap in the mail endpoints. |
+| KI7 | The signup IP gate rate-limits its own test runner | ⏳ known, pre-existing |
+| KI8 | `supabase db push` unsafe — would replay migrations of unverified idempotency | ⏳ known constraint; migrations are applied by hand |
+| KI9 | Several screens have never been seen rendered | ⛔ **needs the human** — signing in requires credentials the agent must not handle |
+| Q6 | No plan sets `workspace_member_limit > 1`, so team invitations are refused everywhere | ⛔ **needs a human decision** — pricing, not code |
+
+⚠️ **Also surfaced by this audit, and not previously tracked as a deferral:**
+`CrmNav` names four routes in the M9 plan that do not exist — `/crm/companies`,
+`/crm/tasks`, `/crm/lists`, `/crm/duplicates`. Every one has its table and, in
+the duplicates case, its engine. The nav correctly omits them rather than
+linking to nothing, so this is missing surface rather than a broken link — but
+it is a larger gap than the Ledger recorded, and it is why M9 Phase 27 (UI
+refinement) cannot be called done.
+
+### Verification
+
+- 2,207 unit tests; security suite 39/39; inbox 10/10; notify 8/8;
+  onboarding 11/11. `tsc --noEmit` 0 errors; lint 0 errors.
+- Migration 0102 rehearsed and smoke-tested, including proof that the shared
+  `updated_at` trigger fires — by backdating first, since `now()` is the
+  transaction timestamp and a naive comparison would pass either way.

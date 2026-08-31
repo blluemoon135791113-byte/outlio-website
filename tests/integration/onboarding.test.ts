@@ -94,12 +94,31 @@ describeIf('steps are gated by the SAME policy layer as everything else', () => 
     expect(ids).toContain('mailbox')
   }, 60_000)
 
-  it('shows nothing at all when the plan excludes every module', async () => {
+  it('drops every module-gated step when the plan excludes the modules', async () => {
     const run = await loadFirstRun(workspaceId, { role: 'owner', modules: new Set<Module>() })
-    expect(run.steps).toEqual([])
-    // ...and an empty checklist must not render as a stuck "0 of 0".
-    expect(shouldShowFirstRun(run)).toBe(false)
+    const ids = run.steps.map((s) => s.id)
+
+    expect(ids).not.toContain('contacts')
+    expect(ids).not.toContain('pipeline')
+    expect(ids).not.toContain('mailbox')
+    expect(ids).not.toContain('campaign')
+
+    /*
+     * ⚠️ "INVITE YOUR TEAM" SURVIVES, and should. `workspace.member.manage` is
+     * declared `module: null` deliberately: adding people to a workspace is not
+     * a CRM or email feature, so a plan that includes neither still has a
+     * workspace worth inviting people to. An earlier version of this test
+     * asserted an empty list, which would have been an argument for breaking
+     * that distinction to satisfy the test.
+     */
+    expect(ids).toEqual(['team'])
   }, 60_000)
+
+  it('does not render a stuck "0 of 0" when there is nothing to do', async () => {
+    // A checklist with no steps must not show as permanently unfinished.
+    const empty = { steps: [], completed: 0, total: 0, dismissed: false }
+    expect(shouldShowFirstRun(empty)).toBe(false)
+  })
 })
 
 describeIf('progress is DERIVED, not remembered', () => {
