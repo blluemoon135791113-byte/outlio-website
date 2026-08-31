@@ -296,63 +296,74 @@ describe('CRITERION 4 — a suppressed recipient is never sent to', () => {
     'invalid_address',
   ] as const
 
-  it.each(reasons)('never delivers to an address suppressed as %s', async (reason, ...rest) => {
-    const ctx = rest[0] as unknown as { skip: () => void }
-    if (!ready()) return ctx.skip()
+  /*
+   * ⚠️ A PLAIN LOOP, NOT `it.each`. Every other test here skips by
+   * destructuring `{ skip }` from the test context, which Vitest passes as the
+   * first argument. `it.each` spreads the CASE VALUES into that position and
+   * appends no context — so the context was `undefined`, and these five tests
+   * threw `Cannot read properties of undefined` instead of skipping whenever
+   * GreenMail was not running. A suppression test that crashes rather than
+   * skipping is the last one you want to be noisy for the wrong reason: the
+   * failure it reports has nothing to do with suppression.
+   */
+  for (const reason of reasons) {
+    it(`never delivers to an address suppressed as ${reason}`, async ({ skip }) => {
+      if (!ready()) return skip()
 
-    const subject = `Suppressed ${reason} ${RUN}`
-    const address = `prospect@buyer.example`
+      const subject = `Suppressed ${reason} ${RUN}`
+      const address = `prospect@buyer.example`
 
-    await suppressEmail({ workspaceId, email: address, reason })
+      await suppressEmail({ workspaceId, email: address, reason })
 
-    // Enqueue refuses outright...
-    const attempt = await enqueueEmail({
-      workspaceId,
-      accountId,
-      toEmail: address,
-      subject,
-      bodyText: 'Should never arrive.',
-      idempotencyKey: `supp-${reason}-${RUN}`,
-    })
-    expect(attempt.queued).toBe(false)
-    if (!attempt.queued) expect(attempt.reason).toBe('suppressed')
+      // Enqueue refuses outright...
+      const attempt = await enqueueEmail({
+        workspaceId,
+        accountId,
+        toEmail: address,
+        subject,
+        bodyText: 'Should never arrive.',
+        idempotencyKey: `supp-${reason}-${RUN}`,
+      })
+      expect(attempt.queued).toBe(false)
+      if (!attempt.queued) expect(attempt.reason).toBe('suppressed')
 
-    /*
-     * ...and so does the CLAIM, which is the check that matters. A message
-     * queued BEFORE the suppression existed must still not go out — that is
-     * the race the in-claim check closes.
-     */
-    const db = adminClient()
-    await db.from('email_suppressions').delete().eq('workspace_id', workspaceId)
+      /*
+       * ...and so does the CLAIM, which is the check that matters. A message
+       * queued BEFORE the suppression existed must still not go out — that is
+       * the race the in-claim check closes.
+       */
+      const db = adminClient()
+      await db.from('email_suppressions').delete().eq('workspace_id', workspaceId)
 
-    await enqueueEmail({
-      workspaceId,
-      accountId,
-      toEmail: address,
-      subject,
-      bodyText: 'Queued before the unsubscribe.',
-      idempotencyKey: `supp-race-${reason}-${RUN}`,
-    })
+      await enqueueEmail({
+        workspaceId,
+        accountId,
+        toEmail: address,
+        subject,
+        bodyText: 'Queued before the unsubscribe.',
+        idempotencyKey: `supp-race-${reason}-${RUN}`,
+      })
 
-    // The unsubscribe lands after the message is already in the queue.
-    await suppressEmail({ workspaceId, email: address, reason })
+      // The unsubscribe lands after the message is already in the queue.
+      await suppressEmail({ workspaceId, email: address, reason })
 
-    await runSendWorker(`worker-supp-${RUN}`)
+      await runSendWorker(`worker-supp-${RUN}`)
 
-    expect(await inboxCount(subject)).toBe(0)
+      expect(await inboxCount(subject)).toBe(0)
 
-    const { data: row } = await db
-      .from('email_messages')
-      .select('status, suppression_reason')
-      .eq('workspace_id', workspaceId)
-      .eq('idempotency_key', `supp-race-${reason}-${RUN}`)
-      .single()
+      const { data: row } = await db
+        .from('email_messages')
+        .select('status, suppression_reason')
+        .eq('workspace_id', workspaceId)
+        .eq('idempotency_key', `supp-race-${reason}-${RUN}`)
+        .single()
 
-    expect(row!.status).toBe('suppressed')
-    expect(row!.suppression_reason).toBe(reason)
+      expect(row!.status).toBe('suppressed')
+      expect(row!.suppression_reason).toBe(reason)
 
-    await db.from('email_suppressions').delete().eq('workspace_id', workspaceId)
-  }, 60_000)
+      await db.from('email_suppressions').delete().eq('workspace_id', workspaceId)
+    }, 60_000)
+  }
 
   it('keeps the FIRST suppression reason when a second arrives', async ({ skip }) => {
     if (!ready()) return skip()

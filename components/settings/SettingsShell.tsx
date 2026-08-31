@@ -31,6 +31,7 @@ const SECTIONS = [
   { href: '/dashboard/settings/billing', label: 'Subscription and billing' },
   { href: '/dashboard/settings/integrations', label: 'Integrations' },
   { href: '/dashboard/settings/extension', label: 'Browser extension' },
+  { href: '/dashboard/settings/notifications', label: 'Notifications' },
   { href: '/dashboard/settings/developers', label: 'Developers' },
   { href: '/dashboard/settings/delete', label: 'Delete account' },
 ] as const
