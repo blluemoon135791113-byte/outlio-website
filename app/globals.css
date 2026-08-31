@@ -42,7 +42,10 @@
 
   --cream: var(--ivory);
   --ink: #171715;
-  --muted: #696962;
+  /* Supporting copy needs to stay visibly secondary without becoming faint.
+     This warm graphite keeps the hierarchy while remaining readable at the
+     small sizes used across marketing, pricing, and product surfaces. */
+  --muted: #565650;
   /* ── Brand palette ────────────────────────────────────────────────────────
      The four colours the product is actually designed in. They existed only as
      rgb triples inside the Hubble block, where three of them were unreachable
@@ -327,10 +330,9 @@ h6 {
   --selected: #3f382d;
   --selected-soft: #efeade;
 
-  /* ⚠️ DARKER THAN THE MARKETING MUTED, DELIBERATELY.
-     The global #696962 lands at roughly 5:1 on this ivory — technically AA,
-     but this surface carries counts and labels at 11-12px, where "technically
-     passing" reads as washed out. #55554d is about 7:1.
+  /* ⚠️ SLIGHTLY DARKER THAN THE MARKETING MUTED, DELIBERATELY.
+     Product surfaces carry counts and labels at 11-12px, so their supporting
+     copy gets the strongest warm graphite in the system. #55554d is about 7:1.
 
      Overridden at the SCOPE, not per page, so every authenticated surface
      moves together and the analytics screen cannot drift into its own grey. */
@@ -1595,6 +1597,11 @@ details[open] .faq-mark {
      (`var(--ease-out-ui, ease-out)`); declaring it once for this surface fixes
      the whole page instead of one rule at a time. */
   --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* Post-hero type roles share one optical weight across every section. The
+     hero intentionally keeps its lighter cinematic treatment. */
+  --leadengine-heading-weight: 560;
+  --leadengine-copy-weight: 500;
 
   --coral: #d2803f;
   --coral-deep: #8f4f1a;

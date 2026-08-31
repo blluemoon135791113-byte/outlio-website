@@ -293,7 +293,7 @@ function UsageCard({
       }
     >
       <div className="flex items-start justify-between gap-2">
-        <p className={featured ? 'text-xs font-medium text-white/75' : 'text-xs font-medium text-muted'}>
+        <p className={featured ? 'text-xs font-medium text-white/84' : 'text-xs font-medium text-muted'}>
           {label}
         </p>
         {/*
@@ -314,7 +314,7 @@ function UsageCard({
             style={{ width: unknown ? '0%' : percent === null ? '28%' : `${Math.max(percent, 3)}%` }}
           />
         </div>
-        <p className={featured ? 'mt-2 text-[11px] text-white/70' : 'mt-2 text-[11px] text-muted'}>
+        <p className={featured ? 'mt-2 text-[11px] text-white/80' : 'mt-2 text-[11px] text-muted'}>
           {unknown
             ? 'Balance unavailable — refresh to retry'
             : limit === null

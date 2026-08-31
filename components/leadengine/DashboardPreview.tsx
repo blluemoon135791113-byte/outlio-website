@@ -17,10 +17,10 @@ export function DashboardPreview() {
           <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-accent">
             Inside Lead Engine
           </p>
-          <h2 className="mt-3 text-3xl font-bold uppercase leading-tight tracking-tight sm:text-4xl">
+          <h2 className="mt-3 font-heading text-3xl uppercase leading-tight tracking-[-0.035em] [font-weight:var(--leadengine-heading-weight)] sm:text-4xl">
             Everything in one workspace
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted">
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted [font-weight:var(--leadengine-copy-weight)]">
             See your credits, extraction activity, files, account access, and subscription the moment you sign in.
           </p>
         </div>
@@ -51,7 +51,7 @@ export function DashboardPreview() {
                 <span className="font-heading text-sm font-semibold tracking-tight">Outlio</span>
               </div>
               <div className="px-3 py-7">
-                <p className="px-3 text-[9px] font-semibold uppercase tracking-[0.17em] text-muted/65">Workspace</p>
+                <p className="px-3 text-[9px] font-semibold uppercase tracking-[0.17em] text-muted/80">Workspace</p>
                 <nav aria-label="Dashboard preview" className="mt-3 space-y-1 text-[12px]">
                   <PreviewNav active icon="⊞">Overview</PreviewNav>
                   <PreviewNav icon="↓">New extraction</PreviewNav>
@@ -151,7 +151,7 @@ function PreviewNav({ children, icon, active = false }: { children: React.ReactN
 }
 
 function PreviewMetric({ label, value, note, featured = false, width, className = '' }: { label: string; value: string; note: string; featured?: boolean; width: string; className?: string }) {
-  return <article className={`${className} min-h-[135px] rounded-xl border p-3.5 ${featured ? 'product-gradient border-accent/20 text-white shadow-[var(--shadow-md)]' : 'border-border bg-panel shadow-[var(--shadow-sm)]'}`}><p className={featured ? 'text-[9px] font-medium text-white/75' : 'text-[9px] font-medium text-muted'}>{label}</p><p className="mt-4 font-heading text-2xl font-semibold leading-none tracking-[-0.04em]">{value}</p><div className={featured ? 'mt-5 h-1 rounded-full bg-white/25' : 'mt-5 h-1 rounded-full bg-surface-muted'}><div className={featured ? 'h-full rounded-full bg-white' : 'h-full rounded-full bg-accent'} style={{ width }} /></div><p className={featured ? 'mt-2 text-[8px] text-white/70' : 'mt-2 text-[8px] text-muted'}>{note}</p></article>
+  return <article className={`${className} min-h-[135px] rounded-xl border p-3.5 ${featured ? 'product-gradient border-accent/20 text-white shadow-[var(--shadow-md)]' : 'border-border bg-panel shadow-[var(--shadow-sm)]'}`}><p className={featured ? 'text-[9px] font-medium text-white/84' : 'text-[9px] font-medium text-muted'}>{label}</p><p className="mt-4 font-heading text-2xl font-semibold leading-none tracking-[-0.04em]">{value}</p><div className={featured ? 'mt-5 h-1 rounded-full bg-white/25' : 'mt-5 h-1 rounded-full bg-surface-muted'}><div className={featured ? 'h-full rounded-full bg-white' : 'h-full rounded-full bg-accent'} style={{ width }} /></div><p className={featured ? 'mt-2 text-[8px] text-white/80' : 'mt-2 text-[8px] text-muted'}>{note}</p></article>
 }
 
 function PreviewRow({ label, value }: { label: string; value: string }) {

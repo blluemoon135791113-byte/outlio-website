@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import styles from './LeadLibrary.module.css'
@@ -15,6 +16,7 @@ type LeadInsight = {
   phone: string
   linkedin: string
   website: string
+  portraitUrl: string
   summary: string
 }
 
@@ -36,6 +38,7 @@ const LEADS: LeadInsight[] = [
     phone: '+1 (415) 555-0184',
     linkedin: 'linkedin.com/in/maya-chen',
     website: 'northstarlabs.example',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/12.jpg',
     summary:
       'Maya leads revenue operations for a growing analytics company. Recent hiring across sales operations and enablement suggests the team is standardizing its pipeline systems and may value cleaner, source-backed account data.',
   },
@@ -49,6 +52,7 @@ const LEADS: LeadInsight[] = [
     phone: '+44 20 0000 0184',
     linkedin: 'linkedin.com/in/elias-morgan',
     website: 'quarryai.example',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/18.jpg',
     summary:
       'Elias owns strategic partnerships at an applied-AI platform expanding into Europe. Public launch activity points to a need for precise partner mapping and faster identification of technical decision-makers.',
   },
@@ -62,6 +66,7 @@ const LEADS: LeadInsight[] = [
     phone: '+65 0000 9074',
     linkedin: 'linkedin.com/in/priya-raman',
     website: 'atlasgrid.example',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/27.jpg',
     summary:
       'Priya runs growth for a distributed infrastructure business. The company is entering new APAC markets, making verified regional contacts, expansion signals, and locally relevant personalization especially useful.',
   },
@@ -75,8 +80,93 @@ const LEADS: LeadInsight[] = [
     phone: '+1 (646) 555-0127',
     linkedin: 'linkedin.com/in/noah-williams',
     website: 'sablesystems.example',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/33.jpg',
     summary:
       'Noah oversees commercial strategy at a security software company preparing its next enterprise push. New channel roles and product launches indicate active territory planning and a likely appetite for richer account intelligence.',
+  },
+  {
+    id: 'sofia-patel',
+    initials: 'SP',
+    name: 'Sofia Patel',
+    role: 'VP, Demand Generation',
+    company: 'Meridian Cloud',
+    email: 'sofia@meridiancloud.example',
+    phone: '+1 (312) 555-0168',
+    linkedin: 'linkedin.com/in/sofia-patel',
+    website: 'meridiancloud.example',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/41.jpg',
+    summary:
+      'Sofia leads global demand generation for a cloud operations platform. A growing field-marketing team and new enterprise campaigns suggest an active need for cleaner account segmentation and higher-confidence contact data.',
+  },
+  {
+    id: 'luca-bennett',
+    initials: 'LB',
+    name: 'Luca Bennett',
+    role: 'Director, Enterprise Sales',
+    company: 'Evernorth Systems',
+    email: 'luca.bennett@evernorth.example',
+    phone: '+44 20 0000 0249',
+    linkedin: 'linkedin.com/in/luca-bennett',
+    website: 'evernorth.example',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/46.jpg',
+    summary:
+      'Luca manages enterprise sales for a workflow automation company. Recent expansion into regulated industries points to longer buying committees and a stronger need for verified stakeholder mapping.',
+  },
+  {
+    id: 'amina-yusuf',
+    initials: 'AY',
+    name: 'Amina Yusuf',
+    role: 'Head of Partnerships',
+    company: 'Cinder Labs',
+    email: 'amina@cinderlabs.example',
+    phone: '+971 4 000 0173',
+    linkedin: 'linkedin.com/in/amina-yusuf',
+    website: 'cinderlabs.example',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/55.jpg',
+    summary:
+      'Amina is building the partner ecosystem for an infrastructure startup. New integration announcements indicate an opportunity to identify adjacent platforms, technical champions, and regional channel partners.',
+  },
+  {
+    id: 'theo-laurent',
+    initials: 'TL',
+    name: 'Theo Laurent',
+    role: 'Chief Operating Officer',
+    company: 'VantageWorks',
+    email: 'theo@vantageworks.example',
+    phone: '+33 1 00 00 18 62',
+    linkedin: 'linkedin.com/in/theo-laurent',
+    website: 'vantageworks.example',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/61.jpg',
+    summary:
+      'Theo oversees operations at a distributed professional-services platform. Multi-market hiring and new delivery partnerships signal a priority around repeatable go-to-market processes and reliable account research.',
+  },
+  {
+    id: 'elena-rossi',
+    initials: 'ER',
+    name: 'Elena Rossi',
+    role: 'VP, Go-to-Market',
+    company: 'Fluxera',
+    email: 'elena.rossi@fluxera.example',
+    phone: '+39 02 0000 5194',
+    linkedin: 'linkedin.com/in/elena-rossi',
+    website: 'fluxera.example',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/68.jpg',
+    summary:
+      'Elena owns go-to-market strategy for a product analytics business. Recent leadership hires and packaging changes suggest active positioning work and a need for precise competitive and buyer intelligence.',
+  },
+  {
+    id: 'marcus-lee',
+    initials: 'ML',
+    name: 'Marcus Lee',
+    role: 'Head of Revenue',
+    company: 'CanopyStack',
+    email: 'marcus@canopystack.example',
+    phone: '+61 2 0000 7185',
+    linkedin: 'linkedin.com/in/marcus-lee',
+    website: 'canopystack.example',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/74.jpg',
+    summary:
+      'Marcus leads revenue for a developer tooling company expanding across APAC. New account-executive roles and solution partnerships point to active territory planning and demand for better buying-signal coverage.',
   },
 ]
 
@@ -92,12 +182,12 @@ const BOOK_ROWS: Book[][] = [
     { color: '#d2694b', height: 79, tilt: -7 },
     { color: '#efe5d7', height: 88, tilt: -8 },
     { color: '#a5b9b1', height: 70 },
-    { color: '#d98b69', height: 82, tilt: 9 },
+    { color: '#d98b69', height: 82, tilt: 9, leadId: 'sofia-patel' },
     { color: '#e4b172', height: 75 },
   ],
   [
     { color: '#b2c5bf', height: 65 },
-    { color: '#eee5d8', height: 53, tilt: -8 },
+    { color: '#eee5d8', height: 53, tilt: -8, leadId: 'luca-bennett' },
     { color: '#e8ad68', height: 68 },
     { color: '#cf7c5e', height: 60, tilt: 7 },
     { color: '#ded5c8', height: 73 },
@@ -116,7 +206,7 @@ const BOOK_ROWS: Book[][] = [
     { color: '#df8c66', height: 68, tilt: -4 },
     { color: '#ece1d2', height: 55, tilt: 10 },
     { color: '#9db6ae', height: 66 },
-    { color: '#db7d60', height: 73, tilt: -8 },
+    { color: '#db7d60', height: 73, tilt: -8, leadId: 'amina-yusuf' },
     { color: '#e7ad65', height: 61, tilt: 9 },
   ],
   [
@@ -129,24 +219,68 @@ const BOOK_ROWS: Book[][] = [
     { color: '#e09b70', height: 65, tilt: -10 },
     { color: '#9fb5ae', height: 71 },
     { color: '#eddfcc', height: 67, tilt: 8 },
-    { color: '#d37d60', height: 74 },
+    { color: '#d37d60', height: 74, leadId: 'theo-laurent' },
     { color: '#e6b977', height: 69 },
   ],
   [
     { color: '#e5bd89', height: 76 },
     { color: '#d9c9ba', height: 63 },
     { color: '#a7bbb5', height: 70 },
-    { color: '#d67452', height: 84 },
+    { color: '#d67452', height: 84, leadId: 'elena-rossi' },
     { color: '#edc98f', height: 66, tilt: 12 },
     { color: '#e9dfd2', height: 72 },
     { color: '#cf8062', height: 62 },
     { color: '#9db2ab', height: 78 },
     { color: '#e4a96f', height: 69, tilt: -10 },
-    { color: '#eee4d6', height: 75 },
+    { color: '#eee4d6', height: 75, leadId: 'marcus-lee' },
     { color: '#d78064', height: 67 },
     { color: '#b0c1bb', height: 80 },
   ],
 ]
+
+const ROW_BOOK_TARGETS = [27, 27, 27, 27, 27]
+
+const DENSE_BOOK_ROWS: Book[][] = BOOK_ROWS.map((row, rowIndex) => {
+  const target = ROW_BOOK_TARGETS[rowIndex] ?? row.length
+  const decorativeBooks = row.filter((book) => !book.leadId)
+  const originalSlots = new Set(
+    row.map((_, bookIndex) => Math.round((bookIndex * (target - 1)) / Math.max(row.length - 1, 1))),
+  )
+  let originalIndex = 0
+  let decorativeIndex = 0
+
+  return Array.from({ length: target }, (_, slotIndex) => {
+    if (originalSlots.has(slotIndex) && originalIndex < row.length) {
+      const book = row[originalIndex]
+      originalIndex += 1
+      return book
+    }
+
+    const source = decorativeBooks[(decorativeIndex * 2 + rowIndex) % decorativeBooks.length]
+    const heightOffset = ((decorativeIndex % 3) - 1) * 4
+    const tilt = decorativeIndex % 4 === 0 ? -4 : decorativeIndex % 5 === 0 ? 5 : 0
+    decorativeIndex += 1
+
+    return {
+      color: source.color,
+      height: Math.max(52, Math.min(88, source.height + heightOffset)),
+      tilt,
+    }
+  })
+})
+
+const BOOK_BAYS = DENSE_BOOK_ROWS.map((row) => {
+  const minimumBaySize = Math.floor(row.length / 3)
+  const remainder = row.length % 3
+  let cursor = 0
+
+  return Array.from({ length: 3 }, (_, bayIndex) => {
+    const baySize = minimumBaySize + (bayIndex < remainder ? 1 : 0)
+    const bay = row.slice(cursor, cursor + baySize)
+    cursor += baySize
+    return bay
+  })
+})
 
 const leadById = new Map(LEADS.map((lead) => [lead.id, lead]))
 
@@ -230,46 +364,50 @@ export function LeadLibrary() {
             <span className={`${styles.divider} ${styles.dividerOne}`} aria-hidden />
             <span className={`${styles.divider} ${styles.dividerTwo}`} aria-hidden />
 
-            {BOOK_ROWS.map((row, rowIndex) => (
+            {BOOK_BAYS.map((row, rowIndex) => (
               <div className={styles.shelfRow} key={`row-${rowIndex}`}>
-                <div className={styles.books}>
-                  {row.map((book, bookIndex) => {
-                    const lead = book.leadId ? leadById.get(book.leadId) : undefined
-                    const bookStyle = {
-                      '--book-color': book.color,
-                      '--book-height': `${book.height}%`,
-                      '--book-tilt': `${book.tilt ?? 0}deg`,
-                    } as CSSProperties
+                {row.map((bay, bayIndex) => (
+                  <div className={styles.shelfBay} key={`bay-${rowIndex}-${bayIndex}`}>
+                    <div className={styles.books}>
+                      {bay.map((book, bookIndex) => {
+                        const lead = book.leadId ? leadById.get(book.leadId) : undefined
+                        const bookStyle = {
+                          '--book-color': book.color,
+                          '--book-height': `${book.height}%`,
+                          '--book-tilt': `${Math.max(-7, Math.min(7, book.tilt ?? 0))}deg`,
+                        } as CSSProperties
 
-                    if (!lead) {
-                      return (
-                        <span
-                          aria-hidden
-                          className={styles.book}
-                          key={`book-${rowIndex}-${bookIndex}`}
-                          style={bookStyle}
-                        />
-                      )
-                    }
+                        if (!lead) {
+                          return (
+                            <span
+                              aria-hidden
+                              className={styles.book}
+                              key={`book-${rowIndex}-${bayIndex}-${bookIndex}`}
+                              style={bookStyle}
+                            />
+                          )
+                        }
 
-                    return (
-                      <button
-                        type="button"
-                        className={`${styles.book} ${styles.interactiveBook}`}
-                        key={lead.id}
-                        style={bookStyle}
-                        aria-label={`Open lead insight for ${lead.name}`}
-                        aria-haspopup="dialog"
-                        onClick={(event) => {
-                          lastTriggerRef.current = event.currentTarget
-                          setActiveLead(lead)
-                        }}
-                      >
-                        <span>{lead.initials}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+                        return (
+                          <button
+                            type="button"
+                            className={`${styles.book} ${styles.interactiveBook}`}
+                            key={lead.id}
+                            style={bookStyle}
+                            aria-label={`Open lead insight for ${lead.name}`}
+                            aria-haspopup="dialog"
+                            onClick={(event) => {
+                              lastTriggerRef.current = event.currentTarget
+                              setActiveLead(lead)
+                            }}
+                          >
+                            <span>{lead.initials}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
@@ -290,6 +428,12 @@ export function LeadLibrary() {
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) closeLead()
             }}
+            onWheel={(event) => {
+              if (event.target !== event.currentTarget) return
+
+              event.preventDefault()
+              window.scrollBy({ left: event.deltaX, top: event.deltaY })
+            }}
           >
             <div
               ref={dialogRef}
@@ -298,13 +442,24 @@ export function LeadLibrary() {
               aria-labelledby="lead-insight-name"
               aria-describedby="lead-insight-summary"
               className={styles.modal}
+              onWheel={(event) => event.stopPropagation()}
             >
               <button ref={closeButtonRef} type="button" onClick={closeLead} className={styles.closeButton} aria-label="Close lead insight">
                 <span aria-hidden>×</span>
               </button>
 
               <div className={styles.profileHeader}>
-                <div className={styles.avatar} aria-hidden>{activeLead.initials}</div>
+                <div className={styles.avatar} aria-hidden>
+                  <span className={styles.avatarFallback}>{activeLead.initials}</span>
+                  <Image
+                    src={activeLead.portraitUrl}
+                    alt=""
+                    width={256}
+                    height={256}
+                    sizes="(max-width: 640px) 77px, 117px"
+                    className={styles.avatarImage}
+                  />
+                </div>
                 <div className={styles.profileCopy}>
                   <p className={styles.modalEyebrow}>Synthetic lead insight</p>
                   <h3 id="lead-insight-name">{activeLead.name}</h3>

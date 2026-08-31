@@ -172,7 +172,7 @@ export default async function AdminPage() {
 function AdminMetric({ label, value, featured = false }: { label: string; value: number; featured?: boolean }) {
   return (
     <article className={featured ? 'rounded-[var(--radius-lg)] border border-accent bg-accent p-4 text-white shadow-[var(--shadow-md)]' : 'rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)]'}>
-      <p className={featured ? 'text-xs font-medium text-white/75' : 'text-xs font-medium text-muted'}>{label}</p>
+      <p className={featured ? 'text-xs font-medium text-white/84' : 'text-xs font-medium text-muted'}>{label}</p>
       <p className="mt-3 font-heading text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums">
         {value.toLocaleString()}
       </p>

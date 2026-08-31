@@ -507,9 +507,9 @@ function CaughtUp({ latestJob }: { latestJob: DashboardJob | null }) {
 function MetricCard({ label, value, detail, featured = false }: { label: string; value: number | null; detail: string; featured?: boolean }) {
   return (
     <div className={featured ? 'min-h-32 rounded-[var(--radius-clay)] bg-accent p-4 text-white shadow-[var(--neo-shadow)]' : 'clay min-h-32 p-4'}>
-      <p className={featured ? 'text-xs font-medium text-white/75' : 'text-xs font-medium text-muted'}>{label}</p>
+      <p className={featured ? 'text-xs font-medium text-white/84' : 'text-xs font-medium text-muted'}>{label}</p>
       <p className="mt-4 font-heading text-[28px] font-semibold leading-none tabular-nums tracking-[-0.04em]">{value === null ? '—' : value.toLocaleString()}</p>
-      <p className={featured ? 'mt-3 text-xs text-white/70' : 'mt-3 text-xs text-muted'}>{detail}</p>
+      <p className={featured ? 'mt-3 text-xs text-white/80' : 'mt-3 text-xs text-muted'}>{detail}</p>
     </div>
   )
 }

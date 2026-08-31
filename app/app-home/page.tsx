@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 
 import Footer from '@/app/components/Footer'
 import Nav from '@/app/components/Nav'
+import { CrmEnrichmentExperience } from '@/components/leadengine/CrmEnrichmentExperience'
 import { DashboardPreview } from '@/components/leadengine/DashboardPreview'
 import { LeadEngineHero } from '@/components/leadengine/LeadEngineHero'
 import { LeadLibrary } from '@/components/leadengine/LeadLibrary'
@@ -49,15 +50,17 @@ export default function LeadEnginePage() {
 
       <LeadEngineHero />
 
+      <CrmEnrichmentExperience />
+
       <section className="bg-paper px-4 py-16 sm:py-20">
         <div className="mx-auto max-w-5xl">
           <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
             Software access only
           </p>
-          <h2 className="mt-4 max-w-3xl text-3xl font-bold uppercase leading-tight tracking-tight sm:text-4xl">
+          <h2 className="mt-4 max-w-3xl font-heading text-3xl uppercase leading-tight tracking-[-0.035em] [font-weight:var(--leadengine-heading-weight)] sm:text-4xl">
             Research infrastructure, not an outreach service
           </h2>
-          <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted sm:text-lg">
+          <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted [font-weight:var(--leadengine-copy-weight)] sm:text-lg">
             Lead Engine extracts, enriches, de-duplicates, organizes, scores, and
             exports B2B data. It does not send cold emails, automatically send
             LinkedIn messages, perform outreach for customers, or include agency

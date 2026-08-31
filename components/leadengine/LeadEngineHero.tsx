@@ -13,7 +13,7 @@ export function LeadEngineHero() {
         <SingularityHeroScene className="min-h-[100svh]">
           <div className="mx-auto flex min-h-[100svh] w-full max-w-[1800px] items-start px-6 pb-16 pt-28 sm:px-10 sm:pt-32 md:items-center md:py-20 lg:px-[121px]">
             <div className="max-w-[35rem]">
-              <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60">
+              <p className="font-sans text-[11px] font-semibold uppercase tracking-[0.2em] text-white/72">
                 Lead Engine
               </p>
 
@@ -21,7 +21,7 @@ export function LeadEngineHero() {
                 Further and Beyond
               </h1>
 
-              <p className="mt-7 max-w-[34rem] text-pretty font-heading text-[1.0625rem] font-medium leading-[1.65] text-white/72 sm:text-lg">
+              <p className="mt-7 max-w-[34rem] text-pretty font-heading text-[1.0625rem] font-medium leading-[1.65] text-white/84 sm:text-lg">
                 The lead engine channels a database of 1.3 billion people across
                 the globe - in to your systems, enriched with our intelligence
                 and clear of noise.

@@ -150,10 +150,10 @@ export default function OrbitalCaseStudies() {
         <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
           <div className="text-center">
             <div className="text-[clamp(1.75rem,8vw,3.75rem)] font-bold text-white">$640K+</div>
-            <div className="mx-auto mt-1 max-w-32 text-[10px] font-medium leading-tight text-white/40 sm:mt-2 sm:max-w-none sm:text-base">
+            <div className="mx-auto mt-1 max-w-32 text-[10px] font-medium leading-tight text-white/72 sm:mt-2 sm:max-w-none sm:text-base">
               Total Revenue Generated
             </div>
-            <div className="mt-2 text-sm font-semibold text-white/70 sm:mt-3 sm:text-2xl">163+ Calls Booked</div>
+            <div className="mt-2 text-sm font-semibold text-white/82 sm:mt-3 sm:text-2xl">163+ Calls Booked</div>
           </div>
         </div>
 

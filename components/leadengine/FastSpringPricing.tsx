@@ -6,10 +6,18 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { BillingInterval, Tier } from '@/lib/fastspring/types'
 
+import styles from './Pricing.module.css'
+
 const SBL_SRC = 'https://sbl.onfastspring.com/sbl/1.0.9/fastspring-builder.min.js'
 
 /** Global name the SBL script tag is told to call when the popup closes. */
 const POPUP_CLOSED_CALLBACK = 'outlioFastSpringPopupClosed'
+
+const PLAN_USAGE: Record<Tier['planKey'], { credits: string; capacity: string }> = {
+  starter: { credits: '100 credits', capacity: '2,500 / month' },
+  professional: { credits: '300 credits', capacity: '7,500 / month' },
+  custom: { credits: '1000+ credits', capacity: '25,000+ / month' },
+}
 
 type FastSpringSession = {
   products?: { path: string; quantity: number }[]
@@ -134,34 +142,32 @@ export function FastSpringPricing({
         }
       />
 
-      <section className="bg-paper px-4 py-16 sm:py-24" aria-labelledby="pricing-heading">
-        <div className="mx-auto max-w-6xl">
-          <div className="text-center">
-            <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
+      <section className={styles.section} aria-labelledby="pricing-heading">
+        <div className={styles.container}>
+          <div className={styles.intro}>
+            <p className={styles.eyebrow}>
               FastSpring-secured billing
             </p>
-            <h1 id="pricing-heading" className="mt-4 text-4xl font-bold uppercase tracking-tight sm:text-6xl">
+            <h1 id="pricing-heading" className={styles.heading}>
               Pick the pace that fits.
             </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted sm:text-lg">
+            <p className={styles.description}>
               Prices are shown in your local currency where available. FastSpring calculates every
               total, including location-aware tax treatment.
             </p>
-            <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-muted">
+            <p className={styles.checkoutSubcopy}>
               These plans purchase access to self-serve Lead Engine software only. They do not include
               managed marketing, outreach campaigns, appointment setting, consulting, or other human services.
             </p>
 
-            <div className="mx-auto mt-8 inline-flex rounded-full bg-cream p-1 shadow-[var(--shadow-sm)]" role="group" aria-label="Billing interval">
+            <div className={styles.billingToggle} role="group" aria-label="Billing interval">
               {(['month', 'year'] as const).map((interval) => (
                 <button
                   key={interval}
                   type="button"
                   onClick={() => setBilling(interval)}
                   aria-pressed={billing === interval}
-                  className={`rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
-                    billing === interval ? 'bg-accent text-white' : 'text-muted hover:text-ink'
-                  }`}
+                  className={`${styles.billingOption} ${billing === interval ? styles.billingOptionActive : ''}`}
                 >
                   {interval === 'month' ? 'Monthly' : 'Yearly'}
                 </button>
@@ -170,68 +176,92 @@ export function FastSpringPricing({
           </div>
 
           {error ? (
-            <p role="alert" className="mx-auto mt-8 max-w-2xl rounded-xl bg-danger-soft px-4 py-3 text-center text-sm text-danger">
+            <p role="alert" className={styles.checkoutError}>
               {error}
             </p>
           ) : null}
 
-          <div className="mt-12 grid gap-6 lg:grid-cols-3">
-            {tiers.map((tier) => {
+          <div className={styles.pricingStrip}>
+            {tiers.map((tier, index) => {
               const path = tier.productPath[billing]
               const formattedTotal = prices[path]
+              const usage = PLAN_USAGE[tier.planKey]
 
               return (
                 <article
                   key={tier.name}
-                  className={`relative flex flex-col rounded-[var(--radius-xl)] bg-panel p-7 shadow-[var(--shadow-md)] ${
-                    tier.featured ? 'ring-2 ring-accent' : 'ring-1 ring-border'
-                  }`}
+                  className={`${styles.planPanel} ${tier.featured ? styles.featuredPlan : ''}`}
                 >
                   {tier.featured ? (
-                    <span className="absolute -top-3 left-7 rounded-full bg-accent px-3 py-1 text-[11px] font-bold uppercase tracking-[0.15em] text-white">
+                    <span className={styles.badge}>
                       Most popular
                     </span>
                   ) : null}
-                  <h2 className="text-2xl font-bold tracking-tight text-ink">{tier.name}</h2>
-                  <p className="mt-2 min-h-12 text-sm leading-6 text-muted">{tier.description}</p>
-                  <div className="mt-7 min-h-16">
+
+                  <div className={styles.planIntro}>
+                    <header>
+                      <div className={styles.planTopline}>
+                        <p className={styles.planIndex}>0{index + 1}</p>
+                        <span className={styles.drawerHint} aria-hidden>→</span>
+                      </div>
+                      <h2 className={styles.planName}>{tier.name}</h2>
+                      <p className={styles.planBlurb}>{tier.description}</p>
+                    </header>
+
+                    <div className={styles.priceBlock}>
                     {formattedTotal ? (
-                      <p className="flex items-end gap-2">
-                        <span className="text-5xl font-black tracking-tight text-ink">{formattedTotal}</span>
-                        <span className="pb-1 text-sm font-medium text-muted">/{billing}</span>
-                      </p>
+                        <>
+                          <p className={styles.price}>{formattedTotal}</p>
+                          <p className={styles.period}>/{billing}</p>
+                        </>
                     ) : (
-                      <p className="pt-4 text-sm font-medium text-muted">
+                        <p className={styles.checkoutPriceFallback}>
                         Your local price is shown at checkout.
                       </p>
                     )}
+                    </div>
+
+                    <dl className={styles.planMetrics}>
+                      <div className={styles.planStat}>
+                        <dt>Credits</dt>
+                        <dd>{usage.credits}</dd>
+                      </div>
+                      <div className={styles.planStat}>
+                        <dt>Capacity</dt>
+                        <dd>{usage.capacity}</dd>
+                      </div>
+                    </dl>
+
+                    <button
+                      type="button"
+                      onClick={() => subscribe(tier)}
+                      disabled={!ready || openingPath === path}
+                      className={`${styles.checkoutCta} ${tier.featured ? styles.checkoutCtaFeatured : ''}`}
+                    >
+                      <span>{openingPath === path ? 'Opening checkout…' : 'Get This'}</span>
+                      <span aria-hidden>↗</span>
+                    </button>
                   </div>
-                  <ul className="mt-7 flex-1 space-y-3 text-sm leading-6 text-muted">
-                    {tier.features.map((feature) => (
-                      <li key={feature} className="flex gap-3">
-                        <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-accent" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    type="button"
-                    onClick={() => subscribe(tier)}
-                    disabled={!ready || openingPath === path}
-                    className={`mt-8 inline-flex h-12 items-center justify-center rounded-[var(--radius-md)] px-5 text-base font-semibold transition-[background-color,transform] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 ${
-                      tier.featured
-                        ? 'bg-accent text-white hover:bg-accent-deep'
-                        : 'bg-ink text-cream hover:bg-accent'
-                    }`}
-                  >
-                    {openingPath === path ? 'Opening checkout…' : 'Subscribe'}
-                  </button>
+
+                  <div className={styles.planIncludes}>
+                    <div className={styles.includesInner}>
+                      <p className={styles.listLabel}>Plan Includes</p>
+                      <ul className={styles.features}>
+                        {tier.features.map((feature) => (
+                          <li key={feature}>
+                            <span aria-hidden className={styles.checkoutTick}>✓</span>
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 </article>
               )
             })}
           </div>
 
-          <p className="mt-10 text-center text-sm text-muted">
+          <p className={styles.merchantNote}>
             Secure checkout is provided by FastSpring, our merchant of record.
           </p>
         </div>

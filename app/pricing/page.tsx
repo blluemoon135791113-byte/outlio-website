@@ -44,9 +44,8 @@ export default async function PricingPage() {
         <Nav surface="leadengine" />
         <main>
           <Pricing
-            billingNotice="Secure subscription checkout is temporarily unavailable. You can still create your account and begin the 3-day trial with 10 credits; no payment will be taken from this page."
             ctaHref="/sign-up"
-            ctaLabel="Start 3-day free trial"
+            ctaLabel="Get This"
           />
         </main>
         <Footer surface="leadengine" />
