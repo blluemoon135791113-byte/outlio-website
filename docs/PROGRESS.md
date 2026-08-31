@@ -8255,3 +8255,150 @@ over its limit, because fixing the limit would not make the send acceptable.
 
 2,084 unit tests plus three live flow suites, typecheck, lint (0 errors) and
 build all pass.
+
+## M7 Phase 23 — the visual Flow builder ✅ — M7 COMPLETE
+
+`app/(product)/flows/`, `components/flows/`.
+
+### A vertical step list, not a drag-and-drop canvas
+
+A canvas needs a graph library, hit-testing, pan and zoom, and an auto-layout
+pass before it draws anything — and the engine's shape is linear with branches,
+not an arbitrary graph. The list renders that shape directly, so what a person
+sees on screen is what `validateFlowDefinition` actually checks. The cost is
+honest: a flow with many branches reads worse here than it would on a canvas.
+Revisit when someone builds one.
+
+### Publishing pins a version, and runs never move
+
+`flow_publish` writes an immutable `flow_versions` row and a run stores the
+`version_id` it started on. Editing a live flow therefore cannot rewrite the
+definition out from under a run that is mid-wait — a contact enrolled on
+Tuesday finishes the flow they were enrolled in.
+
+## M8 Phase 24 — meetings as normalized events ✅
+
+Migrations `0095_meetings.sql`, `0096_fix_meeting_status_cast.sql`,
+`lib/integrations/calendly/`, `app/api/webhooks/calendly/[workspaceId]/`.
+
+### Keyed on the EVENT uri, not the invitee uri
+
+Calendly issues a new invitee uri on every reschedule while
+`scheduled_event.uri` survives. Keying on the invitee would file a reschedule
+as a brand-new meeting, and the booked→rescheduled→cancelled history — the
+thing reporting is for — would read as three unrelated bookings.
+
+### An untyped CASE that made `record_meeting_event` fail on EVERY call
+
+`case p_type when 'cancelled' then 'cancelled' else 'scheduled' end` resolves
+to `text`, not the enum. PL/pgSQL bodies are parsed but not type-resolved at
+CREATE time, so 0095 applied cleanly and every call then failed. Fixed in 0096
+by casting the CASE itself rather than a branch. **This is the same shape as
+the 0072→0073 trap already in this Ledger** — twice now, so it is a pattern and
+not an accident: a smoke test that never calls the function proves nothing.
+
+### Unmatched invitees are kept, not dropped
+
+Someone can book with an address the CRM has never seen. Discarding it loses a
+real meeting; inventing a contact for it would fabricate a record. It goes to
+`meeting_unmatched_invitees` to be resolved deliberately.
+
+## M8 Phase 25.5 — the public API and outbound webhooks ✅ — CRITERIA 7 AND 8
+
+`lib/api/`, `app/api/v1/`, `app/(product)/dashboard/settings/developers/`,
+migrations `0097_public_api.sql`, `0098_webhook_url_loopback.sql`.
+
+### The key prefix is deliberately scanner-recognisable
+
+`outlio_sk_` exists so that GitHub's secret scanning and the equivalent
+in-house tooling can spot a leaked key in a commit. A random opaque string
+would be safer against a human skimming a screen and worse against the thing
+that actually finds leaked keys.
+
+### "Idempotent for consumers" is not something we can do for them
+
+Only the consumer's handler can be idempotent. What we owe them is a STABLE
+EVENT ID across every retry, so "have I already processed this?" is answerable
+on their side. A fresh id per attempt would make each retry look like a new
+event and a consumer doing the right thing would still double-process. Proven
+in `tests/integration/webhook-delivery.test.ts`: three attempts, one id.
+
+### The SSRF guard is re-checked at delivery, not only at save
+
+"POST this wherever I say" means our servers make requests on a customer's
+behalf. Pointed at 169.254.169.254 it reaches the cloud metadata service. The
+check runs again at delivery time because a hostname that was public when it
+was saved can later resolve elsewhere. ⚠️ It is a hostname-SHAPE check: a
+hostname that RESOLVES to a private address still defeats it, because
+resolution happens in the socket layer. Closing that needs DNS pinned to the
+connection — recorded as DR19, the same gap the mail endpoints have.
+
+## M8 Phase 25 — Slack and Teams notifications ✅ — CRITERION 9
+
+`lib/notifications/`, `lib/flows/actions/notify.ts`,
+`app/(product)/dashboard/settings/notifications/`, migration
+`0099_notification_channels.sql`.
+
+### NOTIFY was declared in Phase 20 and had no handler
+
+A flow containing it failed with `ACTION_NOT_AVAILABLE`. That was the honest
+state — better than a placeholder that silently succeeds — and this closes it.
+
+### Not queued, unlike the outbound webhooks, on purpose
+
+A webhook is a contract and earns hours of retries. A notification is a nudge:
+"Dana replied" arriving three hours late is *worse* than not arriving, because
+someone reads it and acts on stale information. One attempt. A failure is
+recorded on the channel, where a person will see it — a notification channel
+that has quietly stopped working is indistinguishable from nothing happening,
+which is the worst possible failure for a feature whose whole job is to tell
+you something happened.
+
+### The fact and a link, never the contents
+
+A Slack channel may include contractors, or whoever was in `#sales` two years
+ago — people with no CRM access. So it is "Dana Reyes replied" plus a link back
+into Outlio, where permissions still apply. The permission model stops at the
+product boundary; once a message is in Slack it obeys Slack's permissions,
+which nobody here controls.
+
+### The URL is a credential
+
+A Slack incoming-webhook URL is unauthenticated: anyone holding it can post to
+that channel as the app. The table is service-role only, and the settings page
+selects the URL but passes only its HOSTNAME to the client — props ship to the
+browser inside the serialised RSC payload.
+
+### `NOTIFIABLE_EVENTS` is a subset of `WEBHOOK_EVENTS`, not the same list
+
+A webhook consumer wants everything, including high-volume machine events. A
+room of people wants the handful worth interrupting them for. Subscribing a
+channel to every `crm.contact.created` in a workspace doing volume outbound is
+how a team learns to mute the channel — after which the feature is worse than
+absent.
+
+### Teams targets Power Automate Workflows
+
+Microsoft retired the Office 365 connector webhooks that most tutorials still
+point at. Building against them would have shipped an integration with an
+expiry date.
+
+### A harness bug that hid M5 criterion 4
+
+`it.each` spreads the case values into the argument where Vitest passes the
+test context, and appends no context of its own — so `skip()` was `undefined`
+and all five suppression cases threw `Cannot read properties of undefined`
+instead of skipping whenever GreenMail was down. A plain `for` loop restores
+the `{ skip }` convention the rest of the file uses. Run against GreenMail, all
+nine pass: **criterion 4 is proven for every suppression reason, not skipped.**
+
+### Verification
+
+- `tests/unit/notification-format.test.ts` — 13 passing, no network.
+- `tests/integration/flow-notify.test.ts` — criterion 9 against a real HTTP
+  server standing in for Slack and for Teams, driven through the real flow
+  engine. Includes the test that matters most: **when the channel is down the
+  flow run still completes.** Nobody should be unable to win a deal because
+  Slack is having an afternoon. ⚠️ Needs 0099 applied before it can run.
+- Full integration suite: 307 passing, 3 failing — all three the documented
+  KI7 signup-IP-gate self-block, unchanged by this work.
