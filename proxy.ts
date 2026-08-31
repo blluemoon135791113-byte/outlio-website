@@ -37,7 +37,7 @@ import { isAppHost } from '@/lib/site'
  * carrying the invitee back to the invitation after they sign in. Letting the
  * page redirect instead would drop the token and strand them on the dashboard.
  */
-const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/join', '/crm']
+const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/join', '/crm', '/email', '/flows']
 
 /**
  * ⚠️ AUTH COOKIES ARE PER-HOST, DELIBERATELY.
@@ -96,6 +96,14 @@ const APP_SUBDOMAIN_PATHS = [
   // the software domain, which is the only host they are ever issued for.
   '/join',
   '/crm',
+  /*
+   * ⚠️ EVERY PRODUCT SURFACE MUST BE LISTED HERE OR IT 404s ON THIS HOST.
+   * `/email` and `/flows` shipped in M5-M7 and were never added, so the whole
+   * Email and Flows product was unreachable in production while every test,
+   * typecheck and build passed -- none of them go through the edge guard.
+   */
+  '/email',
+  '/flows',
   '/extension',
   '/sign-in',
   '/sign-up',

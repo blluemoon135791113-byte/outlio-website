@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs'
+
 import {
   getRedirectUrl,
   getRewrittenUrl,
@@ -94,6 +96,59 @@ describe('app.outlio.io software surface', () => {
       expect(response.status).toBe(308)
     }
   })
+})
+
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  EVERY PRODUCT ROUTE MUST SURVIVE THE EDGE GUARD.                        ║
+ * ║                                                                           ║
+ * ║  `/email` and `/flows` shipped in M5-M7 and were never added to           ║
+ * ║  APP_SUBDOMAIN_PATHS, so the entire Email and Flows product returned 404  ║
+ * ║  in production for months. Nothing caught it: unit tests, typecheck and   ║
+ * ║  `next build` all pass, because none of them go through the proxy. The    ║
+ * ║  route existed, was correct, and was unreachable.                         ║
+ * ║                                                                           ║
+ * ║  ⚠️ THE LIST IS READ FROM THE FILESYSTEM, NOT HARDCODED. A test with its  ║
+ * ║  own copy of the routes fails the same way the allow-list did — someone   ║
+ * ║  adds a surface and forgets the second place. Reading `app/(product)/`    ║
+ * ║  means a new route is covered the moment it exists.                       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('every product surface is reachable on the software domain', () => {
+  const productRoutes = readdirSync('app/(product)', { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('_'))
+    .map((entry) => `/${entry.name}`)
+
+  it('found the product routes to check', () => {
+    // Guards against the glob silently matching nothing, which would make
+    // every assertion below vacuous.
+    expect(productRoutes.length).toBeGreaterThan(3)
+    expect(productRoutes).toContain('/email')
+    expect(productRoutes).toContain('/flows')
+    expect(productRoutes).toContain('/crm')
+  })
+
+  for (const route of readdirSync('app/(product)', { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('_'))
+    .map((entry) => `/${entry.name}`)) {
+    it(`does not 404 ${route} on app.outlio.io`, async () => {
+      const response = await proxy(appRequest(route))
+
+      /*
+       * ⚠️ ASSERTED ON THE REWRITE TARGET, NOT THE STATUS CODE. The guard does
+       * not return a 404 — it REWRITES to `/not-found`, so the response status
+       * is a perfectly healthy 200 and a status assertion passes whether the
+       * path is allow-listed or not. The first version of this test did
+       * exactly that and passed with `/email` deliberately removed, which is
+       * how it was caught.
+       *
+       * Redirecting to sign-in is correct and expected; being rewritten to
+       * not-found means the host refuses to serve the route at all.
+       */
+      const rewritten = getRewrittenUrl(response)
+      if (rewritten) expect(rewritten).not.toContain('/not-found')
+    })
+  }
 })
 
 describe('outlio.io marketing surface', () => {
