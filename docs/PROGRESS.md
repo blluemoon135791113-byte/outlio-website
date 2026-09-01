@@ -9272,3 +9272,47 @@ typecheck 0; lint 0; build clean with `/email/inbox/[id]`.
 Connect a mailbox → readiness → campaign → **author a sequence** → enrol →
 launch → the tick sends → replies sync → stop-on-reply → the inbox fills →
 **open a thread and reply from Outlio, threaded**. Every link exists and runs.
+
+## 2026-09-01 — R14: email analytics, and the guard extended to database functions
+
+`app/(product)/email/analytics/page.tsx`, `components/email/EmailNav.tsx`,
+`tests/unit/worker-wiring.test.ts`.
+
+### Another stranded engine, in a place the R0 guard could not see
+
+`email_mailbox_report` was written and tested in M7 and **had no caller**.
+Nobody could see how their mailboxes were performing — the number that decides
+whether outreach works at all.
+
+⚠️ **The R0 wiring guard could never have caught it.** It looks for call
+expressions (`name(`), and an RPC is invoked as `db.rpc('name', {...})` — a
+**string**. So the whole class of stranded database function was invisible to
+the very test written to prevent stranded code.
+
+The guard now checks RPC names as strings too. **Verified non-vacuous by
+renaming the caller and watching it fail**, then restoring it — the same check
+that should have been applied to the 0104 smoke tests.
+
+### NULL is not zero, and the UI has to keep the difference
+
+`email_campaign_report` deliberately returns a NULL reply rate when nothing has
+been sent, because 0% would read as "nobody answered" when the truth is
+"nothing went out". A screen that renders that as `0%` throws the function's
+care away, so rates over zero sends render as **—** with "Nothing sent yet".
+
+### Queued and needs-verification are surfaced, not buried
+
+A queue that is not draining is the most useful early warning this screen can
+give: it is exactly what "the campaign launched and nothing happened" looks like
+from the inside — which is the failure R10 fixed and which nobody could see.
+
+### Verified
+
+2,244 unit tests (3 new guard tests); typecheck 0; lint 0; build clean with
+`/email/analytics`.
+
+### Deferred from R14
+
+The trend chart over time, per-campaign analytics beyond the existing campaign
+page, and metric selection. `email_batch_funnel` still has no caller — it is
+reached by the CRM reports page's batch funnel, which is a different surface.

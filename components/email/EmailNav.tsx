@@ -13,6 +13,7 @@ const SECTIONS = [
   { href: '/email', label: 'Mailboxes', exact: true },
   { href: '/email/campaigns', label: 'Campaigns', exact: false },
   { href: '/email/inbox', label: 'Inbox', exact: false },
+  { href: '/email/analytics', label: 'Analytics', exact: false },
 ] as const
 
 export function EmailNav() {

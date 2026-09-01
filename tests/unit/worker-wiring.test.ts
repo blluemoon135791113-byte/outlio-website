@@ -206,6 +206,47 @@ describe('engines the R0 audit found unreachable', () => {
   })
 })
 
+/**
+ * ⚠️ A DATABASE FUNCTION CAN BE STRANDED TOO, and the callers-of check above
+ * cannot see it: an RPC is invoked as `db.rpc('name', {...})`, a STRING, not a
+ * call expression. `email_mailbox_report` was written and tested in M7 and had
+ * no caller until R14 — so nobody could see how their mailboxes were
+ * performing, which is the number that decides whether outreach works at all.
+ */
+describe('reporting functions are actually read by something', () => {
+  const RPCS: { name: string; without: string }[] = [
+    {
+      name: 'email_mailbox_report',
+      without: 'nobody can see how their mailboxes are performing',
+    },
+    {
+      name: 'email_campaign_report',
+      without: 'a campaign reports no results',
+    },
+  ]
+
+  for (const rpc of RPCS) {
+    it(`${rpc.name} is called — otherwise ${rpc.without}`, () => {
+      const callers = APP_SOURCES.filter((file) =>
+        readFileSync(file, 'utf8').includes(`'${rpc.name}'`),
+      )
+
+      expect(
+        callers,
+        `${rpc.name} is never passed to db.rpc(), so ${rpc.without}.`,
+      ).not.toHaveLength(0)
+    })
+  }
+
+  it('finds nothing for an rpc name that does not exist', () => {
+    // Proves the matcher can return empty, so a real regression fails.
+    const callers = APP_SOURCES.filter((file) =>
+      readFileSync(file, 'utf8').includes(`'no_such_rpc_anywhere'`),
+    )
+    expect(callers).toHaveLength(0)
+  })
+})
+
 describe('the guard itself is not vacuous', () => {
   it('finds source files to search', () => {
     // If the walk returned nothing, every assertion above would pass while
