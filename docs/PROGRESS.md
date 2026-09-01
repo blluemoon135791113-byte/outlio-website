@@ -9221,3 +9221,54 @@ copying a five-line `docker run` out of a file header, so nobody did it.
 
 `npm run test:email` now starts GreenMail and runs all three. Removing the
 friction is the fix; a louder warning would not have been.
+
+## 2026-09-01 — R11: the inbox can answer
+
+`app/(product)/email/inbox/[id]/page.tsx`, `components/email/ReplyComposer.tsx`,
+`lib/email/inbox.ts` (+`replyableMessageId`), inbox actions,
+`tests/unit/replyable-message-id.test.ts`.
+
+### The inbox could triage and could not answer
+
+It listed threads, assigned them, resolved them — and had no thread view. So
+answering meant leaving Outlio for a real mail client, at which point the reply
+is invisible to the CRM timeline, the campaign report and every metric built on
+them. The conversation continues and the product stops knowing about it.
+
+### ⚠️ The uid fallback must never reach a header
+
+`reply-sync` stores `parsed.messageId ?? \`uid-<n>\``, so
+`email_inbound_messages.provider_message_id` holds either a real RFC Message-ID
+or something like `uid-42`. Putting the fallback into In-Reply-To produces a
+malformed header that **some servers reject outright** — which loses the whole
+reply, not merely its threading.
+
+`replyableMessageId` returns a bracketed id only when the value contains an `@`,
+and null otherwise. The composer says so on screen when it cannot thread: losing
+the threading is cosmetic, losing the reply is not, so it sends anyway and tells
+the person what will happen.
+
+### Each refusal says what to do about it
+
+`enqueueEmail` refuses for six distinct reasons. Collapsing them into "could not
+send" leaves someone re-clicking a button that will never work — a daily limit
+and an unhealthy mailbox need completely different responses. Each is named.
+
+### Untrusted content is rendered as TEXT
+
+Message bodies arrive from outside. `whitespace-pre-wrap` keeps the formatting
+without `dangerouslySetInnerHTML`, per the constitution's third hard rule.
+
+Auto-replies and bounces are **labelled, not hidden**. A thread that silently
+omits a bounce reads as "no answer" when the truth is "undeliverable".
+
+### Verified
+
+2,241 unit tests (5 new on the header guard); inbox integration 10/10;
+typecheck 0; lint 0; build clean with `/email/inbox/[id]`.
+
+### Email is now end to end
+
+Connect a mailbox → readiness → campaign → **author a sequence** → enrol →
+launch → the tick sends → replies sync → stop-on-reply → the inbox fills →
+**open a thread and reply from Outlio, threaded**. Every link exists and runs.

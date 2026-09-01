@@ -190,7 +190,28 @@ export type ThreadDetail = {
     bodyText: string | null
     receivedAt: string
     classification: 'reply' | 'auto_reply' | 'bounce'
+    /**
+     * ⚠️ THE RFC Message-ID *WHEN THERE IS ONE*. `reply-sync` falls back to
+     * `uid-<n>` when a message arrives without one, and that fallback must
+     * never reach an In-Reply-To header — `In-Reply-To: uid-42` is malformed
+     * and some servers reject the whole message for it. Callers use
+     * `replyableMessageId` rather than reading this directly.
+     */
+    providerMessageId: string | null
   }[]
+}
+
+/**
+ * The value to put in In-Reply-To, or null when there is nothing safe to use.
+ *
+ * A real Message-ID contains an `@` and is angle-bracketed. The `uid-<n>`
+ * fallback satisfies neither, which is exactly how it is told apart.
+ */
+export function replyableMessageId(providerMessageId: string | null): string | null {
+  if (!providerMessageId) return null
+  const value = providerMessageId.trim()
+  if (!value.includes('@')) return null
+  return value.startsWith('<') ? value : `<${value}>`
 }
 
 /**
@@ -223,7 +244,7 @@ export async function getThread(input: {
 
   const { data: messages } = await db
     .from('email_inbound_messages')
-    .select('id, from_email, subject, body_text, received_at, classification')
+    .select('id, from_email, subject, body_text, received_at, classification, provider_message_id')
     .eq('workspace_id', input.workspaceId)
     .eq('thread_id', input.threadId)
     .order('received_at', { ascending: true })
@@ -249,6 +270,7 @@ export async function getThread(input: {
       bodyText: m.body_text,
       receivedAt: m.received_at,
       classification: m.classification as 'reply' | 'auto_reply' | 'bounce',
+      providerMessageId: m.provider_message_id,
     })),
   }
 }

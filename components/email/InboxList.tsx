@@ -95,7 +95,15 @@ function ThreadRow({
             ) : null}
           </div>
 
-          <p className="mt-0.5 truncate text-sm text-ink">{thread.subject ?? '(no subject)'}</p>
+          {/* ⚠️ The subject is now the way IN. Until R11 there was no thread
+              view at all, so the inbox could triage a conversation and never
+              open it. */}
+          <Link
+            href={`/email/inbox/${thread.id}`}
+            className="mt-0.5 block truncate text-sm text-ink hover:underline"
+          >
+            {thread.subject ?? '(no subject)'}
+          </Link>
           {thread.preview ? (
             <p className="mt-0.5 truncate text-xs text-muted">{thread.preview}</p>
           ) : null}
