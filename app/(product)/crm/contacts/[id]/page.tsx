@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { AddNote, AssignOwner } from '@/components/crm/ContactPanels'
+import { NewTaskButton } from '@/components/crm/NewTask'
 import { listContactTimeline } from '@/lib/crm/activities'
 import { checkCollision } from '@/lib/crm/collision'
 import { getContactDetail, listAssignableMembers } from '@/lib/crm/contacts-list'
@@ -125,6 +126,24 @@ export default async function ContactDetailPage({
                 ))}
               </ul>
             ) : null}
+          </section>
+
+          {/*
+            ⚠️ THE ACTIONS BELONG ON THE PERSON, not only on a separate screen.
+            A task or a deal is nearly always decided while looking at whoever
+            it is about; making someone leave, find the right list and come
+            back is how CRM data stops getting recorded.
+          */}
+          <section className="clay space-y-3 p-5">
+            <h3 className="text-sm font-semibold text-ink">Next step</h3>
+            <div className="flex flex-wrap items-start gap-2">
+              {can({ role: ctx.role, modules: ctx.modules }, 'crm.task.manage') ? (
+                <NewTaskButton
+                  contactId={contact.id}
+                  contactName={contact.fullName ?? 'this contact'}
+                />
+              ) : null}
+            </div>
           </section>
 
           <section className="clay space-y-4 p-5">

@@ -82,6 +82,38 @@ function Task({ row, canManage }: { row: TaskRow; canManage: boolean }) {
   )
 }
 
+/** What an empty list MEANS, per view. */
+const EMPTY_COPY: Record<string, { title: string; body: string }> = {
+  open: {
+    title: 'No open tasks',
+    body: 'Create one here, or from a contact. Flows can create them too.',
+  },
+  today: {
+    title: 'Nothing due today',
+    body: 'Undated tasks are not counted here — they are under Open.',
+  },
+  overdue: {
+    title: 'Nothing overdue',
+    body: 'Everything with a date is still within it.',
+  },
+  upcoming: {
+    title: 'Nothing scheduled ahead',
+    body: 'Tasks with a future due date appear here. Undated ones stay under Open.',
+  },
+  mine: {
+    title: 'Nothing assigned to you',
+    body: 'Work assigned to you appears here, soonest first.',
+  },
+  team: {
+    title: 'Nobody else has open tasks',
+    body: 'This shows everyone except you. Your own work is under Mine.',
+  },
+  completed: {
+    title: 'Nothing completed yet',
+    body: 'Finished tasks are kept here, with who completed them.',
+  },
+}
+
 export function TaskList({
   rows,
   view,
@@ -92,19 +124,23 @@ export function TaskList({
   canManage: boolean
 }) {
   if (rows.length === 0) {
+    // Declared next to its use so a new view cannot be added without someone
+    // seeing that its empty state needs words.
+
     return (
       <div className="clay p-10 text-center">
+        {/*
+          ⚠️ EACH VIEW SAYS WHAT ITS OWN EMPTINESS MEANS. One shared "No tasks"
+          would be actively misleading here: an empty Today is good news, an
+          empty Overdue is better news, and an empty Open means there is no work
+          recorded at all. They are three different facts.
+        */}
         <p className="text-sm font-medium text-ink">
-          {view === 'overdue'
-            ? 'Nothing overdue'
-            : view === 'completed'
-              ? 'Nothing completed yet'
-              : 'No open tasks'}
+          {EMPTY_COPY[view]?.title ?? 'No open tasks'}
         </p>
         <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted">
-          {view === 'overdue'
-            ? 'Everything with a date is still within it.'
-            : 'Tasks are created from a contact, or by a flow. They show up here with whatever is due first.'}
+          {EMPTY_COPY[view]?.body ??
+            'Tasks are created from a contact, or by a flow. They show up here with whatever is due first.'}
         </p>
       </div>
     )

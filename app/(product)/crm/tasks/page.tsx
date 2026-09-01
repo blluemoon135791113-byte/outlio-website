@@ -15,8 +15,11 @@ export const metadata: Metadata = {
 
 const VIEWS = [
   { value: 'open', label: 'Open' },
+  { value: 'today', label: 'Today' },
   { value: 'overdue', label: 'Overdue' },
+  { value: 'upcoming', label: 'Upcoming' },
   { value: 'mine', label: 'Mine' },
+  { value: 'team', label: 'Team' },
   { value: 'completed', label: 'Completed' },
 ] as const
 
@@ -66,9 +69,37 @@ export default async function TasksPage({
   else query = query.eq('status', 'open')
 
   if (view === 'mine') query = query.eq('assigned_to_user_id', ctx.userId)
+
+  /*
+   * ⚠️ "Team" is everyone ELSE's work, which is the question a manager is
+   * actually asking — "Mine" already answers the other half. It collapses to
+   * nothing for a setter, who has no view beyond their own queue.
+   */
+  if (view === 'team' && seesAll) query = query.neq('assigned_to_user_id', ctx.userId)
+
   // Overdue is a due date in the past, so a task with no due date is never
   // overdue — it is simply undated, which is a different thing.
   if (view === 'overdue') query = query.lt('due_at', new Date().toISOString())
+
+  /*
+   * ⚠️ TODAY AND UPCOMING BOTH EXCLUDE UNDATED TASKS, deliberately. A task
+   * with no due date is not due today and is not coming up — it is undated,
+   * and sweeping it into either list would bury the things that genuinely
+   * have a deadline. `Open` is where undated work lives.
+   */
+  const endOfToday = new Date()
+  endOfToday.setHours(23, 59, 59, 999)
+
+  if (view === 'today') {
+    query = query
+      .not('due_at', 'is', null)
+      .lte('due_at', endOfToday.toISOString())
+      .gte('due_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
+  }
+
+  if (view === 'upcoming') {
+    query = query.not('due_at', 'is', null).gt('due_at', endOfToday.toISOString())
+  }
 
   const { data } = await query
   const tasks = data ?? []
@@ -111,7 +142,13 @@ export default async function TasksPage({
       </div>
 
       <nav aria-label="Task views" className="flex flex-wrap gap-1 border-b border-border">
-        {VIEWS.map((v) => (
+        {/*
+          ⚠️ THE TEAM TAB IS HIDDEN FROM A SETTER, not shown-and-empty. Their
+          query is already narrowed to their own tasks, so a "Team" tab would
+          silently show them their own work under someone else's name — a tab
+          that lies is worse than a tab that is missing.
+        */}
+        {VIEWS.filter((v) => v.value !== 'team' || seesAll).map((v) => (
           <Link
             key={v.value}
             href={`/crm/tasks?view=${v.value}`}

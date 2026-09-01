@@ -9004,3 +9004,49 @@ clean.
 ### Still deferred from R3
 
 Followers / collaborators — no table and no concept. Recorded, not started.
+
+## 2026-09-01 — R6: task queues that answer a real question
+
+`app/(product)/crm/tasks/page.tsx`, `components/crm/TaskList.tsx`,
+`app/(product)/crm/contacts/[id]/page.tsx`.
+
+### Three missing views
+
+Open / Overdue / Mine / Completed existed; **Today**, **Upcoming** and **Team**
+did not, and they are the ones a working day is organised around.
+
+⚠️ **Today and Upcoming both exclude undated tasks, deliberately.** A task with
+no due date is not due today and is not coming up — it is undated. Sweeping it
+into either list would bury the things that genuinely have a deadline. `Open` is
+where undated work lives, and the empty states say so.
+
+⚠️ **"Team" means everyone ELSE**, because "Mine" already answers the other
+half; a manager asking "what is the team doing" does not mean "including me".
+
+### A tab that lies is worse than a tab that is missing
+
+The Team tab is **hidden from a setter**, not shown-and-empty. Their query is
+already narrowed to their own tasks, so a Team tab would silently show them
+their own work under someone else's name.
+
+### Each view says what its own emptiness means
+
+One shared "No tasks" would be actively misleading: an empty **Today** is good
+news, an empty **Overdue** is better news, and an empty **Open** means no work
+is recorded at all. Three different facts, three different sentences.
+
+### Tasks are created where they are decided
+
+A "New task" action now sits on the contact, prefilled with that contact. A task
+is nearly always decided while looking at whoever it is about, and making
+someone leave, find the right list and come back is how CRM data stops getting
+recorded.
+
+### Verified
+
+2,236 unit tests; typecheck 0; lint 0; build clean.
+
+### Still deferred
+
+Notes from an opportunity (its detail view does not exist yet), and task
+creation from the inbox.
