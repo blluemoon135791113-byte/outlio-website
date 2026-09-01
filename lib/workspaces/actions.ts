@@ -29,6 +29,7 @@ import {
   listMemberships,
 } from '@/lib/workspaces/context'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { handoverTotal, reassignMemberRecords } from '@/lib/workspaces/handover'
 import { getWorkspaceEntitlements } from '@/lib/workspaces/entitlements'
 import { canManageRole, WORKSPACE_ROLES, type WorkspaceRole } from '@/lib/workspaces/permissions'
 import {
@@ -297,6 +298,31 @@ export async function removeMemberAction(
       return fail('You cannot remove that member.')
     }
 
+    /*
+     * ⚠️ HAND THE WORK OVER BEFORE DELETING THE MEMBERSHIP.
+     *
+     * This used to delete the row and stop. Everything the person owned kept
+     * pointing at a user who was no longer in the workspace, so those records
+     * appeared in nobody's "assigned to me", the owner filter listed someone
+     * who was not there, and the work quietly stopped being done.
+     *
+     * Reassignment happens FIRST: if it fails, the member is still here and
+     * their book is intact, which is the recoverable order. Deleting first and
+     * failing to reassign would leave orphans with no owner to find them by.
+     */
+    const reassignTo = formData.get('reassign_to')
+    const newOwnerId =
+      typeof reassignTo === 'string' && reassignTo && reassignTo !== 'none'
+        ? reassignTo
+        : null
+
+    let handover
+    try {
+      handover = await reassignMemberRecords(ctx.workspace.id, membership.user_id, newOwnerId)
+    } catch {
+      return fail('Could not reassign their records, so nothing was changed.')
+    }
+
     const { error } = await db
       .from('workspace_memberships')
       .delete()
@@ -306,7 +332,20 @@ export async function removeMemberAction(
     if (error) throw new Error(error.message)
 
     revalidatePath(TEAM_PATH)
-    return ok('Member removed.')
+
+    /*
+     * Says what moved. "Member removed" alone leaves an admin wondering what
+     * happened to that person's pipeline — which is the first thing they will
+     * ask.
+     */
+    const moved = handoverTotal(handover)
+    if (moved === 0) return ok('Member removed. They owned no records.')
+
+    return ok(
+      newOwnerId
+        ? `Member removed. ${moved} record${moved === 1 ? '' : 's'} reassigned.`
+        : `Member removed. ${moved} record${moved === 1 ? '' : 's'} left unassigned.`,
+    )
   } catch (error) {
     return toState(error)
   }

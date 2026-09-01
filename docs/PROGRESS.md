@@ -8936,3 +8936,71 @@ Missing values read **"Not recorded"**, never a blank or a zero.
 ### Verified
 
 2,236 unit tests; typecheck 0; lint 0; build clean with `/crm/companies/[id]`.
+
+## 2026-09-01 — R10 closed, and R3: removing a member no longer orphans their book
+
+### R10 is verified end to end in production
+
+The GitHub Action is green and the database proves the work happened:
+`claimed_by = tick-1788222176294` on both queued messages, written at
+01:56:17 — matching the workflow run at 01:56:11. `attempts` went 1 → 2 and the
+messages moved to `needs_verification`.
+
+**Chain proven: GitHub Action → authenticated request → production tick → real
+database work.** Every background worker in this product now runs.
+
+### ⚠️ A second correction to the R0 audit
+
+R0 claimed global search and Hubble context were unscoped. **Both claims were
+wrong, and both were asserted without checking:**
+
+- Search runs through `listContacts`, which applies `dataScope`.
+- The public API is scoped by the key's workspace, and minting a key requires
+  `workspace.settings.manage` (**admin**) — a setter cannot mint one, so there
+  is no escalation path.
+- Hubble scopes by `userId` throughout — *stricter* than workspace.
+
+Combined with the R5 correction, **every tenancy claim in R0 was wrong except
+the one about companies**, which was a real gap and was mine. The lesson is
+recorded rather than smoothed over: that section was written by pattern-matching
+on which files imported `dataScope`, not by tracing what each query actually
+did.
+
+### The real R3 gap: an orphaned book
+
+`removeMemberAction` deleted the membership row and nothing else. Everything the
+person owned — contacts, companies, deals, open tasks — kept pointing at a user
+who was no longer in the workspace. Those records appeared in **nobody's**
+"assigned to me", the owner filter listed someone who was not there, and the
+work quietly stopped being done by anyone. Nothing errored.
+
+`lib/workspaces/handover.ts` reassigns first and deletes the membership second.
+**That order is the recoverable one:** if reassignment fails the member is still
+there and their book is intact, whereas deleting first and failing to reassign
+leaves orphans with no owner to find them by.
+
+Three rules it enforces:
+
+- **The destination must be a member of this workspace.** The id comes from a
+  form and the service role bypasses RLS, so without the check a crafted
+  request could hand a workspace's entire book of business to an outsider — who
+  would then own it legitimately.
+- **Only OPEN tasks move.** A completed task records who completed it; moving
+  it would credit the successor for finished work they had no part in.
+- **Unassigning is allowed, not refused.** Sometimes there is no successor, and
+  an explicitly unassigned record is findable. A record owned by a non-member
+  is not — which is the whole difference this phase makes.
+
+Past attribution is untouched: activities freeze `owner_user_id_at_event` when
+written, so the leaderboard still credits whoever did the work. That frozen
+column is precisely what makes a handover safe.
+
+### Verified
+
+4 handover integration tests (including the outsider refusal, and that a
+completed task keeps its owner); 2,236 unit tests; typecheck 0; lint 0; build
+clean.
+
+### Still deferred from R3
+
+Followers / collaborators — no table and no concept. Recorded, not started.

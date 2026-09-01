@@ -181,7 +181,19 @@ board and reports.
 The real gap was narrower and newer: **`/crm/companies` had no owner filter**,
 shipped that way on 2026-08-31. `crm_companies` carries `owner_user_id` and is
 indexed on it, so a setter saw every company in the workspace. Fixed in R5.
-Still unscoped: global search and Hubble context.
+
+⚠️ **CORRECTED AGAIN 2026-09-01 (R3).** The claim that global search and Hubble
+context were unscoped was **also wrong**, and was asserted without checking:
+
+- **Search** runs through `listContacts`, which applies `dataScope`.
+- **The public API** is scoped by the key's workspace, and minting a key needs
+  `workspace.settings.manage` (**admin**) — a setter cannot mint one, so there
+  is no escalation path.
+- **Hubble** scopes by `userId` throughout (`estimateScope`, `createResearchRun`,
+  `claimAndProcessResearchRun`) — *stricter* than workspace.
+
+**No unscoped read surface is known to remain.** The real R3 gap was elsewhere:
+removing a member orphaned everything they owned. Fixed in R3.
 
 **Test gaps.** Coverage is strong at the engine layer (2,213 unit + ~350
 integration) and **absent at the wiring layer**. Every one of the failures above
