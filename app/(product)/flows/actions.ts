@@ -12,6 +12,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { FlowDefinitionError, validateFlowDefinition } from '@/lib/flows/definition'
+import { flowTemplate } from '@/lib/flows/templates'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
@@ -26,14 +27,54 @@ export async function createFlow(
     const name = String(formData.get('name') ?? '').trim()
     if (!name) return { ok: false, error: 'Give the flow a name.' }
 
-    const { error } = await createAdminClient().from('flows').insert({
-      workspace_id: ctx.workspace.id,
-      name,
-      description: String(formData.get('description') ?? '').trim() || null,
-      created_by: ctx.userId,
-    })
+    const db = createAdminClient()
 
-    if (error) return { ok: false, error: 'Could not create that flow.' }
+    const { data: flow, error } = await db
+      .from('flows')
+      .insert({
+        workspace_id: ctx.workspace.id,
+        name,
+        description: String(formData.get('description') ?? '').trim() || null,
+        created_by: ctx.userId,
+      })
+      .select('id')
+      .single()
+
+    if (error || !flow) return { ok: false, error: 'Could not create that flow.' }
+
+    /*
+     * ⚠️ A TEMPLATE BECOMES A DRAFT VERSION, NEVER A PUBLISHED ONE. Starting
+     * from a template must not start it running: someone picking "Handle a
+     * reply" to see what it looks like has not agreed to automate their inbox.
+     * `published_at` stays null, so the flow sits as a draft exactly like one
+     * built by hand.
+     */
+    const templateKey = String(formData.get('template') ?? '')
+    if (templateKey) {
+      const template = flowTemplate(templateKey)
+      if (!template) return { ok: false, error: 'That template no longer exists.' }
+
+      const { error: versionError } = await db.from('flow_versions').insert({
+        workspace_id: ctx.workspace.id,
+        flow_id: flow.id,
+        version: 1,
+        definition: template.definition as never,
+        created_by: ctx.userId,
+      })
+
+      if (versionError) {
+        return {
+          ok: false,
+          error: 'The flow was created but the template could not be applied.',
+        }
+      }
+
+      revalidatePath('/flows')
+      return {
+        ok: true,
+        message: `${name} created from “${template.name}”. Review it, then publish when you are happy.`,
+      }
+    }
 
     revalidatePath('/flows')
     return { ok: true, message: `${name} created as a draft. Nothing runs until you publish it.` }

@@ -9316,3 +9316,64 @@ from the inside — which is the failure R10 fixed and which nobody could see.
 The trend chart over time, per-campaign analytics beyond the existing campaign
 page, and metric selection. `email_batch_funnel` still has no caller — it is
 reached by the CRM reports page's batch funnel, which is a different surface.
+
+## 2026-09-01 — R9: flow templates, and a third round of audit corrections
+
+`lib/flows/templates.ts`, `components/flows/CreateFlow.tsx`, flows actions,
+`tests/unit/flow-templates.test.ts`.
+
+### ⚠️ R0 was wrong about flows, twice more
+
+Before building I checked the claims instead of trusting them. Two were false:
+
+- **"Flow builder: vertical step list, no canvas, no node library, no branch
+  drawing, no config panel."** Wrong. `layoutSteps` walks the graph depth-first
+  carrying `depth` and a yes/no `branchLabel`, draws a rejoining step once at
+  its first position, and the action picker splits free from credit-consuming
+  actions into separate lists. The builder is 422 lines and does most of this.
+- **"Flow run history: no screen."** Wrong. `/flows/[id]` already reads
+  `flow_runs` and `flow_step_runs` with status, duration, error code and credits
+  per step.
+
+**This is the third consecutive R0 section to be wrong on inspection** — after
+the tenancy claims (R5, R3) and the reporting claims. The pattern is consistent:
+R0's *engine-reachability* findings were traced properly and all six proved out;
+its *UI-completeness* findings were pattern-matched from file names and greps
+and have been unreliable every time. The matrix now says so at each corrected
+row, and no R0 UI claim should be acted on without re-checking first.
+
+### What was genuinely missing: a starting point
+
+Everything about flows worked except the first five minutes. "Create flow"
+opened an empty graph and asked someone to invent a trigger, a condition and a
+branch before they had ever watched one run.
+
+Eight templates now cover the real cases — new-lead assignment, list follow-up,
+reply handling, call booked, stage changed, gone quiet, deal won, bounce
+cleanup.
+
+### Two rules the templates obey, and are tested for
+
+- **They are validated by the same function that guards publish.** A template
+  that shipped pointing at a missing step, or naming a renamed action, would
+  make someone's first experience of automation a failure that looks like a
+  broken product rather than a typo in a constant.
+- **None of them spends credits or sends email.** A starter someone clicks
+  without reading must not commit them to spend — a Hubble step on a flow
+  pointed at a large list does exactly that, silently and at scale. Enforced by
+  a test that reads `ACTION_TYPES[...].costsCredits`, so adding a paid step to a
+  template fails the build.
+
+A template becomes a **draft version, never a published one**. Picking "Handle a
+reply" to see what it looks like is not agreeing to automate an inbox.
+
+### Verified
+
+2,280 unit tests (36 new, covering every template); typecheck 0; lint 0; build
+clean.
+
+### Still missing in flows
+
+**Test mode** — the brief's dry run with destructive steps simulated. It needs a
+simulate path through the engine's action registry, which is real engine work
+rather than a screen. **Undo/redo** in the builder.

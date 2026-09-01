@@ -3,10 +3,12 @@
 import { useActionState, useState } from 'react'
 
 import { createFlow, type ActionState } from '@/app/(product)/flows/actions'
+import { FLOW_TEMPLATES } from '@/lib/flows/templates'
 
 export function CreateFlow() {
   const [state, action, pending] = useActionState<ActionState, FormData>(createFlow, null)
   const [open, setOpen] = useState(false)
+  const [template, setTemplate] = useState('')
 
   if (!open) {
     return (
@@ -23,6 +25,57 @@ export function CreateFlow() {
   return (
     <form action={action} className="clay w-full space-y-4 p-6">
       <h3 className="text-sm font-semibold text-ink">New flow</h3>
+
+      {/*
+        ⚠️ A BLANK CANVAS IS WHY AUTOMATION GOES UNUSED. "Create flow" used to
+        open an empty graph and ask someone to invent a trigger, a condition
+        and a branch before they had ever watched one run. Starting from a
+        working example is the difference between trying it and closing it.
+      */}
+      <fieldset className="space-y-2">
+        <legend className="text-xs font-medium text-ink">Start from</legend>
+
+        <label className="flex items-start gap-2">
+          <input
+            type="radio"
+            name="template"
+            value=""
+            checked={template === ''}
+            onChange={() => setTemplate('')}
+            className="mt-1"
+          />
+          <span>
+            <span className="block text-sm text-ink">Nothing — build it myself</span>
+            <span className="block text-xs text-muted">An empty flow you wire up by hand.</span>
+          </span>
+        </label>
+
+        {FLOW_TEMPLATES.map((option) => (
+          <label key={option.key} className="flex items-start gap-2">
+            <input
+              type="radio"
+              name="template"
+              value={option.key}
+              checked={template === option.key}
+              onChange={() => setTemplate(option.key)}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-sm text-ink">{option.name}</span>
+              <span className="block text-xs text-muted">{option.description}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
+      {/*
+        Says plainly that nothing starts running. The fear about templates is
+        that picking one to look at it sets it loose on real contacts.
+      */}
+      <p className="text-xs text-muted">
+        Whichever you pick, the flow is created as a draft. Nothing runs until you publish
+        it.
+      </p>
 
       <div>
         <label htmlFor="name" className="block text-xs font-semibold text-ink">Name</label>

@@ -137,10 +137,10 @@ Status values: `COMPLETE` · `PARTIAL` · `UI_ONLY` · `BACKEND_ONLY` · `BROKEN
 |---|:-:|:-:|:-:|:-:|:-:|---|:-:|---|
 | Flow runtime | — | ✅ | ✅ | ✅ | ✅ | Claim, backoff, loop protection, pinned versions, at-most-once | — | COMPLETE |
 | Flow actions | — | ✅ | ✅ | ✅ | ✅ | CRM, email, Hubble, notify handlers registered | — | COMPLETE |
-| Flow builder | ⚠️ | ✅ | ✅ | ❌ | ⚠️ | **Vertical step list, no canvas.** No node library, no branch drawing, no config panel, no undo/redo | R9 | PARTIAL |
-| Flow templates | ❌ | ❌ | ❌ | ❌ | ❌ | None of the 10 starter templates exist | R9 | NOT_IMPLEMENTED |
+| Flow builder | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ **CORRECTED (R9).** The original claim — "vertical step list, no canvas, no node library, no branch drawing, no config panel" — was **wrong**. `layoutSteps` walks the graph depth-first with `depth` and yes/no branch labels, handles rejoins, and the picker splits free from credit-consuming actions. Genuinely missing: **undo/redo** | R9 | PARTIAL |
+| Flow templates | ✅ | ✅ | ✅ | ✅ | ✅ | 8 starter templates, each validated by the publish validator and proven to spend nothing | — | COMPLETE |
 | Flow test mode | ❌ | ❌ | ⚠️ | ❌ | ❌ | No dry run, no simulated steps | R9 | NOT_IMPLEMENTED |
-| Flow run history | ❌ | ✅ | ✅ | ❌ | ✅ | `flow_step_runs` records input/output/status/attempt per step; **no screen** | R8 | BACKEND_ONLY |
+| Flow run history | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ **CORRECTED (R9).** The claim "no screen" was **wrong** — `/flows/[id]` reads `flow_runs` and `flow_step_runs` with status, duration, error and credits per step | — | COMPLETE |
 | Trigger coverage | — | ⚠️ | ✅ | ⚠️ | ⚠️ | Manual and list triggers work. Most of the brief's 20 triggers are not wired to real events | R8 | PARTIAL |
 
 ### Reporting
