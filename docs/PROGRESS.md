@@ -9594,3 +9594,51 @@ name rather than throwing, because a draft can legitimately be mid-edit.
 ### Verified
 
 2,299 unit tests (9 new); typecheck 0; lint 0; build clean.
+
+## 2026-09-01 — Web Interface Guidelines review of the R1–R14 screens
+
+Ran the `web-design-guidelines` skill (Vercel's rule set) against the twelve
+components and pages built during the repair pass.
+
+### Not violations — checked before reporting
+
+- **Focus states.** `app/globals.css:473` defines a global `:focus-visible`
+  outline, so per-component focus classes are unnecessary.
+- **Reduced motion.** Handled globally in three `@media (prefers-reduced-motion)`
+  blocks.
+- **Icon-only buttons.** The ▲▼ reorder controls already carry `aria-label`.
+
+### Fixed
+
+| Issue | Where |
+|---|---|
+| Async status messages never announced | 7 components — now `role="status"` + `aria-live="polite"` |
+| `autocomplete` missing on name/email/phone/title | `NewContact.tsx` |
+| Phone was `type="text"` | now `tel` — a handset shows a keypad |
+| LinkedIn field was `type="text"` | now `url`, `spellCheck={false}` |
+| Native `<select>` inheriting the OS palette | 4 components — explicit `color-scheme` |
+| Number columns not tabular | `email/analytics` — figures jittered between rows |
+| Currency as `USD 1200` | company detail — now `Intl.NumberFormat` |
+
+### ⚠️ The one that was a correctness bug, not a style issue
+
+`toLocaleString()` inside a **Server Component** formats with the SERVER's
+locale and timezone. Vercel runs in UTC, so a reply that arrived at 4pm in
+Karachi rendered as **11am** to the person who received it — and "when did they
+reply" is the question an inbox exists to answer.
+
+`components/ui/LocalTime.tsx` renders a `<time dateTime>` and formats in the
+browser. `suppressHydrationWarning` is correct **here and only here**: the
+server genuinely cannot know the reader's timezone, so the mismatch is by
+design. Anywhere else it would hide a real bug.
+
+### Honest note
+
+These skills were installed on request at the start of the repair pass and
+**were not used until now** — nine screens were built without consulting them.
+The backlog they found was small but included one real defect that no test would
+have caught, because the output was well-formed and simply wrong.
+
+### Verified
+
+2,299 unit tests; typecheck 0; lint 0; build clean.

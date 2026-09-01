@@ -119,11 +119,14 @@ function StepEditor({
           </button>
         ) : null}
 
-        {state ? (
-          <p className={`text-xs ${state.ok ? 'text-success' : 'text-danger'}`}>
-            {state.ok ? state.message : state.error}
-          </p>
-        ) : null}
+        {/* Announced as well as shown. */}
+        <p
+          role="status"
+          aria-live="polite"
+          className={`text-xs ${state?.ok ? 'text-success' : 'text-danger'}`}
+        >
+          {state ? (state.ok ? state.message : state.error) : ''}
+        </p>
       </div>
     </form>
   )

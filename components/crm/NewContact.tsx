@@ -45,6 +45,7 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
           <input
             name="fullName"
             maxLength={140}
+            autoComplete="name"
             className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
           />
         </label>
@@ -54,6 +55,10 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
           <input
             name="email"
             type="email"
+            autoComplete="email"
+            /* An address is a code, not prose — a red squiggle under every
+               one of them is noise. */
+            spellCheck={false}
             className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
           />
         </label>
@@ -63,6 +68,7 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
           <input
             name="jobTitle"
             maxLength={140}
+            autoComplete="organization-title"
             className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
           />
         </label>
@@ -71,6 +77,10 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
           <span className="text-xs font-medium text-ink">Phone</span>
           <input
             name="phone"
+            /* `tel` brings up the phone keypad on a handset. `text` gives a
+               full keyboard for a field that only ever takes digits. */
+            type="tel"
+            autoComplete="tel"
             className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
           />
         </label>
@@ -80,6 +90,9 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
         <span className="text-xs font-medium text-ink">LinkedIn URL</span>
         <input
           name="linkedInUrl"
+          type="url"
+          spellCheck={false}
+          placeholder="https://www.linkedin.com/in/…"
           className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
         />
       </label>
@@ -106,7 +119,11 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
           </button>
         ) : null}
 
-        {state && !state.ok ? <p className="text-xs text-danger">{state.error}</p> : null}
+        {/* Announced, not just shown — a server action result is invisible to a
+            screen reader otherwise. */}
+        <p role="status" aria-live="polite" className="text-xs text-danger">
+          {state && !state.ok ? state.error : ''}
+        </p>
       </div>
     </form>
   )

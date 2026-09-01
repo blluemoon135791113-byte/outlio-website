@@ -91,7 +91,9 @@ export function NewTaskForm({
           </button>
         ) : null}
 
-        {state && !state.ok ? <p className="text-xs text-danger">{state.error}</p> : null}
+        <p role="status" aria-live="polite" className="text-xs text-danger">
+          {state && !state.ok ? state.error : ''}
+        </p>
       </div>
     </form>
   )

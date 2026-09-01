@@ -45,7 +45,7 @@ export function RunManually({
           value={contactId}
           onChange={(event) => setContactId(event.target.value)}
           required
-          className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
+          className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink [color-scheme:light]"
         >
           <option value="">Choose a contact…</option>
           {contacts.map((contact) => (
@@ -74,11 +74,14 @@ export function RunManually({
           {pending ? 'Starting…' : 'Run now'}
         </button>
 
-        {state ? (
-          <p className={`text-xs ${state.ok ? 'text-success' : 'text-danger'}`}>
-            {state.ok ? state.message : state.error}
-          </p>
-        ) : null}
+        {/* Announced as well as shown. */}
+        <p
+          role="status"
+          aria-live="polite"
+          className={`text-xs ${state?.ok ? 'text-success' : 'text-danger'}`}
+        >
+          {state ? (state.ok ? state.message : state.error) : ''}
+        </p>
       </div>
     </form>
   )

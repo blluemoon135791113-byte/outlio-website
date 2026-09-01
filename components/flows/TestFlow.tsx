@@ -36,7 +36,7 @@ export function TestFlow({
             name="contactId"
             value={contactId}
             onChange={(event) => setContactId(event.target.value)}
-            className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
+            className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink [color-scheme:light]"
           >
             {/*
               A contact is optional: without one the branches fall to their

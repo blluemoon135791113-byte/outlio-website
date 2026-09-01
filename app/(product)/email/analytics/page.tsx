@@ -35,7 +35,14 @@ function Stat({
         answered" when the truth is "nothing went out". The UI has to preserve
         that distinction or the function's care is wasted.
       */}
-      <p className={value === null ? 'mt-1 text-lg text-muted' : 'mt-1 text-lg font-semibold text-ink'}>
+      {/* `tabular-nums` so a column of figures does not jitter as it updates. */}
+      <p
+        className={
+          value === null
+            ? 'mt-1 text-lg tabular-nums text-muted'
+            : 'mt-1 text-lg font-semibold tabular-nums text-ink'
+        }
+      >
         {value === null ? '—' : value}
       </p>
       {hint ? <p className="mt-0.5 text-xs text-muted">{hint}</p> : null}
@@ -202,15 +209,15 @@ export default async function EmailAnalyticsPage({
                       <span className="ml-2 text-xs text-muted">{row.from_email}</span>
                     </td>
                     <td className="px-4 py-3 text-xs text-muted">{row.status}</td>
-                    <td className="px-4 py-3 text-ink">{Number(row.sent ?? 0)}</td>
-                    <td className="px-4 py-3 text-ink">{Number(row.replied ?? 0)}</td>
-                    <td className="px-4 py-3 text-ink">
+                    <td className="px-4 py-3 tabular-nums text-ink">{Number(row.sent ?? 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-ink">{Number(row.replied ?? 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-ink">
                       {/* NULL bounce rate means nothing was sent, not a clean record. */}
                       {row.bounce_rate === null
                         ? <span className="text-muted">—</span>
                         : `${(Number(row.bounce_rate) * 100).toFixed(1)}%`}
                     </td>
-                    <td className="px-4 py-3 text-ink">{row.health_score ?? '—'}</td>
+                    <td className="px-4 py-3 tabular-nums text-ink">{row.health_score ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>

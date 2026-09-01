@@ -132,7 +132,7 @@ export function PipelineSetup({
                   update(index, { kind: event.target.value as StageDraft['kind'] })
                 }
                 aria-label={`Stage ${index + 1} type`}
-                className="rounded-[var(--radius-md)] border border-line bg-surface px-2 py-1.5 text-xs text-ink"
+                className="rounded-[var(--radius-md)] border border-line bg-surface px-2 py-1.5 text-xs text-ink [color-scheme:light]"
               >
                 <option value="open">Open</option>
                 <option value="won">Won</option>
@@ -211,11 +211,14 @@ export function PipelineSetup({
           </button>
         ) : null}
 
-        {state ? (
-          <p className={`text-xs ${state.ok ? 'text-success' : 'text-danger'}`}>
-            {state.ok ? state.message : state.error}
-          </p>
-        ) : null}
+        {/* Announced as well as shown. */}
+        <p
+          role="status"
+          aria-live="polite"
+          className={`text-xs ${state?.ok ? 'text-success' : 'text-danger'}`}
+        >
+          {state ? (state.ok ? state.message : state.error) : ''}
+        </p>
       </div>
     </form>
   )

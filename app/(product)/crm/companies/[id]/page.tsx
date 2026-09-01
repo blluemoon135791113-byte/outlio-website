@@ -150,9 +150,18 @@ export default async function CompanyPage({
                 <span className="text-sm text-ink">{deal.title}</span>
                 <span className="text-xs text-muted">
                   {/* Blank value means unknown, so it says so instead of showing 0. */}
+                  {/*
+                    ⚠️ Intl WITH THE CURRENCY, not the code glued to a number.
+                    `USD 1,200` is a string; `$1,200.00` is a formatted amount,
+                    and the difference shows the moment a workspace sells in
+                    anything other than dollars.
+                  */}
                   {deal.value_amount === null
                     ? 'Value not set'
-                    : `${deal.currency} ${Number(deal.value_amount).toLocaleString()}`}
+                    : new Intl.NumberFormat(undefined, {
+                        style: 'currency',
+                        currency: deal.currency ?? 'USD',
+                      }).format(Number(deal.value_amount))}
                 </span>
               </li>
             ))}

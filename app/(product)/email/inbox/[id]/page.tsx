@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { ReplyComposer } from '@/components/email/ReplyComposer'
+import { LocalTime } from '@/components/ui/LocalTime'
 import { getThread, replyableMessageId } from '@/lib/email/inbox'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
@@ -74,7 +75,15 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
                   bounce reads as "no answer" when the truth is "undeliverable".
                 */}
                 {CLASSIFICATION_LABEL[message.classification] ?? message.classification} ·{' '}
-                {new Date(message.receivedAt).toLocaleString()}
+                {/*
+                  ⚠️ FORMATTED IN THE READER'S TIMEZONE, not the server's.
+                  `toLocaleString()` in a Server Component uses the SERVER's
+                  locale and zone — Vercel runs in UTC, so a reply that arrived
+                  at 4pm in Karachi rendered as 11am to the person who received
+                  it. "When did they reply" is the question an inbox exists to
+                  answer.
+                */}
+                <LocalTime iso={message.receivedAt} />
               </span>
             </div>
 
