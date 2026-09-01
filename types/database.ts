@@ -3938,6 +3938,7 @@ export type Database = {
           error_message: string | null
           id: string
           idempotency_key: string
+          in_reply_to_message_id: string | null
           max_attempts: number
           provider_message_id: string | null
           scheduled_at: string
@@ -3971,6 +3972,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           idempotency_key: string
+          in_reply_to_message_id?: string | null
           max_attempts?: number
           provider_message_id?: string | null
           scheduled_at?: string
@@ -4004,6 +4006,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           idempotency_key?: string
+          in_reply_to_message_id?: string | null
           max_attempts?: number
           provider_message_id?: string | null
           scheduled_at?: string
@@ -7876,6 +7879,7 @@ export type Database = {
           body_html: string
           body_text: string
           idempotency_key: string
+          in_reply_to_message_id: string
           message_id: string
           subject: string
           thread_id: string

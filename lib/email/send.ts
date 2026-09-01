@@ -53,6 +53,16 @@ export type EnqueueInput = {
   idempotencyKey: string
   /** Overrides the schedule. Still clamped to the account's sending window. */
   scheduledAt?: Date
+  /** Groups this message with an existing conversation in our own inbox. */
+  threadId?: string | null
+  /**
+   * ⚠️ THE RFC 5322 Message-ID OF THE MESSAGE THIS ANSWERS, and the difference
+   * between a reply and a new email in the recipient's client. The SMTP
+   * provider has always set In-Reply-To and References from this; until R11
+   * nothing supplied it, so every send the product made started a fresh
+   * conversation even when it was an answer.
+   */
+  inReplyToMessageId?: string | null
 }
 
 export type EnqueueResult =
@@ -169,6 +179,10 @@ export async function enqueueEmail(input: EnqueueInput): Promise<EnqueueResult> 
       body_html: input.bodyHtml ?? null,
       idempotency_key: input.idempotencyKey,
       scheduled_at: scheduledAt.toISOString(),
+      thread_id: input.threadId ?? null,
+      // NULL, never an empty string: `In-Reply-To: ""` is a malformed header
+      // rather than an absent one.
+      in_reply_to_message_id: input.inReplyToMessageId || null,
     })
     .select('id, scheduled_at')
     .single()
@@ -269,6 +283,9 @@ export async function runSendWorker(
         html: message.body_html,
         replyTo: account.replyToEmail ?? undefined,
         threadId: message.thread_id ?? undefined,
+        // Carried at last to the provider, which has always known what to do
+        // with it.
+        inReplyToMessageId: message.in_reply_to_message_id ?? undefined,
         idempotencyKey: message.idempotency_key,
       },
     )

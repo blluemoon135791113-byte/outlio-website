@@ -9106,3 +9106,79 @@ typecheck 0; lint 0; build clean.
 Per-step variants (A/B), HTML bodies, and a rendered preview against a real
 contact. The schema carries `body_html` and the template engine has
 `previewTemplate`; neither is wired.
+
+## 2026-09-01 — R11 (part 1): threading, and an incident I caused
+
+Migrations 0104, 0105, 0106. `lib/email/send.ts`.
+
+### The intended change
+
+`providers/smtp.ts` has always read `message.inReplyToMessageId` and set
+In-Reply-To and References from it. `OutboundMessage` declares the field.
+**Nothing ever supplied it** — no column carried the value and the claim
+function never returned one — so every email this product has sent started a
+fresh conversation in the recipient's client, even when it was an answer.
+
+0104 adds `email_messages.in_reply_to_message_id` and carries it through
+`enqueueEmail` → claim → provider.
+
+### ⚠️ The incident
+
+Adding a column to a `RETURNS TABLE` function means recreating it. **I retyped
+the body instead of copying it, twice, and each time lost something.**
+
+**0104 → 0105: renamed `message_id` to `id`.** `runSendWorker` reads
+`message.message_id`, so it became `undefined` on every claimed row and nothing
+could be sent, marked or retried.
+
+**0104 → 0106: dropped the suppression sweep and the retry cap.** The original
+function begins by marking queued messages to a do-not-contact address as
+`suppressed` *before* anything is claimed, and selects only rows with
+`attempts < max_attempts`. I reconstructed the body from the part of 0086 I had
+read and lost both. Consequences:
+
+1. **A message queued before someone unsubscribed would have been sent to
+   them.** This is the one rule in the email system with legal weight rather
+   than merely product weight.
+2. A permanently failing message would retry forever, hammering a server that
+   has already refused it and burning the sending domain's reputation.
+
+Real-world impact was nil: the `message_id` rename broke claiming during the
+same window, so nothing was delivered, and the only queued rows were
+`@buyer.example` test fixtures. **That was luck, not design.**
+
+### What did NOT catch it, and what did
+
+- **Three smoke tests passed.** They exercised the function and asserted on
+  `idempotency_key` and the new column — never on the identifier the caller
+  reads, nor on the safety rules. *A test that exercises a function without
+  asserting its contract proves it runs, not that it is usable.*
+- **`tsc` passed** until types were regenerated, because the generated types
+  described whatever the live function happened to be.
+- **The five suppression integration tests caught it** — and only because
+  GreenMail was started. ⚠️ **Those tests had been skipping silently for the
+  whole project**, so M5 criterion 4 has not actually been exercised in a long
+  time despite being recorded as proven.
+
+### The rules taken from it
+
+- **A migration that recreates a function copies the original body verbatim.**
+  0106 is exactly that, with two edits: the new column in `RETURNS TABLE` and
+  in the final `SELECT`.
+- **A smoke test names every column its caller reads**, and asserts the
+  behaviour the function exists to guarantee — not merely that it returns rows.
+  0106's test asserts a suppressed recipient is never claimed and *is* marked
+  with its reason, a message past `max_attempts` is never re-claimed,
+  `message_id` keeps its name, and the threading header survives.
+
+### Verified
+
+9/9 send-worker integration tests with GreenMail running, **including all five
+suppression tests**; typecheck 0; production claim function confirmed correct
+via regenerated types.
+
+### Known gap recorded
+
+`tests/integration/email-send-worker.test.ts` skips silently without GreenMail,
+so the criterion it proves can rot unnoticed. The run command is in the file
+header; nothing enforces it.
