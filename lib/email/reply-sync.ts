@@ -22,6 +22,7 @@ import { recordActivity } from '@/lib/crm/activities'
 import { getEmailAccount } from '@/lib/email/accounts'
 import { providerFor } from '@/lib/email/providers/registry'
 import { suppressEmail } from '@/lib/email/send'
+import { dispatchFlowTrigger } from '@/lib/flows/dispatch'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { NormalizedReply, SyncCursor } from '@/lib/email/provider'
 
@@ -222,6 +223,15 @@ async function processInbound(
       p_email: from,
       p_reason: 'bounced',
     })
+
+    await dispatchFlowTrigger({
+      workspaceId,
+      triggerType: 'email_bounced',
+      contactId,
+      // The provider's message id IS the occurrence — a re-sync of the same
+      // mailbox must not fire twice for one bounce.
+      idempotencyKey: `email_bounced:${reply.providerMessageId}`,
+    })
     return
   }
 
@@ -236,6 +246,22 @@ async function processInbound(
   }
 
   outcome.replies += 1
+
+  /*
+   * ⚠️ FIRED FOR A GENUINE REPLY ONLY. An out-of-office is not an answer, and
+   * a flow that tasks someone to "respond today" because a holiday
+   * autoresponder arrived is worse than no automation — it teaches people to
+   * ignore the tasks.
+   */
+  if (countsAsReply(classification)) {
+    await dispatchFlowTrigger({
+      workspaceId,
+      triggerType: 'email_replied',
+      contactId,
+      idempotencyKey: `email_replied:${reply.providerMessageId}`,
+    })
+  }
+
   if (!countsAsReply(classification) || !shouldStopSequence(classification)) return
 
   /*

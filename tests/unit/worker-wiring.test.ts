@@ -247,6 +247,49 @@ describe('reporting functions are actually read by something', () => {
   })
 })
 
+/**
+ * ⚠️ A TRIGGER CAN BE STRANDED TOO, and this is the third distinct shape of the
+ * same defect.
+ *
+ * `startRun` had exactly ONE caller outside the engine — Calendly's
+ * `call_booked`. Every other trigger type was declared in the schema, accepted
+ * by the validator, offered in the builder and PUBLISHABLE, and nothing ever
+ * started a run for it. So a customer could build a flow, publish it, and
+ * watch it sit there forever with no error, because nothing had gone wrong —
+ * nothing had happened at all.
+ */
+describe('flow triggers actually fire', () => {
+  const WIRED: { trigger: string; without: string }[] = [
+    { trigger: 'contact_created', without: 'no flow can react to a new contact' },
+    { trigger: 'email_replied', without: 'no flow can react to a reply' },
+    { trigger: 'email_bounced', without: 'no flow can clean up after a bounce' },
+    { trigger: 'stage_changed', without: 'no flow can react to a deal moving' },
+    { trigger: 'opportunity_won', without: 'no flow can react to a win' },
+    { trigger: 'task_completed', without: 'no flow can chain off finished work' },
+    { trigger: 'call_booked', without: 'no flow can react to a booked meeting' },
+  ]
+
+  for (const { trigger, without } of WIRED) {
+    it(`${trigger} is dispatched from somewhere — otherwise ${without}`, () => {
+      const callers = APP_SOURCES.filter((file) =>
+        readFileSync(file, 'utf8').includes(`triggerType: '${trigger}'`),
+      )
+
+      expect(
+        callers,
+        `nothing dispatches ${trigger}, so ${without}.`,
+      ).not.toHaveLength(0)
+    })
+  }
+
+  it('the dispatcher itself reaches startRun', () => {
+    // Every trigger above could dispatch and still never run if the dispatcher
+    // were disconnected from the engine.
+    const callers = callersOf('startRun', 'lib/flows/engine.ts')
+    expect(callers).toContain('lib/flows/dispatch.ts')
+  })
+})
+
 describe('the guard itself is not vacuous', () => {
   it('finds source files to search', () => {
     // If the walk returned nothing, every assertion above would pass while

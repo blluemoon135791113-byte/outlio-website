@@ -9377,3 +9377,70 @@ clean.
 **Test mode** — the brief's dry run with destructive steps simulated. It needs a
 simulate path through the engine's action registry, which is real engine work
 rather than a screen. **Undo/redo** in the builder.
+
+## 2026-09-01 — R8: flow triggers actually fire
+
+`lib/flows/dispatch.ts`, `lib/crm/ingest.ts`, `lib/crm/opportunities.ts`,
+`lib/email/reply-sync.ts`, `app/(product)/crm/tasks/actions.ts`,
+`tests/unit/worker-wiring.test.ts`.
+
+### ⚠️ Seventeen trigger types. One of them ever fired.
+
+`startRun` had exactly **one** caller outside the engine — Calendly's
+`call_booked`. Every other trigger was declared in the schema, accepted by the
+validator, offered in the builder and **publishable**, and nothing in the
+product ever started a run for it.
+
+So a customer could build a flow, publish it, and watch it sit at "published"
+forever **with no error anywhere** — because nothing had gone wrong. Nothing had
+happened at all.
+
+Same shape as R10's dead workers and R14's stranded report: correct code,
+unreachable. This is the third distinct form of that defect, and R0's
+engine-reachability instinct was right about it again.
+
+### Now wired: seven triggers
+
+`contact_created`, `email_replied`, `email_bounced`, `stage_changed`,
+`opportunity_won`, `task_completed`, plus the existing `call_booked`.
+
+### Where the care went
+
+- **`contact_created` fires only for a NEW contact.** A matched contact is
+  someone the CRM already had; firing for them would re-run assignment and
+  re-task a person who has been worked for months.
+- **A move and a win are two triggers, not one.** Every move is
+  `stage_changed`; a move into a won stage is *additionally* `opportunity_won`.
+  Collapsing them either means a win does not fire the win flow, or that every
+  routine move does — and the second congratulates a team eleven times a day.
+- **`email_replied` fires for a genuine reply only.** A flow that tasks someone
+  to "respond today" because a holiday autoresponder arrived is worse than no
+  automation: it teaches people to ignore the tasks.
+- **`task_completed` fires on the transition only.** Complete → reopen →
+  complete is one task finished twice by a person, not two.
+- **Idempotency keys are occurrences, not calls.** The contact id, the
+  opportunity *version*, the provider message id. A random key would make
+  `startRun`'s de-duplication meaningless — and the version is what correctly
+  makes A → B → A fire twice while a retry fires once.
+
+### It cannot break the thing that triggered it
+
+`dispatchFlowTrigger` never throws into its caller. It runs from the middle of
+business operations — creating a contact, recording a reply, moving a deal — and
+a flow that cannot start must not roll back the thing that happened. The reply
+was still received; the deal still moved.
+
+### Verified
+
+2,288 unit tests; flow-engine, opportunities, ingestion and operations
+integration suites all pass; typecheck 0; lint 0; build clean.
+
+The guard was **proven non-vacuous** by renaming a dispatched trigger and
+watching it fail.
+
+### Still not fired
+
+`list_added`, `batch_added`, `campaign_enrolled`, `email_sent`,
+`email_unsubscribed`, `no_activity`, `webhook`, `scheduled`, `manual`. The last
+three need a surface (a button, a schedule, an endpoint) rather than a hook into
+an existing operation.

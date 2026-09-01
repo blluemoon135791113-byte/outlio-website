@@ -10,6 +10,7 @@ import 'server-only'
  *
  * ⚠️ THE SERVICE ROLE BYPASSES RLS. Every query is scoped by `workspace_id`.
  */
+import { dispatchFlowTrigger } from '@/lib/flows/dispatch'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database'
 
@@ -326,6 +327,43 @@ export async function moveStage(
     status: OpportunityStatus
     stage_id: string
     seconds_in_previous_stage: number
+  }
+
+  /*
+   * ⚠️ TWO DISTINCT TRIGGERS, NOT ONE. Every move is a `stage_changed`; a move
+   * into a WON stage is additionally an `opportunity_won`. Collapsing them
+   * would mean either that a win does not fire the win flow, or that every
+   * routine stage move fires it — and the second is the kind of mistake that
+   * congratulates a team eleven times a day.
+   */
+  const { data: contactRow } = await createAdminClient()
+    .from('crm_opportunities')
+    .select('contact_id')
+    .eq('workspace_id', workspaceId)
+    .eq('id', opportunityId)
+    .maybeSingle()
+
+  const contactId = contactRow?.contact_id ?? null
+
+  /*
+   * The VERSION makes the key an occurrence. `crm_move_opportunity_stage`
+   * increments it on every move, so moving A → B → A fires twice, as it
+   * should, while a retry of the same move fires once.
+   */
+  await dispatchFlowTrigger({
+    workspaceId,
+    triggerType: 'stage_changed',
+    contactId,
+    idempotencyKey: `stage_changed:${opportunityId}:${result.version}`,
+  })
+
+  if (result.status === 'won') {
+    await dispatchFlowTrigger({
+      workspaceId,
+      triggerType: 'opportunity_won',
+      contactId,
+      idempotencyKey: `opportunity_won:${opportunityId}:${result.version}`,
+    })
   }
 
   return {

@@ -32,6 +32,7 @@ import {
   normalizePhoneNumber,
 } from '@/lib/crm/normalize'
 import { upsertCrmCompany, type ContactInput } from '@/lib/crm/repository'
+import { dispatchFlowTrigger } from '@/lib/flows/dispatch'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database, Json } from '@/types/database'
 
@@ -684,6 +685,22 @@ export async function createContactManually(
   const contactId = outcome.returned.get('manual-1')
 
   if (!contactId) throw new Error('createContactManually: the contact was not returned')
+
+  /*
+   * ⚠️ ONLY WHEN THE CONTACT IS NEW. A matched contact is someone the CRM
+   * already had, and firing `contact_created` for them would re-run assignment
+   * and re-task a person who has been worked for months.
+   */
+  if (outcome.created > 0) {
+    await dispatchFlowTrigger({
+      workspaceId,
+      triggerType: 'contact_created',
+      contactId,
+      // The contact id IS the occurrence: one creation, one dispatch, however
+      // many times this is retried.
+      idempotencyKey: `contact_created:${contactId}`,
+    })
+  }
 
   return { contactId, created: outcome.created > 0 }
 }

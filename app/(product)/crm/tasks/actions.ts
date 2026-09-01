@@ -11,6 +11,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { recordActivity } from '@/lib/crm/activities'
+import { dispatchFlowTrigger } from '@/lib/flows/dispatch'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
@@ -68,6 +69,19 @@ export async function setTaskDone(
       actorUserId: ctx.userId,
       contactId: task.contact_id,
       metadata: { task_id: task.id, title: task.title },
+    })
+
+    /*
+     * ⚠️ ONLY ON THE TRANSITION TO DONE, for the same reason the activity is.
+     * Completing, reopening and completing again is one task finished twice by
+     * a person and must not run the follow-up flow twice — `startRun`
+     * de-duplicates on this key.
+     */
+    await dispatchFlowTrigger({
+      workspaceId: ctx.workspace.id,
+      triggerType: 'task_completed',
+      contactId: task.contact_id,
+      idempotencyKey: `task_completed:${task.id}`,
     })
   }
 
