@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+
+import { SequenceBuilder } from '@/components/email/SequenceBuilder'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -50,6 +52,9 @@ export default async function CampaignPage({
   const r = report?.[0]
   const policy = policyFor(campaign.type as CampaignType)
   const canLaunch = can({ role: ctx.role, modules: ctx.modules }, 'email.campaign.launch')
+  // Authoring a sequence is a template job, not a launching one — a manager can
+  // write the emails without being the person allowed to send them.
+  const canManage = can({ role: ctx.role, modules: ctx.modules }, 'email.template.manage')
 
   return (
     <div className="space-y-5">
@@ -124,38 +129,55 @@ export default async function CampaignPage({
         </p>
       </section>
 
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-ink">Steps</h3>
-        {(steps ?? []).length === 0 ? (
-          <div className="clay p-6 text-center">
-            <p className="text-sm text-muted">
-              No steps yet. A campaign with no steps has nothing to send.
-            </p>
-          </div>
-        ) : (
-          <ol className="space-y-2">
-            {(steps ?? []).map((step) => (
-              <li key={step.id} className="clay p-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">
-                    Step {step.step_index + 1}
-                  </span>
-                  <span className="text-xs text-muted">
-                    {/* The wait is BEFORE the step, which the label makes explicit. */}
-                    {step.wait_hours === 0
-                      ? 'Sends immediately'
-                      : `Waits ${formatWait(step.wait_hours)} first`}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-sm font-semibold text-ink">{step.subject}</p>
-                <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-relaxed text-muted">
-                  {step.body_text}
-                </p>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
+      {/*
+        ⚠️ THE READ-ONLY STEP LIST IS REPLACED BY AN EDITOR. It used to render
+        the steps and offer no way to author one — `email_sequence_steps` has
+        existed since M6 and nothing in the product could write to it, so every
+        campaign was empty and `assertLaunchable` refused it.
+      */}
+      {canManage ? (
+        <SequenceBuilder
+          campaignId={campaign.id}
+          status={campaign.status}
+          steps={(steps ?? []).map((step) => ({
+            id: step.id,
+            stepIndex: step.step_index,
+            waitHours: step.wait_hours,
+            subject: step.subject,
+            bodyText: step.body_text,
+          }))}
+        />
+      ) : (
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-ink">Steps</h3>
+          {(steps ?? []).length === 0 ? (
+            <div className="clay p-6 text-center">
+              <p className="text-sm text-muted">No steps yet.</p>
+            </div>
+          ) : (
+            <ol className="space-y-2">
+              {(steps ?? []).map((step) => (
+                <li key={step.id} className="clay p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+                      Step {step.step_index + 1}
+                    </span>
+                    <span className="text-xs text-muted">
+                      {step.wait_hours === 0
+                        ? 'Sends immediately'
+                        : `Waits ${formatWait(step.wait_hours)} first`}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-sm font-semibold text-ink">{step.subject}</p>
+                  <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-relaxed text-muted">
+                    {step.body_text}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
     </div>
   )
 }

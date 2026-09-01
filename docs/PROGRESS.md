@@ -9050,3 +9050,59 @@ recorded.
 
 Notes from an opportunity (its detail view does not exist yet), and task
 creation from the inbox.
+
+## 2026-09-01 — R12: the sequence builder
+
+`lib/email/sequence.ts`, `app/(product)/email/campaigns/[id]/sequence-actions.ts`,
+`components/email/SequenceBuilder.tsx`,
+`tests/integration/email-sequence-order.test.ts`.
+
+### Sending has worked since R10, and nobody could author a sequence
+
+`email_sequence_steps` has existed since M6 with waits, per-step stop-on-reply
+and a contiguity constraint. The campaign screen **read** the steps and offered
+no way to write one, so every campaign was empty and `assertLaunchable`
+correctly refused to launch it.
+
+### Wording is always editable; structure is not
+
+Fixing a typo mid-flight changes what the next send says, which is what anyone
+expects. Inserting, deleting or reordering is a different thing: **enrolments
+hold a step index**, so renumbering under them makes someone skip a step or
+receive one twice. Structure edits require `draft` or `paused`, and the screen
+says so with the remedy rather than disabling controls in silence.
+
+### An unknown variable is refused, not sent
+
+`{{firstname}}` would otherwise go out as those exact characters to every
+recipient — the most visible possible failure, and unrecoverable once sent.
+`validateTemplate` runs on both subject and body before either is stored.
+
+### ⚠️ The reorder is two passes, and it has to be
+
+`email_sequence_steps_order_idx` is UNIQUE on `(campaign_id, step_index)`.
+Writing the new positions directly collides with the rows that have not moved
+yet — assigning 0 to the row currently at 1 hits the row still sitting at 0. So
+everything is parked above the live range first, then settled into place.
+
+This was extracted from the server action into `lib/email/sequence.ts`
+specifically so it could be tested against a real database: **the collision only
+exists against the real index**, and a unit test with a fake client would prove
+nothing, because the constraint is the thing under test. The test reverses a
+four-step sequence — the case where every row's destination is occupied.
+
+Deleting renumbers for the same reason: the walker asks for "the step after N",
+so a hole at 1 strands every enrolment that reached step 0, waiting for a step
+that no longer exists. The test deletes the middle step, asserts the gap is
+real, then asserts it closes.
+
+### Verified
+
+5 new ordering integration tests against the live schema; 2,236 unit tests;
+typecheck 0; lint 0; build clean.
+
+### Deferred from R12
+
+Per-step variants (A/B), HTML bodies, and a rendered preview against a real
+contact. The schema carries `body_html` and the template engine has
+`previewTemplate`; neither is wired.
