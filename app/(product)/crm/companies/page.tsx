@@ -119,7 +119,14 @@ export default async function CompaniesPage({
                 {rows.map((company) => (
                   <tr key={company.id} className="border-b border-line last:border-0">
                     <td className="px-4 py-3 font-medium text-ink">
-                      {company.name ?? 'Unnamed company'}
+                      {/* The row is now a way in. Until R2 the company detail
+                          view did not exist at all. */}
+                      <Link
+                        href={`/crm/companies/${company.id}`}
+                        className="hover:underline"
+                      >
+                        {company.name ?? 'Unnamed company'}
+                      </Link>
                       {company.headquarters ? (
                         <span className="ml-2 text-xs font-normal text-muted">
                           {company.headquarters}

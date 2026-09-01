@@ -74,3 +74,76 @@ export async function setTaskDone(
   revalidatePath('/crm/tasks')
   return { ok: true, message: done ? 'Done.' : 'Reopened.' }
 }
+
+
+// ---------------------------------------------------------------------------
+// Creating a task — R2
+//
+// ⚠️ UNTIL NOW A TASK COULD ONLY ARRIVE FROM A FLOW. The tasks page listed and
+// completed them and offered no way to make one, so the queue was empty for
+// anyone who had not built an automation first.
+// ---------------------------------------------------------------------------
+
+export type CreateTaskState =
+  | { ok: true; message: string }
+  | { ok: false; error: string }
+  | null
+
+export async function createTaskAction(
+  _previous: CreateTaskState,
+  formData: FormData,
+): Promise<CreateTaskState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('crm.task.manage')
+  } catch {
+    return { ok: false, error: 'You do not have permission to create tasks.' }
+  }
+
+  const title = String(formData.get('title') ?? '').trim()
+  if (!title) return { ok: false, error: 'Give the task a title.' }
+
+  const contactId = String(formData.get('contactId') ?? '') || null
+  const dueAt = String(formData.get('dueAt') ?? '').trim() || null
+
+  const db = createAdminClient()
+
+  /*
+   * ⚠️ A CONTACT ID FROM A FORM IS A CLAIM. The service role bypasses RLS, so
+   * without this check a crafted request could attach a task to a contact in
+   * another workspace and surface that contact's name in this one.
+   */
+  if (contactId) {
+    const { data: contact } = await db
+      .from('crm_contacts')
+      .select('id')
+      .eq('workspace_id', ctx.workspace.id)
+      .eq('id', contactId)
+      .maybeSingle()
+
+    if (!contact) return { ok: false, error: 'That contact is not in this workspace.' }
+  }
+
+  const { error } = await db.from('crm_tasks').insert({
+    workspace_id: ctx.workspace.id,
+    title,
+    body: String(formData.get('body') ?? '').trim() || null,
+    contact_id: contactId,
+    /*
+     * Assigned to the creator by default. An unassigned task belongs to
+     * nobody and is the kind that sits in a queue forever.
+     */
+    assigned_to_user_id: ctx.userId,
+    // A date input gives a local day; storing it as end-of-day avoids a task
+    // created for "today" reading as already overdue.
+    due_at: dueAt ? new Date(`${dueAt}T23:59:59`).toISOString() : null,
+    status: 'open',
+    created_by: ctx.userId,
+  })
+
+  if (error) return { ok: false, error: 'Could not create that task.' }
+
+  revalidatePath('/crm/tasks')
+  revalidatePath('/dashboard')
+  return { ok: true, message: 'Task created.' }
+}

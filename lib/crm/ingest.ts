@@ -608,3 +608,82 @@ export async function undoBatch(
     membershipsRemoved: row?.memberships_removed ?? 0,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Manual contact creation — R2
+// ---------------------------------------------------------------------------
+
+/**
+ * Adds one contact by hand.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THIS GOES THROUGH `crm_ingest_contacts`, NOT A PLAIN INSERT.         ║
+ * ║                                                                           ║
+ * ║  A "+ Contact" button that inserts a row directly would bypass every      ║
+ * ║  identity rule M2 exists to enforce: normalization, email and LinkedIn    ║
+ * ║  matching, and the canonical-contact guarantee. Someone typing in a       ║
+ * ║  person who is already in the CRM would silently create a second copy —   ║
+ * ║  and manual entry is the single most likely way that happens, because it  ║
+ * ║  is what people reach for when they cannot find someone.                  ║
+ * ║                                                                           ║
+ * ║  So the manual path is the import path with one row, and it reports       ║
+ * ║  whether it created or matched.                                           ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function createContactManually(
+  workspaceId: string,
+  input: ContactInput,
+  actorUserId: string | null = null,
+): Promise<{ contactId: string; created: boolean }> {
+  const db = createAdminClient()
+
+  /*
+   * One batch per workspace collects everything typed in by hand, so a manual
+   * contact still has a provenance in the funnel rather than appearing from
+   * nowhere. Found or created — not one batch per contact, which would make
+   * the batch report useless.
+   */
+  const { data: existing } = await db
+    .from('crm_lead_batches')
+    .select('id')
+    .eq('workspace_id', workspaceId)
+    .eq('source', 'manual')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  let batchId = existing?.id ?? null
+
+  if (!batchId) {
+    const { data: batch, error } = await db
+      .from('crm_lead_batches')
+      .insert({
+        workspace_id: workspaceId,
+        name: 'Added manually',
+        source: 'manual',
+        created_by: actorUserId,
+      })
+      .select('id')
+      .single()
+
+    if (error || !batch) {
+      throw new Error(`createContactManually failed: ${error?.message ?? 'no batch'}`)
+    }
+    batchId = batch.id
+  }
+
+  const row = toPayloadRow('manual-1', input, null)
+  if (!row) {
+    // The normalizer rejects a row with no usable identity. Saying so plainly
+    // beats storing a nameless, unreachable contact.
+    throw new Error('createContactManually: a contact needs a name or an email')
+  }
+
+  const outcome = await runIngest(workspaceId, batchId, [row])
+  const contactId = outcome.returned.get('manual-1')
+
+  if (!contactId) throw new Error('createContactManually: the contact was not returned')
+
+  return { contactId, created: outcome.created > 0 }
+}

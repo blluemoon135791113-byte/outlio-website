@@ -8875,3 +8875,64 @@ preview is for.
 
 2,236 unit tests, all passing, **no expected-fail remaining**; typecheck 0;
 lint 0; build clean with `/crm/import` present.
+
+## 2026-09-01 — R2 (part 1): contacts, tasks and companies can be worked
+
+`lib/crm/ingest.ts` (+`createContactManually`), `lib/crm/contact-actions.ts`,
+`app/(product)/crm/tasks/actions.ts`, `components/crm/NewContact.tsx`,
+`components/crm/NewTask.tsx`, `app/(product)/crm/companies/[id]/page.tsx`.
+
+### Manual contact creation goes THROUGH the dedup, not around it
+
+There was no way to add a contact by hand anywhere in the product — only the
+extension, and imports since R1.
+
+⚠️ **The obvious implementation is a plain INSERT, and it would have been
+wrong.** It bypasses every identity rule M2 exists to enforce: normalization,
+email and LinkedIn matching, the canonical-contact guarantee. Manual entry is
+the *most* likely way a duplicate enters a CRM, because typing someone in is
+what people do when they cannot find a person who is already there.
+
+So the manual path is the import path with one row. It reports **"That person
+was already in your CRM"** and opens them, instead of silently making a second
+copy. Manual contacts collect in one per-workspace "Added manually" batch, so
+they have a provenance in the funnel rather than appearing from nowhere — found
+or created, not one batch per contact, which would make the batch report
+useless.
+
+The owner defaults to whoever added them. That is right for manual entry and
+wrong for a bulk import, which is why R1 leaves imported leads unassigned.
+
+### Tasks could only come from a flow
+
+The tasks page listed and completed tasks and offered no way to make one, so the
+queue was empty for anyone who had not built an automation first. A due date is
+stored as **end of day**, or a task created for "today" reads as already
+overdue.
+
+### A company is not a contact
+
+The brief is explicit that the two stay distinct objects. `/crm/companies/[id]`
+exists so an account can be worked as an account — every person at it, every
+deal against it — rather than only ever being a column on a person's row.
+
+It applies the same owner rule as every other CRM surface: **a setter cannot
+reach another person's account by typing its id into the address bar.** Hiding a
+row from a list is not access control.
+
+Missing values read **"Not recorded"**, never a blank or a zero.
+
+### Deferred from R2, recorded rather than faked
+
+- **Bulk select, saved views, column configuration, and the full filter set**
+  (owner, lifecycle, list, campaign, last activity, next task).
+- **Contact detail as a drawer.** It is a full page today; the brief asks for a
+  drawer so CRM work is not constant navigation.
+- **Company attachment on manual contact creation.** The person fields are
+  there; linking a company by name needs the company-resolution path the
+  ingest uses, which is more than this phase.
+- Remaining quick actions: add to list, add tag, change lifecycle, archive.
+
+### Verified
+
+2,236 unit tests; typecheck 0; lint 0; build clean with `/crm/companies/[id]`.

@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+
+import { NewTaskButton } from '@/components/crm/NewTask'
 import Link from 'next/link'
 
 import { TaskList, type TaskRow } from '@/components/crm/TaskList'
@@ -95,11 +97,17 @@ export default async function TasksPage({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold tracking-[-0.02em] text-ink">Tasks</h2>
-        <p className="mt-0.5 text-sm text-muted">
-          {seesAll ? 'Everything open across the workspace.' : 'The tasks assigned to you.'}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold tracking-[-0.02em] text-ink">Tasks</h2>
+          <p className="mt-0.5 text-sm text-muted">
+            {seesAll ? 'Everything open across the workspace.' : 'The tasks assigned to you.'}
+          </p>
+        </div>
+
+        {/* ⚠️ Until R2 a task could only arrive from a flow, so this queue was
+            empty for anyone who had not built an automation first. */}
+        <NewTaskButton />
       </div>
 
       <nav aria-label="Task views" className="flex flex-wrap gap-1 border-b border-border">

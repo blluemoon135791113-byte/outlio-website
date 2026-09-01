@@ -12,6 +12,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { addNote, assignContact } from '@/lib/crm/activities'
+import { createContactManually } from '@/lib/crm/ingest'
 import {
   checkCollision,
   DuplicateRequestError,
@@ -142,5 +143,79 @@ export async function addNoteAction(
     return ok('Note added.')
   } catch (error) {
     return toState(error)
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Creating a contact by hand — R2
+// ---------------------------------------------------------------------------
+
+export type CreateContactState =
+  | { ok: true; message: string; contactId: string; created: boolean }
+  | { ok: false; error: string }
+  | null
+
+/**
+ * ⚠️ ROUTED THROUGH THE DEDUPLICATING INGEST, not a plain insert. Manual entry
+ * is the most likely way a duplicate gets into a CRM, because it is what people
+ * reach for when they cannot find someone who is already there. This reports
+ * "already in your CRM" instead of quietly making a second copy.
+ */
+export async function createContactAction(
+  _previous: CreateContactState,
+  formData: FormData,
+): Promise<CreateContactState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('crm.contact.create')
+  } catch {
+    return { ok: false, error: 'You do not have permission to add contacts.' }
+  }
+
+  const fullName = String(formData.get('fullName') ?? '').trim()
+  const email = String(formData.get('email') ?? '').trim()
+  const jobTitle = String(formData.get('jobTitle') ?? '').trim()
+  const linkedInUrl = String(formData.get('linkedInUrl') ?? '').trim()
+  const phone = String(formData.get('phone') ?? '').trim()
+
+  // The normalizer enforces this too, but saying it here names the field.
+  if (!fullName && !email) {
+    return { ok: false, error: 'Give at least a name or an email address.' }
+  }
+
+  try {
+    const result = await createContactManually(
+      ctx.workspace.id,
+      {
+        fullName: fullName || null,
+        emails: email ? [email] : [],
+        phones: phone ? [phone] : [],
+        jobTitle: jobTitle || null,
+        linkedInUrl: linkedInUrl || null,
+        // Whoever adds someone by hand is working them; that is a far better
+        // default than unassigned, which is right for a bulk import.
+        ownerUserId: ctx.userId,
+        source: 'manual',
+      },
+      ctx.userId,
+    )
+
+    revalidatePath('/crm/contacts')
+
+    return {
+      ok: true,
+      contactId: result.contactId,
+      created: result.created,
+      message: result.created
+        ? 'Contact added.'
+        : 'That person was already in your CRM — opening them instead.',
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    if (message.includes('needs a name or an email')) {
+      return { ok: false, error: 'Give at least a name or an email address.' }
+    }
+    return { ok: false, error: 'Could not add that contact.' }
   }
 }

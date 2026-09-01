@@ -2,9 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { ContactSearch } from '@/components/crm/ContactSearch'
+import { NewContactButton } from '@/components/crm/NewContact'
 import { listContacts } from '@/lib/crm/contacts-list'
 import { requireWorkspace } from '@/lib/workspaces/context'
-import { dataScope } from '@/lib/workspaces/permissions'
+import { can, dataScope } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
   title: 'Contacts | Outlio',
@@ -66,7 +67,14 @@ export default async function ContactsPage({
             {search ? ` matching “${search}”` : ''}
           </p>
         </div>
-        <ContactSearch initialValue={search} />
+        <div className="flex flex-wrap items-center gap-2">
+          <ContactSearch initialValue={search} />
+          {/* ⚠️ THERE WAS NO WAY TO ADD A CONTACT BY HAND anywhere in the
+              product until R2 — only the extension and, since R1, imports. */}
+          {can({ role: ctx.role, modules: ctx.modules }, 'crm.contact.create') ? (
+            <NewContactButton />
+          ) : null}
+        </div>
       </div>
 
       {result.rows.length === 0 ? (

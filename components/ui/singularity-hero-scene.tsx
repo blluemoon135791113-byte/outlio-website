@@ -207,6 +207,7 @@ const NEBULA_FRAGMENT = /* glsl */ `
   uniform sampler2D uMap;
   uniform float uTime;
   varying vec2 vUv;
+  varying float vRelief;
 
   void main() {
     /*
@@ -313,7 +314,11 @@ export function SingularityHeroScene({
 
     let renderer: THREE.WebGLRenderer
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+      renderer = new THREE.WebGLRenderer({
+        antialias: finePointer.matches,
+        alpha: true,
+        powerPreference: 'high-performance',
+      })
     } catch {
       /*
        * ⚠️ THE PLATE STAYS ON SCREEN IF WEBGL IS UNAVAILABLE.
@@ -325,7 +330,8 @@ export function SingularityHeroScene({
       return
     }
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    const pixelRatioCap = finePointer.matches ? 1.6 : 1.25
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelRatioCap))
     renderer.setClearColor(0x000000, 0)
     renderer.domElement.className = 'absolute inset-0 size-full'
     host.appendChild(renderer.domElement)
@@ -340,7 +346,7 @@ export function SingularityHeroScene({
      * painted starfield slides with the hand, so it reads as wallpaper. These
      * sit behind it and parallax against it when the camera shifts.
      */
-    const STAR_COUNT = 2600
+    const STAR_COUNT = window.innerWidth < 768 ? 1200 : 2200
     const starPositions = new Float32Array(STAR_COUNT * 3)
     const starSizes = new Float32Array(STAR_COUNT)
     let starSeed = 0x2f6b1d
@@ -396,11 +402,15 @@ export function SingularityHeroScene({
     texture.minFilter = THREE.LinearFilter
     texture.generateMipmaps = false
 
+    const pointerUv = new THREE.Vector2(0.5, 0.5)
+    const pointerTargetUv = new THREE.Vector2(0.5, 0.5)
     const handGeometry = new THREE.PlaneGeometry(1, 1, 96, 54)
     const handMaterial = new THREE.ShaderMaterial({
       uniforms: {
         uMap: { value: texture },
         uTime: { value: 0 },
+        uDepth: { value: 1 },
+        uPointer: { value: pointerUv },
       },
       vertexShader: HAND_VERTEX,
       fragmentShader: HAND_FRAGMENT,
@@ -416,6 +426,8 @@ export function SingularityHeroScene({
       uniforms: {
         uMap: { value: texture },
         uTime: { value: 0 },
+        uDepth: { value: 1 },
+        uPointer: { value: pointerUv },
       },
       vertexShader: HAND_VERTEX,
       fragmentShader: NEBULA_FRAGMENT,
@@ -445,6 +457,17 @@ export function SingularityHeroScene({
     const orb = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), orbMaterial)
     scene.add(orb)
 
+    const coronaMaterial = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 } },
+      vertexShader: CORONA_VERTEX,
+      fragmentShader: CORONA_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+    const corona = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), coronaMaterial)
+    scene.add(corona)
+
     /*
      * ⚠️ THE SILHOUETTE IS DRAWN BEFORE THE HAND, NOT AFTER IT.
      *
@@ -457,9 +480,10 @@ export function SingularityHeroScene({
      * BEHIND its own corona.
      */
     stars.renderOrder = 0
-    orb.renderOrder = 1
-    hand.renderOrder = 2
-    nebula.renderOrder = 3
+    corona.renderOrder = 1
+    orb.renderOrder = 2
+    hand.renderOrder = 3
+    nebula.renderOrder = 4
 
     // ── state ────────────────────────────────────────────────────────────────
     let width = 1
@@ -521,13 +545,16 @@ export function SingularityHeroScene({
        * artwork at every viewport; a fixed pixel radius drifts off the hole as
        * soon as the image is scaled.
        */
-      orb.scale.setScalar(layout.imageWidth * HOLE_RADIUS * worldPerPixel)
+      const orbScale = layout.imageWidth * HOLE_RADIUS * worldPerPixel
+      orb.scale.setScalar(orbScale)
+      corona.scale.setScalar(orbScale * 1.5)
       orbBase.set(
         (orbHost.x - width / 2) * worldPerPixel,
         -(orbHost.y - height / 2) * worldPerPixel,
         -0.05,
       )
       orb.position.copy(orbBase)
+      corona.position.copy(orbBase)
     }
 
     const resize = () => {
@@ -544,13 +571,17 @@ export function SingularityHeroScene({
     const move = (event: PointerEvent) => {
       if (!finePointer.matches || layout.narrow || reducedMotion.matches) return
       const bounds = host.getBoundingClientRect()
-      pointerNormX = ((event.clientX - bounds.left) / bounds.width - 0.5) * 2
-      pointerNormY = ((event.clientY - bounds.top) / bounds.height - 0.5) * 2
+      const pointerX = (event.clientX - bounds.left) / bounds.width
+      const pointerY = (event.clientY - bounds.top) / bounds.height
+      pointerNormX = (pointerX - 0.5) * 2
+      pointerNormY = (pointerY - 0.5) * 2
+      pointerTargetUv.set(pointerX, 1 - pointerY)
     }
 
     const leave = () => {
       pointerNormX = 0
       pointerNormY = 0
+      pointerTargetUv.set(0.5, 0.5)
     }
 
     const draw = (time: number) => {
@@ -567,7 +598,12 @@ export function SingularityHeroScene({
        * frame — the plate already has one, and two is one too many.
        */
       starMaterial.uniforms.uTime.value = seconds * motion
+      handMaterial.uniforms.uTime.value = seconds * motion
       nebulaMaterial.uniforms.uTime.value = seconds * motion
+      coronaMaterial.uniforms.uTime.value = seconds * motion
+      handMaterial.uniforms.uDepth.value = reducedMotion.matches ? 0.82 : 1
+      nebulaMaterial.uniforms.uDepth.value = reducedMotion.matches ? 0.82 : 1
+      pointerUv.lerp(pointerTargetUv, smoothing * 0.7)
 
       /*
        * The CAMERA moves, not the objects. That is what makes the starfield
@@ -585,6 +621,7 @@ export function SingularityHeroScene({
       nebula.position.copy(hand.position)
       orb.position.x = orbBase.x + camera.position.x * HAND_DRIFT_DAMPING
       orb.position.y = orbBase.y + camera.position.y * HAND_DRIFT_DAMPING
+      corona.position.copy(orb.position)
 
       /*
        * ⚠️ NO `lookAt` — THAT WAS THE HAND'S EXPAND AND CONTRACT.
@@ -663,6 +700,8 @@ export function SingularityHeroScene({
       nebulaMaterial.dispose()
       orb.geometry.dispose()
       orbMaterial.dispose()
+      corona.geometry.dispose()
+      coronaMaterial.dispose()
       texture.dispose()
       renderer.dispose()
       renderer.domElement.remove()
