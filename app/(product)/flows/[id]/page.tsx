@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+
+import { RunManually } from '@/components/flows/RunManually'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -107,6 +109,35 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
 
   const canManage = can({ role: ctx.role, modules: ctx.modules }, 'flow.manage')
 
+  /*
+   * ⚠️ ONLY FOR A PUBLISHED FLOW WHOSE TRIGGER IS `manual`. Offering "Run now"
+   * on a `contact_created` flow would fire real actions against someone the
+   * flow was never meant to touch, and the person clicking would reasonably
+   * expect a rehearsal rather than a live run.
+   */
+  const currentDefinition = (current?.definition ?? null) as
+    | { trigger?: { type?: string } }
+    | null
+  const isManual =
+    flow.status === 'published' && currentDefinition?.trigger?.type === 'manual'
+
+  const manualContacts = isManual
+    ? await (async () => {
+        // Bounded: a picker, not the whole book.
+        const { data } = await createAdminClient()
+          .from('crm_contacts')
+          .select('id, full_name')
+          .eq('workspace_id', ctx.workspace.id)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(50)
+        return (data ?? []).map((c) => ({
+          id: c.id,
+          name: c.full_name ?? 'Unnamed contact',
+        }))
+      })()
+    : []
+
   return (
     <div className="space-y-5">
       <div>
@@ -137,6 +168,16 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
             Every other step is free.
           </p>
         </div>
+      ) : null}
+
+      {isManual && canManage ? (
+        <section className="clay p-4">
+          <h3 className="text-sm font-semibold text-ink">Run this flow</h3>
+          <p className="mt-0.5 mb-3 text-xs text-muted">
+            This flow is triggered by hand rather than by an event.
+          </p>
+          <RunManually flowId={flow.id} contacts={manualContacts} />
+        </section>
       ) : null}
 
       {canManage ? (

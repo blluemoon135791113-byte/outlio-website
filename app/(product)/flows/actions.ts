@@ -12,6 +12,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { FlowDefinitionError, validateFlowDefinition } from '@/lib/flows/definition'
+import { startRun } from '@/lib/flows/engine'
 import { flowTemplate } from '@/lib/flows/templates'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
@@ -175,5 +176,120 @@ export async function pauseFlow(
     }
   } catch {
     return { ok: false, error: 'Could not change that flow.' }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Running a flow by hand — R8 (the `manual` trigger)
+// ---------------------------------------------------------------------------
+
+export type ManualRunState =
+  | { ok: true; message: string }
+  | { ok: false; error: string }
+  | null
+
+/**
+ * Starts one run of a manually-triggered flow against one contact.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THIS IS NOT TEST MODE, AND MUST NOT BE MISTAKEN FOR IT.              ║
+ * ║                                                                           ║
+ * ║  Every action runs FOR REAL: tasks are created, owners are assigned,      ║
+ * ║  notifications are sent. The brief's test mode — where destructive steps  ║
+ * ║  are simulated — needs a simulate path through the action registry and is ║
+ * ║  recorded as deferred. Calling this "test" would be the dangerous lie:    ║
+ * ║  someone would try it on a real contact expecting nothing to happen.      ║
+ * ║                                                                           ║
+ * ║  ⚠️ ONLY FLOWS WHOSE TRIGGER IS `manual`. Running a `contact_created`     ║
+ * ║  flow by hand would fire real actions against someone the flow was never  ║
+ * ║  meant to touch — and the person clicking would reasonably expect a       ║
+ * ║  rehearsal, not a live run.                                               ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function runFlowManually(
+  _previous: ManualRunState,
+  formData: FormData,
+): Promise<ManualRunState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('flow.manage')
+  } catch {
+    return { ok: false, error: 'You do not have permission to run flows.' }
+  }
+
+  const flowId = String(formData.get('flowId') ?? '')
+  const contactId = String(formData.get('contactId') ?? '')
+  if (!contactId) return { ok: false, error: 'Choose a contact to run it against.' }
+
+  const db = createAdminClient()
+
+  // Scoped by workspace in code — an id from a form is a claim, not authority.
+  const { data: flow } = await db
+    .from('flows')
+    .select('id, name, status, published_version_id, flow_versions!flows_published_version_fk(definition)')
+    .eq('workspace_id', ctx.workspace.id)
+    .eq('id', flowId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (!flow) return { ok: false, error: 'That flow no longer exists.' }
+
+  if (flow.status !== 'published' || !flow.published_version_id) {
+    return { ok: false, error: 'Publish the flow before running it.' }
+  }
+
+  const definition = (flow.flow_versions as { definition?: { trigger?: { type?: string } } } | null)
+    ?.definition
+
+  if (definition?.trigger?.type !== 'manual') {
+    return {
+      ok: false,
+      error:
+        'This flow runs on its own trigger, not by hand. Only a flow whose trigger is “manual” can be started here.',
+    }
+  }
+
+  const { data: contact } = await db
+    .from('crm_contacts')
+    .select('id, full_name')
+    .eq('workspace_id', ctx.workspace.id)
+    .eq('id', contactId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (!contact) return { ok: false, error: 'That contact is not in this workspace.' }
+
+  try {
+    const result = await startRun({
+      workspaceId: ctx.workspace.id,
+      flowId: flow.id,
+      triggerType: 'manual',
+      contactId: contact.id,
+      /*
+       * ⚠️ THE TIMESTAMP IS PART OF THE KEY, deliberately — unlike every other
+       * trigger. Running a flow by hand twice is two intentional acts, and
+       * de-duplicating them would silently ignore the second click and look
+       * like a broken button.
+       */
+      idempotencyKey: `manual:${flow.id}:${contact.id}:${Date.now()}`,
+    })
+
+    revalidatePath(`/flows/${flow.id}`)
+
+    if (!result.started) {
+      const explain: Record<string, string> = {
+        not_published: 'Publish the flow before running it.',
+        duplicate: 'That run has already been started.',
+        halted: `Stopped by a safety limit: ${result.detail}`,
+      }
+      return { ok: false, error: explain[result.reason] ?? 'That run could not start.' }
+    }
+
+    return {
+      ok: true,
+      message: `Started against ${contact.full_name ?? 'that contact'}. Every step runs for real — watch the run history below.`,
+    }
+  } catch {
+    return { ok: false, error: 'That run could not start.' }
   }
 }

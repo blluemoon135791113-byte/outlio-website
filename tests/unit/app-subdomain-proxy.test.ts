@@ -41,6 +41,19 @@ describe('app.outlio.io software surface', () => {
     expect(getRewrittenUrl(response)).toBe('https://app.outlio.io/app-home')
   })
 
+  it('renders the internal homepage rewrite instead of redirecting it back into a loop', async () => {
+    const response = await proxy(
+      new NextRequest('https://app.outlio.io/app-home', {
+        headers: {
+          host: 'app.outlio.io',
+          'x-outlio-internal-rewrite': '1',
+        },
+      }),
+    )
+
+    expect(getRedirectUrl(response)).toBeNull()
+  })
+
   it('serves the Lead Engine terms at /terms on the app domain', async () => {
     const response = await proxy(appRequest('/terms'))
 

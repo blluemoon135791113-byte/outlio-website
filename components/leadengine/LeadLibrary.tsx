@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 
+import { LeadLibraryScene } from './LeadLibraryScene'
 import styles from './LeadLibrary.module.css'
 
 type LeadInsight = {
@@ -283,6 +284,7 @@ const BOOK_BAYS = DENSE_BOOK_ROWS.map((row) => {
 })
 
 const leadById = new Map(LEADS.map((lead) => [lead.id, lead]))
+const SCENE_LEADS = LEADS.map(({ id, initials, name }) => ({ id, initials, name }))
 
 function FieldIcon({ type }: { type: 'company' | 'email' | 'linkedin' | 'phone' | 'role' | 'website' }) {
   const paths = {
@@ -303,11 +305,10 @@ function FieldIcon({ type }: { type: 'company' | 'email' | 'linkedin' | 'phone' 
 
 export function LeadLibrary() {
   const [activeLead, setActiveLead] = useState<LeadInsight | null>(null)
+  const [sceneReady, setSceneReady] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
-  const lastTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const tiltHostRef = useRef<HTMLDivElement>(null)
-  const stageRef = useRef<HTMLDivElement>(null)
+  const lastTriggerRef = useRef<HTMLElement | null>(null)
 
   const closeLead = useCallback(() => {
     const trigger = lastTriggerRef.current
@@ -315,10 +316,19 @@ export function LeadLibrary() {
     requestAnimationFrame(() => trigger?.focus())
   }, [])
 
+  const openSceneLead = useCallback((leadId: string, trigger: HTMLElement) => {
+    const lead = leadById.get(leadId)
+    if (!lead) return
+    lastTriggerRef.current = trigger
+    setActiveLead(lead)
+  }, [])
+
   useEffect(() => {
     if (!activeLead) return
 
-    closeButtonRef.current?.focus()
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    requestAnimationFrame(() => closeButtonRef.current?.focus())
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -328,7 +338,6 @@ export function LeadLibrary() {
       }
 
       if (event.key !== 'Tab' || !dialogRef.current) return
-
       const focusable = Array.from(
         dialogRef.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
@@ -347,54 +356,11 @@ export function LeadLibrary() {
     }
 
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [activeLead, closeLead])
-
-  useEffect(() => {
-    const host = tiltHostRef.current
-    const stage = stageRef.current
-    if (!host || !stage) return
-
-    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)')
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
-    let frame = 0
-
-    const reset = () => {
-      window.cancelAnimationFrame(frame)
-      stage.style.transform = ''
-    }
-
-    const move = (event: PointerEvent) => {
-      if (!finePointer.matches || reducedMotion.matches || stage.dataset.modalOpen === 'true') {
-        reset()
-        return
-      }
-
-      const bounds = host.getBoundingClientRect()
-      const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 2
-      const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 2
-      const rotateX = Math.max(-2.4, Math.min(2.4, y * -2.4))
-      const rotateY = Math.max(-3.2, Math.min(3.2, x * 3.2))
-
-      window.cancelAnimationFrame(frame)
-      frame = window.requestAnimationFrame(() => {
-        stage.style.transform = `translate3d(${x * 2}px, ${y * 1.5}px, 0) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`
-      })
-    }
-
-    host.addEventListener('pointermove', move)
-    host.addEventListener('pointerleave', reset)
-
     return () => {
-      window.cancelAnimationFrame(frame)
-      host.removeEventListener('pointermove', move)
-      host.removeEventListener('pointerleave', reset)
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [])
-
-  useEffect(() => {
-    if (activeLead && stageRef.current) stageRef.current.style.transform = ''
-  }, [activeLead])
+  }, [activeLead, closeLead])
 
   return (
     <section className={styles.section} aria-labelledby="lead-library-title">
@@ -406,13 +372,25 @@ export function LeadLibrary() {
         <p className={styles.instruction}>Move through the shelf. A few records are ready to open.</p>
       </div>
 
-      <div ref={tiltHostRef} className={styles.libraryPerspective}>
-        <div
-          ref={stageRef}
-          className={styles.libraryStage}
-          data-modal-open={activeLead ? 'true' : 'false'}
-        >
-        <div className={styles.shelfFrame} aria-label="Interactive lead intelligence library">
+      <div className={styles.libraryLayout}>
+        <div className={styles.libraryPerspective}>
+          <div
+            className={styles.libraryStage}
+            data-scene-ready={sceneReady ? 'true' : 'false'}
+          >
+            <LeadLibraryScene
+              leads={SCENE_LEADS}
+              activeLeadId={activeLead?.id}
+              onActivate={openSceneLead}
+              onReadyChange={setSceneReady}
+            />
+
+          <div
+            className={styles.fallbackScene}
+            data-hidden={sceneReady ? 'true' : 'false'}
+            aria-hidden={sceneReady}
+          >
+          <div className={styles.shelfFrame} aria-label="Interactive lead intelligence library">
           <div className={styles.shelfInterior}>
             <span className={`${styles.divider} ${styles.dividerOne}`} aria-hidden />
             <span className={`${styles.divider} ${styles.dividerTwo}`} aria-hidden />
@@ -449,6 +427,7 @@ export function LeadLibrary() {
                             style={bookStyle}
                             aria-label={`Open lead insight for ${lead.name}`}
                             aria-haspopup="dialog"
+                            tabIndex={sceneReady ? -1 : undefined}
                             onClick={(event) => {
                               lastTriggerRef.current = event.currentTarget
                               setActiveLead(lead)
@@ -474,87 +453,84 @@ export function LeadLibrary() {
           <span className={`${styles.leg} ${styles.legLeft}`} />
           <span className={`${styles.leg} ${styles.legRight}`} />
         </div>
+          </div>
 
-        {activeLead ? (
+          </div>
+        </div>
+
+      </div>
+
+      {activeLead ? (
+        <div
+          className={styles.modalLayer}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeLead()
+          }}
+        >
           <div
-            className={styles.modalLayer}
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) closeLead()
-            }}
-            onWheel={(event) => {
-              if (event.target !== event.currentTarget) return
-
-              event.preventDefault()
-              window.scrollBy({ left: event.deltaX, top: event.deltaY })
-            }}
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lead-insight-name"
+            aria-describedby="lead-insight-summary"
+            className={styles.modal}
           >
-            <div
-              ref={dialogRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="lead-insight-name"
-              aria-describedby="lead-insight-summary"
-              className={styles.modal}
-              onWheel={(event) => event.stopPropagation()}
-            >
-              <button ref={closeButtonRef} type="button" onClick={closeLead} className={styles.closeButton} aria-label="Close lead insight">
-                <span aria-hidden>×</span>
-              </button>
+            <button ref={closeButtonRef} type="button" onClick={closeLead} className={styles.closeButton} aria-label="Close lead insight">
+              <span aria-hidden>×</span>
+            </button>
 
-              <div className={styles.profileHeader}>
-                <div className={styles.avatar} aria-hidden>
-                  <span className={styles.avatarFallback}>{activeLead.initials}</span>
-                  <Image
-                    src={activeLead.portraitUrl}
-                    alt=""
-                    width={256}
-                    height={256}
-                    sizes="(max-width: 640px) 77px, 117px"
-                    className={styles.avatarImage}
-                  />
-                </div>
-                <div className={styles.profileCopy}>
-                  <p className={styles.modalEyebrow}>Synthetic lead insight</p>
-                  <h3 id="lead-insight-name">{activeLead.name}</h3>
-                  <div className={styles.identityRow}>
-                    <span className={styles.identityIcon}><FieldIcon type="role" /></span>
-                    <span><small>Role</small>{activeLead.role}</span>
-                  </div>
-                  <div className={styles.identityRow}>
-                    <span className={styles.identityIcon}><FieldIcon type="company" /></span>
-                    <span><small>Company</small>{activeLead.company}</span>
-                  </div>
-                </div>
+            <div className={styles.profileHeader}>
+              <div className={styles.avatar} aria-hidden>
+                <span className={styles.avatarFallback}>{activeLead.initials}</span>
+                <Image
+                  src={activeLead.portraitUrl}
+                  alt=""
+                  width={256}
+                  height={256}
+                  sizes="(max-width: 640px) 77px, 117px"
+                  className={styles.avatarImage}
+                />
               </div>
-
-              <dl className={styles.fields}>
-                <div className={styles.field}>
-                  <dt><FieldIcon type="email" />Email</dt>
-                  <dd>{activeLead.email}</dd>
+              <div className={styles.profileCopy}>
+                <p className={styles.modalEyebrow}>Synthetic lead insight</p>
+                <h3 id="lead-insight-name">{activeLead.name}</h3>
+                <div className={styles.identityRow}>
+                  <span className={styles.identityIcon}><FieldIcon type="role" /></span>
+                  <span><small>Role</small>{activeLead.role}</span>
                 </div>
-                <div className={styles.field}>
-                  <dt><FieldIcon type="phone" />Phone</dt>
-                  <dd>{activeLead.phone}</dd>
+                <div className={styles.identityRow}>
+                  <span className={styles.identityIcon}><FieldIcon type="company" /></span>
+                  <span><small>Company</small>{activeLead.company}</span>
                 </div>
-                <div className={styles.field}>
-                  <dt><FieldIcon type="linkedin" />LinkedIn</dt>
-                  <dd>{activeLead.linkedin}</dd>
-                </div>
-                <div className={styles.field}>
-                  <dt><FieldIcon type="website" />Website</dt>
-                  <dd>{activeLead.website}</dd>
-                </div>
-              </dl>
-
-              <div className={styles.summary}>
-                <p>Summary</p>
-                <div id="lead-insight-summary">{activeLead.summary}</div>
               </div>
             </div>
+
+            <dl className={styles.fields}>
+              <div className={styles.field}>
+                <dt><FieldIcon type="email" />Email</dt>
+                <dd>{activeLead.email}</dd>
+              </div>
+              <div className={styles.field}>
+                <dt><FieldIcon type="phone" />Phone</dt>
+                <dd>{activeLead.phone}</dd>
+              </div>
+              <div className={styles.field}>
+                <dt><FieldIcon type="linkedin" />LinkedIn</dt>
+                <dd>{activeLead.linkedin}</dd>
+              </div>
+              <div className={styles.field}>
+                <dt><FieldIcon type="website" />Website</dt>
+                <dd>{activeLead.website}</dd>
+              </div>
+            </dl>
+
+            <div className={styles.summary}>
+              <p>Summary</p>
+              <div id="lead-insight-summary">{activeLead.summary}</div>
+            </div>
           </div>
-        ) : null}
         </div>
-      </div>
+      ) : null}
 
       <Link href="/sign-in" className={styles.signIn}>
         Sign In

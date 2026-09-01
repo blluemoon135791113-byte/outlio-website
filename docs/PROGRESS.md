@@ -9444,3 +9444,93 @@ watching it fail.
 `email_unsubscribed`, `no_activity`, `webhook`, `scheduled`, `manual`. The last
 three need a surface (a button, a schedule, an endpoint) rather than a hook into
 an existing operation.
+
+## 2026-09-02 — KI9: first authenticated browser-audit slice
+
+The local app was started from `platform-m1-workspaces` at `11fa957` with
+`WATCHPACK_POLLING=true` because the default watcher hit the host's open-file
+limit. The owner/admin test session was already signed in. This was a
+read-only audit: no records were created, no forms were submitted, and no
+external messages were sent.
+
+### Scope and observed passes
+
+- `/dashboard` rendered with the setup checklist, usage cards, account state,
+  and Lead Engine actions. The checklist showed 2 of 6 items done; the
+  pipeline item had no visible link in the interactive view and was not
+  treated as a confirmed clickable path.
+- `/crm` rendered its Contacts, Companies, Pipeline, Tasks, Lists, Import,
+  Reports and Duplicates navigation.
+- `/crm/contacts` rendered 44 existing contacts, search, and the Add contact
+  form. The form accepts a name or email and exposes job title, phone and
+  LinkedIn URL without being submitted.
+- `/crm/pipeline` rendered an empty Sales board with New pipeline and New deal.
+  New pipeline exposed the default Open/Won/Lost stage types, probabilities,
+  reorder/remove controls and a required Won stage. New deal exposed contact,
+  stage, optional value with an explicit unknown-value explanation, and
+  expected-close fields. Both forms were cancelled without saving.
+- `/crm/import` rendered the CSV upload control and Check the file action. The
+  page explicitly says nothing is saved until the user sees the preview and
+  that matched contacts are linked rather than duplicated.
+- `/email`, `/email/campaigns`, `/email/inbox` and `/email/analytics` rendered
+  their no-mailbox/no-activity states. Analytics preserved NULL metrics as `—`
+  and explained that nothing had been sent yet.
+- `/flows` and an existing flow detail page rendered the trigger selector,
+  graph steps, publish control and Recent runs section. The trigger selector
+  included Someone starts it by hand; the detail page stated the flow had not
+  run because it was not published.
+
+### Environment and remaining verification
+
+Several first visits were slow because Next.js compiled routes and the app's
+server-side data work ran together: the local log recorded successful 200
+responses ranging from about 5 seconds to 49 seconds. This is an observation
+in the development environment, not yet a confirmed production regression.
+The default watcher produced repeated `EMFILE` errors; polling mode removed
+those errors for this run.
+
+Not rendered in this slice: company detail, tasks, lists, reports, duplicates,
+new extraction, Hubble, settings, user admin, and the full contact/detail,
+email composer, campaign-builder and flow-edit interactions. No issue is
+claimed for those paths; they remain KI9 verification work.
+
+### Verification
+
+Browser audit only; no code or data mutation. The local server was running in
+polling mode. The append-only ledger was updated after the audit.
+
+## 2026-09-01 — The `manual` flow trigger
+
+`app/(product)/flows/actions.ts`, `components/flows/RunManually.tsx`,
+`app/(product)/flows/[id]/page.tsx`.
+
+A published flow whose trigger is `manual` now has a "Run now" control on its
+page, with a bounded contact picker. Eight of seventeen triggers now fire.
+
+### ⚠️ This is NOT test mode, and the copy says so
+
+Every action runs for real: tasks created, owners assigned, notifications sent.
+The brief's test mode — destructive steps simulated — needs a simulate path
+through the action registry and remains deferred.
+
+**Calling this "test" would be the dangerous lie.** Someone would point it at a
+real contact expecting a rehearsal. The button says "Run now", and a warning
+sits above it *before* the click, while they can still change their mind.
+
+### Only manual-triggered flows
+
+Offering "Run now" on a `contact_created` flow would fire real actions against
+someone the flow was never meant to touch — and the person clicking would
+reasonably expect a rehearsal. The action refuses it server-side and the control
+is not rendered.
+
+### ⚠️ The one place a timestamp belongs in an idempotency key
+
+Every other trigger keys on the occurrence — contact id, opportunity version,
+provider message id — so a retry runs once. Manual is the opposite: **running a
+flow by hand twice is two intentional acts**, and de-duplicating them would
+silently ignore the second click and look like a broken button.
+
+### Verified
+
+2,290 unit tests; flow-engine integration 9/9; typecheck 0; lint 0; build clean.

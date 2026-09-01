@@ -265,10 +265,11 @@ no owner filter (introduced by this agent, fixed in R5).
   Needs a simulate path through the action registry: real engine work.
 - **Flow builder undo/redo.**
 - **Triggers not yet fired:** `list_added`, `batch_added`, `campaign_enrolled`,
-  `email_sent`, `email_unsubscribed`, `no_activity`, `webhook`, `scheduled`,
-  `manual`. The last three need a surface (button, schedule, endpoint) rather
-  than a hook into an existing operation. **`manual` is the highest value** —
-  it makes flows testable by hand.
+  `email_sent`, `email_unsubscribed`, `no_activity`, `webhook`, `scheduled`.
+  The last two need a surface (a schedule, an endpoint). `manual` is **done** —
+  a published flow whose trigger is `manual` has a "Run now" control on its
+  page. ⚠️ That is **not** test mode: every action runs for real, and the UI
+  says so before the click.
 - **R15–R19** — cross-module integration, attribution, integrations framework,
   UI refinement, security/perf regression.
 

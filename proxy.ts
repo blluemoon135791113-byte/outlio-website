@@ -72,6 +72,17 @@ const INTERNAL_PATHS: Record<string, string> = Object.fromEntries(
 )
 
 /**
+ * Marks the server-side request created by one of the rewrites above.
+ *
+ * Next 16 runs Proxy again for the rewrite destination. Without this marker,
+ * that second pass looks exactly like a visitor requesting `/app-home` and the
+ * canonical redirect below sends it back to `/`, creating an infinite loop.
+ * This header is forwarded only to the rewritten route; it is not emitted as a
+ * response header or added to the visitor-facing URL.
+ */
+const INTERNAL_REWRITE_HEADER = 'x-outlio-internal-rewrite'
+
+/**
  * The complete surface of the software domain.
  *
  * ⚠️ ANYTHING ELSE ON THIS HOST IS A 404, NOT A REDIRECT TO outlio.io.
@@ -118,6 +129,10 @@ const APP_SUBDOMAIN_PATHS = [
 export async function proxy(request: NextRequest) {
   const host = request.headers.get('host')?.split(':')[0]?.toLowerCase() ?? ''
   const { pathname: rawPath } = request.nextUrl
+  const isInternalRewrite = request.headers.get(INTERNAL_REWRITE_HEADER) === '1'
+  const shouldClearRedirectCache =
+    process.env.NODE_ENV === 'development' &&
+    request.nextUrl.searchParams.has('__clear_redirect_cache')
 
   let trialDeviceCookie: string | null = null
   if (rawPath === '/sign-up') {
@@ -136,6 +151,18 @@ export async function proxy(request: NextRequest) {
     // Preserve content negotiation without a second deprecated middleware
     // file. One Next 16 Proxy is the only supported project-level boundary.
     result.headers.set('Vary', 'Accept, Accept-Encoding')
+
+    // A Proxy bug must not leave localhost permanently unusable after it is
+    // fixed. Chrome caches 308 responses aggressively, including the old
+    // self-redirect that caused this incident. Keep canonical redirects
+    // permanent in production, but make every development response explicitly
+    // non-cacheable so a normal refresh always reaches the current dev server.
+    if (process.env.NODE_ENV === 'development') {
+      result.headers.set('Cache-Control', 'no-store, max-age=0')
+    }
+    if (shouldClearRedirectCache) {
+      result.headers.set('Clear-Site-Data', '"cache"')
+    }
     if (!trialDeviceCookie) return result
     result.cookies.set({
       name: TRIAL_DEVICE_COOKIE,
@@ -160,10 +187,12 @@ export async function proxy(request: NextRequest) {
    * so search engines and crawlers only ever record the clean path.
    */
   const publicPathForInternal = INTERNAL_PATHS[rawPath]
-  if (publicPathForInternal) {
+  if (publicPathForInternal && !isInternalRewrite) {
     const url = request.nextUrl.clone()
     url.pathname = publicPathForInternal
-    return finish(NextResponse.redirect(url, 308))
+    return finish(
+      NextResponse.redirect(url, process.env.NODE_ENV === 'development' ? 307 : 308),
+    )
   }
 
   /** Set when the app host serves a public path from an internal route. */
@@ -204,7 +233,11 @@ export async function proxy(request: NextRequest) {
    */
   const baseResponse = () =>
     rewriteTo
-      ? NextResponse.rewrite(rewriteTo, { request })
+      ? (() => {
+          const headers = new Headers(request.headers)
+          headers.set(INTERNAL_REWRITE_HEADER, '1')
+          return NextResponse.rewrite(rewriteTo, { request: { headers } })
+        })()
       : NextResponse.next({ request })
 
   let response = baseResponse()

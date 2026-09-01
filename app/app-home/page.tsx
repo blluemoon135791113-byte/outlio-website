@@ -4,6 +4,7 @@ import Footer from '@/app/components/Footer'
 import Nav from '@/app/components/Nav'
 import { CrmEnrichmentExperience } from '@/components/leadengine/CrmEnrichmentExperience'
 import { DashboardPreview } from '@/components/leadengine/DashboardPreview'
+import { ExtractionJourney } from '@/components/leadengine/ExtractionJourney'
 import { LeadEngineHero } from '@/components/leadengine/LeadEngineHero'
 import { LeadLibrary } from '@/components/leadengine/LeadLibrary'
 import { Pricing } from '@/components/leadengine/Pricing'
@@ -56,6 +57,10 @@ export default function LeadEnginePage() {
             <CrmEnrichmentExperience />
           </div>
 
+          <div className="leadengine-story-panel">
+            <ExtractionJourney />
+          </div>
+
           <aside className="leadengine-story-note" aria-labelledby="software-access-title">
             <p className="leadengine-story-kicker">Software access only</p>
             <div>
@@ -80,9 +85,7 @@ export default function LeadEnginePage() {
             <Pricing />
           </div>
 
-          <div className="leadengine-story-panel leadengine-story-panel-dark">
-            <LeadLibrary />
-          </div>
+          <LeadLibrary />
         </div>
       </main>
 

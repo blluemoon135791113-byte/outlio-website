@@ -267,6 +267,7 @@ describe('flow triggers actually fire', () => {
     { trigger: 'opportunity_won', without: 'no flow can react to a win' },
     { trigger: 'task_completed', without: 'no flow can chain off finished work' },
     { trigger: 'call_booked', without: 'no flow can react to a booked meeting' },
+    { trigger: 'manual', without: 'a hand-triggered flow can never be started' },
   ]
 
   for (const { trigger, without } of WIRED) {
