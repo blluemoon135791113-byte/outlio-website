@@ -13,6 +13,7 @@ import { revalidatePath } from 'next/cache'
 
 import { FlowDefinitionError, validateFlowDefinition } from '@/lib/flows/definition'
 import { startRun } from '@/lib/flows/engine'
+import { simulateFlow, type SimulationResult } from '@/lib/flows/simulate'
 import { flowTemplate } from '@/lib/flows/templates'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
@@ -292,4 +293,94 @@ export async function runFlowManually(
   } catch {
     return { ok: false, error: 'That run could not start.' }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Test mode — R9
+// ---------------------------------------------------------------------------
+
+export type SimulateState =
+  | { ok: true; result: SimulationResult; contactName: string }
+  | { ok: false; error: string }
+  | null
+
+/**
+ * Dry-runs a flow against one contact.
+ *
+ * ⚠️ WRITES NOTHING AND CALLS NO HANDLER. Unlike `runFlowManually`, which is a
+ * real run wearing a plain name, this is the rehearsal — and it works on a
+ * DRAFT as well as a published flow, because rehearsing before you publish is
+ * the entire point.
+ */
+export async function simulateFlowAction(
+  _previous: SimulateState,
+  formData: FormData,
+): Promise<SimulateState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('flow.manage')
+  } catch {
+    return { ok: false, error: 'You do not have permission to test flows.' }
+  }
+
+  const flowId = String(formData.get('flowId') ?? '')
+  const contactId = String(formData.get('contactId') ?? '') || null
+
+  const db = createAdminClient()
+
+  // Scoped by workspace in code — an id from a form is a claim.
+  const { data: flow } = await db
+    .from('flows')
+    .select('id, published_version_id')
+    .eq('workspace_id', ctx.workspace.id)
+    .eq('id', flowId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (!flow) return { ok: false, error: 'That flow no longer exists.' }
+
+  /*
+   * The published version if there is one, otherwise the newest draft. Testing
+   * an unpublished flow is the case that matters most: it is how someone finds
+   * out the branch goes the wrong way BEFORE it runs on anybody.
+   */
+  const { data: version } = await db
+    .from('flow_versions')
+    .select('definition')
+    .eq('workspace_id', ctx.workspace.id)
+    .eq('flow_id', flow.id)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!version) return { ok: false, error: 'This flow has no steps to test yet.' }
+
+  let definition
+  try {
+    definition = validateFlowDefinition(version.definition)
+  } catch {
+    return { ok: false, error: 'This flow’s steps are not valid yet, so it cannot be tested.' }
+  }
+
+  let contactName = 'no contact'
+  if (contactId) {
+    const { data: contact } = await db
+      .from('crm_contacts')
+      .select('id, full_name')
+      .eq('workspace_id', ctx.workspace.id)
+      .eq('id', contactId)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (!contact) return { ok: false, error: 'That contact is not in this workspace.' }
+    contactName = contact.full_name ?? 'that contact'
+  }
+
+  const result = await simulateFlow({
+    workspaceId: ctx.workspace.id,
+    definition,
+    contactId,
+  })
+
+  return { ok: true, result, contactName }
 }

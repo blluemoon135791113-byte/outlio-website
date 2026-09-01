@@ -261,8 +261,6 @@ no owner filter (introduced by this agent, fixed in R5).
   set, contact detail as a drawer.
 - **R7** — custom dashboards, widgets, custom metrics. Nothing exists.
 - **R13** — campaign schedule/options UI. All enforced server-side already.
-- **Flow test mode** — the brief's dry run with destructive steps simulated.
-  Needs a simulate path through the action registry: real engine work.
 - **Flow builder undo/redo.**
 - **Triggers not yet fired:** `list_added`, `batch_added`, `campaign_enrolled`,
   `email_sent`, `email_unsubscribed`, `no_activity`, `webhook`, `scheduled`.
@@ -308,5 +306,6 @@ have been built without ever being seen. Everything below them is tested; the
 surface is not. That is the single largest risk in the codebase, and it is
 cheap to retire.
 
-**If you do a second thing:** wire the `manual` flow trigger. It is small, and
-it turns flows from something you have to trust into something you can test.
+**If you do a second thing:** pick up R7 (custom dashboards). It is the only
+remaining module with nothing at any layer — no builder, no widgets, no custom
+metrics — so it is the largest single gap against the brief.

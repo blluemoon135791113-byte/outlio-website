@@ -444,7 +444,7 @@ async function finish(
  * contact that changed mid-run would take inconsistent paths on adjacent
  * conditions, which is impossible to reason about after the fact.
  */
-async function gatherFacts(
+export async function gatherFacts(
   workspaceId: string,
   contactId: string | null,
 ): Promise<Record<string, unknown>> {

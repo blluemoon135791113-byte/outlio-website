@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 
 import { RunManually } from '@/components/flows/RunManually'
+import { TestFlow } from '@/components/flows/TestFlow'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -121,7 +122,7 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
   const isManual =
     flow.status === 'published' && currentDefinition?.trigger?.type === 'manual'
 
-  const manualContacts = isManual
+  const pickableContacts = canManage
     ? await (async () => {
         // Bounded: a picker, not the whole book.
         const { data } = await createAdminClient()
@@ -170,13 +171,28 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
         </div>
       ) : null}
 
+      {/*
+        ⚠️ TEST MODE COMES FIRST, ON EVERY FLOW INCLUDING DRAFTS. Rehearsing
+        before publishing is the point — it is how someone finds out a branch
+        goes the wrong way before it runs on anybody.
+      */}
+      {canManage ? (
+        <section className="clay p-4">
+          <h3 className="text-sm font-semibold text-ink">Test run</h3>
+          <p className="mt-0.5 mb-3 text-xs text-muted">
+            Walks the steps against a real contact without doing any of them.
+          </p>
+          <TestFlow flowId={flow.id} contacts={pickableContacts} />
+        </section>
+      ) : null}
+
       {isManual && canManage ? (
         <section className="clay p-4">
           <h3 className="text-sm font-semibold text-ink">Run this flow</h3>
           <p className="mt-0.5 mb-3 text-xs text-muted">
             This flow is triggered by hand rather than by an event.
           </p>
-          <RunManually flowId={flow.id} contacts={manualContacts} />
+          <RunManually flowId={flow.id} contacts={pickableContacts} />
         </section>
       ) : null}
 

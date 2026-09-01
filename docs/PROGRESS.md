@@ -9534,3 +9534,63 @@ silently ignore the second click and look like a broken button.
 ### Verified
 
 2,290 unit tests; flow-engine integration 9/9; typecheck 0; lint 0; build clean.
+
+## 2026-09-01 — Flow test mode
+
+`lib/flows/simulate.ts`, `components/flows/TestFlow.tsx`, flows actions,
+`tests/unit/flow-simulate.test.ts`.
+
+### It writes nothing, and that is tested as an ABSENCE
+
+A dry run walks the graph against a real contact and reports what *would*
+happen. No handler is invoked, nothing is created, sent or changed.
+
+⚠️ **The property under test is an absence**, which is easy to test badly. A
+simulator that ran the flow for real and then described it accurately would pass
+any test that only checked the report. So `handlerFor` is spied on and the
+assertion is that it was **never called** — and that assertion was proven
+non-vacuous by making the simulator call it and watching the test fail.
+
+### It simulates everything, not only the irreversible steps
+
+The brief asks for external and destructive steps to be simulated. This goes
+further: **`CREATE_TASK` is simulated too.** A dry run that quietly creates
+three tasks and assigns an owner is not a dry run, and the person who clicked
+"test" now has real work to undo by hand.
+
+### Waits are stepped over, deliberately
+
+A dry run that honoured a three-day wait would tell someone nothing for three
+days. The wait is described and the walk continues past it.
+
+### Branches resolve against the real contact
+
+`gatherFacts` is read once so a condition goes the way it actually would. A
+simulation that guessed at conditions would be **worse than none** — it would
+confidently show the wrong path.
+
+### It works on drafts, and that is the important case
+
+Rehearsing before publishing is the point: it is how someone finds out a branch
+goes the wrong way *before* it runs on anybody. Test mode is offered on every
+flow; "Run now" only on a published, manually-triggered one.
+
+⚠️ **Two buttons that look alike and behave differently is how someone mails a
+customer by accident**, so the copy carries the difference: "Test run — nothing
+is created, sent or changed" against "Run now — this runs for real".
+
+### Credits are quoted before publishing
+
+If a real run would spend credits, the test says how many *per contact*.
+Learning that here is worth far more than learning it on an invoice.
+
+### Bounded
+
+A cyclic definition would spin forever inside a request — the engine's own loop
+protection does not apply because nothing is being recorded. It stops after 100
+steps and says the definition may loop. A dangling pointer stops with the step
+name rather than throwing, because a draft can legitimately be mid-edit.
+
+### Verified
+
+2,299 unit tests (9 new); typecheck 0; lint 0; build clean.
