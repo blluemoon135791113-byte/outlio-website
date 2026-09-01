@@ -9182,3 +9182,42 @@ via regenerated types.
 `tests/integration/email-send-worker.test.ts` skips silently without GreenMail,
 so the criterion it proves can rot unnoticed. The run command is in the file
 header; nothing enforces it.
+
+## 2026-09-01 — Which criteria are actually proven
+
+Prompted by the 0104 incident: the defect was caught by tests that had been
+**skipping silently for the whole project**, so it was no longer safe to assume
+a criterion recorded as proven was still being exercised. Full integration run:
+**410 passed, 3 failed, 24 skipped across 41 files.**
+
+### The 3 failures are known
+
+All three are `signup-ip-gate.test.ts` — **KI7**, the signup IP gate
+rate-limiting its own test runner. Confirmed pre-existing and unchanged.
+
+### 7 of the 8 skipped files are skipping CORRECTLY
+
+Every `*-live.test.ts` sits behind an explicit opt-in variable —
+`RUN_LIVE_PROVIDERS`, `RUN_HUBBLE_LLM`, `RUN_HUBBLE_SERVICES`,
+`RUN_HUBBLE_MCP_LIVE`, `RUN_DOMAIN_BACKFILL`, `ENRICH_JOB_ID`. They call real
+paid APIs. Skipping by default is the design, not rot.
+
+### The one that WAS rotting
+
+Three suites need GreenMail and had been skipping for months:
+`email-send-worker`, `email-reply-sync`, `email-smtp`. With it running:
+
+| Suite | Result |
+|---|---|
+| `email-send-worker` | **9/9** — including all five suppression tests |
+| `email-reply-sync` + `email-smtp` | **14/14** |
+
+So M5 and M6 criteria are genuinely proven — but they had not been exercised in
+a long time, which is exactly how the 0104 regression reached production.
+
+⚠️ **The tests already `console.warn` on skip and it was not enough.** A warning
+in a 400-test run is invisible. The friction was that starting GreenMail meant
+copying a five-line `docker run` out of a file header, so nobody did it.
+
+`npm run test:email` now starts GreenMail and runs all three. Removing the
+friction is the fix; a louder warning would not have been.

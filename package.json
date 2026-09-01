@@ -17,7 +17,8 @@
     "db:types": "node scripts/gen-db-types.mjs",
     "ext:package": "node extensions/scripts/build.mjs --target=chrome && node extensions/scripts/package.mjs --target=chrome",
     "ext:package:firefox": "node extensions/scripts/build.mjs --target=firefox && node extensions/scripts/package.mjs --target=firefox",
-    "ext:assets": "node extensions/scripts/build.mjs --target=chrome && node extensions/scripts/screenshots.mjs"
+    "ext:assets": "node extensions/scripts/build.mjs --target=chrome && node extensions/scripts/screenshots.mjs",
+    "test:email": "docker rm -f outlio-greenmail >/dev/null 2>&1; docker run -d --name outlio-greenmail -p 2525:3025 -p 993:3993 -e GREENMAIL_OPTS='-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=sender:senderpw@acme.example,prospect:prospectpw@buyer.example' greenmail/standalone:2.1.4 >/dev/null && sleep 20 && vitest run tests/integration/email-send-worker.test.ts tests/integration/email-reply-sync.test.ts tests/integration/email-smtp.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "^2.0.0",
