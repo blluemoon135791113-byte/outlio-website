@@ -10,6 +10,7 @@ import {
   trashJobAction,
   type JobActionState,
 } from '@/lib/jobs/actions'
+import { SendToCrmButton } from '@/components/crm/SendToCrmButton'
 import {
   DASHBOARD_FILE_SELECT,
   DASHBOARD_JOB_SELECT,
@@ -714,6 +715,16 @@ function JobHistoryRow({
               googleConnected={googleConnected}
               ghlConnected={ghlConnected}
             />
+            {/*
+              ⚠️ THE BRIDGE BETWEEN THE TWO PRODUCTS. Until R1 the Lead Engine
+              and the CRM were disconnected: `ingestExtractionJob` existed,
+              was tested, and had no caller, so extracted leads could never
+              reach the CRM. Deliberately explicit — nothing moves until
+              someone asks.
+            */}
+            {job.kind !== 'account_list' ? (
+              <SendToCrmButton jobId={job.id} recordCount={job.leads_kept} />
+            ) : null}
             <TrashButton jobId={job.id} onTrashed={onPurged} />
             <DeleteRunButton jobId={job.id} onDeleted={onDeleted} />
           </div>

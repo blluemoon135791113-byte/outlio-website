@@ -8805,3 +8805,73 @@ Hubble context.
 ### Verified
 
 2,231 unit tests + 4 expected-fail; typecheck 0; lint 0; build clean.
+
+## 2026-09-01 — R1: the Lead Engine and the CRM are connected
+
+`app/(product)/crm/import/`, `components/crm/ImportContacts.tsx`,
+`components/crm/SendToCrmButton.tsx`, `components/jobs/ExtractionDashboard.tsx`.
+
+### The last four stranded engines
+
+`ingestExtractionJob`, `runCsvImport`, `buildImportPlan` and `undoBatch` were
+all built and tested in M2 and **none had a caller**. The consequence was that
+the only way into the CRM was the browser extension: a customer arriving with
+an existing contact list had no way in at all, and extracted leads could never
+reach the CRM they were extracted for.
+
+### ⚠️ THE RATCHET IS NOW EMPTY
+
+All six engines R0 found stranded are enforced. Each was promoted the moment it
+gained a caller, by its own `it.fails` guard flipping to a failure. The empty
+`describe` block is left in place with a note: the next engine that ships
+without a caller belongs there, not in a comment nobody reads.
+
+### Explicit, never automatic
+
+Nothing moves from the Lead Engine into the CRM until someone asks. The brief
+is firm that thousands of contacts must not appear in a CRM unbidden, and the
+button states the count so the action is not a leap of faith. Leads arrive
+**unassigned**: bulk-assigning a whole batch to whoever clicked would be wrong
+most of the time, and reassigning later rewrites attribution.
+
+### "Already in your CRM", not "duplicates"
+
+Both flows report matched contacts as recognised and linked to this batch —
+because that is what happened. The canonical-contact rule means a second
+extraction containing the same person associates them rather than copying them.
+Calling that a duplicate would make a correct outcome sound like a fault.
+
+### The file never lands on the server before it is wanted
+
+CSV import is two submits of the same file from the browser, not upload-then-
+commit. Persisting on upload leaves an orphan every time someone changes their
+mind after seeing the preview — and changing their mind is exactly what the
+preview is for.
+
+### Three bugs caught before they shipped
+
+- **The binary sniff tested for a SPACE, not a NUL** (`includes(' ')`), which
+  would have rejected every CSV containing a space — that is, all of them.
+- `ImportPlanRow` is `{ line, contact, company }`; the preview was written
+  against an invented `row.values`. The preview now reads the **parsed
+  contact**, which is the point: it shows what will actually be stored, so a
+  mis-mapped column is visible before committing.
+- `crm_import_jobs.content_hash` is required. It is now a real SHA-256 of the
+  file, which is what makes "you have already imported this" answerable when
+  the same export is re-uploaded under a different filename.
+
+### Deferred, recorded rather than faked
+
+- **A pre-commit dedup preview for Lead Engine → CRM.** The brief asks for
+  "X new / X existing" *before* committing. `crm_ingest_contacts` does dedup
+  inside the write, so a true dry run needs engine work. The CSV path *does*
+  preview properly; the extraction path reports precisely afterwards.
+- **Imports over 8MB.** Parsed in-request today with a hard ceiling; a bigger
+  file belongs in the job queue.
+- **Sync modes** (manual / ask-after-extraction / auto). Only manual exists,
+  which is the safe default the brief asks for.
+
+### Verified
+
+2,236 unit tests, all passing, **no expected-fail remaining**; typecheck 0;
+lint 0; build clean with `/crm/import` present.

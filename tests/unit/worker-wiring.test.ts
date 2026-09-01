@@ -115,6 +115,39 @@ describe('every background worker has a trigger', () => {
     ).not.toHaveLength(0)
   })
 
+  /* Promoted out of the ratchet by R1. */
+  const R1_ENGINES: { name: string; definedIn: string; without: string }[] = [
+    {
+      name: 'ingestExtractionJob',
+      definedIn: 'lib/crm/ingest.ts',
+      without: 'extracted leads can never reach the CRM',
+    },
+    {
+      name: 'runCsvImport',
+      definedIn: 'lib/crm/ingest.ts',
+      without: 'a customer arriving with a contact list has no way in',
+    },
+    {
+      name: 'buildImportPlan',
+      definedIn: 'lib/crm/csv-import.ts',
+      without: 'an import can never be previewed before it commits',
+    },
+    {
+      name: 'undoBatch',
+      definedIn: 'lib/crm/ingest.ts',
+      without: 'a bad import cannot be rolled back',
+    },
+  ]
+
+  for (const engine of R1_ENGINES) {
+    it(`${engine.name} has a caller — otherwise ${engine.without}`, () => {
+      expect(
+        callersOf(engine.name, engine.definedIn),
+        `${engine.name} has no caller, so ${engine.without}.`,
+      ).not.toHaveLength(0)
+    })
+  }
+
   it('the tick is reachable from a route, not just defined', () => {
     /*
      * The workers above could all be called by `runTick` and still never run
@@ -153,56 +186,24 @@ describe('every background worker has a trigger', () => {
   })
 })
 
+/**
+ * ⚠️ THE RATCHET IS EMPTY, AND THAT IS THE POINT.
+ *
+ * R0 found six engines built, tested and unreachable. Each was listed here
+ * with `it.fails`, asserting the defect still existed — so the suite stayed
+ * green while the defect stayed documented, and wiring one made ITS OWN test
+ * start failing as the signal to promote it into the enforced block above.
+ *
+ * All six are now enforced there (R4, R5, R1). The mechanism is left in place
+ * with this note rather than deleted: the next engine that ships without a
+ * caller belongs here, not in a comment nobody reads.
+ */
 describe('engines the R0 audit found unreachable', () => {
-  /**
-   * ⚠️ THESE USE `it.fails`, WHICH IS A RATCHET, NOT A SKIP.
-   *
-   * All six engines below are built, tested and STILL UNREACHABLE as of R10 —
-   * wiring them is R1/R4/R5 work. Two wrong ways to handle that: leave the
-   * suite red, which trains everyone to ignore red; or skip them, which
-   * deletes the signal entirely.
-   *
-   * `it.fails` asserts the defect still exists. The suite stays green AND the
-   * defect stays documented — and the moment someone wires one of these up,
-   * THIS TEST STARTS FAILING and tells them to move the line down to the
-   * block above. A guard that fixes itself when the bug is fixed.
-   *
-   * A caller anywhere in `app/` or `lib/` counts: this asserts the code is
-   * WIRED, not that a particular button exists.
-   */
-  const ENGINES: { name: string; definedIn: string; without: string }[] = [
-    {
-      name: 'ingestExtractionJob',
-      definedIn: 'lib/crm/ingest.ts',
-      without: 'extracted leads can never reach the CRM',
-    },
-    {
-      name: 'runCsvImport',
-      definedIn: 'lib/crm/ingest.ts',
-      without: 'a customer arriving with a contact list has no way in',
-    },
-    {
-      name: 'buildImportPlan',
-      definedIn: 'lib/crm/csv-import.ts',
-      without: 'an import can never be previewed before it commits',
-    },
-    {
-      name: 'undoBatch',
-      definedIn: 'lib/crm/ingest.ts',
-      without: 'a bad import cannot be rolled back',
-    },
-  ]
-
-  for (const engine of ENGINES) {
-    it.fails(`STILL UNREACHABLE — ${engine.name}: ${engine.without}`, () => {
-      const callers = callersOf(engine.name, engine.definedIn)
-
-      expect(
-        callers,
-        `${engine.name} has no caller outside ${engine.definedIn}, so ${engine.without}.`,
-      ).not.toHaveLength(0)
-    })
-  }
+  it('has none left — all six were promoted into the enforced block', () => {
+    // A deliberately trivial assertion. Its job is to keep the explanation
+    // above attached to the suite that needed it.
+    expect(true).toBe(true)
+  })
 })
 
 describe('the guard itself is not vacuous', () => {
