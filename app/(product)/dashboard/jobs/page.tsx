@@ -17,7 +17,7 @@ import { getGoogleConnectionMetadata } from '@/lib/integrations/google-repositor
 import { getGhlConnectionMetadata } from '@/lib/integrations/ghl-repository'
 
 export const metadata: Metadata = {
-  title: 'Extraction workspace | Outlio',
+  title: 'Lead sources | Outlio',
   robots: { index: false, follow: false },
 }
 

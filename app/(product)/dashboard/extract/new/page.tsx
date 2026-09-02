@@ -6,7 +6,7 @@ import { requireAccess } from '@/lib/auth/access'
 import { resolveUploadLimits } from '@/lib/upload/limits'
 
 export const metadata: Metadata = {
-  title: 'New extraction | Outlio',
+  title: 'Find leads | Outlio',
   robots: { index: false, follow: false },
 }
 
@@ -26,7 +26,7 @@ export default async function NewExtractionPage() {
             Lead Engine
           </p>
           <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
-            New extraction
+            Find leads
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
             Upload the pages you saved.
@@ -36,7 +36,7 @@ export default async function NewExtractionPage() {
           href="/dashboard/jobs"
           className="inline-flex h-10 w-fit items-center justify-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-4 text-sm font-semibold text-ink transition-[border-color,background-color,transform] duration-150 ease-out hover:border-accent/35 hover:bg-accent-soft/40 active:scale-[0.97]"
         >
-          View extractions
+          View lead sources
         </Link>
       </header>
 

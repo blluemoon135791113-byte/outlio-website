@@ -102,6 +102,21 @@ const nextConfig: NextConfig = {
     root: projectRoot,
   },
 
+  /*
+    DEV ONLY — Next refuses cross-origin requests for dev assets, so opening the
+    dev server on 127.0.0.1 rather than localhost returns 403 for every client
+    chunk. The page still renders (server components, and forms degrade to a
+    native POST), which makes the failure quietly misleading: it looks like a
+    working page whose client-side behaviour has silently vanished.
+
+    Both names point at this machine. Allowing the other one lets the signed-out
+    auth screens be exercised on 127.0.0.1 while a dev session stays signed in
+    on localhost — two origins, two cookie jars, one server.
+
+    Has no effect on `next build`.
+  */
+  allowedDevOrigins: ['127.0.0.1'],
+
   /* config options here */
   images: {
     formats: ['image/avif', 'image/webp'],

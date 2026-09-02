@@ -157,7 +157,7 @@ export function DuplicateList({
         </p>
         <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted">
           {tab === 'exact' || tab === 'possible'
-            ? 'Pairs appear here when an import or extraction brings in someone the CRM may already have.'
+            ? 'Pairs appear here when an import or lead search brings in someone you may already have.'
             : 'Pairs you resolve show up here so a merge can be traced back.'}
         </p>
       </div>

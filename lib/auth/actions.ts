@@ -40,10 +40,29 @@ import { createClient } from '@/lib/supabase/server'
  * this a single validation slip wipes every field the user filled in.
  *
  * The password is NEVER echoed back.
+ *
+ * ⚠️ `field` NAMES THE INPUT THAT CAUSED THE ERROR, and is deliberately
+ * optional. Every rejection below already knew which field was at fault —
+ * `nameResult`, `phoneResult`, `linkedInResult`, `passwordCheck` — and threw
+ * that knowledge away into one banner at the top of a five-field form, leaving
+ * the user to guess. Carrying it lets the form put the message under the input
+ * and move focus there.
+ *
+ * ⚠️ LEAVING IT UNSET IS A SECURITY DECISION, NOT AN OVERSIGHT. Sign-in's
+ * credentials error must stay unattributed: pointing at `email` would turn the
+ * form into the account-enumeration oracle `GENERIC_CREDENTIALS_ERROR` exists
+ * to prevent. Rate limits and provider failures are form-level for the same
+ * reason — no single input is wrong.
  */
 export type ActionState =
   | { status: 'idle' }
-  | { status: 'error'; message: string; values?: Record<string, string> }
+  | {
+      status: 'error'
+      message: string
+      values?: Record<string, string>
+      /** `name` of the input at fault, when naming one leaks nothing. */
+      field?: string
+    }
   | { status: 'success'; message: string }
 
 const emailSchema = z
@@ -86,15 +105,19 @@ export async function signUpAction(
     phone: String(formData.get('phone') ?? ''),
     linkedin_url: String(formData.get('linkedin_url') ?? ''),
   }
-  const reject = (message: string): ActionState => ({
+  const reject = (message: string, field?: string): ActionState => ({
     status: 'error',
     message,
     values: submitted,
+    field,
   })
 
   const emailResult = emailSchema.safeParse(formData.get('email'))
   if (!emailResult.success) {
-    return reject(emailResult.error.issues[0]?.message ?? 'Enter a valid email address.')
+    return reject(
+      emailResult.error.issues[0]?.message ?? 'Enter a valid email address.',
+      'email',
+    )
   }
   const email = emailResult.data
   const password = String(formData.get('password') ?? '')
@@ -102,16 +125,16 @@ export async function signUpAction(
   // All three are REQUIRED. Access is granted by manual review, so a human
   // needs a name, a reachable number, and a profile to vet before approving.
   const nameResult = normalizeFullName(submitted.full_name)
-  if (!nameResult.ok) return reject(nameResult.reason)
+  if (!nameResult.ok) return reject(nameResult.reason, 'full_name')
 
   const phoneResult = normalizePhoneForCountry(submitted.phone_country, submitted.phone)
-  if (!phoneResult.ok) return reject(phoneResult.reason)
+  if (!phoneResult.ok) return reject(phoneResult.reason, 'phone')
 
   const linkedInResult = normalizeLinkedInUrl(submitted.linkedin_url)
-  if (!linkedInResult.ok) return reject(linkedInResult.reason)
+  if (!linkedInResult.ok) return reject(linkedInResult.reason, 'linkedin_url')
 
   const passwordCheck = checkPassword(password)
-  if (!passwordCheck.ok) return reject(passwordCheck.reason)
+  if (!passwordCheck.ok) return reject(passwordCheck.reason, 'password')
 
   try {
     await enforce(RULES.signUp, subjectFor(await clientIp(), email))
@@ -325,10 +348,16 @@ export async function updatePasswordAction(
   const password = String(formData.get('password') ?? '')
   const confirm = String(formData.get('confirm_password') ?? '')
 
-  if (password !== confirm) return failure('Both passwords must match.')
+  if (password !== confirm) {
+    // Named on the CONFIRM field: the first box is what the user meant, the
+    // second is the one to retype.
+    return { status: 'error', message: 'Both passwords must match.', field: 'confirm_password' }
+  }
 
   const passwordCheck = checkPassword(password)
-  if (!passwordCheck.ok) return failure(passwordCheck.reason)
+  if (!passwordCheck.ok) {
+    return { status: 'error', message: passwordCheck.reason, field: 'password' }
+  }
 
   const supabase = await createClient()
   const {

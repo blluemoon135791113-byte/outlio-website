@@ -5,6 +5,7 @@ import { useActionState } from 'react'
 
 import { Field } from '@/components/auth/Field'
 import { FormFeedback } from '@/components/auth/FormFeedback'
+import { PasswordField } from '@/components/auth/PasswordField'
 import { SubmitButton } from '@/components/auth/SubmitButton'
 import { signInAction, type ActionState } from '@/lib/auth/actions'
 
@@ -33,24 +34,27 @@ export function SignInForm({ next }: { next?: string }) {
         defaultValue={priorEmail}
       />
 
-      <div className="space-y-1.5">
-        <Field
-          id="password"
-          name="password"
-          label="Password"
-          type="password"
-          autoComplete="current-password"
-          required
-        />
-        <div className="text-right">
+      {/*
+        "Forgot password?" sits BESIDE THE LABEL, not under the input. Below, it
+        was the last thing between the password box and the sign-in button —
+        directly in the path of someone who has typed their password correctly
+        and is heading for submit.
+      */}
+      <PasswordField
+        id="password"
+        name="password"
+        label="Password"
+        autoComplete="current-password"
+        required
+        labelAside={
           <Link
             href="/forgot-password"
             className="text-xs font-medium text-accent hover:underline"
           >
             Forgot password?
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       <SubmitButton>Sign in</SubmitButton>
     </form>

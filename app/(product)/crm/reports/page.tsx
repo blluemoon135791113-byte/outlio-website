@@ -370,7 +370,7 @@ export default async function ReportsPage({
             </div>
             {funnels.length === 0 ? (
               <p className="text-sm text-muted">
-                No batches yet. A funnel appears once an extraction or an import has run.
+                No batches yet. A funnel appears once a lead search or an import has run.
               </p>
             ) : (
               <div className="space-y-3">

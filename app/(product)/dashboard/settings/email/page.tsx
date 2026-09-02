@@ -12,7 +12,7 @@ export default async function EmailSettingsPage() {
   return (
     <SettingsShell
       title="Email address"
-      description="Where sign-in links, receipts, and extraction notices are sent."
+      description="Where sign-in links, receipts, and lead-search notices are sent."
     >
       <div className="max-w-md">
         <EmailSettings email={ctx.email ?? ''} />

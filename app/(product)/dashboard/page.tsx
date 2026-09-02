@@ -84,12 +84,12 @@ export default async function DashboardPage() {
       featured: true,
     },
     {
-      label: 'Extractions today',
+      label: 'Lead searches today',
       value: usage?.extractionsToday ?? 0,
       limit: limits?.extractions_per_day ?? null,
     },
     {
-      label: 'Extractions this month',
+      label: 'Lead searches this month',
       value: usage?.extractionsThisMonth ?? 0,
       limit: limits?.extractions_per_month ?? null,
     },
@@ -131,7 +131,7 @@ export default async function DashboardPage() {
             className="product-gradient inline-flex h-10 items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 text-sm font-semibold text-white transition-[filter,transform] duration-150 ease-out hover:brightness-95 active:scale-[0.97]"
           >
             <span aria-hidden className="text-base leading-none">+</span>
-            New extraction
+            Find leads
           </Link>
         </div>
       </header>
@@ -175,7 +175,7 @@ export default async function DashboardPage() {
                 href="/dashboard/extract/new"
                 className="product-gradient inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] px-4 text-sm font-semibold text-white transition-[filter,transform] duration-150 ease-out hover:brightness-95 active:scale-[0.97]"
               >
-                Start an extraction
+                Find your first leads
               </Link>
               <Link
                 href="/dashboard/jobs"

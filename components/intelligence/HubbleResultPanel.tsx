@@ -95,7 +95,6 @@ export function HubbleResultPanel({
       {/* Native overflow on product routes; the marker also keeps this safe if
           the panel is later reused inside a smooth-scrolled surface. */}
       <div
-        data-lenis-prevent
         tabIndex={0}
         aria-label="Research result details"
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 outline-none [scrollbar-gutter:stable] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/20"

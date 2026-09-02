@@ -172,7 +172,7 @@ export default async function ContactsPage({
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
             {search
               ? 'Try part of a name or an email address.'
-              : 'Contacts arrive from an extraction or a CSV import, and appear here once they do.'}
+              : 'Contacts arrive from a lead search or a CSV import, and appear here once they do.'}
           </p>
         </div>
       ) : (
