@@ -257,8 +257,9 @@ no owner filter (introduced by this agent, fixed in R5).
 
 ### Not started
 
-- **R2 remainder** — bulk select, saved views, column config, the full filter
-  set, contact detail as a drawer.
+- **R2 remainder** — saved views, column config, the wider filter set
+  (lifecycle, list, campaign, last activity), and contact detail as a drawer.
+  Bulk select + bulk assign and the owner/unassigned filter are **done**.
 - **R7 remainder** — dashboard templates (Outbound Sales, Pipeline, Setter
   Performance), custom-field aggregation (SUM/AVG over a numeric custom field),
   per-widget filters, and trend-over-time charts. ⚠️ **Trend charts need a

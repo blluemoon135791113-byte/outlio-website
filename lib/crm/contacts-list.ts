@@ -38,6 +38,14 @@ export type ListContactsOptions = {
   search?: string | null
   /** `null` means "the whole workspace" and is only ever passed for a manager. */
   ownerUserId?: string | null
+  /**
+   * ⚠️ A SEPARATE FLAG, NOT `ownerUserId: null`.
+   *
+   * "Everyone" and "nobody" are different filters and null already means the
+   * first. Overloading it would make "show me unassigned contacts" —
+   * the single most useful view straight after an import — unexpressible.
+   */
+  unassignedOnly?: boolean
   page?: number
   pageSize?: number
 }
@@ -106,6 +114,8 @@ export async function listContacts(
     .is('deleted_at', null)
 
   if (options.ownerUserId) query = query.eq('owner_user_id', options.ownerUserId)
+  // Nobody, as opposed to everyone. See the note on `unassignedOnly`.
+  if (options.unassignedOnly) query = query.is('owner_user_id', null)
 
   if (search) {
     const escaped = search.replace(/[%_,()]/g, '')

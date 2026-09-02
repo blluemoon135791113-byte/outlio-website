@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { BulkAssign } from '@/components/crm/BulkAssign'
 import { ContactSearch } from '@/components/crm/ContactSearch'
 import { NewContactButton } from '@/components/crm/NewContact'
 import { listContacts } from '@/lib/crm/contacts-list'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
 
@@ -27,18 +29,58 @@ const PAGE_SIZE = 25
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>
+  searchParams: Promise<{ q?: string; page?: string; owner?: string }>
 }) {
   const ctx = await requireWorkspace()
   const params = await searchParams
 
   const search = params.q?.trim() ?? ''
+  /*
+   * ⚠️ "unassigned" IS A VALUE, NOT AN ABSENT ONE. Nobody and everyone are
+   * different filters; overloading the empty string would make the single most
+   * useful view straight after an import — "who has nobody working them" —
+   * unexpressible.
+   */
+  const ownerFilter = params.owner ?? ''
   const page = Math.max(Number.parseInt(params.page ?? '1', 10) || 1, 1)
   const scopedToSelf = dataScope(ctx.role) === 'assigned'
+  /*
+   * A setter cannot reassign, so they get no checkboxes — a control that
+   * always refuses is worse than no control.
+   */
+  const canAssign = can({ role: ctx.role, modules: ctx.modules }, 'crm.contact.assign')
+
+  const assignees = canAssign
+    ? await (async () => {
+        const db = createAdminClient()
+        const { data: members } = await db
+          .from('workspace_memberships')
+          .select('user_id')
+          .eq('workspace_id', ctx.workspace.id)
+
+        const ids = (members ?? []).map((m) => m.user_id)
+        if (ids.length === 0) return []
+
+        const { data: profiles } = await db
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', ids)
+
+        return (profiles ?? []).map((p) => ({
+          id: p.id,
+          name: p.full_name ?? p.email ?? 'Unnamed member',
+        }))
+      })()
+    : []
 
   const result = await listContacts(ctx.workspace.id, {
     search,
-    ownerUserId: scopedToSelf ? ctx.userId : null,
+    ownerUserId: scopedToSelf
+      ? ctx.userId
+      : ownerFilter && ownerFilter !== 'unassigned'
+        ? ownerFilter
+        : null,
+    unassignedOnly: !scopedToSelf && ownerFilter === 'unassigned',
     page,
     pageSize: PAGE_SIZE,
   })
@@ -71,6 +113,39 @@ export default async function ContactsPage({
           <ContactSearch initialValue={search} />
           {/* ⚠️ THERE WAS NO WAY TO ADD A CONTACT BY HAND anywhere in the
               product until R2 — only the extension and, since R1, imports. */}
+          {/*
+            ⚠️ THE FILTER IS A LINK SET, NOT A SELECT. The URL carries the
+            state, so a filtered list can be bookmarked, shared with a
+            colleague, and reached with the back button — which a select
+            posting to client state cannot.
+          */}
+          {!scopedToSelf ? (
+            <nav aria-label="Owner filter" className="flex gap-1">
+              {[
+                { value: '', label: 'All' },
+                { value: 'unassigned', label: 'Unassigned' },
+                { value: ctx.userId!, label: 'Mine' },
+              ].map((option) => (
+                <Link
+                  key={option.value || 'all'}
+                  href={
+                    option.value
+                      ? `/crm/contacts?owner=${encodeURIComponent(option.value)}`
+                      : '/crm/contacts'
+                  }
+                  aria-current={ownerFilter === option.value ? 'page' : undefined}
+                  className={
+                    ownerFilter === option.value
+                      ? 'rounded-[var(--radius-md)] bg-accent px-2.5 py-1 text-xs font-semibold text-cream'
+                      : 'rounded-[var(--radius-md)] px-2.5 py-1 text-xs font-medium text-muted transition-colors duration-150 hover:text-ink'
+                  }
+                >
+                  {option.label}
+                </Link>
+              ))}
+            </nav>
+          ) : null}
+
           {can({ role: ctx.role, modules: ctx.modules }, 'crm.contact.create') ? (
             <NewContactButton />
           ) : null}
@@ -89,11 +164,16 @@ export default async function ContactsPage({
           </p>
         </div>
       ) : (
-        <>
+        <BulkAssign assignees={assignees} canAssign={canAssign}>
           <div className="clay overflow-x-auto p-0">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-xs uppercase tracking-[0.08em] text-muted">
+                  {canAssign ? (
+                    <th scope="col" className="w-10 px-4 py-3">
+                      <span className="sr-only">Select</span>
+                    </th>
+                  ) : null}
                   <th scope="col" className="px-4 py-3 font-semibold">Name</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Company</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Email</th>
@@ -109,6 +189,17 @@ export default async function ContactsPage({
                     key={row.id}
                     className="border-b border-border last:border-b-0 transition-colors duration-150 hover:bg-surface-muted"
                   >
+                    {canAssign ? (
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          name="contactId"
+                          value={row.id}
+                          aria-label={`Select ${row.fullName ?? 'contact'}`}
+                          className="h-4 w-4"
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-4 py-3">
                       <Link
                         href={`/crm/contacts/${row.id}`}
@@ -156,7 +247,7 @@ export default async function ContactsPage({
               />
             </nav>
           ) : null}
-        </>
+        </BulkAssign>
       )}
     </div>
   )

@@ -9719,3 +9719,61 @@ call to the catalogue and watching the test fail.
 
 Dashboard templates, custom-field aggregation, per-widget filters, and trend
 charts (pending the library decision).
+
+## 2026-09-01 — R2 (part 2): bulk assignment and the owner filter
+
+`lib/crm/contacts-list.ts`, `lib/crm/contact-actions.ts`,
+`components/crm/BulkAssign.tsx`, `app/(product)/crm/contacts/page.tsx`.
+
+### This closes a loop R1 deliberately opened
+
+R1 leaves imported and extracted leads **unassigned** on purpose: handing five
+hundred contacts to whoever clicked the button is wrong most of the time. That
+is only defensible if distributing them afterwards is easy — and until now
+nothing could assign more than one contact at a time. The deliberate choice was
+quietly making the product unusable after an import of any size.
+
+### "Unassigned" is a value, not an absent one
+
+`ownerUserId: null` already means "the whole workspace". Overloading it would
+make *"who has nobody working them"* — the single most useful view straight
+after an import — unexpressible. `unassignedOnly` is a separate flag.
+
+### The selection IS the form
+
+Each checkbox is a real `<input name="contactId">` inside the form that
+submits. So the posted set is by definition what is ticked on screen. Mirroring
+it into React state is how a list ends up submitting ids from the previous page.
+The count is read from the DOM for the same reason.
+
+"Select all **on this page**" says so, because that is what it does. A control
+labelled "select all" that silently means the 25 you can see is how someone
+assigns a quarter of an import and believes they assigned all of it.
+
+### ⚠️ A hooks violation that `tsc` could not see
+
+The first version returned early for a setter, **before** `useRef` and
+`useState` — calling hooks conditionally, which React forbids. `tsc` passed;
+**ESLint's `rules-of-hooks` caught it** with four errors. Split so the hooks
+live only in the branch that uses them.
+
+Another entry in the running theme: a green typecheck is not a working
+component. Lint and build have each caught a class of defect this session that
+`tsc` structurally cannot.
+
+### Other care
+
+- The new owner must be a **member of this workspace** — the id comes from a
+  form and the service role bypasses RLS. Same check as the R3 handover.
+- Bounded at 200: an unbounded UPDATE is how one submission rewrites a whole
+  book of business.
+- Reports the number that **actually changed**, not the number selected. They
+  differ when a selection spans records someone has lost access to.
+- The filter is a **link set, not a select**: the URL carries the state, so a
+  filtered list can be bookmarked, shared and reached with the back button.
+- A setter gets no checkboxes at all — a control that always refuses is worse
+  than no control.
+
+### Verified
+
+2,336 unit tests; CRM ingestion 19/19; typecheck 0; lint 0; build clean.

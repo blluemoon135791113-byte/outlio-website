@@ -13,6 +13,7 @@ import { z } from 'zod'
 
 import { addNote, assignContact } from '@/lib/crm/activities'
 import { createContactManually } from '@/lib/crm/ingest'
+import { createAdminClient } from '@/lib/supabase/admin'
 import {
   checkCollision,
   DuplicateRequestError,
@@ -217,5 +218,101 @@ export async function createContactAction(
       return { ok: false, error: 'Give at least a name or an email address.' }
     }
     return { ok: false, error: 'Could not add that contact.' }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bulk assignment — R2
+// ---------------------------------------------------------------------------
+
+export type BulkAssignState =
+  | { ok: true; message: string }
+  | { ok: false; error: string }
+  | null
+
+/**
+ * Assigns many contacts at once.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THIS CLOSES A LOOP R1 DELIBERATELY OPENED.                              ║
+ * ║                                                                           ║
+ * ║  Imported and extracted leads arrive UNASSIGNED on purpose — bulk-giving  ║
+ * ║  five hundred contacts to whoever clicked the button is wrong most of the ║
+ * ║  time. But that is only defensible if distributing them afterwards is     ║
+ * ║  easy, and until now there was no way to assign more than one contact at  ║
+ * ║  a time. The deliberate choice was quietly making the product unusable    ║
+ * ║  after an import of any size.                                             ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function bulkAssignAction(
+  _previous: BulkAssignState,
+  formData: FormData,
+): Promise<BulkAssignState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('crm.contact.assign')
+  } catch {
+    return { ok: false, error: 'You do not have permission to assign contacts.' }
+  }
+
+  const ids = formData.getAll('contactId').map(String).filter(Boolean)
+  if (ids.length === 0) return { ok: false, error: 'Select some contacts first.' }
+
+  /*
+   * ⚠️ BOUNDED. A page holds 25; anything far beyond that is a crafted request
+   * rather than a click, and an unbounded UPDATE is how one form submission
+   * rewrites a whole book of business.
+   */
+  if (ids.length > 200) {
+    return { ok: false, error: 'Assign at most 200 contacts at a time.' }
+  }
+
+  const raw = String(formData.get('ownerUserId') ?? '')
+  const ownerUserId = raw === 'none' ? null : raw
+
+  const db = createAdminClient()
+
+  /*
+   * ⚠️ THE NEW OWNER MUST BE A MEMBER OF THIS WORKSPACE. The id comes from a
+   * form and the service role bypasses RLS, so without this a crafted request
+   * hands contacts to an outsider, who then owns them legitimately. Same check
+   * as the departing-member handover in R3.
+   */
+  if (ownerUserId) {
+    const { data: member } = await db
+      .from('workspace_memberships')
+      .select('user_id')
+      .eq('workspace_id', ctx.workspace.id)
+      .eq('user_id', ownerUserId)
+      .maybeSingle()
+
+    if (!member) return { ok: false, error: 'That person is not in this workspace.' }
+  }
+
+  const { data, error } = await db
+    .from('crm_contacts')
+    .update({ owner_user_id: ownerUserId })
+    // Scoped by workspace in code, and by the id list — an id from a form is a
+    // claim, and this is what stops it reaching another tenant's contact.
+    .eq('workspace_id', ctx.workspace.id)
+    .in('id', ids)
+    .select('id')
+
+  if (error) return { ok: false, error: 'Could not assign those contacts.' }
+
+  const moved = data?.length ?? 0
+
+  revalidatePath('/crm/contacts')
+
+  /*
+   * Reports the number that ACTUALLY changed, not the number selected. They
+   * differ when a selection spans a page someone no longer has access to, and
+   * silently claiming the larger number would hide that.
+   */
+  return {
+    ok: true,
+    message: ownerUserId
+      ? `${moved} contact${moved === 1 ? '' : 's'} assigned.`
+      : `${moved} contact${moved === 1 ? '' : 's'} unassigned.`,
   }
 }
