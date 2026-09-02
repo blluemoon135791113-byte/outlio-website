@@ -21,9 +21,9 @@ function CursorIcon() {
     <svg viewBox="0 0 28 34" aria-hidden="true">
       <path
         d="M3.3 2.4 24.8 20c1 .82.42 2.45-.87 2.43l-8.18-.07 3.86 7.29-4.1 2.16-3.84-7.26-5.15 6.09c-.84 1-2.5.4-2.48-.9L3.3 2.4Z"
-        fill="#fff"
-        stroke="#111"
-        strokeWidth="1.55"
+        fill="#111"
+        stroke="#fff"
+        strokeWidth="1.7"
         strokeLinejoin="round"
       />
     </svg>

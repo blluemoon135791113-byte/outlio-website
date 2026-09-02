@@ -40,6 +40,7 @@ let bob: TestUser | null = null
 let aliceWorkspace = ''
 let bobWorkspace = ''
 let aliceContact = ''
+let aliceDashboard = ''
 let aliceAccount = ''
 
 const describeIf = hasSupabaseEnv ? describe : describe.skip
@@ -112,6 +113,40 @@ beforeAll(async () => {
     events: [], created_by: alice.id,
   })
 
+  /*
+   * ⚠️ R19: ALICE MUST ACTUALLY HAVE ROWS IN THE NEW TABLES.
+   *
+   * Adding `dashboards` to the cross-tenant list without seeding it would have
+   * been VACUOUS — the table is empty, so Bob reads `[]` whether RLS works or
+   * not, and the suite would report three new passes while checking nothing.
+   * This is the exact trap the positive controls below exist to catch, and it
+   * caught this.
+   */
+  await db.from('workspace_onboarding_state').insert({
+    workspace_id: aliceWorkspace,
+    dismissed_at: new Date().toISOString(),
+    dismissed_by: alice.id,
+  })
+
+  const { data: aliceDash } = await db
+    .from('dashboards')
+    .insert({
+      workspace_id: aliceWorkspace,
+      name: `Alice dashboard ${RUN}`,
+      created_by: alice.id,
+    })
+    .select('id')
+    .single()
+
+  aliceDashboard = aliceDash!.id
+
+  await db.from('dashboard_widgets').insert({
+    workspace_id: aliceWorkspace,
+    dashboard_id: aliceDashboard,
+    metric_key: 'contacts.total',
+    position: 0,
+  })
+
   await db.rpc('email_record_inbound', {
     p_workspace_id: aliceWorkspace,
     p_account_id: aliceAccount,
@@ -162,6 +197,35 @@ describeIf('the test clients are genuinely authenticated', () => {
     expect(data).toHaveLength(1)
     expect(data![0]!.full_name).toBe(`Alice Contact ${RUN}`)
   }, 30_000)
+
+  /*
+   * ⚠️ R19: THE CONTROL FOR THE TABLES ADDED AFTER THIS SUITE WAS WRITTEN.
+   *
+   * Without these, the three new cross-tenant assertions would pass on empty
+   * tables and prove nothing. This is what makes "Bob sees nothing" mean
+   * something: there IS something for him not to see.
+   */
+  it('lets Alice read her OWN dashboard — the same row Bob cannot', async () => {
+    const { data, error } = await alice!.client
+      .from('dashboards').select('id, name').eq('id', aliceDashboard)
+
+    expect(error).toBeNull()
+    expect(data).toHaveLength(1)
+    expect(data![0]!.name).toBe(`Alice dashboard ${RUN}`)
+  }, 30_000)
+
+  it('lets Alice read her OWN widgets and onboarding state', async () => {
+    const [widgets, onboarding] = await Promise.all([
+      alice!.client
+        .from('dashboard_widgets').select('id').eq('dashboard_id', aliceDashboard),
+      alice!.client
+        .from('workspace_onboarding_state').select('workspace_id')
+        .eq('workspace_id', aliceWorkspace),
+    ])
+
+    expect(widgets.data).toHaveLength(1)
+    expect(onboarding.data).toHaveLength(1)
+  }, 30_000)
 })
 
 describeIf('NO CROSS-TENANT ACCESS', () => {
@@ -188,6 +252,15 @@ describeIf('NO CROSS-TENANT ACCESS', () => {
     'flow_runs',
     'meeting_bookings',
     'workspace_memberships',
+    /*
+     * ⚠️ ADDED IN R19. These three tables shipped in migrations 0102 and 0107,
+     * after this suite was written, and were therefore never checked for
+     * tenant isolation. A security suite that is not extended alongside the
+     * schema decays into a statement about the past.
+     */
+    'workspace_onboarding_state',
+    'dashboards',
+    'dashboard_widgets',
   ] as const
 
   for (const table of TENANT_TABLES) {

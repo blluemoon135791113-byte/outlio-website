@@ -968,12 +968,31 @@
 }
 
 .libraryPerspective {
+  position: relative;
+  isolation: isolate;
   width: 100%;
   margin: 0;
   padding: 0;
 }
 
+.libraryPerspective::after {
+  position: absolute;
+  z-index: 0;
+  right: 12%;
+  bottom: clamp(3.1rem, 5.4vw, 4.15rem);
+  left: 12%;
+  height: clamp(1.65rem, 2.8vw, 2.35rem);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(76, 47, 29, 0.22) 0%, rgba(101, 66, 41, 0.1) 44%, transparent 74%);
+  content: '';
+  filter: blur(0.7rem);
+  pointer-events: none;
+  transform: scaleX(0.92);
+}
+
 .libraryStage {
+  position: relative;
+  z-index: 1;
   min-height: clamp(30rem, 49vw, 36rem);
   padding: 0;
   overflow: visible;

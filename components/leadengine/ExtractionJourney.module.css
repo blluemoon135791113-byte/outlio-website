@@ -3,21 +3,21 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   position: relative;
-  padding: clamp(2.25rem, 4vw, 4.5rem);
+  padding: clamp(1.75rem, 3vw, 3rem);
   background: #fff;
   color: #171715;
 }
 
 .layout {
   display: grid;
-  width: min(100%, 98rem);
+  width: min(100%, 86rem);
   margin-inline: auto;
-  grid-template-columns: minmax(20rem, 0.92fr) minmax(34rem, 1.08fr);
-  gap: clamp(2.25rem, 4.5vw, 5.5rem);
+  grid-template-columns: minmax(19rem, 0.9fr) minmax(30rem, 1fr);
+  gap: clamp(2rem, 3.5vw, 4rem);
   align-items: center;
 }
 
-.copy { max-width: 38rem; }
+.copy { max-width: 34rem; }
 
 .featureGlyph {
   position: relative;
@@ -59,7 +59,7 @@
 .heading {
   margin: 0;
   font-family: var(--font-heading), sans-serif;
-  font-size: clamp(2.8rem, 5vw, 5.35rem);
+  font-size: clamp(2.65rem, 4.2vw, 4.6rem);
   font-weight: var(--leadengine-heading-weight);
   letter-spacing: -0.062em;
   line-height: 0.98;
@@ -107,7 +107,9 @@
 
 .animationBox {
   position: relative;
+  width: min(100%, 36rem);
   min-width: 0;
+  justify-self: end;
   overflow: hidden;
   border-radius: clamp(1.8rem, 3vw, 3.25rem);
   background:
@@ -115,7 +117,7 @@
     linear-gradient(145deg, #ffd878 0%, #ffc23e 48%, #f4a914 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 1.8rem 4.5rem rgba(196, 119, 5, 0.16);
   isolation: isolate;
-  aspect-ratio: 1.34 / 1;
+  aspect-ratio: 1 / 1;
 }
 
 .animationBox::before {
@@ -130,10 +132,10 @@
 
 .browserWindow {
   position: absolute;
-  top: 7%;
-  right: 6%;
-  bottom: 13%;
-  left: 6%;
+  top: 4.5%;
+  right: 4.5%;
+  bottom: 10.5%;
+  left: 4.5%;
   overflow: hidden;
   border: 1px solid rgba(125, 75, 7, 0.16);
   border-radius: clamp(1rem, 2vw, 1.6rem);
@@ -210,6 +212,15 @@
 
 .salesNavigator,
 .crmTable { position: absolute; inset: 8.5cqh 0 0; }
+
+.salesNavigator,
+.extensionPanel,
+.syncPanel,
+.crmTable,
+.successToast,
+.cursor {
+  will-change: transform, opacity;
+}
 
 .salesNavigator {
   background: #f3f3f3;
@@ -562,18 +573,18 @@
   left: 0;
   width: clamp(1rem, 2.5cqw, 1.55rem);
   opacity: 0;
-  filter: drop-shadow(0 0.3rem 0.35rem rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 0.18rem 0.2rem rgba(0, 0, 0, 0.42));
   transform: translate3d(88cqw, 4cqh, 0);
   animation: cursor-path var(--journey-duration) var(--ease-in-out) infinite;
   pointer-events: none;
 }
 .cursor svg { display: block; width: 100%; height: auto; }
-.cursor > span { position: absolute; top: -0.12rem; left: -0.12rem; width: 0.52rem; aspect-ratio: 1; border: 1px solid rgba(224, 112, 2, 0.72); border-radius: 50%; opacity: 0; transform: scale(0.95); transform-origin: center; animation: cursor-click var(--journey-duration) var(--ease-out) infinite; }
+.cursor > span { position: absolute; top: -0.12rem; left: -0.12rem; width: 0.52rem; aspect-ratio: 1; border: 1px solid rgba(17, 17, 17, 0.52); border-radius: 50%; opacity: 0; transform: scale(0.95); transform-origin: center; animation: cursor-click var(--journey-duration) var(--ease-out) infinite; }
 
 .animationCaption {
   position: absolute;
   right: 8%;
-  bottom: 5.5%;
+  bottom: 3.5%;
   left: 8%;
   display: flex;
   align-items: center;
@@ -661,19 +672,18 @@
 }
 
 @keyframes cursor-path {
-  0% { opacity: 0; transform: translate3d(84cqw, 2cqh, 0) scale(1); }
-  4% { opacity: 1; transform: translate3d(78cqw, 12cqh, 0) scale(1); }
-  8%, 12% { opacity: 1; transform: translate3d(94cqw, 3.8cqh, 0) scale(1); }
-  17% { opacity: 1; transform: translate3d(88cqw, 16cqh, 0) scale(1); }
-  26%, 32% { opacity: 1; transform: translate3d(83cqw, 31cqh, 0) scale(1); }
-  41% { opacity: 1; transform: translate3d(83cqw, 36cqh, 0) scale(1); }
-  45% { opacity: 0; transform: translate3d(70cqw, 50cqh, 0) scale(1); }
-  58% { opacity: 0; transform: translate3d(70cqw, 70cqh, 0) scale(1); }
-  66% { opacity: 1; transform: translate3d(18cqw, 25cqh, 0) scale(1); }
-  72%, 78% { opacity: 1; transform: translate3d(4.2cqw, 47cqh, 0) scale(1); }
-  84% { opacity: 1; transform: translate3d(85cqw, 50cqh, 0) scale(1); }
-  91% { opacity: 1; transform: translate3d(96cqw, 26cqh, 0) scale(1); }
-  96%, 100% { opacity: 0; transform: translate3d(84cqw, 2cqh, 0) scale(1); }
+  0% { opacity: 0; transform: translate3d(88cqw, 8cqh, 0) scale(1); }
+  4% { opacity: 1; transform: translate3d(91cqw, 6cqh, 0) scale(1); }
+  8%, 12% { opacity: 1; transform: translate3d(94cqw, 4.2cqh, 0) scale(1); }
+  17% { opacity: 1; transform: translate3d(90cqw, 15cqh, 0) scale(1); }
+  26%, 32% { opacity: 1; transform: translate3d(80.5cqw, 31cqh, 0) scale(1); }
+  41% { opacity: 1; transform: translate3d(80.5cqw, 34cqh, 0) scale(1); }
+  45%, 62% { opacity: 0; transform: translate3d(80.5cqw, 34cqh, 0) scale(1); }
+  67% { opacity: 1; transform: translate3d(14cqw, 29cqh, 0) scale(1); }
+  72%, 78% { opacity: 1; transform: translate3d(4.4cqw, 36.5cqh, 0) scale(1); }
+  86% { opacity: 1; transform: translate3d(4.4cqw, 36.5cqh, 0) scale(1); }
+  93% { opacity: 0; transform: translate3d(4.4cqw, 36.5cqh, 0) scale(1); }
+  96%, 100% { opacity: 0; transform: translate3d(88cqw, 8cqh, 0) scale(1); }
 }
 
 @keyframes cursor-click {
@@ -703,7 +713,7 @@
 }
 
 @media (max-width: 70rem) {
-  .section { padding: clamp(2rem, 4vw, 3.5rem); }
+  .section { padding: clamp(1.75rem, 3vw, 2.75rem); }
   .layout { grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); gap: clamp(1.8rem, 3vw, 2.75rem); }
   .heading { font-size: clamp(2.35rem, 4.6vw, 4rem); }
   .description { font-size: clamp(0.94rem, 1.55vw, 1.1rem); }
@@ -712,7 +722,7 @@
 @media (max-width: 48rem) {
   .layout { grid-template-columns: 1fr; }
   .copy { max-width: 44rem; }
-  .animationBox { width: min(100%, 43rem); margin-inline: auto; }
+  .animationBox { width: min(100%, 35rem); justify-self: center; margin-inline: auto; }
 }
 
 @media (max-width: 38rem) {
@@ -720,8 +730,8 @@
   .featureGlyph { width: 2.7rem; height: 2.7rem; margin-bottom: 1.6rem; }
   .heading { font-size: clamp(2.4rem, 12vw, 3.4rem); }
   .description { font-size: 0.98rem; }
-  .animationBox { border-radius: 1.45rem; aspect-ratio: 1.08 / 1; }
-  .browserWindow { top: 6%; right: 4%; bottom: 12%; left: 4%; }
+  .animationBox { border-radius: 1.45rem; aspect-ratio: 1 / 1; }
+  .browserWindow { top: 4%; right: 4%; bottom: 10%; left: 4%; }
   .salesNavHeader nav span:nth-child(n + 3) { display: none; }
   .salesNavBody { grid-template-columns: 22% minmax(0, 1fr); }
   .salesFilters div { padding-inline: 1.2cqw; }

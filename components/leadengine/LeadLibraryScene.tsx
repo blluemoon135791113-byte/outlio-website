@@ -120,6 +120,34 @@ export function LeadLibraryScene({
         const root = new THREE.Group()
         scene.add(root)
 
+        const contactShadowCanvas = document.createElement('canvas')
+        contactShadowCanvas.width = 512
+        contactShadowCanvas.height = 96
+        const contactShadowContext = contactShadowCanvas.getContext('2d')
+        if (contactShadowContext) {
+          const gradient = contactShadowContext.createRadialGradient(256, 48, 8, 256, 48, 250)
+          gradient.addColorStop(0, 'rgba(71, 42, 25, 0.3)')
+          gradient.addColorStop(0.42, 'rgba(84, 52, 32, 0.16)')
+          gradient.addColorStop(0.72, 'rgba(102, 69, 45, 0.06)')
+          gradient.addColorStop(1, 'rgba(102, 69, 45, 0)')
+          contactShadowContext.fillStyle = gradient
+          contactShadowContext.fillRect(0, 0, 512, 96)
+        }
+        const contactShadowTexture = new THREE.CanvasTexture(contactShadowCanvas)
+        contactShadowTexture.colorSpace = THREE.SRGBColorSpace
+        const contactShadow = new THREE.Mesh(
+          new THREE.PlaneGeometry(7.25, 0.68),
+          new THREE.MeshBasicMaterial({
+            map: contactShadowTexture,
+            transparent: true,
+            depthWrite: false,
+            opacity: 0.78,
+            toneMapped: false,
+          }),
+        )
+        contactShadow.position.set(0, -3.06, -0.72)
+        root.add(contactShadow)
+
         const shelfMaterial = new THREE.MeshPhysicalMaterial({
           color: 0xe8cbaa,
           roughness: 0.52,
@@ -546,6 +574,7 @@ export function LeadLibraryScene({
           })
           geometries.forEach((geometry) => geometry.dispose())
           materials.forEach((material) => material.dispose())
+          contactShadowTexture.dispose()
           renderer.dispose()
           renderer.domElement.remove()
           onReadyChange(false)

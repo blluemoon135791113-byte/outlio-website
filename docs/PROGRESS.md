@@ -9816,3 +9816,51 @@ rendered none. Same shape as the stranded engines, one layer up.
 
 2,336 unit tests; readiness integration 6 passed / 2 skipped; typecheck 0;
 lint 0; build clean.
+
+## 2026-09-01 — R19: security and performance regression
+
+`tests/integration/security-suite.test.ts`, `scripts/volume-test.sh` re-run.
+
+### ⚠️ The security suite had decayed into a statement about the past
+
+Three tables shipped after it was written — `workspace_onboarding_state`
+(0102), `dashboards` and `dashboard_widgets` (0107) — and **none was checked for
+tenant isolation**. A security suite that is not extended alongside the schema
+tests the product as it was, not as it is.
+
+### ⚠️ And adding them naively would have proved nothing
+
+Alice had no rows in any of the three. Bob reading `[]` from an empty table is
+not evidence of isolation — it is evidence of an empty table. The three new
+assertions would have reported passes while checking nothing.
+
+**This is exactly the trap the suite's own positive controls exist to catch, and
+it caught it.** Alice is now seeded with a dismissed onboarding row, a dashboard
+and a widget, and two new positive controls assert she **can** read them —
+which is what makes "Bob sees nothing" mean something.
+
+Proven non-vacuous by deleting the widget seed and watching the control fail.
+
+**44 tests, up from 39.**
+
+### Performance: no regression at 100k
+
+| Query | Result |
+|---|---|
+| Contacts page 1 | Index scan, **0.22ms** |
+| Inbox keyset page | **2 buffers**, flat at any depth |
+| Sequential scans | Only from the harness's own `count(*)` verification |
+
+The `estimated` count from R9 is holding: no per-page sequential scan over
+`crm_contacts` appears in the plans for the product's own queries.
+
+### What this pass does NOT cover
+
+It verifies **isolation and query plans**. It cannot verify that any of the
+~27 screens built in this pass render correctly or are usable — that still needs
+a human at the preview (KI9).
+
+### Verified
+
+44 security tests; 2,336 unit tests; volume harness clean at 100k; typecheck 0;
+lint 0; build clean.
