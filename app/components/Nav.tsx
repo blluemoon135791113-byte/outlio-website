@@ -251,8 +251,16 @@ export default function Nav({ surface = "agency", variant = "default" }: NavProp
               {...externalProps(cta)}
               className={
                 cta.primary
-                  ? "flex items-center gap-2 border-r border-ink bg-accent px-6 text-[15px] font-semibold text-cream transition-colors hover:bg-accent-deep"
-                  : "flex items-center px-6 text-[15px] font-semibold transition-colors hover:bg-ink hover:text-cream"
+                  ? `flex items-center gap-2 border-r border-ink bg-accent px-6 text-[15px] font-semibold text-cream transition-colors ${
+                      surface === "leadengine"
+                        ? "hover:bg-[#f4a914] hover:text-[#140104]"
+                        : "hover:bg-accent-deep"
+                    }`
+                  : `flex items-center px-6 text-[15px] font-semibold transition-colors ${
+                      surface === "leadengine"
+                        ? "hover:bg-[#ffe0a0] hover:text-[#140104]"
+                        : "hover:bg-ink hover:text-cream"
+                    }`
               }
               style={
                 // The last CTA never needs a right border; the header edge is it.
@@ -317,8 +325,16 @@ export default function Nav({ surface = "agency", variant = "default" }: NavProp
                   {...externalProps(cta)}
                   className={
                     cta.primary
-                      ? "mt-4 block rounded-full bg-accent px-6 py-3 text-center text-base font-semibold text-cream transition-colors hover:bg-accent-deep"
-                      : "mt-3 block rounded-full bg-ink px-6 py-3 text-center text-base font-semibold text-cream transition-colors hover:bg-accent"
+                      ? `mt-4 block rounded-full bg-accent px-6 py-3 text-center text-base font-semibold text-cream transition-colors ${
+                          surface === "leadengine"
+                            ? "hover:bg-[#f4a914] hover:text-[#140104]"
+                            : "hover:bg-accent-deep"
+                        }`
+                      : `mt-3 block rounded-full bg-ink px-6 py-3 text-center text-base font-semibold text-cream transition-colors ${
+                          surface === "leadengine"
+                            ? "hover:bg-[#ffe0a0] hover:text-[#140104]"
+                            : "hover:bg-accent"
+                        }`
                   }
                   onClick={closeMobile}
                 >

@@ -101,8 +101,13 @@ export default async function PipelinePage({
               />
             ) : null}
 
-            {/* A second pipeline is a normal thing to want — different products,
-                different motions — so the way to make one is on the board. */}
+            {/*
+              ⚠️ SECONDARY STYLING, BECAUSE THESE DO VERY DIFFERENT THINGS.
+              "New deal" adds a record to THIS pipeline; "New pipeline" creates
+              a whole new board. Rendered identically side by side — same
+              colour, weight and size — they invited exactly the misclick that
+              leaves someone with an accidental second pipeline.
+            */}
             {canManage ? <NewPipelineButton /> : null}
           </div>
         </div>

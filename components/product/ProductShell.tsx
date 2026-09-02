@@ -22,6 +22,15 @@ function pageLabel(pathname: string) {
   if (pathname.startsWith('/dashboard/intelligence')) return 'Intelligence'
   if (pathname.startsWith('/dashboard/access')) return 'Access status'
   if (pathname.startsWith('/dashboard/settings')) return 'Settings'
+  /*
+   * ⚠️ EMAIL AND FLOWS WERE MISSING, so both fell through to "Overview" —
+   * every screen in two whole modules announced itself as the dashboard. The
+   * fallback is meant for `/dashboard` itself, and a fallback that silently
+   * catches new top-level sections is why nobody noticed for two milestones.
+   */
+  if (pathname.startsWith('/email')) return 'Email'
+  if (pathname.startsWith('/flows')) return 'Flows'
+  if (pathname.startsWith('/extension')) return 'Extension'
   return 'Overview'
 }
 

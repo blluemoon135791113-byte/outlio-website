@@ -5,6 +5,7 @@ import Nav from '@/app/components/Nav'
 import { CrmEnrichmentExperience } from '@/components/leadengine/CrmEnrichmentExperience'
 import { DashboardPreview } from '@/components/leadengine/DashboardPreview'
 import { ExtractionJourney } from '@/components/leadengine/ExtractionJourney'
+import { HubbleIntelligence } from '@/components/leadengine/HubbleIntelligence'
 import { LeadEngineHero } from '@/components/leadengine/LeadEngineHero'
 import { LeadLibrary } from '@/components/leadengine/LeadLibrary'
 import { Pricing } from '@/components/leadengine/Pricing'
@@ -59,6 +60,10 @@ export default function LeadEnginePage() {
 
           <div className="leadengine-story-panel">
             <ExtractionJourney />
+          </div>
+
+          <div className="leadengine-story-panel">
+            <HubbleIntelligence />
           </div>
 
           <aside className="leadengine-story-note" aria-labelledby="software-access-title">

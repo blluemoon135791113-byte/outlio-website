@@ -129,8 +129,15 @@ export function PipelineBoard({
     return (
       <div className="clay p-10 text-center">
         <h2 className="text-base font-semibold text-ink">No deals yet</h2>
+        {/*
+          ⚠️ THIS COPY CONTRADICTED THE SCREEN. It said deals come "from a
+          contact" — written before R4 put a "New deal" button directly above
+          it. Telling someone to go elsewhere while the button is in view is
+          how a working feature reads as unfinished.
+        */}
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
-          Opportunities you create from a contact appear here, one column per stage.
+          Add one with <strong className="text-ink">New deal</strong> above, or from any
+          contact. They appear here as cards, one column per stage.
         </p>
       </div>
     )

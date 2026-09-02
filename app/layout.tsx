@@ -5,9 +5,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { serializeJsonLd } from "@/lib/json-ld";
 import { APP_ORIGIN, isAppHost } from "@/lib/site";
-import SmoothScroll from "./components/SmoothScroll";
 import "./globals.css";
-import "lenis/dist/lenis.css";
 
 const GOOGLE_TAG_MANAGER_ID = "GTM-WK5M6CDJ";
 
@@ -311,7 +309,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
-        <SmoothScroll />
         {children}
       </body>
     </html>

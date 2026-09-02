@@ -10053,3 +10053,66 @@ a dark popup.
 
 **KI9.** Everything verifiable from code has now been verified twice. What
 remains is whether any of it looks right.
+
+## 2026-09-03 — KI9 CLOSED: the screens were finally seen
+
+Signed in at the preview and walked the product. **Eight defects, all invisible
+to typecheck, lint, build and 2,350 tests** — because every one of them is about
+what a person sees.
+
+### The worst: the SELECTED filter was the least readable option
+
+`globals.css:1445` has `.hubble-shell nav a[aria-current='page']`, which paints
+a charcoal tint on **any** current link in a nav inside the product shell — and
+out-specifies a utility class. So `bg-accent text-cream` on my filter pills
+rendered **cream text on cream**.
+
+Both filter controls I built were affected: the contacts owner filter (R2) and
+the analytics date range (R14). In each, the *selected* option was the hardest
+of the three to read.
+
+⚠️ **Identical `className`, different computed background** — which is why no
+amount of reading the source would have found it. It took `getComputedStyle` on
+a live page.
+
+Fixed by working *with* the shell rule rather than fighting it: the shell
+supplies the background, the pill supplies dark text and weight. That also
+matches the tab idiom used everywhere else instead of inventing a second one.
+
+### Two nav items were unreachable
+
+The CRM tab strip is **749px of content in 623px**, with `overflow: visible` —
+so it clipped rather than scrolled and *Duplicates* could not be reached at all.
+Functional, not cosmetic. Both tab strips now scroll.
+
+### Two whole modules called themselves "Overview"
+
+`pageLabel` in `ProductShell` had no case for `/email` or `/flows`, so every
+screen in both fell through to the fallback. A fallback that silently swallows
+new top-level sections is why this survived two milestones.
+
+### Reports and Dashboards were both "current" at once
+
+`/crm/reports/dashboards` starts with `/crm/reports`, so a prefix test lit both
+tabs — and `aria-current="page"` on two links tells a screen reader the person
+is in two places. Now the longest match wins.
+
+### The pipeline empty state argued with the button above it
+
+It said deals come *"from a contact"* — written before R4 put **New deal**
+directly above. And **New deal** and **New pipeline** were styled identically:
+same colour, weight, size, side by side, one adding a record and the other
+creating a whole board. New pipeline is now secondary.
+
+### What was RIGHT, and worth recording
+
+- The `—` for unknown values reads as *unknown*, not broken. That was the main
+  worry about the null handling and it is fine.
+- **Test run** is visibly secondary with *"Nothing is created, sent or changed"*
+  beside it, and **Run now** correctly does not appear on a `contact_created`
+  flow. The distinction that could send real mail holds.
+- Every empty state read as "nothing yet", never as a failure.
+
+### Verified
+
+2,350 unit tests; typecheck 0; lint 0; build clean.

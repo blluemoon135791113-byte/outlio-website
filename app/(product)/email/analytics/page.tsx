@@ -125,9 +125,15 @@ export default async function EmailAnalyticsPage({
               key={range.value}
               href={`/email/analytics?days=${range.value}`}
               aria-current={Number(range.value) === days ? 'page' : undefined}
+              /*
+                ⚠️ NO `bg-accent`. `.hubble-shell nav a[aria-current='page']`
+                in globals.css sets a charcoal tint on any current nav link and
+                out-specifies a utility class, so cream text landed on cream.
+                The shell supplies the background; this supplies the contrast.
+              */
               className={
                 Number(range.value) === days
-                  ? 'rounded-[var(--radius-md)] bg-accent px-2.5 py-1 text-xs font-semibold text-cream'
+                  ? 'rounded-[var(--radius-md)] px-2.5 py-1 text-xs font-semibold text-ink'
                   : 'rounded-[var(--radius-md)] px-2.5 py-1 text-xs font-medium text-muted transition-colors duration-150 hover:text-ink'
               }
             >

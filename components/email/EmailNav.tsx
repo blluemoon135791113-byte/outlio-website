@@ -20,7 +20,7 @@ export function EmailNav() {
   const pathname = usePathname()
 
   return (
-    <nav aria-label="Email sections" className="flex gap-1 border-b border-border">
+    <nav aria-label="Email sections" className="flex gap-1 overflow-x-auto whitespace-nowrap border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {SECTIONS.map((section) => {
         const active = section.exact
           ? pathname === section.href

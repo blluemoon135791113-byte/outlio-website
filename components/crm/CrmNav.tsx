@@ -29,9 +29,22 @@ export function CrmNav() {
   const pathname = usePathname()
 
   return (
-    <nav aria-label="CRM sections" className="flex gap-1 border-b border-border">
+    <nav aria-label="CRM sections" className="flex gap-1 overflow-x-auto whitespace-nowrap border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {SECTIONS.map((section) => {
-        const active = pathname === section.href || pathname.startsWith(`${section.href}/`)
+        /*
+         * ⚠️ THE LONGEST MATCH WINS, NOT EVERY PREFIX MATCH.
+         *
+         * `/crm/reports/dashboards` starts with `/crm/reports`, so a plain
+         * prefix test lit BOTH tabs at once — and `aria-current="page"` on two
+         * links tells a screen reader the user is in two places. Picking the
+         * most specific matching section is what makes a nested route belong
+         * to exactly one tab.
+         */
+        const best = SECTIONS.filter(
+          (s) => pathname === s.href || pathname.startsWith(`${s.href}/`),
+        ).sort((a, b) => b.href.length - a.href.length)[0]
+
+        const active = best?.href === section.href
 
         return (
           <Link

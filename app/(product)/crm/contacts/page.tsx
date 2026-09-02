@@ -134,9 +134,21 @@ export default async function ContactsPage({
                       : '/crm/contacts'
                   }
                   aria-current={ownerFilter === option.value ? 'page' : undefined}
+                  /*
+                    ⚠️ NO `bg-accent` HERE, DELIBERATELY. `globals.css` has
+                    `.hubble-shell nav a[aria-current='page']`, which sets a
+                    charcoal-tint background on ANY current link inside a nav
+                    in the product shell — and its specificity beats a utility
+                    class. Cream text on that tint is cream on cream: the
+                    SELECTED option rendered as the least readable of the
+                    three, which is exactly backwards.
+                    The shell supplies the background; this supplies the
+                    contrast, and the result matches the tab idiom already used
+                    everywhere else rather than inventing a second one.
+                  */
                   className={
                     ownerFilter === option.value
-                      ? 'rounded-[var(--radius-md)] bg-accent px-2.5 py-1 text-xs font-semibold text-cream'
+                      ? 'rounded-[var(--radius-md)] px-2.5 py-1 text-xs font-semibold text-ink'
                       : 'rounded-[var(--radius-md)] px-2.5 py-1 text-xs font-medium text-muted transition-colors duration-150 hover:text-ink'
                   }
                 >
