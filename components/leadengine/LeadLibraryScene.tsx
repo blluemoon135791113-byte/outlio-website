@@ -181,8 +181,8 @@ export function LeadLibraryScene({
           return mesh
         }
 
-        addBox(6.82, 6.42, 0.34, 0, 0.08, -0.64, shelfEdgeMaterial, 0.24)
-        addBox(6.46, 5.86, 0.32, 0, 0.1, -0.46, backMaterial, 0.2)
+        addBox(6.38, 6.04, 0.34, 0, 0.08, -0.64, shelfEdgeMaterial, 0.22)
+        addBox(6.1, 5.7, 0.32, 0, 0.1, -0.46, backMaterial, 0.18)
         addBox(0.38, 6.08, 0.62, -3.14, 0.1, -0.04, shelfEdgeMaterial, 0.16)
         addBox(0.38, 6.08, 0.62, 3.14, 0.1, -0.04, shelfEdgeMaterial, 0.16)
         addBox(6.34, 0.38, 0.62, 0, 3.05, -0.04, shelfEdgeMaterial, 0.16)
@@ -466,7 +466,7 @@ export function LeadLibraryScene({
           const width = Math.max(1, bounds.width)
           const height = Math.max(1, bounds.height)
           camera.aspect = width / height
-          camera.position.z = width / height < 0.92 ? 10.4 : 9.4
+          camera.position.z = width / height < 0.92 ? 14.8 : 9.4
           camera.updateProjectionMatrix()
           renderer.setSize(width, height, false)
         }

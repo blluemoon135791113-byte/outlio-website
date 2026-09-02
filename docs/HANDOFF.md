@@ -259,7 +259,11 @@ no owner filter (introduced by this agent, fixed in R5).
 
 - **R2 remainder** — bulk select, saved views, column config, the full filter
   set, contact detail as a drawer.
-- **R7** — custom dashboards, widgets, custom metrics. Nothing exists.
+- **R7 remainder** — dashboard templates (Outbound Sales, Pipeline, Setter
+  Performance), custom-field aggregation (SUM/AVG over a numeric custom field),
+  per-widget filters, and trend-over-time charts. ⚠️ **Trend charts need a
+  charting library — a dependency decision, not a coding one.** Stat cards and
+  CSS bullets cover every metric shipped so far, deliberately.
 - **R13** — campaign schedule/options UI. All enforced server-side already.
 - **Flow builder undo/redo.**
 - **Triggers not yet fired:** `list_added`, `batch_added`, `campaign_enrolled`,
@@ -306,6 +310,6 @@ have been built without ever being seen. Everything below them is tested; the
 surface is not. That is the single largest risk in the codebase, and it is
 cheap to retire.
 
-**If you do a second thing:** pick up R7 (custom dashboards). It is the only
-remaining module with nothing at any layer — no builder, no widgets, no custom
-metrics — so it is the largest single gap against the brief.
+**If you do a second thing:** finish R2 (bulk actions, saved views, filters,
+contact detail as a drawer). It is the largest remaining gap now that R7 has a
+working core.

@@ -960,7 +960,7 @@
   position: relative;
   z-index: 1;
   display: grid;
-  width: min(100%, 52rem);
+  width: min(100%, 46rem);
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
   align-items: center;
@@ -974,12 +974,12 @@
 }
 
 .libraryStage {
-  min-height: clamp(34rem, 52vw, 40rem);
+  min-height: clamp(30rem, 49vw, 36rem);
   padding: 0;
   overflow: visible;
   border: 0;
   border-radius: 0;
-  background: #f7eee2;
+  background: transparent;
   box-shadow: none;
   backdrop-filter: none;
 }
@@ -1147,7 +1147,7 @@
 
 @media (max-width: 68rem) {
   .libraryLayout {
-    width: min(100%, 48rem);
+    width: min(100%, 44rem);
   }
 }
 
@@ -1158,7 +1158,7 @@
   }
 
   .libraryStage {
-    min-height: 31.5rem;
+    min-height: 29rem;
   }
 
   .modal .profileHeader {

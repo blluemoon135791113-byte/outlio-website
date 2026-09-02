@@ -9642,3 +9642,80 @@ have caught, because the output was well-formed and simply wrong.
 ### Verified
 
 2,299 unit tests; typecheck 0; lint 0; build clean.
+
+## 2026-09-01 — R7: custom dashboards
+
+Migration `0107_dashboards.sql`, `lib/reports/metrics.ts`,
+`lib/reports/dashboards.ts`, `components/reports/`,
+`app/(product)/crm/reports/dashboards/`, `tests/unit/report-metrics.test.ts`.
+
+Designed with the `ui-ux-pro-max` skill consulted **first**, per the standing
+instruction — and one of its modes deliberately rejected.
+
+### ⚠️ A WIDGET NAMES A KEY. IT NEVER CARRIES A QUERY.
+
+The tempting design stores SQL on the widget, or a table plus a column plus an
+aggregate. Both hand a customer a way to read tables the permission layer never
+approved — *"count rows in `email_account_secrets` grouped by workspace"* is
+perfectly well-formed under that design — and both break silently the day a
+column is renamed.
+
+`metric_key` resolves through a code catalogue where every metric states its own
+table, its own scoping and its own **permission**. A dashboard can only ever ask
+for something on that list.
+
+Three checks enforce it, and the third is the one that matters:
+
+1. The key must resolve — an unknown key is refused, not defaulted.
+2. The permission is checked when a widget is **added**.
+3. **The permission is re-checked at RENDER time**, because a person's role can
+   change after a dashboard is built. A widget they may no longer see says
+   "Not visible to you" rather than silently disappearing — a gap in the grid
+   with no explanation reads as a broken product.
+
+A setter opening a manager's dashboard sees **their** numbers: the metric applies
+`dataScope` when it runs, not when it was authored.
+
+### What the skill changed, and what it did not
+
+**Rejected `--design-system`.** It generates a fresh palette and typography;
+`CLAUDE.md` fixes the design language and forbids hardcoded colours, so running
+it would have produced a competing system to then ignore. Targeted `--domain`
+queries were the right mode. Its chart data also carried literal hex values —
+the reasoning was taken, the values were not.
+
+**Took:** *"fewer than four data points belongs in a stat card, not a chart"*
+and *"a bullet chart is the right form for a KPI against a target when several
+sit side by side."* Nearly every sales metric here is a single number, or a
+number against a total.
+
+⚠️ **So v1 ships with NO charting library**, and that is a conclusion rather
+than a shortcut. There is no charting dependency in `package.json`; adding one
+is a decision of the same class as DR18 (XLSX) and is surfaced rather than taken
+quietly. Trend-over-time genuinely needs one and is deferred.
+
+**Took:** *"never distinguish series by hue alone"* and the accessible fallback
+of a visible table — which is why `list` is one of the four visuals, and why the
+CSS bar is `aria-hidden` with the number stated above it in text.
+
+### NULL is not zero, again
+
+A pipeline with no priced deals is not a pipeline worth nothing; a win rate over
+nothing closed is not 0%. The metric layer returns null deliberately and the
+widget renders `—` with "Nothing recorded yet for this period."
+
+### Verified
+
+2,336 unit tests (37 new on the catalogue); typecheck 0; lint 0; build clean
+with both routes. Migration rehearsed and smoke-tested: a second default
+dashboard is refused, duplicate widget positions are refused, invalid widths are
+refused, widgets cascade with their dashboard, and a **soft-deleted default
+frees the slot** — the trap that bit `crm_pipelines` in R5.
+
+The "no query on a widget" guard was **proven non-vacuous** by adding a `.rpc(`
+call to the catalogue and watching the test fail.
+
+### Deferred from R7
+
+Dashboard templates, custom-field aggregation, per-widget filters, and trend
+charts (pending the library decision).

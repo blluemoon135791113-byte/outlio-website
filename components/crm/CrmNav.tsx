@@ -21,6 +21,7 @@ const SECTIONS = [
   { href: '/crm/lists', label: 'Lists' },
   { href: '/crm/import', label: 'Import' },
   { href: '/crm/reports', label: 'Reports' },
+  { href: '/crm/reports/dashboards', label: 'Dashboards' },
   { href: '/crm/duplicates', label: 'Duplicates' },
 ] as const
 
