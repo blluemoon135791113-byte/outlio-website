@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 const PAGE_SIZE = 25
 
 /**
- * Companies — M9, the route `CrmNav` has named since M2.
+ * Companies — M9, the route the CRM navigation has named since M2.
  *
  * ⚠️ THE CONTACT COUNT IS ONE BATCHED QUERY, not one per row. A 25-row page
  * with a per-row count is 25 extra round trips, which is the shape that makes

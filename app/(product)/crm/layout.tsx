@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 
-import { CrmNav } from '@/components/crm/CrmNav'
 import { getWorkspaceContext } from '@/lib/workspaces/context'
 import { decidePermission } from '@/lib/workspaces/permissions'
 
@@ -47,16 +46,31 @@ export default async function CrmLayout({ children }: { children: ReactNode }) {
     )
   }
 
+  /*
+   * ⚠️ NO SECTION TAB BAR HERE ANY MORE.
+   *
+   * `CrmNav` listed the same nine destinations the sidebar's Pipeline section
+   * now expands to show, one above the other — two navigations, both current,
+   * disagreeing about nothing and costing a whole row of vertical space on
+   * every CRM page. Two `aria-current="page"` links for one location also tell
+   * a screen-reader user they are in two places at once.
+   *
+   * The sidebar owns section navigation, and it stays reachable on a small
+   * screen through the header's menu button (`ProductShell`), so nothing is
+   * lost by removing the duplicate.
+   */
   return (
     <div className="space-y-6">
       <header>
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
           {ctx.workspace.name}
         </p>
-        <h1 className="mt-1.5 text-[30px] font-semibold tracking-[-0.035em] text-ink">CRM</h1>
+        {/* Named for what the sidebar calls it. "CRM" here while the nav said
+            Pipeline was the same feature answering to two names. */}
+        <h1 className="mt-1.5 text-[30px] font-semibold tracking-[-0.035em] text-ink">
+          Pipeline
+        </h1>
       </header>
-
-      <CrmNav />
 
       {children}
     </div>

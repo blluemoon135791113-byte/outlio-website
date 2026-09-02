@@ -3,8 +3,13 @@ import Link from 'next/link'
 
 import { BulkAssign } from '@/components/crm/BulkAssign'
 import { ContactSearch } from '@/components/crm/ContactSearch'
+import {
+  ContactsTable,
+  contactsHref,
+  type ContactsTableQuery,
+} from '@/components/crm/ContactsTable'
 import { NewContactButton } from '@/components/crm/NewContact'
-import { listContacts } from '@/lib/crm/contacts-list'
+import { isContactSort, listContacts } from '@/lib/crm/contacts-list'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
@@ -29,7 +34,13 @@ const PAGE_SIZE = 25
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string; owner?: string }>
+  searchParams: Promise<{
+    q?: string
+    page?: string
+    owner?: string
+    sort?: string
+    dir?: string
+  }>
 }) {
   const ctx = await requireWorkspace()
   const params = await searchParams
@@ -43,6 +54,14 @@ export default async function ContactsPage({
    */
   const ownerFilter = params.owner ?? ''
   const page = Math.max(Number.parseInt(params.page ?? '1', 10) || 1, 1)
+  /*
+   * ⚠️ VALIDATED, NOT PASSED THROUGH. `sort` reaches a database `.order()`;
+   * `isContactSort` is what stops a hand-edited URL naming a column — and the
+   * fallback is the previous default, so a nonsense value degrades to the
+   * ordinary list rather than to an error page.
+   */
+  const sort = isContactSort(params.sort) ? params.sort : 'created'
+  const direction = params.dir === 'asc' ? 'asc' : 'desc'
   const scopedToSelf = dataScope(ctx.role) === 'assigned'
   /*
    * A setter cannot reassign, so they get no checkboxes — a control that
@@ -83,9 +102,24 @@ export default async function ContactsPage({
     unassignedOnly: !scopedToSelf && ownerFilter === 'unassigned',
     page,
     pageSize: PAGE_SIZE,
+    sort,
+    direction,
   })
 
   const lastPage = Math.max(Math.ceil(result.total / result.pageSize), 1)
+
+  /*
+   * ⚠️ ONE OBJECT, CARRIED BY EVERY LINK ON THE PAGE. Pagination used to
+   * rebuild its own URL from `q` and `page` alone, so paging away from a
+   * filtered or sorted list silently discarded both — page 2 of "Unassigned"
+   * returned the whole workspace under a heading that still said Unassigned.
+   */
+  const query: ContactsTableQuery = {
+    search,
+    owner: scopedToSelf ? '' : ownerFilter,
+    sort,
+    direction,
+  }
 
   /*
    * ⚠️ THE COUNT IS ESTIMATED ABOVE A THRESHOLD (see `listContacts`), and the
@@ -128,11 +162,12 @@ export default async function ContactsPage({
               ].map((option) => (
                 <Link
                   key={option.value || 'all'}
-                  href={
-                    option.value
-                      ? `/crm/contacts?owner=${encodeURIComponent(option.value)}`
-                      : '/crm/contacts'
-                  }
+                  /*
+                   * Keeps the search term and the sort. Changing WHO you are
+                   * looking at is not a request to stop looking for "sam" or
+                   * to go back to newest-first.
+                   */
+                  href={contactsHref(query, { owner: option.value })}
                   aria-current={ownerFilter === option.value ? 'page' : undefined}
                   /*
                     ⚠️ NO `bg-accent` HERE, DELIBERATELY. `globals.css` has
@@ -177,65 +212,12 @@ export default async function ContactsPage({
         </div>
       ) : (
         <BulkAssign assignees={assignees} canAssign={canAssign}>
-          <div className="clay overflow-x-auto p-0">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-border text-xs uppercase tracking-[0.08em] text-muted">
-                  {canAssign ? (
-                    <th scope="col" className="w-10 px-4 py-3">
-                      <span className="sr-only">Select</span>
-                    </th>
-                  ) : null}
-                  <th scope="col" className="px-4 py-3 font-semibold">Name</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Company</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Email</th>
-                  {!scopedToSelf ? (
-                    <th scope="col" className="px-4 py-3 font-semibold">Owner</th>
-                  ) : null}
-                  <th scope="col" className="px-4 py-3 font-semibold">Last activity</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="border-b border-border last:border-b-0 transition-colors duration-150 hover:bg-surface-muted"
-                  >
-                    {canAssign ? (
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          name="contactId"
-                          value={row.id}
-                          aria-label={`Select ${row.fullName ?? 'contact'}`}
-                          className="h-4 w-4"
-                        />
-                      </td>
-                    ) : null}
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/crm/contacts/${row.id}`}
-                        className="font-semibold text-ink hover:text-accent"
-                      >
-                        {row.fullName ?? 'Unnamed contact'}
-                      </Link>
-                      {row.jobTitle ? (
-                        <span className="block text-xs text-muted">{row.jobTitle}</span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-muted">{row.companyName ?? '—'}</td>
-                    <td className="px-4 py-3 text-muted">{row.primaryEmail ?? '—'}</td>
-                    {!scopedToSelf ? (
-                      <td className="px-4 py-3 text-muted">{row.ownerName ?? 'Unassigned'}</td>
-                    ) : null}
-                    <td className="px-4 py-3 text-muted">
-                      {row.lastActivityAt ? formatDate(row.lastActivityAt) : 'Never'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ContactsTable
+            rows={result.rows}
+            query={query}
+            canAssign={canAssign}
+            showOwner={!scopedToSelf}
+          />
 
           {lastPage > 1 ? (
             <nav
@@ -243,8 +225,8 @@ export default async function ContactsPage({
               className="flex items-center justify-between text-sm"
             >
               <PageLink
+                query={query}
                 page={page - 1}
-                search={search}
                 disabled={page <= 1}
                 label="Previous"
               />
@@ -252,8 +234,8 @@ export default async function ContactsPage({
                 Page {page} of {lastPage}
               </span>
               <PageLink
+                query={query}
                 page={page + 1}
-                search={search}
                 disabled={page >= lastPage}
                 label="Next"
               />
@@ -266,13 +248,13 @@ export default async function ContactsPage({
 }
 
 function PageLink({
+  query,
   page,
-  search,
   disabled,
   label,
 }: {
+  query: ContactsTableQuery
   page: number
-  search: string
   disabled: boolean
   label: string
 }) {
@@ -284,21 +266,22 @@ function PageLink({
     return <span className={`${className} cursor-not-allowed text-muted opacity-50`}>{label}</span>
   }
 
-  const query = new URLSearchParams()
-  if (search) query.set('q', search)
-  query.set('page', String(page))
-
+  /*
+   * ⚠️ BUILT FROM THE WHOLE QUERY, NOT FROM `q` ALONE.
+   *
+   * This function used to construct its own URL from the search term and the
+   * page number. Everything else the reader had chosen — the owner filter, and
+   * now the sort — was silently dropped on the way to page 2: "Unassigned"
+   * became the entire workspace while the heading above still said Unassigned,
+   * and there was nothing on screen to suggest the list had changed meaning.
+   *
+   * `contactsHref` is now the only place a contacts URL is assembled, so a
+   * filter added later is carried by pagination for free instead of being
+   * forgotten by one control that nobody thought to update.
+   */
   return (
-    <Link href={`/crm/contacts?${query}`} className={`${className} text-muted hover:text-ink`}>
+    <Link href={contactsHref(query, { page })} className={`${className} text-muted hover:text-ink`}>
       {label}
     </Link>
   )
-}
-
-function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
 }

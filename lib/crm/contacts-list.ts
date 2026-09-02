@@ -48,6 +48,30 @@ export type ListContactsOptions = {
   unassignedOnly?: boolean
   page?: number
   pageSize?: number
+  /**
+   * ⚠️ ONLY COLUMNS THE BASE QUERY CAN ORDER BY.
+   *
+   * Company, email, owner and last activity are resolved AFTER the page is
+   * fetched, in four batched lookups. Sorting on one of them could only sort
+   * the 25 rows already in hand, which looks identical to a real sort and is
+   * wrong the moment there is a second page — the top name on page 1 would not
+   * be the top name overall. Rather than offer that, the list offers no sort
+   * control on those columns at all.
+   */
+  sort?: ContactSort
+  direction?: 'asc' | 'desc'
+}
+
+/** The sortable columns, and the database column each one means. */
+export const CONTACT_SORTS = {
+  name: 'full_name',
+  created: 'created_at',
+} as const
+
+export type ContactSort = keyof typeof CONTACT_SORTS
+
+export function isContactSort(value: string | undefined): value is ContactSort {
+  return value === 'name' || value === 'created'
 }
 
 /**
@@ -126,8 +150,23 @@ export async function listContacts(
     query = query.or(clauses.join(','))
   }
 
+  const sort: ContactSort = options.sort ?? 'created'
+  const ascending = options.direction === 'asc'
+
   const { data, count, error } = await query
-    .order('created_at', { ascending: false })
+    /*
+     * ⚠️ NULLS LAST IN BOTH DIRECTIONS. A contact with no name is not the
+     * "first" one alphabetically in any sense a reader means, and Postgres
+     * defaults to NULLS FIRST on DESC — so reversing the sort would otherwise
+     * put every unnamed row at the top and bury the answer.
+     */
+    .order(CONTACT_SORTS[sort], { ascending, nullsFirst: false })
+    /*
+     * A stable tiebreaker. Without one, two contacts added in the same second
+     * can swap places between page 1 and page 2 and a row is seen twice while
+     * another is never seen at all.
+     */
+    .order('id', { ascending: true })
     .range(from, from + pageSize - 1)
 
   if (error) throw new Error(`listContacts failed: ${error.message}`)
