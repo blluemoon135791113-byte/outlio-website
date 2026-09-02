@@ -642,3 +642,46 @@ export async function listPipelines(
     stageCount: counts.get(p.id) ?? 0,
   }))
 }
+
+/**
+ * The pipeline a new deal should land in when nobody picked one.
+ *
+ * ⚠️ RETURNS NULL RATHER THAN GUESSING when a workspace has none. A caller that
+ * invented a pipeline here would create one nobody configured, and the board
+ * would fill with deals in stages the customer never chose.
+ */
+export async function defaultPipeline(
+  workspaceId: string,
+): Promise<{ id: string; stages: { id: string; name: string; kind: StageKind }[] } | null> {
+  const db = createAdminClient()
+
+  const { data: preferred } = await db
+    .from('crm_pipelines')
+    .select('id')
+    .eq('workspace_id', workspaceId)
+    .eq('is_default', true)
+    .is('archived_at', null)
+    .maybeSingle()
+
+  // No default set is ordinary, not an error — fall back to the first.
+  const { data: fallback } = preferred
+    ? { data: preferred }
+    : await db
+        .from('crm_pipelines')
+        .select('id')
+        .eq('workspace_id', workspaceId)
+        .is('archived_at', null)
+        .order('sort_order', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+  if (!fallback) return null
+
+  const pipeline = await getPipeline(workspaceId, fallback.id)
+  if (!pipeline) return null
+
+  return {
+    id: pipeline.id,
+    stages: pipeline.stages.map((s) => ({ id: s.id, name: s.name, kind: s.kind })),
+  }
+}

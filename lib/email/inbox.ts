@@ -311,3 +311,59 @@ export async function viewCounts(input: {
     resolved: resolved.count ?? 0,
   }
 }
+
+/**
+ * The conversations with one contact — R15.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THE BRIEF'S RULE: "THERE MUST NOT BE SEPARATE INCOMPATIBLE HISTORIES."  ║
+ * ║                                                                           ║
+ * ║  A reply already reached four places: the inbox, the contact's activity   ║
+ * ║  timeline, the flow triggers and the campaign report. The conversation    ║
+ * ║  ITSELF was reachable from only one of them. So the CRM could tell you    ║
+ * ║  someone replied and could not show you what they said — which is the     ║
+ * ║  question anyone asks next.                                               ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function threadsForContact(input: {
+  workspaceId: string
+  contactId: string
+  userId: string
+  policy: PolicyInput
+}): Promise<InboxThread[]> {
+  const db = createAdminClient()
+
+  let query = db
+    .from('email_threads')
+    .select(
+      'id, subject, contact_id, assigned_to, status, last_message_at, last_direction, message_count, read_at, crm_contacts(full_name)',
+    )
+    // Scoped by workspace in code — the service role bypasses RLS.
+    .eq('workspace_id', input.workspaceId)
+    .eq('contact_id', input.contactId)
+    .order('last_message_at', { ascending: false })
+    .limit(20)
+
+  /*
+   * ⚠️ THE SAME RULE AS THE INBOX ITSELF. A setter who may not see a thread in
+   * the inbox must not see it on the contact either — otherwise the contact
+   * page becomes the way around the inbox's permissions.
+   */
+  if (!seesAllThreads(input.policy)) query = query.eq('assigned_to', input.userId)
+
+  const { data } = await query
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    subject: row.subject,
+    contactId: row.contact_id,
+    contactName: (row.crm_contacts as { full_name: string } | null)?.full_name ?? null,
+    assignedTo: row.assigned_to,
+    status: row.status as 'open' | 'resolved',
+    lastMessageAt: row.last_message_at,
+    lastDirection: row.last_direction as 'inbound' | 'outbound',
+    messageCount: row.message_count,
+    isRead: row.read_at !== null,
+    preview: null,
+  }))
+}

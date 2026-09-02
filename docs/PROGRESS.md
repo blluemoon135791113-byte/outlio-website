@@ -9864,3 +9864,50 @@ a human at the preview (KI9).
 
 44 security tests; 2,336 unit tests; volume harness clean at 100k; typecheck 0;
 lint 0; build clean.
+
+## 2026-09-01 — R15: cross-module integration
+
+`lib/email/inbox.ts` (+`threadsForContact`), `lib/crm/opportunities.ts`
+(+`defaultPipeline`), `app/(product)/crm/contacts/[id]/page.tsx`,
+`app/(product)/email/inbox/[id]/page.tsx`,
+`tests/integration/cross-module.test.ts`.
+
+### Two gaps in "there must not be separate incompatible histories"
+
+A reply already reached four places — the inbox, the contact's activity
+timeline, the flow triggers, the campaign report. Two links were missing.
+
+**1. The conversation was reachable from only one of them.** The CRM could tell
+you someone had replied (the activity row existed) and could not show you what
+they said, which is the question anyone asks next. Contact detail now lists the
+threads, applying the **same** `seesAllThreads` rule as the inbox — otherwise
+the contact page becomes the way around the inbox's permissions.
+
+**2. A reply could not become a deal.** Recording one meant leaving the inbox,
+finding the contact, finding the board, and remembering what the reply said.
+Most of the time nobody does, so the pipeline under-reports and the campaign
+that produced the deal gets no credit. The thread view now creates one against
+that contact, in the default pipeline.
+
+`defaultPipeline` returns **null rather than guessing** when a workspace has
+none, and the form is not offered — showing it would fail on submit and teach
+someone the feature is broken, when the answer is "set up a pipeline first".
+
+### ⚠️ A test that passed while checking nothing
+
+The first version asserted `contact_id` on `email_inbound_messages`. That column
+**does not exist** — the contact lives on the thread, which is the right design:
+a thread is about a person, a message belongs to a thread.
+
+One test failed loudly on it. **A companion test passed**, because it looped
+over `data ?? []` where `data` was null — PostgREST had returned an error nobody
+checked. Zero iterations, zero assertions, green.
+
+Both now assert `error` is null and that the collection is non-empty before
+looping. *A `?? []` on an unchecked query result turns an error into a silent
+pass* — the same shape as every other vacuous test found this week.
+
+### Verified
+
+5 cross-module integration tests; 2,336 unit tests; typecheck 0; lint 0; build
+clean.

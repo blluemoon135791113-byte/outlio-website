@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 
 import { AddNote, AssignOwner } from '@/components/crm/ContactPanels'
 import { NewTaskButton } from '@/components/crm/NewTask'
+import { threadsForContact } from '@/lib/email/inbox'
 import { listContactTimeline } from '@/lib/crm/activities'
 import { checkCollision } from '@/lib/crm/collision'
 import { getContactDetail, listAssignableMembers } from '@/lib/crm/contacts-list'
@@ -40,6 +41,15 @@ export default async function ContactDetailPage({
 
   const policy = { role: ctx.role, modules: ctx.modules }
   const canAssign = can(policy, 'crm.contact.assign')
+  const emailThreads = can({ role: ctx.role, modules: ctx.modules }, 'email.inbox.view')
+    ? await threadsForContact({
+        workspaceId: ctx.workspace.id,
+        contactId: contact.id,
+        userId: ctx.userId!,
+        policy: { role: ctx.role, modules: ctx.modules },
+      })
+    : []
+
   const canEdit = can(policy, 'crm.contact.edit')
 
   const [timeline, members, collision, notes] = await Promise.all([
@@ -145,6 +155,38 @@ export default async function ContactDetailPage({
               ) : null}
             </div>
           </section>
+
+          {/*
+            ⚠️ R15 — "THERE MUST NOT BE SEPARATE INCOMPATIBLE HISTORIES."
+            A reply already reached the inbox, this contact's activity
+            timeline, the flow triggers and the campaign report. The
+            CONVERSATION itself was reachable from only one of them, so the CRM
+            could tell you someone replied and could not show you what they
+            said — which is the question anyone asks next.
+          */}
+          {emailThreads.length > 0 ? (
+            <section className="clay space-y-3 p-5">
+              <h3 className="text-sm font-semibold text-ink">Email</h3>
+              <ul className="divide-y divide-line">
+                {emailThreads.map((thread) => (
+                  <li key={thread.id} className="py-2">
+                    <Link
+                      href={`/email/inbox/${thread.id}`}
+                      className="text-sm font-medium text-ink hover:underline"
+                    >
+                      {thread.subject ?? '(no subject)'}
+                    </Link>
+                    <p className="mt-0.5 text-xs text-muted">
+                      {thread.messageCount}{' '}
+                      {thread.messageCount === 1 ? 'message' : 'messages'}
+                      {thread.status === 'resolved' ? ' · resolved' : ''}
+                      {thread.lastDirection === 'inbound' ? ' · they replied last' : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section className="clay space-y-4 p-5">
             <h3 className="text-sm font-semibold text-ink">Timeline</h3>

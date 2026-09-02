@@ -2,8 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { NewOpportunityForm } from '@/components/crm/NewOpportunity'
 import { ReplyComposer } from '@/components/email/ReplyComposer'
 import { LocalTime } from '@/components/ui/LocalTime'
+import { defaultPipeline } from '@/lib/crm/opportunities'
 import { getThread, replyableMessageId } from '@/lib/email/inbox'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
@@ -43,6 +45,17 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
    * distinguishing them would confirm the thread exists.
    */
   if (!detail) notFound()
+
+  /*
+   * Only offered when there is somewhere for the deal to go. Showing the form
+   * with no pipeline would fail on submit and teach someone the feature is
+   * broken, when the real answer is "set up a pipeline first".
+   */
+  const canCreateDeal = can(
+    { role: ctx.role, modules: ctx.modules },
+    'crm.opportunity.create',
+  )
+  const pipeline = canCreateDeal ? await defaultPipeline(ctx.workspace.id) : null
 
   const latestInbound = [...detail.messages]
     .reverse()
@@ -103,6 +116,31 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
           </li>
         ))}
       </ol>
+
+      {/*
+        ⚠️ R15 — THIS IS THE LINK TO REVENUE. A reply is the moment a
+        conversation becomes a deal, and until now the only way to record that
+        was to leave the inbox, find the contact, find the board, and remember
+        what the reply said. Most of the time nobody did, so the pipeline
+        under-reported and the campaign that produced the deal got no credit.
+      */}
+      {canCreateDeal && pipeline && detail.thread.contactId ? (
+        <section className="clay p-4">
+          <h3 className="text-sm font-semibold text-ink">Turn this into a deal</h3>
+          <p className="mt-0.5 mb-3 text-xs text-muted">
+            Creates it against {detail.thread.contactName ?? 'this contact'}, so the
+            campaign that started the conversation keeps the credit.
+          </p>
+          <NewOpportunityForm
+            pipelineId={pipeline.id}
+            stages={pipeline.stages}
+            fixedContact={{
+              id: detail.thread.contactId,
+              name: detail.thread.contactName ?? 'this contact',
+            }}
+          />
+        </section>
+      ) : null}
 
       {can({ role: ctx.role, modules: ctx.modules }, 'email.inbox.manage') && latestInbound ? (
         <section className="clay p-4">
