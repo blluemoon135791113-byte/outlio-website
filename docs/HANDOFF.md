@@ -265,7 +265,6 @@ no owner filter (introduced by this agent, fixed in R5).
   per-widget filters, and trend-over-time charts. ⚠️ **Trend charts need a
   charting library — a dependency decision, not a coding one.** Stat cards and
   CSS bullets cover every metric shipped so far, deliberately.
-- **R13** — campaign schedule/options UI. All enforced server-side already.
 - **Flow builder undo/redo.**
 - **Triggers not yet fired:** `list_added`, `batch_added`, `campaign_enrolled`,
   `email_sent`, `email_unsubscribed`, `no_activity`, `webhook`, `scheduled`.

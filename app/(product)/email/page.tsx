@@ -143,6 +143,27 @@ export default async function MailboxesPage() {
                 }}
                 checks={latestByAccount.get(account.id) ?? []}
                 canManage={can({ role: ctx.role, modules: ctx.modules }, 'email.account.manage')}
+                /*
+                  ⚠️ R13. Every one of these has been ENFORCED on each enqueue
+                  since M5 and editable by nobody — so a customer in Karachi
+                  sent on London hours, and a warmed-up domain stayed capped at
+                  its starting allowance forever.
+                */
+                schedule={
+                  can({ role: ctx.role, modules: ctx.modules }, 'email.account.manage')
+                    ? {
+                        id: account.id,
+                        displayName: account.displayName,
+                        timezone: account.timezone,
+                        sendWindowStart: account.sendWindowStart,
+                        sendWindowEnd: account.sendWindowEnd,
+                        sendDays: account.sendDays,
+                        dailySendLimit: account.dailySendLimit,
+                        minDelaySeconds: account.minDelaySeconds,
+                        rampEnabled: account.rampEnabled,
+                      }
+                    : null
+                }
               />
             ))}
           </section>

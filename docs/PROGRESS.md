@@ -9777,3 +9777,42 @@ component. Lint and build have each caught a class of defect this session that
 ### Verified
 
 2,336 unit tests; CRM ingestion 19/19; typecheck 0; lint 0; build clean.
+
+## 2026-09-01 — R13: sending settings someone can actually change
+
+`app/(product)/email/actions.ts`, `components/email/SendingSettings.tsx`,
+`components/email/MailboxCard.tsx`, `app/(product)/email/page.tsx`.
+
+### Enforced since M5, editable by nobody
+
+The send window, the sending days, the timezone, the daily limit, the minimum
+delay and the whole ramp are **read on every enqueue** — a message outside the
+window is refused, and the ramp caps the daily allowance. Every one of them sat
+at its default because nothing in the product could change it.
+
+So a customer in Karachi sent on **London** hours, and a domain that had warmed
+up for months stayed capped at its starting allowance forever. Not a missing
+feature so much as a set of controls wired to nothing.
+
+⚠️ **`EmailAccount` already carried every field.** The page loaded them and
+rendered none. Same shape as the stranded engines, one layer up.
+
+### Where the copy does the work
+
+- **An impossible window is refused with a sentence**, not a constraint
+  violation. An end before a start is not a narrow window — it is one that can
+  never open, and every send would queue forever with no visible cause. Zero
+  sending days fails the same way, reached differently.
+- **Blank daily limit is not zero.** Blank means "no cap beyond the ramp"; zero
+  would stop the mailbox entirely — a thing someone might want, but never by
+  leaving a field empty.
+- **The ramp checkbox explains what turning it OFF does**, because that is the
+  risky direction and the one clicked without thinking: full volume immediately
+  is how a new domain gets filtered.
+- **The timezone asks for an IANA name**, and says why: an offset is wrong twice
+  a year, and the wrongness lands exactly when a campaign is mid-flight.
+
+### Verified
+
+2,336 unit tests; readiness integration 6 passed / 2 skipped; typecheck 0;
+lint 0; build clean.

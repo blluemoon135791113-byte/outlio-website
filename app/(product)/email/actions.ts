@@ -339,3 +339,95 @@ export async function enrolContacts(
     return { ok: false, error: 'Could not enrol those contacts.' }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Sending settings — R13
+// ---------------------------------------------------------------------------
+
+export type SendingSettingsState =
+  | { ok: true; message: string }
+  | { ok: false; error: string }
+  | null
+
+/** ISO weekday numbers, Monday first. */
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7]
+
+/**
+ * Updates a mailbox's schedule and ramp.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  EVERY ONE OF THESE HAS BEEN ENFORCED SINCE M5 AND EDITABLE BY NOBODY.   ║
+ * ║                                                                           ║
+ * ║  The send window, the sending days, the daily limit, the minimum delay    ║
+ * ║  and the whole ramp are read on every enqueue — a message outside the     ║
+ * ║  window is refused, and the ramp caps the daily allowance. All of it sat  ║
+ * ║  at its default because nothing in the product could change it.           ║
+ * ║                                                                           ║
+ * ║  So a customer in Karachi sent on London hours, and a warmed-up domain    ║
+ * ║  stayed capped at the starting allowance forever.                         ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function updateSendingSettings(
+  _previous: SendingSettingsState,
+  formData: FormData,
+): Promise<SendingSettingsState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('email.account.manage')
+  } catch {
+    return { ok: false, error: 'You do not have permission to change sending settings.' }
+  }
+
+  const accountId = String(formData.get('accountId') ?? '')
+  const start = String(formData.get('sendWindowStart') ?? '')
+  const end = String(formData.get('sendWindowEnd') ?? '')
+
+  /*
+   * ⚠️ THE DATABASE ALSO CHECKS THIS, and the check here exists so the person
+   * gets a sentence instead of a constraint violation. An end before a start
+   * is not a narrow window — it is a window that can never open, and every
+   * send would queue forever with no obvious cause.
+   */
+  if (start >= end) {
+    return { ok: false, error: 'The window has to end after it starts.' }
+  }
+
+  const days = formData
+    .getAll('sendDays')
+    .map((d) => Number(d))
+    .filter((d) => WEEKDAYS.includes(d))
+
+  if (days.length === 0) {
+    // Same failure as an impossible window, reached a different way.
+    return { ok: false, error: 'Pick at least one day, or nothing can ever send.' }
+  }
+
+  const positiveOrNull = (name: string): number | null => {
+    const raw = String(formData.get(name) ?? '').trim()
+    if (raw === '') return null
+    const n = Number(raw)
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null
+  }
+
+  const { error } = await createAdminClient()
+    .from('email_accounts')
+    .update({
+      timezone: String(formData.get('timezone') ?? 'UTC'),
+      send_window_start: start,
+      send_window_end: end,
+      send_days: days,
+      // Blank means "no cap of our own", which is different from zero — zero
+      // would stop the mailbox entirely.
+      daily_send_limit: positiveOrNull('dailySendLimit'),
+      min_delay_seconds: positiveOrNull('minDelaySeconds') ?? 60,
+      ramp_enabled: formData.get('rampEnabled') === 'on',
+    })
+    // Scoped by workspace in code — the service role bypasses RLS.
+    .eq('workspace_id', ctx.workspace.id)
+    .eq('id', accountId)
+
+  if (error) return { ok: false, error: 'Could not save those settings.' }
+
+  revalidatePath('/email')
+  return { ok: true, message: 'Sending settings saved.' }
+}

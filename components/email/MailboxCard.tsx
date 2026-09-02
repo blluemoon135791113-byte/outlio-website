@@ -2,6 +2,11 @@
 
 import { useActionState, useState } from 'react'
 
+import {
+  SendingSettings,
+  type AccountSchedule,
+} from '@/components/email/SendingSettings'
+
 import { disconnectAccount, recheckAccount, type ActionState } from '@/app/(product)/email/actions'
 
 type Check = { id: string; label: string; status: string; detail: string }
@@ -30,10 +35,13 @@ export function MailboxCard({
   account,
   checks,
   canManage,
+  schedule,
 }: {
   account: Account
   checks: Check[]
   canManage: boolean
+  /** Null for anyone who may not change it — see R13. */
+  schedule: AccountSchedule | null
 }) {
   const [expanded, setExpanded] = useState(false)
   const [recheckState, recheck, rechecking] = useActionState<ActionState, FormData>(
@@ -140,6 +148,8 @@ export function MailboxCard({
             {expanded ? 'Hide passing checks' : 'Show all checks'}
           </button>
         ) : null}
+
+        {canManage && schedule ? <SendingSettings account={schedule} /> : null}
 
         {canManage ? (
           <>
