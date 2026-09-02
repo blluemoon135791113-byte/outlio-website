@@ -30,6 +30,7 @@ export function SignInForm({ next }: { next?: string }) {
         label="Email"
         type="email"
         autoComplete="email"
+        spellCheck={false}
         required
         defaultValue={priorEmail}
       />

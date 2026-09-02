@@ -49,6 +49,7 @@ export function SignUpForm({ referralCode = '' }: { referralCode?: string }) {
         label="Work email"
         type="email"
         autoComplete="email"
+        spellCheck={false}
         required
         defaultValue={prior.email ?? ''}
         error={errorFor('email')}
@@ -80,6 +81,7 @@ export function SignUpForm({ referralCode = '' }: { referralCode?: string }) {
         type="text"
         inputMode="url"
         autoComplete="url"
+        spellCheck={false}
         required
         placeholder="linkedin.com/in/your-name"
         hint="Your own profile. We use it to verify your request and never visit or scrape it."

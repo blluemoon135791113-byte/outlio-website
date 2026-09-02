@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation'
 
 import { AddNote, AssignOwner } from '@/components/crm/ContactPanels'
 import { NewTaskButton } from '@/components/crm/NewTask'
+import { LocalTime, RelativeTime } from '@/components/ui/LocalTime'
+import { Monogram } from '@/components/ui/Monogram'
 import { threadsForContact } from '@/lib/email/inbox'
 import { listContactTimeline } from '@/lib/crm/activities'
 import { checkCollision } from '@/lib/crm/collision'
@@ -12,9 +14,27 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
 
-export const metadata: Metadata = {
-  title: 'Contact | Outlio',
-  robots: { index: false, follow: false },
+/**
+ * ⚠️ NAMED, NOT "Contact". Every contact tab was titled identically, so a
+ * browser with four of them open showed four indistinguishable tabs and the
+ * back-history was a column of the same word.
+ *
+ * Still `noindex` — this is a private record, and `generateMetadata` must not
+ * quietly drop the robots directive the static object carried.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}): Promise<Metadata> {
+  const ctx = await requireWorkspace()
+  const { id } = await params
+  const contact = await getContactDetail(ctx.workspace.id, id)
+
+  return {
+    title: `${contact?.fullName ?? 'Contact'} | Outlio`,
+    robots: { index: false, follow: false },
+  }
 }
 
 /**
@@ -68,49 +88,99 @@ export default async function ContactDetailPage({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-4">
           <section className="clay p-5">
-            <h2 className="text-xl font-semibold tracking-[-0.025em] text-ink">
-              {contact.fullName ?? 'Unnamed contact'}
-            </h2>
-            {contact.jobTitle || contact.company ? (
-              <p className="mt-1 text-sm text-muted">
-                {contact.jobTitle}
-                {contact.jobTitle && contact.company ? ' · ' : ''}
-                {contact.company?.name}
-              </p>
-            ) : null}
+            {/*
+              The same monogram the list row uses, so arriving here from the
+              list is visibly the same person rather than a name that happens
+              to match.
+            */}
+            <div className="flex items-start gap-3">
+              <Monogram name={contact.fullName} />
+              <div className="min-w-0">
+                <h2 className="text-xl font-semibold tracking-[-0.025em] text-ink">
+                  {contact.fullName ?? 'Unnamed contact'}
+                </h2>
+                {contact.jobTitle || contact.company ? (
+                  <p className="mt-0.5 text-sm text-muted">
+                    {contact.jobTitle}
+                    {contact.jobTitle && contact.company ? ' · ' : ''}
+                    {contact.company ? (
+                      /*
+                        Underlined rather than colour-on-hover: a link that
+                        only announces itself once the pointer is on it is
+                        invisible to anyone navigating by keyboard, and
+                        invisible on a touch screen entirely.
+                      */
+                      <Link
+                        href={`/crm/companies/${contact.company.id}`}
+                        className="underline decoration-border decoration-dotted underline-offset-2 transition-colors duration-150 hover:text-accent hover:decoration-accent"
+                      >
+                        {contact.company.name}
+                      </Link>
+                    ) : null}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
             {contact.headline ? (
-              <p className="mt-2 text-sm leading-relaxed text-muted">{contact.headline}</p>
+              <p className="mt-3 text-sm leading-relaxed text-muted">{contact.headline}</p>
             ) : null}
 
             <dl className="mt-4 grid gap-3 sm:grid-cols-2">
               <Field label="Email">
-                {contact.emails.length === 0
-                  ? '—'
-                  : contact.emails.map((e) => (
-                      <span key={e.id} className="block">
+                {contact.emails.length === 0 ? (
+                  <Missing>No email on file</Missing>
+                ) : (
+                  /*
+                   * ⚠️ ACTIONABLE. This is the address someone came here to
+                   * write to; rendering it as text made the only useful thing
+                   * on the page a copy-and-paste job.
+                   */
+                  contact.emails.map((e) => (
+                    <span key={e.id} className="block">
+                      <a
+                        href={`mailto:${e.address}`}
+                        className="transition-colors duration-150 hover:text-accent"
+                      >
                         {e.address}
-                        {e.isPrimary && contact.emails.length > 1 ? (
-                          <span className="ml-1 text-[10px] uppercase tracking-wide text-muted">
-                            primary
-                          </span>
-                        ) : null}
-                      </span>
-                    ))}
+                      </a>
+                      {e.isPrimary && contact.emails.length > 1 ? (
+                        <span className="ml-1 text-[10px] uppercase tracking-wide text-muted">
+                          primary
+                        </span>
+                      ) : null}
+                    </span>
+                  ))
+                )}
               </Field>
               <Field label="Phone">
-                {contact.phones.length === 0
-                  ? '—'
-                  : contact.phones.map((p) => (
-                      // The raw value is shown, not the E.164: it is what the
-                      // source gave us, and a number we could not regionalize
-                      // has no E.164 at all (Ledger D12).
-                      <span key={p.id} className="block">
+                {contact.phones.length === 0 ? (
+                  <Missing>No phone on file</Missing>
+                ) : (
+                  contact.phones.map((p) => (
+                    // The raw value is DISPLAYED, not the E.164: it is what the
+                    // source gave us, and a number we could not regionalize has
+                    // no E.164 at all (Ledger D12). The dial link prefers the
+                    // E.164 when we have one, because that is the form a phone
+                    // can actually dial.
+                    <span key={p.id} className="block">
+                      <a
+                        href={`tel:${p.e164 ?? p.raw}`}
+                        className="transition-colors duration-150 hover:text-accent"
+                      >
                         {p.raw}
-                      </span>
-                    ))}
+                      </a>
+                    </span>
+                  ))
+                )}
               </Field>
-              <Field label="Location">{contact.location ?? '—'}</Field>
+              <Field label="Location">
+                {contact.location ?? <Missing>Not recorded</Missing>}
+              </Field>
               <Field label="Source">{contact.source.replace(/_/g, ' ')}</Field>
+              <Field label="Added">
+                <LocalTime iso={contact.createdAt} dateOnly />
+              </Field>
             </dl>
 
             {contact.linkedInUrl ? (
@@ -204,8 +274,14 @@ export default async function ContactDetailPage({
                     <p className="text-sm font-medium text-ink">
                       {entry.activityType.replace(/_/g, ' ').toLowerCase()}
                     </p>
+                    {/*
+                      ⚠️ `toLocaleString()` HERE FORMATTED IN THE SERVER'S
+                      TIMEZONE — Vercel runs in UTC, so an activity at 4pm in
+                      Karachi read as 11am to the person it happened to. "When
+                      did this happen" is the entire point of a timeline.
+                    */}
                     <p className="text-xs text-muted">
-                      {new Date(entry.occurredAt).toLocaleString()} · {entry.channel}
+                      <RelativeTime iso={entry.occurredAt} /> · {entry.channel}
                     </p>
                   </li>
                 ))}
@@ -223,7 +299,7 @@ export default async function ContactDetailPage({
                       {note.body}
                     </p>
                     <p className="mt-1 text-xs text-muted">
-                      {new Date(note.createdAt).toLocaleString()}
+                      <RelativeTime iso={note.createdAt} />
                     </p>
                   </li>
                 ))}
@@ -259,6 +335,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <dd className="mt-0.5 text-sm text-ink">{children}</dd>
     </div>
   )
+}
+
+/**
+ * A value we do not have.
+ *
+ * ⚠️ SAYS WHICH THING IS MISSING. An em dash satisfies the letter of
+ * `docs/UNSUPPORTED_FIELDS.md` — the value is visibly absent, not fabricated —
+ * while making every empty field on the page look identical, so "we never got
+ * an email for this person" and "nobody typed a location" read as the same
+ * shrug.
+ */
+function Missing({ children }: { children: React.ReactNode }) {
+  return <span className="text-xs italic text-muted/70">{children}</span>
 }
 
 async function recentNotes(workspaceId: string, contactId: string) {

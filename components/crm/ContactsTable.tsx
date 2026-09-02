@@ -64,12 +64,10 @@ function SortableHeader({
   label,
   column,
   query,
-  className = '',
 }: {
   label: string
   column: ContactSort
   query: ContactsTableQuery
-  className?: string
 }) {
   const active = query.sort === column
   const nextDirection = active && query.direction === 'desc' ? 'asc' : 'desc'
@@ -78,7 +76,7 @@ function SortableHeader({
     <th
       scope="col"
       aria-sort={active ? (query.direction === 'asc' ? 'ascending' : 'descending') : undefined}
-      className={`px-4 py-3 font-semibold ${className}`}
+      className="px-4 py-3 font-semibold"
     >
       <Link
         // Sorting returns to page 1: staying on page 7 of a re-ordered list
@@ -142,7 +140,7 @@ export function ContactsTable({
             return (
               <tr
                 key={row.id}
-                className="group border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-surface-muted"
+                className="border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-surface-muted"
               >
                 {canAssign ? (
                   <td className="px-4 py-2.5 align-middle">
@@ -186,7 +184,10 @@ export function ContactsTable({
                   {row.companyName ? (
                     <span className="flex items-center gap-2">
                       <Monogram name={row.companyName} size="sm" square />
-                      <span className="truncate text-ink">{row.companyName}</span>
+                      {/* `min-w-0` or `truncate` does nothing: a flex child's
+                          default min-width is auto, so it refuses to shrink
+                          below its content and the row widens instead. */}
+                      <span className="min-w-0 truncate text-ink">{row.companyName}</span>
                     </span>
                   ) : (
                     <Missing>No company</Missing>
@@ -203,7 +204,9 @@ export function ContactsTable({
                      */
                     <a
                       href={`mailto:${row.primaryEmail}`}
-                      className="truncate text-muted transition-colors duration-150 hover:text-accent"
+                      // `block`, because `text-overflow` has no effect on an
+                      // inline box — the address simply overflowed the cell.
+                      className="block truncate text-muted transition-colors duration-150 hover:text-accent"
                     >
                       {row.primaryEmail}
                     </a>
@@ -217,7 +220,7 @@ export function ContactsTable({
                     {row.ownerName ? (
                       <span className="flex items-center gap-2">
                         <Monogram name={row.ownerName} size="sm" />
-                        <span className="truncate text-muted">{row.ownerName}</span>
+                        <span className="min-w-0 truncate text-muted">{row.ownerName}</span>
                       </span>
                     ) : (
                       /*

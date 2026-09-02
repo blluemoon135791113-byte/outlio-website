@@ -49,7 +49,19 @@ export function ContactSearch({ initialValue }: { initialValue: string }) {
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder="Search by name or email"
-        className="field w-full px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none"
+        /*
+          Names and email addresses are not misspellings. Left on, every real
+          person's surname in the box gets a red squiggle.
+        */
+        spellCheck={false}
+        autoComplete="off"
+        /*
+          ⚠️ NO `focus:outline-none` HERE. It was doing nothing `.field:focus`
+          does not already do, while putting the outline-removal anti-pattern
+          in component code where the next person copies it to somewhere that
+          has no replacement ring.
+        */
+        className="field w-full px-3 py-2 text-sm text-ink placeholder:text-muted"
       />
     </label>
   )
