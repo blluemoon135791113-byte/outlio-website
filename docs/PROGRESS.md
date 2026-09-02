@@ -9911,3 +9911,56 @@ pass* — the same shape as every other vacuous test found this week.
 
 5 cross-module integration tests; 2,336 unit tests; typecheck 0; lint 0; build
 clean.
+
+## 2026-09-01 — R16: attribution, and the claim it rested on
+
+`tests/integration/batch-attribution.test.ts`.
+
+### The function and the screen already existed
+
+⚠️ **R16 was largely built.** `crm_batch_funnel` (0083) reaches `won_revenue`
+and the reports page renders it. Another entry for the pattern: **the audit's
+UI-completeness claims keep overstating what is missing.**
+
+### What was missing was the proof
+
+The function is headed *"ties a source batch to revenue end to end"* and
+**nothing ever exercised it against a batch that produced a deal.** The only
+test touching `wonRevenue` formats it into a CSV. So the sentence this product
+exists to answer — *which list made us money* — rested on a comment.
+
+The chain is five links: batch → member → contact → opportunity → won. **A break
+anywhere returns a plausible number**, because every link degrades to zero
+rather than to an error.
+
+Six tests now cover it, including the two that make the rest mean anything:
+
+- **A second batch with its own revenue.** Without one, "the funnel reports the
+  revenue" is indistinguishable from "the funnel reports ALL revenue" — a query
+  missing its batch filter would satisfy every other assertion.
+- **An open deal beside the won one.** If `won_deals` counted every
+  opportunity, revenue would include a deal nobody has closed: a forecast
+  reported as income.
+
+Attribution also survives the contact being reassigned — R2 and R3 both make
+reassignment easy, and it must not rewrite where revenue came from.
+
+### ⚠️ My fixture failed silently, which is the bug I have spent the week fixing
+
+The first run failed four tests pointing at the FUNCTION. The fault was mine:
+`status: 'won'` without `closed_at` violates
+`crm_opportunities_closed_consistent` — a won deal with no close date is
+nonsense, and the constraint says so — and **the seed helper never checked the
+insert error**, so the deal was never created and the funnel correctly reported
+zero.
+
+*An unchecked insert in a fixture makes every assertion downstream a guess.*
+Every seed write now asserts its error.
+
+⚠️ **`extracted` and `canonical` are different numbers on purpose** — rows in
+the source file versus contacts after de-duplication. The gap between them is
+what tells a customer how much of a bought list they already had.
+
+### Verified
+
+6 attribution tests; 2,336 unit tests; typecheck 0; lint 0.
