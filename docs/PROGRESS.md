@@ -9964,3 +9964,35 @@ what tells a customer how much of a bought list they already had.
 ### Verified
 
 6 attribution tests; 2,336 unit tests; typecheck 0; lint 0.
+
+## 2026-09-03 — R17: the integrations catalogue
+
+`lib/integrations/catalogue.ts`, `tests/unit/integration-catalogue.test.ts`.
+
+The brief says explicitly: *do not implement everything immediately; preserve
+the adapter layer.* The adapter layer exists — shared types, per-provider
+repositories, Clay, Google, GoHighLevel and Calendly all built against it.
+
+### ⚠️ What it did NOT have was honesty about its own scope
+
+`INTEGRATION_PROVIDERS` names five providers and **three exist**. `microsoft`
+and `dropbox` are in the enum with nothing behind them. `EXPORT_DESTINATIONS`
+names seven and **five have a writer** — `onedrive` and `dropbox` have none.
+
+Nothing is broken today, because no screen is built from the enum. But *the
+type says a value is legal that the product cannot honour*, and the next person
+to build a picker from it ships options that fail on click — the worst kind,
+because the person retries.
+
+The catalogue is now the single place that says which is which, and the tests
+make growing the enum **force a decision**: a provider added to the enum and not
+the catalogue fails. Proven by adding `salesforce` and watching it fail.
+
+`planned` entries must say **why**. "Coming soon" with no reason is how
+something stays unbuilt for a year — Microsoft is blocked on the same OAuth
+credentials as calendar sync; Dropbox simply has no adapter and nothing needs
+one.
+
+### Verified
+
+14 catalogue tests; typecheck 0; lint 0.
