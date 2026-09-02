@@ -113,7 +113,6 @@ export function HubbleLeadList({
     <ul
       /* Kept as a defensive marker if this component is ever reused on a
          smooth-scrolled page; dashboard routes themselves use native scroll. */
-      data-lenis-prevent
       tabIndex={fill ? 0 : undefined}
       aria-label="Leads"
       className={`clay hubble-lead-ledger divide-y divide-clay-sunken overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink/25 ${

@@ -216,7 +216,6 @@ export function DateRangePicker({
       {open && typeof document !== 'undefined' ? createPortal(
         <div
           ref={popoverRef}
-          data-lenis-prevent
           role="dialog"
           aria-label="Choose a date range"
           /*

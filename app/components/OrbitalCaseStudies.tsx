@@ -245,7 +245,6 @@ export default function OrbitalCaseStudies() {
           {/* Modal */}
           <div
             className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl p-5 animate-[fadeSlideUp_0.3s_ease-out] sm:p-10"
-            data-lenis-prevent
             style={{
               background: "linear-gradient(160deg, rgba(240,238,235,0.92) 0%, rgba(225,222,218,0.88) 100%)",
               backdropFilter: "blur(40px) saturate(180%)",

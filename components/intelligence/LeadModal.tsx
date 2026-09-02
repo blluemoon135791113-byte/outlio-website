@@ -191,9 +191,7 @@ export function LeadModal({
           expanded ? 'max-h-[85vh]' : 'max-h-[70vh]'
         }`}
       >
-        {/* `data-lenis-prevent`: Lenis owns the page scroll and would swallow
-            this container's own. See HubbleResultPanel for the full note. */}
-        <div data-lenis-prevent ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto p-6">
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto p-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-center gap-4">
               <PersonAvatar name={lead.fullName} size="lg" />
