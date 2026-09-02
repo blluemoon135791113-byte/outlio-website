@@ -72,7 +72,7 @@ export function LeadLibraryScene({
         const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)')
         const scene = new THREE.Scene()
         const camera = new THREE.PerspectiveCamera(37, 1, 0.1, 40)
-        camera.position.set(0, 0.15, 9.4)
+        camera.position.set(0, -0.28, 10.4)
 
         let renderer: InstanceType<typeof THREE.WebGLRenderer>
         try {
@@ -92,7 +92,7 @@ export function LeadLibraryScene({
         renderer.toneMapping = THREE.ACESFilmicToneMapping
         renderer.toneMappingExposure = 1.06
         renderer.shadowMap.enabled = finePointer.matches && window.innerWidth >= 768
-        renderer.shadowMap.type = THREE.PCFShadowMap
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap
         renderer.domElement.setAttribute('aria-hidden', 'true')
         renderer.domElement.style.width = '100%'
         renderer.domElement.style.height = '100%'
@@ -107,6 +107,13 @@ export function LeadLibraryScene({
         keyLight.shadow.mapSize.set(1024, 1024)
         keyLight.shadow.camera.near = 1
         keyLight.shadow.camera.far = 18
+        keyLight.shadow.camera.left = -5
+        keyLight.shadow.camera.right = 5
+        keyLight.shadow.camera.top = 5
+        keyLight.shadow.camera.bottom = -5
+        keyLight.shadow.bias = -0.0008
+        keyLight.shadow.normalBias = 0.025
+        keyLight.shadow.radius = 3
         scene.add(keyLight)
 
         const warmLight = new THREE.PointLight(0xe07002, 28, 13, 1.7)
@@ -120,33 +127,61 @@ export function LeadLibraryScene({
         const root = new THREE.Group()
         scene.add(root)
 
+        // The page is the visible floor; this transparent receiver gives the
+        // shelf and visitor real contact shadows without adding another board.
+        const floor = new THREE.Mesh(
+          new THREE.PlaneGeometry(10.5, 6.2),
+          new THREE.ShadowMaterial({ color: 0x5c3b26, opacity: 0.17 }),
+        )
+        floor.position.set(0, -3.22, 1.25)
+        floor.rotation.x = -Math.PI / 2
+        floor.receiveShadow = renderer.shadowMap.enabled
+        root.add(floor)
+
+        // A pair of inexpensive baked contact shadows stays visible even on
+        // compact devices where the live shadow map is deliberately disabled.
+        // They ground the case and the visitor without adding another surface.
         const contactShadowCanvas = document.createElement('canvas')
-        contactShadowCanvas.width = 512
-        contactShadowCanvas.height = 96
+        contactShadowCanvas.width = 256
+        contactShadowCanvas.height = 256
         const contactShadowContext = contactShadowCanvas.getContext('2d')
         if (contactShadowContext) {
-          const gradient = contactShadowContext.createRadialGradient(256, 48, 8, 256, 48, 250)
-          gradient.addColorStop(0, 'rgba(71, 42, 25, 0.3)')
-          gradient.addColorStop(0.42, 'rgba(84, 52, 32, 0.16)')
-          gradient.addColorStop(0.72, 'rgba(102, 69, 45, 0.06)')
-          gradient.addColorStop(1, 'rgba(102, 69, 45, 0)')
+          const gradient = contactShadowContext.createRadialGradient(128, 128, 8, 128, 128, 124)
+          gradient.addColorStop(0, 'rgba(42, 23, 13, 0.72)')
+          gradient.addColorStop(0.48, 'rgba(42, 23, 13, 0.34)')
+          gradient.addColorStop(1, 'rgba(42, 23, 13, 0)')
           contactShadowContext.fillStyle = gradient
-          contactShadowContext.fillRect(0, 0, 512, 96)
+          contactShadowContext.fillRect(0, 0, 256, 256)
         }
         const contactShadowTexture = new THREE.CanvasTexture(contactShadowCanvas)
         contactShadowTexture.colorSpace = THREE.SRGBColorSpace
-        const contactShadow = new THREE.Mesh(
-          new THREE.PlaneGeometry(7.25, 0.68),
-          new THREE.MeshBasicMaterial({
-            map: contactShadowTexture,
-            transparent: true,
-            depthWrite: false,
-            opacity: 0.78,
-            toneMapped: false,
-          }),
-        )
-        contactShadow.position.set(0, -3.06, -0.72)
-        root.add(contactShadow)
+
+        const addContactShadow = (
+          width: number,
+          depth: number,
+          x: number,
+          z: number,
+          opacity: number,
+        ) => {
+          const shadow = new THREE.Mesh(
+            new THREE.PlaneGeometry(width, depth),
+            new THREE.MeshBasicMaterial({
+              map: contactShadowTexture,
+              color: 0x4c2d1b,
+              transparent: true,
+              opacity,
+              depthWrite: false,
+              toneMapped: false,
+            }),
+          )
+          shadow.position.set(x, -3.205, z)
+          shadow.rotation.x = -Math.PI / 2
+          shadow.renderOrder = 1
+          root.add(shadow)
+        }
+
+        addContactShadow(6.45, 1.28, 0, 0.08, 0.28)
+        addContactShadow(0.92, 0.7, 0, 1.58, 0.36)
 
         const shelfMaterial = new THREE.MeshPhysicalMaterial({
           color: 0xe8cbaa,
@@ -177,8 +212,8 @@ export function LeadLibraryScene({
           clearcoat: 0.04,
         })
         const pantsMaterial = new THREE.MeshStandardMaterial({
-          color: 0x725c4d,
-          roughness: 0.9,
+          color: 0xd4ac80,
+          roughness: 0.82,
         })
         const hairMaterial = new THREE.MeshStandardMaterial({
           color: 0x3c2b23,
@@ -209,17 +244,77 @@ export function LeadLibraryScene({
           return mesh
         }
 
-        addBox(6.38, 6.04, 0.34, 0, 0.08, -0.64, shelfEdgeMaterial, 0.22)
-        addBox(6.1, 5.7, 0.32, 0, 0.1, -0.46, backMaterial, 0.18)
-        addBox(0.38, 6.08, 0.62, -3.14, 0.1, -0.04, shelfEdgeMaterial, 0.16)
-        addBox(0.38, 6.08, 0.62, 3.14, 0.1, -0.04, shelfEdgeMaterial, 0.16)
-        addBox(6.34, 0.38, 0.62, 0, 3.05, -0.04, shelfEdgeMaterial, 0.16)
-        addBox(6.34, 0.42, 0.72, 0, -2.86, 0, shelfEdgeMaterial, 0.16)
+        const roundedRect = (
+          path: InstanceType<typeof THREE.Path>,
+          x: number,
+          y: number,
+          width: number,
+          height: number,
+          radius: number,
+          reverse = false,
+        ) => {
+          if (!reverse) {
+            path.moveTo(x + radius, y)
+            path.lineTo(x + width - radius, y)
+            path.quadraticCurveTo(x + width, y, x + width, y + radius)
+            path.lineTo(x + width, y + height - radius)
+            path.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+            path.lineTo(x + radius, y + height)
+            path.quadraticCurveTo(x, y + height, x, y + height - radius)
+            path.lineTo(x, y + radius)
+            path.quadraticCurveTo(x, y, x + radius, y)
+            return
+          }
+
+          path.moveTo(x + radius, y)
+          path.quadraticCurveTo(x, y, x, y + radius)
+          path.lineTo(x, y + height - radius)
+          path.quadraticCurveTo(x, y + height, x + radius, y + height)
+          path.lineTo(x + width - radius, y + height)
+          path.quadraticCurveTo(x + width, y + height, x + width, y + height - radius)
+          path.lineTo(x + width, y + radius)
+          path.quadraticCurveTo(x + width, y, x + width - radius, y)
+          path.lineTo(x + radius, y)
+        }
+
+        // A single extruded ring gives the case one uninterrupted curve around
+        // all four corners, instead of assembling the perimeter from boards.
+        const frameShape = new THREE.Shape()
+        roundedRect(frameShape, -3.24, -3.1, 6.48, 6.2, 0.54)
+        const frameOpening = new THREE.Path()
+        roundedRect(frameOpening, -2.86, -2.72, 5.72, 5.44, 0.3, true)
+        frameShape.holes.push(frameOpening)
+        const frameGeometry = new THREE.ExtrudeGeometry(frameShape, {
+          depth: 0.48,
+          steps: 1,
+          curveSegments: 20,
+          bevelEnabled: true,
+          bevelSegments: 4,
+          bevelSize: 0.07,
+          bevelThickness: 0.07,
+        })
+        const shelfFrameMesh = new THREE.Mesh(frameGeometry, shelfEdgeMaterial)
+        shelfFrameMesh.position.z = -0.28
+        shelfFrameMesh.castShadow = renderer.shadowMap.enabled
+        shelfFrameMesh.receiveShadow = true
+        root.add(shelfFrameMesh)
+
+        const back = new THREE.Mesh(
+          new RoundedBoxGeometry(5.72, 5.44, 0.26, 5, 0.3),
+          backMaterial,
+        )
+        back.position.set(0, 0, -0.38)
+        back.receiveShadow = true
+        root.add(back)
+
         addBox(0.2, 5.68, 0.5, -1.02, 0.1, -0.02, shelfMaterial)
         addBox(0.2, 5.68, 0.5, 1.02, 0.1, -0.02, shelfMaterial)
 
         const shelfY = [-2.46, -1.38, -0.3, 0.78, 1.86]
-        shelfY.forEach((y) => addBox(6.02, 0.22, 0.68, 0, y, 0.02, shelfMaterial))
+        shelfY.forEach((y) => addBox(5.74, 0.22, 0.68, 0, y, 0.02, shelfMaterial, 0.1))
+        // The top canopy sits in front of the books so the first row reads as
+        // enclosed within the case rather than floating above the shelves.
+        addBox(5.74, 0.3, 0.8, 0, 2.79, 0.04, shelfEdgeMaterial, 0.12)
 
         const bookGeometry = new RoundedBoxGeometry(1, 1, 1, 2, 0.045)
         const bookMaterials = BOOK_COLORS.map(
@@ -254,7 +349,9 @@ export function LeadLibraryScene({
         shelfY.forEach((shelfTop, row) => {
           bayCenters.forEach((bayX, bay) => {
             for (let slot = 0; slot < 9; slot += 1) {
-              const height = 0.63 + random() * 0.28
+              const height = row === shelfY.length - 1
+                ? 0.55 + random() * 0.16
+                : 0.63 + random() * 0.28
               const depth = 0.31 + random() * 0.09
               const x = bayX - 0.77 + slot * (bookWidth + bookGap)
               const y = shelfTop + 0.13 + height / 2
@@ -306,8 +403,8 @@ export function LeadLibraryScene({
         })
 
         const person = new THREE.Group()
-        person.position.set(0, -2.57, 0.92)
-        person.scale.setScalar(1.08)
+        person.position.set(0, -2.465, 1.55)
+        person.scale.setScalar(1.18)
         root.add(person)
 
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 32, 24), skinMaterial)
@@ -336,13 +433,13 @@ export function LeadLibraryScene({
         neck.castShadow = renderer.shadowMap.enabled
         person.add(neck)
 
-        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.145, 0.48, 24), personMaterial)
+        const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.28, 8, 24), personMaterial)
         body.position.y = 0.48
-        body.scale.z = 0.78
+        body.scale.set(1.08, 1, 0.8)
         body.castShadow = renderer.shadowMap.enabled
         person.add(body)
 
-        const pelvis = new THREE.Mesh(new RoundedBoxGeometry(0.34, 0.18, 0.25, 3, 0.07), pantsMaterial)
+        const pelvis = new THREE.Mesh(new RoundedBoxGeometry(0.34, 0.16, 0.24, 4, 0.08), pantsMaterial)
         pelvis.position.y = 0.18
         pelvis.castShadow = renderer.shadowMap.enabled
         person.add(pelvis)
@@ -378,38 +475,26 @@ export function LeadLibraryScene({
           person.add(joint)
         }
 
-        const leftShoulder = new THREE.Vector3(-0.2, 0.61, 0)
-        const rightShoulder = new THREE.Vector3(0.2, 0.61, 0)
-        const leftElbow = new THREE.Vector3(-0.29, 0.39, 0.01)
-        const rightElbow = new THREE.Vector3(0.29, 0.39, 0.01)
-        const leftHand = new THREE.Vector3(-0.27, 0.18, 0.03)
-        const rightHand = new THREE.Vector3(0.27, 0.18, 0.03)
-        addSegment(leftShoulder, leftElbow, 0.067, personMaterial)
-        addSegment(leftElbow, leftHand, 0.056, skinMaterial)
-        addSegment(rightShoulder, rightElbow, 0.067, personMaterial)
-        addSegment(rightElbow, rightHand, 0.056, skinMaterial)
-        addJoint(leftElbow, 0.06, skinMaterial)
-        addJoint(rightElbow, 0.06, skinMaterial)
-        addJoint(leftHand, 0.068, skinMaterial)
-        addJoint(rightHand, 0.068, skinMaterial)
+        const leftShoulder = new THREE.Vector3(-0.19, 0.61, 0)
+        const rightShoulder = new THREE.Vector3(0.19, 0.61, 0)
+        const leftHand = new THREE.Vector3(-0.28, 0.2, 0.025)
+        const rightHand = new THREE.Vector3(0.28, 0.2, 0.025)
+        addSegment(leftShoulder, leftHand, 0.061, personMaterial)
+        addSegment(rightShoulder, rightHand, 0.061, personMaterial)
+        addJoint(leftHand, 0.057, skinMaterial)
+        addJoint(rightHand, 0.057, skinMaterial)
 
-        const leftHip = new THREE.Vector3(-0.1, 0.17, 0)
-        const rightHip = new THREE.Vector3(0.1, 0.17, 0)
-        const leftKnee = new THREE.Vector3(-0.12, -0.08, 0.01)
-        const rightKnee = new THREE.Vector3(0.12, -0.08, 0.01)
-        const leftAnkle = new THREE.Vector3(-0.12, -0.34, 0.02)
-        const rightAnkle = new THREE.Vector3(0.12, -0.34, 0.02)
-        addSegment(leftHip, leftKnee, 0.073, pantsMaterial)
-        addSegment(leftKnee, leftAnkle, 0.068, pantsMaterial)
-        addSegment(rightHip, rightKnee, 0.073, pantsMaterial)
-        addSegment(rightKnee, rightAnkle, 0.068, pantsMaterial)
-        addJoint(leftKnee, 0.07, pantsMaterial)
-        addJoint(rightKnee, 0.07, pantsMaterial)
+        const leftHip = new THREE.Vector3(-0.105, 0.16, 0)
+        const rightHip = new THREE.Vector3(0.105, 0.16, 0)
+        const leftAnkle = new THREE.Vector3(-0.145, -0.52, 0.025)
+        const rightAnkle = new THREE.Vector3(0.145, -0.52, 0.025)
+        addSegment(leftHip, leftAnkle, 0.067, pantsMaterial)
+        addSegment(rightHip, rightAnkle, 0.067, pantsMaterial)
 
-        const shoeGeometry = new RoundedBoxGeometry(0.16, 0.09, 0.28, 3, 0.045)
-        ;[-0.12, 0.12].forEach((x) => {
+        const shoeGeometry = new RoundedBoxGeometry(0.18, 0.1, 0.3, 3, 0.045)
+        ;[-0.145, 0.145].forEach((x) => {
           const shoe = new THREE.Mesh(shoeGeometry, shoeMaterial)
-          shoe.position.set(x, -0.38, 0.055)
+          shoe.position.set(x, -0.59, 0.085)
           shoe.castShadow = renderer.shadowMap.enabled
           person.add(shoe)
         })
@@ -494,7 +579,7 @@ export function LeadLibraryScene({
           const width = Math.max(1, bounds.width)
           const height = Math.max(1, bounds.height)
           camera.aspect = width / height
-          camera.position.z = width / height < 0.92 ? 14.8 : 9.4
+          camera.position.z = width / height < 0.92 ? 15.2 : 10.4
           camera.updateProjectionMatrix()
           renderer.setSize(width, height, false)
         }

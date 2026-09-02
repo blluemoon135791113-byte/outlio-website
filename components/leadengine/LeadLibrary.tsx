@@ -39,7 +39,7 @@ const LEADS: LeadInsight[] = [
     phone: '+1 (415) 555-0184',
     linkedin: 'linkedin.com/in/maya-chen',
     website: 'northstarlabs.example',
-    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/12.jpg',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/90.jpg',
     summary:
       'Maya leads revenue operations for a growing analytics company. Recent hiring across sales operations and enablement suggests the team is standardizing its pipeline systems and may value cleaner, source-backed account data.',
   },
@@ -53,7 +53,7 @@ const LEADS: LeadInsight[] = [
     phone: '+44 20 0000 0184',
     linkedin: 'linkedin.com/in/elias-morgan',
     website: 'quarryai.example',
-    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/18.jpg',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/54.jpg',
     summary:
       'Elias owns strategic partnerships at an applied-AI platform expanding into Europe. Public launch activity points to a need for precise partner mapping and faster identification of technical decision-makers.',
   },
@@ -67,7 +67,7 @@ const LEADS: LeadInsight[] = [
     phone: '+65 0000 9074',
     linkedin: 'linkedin.com/in/priya-raman',
     website: 'atlasgrid.example',
-    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/27.jpg',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/17.jpg',
     summary:
       'Priya runs growth for a distributed infrastructure business. The company is entering new APAC markets, making verified regional contacts, expansion signals, and locally relevant personalization especially useful.',
   },
@@ -81,23 +81,23 @@ const LEADS: LeadInsight[] = [
     phone: '+1 (646) 555-0127',
     linkedin: 'linkedin.com/in/noah-williams',
     website: 'sablesystems.example',
-    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/33.jpg',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/24.jpg',
     summary:
       'Noah oversees commercial strategy at a security software company preparing its next enterprise push. New channel roles and product launches indicate active territory planning and a likely appetite for richer account intelligence.',
   },
   {
     id: 'sofia-patel',
-    initials: 'SP',
-    name: 'Sofia Patel',
+    initials: 'SC',
+    name: 'Sophia Carter',
     role: 'VP, Demand Generation',
     company: 'Meridian Cloud',
-    email: 'sofia@meridiancloud.example',
+    email: 'sophia@meridiancloud.example',
     phone: '+1 (312) 555-0168',
-    linkedin: 'linkedin.com/in/sofia-patel',
+    linkedin: 'linkedin.com/in/sophia-carter',
     website: 'meridiancloud.example',
-    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/41.jpg',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/49.jpg',
     summary:
-      'Sofia leads global demand generation for a cloud operations platform. A growing field-marketing team and new enterprise campaigns suggest an active need for cleaner account segmentation and higher-confidence contact data.',
+      'Sophia leads global demand generation for a cloud operations platform. A growing field-marketing team and new enterprise campaigns suggest an active need for cleaner account segmentation and higher-confidence contact data.',
   },
   {
     id: 'luca-bennett',
@@ -123,7 +123,7 @@ const LEADS: LeadInsight[] = [
     phone: '+971 4 000 0173',
     linkedin: 'linkedin.com/in/amina-yusuf',
     website: 'cinderlabs.example',
-    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/55.jpg',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/43.jpg',
     summary:
       'Amina is building the partner ecosystem for an infrastructure startup. New integration announcements indicate an opportunity to identify adjacent platforms, technical champions, and regional channel partners.',
   },
@@ -137,7 +137,7 @@ const LEADS: LeadInsight[] = [
     phone: '+33 1 00 00 18 62',
     linkedin: 'linkedin.com/in/theo-laurent',
     website: 'vantageworks.example',
-    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/61.jpg',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/13.jpg',
     summary:
       'Theo oversees operations at a distributed professional-services platform. Multi-market hiring and new delivery partnerships signal a priority around repeatable go-to-market processes and reliable account research.',
   },
@@ -151,7 +151,7 @@ const LEADS: LeadInsight[] = [
     phone: '+39 02 0000 5194',
     linkedin: 'linkedin.com/in/elena-rossi',
     website: 'fluxera.example',
-    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/68.jpg',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/45.jpg',
     summary:
       'Elena owns go-to-market strategy for a product analytics business. Recent leadership hires and packaging changes suggest active positioning work and a need for precise competitive and buyer intelligence.',
   },
@@ -165,7 +165,7 @@ const LEADS: LeadInsight[] = [
     phone: '+61 2 0000 7185',
     linkedin: 'linkedin.com/in/marcus-lee',
     website: 'canopystack.example',
-    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/74.jpg',
+    portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/95.jpg',
     summary:
       'Marcus leads revenue for a developer tooling company expanding across APAC. New account-executive roles and solution partnerships point to active territory planning and demand for better buying-signal coverage.',
   },
@@ -492,7 +492,6 @@ export function LeadLibrary() {
                 />
               </div>
               <div className={styles.profileCopy}>
-                <p className={styles.modalEyebrow}>Synthetic lead insight</p>
                 <h3 id="lead-insight-name">{activeLead.name}</h3>
                 <div className={styles.identityRow}>
                   <span className={styles.identityIcon}><FieldIcon type="role" /></span>
@@ -532,13 +531,22 @@ export function LeadLibrary() {
         </div>
       ) : null}
 
-      <Link href="/sign-in" className={styles.signIn}>
-        Sign In
-        <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M7 17 17 7" />
-          <path d="M8 7h9v9" />
-        </svg>
-      </Link>
+      <div className={styles.libraryActions}>
+        <Link href="/sign-in" className={`${styles.libraryAction} ${styles.signIn}`}>
+          Sign In
+          <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 17 17 7" />
+            <path d="M8 7h9v9" />
+          </svg>
+        </Link>
+        <Link href="/sign-up" className={`${styles.libraryAction} ${styles.freeTrial}`}>
+          Start your Free Trial
+          <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 17 17 7" />
+            <path d="M8 7h9v9" />
+          </svg>
+        </Link>
+      </div>
     </section>
   )
 }

@@ -98,12 +98,13 @@
 }
 
 .billingOptionActive {
-  background: #8f4f1a;
-  color: #fffaf0;
+  background: #e07002;
+  color: #140104;
 }
 
 .billingOptionActive:hover {
-  color: #fffaf0;
+  background: #f4a914;
+  color: #140104;
 }
 
 .checkoutError {
@@ -120,13 +121,9 @@
 }
 
 .pricingStrip {
-  --plan-motion: 280ms cubic-bezier(0.77, 0, 0.175, 1);
+  --plan-motion: 360ms cubic-bezier(0.23, 1, 0.32, 1);
   position: relative;
   isolation: isolate;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(0.65rem, 1.2vw, 0.95rem);
-  min-height: 25.5rem;
   margin-top: clamp(3.5rem, 7vw, 5.5rem);
   padding: clamp(0.65rem, 1.2vw, 0.95rem);
   overflow: hidden;
@@ -139,9 +136,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.96),
     inset 0 -1px 0 rgba(81, 6, 0, 0.05),
     0 1.5rem 4rem rgba(81, 6, 0, 0.1);
-  backdrop-filter: blur(24px) saturate(118%);
-  -webkit-backdrop-filter: blur(24px) saturate(118%);
-  transition: grid-template-columns var(--plan-motion);
 }
 
 .pricingStrip::before {
@@ -156,9 +150,17 @@
   pointer-events: none;
 }
 
-.planPanel {
-  --active-intro-width: clamp(18rem, 58%, 24rem);
+.plansTrack {
   position: relative;
+  min-height: 23.6rem;
+}
+
+.planPanel {
+  --active-intro-width: 55.555556%;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 60%;
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -171,11 +173,28 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.98),
     inset 0 -1px 0 rgba(81, 6, 0, 0.04),
     0 0.65rem 1.6rem rgba(81, 6, 0, 0.07);
-  contain: paint;
-  transform: translateZ(0);
+  backface-visibility: hidden;
+  contain: layout paint style;
+  clip-path: inset(0 44.444444% 0 0 round clamp(1.2rem, 2vw, 1.65rem));
+  transform: translate3d(0, 0, 0);
+  will-change: clip-path, transform;
   transition:
-    border-color 170ms ease-out,
-    box-shadow 170ms ease-out;
+    clip-path var(--plan-motion),
+    transform var(--plan-motion),
+    border-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.planPanel:nth-child(1) {
+  left: 0;
+}
+
+.planPanel:nth-child(2) {
+  left: 33.333333%;
+}
+
+.planPanel:nth-child(3) {
+  left: 66.666667%;
 }
 
 .planPanel::before {
@@ -201,7 +220,7 @@
 .planIntro {
   position: relative;
   display: flex;
-  width: 100%;
+  width: var(--active-intro-width);
   z-index: 1;
   min-height: 23.6rem;
   min-width: 0;
@@ -210,7 +229,7 @@
   padding: clamp(1.45rem, 2.4vw, 2.1rem);
   border-radius: inherit;
   background: linear-gradient(128deg, rgba(255, 255, 255, 0.26), transparent 58%);
-  transition: width var(--plan-motion);
+  box-shadow: inset 0 0 0 1px rgba(81, 6, 0, 0.07);
 }
 
 .planIntro > header {
@@ -306,6 +325,11 @@
     0 0.35rem 0.9rem rgba(81, 6, 0, 0.035);
 }
 
+.planIntro > .cta,
+.planIntro > .checkoutCta {
+  margin-top: auto;
+}
+
 .planStat {
   min-width: 0;
 }
@@ -340,17 +364,15 @@
   min-width: 0;
   overflow: hidden;
   border-left: 1px solid transparent;
-  clip-path: inset(0 100% 0 0);
   opacity: 0;
   transform: translate3d(-0.65rem, 0, 0);
   visibility: hidden;
-  will-change: clip-path, opacity, transform;
+  will-change: opacity, transform;
   transition:
-    clip-path 240ms cubic-bezier(0.23, 1, 0.32, 1),
-    opacity 160ms ease-out,
-    transform 240ms cubic-bezier(0.23, 1, 0.32, 1),
-    border-color 160ms ease-out,
-    visibility 0ms linear 240ms;
+    opacity 220ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 320ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
+    visibility 0ms linear 320ms;
 }
 
 .includesInner {
@@ -384,6 +406,7 @@
 
 .features li {
   display: flex;
+  align-items: flex-start;
   gap: 0.6rem;
 }
 
@@ -415,7 +438,7 @@
   position: absolute;
   z-index: 4;
   top: 1.35rem;
-  right: 1.35rem;
+  right: calc(44.444444% + 1.35rem);
   display: inline-flex;
   align-items: center;
   min-height: 1.5rem;
@@ -454,9 +477,9 @@
 
 .cta:hover,
 .checkoutCta:hover {
-  border-color: #8f4f1a;
-  background: #fffaf0;
-  color: #8f4f1a;
+  border-color: #e07002;
+  background: #fff0b8;
+  color: #321d10;
 }
 
 .cta:active,
@@ -466,16 +489,16 @@
 
 .ctaFeatured,
 .checkoutCtaFeatured {
-  border-color: #8f4f1a;
-  background: #8f4f1a;
-  color: #fffaf0;
+  border-color: #dd6300;
+  background: #dd6300;
+  color: #140104;
 }
 
 .ctaFeatured:hover,
 .checkoutCtaFeatured:hover {
-  border-color: #77400f;
-  background: #77400f;
-  color: #fffaf0;
+  border-color: #f4a914;
+  background: #f4a914;
+  color: #140104;
 }
 
 .checkoutCta:disabled {
@@ -499,105 +522,103 @@
   text-align: center;
 }
 
-@media (hover: hover) and (pointer: fine) and (min-width: 64rem) {
-  .pricingStrip:has(.planPanel:nth-child(1):hover) {
-    grid-template-columns: minmax(0, 1.42fr) minmax(0, 0.79fr) minmax(0, 0.79fr);
+@media (hover: hover) and (pointer: fine) and (min-width: 48rem) {
+  .plansTrack:has(.planPanel:nth-child(1):is(:hover, :focus-within)) .planPanel:nth-child(1) {
+    clip-path: inset(0 0 0 0 round clamp(1.2rem, 2vw, 1.65rem));
   }
 
-  .pricingStrip:has(.planPanel:nth-child(2):hover) {
-    grid-template-columns: minmax(0, 0.79fr) minmax(0, 1.42fr) minmax(0, 0.79fr);
+  .plansTrack:has(.planPanel:nth-child(1):is(:hover, :focus-within)) .planPanel:nth-child(2) {
+    clip-path: inset(0 66.666667% 0 0 round clamp(1.2rem, 2vw, 1.65rem));
+    transform: translate3d(44.444444%, 0, 0);
   }
 
-  .pricingStrip:has(.planPanel:nth-child(3):hover) {
-    grid-template-columns: minmax(0, 0.79fr) minmax(0, 0.79fr) minmax(0, 1.42fr);
+  .plansTrack:has(.planPanel:nth-child(1):is(:hover, :focus-within)) .planPanel:nth-child(3) {
+    clip-path: inset(0 66.666667% 0 0 round clamp(1.2rem, 2vw, 1.65rem));
+    transform: translate3d(22.222222%, 0, 0);
   }
 
-  .planPanel:hover {
+  .plansTrack:has(.planPanel:nth-child(2):is(:hover, :focus-within)) .planPanel:nth-child(1) {
+    clip-path: inset(0 66.666667% 0 0 round clamp(1.2rem, 2vw, 1.65rem));
+  }
+
+  .plansTrack:has(.planPanel:nth-child(2):is(:hover, :focus-within)) .planPanel:nth-child(2) {
+    clip-path: inset(0 0 0 0 round clamp(1.2rem, 2vw, 1.65rem));
+    transform: translate3d(-22.222222%, 0, 0);
+  }
+
+  .plansTrack:has(.planPanel:nth-child(2):is(:hover, :focus-within)) .planPanel:nth-child(3) {
+    clip-path: inset(0 66.666667% 0 0 round clamp(1.2rem, 2vw, 1.65rem));
+    transform: translate3d(22.222222%, 0, 0);
+  }
+
+  .plansTrack:has(.planPanel:nth-child(3):is(:hover, :focus-within)) .planPanel:nth-child(1) {
+    clip-path: inset(0 66.666667% 0 0 round clamp(1.2rem, 2vw, 1.65rem));
+  }
+
+  .plansTrack:has(.planPanel:nth-child(3):is(:hover, :focus-within)) .planPanel:nth-child(2) {
+    clip-path: inset(0 66.666667% 0 0 round clamp(1.2rem, 2vw, 1.65rem));
+    transform: translate3d(-22.222222%, 0, 0);
+  }
+
+  .plansTrack:has(.planPanel:nth-child(3):is(:hover, :focus-within)) .planPanel:nth-child(3) {
+    clip-path: inset(0 0 0 0 round clamp(1.2rem, 2vw, 1.65rem));
+    transform: translate3d(-44.444444%, 0, 0);
+  }
+
+  .planPanel:is(:hover, :focus-within) {
     z-index: 2;
-    border-color: rgba(143, 79, 26, 0.42);
+    border-color: rgba(224, 112, 2, 0.46);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.94),
+      inset 0 1px 0 rgba(255, 255, 255, 0.98),
       inset 0 -1px 0 rgba(81, 6, 0, 0.04),
-      0 1.2rem 2.8rem rgba(81, 6, 0, 0.14);
+      0 0.85rem 2rem rgba(143, 79, 26, 0.1);
   }
 
-  .planPanel:hover::before {
+  .planPanel:is(:hover, :focus-within)::before {
     opacity: 0.82;
   }
 
-  .planPanel:hover .planIntro {
-    width: var(--active-intro-width);
-  }
-
-  .planPanel:hover .planIncludes {
+  .planPanel:is(:hover, :focus-within) .planIncludes {
     border-left-color: rgba(81, 6, 0, 0.12);
-    clip-path: inset(0 0 0 0);
     opacity: 1;
     transform: translate3d(0, 0, 0);
     visibility: visible;
-    transition-delay: 25ms, 25ms, 0ms, 25ms, 0ms;
+    transition-delay: 55ms, 20ms, 45ms, 0ms;
   }
 
-  .planPanel:hover .drawerHint {
+  .planPanel:is(:hover, :focus-within) .drawerHint {
     transform: translateX(0.2rem);
     background: rgba(224, 112, 2, 0.12);
   }
 
-  .planPanel:hover .badge {
+  .planPanel:is(:hover, :focus-within) .badge,
+  .plansTrack:has(.planPanel:is(:hover, :focus-within)) .planPanel:not(:is(:hover, :focus-within)) .badge {
     opacity: 0;
   }
 
-  .pricingStrip:has(.planPanel:hover) .planPanel:not(:hover) .badge {
-    opacity: 0;
-  }
-
-  .pricingStrip:has(.planPanel:nth-child(1):focus-within) {
-    grid-template-columns: minmax(0, 1.42fr) minmax(0, 0.79fr) minmax(0, 0.79fr);
-  }
-
-  .pricingStrip:has(.planPanel:nth-child(2):focus-within) {
-    grid-template-columns: minmax(0, 0.79fr) minmax(0, 1.42fr) minmax(0, 0.79fr);
-  }
-
-  .pricingStrip:has(.planPanel:nth-child(3):focus-within) {
-    grid-template-columns: minmax(0, 0.79fr) minmax(0, 0.79fr) minmax(0, 1.42fr);
-  }
-
-  .pricingStrip:has(.planPanel:focus-within),
-  .planPanel:focus-within,
-  .planPanel:focus-within .planIntro,
-  .planPanel:focus-within .planIncludes {
-    transition-duration: 0ms;
-  }
-
-  .planPanel:focus-within {
-    z-index: 2;
-    border-color: rgba(143, 79, 26, 0.42);
-  }
-
-  .planPanel:focus-within .planIntro {
-    width: var(--active-intro-width);
-  }
-
-  .planPanel:focus-within .planIncludes {
-    border-left-color: rgba(81, 6, 0, 0.12);
-    clip-path: inset(0 0 0 0);
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    visibility: visible;
-  }
 }
 
-@media (max-width: 63.999rem) {
+@media (max-width: 47.999rem) {
   .pricingStrip {
+    min-height: 0;
+  }
+
+  .plansTrack {
     display: flex;
     min-height: 0;
     flex-direction: column;
+    gap: clamp(0.65rem, 1.2vw, 0.95rem);
   }
 
   .planPanel {
+    position: relative;
+    inset: auto;
     display: grid;
+    width: 100%;
     grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
+    clip-path: none;
+    transform: none;
+    will-change: auto;
     border: 1px solid rgba(81, 6, 0, 0.12);
   }
 
@@ -605,7 +626,6 @@
     position: relative;
     inset: auto;
     border-left-color: rgba(81, 6, 0, 0.12);
-    clip-path: none;
     opacity: 1;
     transform: none;
     visibility: visible;
@@ -613,7 +633,17 @@
   }
 
   .planIntro {
+    width: 100%;
     min-height: 0;
+  }
+
+  .planIntro > .cta,
+  .planIntro > .checkoutCta {
+    margin-top: 1.45rem;
+  }
+
+  .badge {
+    right: 1.35rem;
   }
 }
 

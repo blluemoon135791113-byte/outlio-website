@@ -182,83 +182,85 @@ export function FastSpringPricing({
           ) : null}
 
           <div className={styles.pricingStrip}>
-            {tiers.map((tier, index) => {
-              const path = tier.productPath[billing]
-              const formattedTotal = prices[path]
-              const usage = PLAN_USAGE[tier.planKey]
+            <div className={styles.plansTrack}>
+              {tiers.map((tier, index) => {
+                const path = tier.productPath[billing]
+                const formattedTotal = prices[path]
+                const usage = PLAN_USAGE[tier.planKey]
 
-              return (
-                <article
-                  key={tier.name}
-                  className={`${styles.planPanel} ${tier.featured ? styles.featuredPlan : ''}`}
-                >
-                  {tier.featured ? (
-                    <span className={styles.badge}>
-                      Most popular
-                    </span>
-                  ) : null}
+                return (
+                  <article
+                    key={tier.name}
+                    className={`${styles.planPanel} ${tier.featured ? styles.featuredPlan : ''}`}
+                  >
+                    {tier.featured ? (
+                      <span className={styles.badge}>
+                        Most popular
+                      </span>
+                    ) : null}
 
-                  <div className={styles.planIntro}>
-                    <header>
-                      <div className={styles.planTopline}>
-                        <p className={styles.planIndex}>0{index + 1}</p>
-                        <span className={styles.drawerHint} aria-hidden>→</span>
+                    <div className={styles.planIntro}>
+                      <header>
+                        <div className={styles.planTopline}>
+                          <p className={styles.planIndex}>0{index + 1}</p>
+                          <span className={styles.drawerHint} aria-hidden>→</span>
+                        </div>
+                        <h2 className={styles.planName}>{tier.name}</h2>
+                        <p className={styles.planBlurb}>{tier.description}</p>
+                      </header>
+
+                      <div className={styles.priceBlock}>
+                        {formattedTotal ? (
+                          <>
+                            <p className={styles.price}>{formattedTotal}</p>
+                            <p className={styles.period}>/{billing}</p>
+                          </>
+                        ) : (
+                          <p className={styles.checkoutPriceFallback}>
+                            Your local price is shown at checkout.
+                          </p>
+                        )}
                       </div>
-                      <h2 className={styles.planName}>{tier.name}</h2>
-                      <p className={styles.planBlurb}>{tier.description}</p>
-                    </header>
 
-                    <div className={styles.priceBlock}>
-                    {formattedTotal ? (
-                        <>
-                          <p className={styles.price}>{formattedTotal}</p>
-                          <p className={styles.period}>/{billing}</p>
-                        </>
-                    ) : (
-                        <p className={styles.checkoutPriceFallback}>
-                        Your local price is shown at checkout.
-                      </p>
-                    )}
+                      <dl className={styles.planMetrics}>
+                        <div className={styles.planStat}>
+                          <dt>Credits</dt>
+                          <dd>{usage.credits}</dd>
+                        </div>
+                        <div className={styles.planStat}>
+                          <dt>Capacity</dt>
+                          <dd>{usage.capacity}</dd>
+                        </div>
+                      </dl>
+
+                      <button
+                        type="button"
+                        onClick={() => subscribe(tier)}
+                        disabled={!ready || openingPath === path}
+                        className={`${styles.checkoutCta} ${tier.featured ? styles.checkoutCtaFeatured : ''}`}
+                      >
+                        <span>{openingPath === path ? 'Opening checkout…' : 'Get This'}</span>
+                        <span aria-hidden>↗</span>
+                      </button>
                     </div>
 
-                    <dl className={styles.planMetrics}>
-                      <div className={styles.planStat}>
-                        <dt>Credits</dt>
-                        <dd>{usage.credits}</dd>
+                    <div className={styles.planIncludes}>
+                      <div className={styles.includesInner}>
+                        <p className={styles.listLabel}>Plan Includes</p>
+                        <ul className={styles.features}>
+                          {tier.features.map((feature) => (
+                            <li key={feature}>
+                              <span aria-hidden className={styles.checkoutTick}>✓</span>
+                              <span>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                      <div className={styles.planStat}>
-                        <dt>Capacity</dt>
-                        <dd>{usage.capacity}</dd>
-                      </div>
-                    </dl>
-
-                    <button
-                      type="button"
-                      onClick={() => subscribe(tier)}
-                      disabled={!ready || openingPath === path}
-                      className={`${styles.checkoutCta} ${tier.featured ? styles.checkoutCtaFeatured : ''}`}
-                    >
-                      <span>{openingPath === path ? 'Opening checkout…' : 'Get This'}</span>
-                      <span aria-hidden>↗</span>
-                    </button>
-                  </div>
-
-                  <div className={styles.planIncludes}>
-                    <div className={styles.includesInner}>
-                      <p className={styles.listLabel}>Plan Includes</p>
-                      <ul className={styles.features}>
-                        {tier.features.map((feature) => (
-                          <li key={feature}>
-                            <span aria-hidden className={styles.checkoutTick}>✓</span>
-                            <span>{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
                     </div>
-                  </div>
-                </article>
-              )
-            })}
+                  </article>
+                )
+              })}
+            </div>
           </div>
 
           <p className={styles.merchantNote}>

@@ -9996,3 +9996,60 @@ one.
 ### Verified
 
 14 catalogue tests; typecheck 0; lint 0.
+
+## 2026-09-03 — R18: UI refinement, limited to what code can prove
+
+`components/` (23 files), `docs/HANDOFF.md`.
+
+### ⚠️ What this phase is NOT
+
+The brief's R18 is visual refinement. **~28 screens have never been rendered by
+anyone** (KI9), so this pass deliberately covers only what is checkable from
+source. Spacing, hierarchy, whether a layout reads well — untouched, because
+"refining" a screen nobody has seen is guessing with extra steps.
+
+### A product-wide accessibility sweep, not just the new screens
+
+The earlier `web-design-guidelines` pass covered the twelve components built in
+the repair pass. This swept **every** component using `useActionState`.
+
+**19 async status messages were announced to nobody.** The pattern was
+consistent and revealing: *errors* mostly carried `role="alert"`; **successes
+carried nothing**. So a screen-reader user was told when an action failed and
+never told when it worked.
+
+Now: errors get `role="alert"` (assertive — it interrupts), successes get
+`role="status"` with `aria-live="polite"` (waits for a pause). Announcing a
+confirmation assertively talks over whatever the person is reading.
+
+### ⚠️ My first detector produced twenty false positives
+
+It grepped for `aria-live` alone, so every element already using `role="alert"`
+— which *implies* `aria-live="assertive"` — looked broken. I nearly "fixed"
+twenty files that were already correct.
+
+The corrected detector then hit three components with a **dynamic**
+`role={state.ok ? undefined : 'alert'}`, which my quoted-string check could not
+see. Those were the interesting ones: the conditional yields `undefined` on
+success, so a confirmation genuinely was silent. Fixed by making the role cover
+both outcomes rather than by adding a second attribute.
+
+*Two detectors, two different wrong answers, before the real 19.* Recorded
+because the same shape — a check that looks thorough and is measuring the wrong
+thing — has produced every false claim in this project's audit.
+
+### Native selects
+
+Four more `<select>` elements had no explicit colour scheme. Without one they
+inherit the OS palette, which on Windows and in dark mode renders dark text on
+a dark popup.
+
+### Verified
+
+2,350 unit tests; typecheck 0; lint 0; build clean; the detector now reports
+**zero** unannounced status messages product-wide.
+
+### Still open, and only a human can close it
+
+**KI9.** Everything verifiable from code has now been verified twice. What
+remains is whether any of it looks right.

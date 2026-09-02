@@ -137,7 +137,7 @@ export function DashboardPreview() {
         </div>
 
         <div className="mt-7 flex justify-center">
-          <Link href="/sign-up" className="inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-accent/35 decoration-2 underline-offset-4 transition-[color,transform] duration-150 ease-out hover:text-accent active:scale-[0.97]">
+          <Link href="/sign-up" className="inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-accent/35 decoration-2 underline-offset-4 transition-[color,transform] duration-150 ease-out hover:text-[#dd6300] active:scale-[0.97]">
             Get your workspace <span aria-hidden>→</span>
           </Link>
         </div>

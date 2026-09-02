@@ -56,7 +56,14 @@ export function CampaignControls({
 
       {state ? (
         <p
-          role={state.ok ? undefined : 'alert'}
+          /*
+            ⚠️ BOTH OUTCOMES ARE ANNOUNCED, with different urgency. The
+            original yielded `undefined` on success, so a confirmation was
+            silent to a screen reader — the person had no way to know their
+            action worked.
+          */
+          role={state.ok ? 'status' : 'alert'}
+          aria-live={state.ok ? 'polite' : 'assertive'}
           className={`max-w-xs text-xs leading-relaxed ${state.ok ? 'text-success' : 'text-danger'}`}
         >
           {state.ok ? state.message : state.error}

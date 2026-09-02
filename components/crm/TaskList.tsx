@@ -76,7 +76,7 @@ function Task({ row, canManage }: { row: TaskRow; canManage: boolean }) {
           ) : null}
         </p>
 
-        {state && !state.ok ? <p className="mt-1 text-xs text-danger">{state.error}</p> : null}
+        {state && !state.ok ? <p role="alert" className="mt-1 text-xs text-danger">{state.error}</p> : null}
       </div>
     </li>
   )

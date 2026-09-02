@@ -19,6 +19,7 @@ function Feedback({ state }: { state: ClayActionState }) {
   return (
     <p
       role={state.status === 'error' ? 'alert' : 'status'}
+      aria-live={state.status === 'error' ? 'assertive' : 'polite'}
       className={state.status === 'error' ? 'text-sm text-danger' : 'text-sm text-success'}
     >
       {state.message}

@@ -38,6 +38,15 @@ function OutlioMark({ small = false }: { small?: boolean }) {
   )
 }
 
+function CrmMark() {
+  return (
+    <span className={styles.crmBrandMark} aria-hidden="true">
+      <span className={styles.crmBrandOrbit}><i /><i /><i /></span>
+      <span className={styles.crmBrandCore}><i /><i /><i /></span>
+    </span>
+  )
+}
+
 function FeatureGlyph() {
   return (
     <span className={styles.featureGlyph} aria-hidden="true">
@@ -54,15 +63,12 @@ export function ExtractionJourney() {
         <div className={styles.copy}>
           <FeatureGlyph />
           <h2 id="extraction-journey-title" className={styles.heading}>
-            From a saved search to sales-ready records.
+            Turn searches into CRM-ready records.
           </h2>
           <p className={styles.description}>
-            Open the extension on the Sales Navigator search you already built. One
-            click captures the visible profiles, removes duplicates, and enriches each
-            lead with verified contact and company intelligence—ready for your CRM.
-          </p>
-          <p className={styles.offer}>
-            Start with up to 250 leads in the trial. Exporting the finished list stays free.
+            Open Outlio on any Sales Navigator search. One click captures profiles,
+            removes duplicates, verifies contact and company data, and sends clean
+            records to your CRM.
           </p>
           <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" className={styles.cta}>
             book a demo
@@ -153,7 +159,7 @@ export function ExtractionJourney() {
             <div className={styles.crmTable}>
               <header className={styles.crmHeader}>
                 <div className={styles.crmTitle}>
-                  <span className={styles.crmIcon}><OutlioMark small /></span>
+                  <span className={styles.crmIcon}><CrmMark /></span>
                   <span><strong>CRM Contacts <b>3</b></strong><small>Manage enriched people and sync status.</small></span>
                 </div>
                 <span className={styles.crmSynced}>✓ Synced just now</span>

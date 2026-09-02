@@ -66,13 +66,13 @@ export function TestFlow({
       </form>
 
       {state && !state.ok ? (
-        <p className="text-xs text-danger">{state.error}</p>
+        <p role="alert" className="text-xs text-danger">{state.error}</p>
       ) : null}
 
       {state?.ok ? (
         <div className="space-y-2 border-t border-line pt-3">
           <p className="text-xs text-muted">
-            Against <span className="font-medium text-ink">{state.contactName}</span>
+            Against <span role="status" aria-live="polite" className="font-medium text-ink">{state.contactName}</span>
             {state.result.creditsWouldSpend > 0 ? (
               <>
                 {' · '}
@@ -103,7 +103,7 @@ export function TestFlow({
           </ol>
 
           {state.result.stoppedBecause ? (
-            <p className="rounded-[var(--radius-md)] bg-warning-soft px-3 py-2 text-xs text-warning">
+            <p role="status" aria-live="polite" className="rounded-[var(--radius-md)] bg-warning-soft px-3 py-2 text-xs text-warning">
               {state.result.stoppedBecause}
             </p>
           ) : null}

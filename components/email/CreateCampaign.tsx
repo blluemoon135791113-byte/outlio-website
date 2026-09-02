@@ -98,7 +98,7 @@ export function CreateCampaign({ accounts }: { accounts: { id: string; label: st
           id="accountId"
           name="accountId"
           required
-          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors duration-150 focus-visible:border-accent"
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors duration-150 focus-visible:border-accent [color-scheme:light]"
         >
           {accounts.map((account) => (
             <option key={account.id} value={account.id}>
@@ -114,7 +114,7 @@ export function CreateCampaign({ accounts }: { accounts: { id: string; label: st
         </p>
       ) : null}
       {state?.ok ? (
-        <p className="rounded-[var(--radius-md)] bg-success-soft px-3 py-2 text-sm text-success">
+        <p role="status" aria-live="polite" className="rounded-[var(--radius-md)] bg-success-soft px-3 py-2 text-sm text-success">
           {state.message}
         </p>
       ) : null}

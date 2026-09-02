@@ -214,46 +214,6 @@ const HAND_FRAGMENT = /* glsl */ `
   }
 `
 
-const NEBULA_FRAGMENT = /* glsl */ `
-  uniform sampler2D uMap;
-  uniform float uTime;
-  varying vec2 vUv;
-
-  void main() {
-    /*
-     * Animate only the blue-white wake already present in the supplied
-     * artwork. Because the texture is also the mask, this can never invent a
-     * solid beam over the hero copy.
-     */
-    float beamAxis = 0.286 + vUv.x * 0.67;
-    float beamWidth = mix(0.085, 0.028, smoothstep(0.08, 0.84, vUv.x));
-    float distanceToBeam = abs(vUv.y - beamAxis) / beamWidth;
-    float beamMask = exp(-distanceToBeam * distanceToBeam * 1.65);
-    beamMask *= smoothstep(0.03, 0.2, vUv.x);
-    beamMask *= 1.0 - smoothstep(0.86, 0.93, vUv.x);
-
-    float flutter = sin(uTime * 1.15 + vUv.x * 17.0) * 0.0028;
-    vec2 flowingUv = vUv + vec2(flutter, flutter * 0.67);
-    vec4 source = texture2D(uMap, flowingUv);
-    float luminance = dot(source.rgb, vec3(0.2126, 0.7152, 0.0722));
-    float coolLead = source.b - source.r * 0.52;
-    float existingLight = clamp(
-      smoothstep(0.04, 0.32, coolLead) + smoothstep(0.66, 0.98, luminance),
-      0.0,
-      1.0
-    );
-
-    float travel = (0.825 - vUv.x) * 48.0 - uTime * 4.6;
-    float shootingPacket = pow(0.5 + 0.5 * sin(travel), 7.0);
-    float secondaryPacket = pow(0.5 + 0.5 * sin(travel * 0.47 + 1.8), 10.0);
-    float nebulaBreath = 0.72 + 0.28 * sin(uTime * 0.82 + vUv.x * 5.0);
-    float energy = 0.12 + shootingPacket * 0.7 + secondaryPacket * 0.38;
-    float alpha = beamMask * existingLight * energy * nebulaBreath;
-
-    gl_FragColor = vec4(source.rgb * (0.72 + energy), alpha);
-  }
-`
-
 const ORB_VERTEX = /* glsl */ `
   varying vec3 vNormal;
   varying vec3 vViewDirection;
@@ -280,8 +240,8 @@ const ORB_FRAGMENT = /* glsl */ `
     float atmosphericBand = pow(max(0.0, sin(vNormal.y * 8.0 + vNormal.x * 5.0 + uTime * 0.16)), 10.0);
     float bodyLight = diffuse * 0.045 + pow(facing, 3.0) * 0.016;
     vec3 darkBody = vec3(0.02, 0.024, 0.034) + vec3(0.24, 0.3, 0.42) * bodyLight;
-    darkBody += vec3(0.12, 0.22, 0.42) * rim * (0.06 + uEnergy * 0.025);
-    darkBody += vec3(0.2, 0.34, 0.58) * atmosphericBand * rim * 0.018;
+    darkBody += vec3(0.22, 0.38, 0.68) * rim * (0.12 + uEnergy * 0.04);
+    darkBody += vec3(0.32, 0.48, 0.78) * atmosphericBand * rim * 0.03;
     gl_FragColor = vec4(darkBody, 1.0);
   }
 `
@@ -307,9 +267,41 @@ const CORONA_FRAGMENT = /* glsl */ `
   void main() {
     float fresnel = pow(1.0 - max(dot(vNormal, vViewDirection), 0.0), 3.6);
     float pulse = 0.82 + 0.18 * sin(uTime * 1.35);
-    float alpha = fresnel * (0.2 + uEnergy * 0.055) * pulse;
+    float alpha = fresnel * (0.34 + uEnergy * 0.08) * pulse;
     vec3 corona = mix(vec3(0.44, 0.64, 0.94), vec3(0.93, 0.97, 1.0), fresnel);
-    gl_FragColor = vec4(corona * (0.7 + fresnel * 0.5), alpha);
+    gl_FragColor = vec4(corona * (0.82 + fresnel * 0.62), alpha);
+  }
+`
+
+const LIGHT_WAVE_VERTEX = /* glsl */ `
+  varying vec2 vUv;
+
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+
+const LIGHT_WAVE_FRAGMENT = /* glsl */ `
+  uniform float uTime;
+  uniform float uPhase;
+  uniform float uStrength;
+  varying vec2 vUv;
+
+  void main() {
+    float distanceFromCore = abs(vUv.y - 0.5) * 2.0;
+    float softBody = pow(max(0.0, 1.0 - distanceFromCore), 3.4);
+    float brightCore = pow(max(0.0, 1.0 - distanceFromCore), 13.0);
+    float endFade = smoothstep(0.0, 0.08, vUv.x);
+    float travel = fract(vUv.x * 1.42 + uTime * 0.31 + uPhase);
+    float movingPulse = smoothstep(0.22, 0.48, travel) * (1.0 - smoothstep(0.58, 0.9, travel));
+    float shimmer = 0.68 + 0.32 * sin(vUv.x * 17.0 - uTime * 2.7 + uPhase * 6.28318);
+    float energy = 0.34 + movingPulse * 0.66;
+    vec3 coolEdge = vec3(0.34, 0.58, 1.0);
+    vec3 hotCore = vec3(0.95, 0.98, 1.0);
+    vec3 color = mix(coolEdge, hotCore, brightCore);
+    float alpha = (softBody * 0.34 + brightCore * 0.92) * endFade * energy * shimmer * uStrength;
+    gl_FragColor = vec4(color, alpha);
   }
 `
 
@@ -438,23 +430,6 @@ export function SingularityHeroScene({
     const hand = new THREE.Mesh(handGeometry, handMaterial)
     scene.add(hand)
 
-    // ── movement inside the source artwork's existing light ────────────────
-    const nebulaMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        uMap: { value: texture },
-        uTime: { value: 0 },
-        uDepth: { value: 1 },
-        uPointer: { value: pointerUv },
-      },
-      vertexShader: HAND_VERTEX,
-      fragmentShader: NEBULA_FRAGMENT,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    })
-    const nebula = new THREE.Mesh(handGeometry, nebulaMaterial)
-    scene.add(nebula)
-
     // ── the singularity ──────────────────────────────────────────────────────
     const orbMaterial = new THREE.ShaderMaterial({
       uniforms: {
@@ -491,6 +466,64 @@ export function SingularityHeroScene({
     const corona = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), coronaMaterial)
     scene.add(corona)
 
+    const LIGHT_WAVE_SEGMENTS = 72
+    const createLightWaveGeometry = () => {
+      const geometry = new THREE.BufferGeometry()
+      const positions = new Float32Array((LIGHT_WAVE_SEGMENTS + 1) * 2 * 3)
+      const uvs = new Float32Array((LIGHT_WAVE_SEGMENTS + 1) * 2 * 2)
+      const indices = new Uint16Array(LIGHT_WAVE_SEGMENTS * 6)
+
+      for (let i = 0; i <= LIGHT_WAVE_SEGMENTS; i += 1) {
+        const offset = i * 4
+        const progress = i / LIGHT_WAVE_SEGMENTS
+        uvs[offset] = progress
+        uvs[offset + 1] = 0
+        uvs[offset + 2] = progress
+        uvs[offset + 3] = 1
+      }
+
+      for (let i = 0; i < LIGHT_WAVE_SEGMENTS; i += 1) {
+        const offset = i * 6
+        const vertex = i * 2
+        indices[offset] = vertex
+        indices[offset + 1] = vertex + 1
+        indices[offset + 2] = vertex + 2
+        indices[offset + 3] = vertex + 2
+        indices[offset + 4] = vertex + 1
+        indices[offset + 5] = vertex + 3
+      }
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+      geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
+      geometry.setIndex(new THREE.BufferAttribute(indices, 1))
+      return geometry
+    }
+
+    const createLightWaveMaterial = (phase: number, strength: number) =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uPhase: { value: phase },
+          uStrength: { value: strength },
+        },
+        vertexShader: LIGHT_WAVE_VERTEX,
+        fragmentShader: LIGHT_WAVE_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      })
+
+    const upperWaveGeometry = createLightWaveGeometry()
+    const lowerWaveGeometry = createLightWaveGeometry()
+    const upperWaveMaterial = createLightWaveMaterial(0.08, 1.0)
+    const lowerWaveMaterial = createLightWaveMaterial(0.56, 0.82)
+    const upperWave = new THREE.Mesh(upperWaveGeometry, upperWaveMaterial)
+    const lowerWave = new THREE.Mesh(lowerWaveGeometry, lowerWaveMaterial)
+    upperWave.frustumCulled = false
+    lowerWave.frustumCulled = false
+    scene.add(upperWave, lowerWave)
+
     /*
      * ⚠️ THE SILHOUETTE IS DRAWN BEFORE THE HAND, NOT AFTER IT.
      *
@@ -506,7 +539,8 @@ export function SingularityHeroScene({
     corona.renderOrder = 1
     orb.renderOrder = 2
     hand.renderOrder = 3
-    nebula.renderOrder = 4
+    upperWave.renderOrder = 1
+    lowerWave.renderOrder = 1
 
     // ── state ────────────────────────────────────────────────────────────────
     let width = 1
@@ -541,6 +575,44 @@ export function SingularityHeroScene({
      */
     const HAND_DRIFT_DAMPING = 0.55
 
+    type SourcePoint = readonly [number, number]
+    const updateLightWave = (
+      geometry: THREE.BufferGeometry,
+      start: SourcePoint,
+      control: SourcePoint,
+      end: SourcePoint,
+      widthInPixels: number,
+      worldPerPixel: number,
+    ) => {
+      const position = geometry.getAttribute('position') as THREE.BufferAttribute
+
+      for (let i = 0; i <= LIGHT_WAVE_SEGMENTS; i += 1) {
+        const t = i / LIGHT_WAVE_SEGMENTS
+        const inverse = 1 - t
+        const sourceX = inverse * inverse * start[0] + 2 * inverse * t * control[0] + t * t * end[0]
+        const sourceY = inverse * inverse * start[1] + 2 * inverse * t * control[1] + t * t * end[1]
+        const tangentX = 2 * inverse * (control[0] - start[0]) + 2 * t * (end[0] - control[0])
+        const tangentY = 2 * inverse * (control[1] - start[1]) + 2 * t * (end[1] - control[1])
+        const tangentLength = Math.max(0.0001, Math.hypot(tangentX, tangentY))
+        const normalX = -tangentY / tangentLength
+        const normalY = tangentX / tangentLength
+        const taper = 0.5 + Math.sin(Math.PI * t) * 0.5
+        const halfWidth = widthInPixels * taper * 0.5
+        const hostX = layout.imageX + sourceX * layout.imageWidth
+        const hostY = layout.imageY + sourceY * layout.imageHeight
+        const centerX = (hostX - width / 2) * worldPerPixel
+        const centerY = -(hostY - height / 2) * worldPerPixel
+        const offsetX = normalX * halfWidth * worldPerPixel
+        const offsetY = normalY * halfWidth * worldPerPixel
+        const vertex = i * 2
+
+        position.setXYZ(vertex, centerX - offsetX, centerY + offsetY, 0.08)
+        position.setXYZ(vertex + 1, centerX + offsetX, centerY - offsetY, 0.08)
+      }
+
+      position.needsUpdate = true
+    }
+
     const place = () => {
       const visibleHeight = 2 * CAMERA_DISTANCE * Math.tan((CAMERA_FOV * Math.PI) / 360)
       const worldPerPixel = visibleHeight / height
@@ -550,7 +622,6 @@ export function SingularityHeroScene({
         layout.imageHeight * worldPerPixel,
         1,
       )
-      nebula.scale.copy(hand.scale)
 
       // Host pixels → world: origin at the frame centre, y flipped.
       const cx = layout.imageX + layout.imageWidth / 2
@@ -561,7 +632,6 @@ export function SingularityHeroScene({
         0,
       )
       hand.position.copy(handBase)
-      nebula.position.copy(handBase)
 
       orbHost.x = layout.imageX + layout.imageWidth * ORB_SOURCE_X
       orbHost.y = layout.imageY + layout.imageHeight * ORB_SOURCE_Y
@@ -572,7 +642,7 @@ export function SingularityHeroScene({
        */
       const orbScale = layout.imageWidth * HOLE_RADIUS * worldPerPixel
       orb.scale.setScalar(orbScale)
-      corona.scale.setScalar(orbScale * 1.5)
+      corona.scale.setScalar(orbScale * 2.08)
       orbBase.set(
         (orbHost.x - width / 2) * worldPerPixel,
         -(orbHost.y - height / 2) * worldPerPixel,
@@ -580,6 +650,23 @@ export function SingularityHeroScene({
       )
       orb.position.copy(orbBase)
       corona.position.copy(orbBase)
+
+      updateLightWave(
+        upperWaveGeometry,
+        [0.03, 0.56],
+        [0.5, 0.31],
+        [ORB_SOURCE_X, ORB_SOURCE_Y],
+        layout.narrow ? 5 : 8,
+        worldPerPixel,
+      )
+      updateLightWave(
+        lowerWaveGeometry,
+        [0.09, 0.73],
+        [0.54, 0.5],
+        [ORB_SOURCE_X, ORB_SOURCE_Y],
+        layout.narrow ? 7 : 11,
+        worldPerPixel,
+      )
     }
 
     const resize = () => {
@@ -623,18 +710,18 @@ export function SingularityHeroScene({
       const smoothing = 1 - Math.pow(0.001, delta / 1000)
       pointerEnergy += (pointerEnergyTarget - pointerEnergy) * smoothing
 
-      /* The orb stays welded to the fingertip target. Energy moves through its
-       * wake like atmospheric plasma; the object itself never crosses the
-       * frame or duplicates the singularity painted into the source plate. */
+      /* The orb stays welded to the fingertip target. The supplied artwork's
+       * light is rendered once, so its natural wake stays intact without a
+       * second layer drawing over the hero. */
       starMaterial.uniforms.uTime.value = seconds * motion
       handMaterial.uniforms.uTime.value = seconds * motion
-      nebulaMaterial.uniforms.uTime.value = seconds * motion
       orbMaterial.uniforms.uTime.value = seconds * motion
       orbMaterial.uniforms.uEnergy.value = pointerEnergy * motion
       coronaMaterial.uniforms.uTime.value = seconds * motion
       coronaMaterial.uniforms.uEnergy.value = pointerEnergy * motion
+      upperWaveMaterial.uniforms.uTime.value = seconds * motion
+      lowerWaveMaterial.uniforms.uTime.value = seconds * motion
       handMaterial.uniforms.uDepth.value = reducedMotion.matches ? 0.82 : 1
-      nebulaMaterial.uniforms.uDepth.value = reducedMotion.matches ? 0.82 : 1
       pointerUv.lerp(pointerTargetUv, smoothing * 0.7)
 
       /*
@@ -650,10 +737,12 @@ export function SingularityHeroScene({
       // The hand rides along with the camera, cancelling most of its drift.
       hand.position.x = handBase.x + camera.position.x * HAND_DRIFT_DAMPING
       hand.position.y = handBase.y + camera.position.y * HAND_DRIFT_DAMPING
-      nebula.position.copy(hand.position)
       orb.position.x = orbBase.x + camera.position.x * HAND_DRIFT_DAMPING
       orb.position.y = orbBase.y + camera.position.y * HAND_DRIFT_DAMPING
       corona.position.copy(orb.position)
+      upperWave.position.x = camera.position.x * HAND_DRIFT_DAMPING
+      upperWave.position.y = camera.position.y * HAND_DRIFT_DAMPING
+      lowerWave.position.copy(upperWave.position)
 
       /*
        * ⚠️ NO `lookAt` — THAT WAS THE HAND'S EXPAND AND CONTRACT.
@@ -729,11 +818,14 @@ export function SingularityHeroScene({
       starMaterial.dispose()
       handGeometry.dispose()
       handMaterial.dispose()
-      nebulaMaterial.dispose()
       orb.geometry.dispose()
       orbMaterial.dispose()
       corona.geometry.dispose()
       coronaMaterial.dispose()
+      upperWaveGeometry.dispose()
+      lowerWaveGeometry.dispose()
+      upperWaveMaterial.dispose()
+      lowerWaveMaterial.dispose()
       texture.dispose()
       renderer.dispose()
       renderer.domElement.remove()

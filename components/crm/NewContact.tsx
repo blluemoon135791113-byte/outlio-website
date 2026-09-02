@@ -23,7 +23,7 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
   if (state?.ok) {
     return (
       <div className="clay space-y-3 p-4">
-        <p className="text-sm text-ink">{state.message}</p>
+        <p role="status" aria-live="polite" className="text-sm text-ink">{state.message}</p>
         <button
           type="button"
           onClick={() => router.push(`/crm/contacts/${state.contactId}`)}

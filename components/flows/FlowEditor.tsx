@@ -88,7 +88,7 @@ export function FlowEditor({
             </p>
           ) : null}
           {state?.ok ? (
-            <p className="rounded-[var(--radius-md)] bg-success-soft px-3 py-2 text-xs text-success">
+            <p role="status" aria-live="polite" className="rounded-[var(--radius-md)] bg-success-soft px-3 py-2 text-xs text-success">
               {state.message}
             </p>
           ) : null}

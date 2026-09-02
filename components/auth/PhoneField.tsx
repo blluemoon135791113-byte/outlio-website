@@ -34,7 +34,7 @@ export function PhoneField({ defaultCountry = 'US', defaultValue = '' }: PhoneFi
           name="phone_country"
           defaultValue={safeDefault}
           autoComplete="tel-country-code"
-          className="min-w-0 border-r border-border bg-transparent px-3 py-2.5 text-sm font-semibold text-ink outline-none"
+          className="min-w-0 border-r border-border bg-transparent px-3 py-2.5 text-sm font-semibold text-ink outline-none [color-scheme:light]"
           required
         >
           {countries.map((country) => (

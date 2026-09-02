@@ -3,28 +3,28 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   position: relative;
-  padding: clamp(1.75rem, 3vw, 3rem);
+  padding: clamp(1.5rem, 2.4vw, 2.4rem);
   background: #fff;
   color: #171715;
 }
 
 .layout {
   display: grid;
-  width: min(100%, 86rem);
+  width: min(100%, 82rem);
   margin-inline: auto;
-  grid-template-columns: minmax(19rem, 0.9fr) minmax(30rem, 1fr);
-  gap: clamp(2rem, 3.5vw, 4rem);
+  grid-template-columns: minmax(18rem, 0.82fr) minmax(29rem, 1fr);
+  gap: clamp(2rem, 3vw, 3.5rem);
   align-items: center;
 }
 
-.copy { max-width: 34rem; }
+.copy { max-width: 31rem; }
 
 .featureGlyph {
   position: relative;
   display: block;
-  width: 3.35rem;
-  height: 3.35rem;
-  margin-bottom: clamp(1.4rem, 2.6vw, 2.4rem);
+  width: 2.9rem;
+  height: 2.9rem;
+  margin-bottom: clamp(1.15rem, 2vw, 1.7rem);
 }
 
 .glyphTarget,
@@ -59,30 +59,21 @@
 .heading {
   margin: 0;
   font-family: var(--font-heading), sans-serif;
-  font-size: clamp(2.65rem, 4.2vw, 4.6rem);
+  font-size: clamp(2.35rem, 3.4vw, 3.8rem);
   font-weight: var(--leadengine-heading-weight);
   letter-spacing: -0.062em;
-  line-height: 0.98;
+  line-height: 1.01;
   text-wrap: balance;
 }
 
 .description {
-  max-width: 37rem;
-  margin: clamp(1.3rem, 2.2vw, 1.9rem) 0 0;
+  max-width: 29rem;
+  margin: clamp(1.15rem, 1.8vw, 1.5rem) 0 0;
   color: #393733;
-  font-size: clamp(1rem, 1.35vw, 1.22rem);
+  font-size: clamp(0.98rem, 1.2vw, 1.1rem);
   font-weight: var(--leadengine-copy-weight);
   line-height: 1.62;
   text-wrap: pretty;
-}
-
-.offer {
-  max-width: 34rem;
-  margin: 1rem 0 0;
-  color: #7b4b0f;
-  font-size: clamp(0.86rem, 1.05vw, 0.98rem);
-  font-weight: 650;
-  line-height: 1.55;
 }
 
 .cta {
@@ -90,7 +81,7 @@
   min-height: 3.45rem;
   align-items: center;
   gap: 1.8rem;
-  margin-top: 1.45rem;
+  margin-top: 1.6rem;
   padding: 0 1.4rem;
   border-radius: 0.85rem;
   background: #111;
@@ -99,7 +90,10 @@
   font-weight: 700;
   text-transform: lowercase;
   box-shadow: 0 0.8rem 1.8rem rgba(110, 68, 8, 0.12);
-  transition: transform 150ms var(--ease-out), background-color 150ms var(--ease-out);
+  transition:
+    transform 150ms var(--ease-out),
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
 .cta:focus-visible { outline: 3px solid rgba(224, 112, 2, 0.38); outline-offset: 4px; }
@@ -107,7 +101,7 @@
 
 .animationBox {
   position: relative;
-  width: min(100%, 36rem);
+  width: min(100%, 33rem);
   min-width: 0;
   justify-self: end;
   overflow: hidden;
@@ -485,7 +479,68 @@
 }
 .crmHeader { display: flex; align-items: center; justify-content: space-between; gap: 2cqw; }
 .crmTitle { display: flex; min-width: 0; align-items: center; gap: 1.2cqw; }
-.crmIcon { display: grid; width: 5.8cqw; min-width: 2rem; aspect-ratio: 1; place-items: center; border: 1px solid #ebe4d7; border-radius: 0.9cqw; background: #fff; box-shadow: 0 0.4rem 1rem rgba(122, 75, 9, 0.08); }
+.crmIcon { display: grid; width: 5.8cqw; min-width: 2rem; aspect-ratio: 1; place-items: center; }
+
+.crmBrandMark {
+  position: relative;
+  display: grid;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid rgba(126, 72, 4, 0.2);
+  border-radius: 30%;
+  background:
+    radial-gradient(circle at 28% 20%, #fff5b6 0 8%, transparent 34%),
+    linear-gradient(145deg, #ffd878, #f4a914 58%, #e07002);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 0.55rem 1.15rem rgba(180, 101, 5, 0.2);
+}
+
+.crmBrandOrbit {
+  position: absolute;
+  inset: 12%;
+  border: 1px solid rgba(255, 253, 247, 0.68);
+  border-radius: 50%;
+  animation: crm-brand-orbit var(--journey-duration) linear infinite;
+}
+
+.crmBrandOrbit i {
+  position: absolute;
+  width: 18%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(76, 43, 4, 0.16);
+  border-radius: 50%;
+  background: #fffdf7;
+  box-shadow: 0 0.2rem 0.45rem rgba(98, 54, 3, 0.18);
+}
+
+.crmBrandOrbit i:first-child { top: -9%; left: 41%; }
+.crmBrandOrbit i:nth-child(2) { right: 0; bottom: 7%; }
+.crmBrandOrbit i:nth-child(3) { bottom: 7%; left: 0; }
+
+.crmBrandCore {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 42%;
+  gap: 2px;
+  padding: 11% 9%;
+  border-radius: 28%;
+  background: #24180d;
+  box-shadow: 0 0.22rem 0.5rem rgba(62, 32, 2, 0.28);
+}
+
+.crmBrandCore i {
+  display: block;
+  height: 1px;
+  border-radius: 999px;
+  background: #fff5d5;
+}
+
+.crmBrandCore i:nth-child(2) { width: 72%; }
+.crmBrandCore i:nth-child(3) { width: 86%; }
 .crmTitle strong,
 .crmTitle small { display: block; }
 .crmTitle strong { font-size: clamp(0.66rem, 1.5cqw, 0.9rem); }
@@ -708,27 +763,35 @@
   99%, 100% { opacity: 0.58; }
 }
 
+@keyframes crm-brand-orbit {
+  to { transform: rotate(1turn); }
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .cta:hover { background: #2a241c; transform: translateY(-2px); }
+  .cta:hover {
+    background: #f4a914;
+    color: #140104;
+    transform: translateY(-2px);
+  }
 }
 
 @media (max-width: 70rem) {
-  .section { padding: clamp(1.75rem, 3vw, 2.75rem); }
+  .section { padding: clamp(1.5rem, 2.5vw, 2.25rem); }
   .layout { grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); gap: clamp(1.8rem, 3vw, 2.75rem); }
-  .heading { font-size: clamp(2.35rem, 4.6vw, 4rem); }
+  .heading { font-size: clamp(2.25rem, 4.1vw, 3.45rem); }
   .description { font-size: clamp(0.94rem, 1.55vw, 1.1rem); }
 }
 
 @media (max-width: 48rem) {
   .layout { grid-template-columns: 1fr; }
   .copy { max-width: 44rem; }
-  .animationBox { width: min(100%, 35rem); justify-self: center; margin-inline: auto; }
+  .animationBox { width: min(100%, 33rem); justify-self: center; margin-inline: auto; }
 }
 
 @media (max-width: 38rem) {
   .section { padding: 2.8rem 1rem 1rem; }
   .featureGlyph { width: 2.7rem; height: 2.7rem; margin-bottom: 1.6rem; }
-  .heading { font-size: clamp(2.4rem, 12vw, 3.4rem); }
+  .heading { font-size: clamp(2.2rem, 10.5vw, 3rem); }
   .description { font-size: 0.98rem; }
   .animationBox { border-radius: 1.45rem; aspect-ratio: 1 / 1; }
   .browserWindow { top: 4%; right: 4%; bottom: 10%; left: 4%; }
@@ -774,4 +837,6 @@
   .crmRow:first-child .checkbox::after,
   .crmSelection,
   .cursor > span { animation: none; }
+
+  .crmBrandOrbit { animation: none; }
 }

@@ -771,7 +771,7 @@
   line-height: 1.55;
 }
 
-.signIn {
+.libraryAction {
   position: relative;
   z-index: 2;
   display: flex;
@@ -780,7 +780,7 @@
   align-items: center;
   gap: 0.65rem;
   justify-content: center;
-  margin: clamp(2rem, 4vw, 3.2rem) auto 0;
+  margin: 0;
   padding: 0 1.65rem;
   border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 999px;
@@ -798,17 +798,17 @@
     border-color 150ms ease;
 }
 
-.signIn svg {
+.libraryAction svg {
   width: 1rem;
   height: 1rem;
 }
 
-.signIn:focus-visible {
+.libraryAction:focus-visible {
   outline: 2px solid white;
   outline-offset: 4px;
 }
 
-.signIn:active {
+.libraryAction:active {
   transform: scale(0.97);
 }
 
@@ -903,7 +903,7 @@
 
   .interactiveBook,
   .closeButton,
-  .signIn {
+  .libraryAction {
     transition-duration: 0.01ms;
   }
 
@@ -975,21 +975,6 @@
   padding: 0;
 }
 
-.libraryPerspective::after {
-  position: absolute;
-  z-index: 0;
-  right: 12%;
-  bottom: clamp(3.1rem, 5.4vw, 4.15rem);
-  left: 12%;
-  height: clamp(1.65rem, 2.8vw, 2.35rem);
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(76, 47, 29, 0.22) 0%, rgba(101, 66, 41, 0.1) 44%, transparent 74%);
-  content: '';
-  filter: blur(0.7rem);
-  pointer-events: none;
-  transform: scaleX(0.92);
-}
-
 .libraryStage {
   position: relative;
   z-index: 1;
@@ -1047,24 +1032,27 @@
   overflow-x: hidden;
   overflow-y: auto;
   border-radius: 0;
-  background: rgba(31, 22, 16, 0.78);
+  background: rgba(38, 26, 17, 0.58);
   backdrop-filter: none;
   overscroll-behavior: contain;
   animation: libraryOverlayIn 250ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both;
 }
 
 .modal {
-  width: min(100%, 31rem);
+  width: min(100%, 31.5rem);
   min-height: 0;
   max-height: calc(100dvh - clamp(1.5rem, 6vw, 4rem));
-  padding: clamp(1.25rem, 3.5vw, 2.1rem);
+  padding: clamp(1.1rem, 2.8vw, 1.55rem);
   overflow-x: hidden;
   overflow-y: auto;
-  border: 1px solid #dfc8ad;
-  border-radius: clamp(1.5rem, 3vw, 2.35rem);
-  background: #fffaf2;
+  border: 1px solid rgba(201, 161, 114, 0.62);
+  border-radius: clamp(1.45rem, 3vw, 2rem);
+  background: linear-gradient(145deg, #fffaf1 0%, #f7ead8 100%);
   color: #392b22;
-  box-shadow: 0 2rem 5rem rgba(31, 20, 12, 0.32);
+  box-shadow:
+    0 1.6rem 3.8rem rgba(55, 34, 19, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(143, 91, 48, 0.08);
   overscroll-behavior: contain;
   scrollbar-color: #cfaa7d #f6e8d5;
   scrollbar-gutter: stable;
@@ -1074,38 +1062,104 @@
 }
 
 .modal .profileHeader {
-  grid-template-columns: clamp(5.4rem, 18vw, 7rem) minmax(0, 1fr);
-  padding: 0.4rem 2.8rem clamp(1.15rem, 3vw, 1.6rem) 0;
-  border-color: #e5c79f;
+  grid-template-columns: clamp(5.5rem, 18vw, 6.75rem) minmax(0, 1fr);
+  gap: clamp(1rem, 3vw, 1.4rem);
+  padding: 0 2.75rem 1.2rem 0;
+  border: 0;
+  border-bottom: 1px solid rgba(202, 169, 129, 0.54);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .modal .fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.85rem;
 }
 
 .modal .avatar {
-  box-shadow: 0 0.9rem 1.8rem rgba(91, 56, 30, 0.22);
+  border: 0.25rem solid #fff9f0;
+  outline: 1px solid rgba(201, 162, 116, 0.65);
+  box-shadow:
+    0 0.65rem 1.25rem rgba(91, 56, 30, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
-.modal .identityIcon,
-.modal .field,
-.modal .summary {
-  box-shadow: none;
+.modal .profileHeader h3 {
+  margin-bottom: 1rem;
+  font-size: clamp(1.9rem, 5vw, 2.65rem);
 }
 
 .modal .identityIcon {
-  border-color: #ead6bd;
-  background: #f4e2cc;
+  border-color: rgba(220, 190, 153, 0.7);
+  background: #f8e8d2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .modal .field {
-  border-color: #ead6bd;
-  background: #f9ecdc;
+  min-height: 4.35rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: 0.2rem;
+  padding: 0.72rem 0.85rem;
+  border-color: rgba(218, 186, 148, 0.7);
+  border-radius: 0.95rem;
+  background: rgba(255, 250, 241, 0.66);
+  box-shadow:
+    0 0.38rem 0.78rem rgba(98, 62, 32, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(126, 83, 46, 0.05);
+}
+
+.modal .field::after {
+  display: none;
+}
+
+.modal .field dt {
+  margin: 0;
+  color: #a85a1a;
+  font-size: 0.56rem;
+}
+
+.modal .field dd {
+  min-width: 0;
+  color: #3f2b1e;
+  font-size: 0.78rem;
+  font-weight: 620;
+  line-height: 1.35;
 }
 
 .modal .summary {
-  border-color: #e2c8a8;
-  background: #f3dfc7;
+  margin-top: 0.85rem;
+  padding: clamp(1rem, 2.6vw, 1.25rem);
+  border-color: rgba(214, 179, 137, 0.72);
+  border-radius: 1rem;
+  background: rgba(241, 220, 193, 0.68);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px rgba(255, 250, 242, 0.2);
+}
+
+.modal .summary p {
+  color: #a85a1a;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.modal .summary div {
+  color: #4f392a;
+  font-size: 0.82rem;
+  font-weight: 540;
+  line-height: 1.55;
+}
+
+.modal .closeButton {
+  border: 1px solid rgba(210, 175, 131, 0.68);
+  background: #f7e8d3;
+  box-shadow:
+    0 0.25rem 0.55rem rgba(95, 59, 30, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .closeButton {
@@ -1148,8 +1202,17 @@
   box-shadow: none;
 }
 
-.signIn {
+.libraryActions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
   margin-top: clamp(2.75rem, 5vw, 4.5rem);
+}
+
+.signIn {
   border-color: #241b16;
   background: #241b16;
   color: #fffaf2;
@@ -1157,10 +1220,27 @@
   backdrop-filter: none;
 }
 
+.freeTrial {
+  border-color: #efb34d;
+  background: #ffe0a0;
+  color: #321d10;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.74),
+    0 0.65rem 1.4rem rgba(224, 112, 2, 0.12);
+  backdrop-filter: none;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .signIn:hover {
-    border-color: #7b4b0f;
-    background: #7b4b0f;
+    border-color: #e07002;
+    background: #e07002;
+    color: #140104;
+  }
+
+  .freeTrial:hover {
+    border-color: #f4a914;
+    background: #f4a914;
+    color: #140104;
   }
 }
 
@@ -1185,11 +1265,21 @@
   }
 
   .modal .fields {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modal .field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
   }
 
   .modal {
     max-height: calc(100dvh - 1.25rem);
     padding: 1.1rem;
+  }
+
+  .modal .profileHeader {
+    grid-template-columns: 5.6rem minmax(0, 1fr);
+    padding-right: 2.4rem;
   }
 }

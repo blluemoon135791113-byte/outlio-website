@@ -205,7 +205,7 @@ function MemberRow({
               name="role"
               defaultValue={member.role}
               aria-label={`Role for ${member.email ?? 'member'}`}
-              className="field px-2 py-1.5 text-xs text-ink focus:outline-none"
+              className="field px-2 py-1.5 text-xs text-ink focus:outline-none [color-scheme:light]"
             >
               {assignableRoles.map((role) => (
                 <option key={role} value={role}>
@@ -279,7 +279,7 @@ function InvitationRow({ invitation }: { invitation: PendingInvitation }) {
           {ROLE_LABEL[invitation.role]} · expires {formatDate(invitation.expiresAt)}
         </p>
         {state.status === 'error' ? (
-          <p className="mt-1 text-xs text-danger">{state.message}</p>
+          <p role="status" aria-live="polite" className="mt-1 text-xs text-danger">{state.message}</p>
         ) : null}
       </div>
       <form action={action}>

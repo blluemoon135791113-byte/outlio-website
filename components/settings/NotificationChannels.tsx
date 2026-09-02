@@ -31,7 +31,7 @@ export type ChannelRow = {
 function Feedback({ state }: { state: ChannelActionState }) {
   if (!state) return null
   return (
-    <p className={`text-xs ${state.ok ? 'text-success' : 'text-danger'}`}>
+    <p role="status" aria-live="polite" className={`text-xs ${state.ok ? 'text-success' : 'text-danger'}`}>
       {state.ok ? state.message : state.error}
     </p>
   )

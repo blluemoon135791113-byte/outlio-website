@@ -26,7 +26,7 @@ export function NewTaskForm({
   )
 
   if (state?.ok) {
-    return <p className="text-xs font-medium text-success">{state.message}</p>
+    return <p role="status" aria-live="polite" className="text-xs font-medium text-success">{state.message}</p>
   }
 
   return (

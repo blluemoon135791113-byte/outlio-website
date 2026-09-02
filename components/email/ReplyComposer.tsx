@@ -25,7 +25,7 @@ export function ReplyComposer({
 
   if (state?.ok) {
     return (
-      <p className="rounded-[var(--radius-md)] bg-success-soft px-3 py-2 text-sm text-success">
+      <p role="status" aria-live="polite" className="rounded-[var(--radius-md)] bg-success-soft px-3 py-2 text-sm text-success">
         {state.message}
       </p>
     )

@@ -133,15 +133,17 @@ export function Pricing({ ctaHref, ctaLabel }: PricingProps = {}) {
         </div>
 
         <div className={styles.pricingStrip}>
-          {TIERS.map((tier, index) => (
-            <HoverPlan
-              key={tier.key}
-              tier={tier}
-              index={`0${index + 1}`}
-              ctaHref={ctaHref}
-              ctaLabel={ctaLabel}
-            />
-          ))}
+          <div className={styles.plansTrack}>
+            {TIERS.map((tier, index) => (
+              <HoverPlan
+                key={tier.key}
+                tier={tier}
+                index={`0${index + 1}`}
+                ctaHref={ctaHref}
+                ctaLabel={ctaLabel}
+              />
+            ))}
+          </div>
         </div>
 
         {/*

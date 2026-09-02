@@ -122,7 +122,7 @@ export function ImportContacts() {
       </form>
 
       {state?.step === 'error' ? (
-        <p className="rounded-[var(--radius-md)] bg-danger-soft px-3 py-2 text-xs text-danger">
+        <p role="alert" className="rounded-[var(--radius-md)] bg-danger-soft px-3 py-2 text-xs text-danger">
           {state.error}
         </p>
       ) : null}

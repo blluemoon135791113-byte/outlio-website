@@ -261,7 +261,8 @@ export function FlowBuilder({
 
       {state ? (
         <p
-          role={state.ok ? undefined : 'alert'}
+          role={state.ok ? 'status' : 'alert'}
+          aria-live={state.ok ? 'polite' : 'assertive'}
           className={`text-xs leading-relaxed ${state.ok ? 'text-success' : 'text-danger'}`}
         >
           {state.ok ? state.message : state.error}

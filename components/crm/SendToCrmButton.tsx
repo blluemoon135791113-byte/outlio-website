@@ -35,7 +35,7 @@ export function SendToCrmButton({
   if (!recordCount || recordCount === 0) return null
 
   if (state?.ok) {
-    return <span className="text-xs font-medium text-success">{state.message}</span>
+    return <span role="status" aria-live="polite" className="text-xs font-medium text-success">{state.message}</span>
   }
 
   return (
@@ -54,7 +54,7 @@ export function SendToCrmButton({
       </button>
 
       {state && !state.ok ? (
-        <span className="text-xs text-danger">{state.error}</span>
+        <span role="alert" className="text-xs text-danger">{state.error}</span>
       ) : null}
     </form>
   )
