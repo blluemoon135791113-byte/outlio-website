@@ -83,6 +83,10 @@ export function HubbleIntelligence() {
                 <span className={styles.rowIcon}>▣</span>
                 <strong>Buying cycles — shortening</strong>
               </div>
+              <div className={styles.resultRow}>
+                <span className={styles.rowIcon}>◫</span>
+                <strong>Decision teams — expanding</strong>
+              </div>
             </article>
 
             <span className={`${styles.connector} ${styles.connectorBottom}`}><i /></span>

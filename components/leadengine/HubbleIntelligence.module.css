@@ -109,10 +109,10 @@
 .sendButton svg { width: 70%; fill: none; stroke: currentColor; stroke-linejoin: round; stroke-width: 2; }
 
 .resultCard {
-  top: 34%;
+  top: 31.5%;
   right: 1%;
   left: 21%;
-  padding: 3cqh 3.6cqw;
+  padding: 2.5cqh 3.6cqw;
   border-radius: clamp(1.2rem, 2.7cqw, 1.85rem);
 }
 
@@ -132,8 +132,8 @@
   min-width: 0;
   align-items: center;
   gap: 2cqw;
-  margin-top: 2.2cqh;
-  padding-top: 2.1cqh;
+  margin-top: 1.45cqh;
+  padding-top: 1.45cqh;
   border-top: 1px solid #dfe7e3;
 }
 
@@ -151,7 +151,7 @@
 
 .savedCard {
   right: 10%;
-  bottom: 3.5%;
+  bottom: -2%;
   left: 7%;
   display: grid;
   min-height: 12.5cqh;
@@ -181,7 +181,7 @@
 .connector { position: absolute; z-index: 1; left: 46%; width: 1px; border-left: 3px dotted rgba(255, 255, 255, 0.94); }
 .connector i { position: absolute; bottom: -0.35rem; left: -0.38rem; width: 0.7rem; border-right: 3px solid rgba(255, 255, 255, 0.96); border-bottom: 3px solid rgba(255, 255, 255, 0.96); content: ''; aspect-ratio: 1; transform: rotate(45deg); }
 .connectorTop { top: 20%; height: 15%; }
-.connectorBottom { top: 69%; height: 19%; }
+.connectorBottom { top: 75%; height: 13%; }
 
 .copy { max-width: 34rem; }
 

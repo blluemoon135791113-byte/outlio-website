@@ -87,6 +87,16 @@ export function FlowBuilder({
   const [state, publish, publishing] = useActionState<ActionState, FormData>(publishFlow, null)
 
   const rows = useMemo(() => layoutSteps(definition), [definition])
+  /*
+   * Every step a branch could route to, labelled the way it reads on the
+   * canvas. Derived from the definition rather than the laid-out rows, because
+   * a step that is currently unreachable is exactly the one somebody is trying
+   * to wire back up.
+   */
+  const targets = useMemo(
+    () => definition.steps.map((s) => ({ id: s.id, label: `${describeStep(s)} (${s.id})` })),
+    [definition],
+  )
   const orphans = useMemo(() => new Set(unreachableStepIds(definition)), [definition])
 
   const { problems, creditsPerContact } = useMemo(() => {
@@ -117,6 +127,27 @@ export function FlowBuilder({
         action,
         config: {},
         next: null,
+      } as never),
+    )
+    setAddingAfter(undefined)
+    setEditing(id)
+  }
+
+  /*
+   * ⚠️ A BRANCH ARRIVES WITH ONE CONDITION ALREADY IN IT. The schema requires
+   * `min(1)`, so an empty one is unpublishable the moment it is created — the
+   * builder would produce a definition it refuses to accept.
+   */
+  const addBranch = (afterId: string | null) => {
+    const id = nextStepId(definition, 'check')
+    setDefinition(
+      insertAfter(definition, afterId, {
+        id,
+        type: 'BRANCH',
+        conditions: [{ field: 'contact.job_title', operator: 'is_not_empty' }],
+        match: 'all',
+        onTrue: null,
+        onFalse: null,
       } as never),
     )
     setAddingAfter(undefined)
@@ -156,6 +187,7 @@ export function FlowBuilder({
       </div>
 
       <AddHere onAction={(a) => addStep(null, a)} onWait={() => addWait(null)}
+        onBranch={() => addBranch(null)}
         open={addingAfter === null} onOpen={() => setAddingAfter(null)}
         onClose={() => setAddingAfter(undefined)} />
 
@@ -216,6 +248,7 @@ export function FlowBuilder({
                 members={members}
                 campaigns={campaigns}
                 mailboxes={mailboxes}
+                targets={targets}
                 onChange={(patch) => setDefinition(updateStep(definition, row.step.id, patch))}
               />
             ) : null}
@@ -224,6 +257,7 @@ export function FlowBuilder({
           <AddHere
             onAction={(a) => addStep(row.step.id, a)}
             onWait={() => addWait(row.step.id)}
+            onBranch={() => addBranch(row.step.id)}
             open={addingAfter === row.step.id}
             onOpen={() => setAddingAfter(row.step.id)}
             onClose={() => setAddingAfter(undefined)}
@@ -296,12 +330,14 @@ export function FlowBuilder({
 function AddHere({
   onAction,
   onWait,
+  onBranch,
   open,
   onOpen,
   onClose,
 }: {
   onAction: (action: ActionType) => void
   onWait: () => void
+  onBranch: () => void
   open: boolean
   onOpen: () => void
   onClose: () => void
@@ -329,6 +365,19 @@ function AddHere({
             className="rounded-[var(--radius-md)] border border-border px-2.5 py-1 text-xs font-medium text-ink transition-colors duration-150 hover:bg-surface-muted"
           >
             Wait
+          </button>
+          {/*
+            ⚠️ THERE WAS NO WAY TO ADD A BRANCH AT ALL. `addStep` only made
+            ACTIONs and `addWait` only WAITs, so a condition could only reach a
+            flow through the JSON editor — which is why the branch editor had
+            nothing to edit for anyone who had not hand-written one.
+          */}
+          <button
+            type="button"
+            onClick={onBranch}
+            className="rounded-[var(--radius-md)] border border-border px-2.5 py-1 text-xs font-medium text-ink transition-colors duration-150 hover:bg-surface-muted"
+          >
+            Only if…
           </button>
           {FREE_ACTIONS.map((action) => (
             <button
@@ -849,11 +898,23 @@ type BranchCondition = { field: string; operator: string; value?: unknown }
 function BranchEditor({
   conditions,
   match,
+  onTrue,
+  onFalse,
+  targets,
   onChange,
 }: {
   conditions: BranchCondition[]
   match: 'all' | 'any'
-  onChange: (patch: { conditions?: BranchCondition[]; match?: 'all' | 'any' }) => void
+  onTrue: string | null
+  onFalse: string | null
+  /** Every other step this branch may route to. */
+  targets: { id: string; label: string }[]
+  onChange: (patch: {
+    conditions?: BranchCondition[]
+    match?: 'all' | 'any'
+    onTrue?: string | null
+    onFalse?: string | null
+  }) => void
 }) {
   const update = (index: number, patch: Partial<BranchCondition>) =>
     onChange({
@@ -999,13 +1060,55 @@ function BranchEditor({
       </button>
 
       {/*
-        Routing is edge-wiring, and every edge in this builder goes through
-        lib/flows/builder.ts. Saying which part is still JSON is more useful
-        than the old blanket "branches are edited in the JSON view".
+        ⚠️ ROUTING, AND WHY IT IS A PLAIN SELECT RATHER THAN A CANVAS. A branch
+        has exactly two edges; every other edge in this builder is implicit in
+        the order of the list. Two dropdowns say the same thing a drag-and-drop
+        graph would, and cannot produce an edge pointing at a step that does
+        not exist.
+
+        ⚠️ "End the flow" IS A REAL DESTINATION, not an empty value. `null`
+        means the run finishes on that path, which is the common shape — "only
+        do the rest if this holds". A blank option would read as unset.
       */}
-      <p className="text-xs leading-relaxed text-muted">
-        Which step each path goes to is still set in the JSON editor below.
-      </p>
+      <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
+        <div>
+          <label className="block text-xs font-semibold text-ink" htmlFor="branch-true">
+            If it holds, go to
+          </label>
+          <select
+            id="branch-true"
+            value={onTrue ?? ''}
+            onChange={(event) => onChange({ onTrue: event.target.value || null })}
+            className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+          >
+            <option value="">End the flow</option>
+            {targets.map((target) => (
+              <option key={target.id} value={target.id}>
+                {target.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-ink" htmlFor="branch-false">
+            Otherwise, go to
+          </label>
+          <select
+            id="branch-false"
+            value={onFalse ?? ''}
+            onChange={(event) => onChange({ onFalse: event.target.value || null })}
+            className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+          >
+            <option value="">End the flow</option>
+            {targets.map((target) => (
+              <option key={target.id} value={target.id}>
+                {target.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1100,12 +1203,14 @@ function StepEditor({
   members,
   campaigns,
   mailboxes,
+  targets,
   onChange,
 }: {
   step: FlowDefinition['steps'][number]
   members: FlowMember[]
   campaigns: FlowCampaign[]
   mailboxes: FlowMailbox[]
+  targets: { id: string; label: string }[]
   onChange: (patch: Record<string, unknown>) => void
 }) {
   if (step.type === 'WAIT') {
@@ -1130,6 +1235,11 @@ function StepEditor({
       <BranchEditor
         conditions={step.conditions}
         match={step.match}
+        onTrue={step.onTrue}
+        onFalse={step.onFalse}
+        /* Itself excluded: a branch routing to itself is an infinite loop the
+           validator rejects, so it must not be offerable. */
+        targets={targets.filter((t) => t.id !== step.id)}
         onChange={(patch) => onChange(patch as Record<string, unknown>)}
       />
     )

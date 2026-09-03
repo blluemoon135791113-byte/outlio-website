@@ -109,10 +109,71 @@ describe('the branch editor offers only facts that exist', () => {
     expect(BUILDER).toContain('disabled={conditions.length <= 1}')
   })
 
-  it('says plainly which part is still JSON', () => {
-    // Replaces the old blanket "branches are edited in the JSON view".
+  it('no longer sends anyone to the JSON view', () => {
+    /*
+     * This assertion has moved twice, and the movement is the point. First the
+     * whole branch was "edited in the JSON view". Then conditions arrived and
+     * only ROUTING was. Now routing has pickers too, so neither sentence
+     * should survive — a stale pointer to a JSON escape hatch is worse than
+     * none, because it sends someone to hand-edit something the UI can do.
+     */
     expect(BUILDER).not.toContain('Branch conditions are edited in the JSON view')
-    expect(BUILDER).toContain('Which step each path goes to is still set in the JSON editor')
+    expect(BUILDER).not.toContain('Which step each path goes to is still set in the JSON editor')
+  })
+})
+
+describe('branch routing', () => {
+  it('routes both paths from the builder', () => {
+    expect(BUILDER).toContain('branch-true')
+    expect(BUILDER).toContain('branch-false')
+    expect(BUILDER).toContain('onChange({ onTrue: event.target.value || null })')
+    expect(BUILDER).toContain('onChange({ onFalse: event.target.value || null })')
+  })
+
+  it('offers "End the flow" as a real destination', () => {
+    /*
+     * `null` means the run finishes on that path — the common shape, "only do
+     * the rest if this holds". A blank option would read as unset rather than
+     * as the deliberate choice it is.
+     */
+    expect(BUILDER).toContain('End the flow')
+  })
+
+  it('never offers the branch itself as a target', () => {
+    // A branch routing to itself is a cycle with no wait, which the validator
+    // rejects — so it must not be selectable in the first place.
+    expect(BUILDER).toContain('targets.filter((t) => t.id !== step.id)')
+  })
+
+  it('can add a branch at all', () => {
+    /*
+     * ⚠️ THERE WAS NO WAY TO. `addStep` made only ACTIONs and `addWait` only
+     * WAITs, so a condition could reach a flow only through the JSON editor —
+     * which meant the condition editor had nothing to edit for anyone who had
+     * not hand-written one.
+     */
+    expect(BUILDER).toContain('const addBranch =')
+    expect(BUILDER).toContain('onBranch={() => addBranch(')
+    expect(BUILDER).toContain('Only if…')
+  })
+
+  it('creates it with a condition already present', () => {
+    // The schema requires `min(1)`; an empty branch is unpublishable the
+    // instant it is created.
+    const add = BUILDER.slice(BUILDER.indexOf('const addBranch ='), BUILDER.indexOf('const addWait ='))
+    expect(add).toContain("conditions: [{ field: 'contact.job_title', operator: 'is_not_empty' }]")
+  })
+
+  it('inserting a branch wires onTrue, never next', () => {
+    /*
+     * ⚠️ A BRANCH HAS NO `next`. Writing one produces an object the schema
+     * strips on validate, so the rest of the flow silently detaches: the
+     * branch points nowhere and every step after it becomes unreachable.
+     */
+    const builderLib = read('lib/flows/builder.ts')
+    expect(builderLib).toContain('const pointAt =')
+    expect(builderLib).toContain("candidate.type === 'BRANCH'")
+    expect(builderLib).toContain('onTrue: successor, onFalse: null')
   })
 })
 
@@ -166,10 +227,24 @@ describe('both editors patch rather than replace', () => {
     expect(BUILDER).toContain('onChange({ ...config, field: event.target.value })')
   })
 
-  it('the branch editor patches conditions and match independently', () => {
-    // `onChange({ match })` must not wipe conditions, and vice versa.
-    expect(BUILDER).toContain('onChange: (patch: { conditions?: BranchCondition[]; match?:')
+  it('the branch editor patches each part independently', () => {
+    /*
+     * ⚠️ EVERY FIELD IS OPTIONAL IN THE PATCH TYPE, and that is what makes
+     * `onChange({ match })` safe: `updateStep` merges, so sending only the
+     * changed key leaves conditions and both routes alone. A patch type with
+     * required fields would force every caller to resend everything, and the
+     * first one to forget would silently clear a route.
+     */
+    const patchType = BUILDER.slice(
+      BUILDER.indexOf('onChange: (patch: {'),
+      BUILDER.indexOf('}) => void', BUILDER.indexOf('onChange: (patch: {')),
+    )
+    for (const key of ['conditions?', 'match?', 'onTrue?', 'onFalse?']) {
+      expect(patchType, `${key} is not optional in the branch patch`).toContain(key)
+    }
+
     expect(BUILDER).toContain('onChange({ match:')
-    expect(BUILDER).toContain('onChange({\n      conditions:')
+    expect(BUILDER).toContain('onChange({ onTrue:')
+    expect(BUILDER).toContain('onChange({ onFalse:')
   })
 })

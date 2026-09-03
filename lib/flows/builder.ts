@@ -145,9 +145,22 @@ export function insertAfter(
 ): FlowDefinition {
   const steps = definition.steps.map((s) => ({ ...s }))
 
+  /*
+   * ⚠️ A BRANCH HAS NO `next` — IT HAS TWO EDGES. Writing `next` onto one
+   * produces an object the schema strips on validate, so the rest of the flow
+   * would silently detach: the branch would point nowhere and every step after
+   * it become unreachable. The successor goes on `onTrue` instead — "the rest
+   * of the flow happens if this holds" — and `onFalse` stays null, which reads
+   * on the canvas as the no-path ending.
+   */
+  const pointAt = (candidate: FlowStep, successor: string | null): FlowStep =>
+    candidate.type === 'BRANCH'
+      ? ({ ...candidate, onTrue: successor, onFalse: null } as FlowStep)
+      : ({ ...candidate, next: successor } as FlowStep)
+
   // Inserting at the top: the new step becomes the entry and points at the old.
   if (afterId === null) {
-    const inserted = { ...step, next: definition.entryStepId } as FlowStep
+    const inserted = pointAt(step, definition.entryStepId)
     return { ...definition, entryStepId: step.id, steps: [inserted, ...steps] }
   }
 
@@ -157,12 +170,12 @@ export function insertAfter(
   if (previous.type === 'BRANCH') {
     // A branch has two edges; appending after it goes down the "yes" side,
     // which is the one a person means by "then".
-    const inserted = { ...step, next: previous.onTrue } as FlowStep
+    const inserted = pointAt(step, previous.onTrue)
     previous.onTrue = step.id
     return { ...definition, steps: [...steps, inserted] }
   }
 
-  const inserted = { ...step, next: previous.next } as FlowStep
+  const inserted = pointAt(step, previous.next)
   previous.next = step.id
   return { ...definition, steps: [...steps, inserted] }
 }
