@@ -99,6 +99,43 @@ export const ACTION_TYPES = {
 
 export type ActionType = keyof typeof ACTION_TYPES
 
+/**
+ * Actions that have a handler behind them.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THE CATALOGUE PROMISED 29 ACTIONS. 22 EXIST.                            ║
+ * ║                                                                           ║
+ * ║  ADD_TO_LIST, CREATE_OPPORTUNITY, DATE_CALC, MOVE_STAGE,                 ║
+ * ║  REMOVE_FROM_LIST, TEXT_TRANSFORM and WEBHOOK are in `ACTION_TYPES`,      ║
+ * ║  offered by the builder's step picker, accepted by the validator and      ║
+ * ║  publishable — and `registerAllActions` registers no handler for any of   ║
+ * ║  them. A flow using one publishes cleanly and dies on its first contact   ║
+ * ║  with "the X action is not available yet".                                ║
+ * ║                                                                           ║
+ * ║  ⚠️ THIS FILE IS THE SINGLE PLACE THAT SAYS WHICH IS WHICH, and           ║
+ * ║  `tests/unit/flow-action-coverage.test.ts` compares it against the real   ║
+ * ║  `registerAction` calls — so implementing one, or adding a new unbacked   ║
+ * ║  action, forces a decision here rather than quietly widening a promise.   ║
+ * ║                                                                           ║
+ * ║  Same reasoning as `lib/integrations/catalogue.ts`: an option that fails  ║
+ * ║  on click is worse than an absent one, because the person retries.        ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export const UNIMPLEMENTED_ACTIONS: readonly ActionType[] = [
+  'ADD_TO_LIST',
+  'CREATE_OPPORTUNITY',
+  'DATE_CALC',
+  'MOVE_STAGE',
+  'REMOVE_FROM_LIST',
+  'TEXT_TRANSFORM',
+  'WEBHOOK',
+]
+
+/** Whether a flow may actually use this action today. */
+export function actionIsImplemented(type: ActionType): boolean {
+  return !UNIMPLEMENTED_ACTIONS.includes(type)
+}
+
 export function actionCostsCredits(type: ActionType): boolean {
   return ACTION_TYPES[type].costsCredits
 }

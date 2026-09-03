@@ -183,7 +183,7 @@ export function FastSpringPricing({
 
           <div className={styles.pricingStrip}>
             <div className={styles.plansTrack}>
-              {tiers.map((tier, index) => {
+              {tiers.map((tier) => {
                 const path = tier.productPath[billing]
                 const formattedTotal = prices[path]
                 const usage = PLAN_USAGE[tier.planKey]
@@ -193,16 +193,12 @@ export function FastSpringPricing({
                     key={tier.name}
                     className={`${styles.planPanel} ${tier.featured ? styles.featuredPlan : ''}`}
                   >
-                    {tier.featured ? (
-                      <span className={styles.badge}>
-                        Most popular
-                      </span>
-                    ) : null}
-
                     <div className={styles.planIntro}>
                       <header>
                         <div className={styles.planTopline}>
-                          <p className={styles.planIndex}>0{index + 1}</p>
+                          {tier.featured ? (
+                            <span className={styles.badge}>Most popular</span>
+                          ) : null}
                           <span className={styles.drawerHint} aria-hidden>→</span>
                         </div>
                         <h2 className={styles.planName}>{tier.name}</h2>

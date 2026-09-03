@@ -18,6 +18,7 @@ import {
   ACTION_TYPES,
   FlowDefinitionError,
   TRIGGER_TYPES,
+  actionIsImplemented,
   validateFlowDefinition,
   type ActionType,
   type FlowDefinition,
@@ -34,11 +35,17 @@ const TASK_FOR: Partial<Record<ActionType, HubbleTask>> = {
   HUBBLE_ACCOUNT_SUMMARY: 'account_summary',
 }
 
+/*
+ * ⚠️ ONLY ACTIONS THAT HAVE A HANDLER ARE OFFERED. Seven entries in
+ * `ACTION_TYPES` have no runner registered — a flow using one publishes
+ * cleanly and dies on its first contact with "not available yet". An option
+ * that fails on click is worse than an absent one, because the person retries.
+ */
 const FREE_ACTIONS = (Object.keys(ACTION_TYPES) as ActionType[]).filter(
-  (a) => !ACTION_TYPES[a].costsCredits,
+  (a) => !ACTION_TYPES[a].costsCredits && actionIsImplemented(a),
 )
 const AI_ACTIONS = (Object.keys(ACTION_TYPES) as ActionType[]).filter(
-  (a) => ACTION_TYPES[a].costsCredits,
+  (a) => ACTION_TYPES[a].costsCredits && actionIsImplemented(a),
 )
 
 /**

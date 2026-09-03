@@ -606,6 +606,13 @@
     border: 1px solid rgba(81, 6, 0, 0.12);
   }
 
+  .planPanel:nth-child(1),
+  .planPanel:nth-child(2),
+  .planPanel:nth-child(3) {
+    right: auto;
+    left: auto;
+  }
+
   .planIncludes {
     position: relative;
     inset: auto;

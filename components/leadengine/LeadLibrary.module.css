@@ -40,16 +40,6 @@
   text-align: center;
 }
 
-.eyebrow {
-  margin: 0 0 1rem;
-  color: var(--dune-light);
-  font-family: var(--font-body);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-}
-
 .heading {
   margin: 0 auto;
   max-width: 62rem;
