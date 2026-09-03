@@ -11,7 +11,7 @@
  */
 import { revalidatePath } from 'next/cache'
 
-import { FlowDefinitionError, validateFlowDefinition } from '@/lib/flows/definition'
+import { FlowDefinitionError, validateFlowDefinition, publishProblems } from '@/lib/flows/definition'
 import { startRun } from '@/lib/flows/engine'
 import { simulateFlow, type SimulationResult } from '@/lib/flows/simulate'
 import { flowTemplate } from '@/lib/flows/templates'
@@ -121,8 +121,9 @@ export async function publishFlow(
     return { ok: false, error: 'That is not valid JSON.' }
   }
 
+  let definition
   try {
-    validateFlowDefinition(parsed)
+    definition = validateFlowDefinition(parsed)
   } catch (error) {
     if (error instanceof FlowDefinitionError) {
       // Every problem at once — one round trip should tell the author
@@ -130,6 +131,23 @@ export async function publishFlow(
       return { ok: false, error: error.problems.join(' ') }
     }
     return { ok: false, error: 'That flow definition is not valid.' }
+  }
+
+  /*
+   * ⚠️ REFUSED HERE, NOT DISCOVERED IN A FAILED RUN.
+   *
+   * A step whose required config is blank can only ever fail. Observed in
+   * production: an ASSIGN_OWNER step with `userId: ""` published cleanly, ran
+   * on a real contact and died at step one — and the only trace was a failed
+   * run nobody was watching, so the flow looked like it was working.
+   *
+   * Deliberately NOT part of `validateFlowDefinition`: that also parses
+   * definitions already stored, and tightening it would retroactively break
+   * flows published before this check existed.
+   */
+  const blockers = publishProblems(definition)
+  if (blockers.length > 0) {
+    return { ok: false, error: blockers.join(' ') }
   }
 
   const { data: version, error } = await createAdminClient().rpc('flow_publish', {

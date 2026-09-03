@@ -582,9 +582,11 @@
 .crmTable {
   position: absolute;
   z-index: 5;
+  top: 43cqh;
   right: 2.5cqw;
   bottom: 2.5cqh;
   left: 2.5cqw;
+  overflow: hidden;
   padding: 2cqh 2cqw 2.2cqh;
   border: 1px solid rgba(103, 69, 18, 0.17);
   border-radius: 1.7cqw;
@@ -937,20 +939,52 @@
   }
 
   .crmTable {
+    top: 42cqh;
     right: 1.8cqw;
     bottom: 1.8cqh;
     left: 1.8cqw;
     padding-inline: 1.5cqw;
   }
 
-  .crmColumns,
-  .crmRow {
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.56fr) minmax(0, 0.86fr) minmax(0, 1.15fr);
+  .crmColumns {
+    display: none;
   }
 
-  .crmColumns span:nth-child(3),
+  .crmRows {
+    margin-top: 1.4cqh;
+  }
+
+  .crmRow {
+    min-height: 10.6cqh;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) auto;
+    grid-template-areas:
+      'member member status'
+      'role company contact';
+    gap: 0.65cqh 1.1cqw;
+    align-items: center;
+    padding-block: 1cqh;
+  }
+
+  .crmMember {
+    grid-area: member;
+  }
+
+  .crmStatus {
+    grid-area: status;
+  }
+
   .crmRole {
-    display: none;
+    grid-area: role;
+  }
+
+  .crmCompany {
+    min-width: 0;
+    grid-area: company;
+  }
+
+  .crmContact {
+    min-width: 0;
+    grid-area: contact;
   }
 }
 

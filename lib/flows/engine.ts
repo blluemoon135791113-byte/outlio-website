@@ -472,13 +472,89 @@ export async function gatherFacts(
 }
 
 /** Runs that are due to wake up. */
-export async function claimWaitingRuns(limit = 20): Promise<{ id: string; workspaceId: string }[]> {
-  const { data } = await createAdminClient()
-    .from('flow_runs')
-    .select('id, workspace_id')
-    .eq('status', 'waiting')
-    .lte('resume_at', new Date().toISOString())
-    .limit(limit)
+/**
+ * ⚠️ A RUN IS ONLY RE-CLAIMED AFTER THIS LONG. `flow_runs` has no
+ * `claimed_by` column, so the claim below is a conditional UPDATE on
+ * `updated_at`: whoever bumps it first owns the run, and everyone else's WHERE
+ * clause stops matching. The lease is what stops a run that is CURRENTLY being
+ * advanced from being picked up by an overlapping tick and executed twice —
+ * which for a SEND step means the same person is emailed twice.
+ */
+const RUN_LEASE_MS = 90_000
 
-  return (data ?? []).map((r) => ({ id: r.id, workspaceId: r.workspace_id }))
+/**
+ * Runs the tick should advance.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THIS USED TO SELECT ONLY `waiting`, AND THAT HUNG EVERY TRIGGERED FLOW. ║
+ * ║                                                                           ║
+ * ║  `startRun` creates a run with `status: 'running'`, `current_step` set to ║
+ * ║  the first step and `resume_at: null` — it does NOT advance it. Nothing   ║
+ * ║  else calls `advanceRun`; the tick is its only caller. So a run created   ║
+ * ║  by a real trigger matched neither `status = 'waiting'` nor               ║
+ * ║  `resume_at <= now()`, and sat at step one forever.                       ║
+ * ║                                                                           ║
+ * ║  Reproduced on production: publishing a flow and creating a contact       ║
+ * ║  fired `contact_created` and wrote a run — which then never moved.        ║
+ * ║  Across every workspace: 2 stuck at `running`, and ZERO `waiting`, so the ║
+ * ║  query that only looked for `waiting` had never returned a single row.    ║
+ * ║                                                                           ║
+ * ║  ⚠️ `advanceRun` ALREADY ACCEPTED BOTH STATES — it guards on              ║
+ * ║  `running || waiting`. Only the claim was too narrow. The engine was      ║
+ * ║  right; the thing that feeds it was not.                                  ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function claimWaitingRuns(limit = 20): Promise<{ id: string; workspaceId: string }[]> {
+  const db = createAdminClient()
+  const now = new Date()
+  const leaseCutoff = new Date(now.getTime() - RUN_LEASE_MS).toISOString()
+
+  /*
+   * Parked at a WAIT step and now due, or started by a trigger and never
+   * advanced. Both are read first and CLAIMED second, because PostgREST cannot
+   * express "update the oldest N rows" in one statement.
+   */
+  const [parked, started] = await Promise.all([
+    db
+      .from('flow_runs')
+      .select('id')
+      .eq('status', 'waiting')
+      .lte('resume_at', now.toISOString())
+      .order('resume_at', { ascending: true })
+      .limit(limit),
+    db
+      .from('flow_runs')
+      .select('id')
+      .eq('status', 'running')
+      .lt('updated_at', leaseCutoff)
+      .order('created_at', { ascending: true })
+      .limit(limit),
+  ])
+
+  const candidates = [
+    ...(parked.data ?? []).map((r) => r.id),
+    ...(started.data ?? []).map((r) => r.id),
+  ].slice(0, limit)
+
+  if (candidates.length === 0) return []
+
+  /*
+   * ⚠️ THE CLAIM IS THE UPDATE, NOT THE SELECT.
+   *
+   * `UPDATE … WHERE updated_at < cutoff RETURNING` is atomic per row: two
+   * ticks that both read the same candidate will both attempt this, and only
+   * the first one's WHERE still matches — the second gets zero rows back and
+   * never touches the run. Selecting and then advancing without this would let
+   * overlapping ticks execute the same SEND step twice.
+   *
+   * The waiting rows are re-checked on `resume_at` for the same reason.
+   */
+  const { data: claimed } = await db
+    .from('flow_runs')
+    .update({ updated_at: now.toISOString() })
+    .in('id', candidates)
+    .lt('updated_at', leaseCutoff)
+    .select('id, workspace_id')
+
+  return (claimed ?? []).map((r) => ({ id: r.id, workspaceId: r.workspace_id }))
 }

@@ -281,6 +281,85 @@ export function validateFlowDefinition(input: unknown): FlowDefinition {
 }
 
 /**
+ * Problems that should stop a PUBLISH but must never stop a parse.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ SEPARATE FROM `validateFlowDefinition`, AND THAT SEPARATION IS THE    ║
+ * ║  WHOLE POINT.                                                             ║
+ * ║                                                                           ║
+ * ║  The first version of this check lived inside `validateFlowDefinition`,   ║
+ * ║  which also parses definitions that are ALREADY STORED — `advanceRun`     ║
+ * ║  calls it on every run to read the pinned version. Tightening the parser  ║
+ * ║  therefore made previously-valid published flows fail to load, and broke  ║
+ * ║  22 tests that build minimal fixtures. Retroactively invalidating stored  ║
+ * ║  data is a migration, not a validation.                                   ║
+ * ║                                                                           ║
+ * ║  So this runs at the moment of publishing, where refusing is cheap and    ║
+ * ║  the author is present to fix it.                                         ║
+ * ║                                                                           ║
+ * ║  WHY IT EXISTS: observed in production, a published flow whose            ║
+ * ║  ASSIGN_OWNER step had `userId: ""`. It published, triggered on a real    ║
+ * ║  contact, and failed at step one with "this step has no person configured ║
+ * ║  to assign to" — a correct message nobody was going to read, because the  ║
+ * ║  only place it appeared was a failed run.                                 ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Returns the problems; the caller decides whether to refuse or warn.
+ */
+export function publishProblems(definition: FlowDefinition): string[] {
+  const problems: string[] = []
+
+  for (const step of definition.steps) {
+    if (step.type !== 'ACTION') continue
+
+    const required = REQUIRED_ACTION_CONFIG[step.action]
+    if (!required) continue
+
+    for (const key of required) {
+      const value = (step.config as Record<string, unknown>)[key]
+      const missing =
+        value === undefined ||
+        value === null ||
+        (typeof value === 'string' && value.trim() === '') ||
+        (Array.isArray(value) && value.length === 0)
+
+      if (missing) {
+        const name = step.label?.trim() || step.id
+        problems.push(`“${name}” needs ${key} set before this flow can be published.`)
+      }
+    }
+  }
+
+  return problems
+}
+
+/**
+ * Config keys an action cannot run without.
+ *
+ * ⚠️ EVERY ENTRY MIRRORS A `fail('NO_…')` GUARD IN THE HANDLER, and the key
+ * names are read from those handlers rather than guessed — `ADD_TAG` reads
+ * `config.tag`, not `config.name`, so validating "name" here would block a
+ * correct flow while still letting the broken one through.
+ *
+ * ⚠️ ABSENT MEANS "NO REQUIRED CONFIG", WHICH IS THE SAFE DIRECTION. A missing
+ * entry can only fail to catch a bad publish; a wrong entry would refuse a
+ * good one. `tests/unit/flow-required-config.test.ts` keeps the two in step.
+ */
+const REQUIRED_ACTION_CONFIG: Partial<Record<string, readonly string[]>> = {
+  ASSIGN_OWNER: ['userId'],
+  ROUND_ROBIN: ['userIds'],
+  CREATE_TASK: ['title'],
+  ADD_TAG: ['tag'],
+  REMOVE_TAG: ['tag'],
+  ENROLL_SEQUENCE: ['campaignId'],
+  REMOVE_SEQUENCE: ['campaignId'],
+  PAUSE_SEQUENCE: ['campaignId'],
+  RESUME_SEQUENCE: ['campaignId'],
+  // Both, because `sendEmail` refuses on either being blank.
+  SEND_EMAIL: ['subject', 'body'],
+}
+
+/**
  * Which steps in a definition will charge credits.
  *
  * ⚠️ ANSWERED BEFORE A FLOW RUNS, not after. The brief requires expected
