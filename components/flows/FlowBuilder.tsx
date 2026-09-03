@@ -787,6 +787,313 @@ function SendEmailEditor({
   )
 }
 
+/**
+ * The facts a branch can test, exactly as `gatherFacts` names them.
+ *
+ * ⚠️ THESE KEYS ARE NOT GUESSES. `facts[condition.field]` is a plain lookup, so
+ * a field the fact set does not contain reads as `undefined` — and `undefined`
+ * makes most operators false, sending every contact down the same path
+ * silently. A typo here is a branch that looks configured and never branches.
+ */
+const BRANCH_FIELDS: { key: string; label: string }[] = [
+  { key: 'contact.full_name', label: 'Contact — full name' },
+  { key: 'contact.first_name', label: 'Contact — first name' },
+  { key: 'contact.last_name', label: 'Contact — last name' },
+  { key: 'contact.job_title', label: 'Contact — job title' },
+  { key: 'contact.headline', label: 'Contact — headline' },
+  { key: 'contact.location', label: 'Contact — location' },
+  { key: 'contact.owner_user_id', label: 'Contact — owner' },
+  { key: 'contact.company_id', label: 'Contact — company' },
+]
+
+const BRANCH_OPERATORS: { key: string; label: string }[] = [
+  { key: 'equals', label: 'is exactly' },
+  { key: 'not_equals', label: 'is not' },
+  { key: 'contains', label: 'contains' },
+  { key: 'not_contains', label: 'does not contain' },
+  { key: 'is_empty', label: 'is empty' },
+  { key: 'is_not_empty', label: 'is not empty' },
+  { key: 'greater_than', label: 'is greater than' },
+  { key: 'less_than', label: 'is less than' },
+  { key: 'in', label: 'is one of' },
+  { key: 'not_in', label: 'is none of' },
+]
+
+/** Operators that take no value at all. */
+const VALUELESS = new Set(['is_empty', 'is_not_empty'])
+/** Operators whose value MUST be an array, or they never match. */
+const LIST_OPERATORS = new Set(['in', 'not_in'])
+/** Operators that coerce with `Number()`. */
+const NUMERIC = new Set(['greater_than', 'less_than'])
+
+type BranchCondition = { field: string; operator: string; value?: unknown }
+
+/**
+ * Branch conditions.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ `in` AND `not_in` FAIL SILENTLY UNLESS THE VALUE IS AN ARRAY.        ║
+ * ║                                                                           ║
+ * ║  `evaluateCondition` guards them with `Array.isArray(expected) && …`, so  ║
+ * ║  a string there does not error — it returns FALSE, for every contact,     ║
+ * ║  forever. Typing `founder, ceo` into a JSON box produced exactly that.    ║
+ * ║  This editor stores a real array, which is the whole reason it is worth   ║
+ * ║  more than a textarea.                                                    ║
+ * ║                                                                           ║
+ * ║  ⚠️ `equals` IS STRICT `===`, and every fact is a string or null. So the  ║
+ * ║  value is kept as text for those operators and coerced to a number only   ║
+ * ║  for the two that call `Number()`. Storing 5 where "5" is meant is a      ║
+ * ║  comparison that can never be true.                                       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+function BranchEditor({
+  conditions,
+  match,
+  onChange,
+}: {
+  conditions: BranchCondition[]
+  match: 'all' | 'any'
+  onChange: (patch: { conditions?: BranchCondition[]; match?: 'all' | 'any' }) => void
+}) {
+  const update = (index: number, patch: Partial<BranchCondition>) =>
+    onChange({
+      conditions: conditions.map((c, i) => (i === index ? { ...c, ...patch } : c)),
+    })
+
+  /** Re-shapes the stored value when the operator changes shape. */
+  const changeOperator = (index: number, operator: string) => {
+    const current = conditions[index]!
+    let value: unknown = current.value
+
+    if (VALUELESS.has(operator)) value = undefined
+    else if (LIST_OPERATORS.has(operator)) value = Array.isArray(value) ? value : []
+    else if (Array.isArray(value)) value = value.join(', ')
+
+    update(index, { operator, value })
+  }
+
+  return (
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="branch-match">
+          Take the true path when
+        </label>
+        <select
+          id="branch-match"
+          value={match}
+          onChange={(event) => onChange({ match: event.target.value === 'any' ? 'any' : 'all' })}
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+        >
+          <option value="all">every condition holds</option>
+          <option value="any">any condition holds</option>
+        </select>
+      </div>
+
+      <ul className="space-y-2">
+        {conditions.map((condition, index) => {
+          const valueless = VALUELESS.has(condition.operator)
+          const isList = LIST_OPERATORS.has(condition.operator)
+          const known = BRANCH_FIELDS.some((f) => f.key === condition.field)
+
+          return (
+            <li key={index} className="rounded-[var(--radius-md)] bg-surface-muted p-2.5">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <select
+                  value={condition.field}
+                  aria-label={`Condition ${index + 1} field`}
+                  onChange={(event) => update(index, { field: event.target.value })}
+                  className="min-w-0 rounded-[var(--radius-md)] border border-border bg-surface px-2.5 py-1.5 text-xs text-ink outline-none [color-scheme:light]"
+                >
+                  {BRANCH_FIELDS.map((field) => (
+                    <option key={field.key} value={field.key}>
+                      {field.label}
+                    </option>
+                  ))}
+                  {/* A field from JSON that the fact set no longer has. Kept
+                      visible rather than silently reassigned. */}
+                  {condition.field && !known ? (
+                    <option value={condition.field}>{condition.field} (unknown)</option>
+                  ) : null}
+                </select>
+
+                <select
+                  value={condition.operator}
+                  aria-label={`Condition ${index + 1} operator`}
+                  onChange={(event) => changeOperator(index, event.target.value)}
+                  className="min-w-0 rounded-[var(--radius-md)] border border-border bg-surface px-2.5 py-1.5 text-xs text-ink outline-none [color-scheme:light]"
+                >
+                  {BRANCH_OPERATORS.map((operator) => (
+                    <option key={operator.key} value={operator.key}>
+                      {operator.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {!valueless ? (
+                <input
+                  type={NUMERIC.has(condition.operator) ? 'number' : 'text'}
+                  value={
+                    Array.isArray(condition.value)
+                      ? condition.value.join(', ')
+                      : condition.value === undefined || condition.value === null
+                        ? ''
+                        : String(condition.value)
+                  }
+                  aria-label={`Condition ${index + 1} value`}
+                  placeholder={isList ? 'Founder, CEO, Owner' : 'Founder'}
+                  onChange={(event) => {
+                    const raw = event.target.value
+                    update(index, {
+                      value: isList
+                        ? // Split into a REAL array. A string here never matches.
+                          raw.split(',').map((part) => part.trim()).filter(Boolean)
+                        : NUMERIC.has(condition.operator)
+                          ? Number(raw)
+                          : raw,
+                    })
+                  }}
+                  className="mt-2 w-full rounded-[var(--radius-md)] border border-border bg-surface px-2.5 py-1.5 text-xs text-ink outline-none"
+                />
+              ) : null}
+
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-muted">
+                  {isList ? 'Separate each option with a comma.' : valueless ? 'No value needed.' : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({ conditions: conditions.filter((_, i) => i !== index) })
+                  }
+                  /*
+                   * ⚠️ THE LAST CONDITION CANNOT BE REMOVED. The schema requires
+                   * `min(1)`, so removing it makes the definition invalid and
+                   * the flow unpublishable — a dead end reached by clicking a
+                   * button that looked available.
+                   */
+                  disabled={conditions.length <= 1}
+                  className="rounded-[var(--radius-md)] px-2 py-1 text-[11px] font-medium text-muted transition-colors duration-150 hover:text-danger disabled:opacity-40"
+                >
+                  Remove
+                </button>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+
+      <button
+        type="button"
+        onClick={() =>
+          onChange({
+            conditions: [
+              ...conditions,
+              { field: BRANCH_FIELDS[0]!.key, operator: 'is_not_empty' },
+            ],
+          })
+        }
+        className="rounded-[var(--radius-md)] bg-surface-muted px-3 py-1.5 text-xs font-medium text-ink transition-colors duration-150 hover:opacity-90"
+      >
+        Add a condition
+      </button>
+
+      {/*
+        Routing is edge-wiring, and every edge in this builder goes through
+        lib/flows/builder.ts. Saying which part is still JSON is more useful
+        than the old blanket "branches are edited in the JSON view".
+      */}
+      <p className="text-xs leading-relaxed text-muted">
+        Which step each path goes to is still set in the JSON editor below.
+      </p>
+    </div>
+  )
+}
+
+/** What a flow may write back onto a contact. */
+const UPDATABLE_CONTACT_FIELDS: { key: string; label: string }[] = [
+  { key: 'job_title', label: 'Job title' },
+  { key: 'headline', label: 'Headline' },
+  { key: 'location', label: 'Location' },
+  { key: 'full_name', label: 'Full name' },
+]
+
+/**
+ * Setting a field on the contact.
+ *
+ * ⚠️ THE LIST IS THE HANDLER'S ALLOW-LIST, NOT EVERY COLUMN. `updateField`
+ * refuses anything outside `UPDATABLE_FIELDS` with FIELD_NOT_ALLOWED, so
+ * offering a wider choice here would just move the failure from publish to run.
+ */
+function UpdateFieldEditor({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>
+  onChange: (config: Record<string, unknown>) => void
+}) {
+  const field = typeof config.field === 'string' ? config.field : ''
+  const clearing = config.value === null
+  const value = typeof config.value === 'string' ? config.value : ''
+
+  return (
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="update-field">
+          Field
+        </label>
+        <select
+          id="update-field"
+          value={field}
+          onChange={(event) => onChange({ ...config, field: event.target.value })}
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+        >
+          <option value="">Nothing chosen — this step cannot run</option>
+          {UPDATABLE_CONTACT_FIELDS.map((option) => (
+            <option key={option.key} value={option.key}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="update-value">
+          Set to
+        </label>
+        <input
+          id="update-value"
+          type="text"
+          value={value}
+          disabled={clearing}
+          maxLength={200}
+          placeholder="Qualified"
+          onChange={(event) => onChange({ ...config, value: event.target.value })}
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent disabled:opacity-50"
+        />
+      </div>
+
+      {/*
+        ⚠️ CLEARING IS A REAL CHOICE AND IS NOT THE SAME AS AN EMPTY BOX. The
+        handler accepts `null` to clear and refuses any non-string otherwise, so
+        "" writes an empty string and `null` removes the value. Collapsing the
+        two would make one of them unreachable.
+      */}
+      <label className="flex items-center gap-2 text-sm text-ink">
+        <input
+          type="checkbox"
+          checked={clearing}
+          onChange={(event) =>
+            onChange({ ...config, value: event.target.checked ? null : '' })
+          }
+          className="h-4 w-4"
+        />
+        Clear the field instead
+      </label>
+    </div>
+  )
+}
+
 /** Per-step settings. Deliberately small: config differs by action. */
 function StepEditor({
   step,
@@ -820,12 +1127,11 @@ function StepEditor({
 
   if (step.type === 'BRANCH') {
     return (
-      <div className="mt-3 border-t border-border pt-3">
-        <p className="text-xs text-muted">
-          Branch conditions are edited in the JSON view for now — the builder covers actions and
-          waits.
-        </p>
-      </div>
+      <BranchEditor
+        conditions={step.conditions}
+        match={step.match}
+        onChange={(patch) => onChange(patch as Record<string, unknown>)}
+      />
     )
   }
 
@@ -875,6 +1181,15 @@ function StepEditor({
         campaigns={campaigns}
         value={typeof step.config.campaignId === 'string' ? step.config.campaignId : ''}
         onSelect={(campaignId) => onChange({ config: { ...step.config, campaignId } })}
+      />
+    )
+  }
+
+  if (step.action === 'UPDATE_FIELD') {
+    return (
+      <UpdateFieldEditor
+        config={step.config}
+        onChange={(config) => onChange({ config })}
       />
     )
   }

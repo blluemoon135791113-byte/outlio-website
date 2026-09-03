@@ -398,6 +398,12 @@ const REQUIRED_ACTION_CONFIG: Partial<Record<string, readonly string[]>> = {
   RESUME_SEQUENCE: ['campaignId'],
   // Both, because `sendEmail` refuses on either being blank.
   SEND_EMAIL: ['accountId', 'subject', 'body'],
+  /*
+   * `field` only. `value` may legitimately be null — that is how a flow CLEARS
+   * a field — and the missing-check below treats null as absent, so requiring
+   * it would make clearing unpublishable.
+   */
+  UPDATE_FIELD: ['field'],
 }
 
 /**
