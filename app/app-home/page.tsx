@@ -62,7 +62,7 @@ export default function LeadEnginePage() {
             <ExtractionJourney />
           </div>
 
-          <div className="leadengine-story-panel">
+          <div className="leadengine-story-panel leadengine-story-panel-inner-only">
             <HubbleIntelligence />
           </div>
 

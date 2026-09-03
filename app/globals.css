@@ -257,6 +257,28 @@
   /* Product tokens — see :root above */
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+
+  /* ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  ⚠️ THESE TWO WERE MISSING, AND 190 CLASS USAGES DEPENDED ON THEM.    ║
+     ║                                                                       ║
+     ║  `bg-surface` (108), `border-line` (49), `hover:bg-surface` (28) and   ║
+     ║  `divide-line` (5) are written across 54 files — including every       ║
+     ║  input in the "New deal" and "New pipeline" forms. None of them        ║
+     ║  existed in `@theme`, so Tailwind emitted NOTHING for them.            ║
+     ║                                                                       ║
+     ║  This does not error. `bg-surface` silently left the background        ║
+     ║  transparent; `border-line` left `border` at its `currentColor`        ║
+     ║  default, so a "subtle divider" rendered in the element's TEXT colour; ║
+     ║  `divide-y divide-line` drew dividers the same way. Every one of them  ║
+     ║  looked deliberate in the source and produced the wrong pixel.         ║
+     ║                                                                       ║
+     ║  A missing Tailwind token is invisible to tsc, to ESLint and to the    ║
+     ║  build. Naming them here is the fix; the alternative — rewriting 190   ║
+     ║  usages to `bg-panel` / `border-border` — is a large diff that lands   ║
+     ║  in exactly the same place.                                           ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ */
+  --color-surface: var(--panel);
+  --color-line: var(--border);
   /* Exposed so `border-focus` resolves. The focus ring is deliberately its own
      token and not the accent (see `--focus`), so it needs its own colour
      utility rather than borrowing `border-accent` and re-branding the ring. */
@@ -1860,6 +1882,13 @@ details[open] .faq-mark {
 
 .leadengine-story-panel > section {
   border-radius: inherit;
+}
+
+.leadengine-story-panel-inner-only {
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .leadengine-story-panel-immersive {

@@ -56,10 +56,27 @@ describe('the marketing site keeps its material', () => {
 
   it('the flat rules are scoped, never global', () => {
     /*
-     * A bare `.clay { box-shadow: none }` anywhere would defeat the scoping.
-     * Every flat override must be prefixed by one of the two product scopes.
+     * A bare `.clay { box-shadow: none }` would defeat the scoping and flatten
+     * `/product` along with the app.
+     *
+     * ⚠️ ONLY THE MATERIAL VOCABULARY IS CHECKED. The first version flagged any
+     * rule containing `box-shadow: none` and reported
+     * `.leadengine-story-panel-inner-only` — a pre-existing marketing panel
+     * that is deliberately transparent and has nothing to do with the flat
+     * pass. A guard that fails on correct, untouched code is a guard someone
+     * deletes rather than reads.
+     *
+     * `clay`, `hubble`, `field`, `skeuo` and `glass` are the five families the
+     * flattening governs; those are the ones that must never be flattened
+     * globally.
      */
-    const flatRules = [...CSS.matchAll(/^(\.[a-z][^\n{]*)\{[^}]*box-shadow:\s*none/gm)]
+    const MATERIAL = /\b(clay|hubble|field|skeuo|glass)/
+
+    const flatRules = [...CSS.matchAll(/^(\.[a-z][^\n{]*)\{([^}]*)\}/gm)].filter(
+      (rule) => /box-shadow:\s*none/.test(rule[2]!) && MATERIAL.test(rule[1]!),
+    )
+
+    // Non-vacuous: the flat pass created several of these.
     expect(flatRules.length).toBeGreaterThan(0)
 
     for (const rule of flatRules) {

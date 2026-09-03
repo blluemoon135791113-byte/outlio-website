@@ -3,17 +3,17 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   position: relative;
-  padding: clamp(1.5rem, 2.4vw, 2.4rem);
+  padding: clamp(1.25rem, 2vw, 2rem);
   background: #fff;
   color: #171715;
 }
 
 .layout {
   display: grid;
-  width: min(100%, 82rem);
+  width: min(100%, 88rem);
   margin-inline: auto;
-  grid-template-columns: minmax(18rem, 0.82fr) minmax(29rem, 1fr);
-  gap: clamp(2rem, 3vw, 3.5rem);
+  grid-template-columns: minmax(18rem, 0.68fr) minmax(34rem, 1.32fr);
+  gap: clamp(1.75rem, 2.5vw, 3rem);
   align-items: center;
 }
 
@@ -101,7 +101,7 @@
 
 .animationBox {
   position: relative;
-  width: min(100%, 33rem);
+  width: min(100%, 40rem);
   min-width: 0;
   justify-self: end;
   overflow: hidden;
@@ -126,10 +126,10 @@
 
 .browserWindow {
   position: absolute;
-  top: 4.5%;
-  right: 4.5%;
-  bottom: 10.5%;
-  left: 4.5%;
+  top: 2.25%;
+  right: 2.25%;
+  bottom: 8.5%;
+  left: 2.25%;
   overflow: hidden;
   border: 1px solid rgba(125, 75, 7, 0.16);
   border-radius: clamp(1rem, 2vw, 1.6rem);
@@ -777,7 +777,7 @@
 
 @media (max-width: 70rem) {
   .section { padding: clamp(1.5rem, 2.5vw, 2.25rem); }
-  .layout { grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); gap: clamp(1.8rem, 3vw, 2.75rem); }
+  .layout { grid-template-columns: minmax(0, 0.68fr) minmax(0, 1.32fr); gap: clamp(1.5rem, 2.5vw, 2.25rem); }
   .heading { font-size: clamp(2.25rem, 4.1vw, 3.45rem); }
   .description { font-size: clamp(0.94rem, 1.55vw, 1.1rem); }
 }
@@ -785,16 +785,17 @@
 @media (max-width: 48rem) {
   .layout { grid-template-columns: 1fr; }
   .copy { max-width: 44rem; }
-  .animationBox { width: min(100%, 33rem); justify-self: center; margin-inline: auto; }
+  .animationBox { width: min(100%, 40rem); justify-self: center; margin-inline: auto; }
 }
 
 @media (max-width: 38rem) {
-  .section { padding: 2.8rem 1rem 1rem; }
+  .section { padding: 2.5rem 0.5rem 0.5rem; }
+  .copy { padding-inline: 0.5rem; }
   .featureGlyph { width: 2.7rem; height: 2.7rem; margin-bottom: 1.6rem; }
   .heading { font-size: clamp(2.2rem, 10.5vw, 3rem); }
   .description { font-size: 0.98rem; }
   .animationBox { border-radius: 1.45rem; aspect-ratio: 1 / 1; }
-  .browserWindow { top: 4%; right: 4%; bottom: 10%; left: 4%; }
+  .browserWindow { top: 1.5%; right: 1.5%; bottom: 8%; left: 1.5%; }
   .salesNavHeader nav span:nth-child(n + 3) { display: none; }
   .salesNavBody { grid-template-columns: 22% minmax(0, 1fr); }
   .salesFilters div { padding-inline: 1.2cqw; }

@@ -193,6 +193,19 @@ export default async function ContactsPage({
             </nav>
           ) : null}
 
+          {/*
+            ⚠️ PLAIN LINKS, NOT BUTTONS WITH `onClick`. A download is a
+            navigation to a resource: an anchor gets Cmd-click, middle-click
+            and "Save link as" for free, works with JavaScript disabled, and
+            needs no client component. `download` asks the browser to save
+            rather than navigate.
+
+            Shown to everyone who can read contacts, because the route scopes
+            what comes back by role — a setter's file contains their own
+            contacts. Hiding it would not be the control; the route is.
+          */}
+          <ContactExportLinks />
+
           {can({ role: ctx.role, modules: ctx.modules }, 'crm.contact.create') ? (
             <NewContactButton />
           ) : null}
@@ -244,6 +257,35 @@ export default async function ContactsPage({
         </BulkAssign>
       )}
     </div>
+  )
+}
+
+/**
+ * The two downloads.
+ *
+ * ⚠️ NAMED FOR WHAT THEY ARE FOR, not for their format. "Export CSV" twice
+ * would make the difference invisible at exactly the moment it matters — one
+ * of these files is safe to upload to a mailing tool and the other is not,
+ * because only one excludes people who have unsubscribed.
+ */
+function ContactExportLinks() {
+  const className =
+    'rounded-[var(--radius-md)] border border-border px-2.5 py-1 text-xs font-medium text-muted transition-colors duration-150 hover:border-border-strong hover:text-ink'
+
+  return (
+    <span className="flex items-center gap-1.5">
+      <a href="/crm/contacts/export?kind=crm" download className={className}>
+        Export CSV
+      </a>
+      <a
+        href="/crm/contacts/export?kind=marketing"
+        download
+        className={className}
+        title="Contacts with an email address, excluding anyone who unsubscribed or bounced."
+      >
+        Email list
+      </a>
+    </span>
   )
 }
 
