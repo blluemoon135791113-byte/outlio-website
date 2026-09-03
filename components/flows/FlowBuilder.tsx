@@ -65,9 +65,17 @@ const AI_ACTIONS = (Object.keys(ACTION_TYPES) as ActionType[]).filter(
 export function FlowBuilder({
   flowId,
   initialDefinition,
+  /*
+   * ⚠️ RESOLVED ON THE SERVER, NOT FETCHED HERE. The member list is the same
+   * one the CRM's assign control uses, and reading it server-side keeps a
+   * workspace's roster off any client route — a browser request for "who is in
+   * this workspace" is a question no client should be able to ask directly.
+   */
+  members,
 }: {
   flowId: string
   initialDefinition: FlowDefinition
+  members: FlowMember[]
 }) {
   const [definition, setDefinition] = useState<FlowDefinition>(initialDefinition)
   const [editing, setEditing] = useState<string | null>(null)
@@ -201,6 +209,7 @@ export function FlowBuilder({
             {editing === row.step.id ? (
               <StepEditor
                 step={row.step}
+                members={members}
                 onChange={(patch) => setDefinition(updateStep(definition, row.step.id, patch))}
               />
             ) : null}
@@ -365,12 +374,144 @@ function AddHere({
   )
 }
 
+export type FlowMember = { userId: string; name: string }
+
+/**
+ * Who a step assigns to.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THE FIELD ASKED FOR A UUID AND NOBODY HAS ONE TO HAND.                  ║
+ * ║                                                                           ║
+ * ║  `ASSIGN_OWNER` was configured through the raw JSON box, so filling it in ║
+ * ║  correctly meant already knowing a `auth.users.id`. Observed in           ║
+ * ║  production: a published flow with `userId: ""` — left blank not through  ║
+ * ║  carelessness but because there was no way to answer the question.        ║
+ * ║                                                                           ║
+ * ║  The step then failed at run time with "this step has no person           ║
+ * ║  configured to assign to", visible only inside a failed run. Publishing   ║
+ * ║  now refuses it, but refusing an input nobody can satisfy is only half a  ║
+ * ║  fix — this is the other half.                                            ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+function AssigneePicker({
+  members,
+  value,
+  onSelect,
+}: {
+  members: FlowMember[]
+  value: string
+  onSelect: (userId: string) => void
+}) {
+  /*
+   * ⚠️ A MEMBER WHO HAS LEFT MUST STILL BE VISIBLE. A saved `userId` that is
+   * no longer in the workspace would otherwise vanish from the select, which
+   * silently rewrites the step to whatever happens to be selected instead —
+   * changing an automation nobody touched. It is shown, marked, and can only
+   * be replaced deliberately.
+   */
+  const known = members.some((m) => m.userId === value)
+
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <label className="block text-xs font-semibold text-ink" htmlFor="assign-owner">
+        Assign to
+      </label>
+      <select
+        id="assign-owner"
+        value={value}
+        onChange={(event) => onSelect(event.target.value)}
+        className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+      >
+        {/*
+          Named for what it means rather than left blank. An empty option reads
+          as "not loaded yet"; this reads as the choice it is — and it is the
+          one the publish check refuses.
+        */}
+        <option value="">Nobody yet — this step cannot run</option>
+        {members.map((member) => (
+          <option key={member.userId} value={member.userId}>
+            {member.name}
+          </option>
+        ))}
+        {value && !known ? (
+          <option value={value}>Someone no longer in this workspace</option>
+        ) : null}
+      </select>
+
+      {members.length === 0 ? (
+        <p className="mt-1 text-xs text-warning">
+          This workspace has no members to assign to yet.
+        </p>
+      ) : (
+        <p className="mt-1 text-xs text-muted">
+          The contact that triggered the flow becomes theirs.
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** Who a round-robin step shares work between. */
+function AssigneePoolPicker({
+  members,
+  value,
+  onChange,
+}: {
+  members: FlowMember[]
+  value: string[]
+  onChange: (userIds: string[]) => void
+}) {
+  const toggle = (userId: string) =>
+    onChange(
+      value.includes(userId) ? value.filter((id) => id !== userId) : [...value, userId],
+    )
+
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <span className="block text-xs font-semibold text-ink">Share between</span>
+
+      {members.length === 0 ? (
+        <p className="mt-1.5 text-xs text-warning">
+          This workspace has no members to share between yet.
+        </p>
+      ) : (
+        <ul className="mt-1.5 space-y-1.5">
+          {members.map((member) => (
+            <li key={member.userId}>
+              {/* Label wraps the control, so the name is part of the hit target. */}
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={value.includes(member.userId)}
+                  onChange={() => toggle(member.userId)}
+                  className="h-4 w-4"
+                />
+                {member.name}
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-1.5 text-xs text-muted">
+        {value.length === 0
+          ? 'Nobody selected — this step cannot run.'
+          : `Contacts are dealt out evenly between ${value.length} ${
+              value.length === 1 ? 'person' : 'people'
+            }.`}
+      </p>
+    </div>
+  )
+}
+
 /** Per-step settings. Deliberately small: config differs by action. */
 function StepEditor({
   step,
+  members,
   onChange,
 }: {
   step: FlowDefinition['steps'][number]
+  members: FlowMember[]
   onChange: (patch: Record<string, unknown>) => void
 }) {
   if (step.type === 'WAIT') {
@@ -398,6 +539,36 @@ function StepEditor({
           waits.
         </p>
       </div>
+    )
+  }
+
+  /*
+   * ⚠️ THE PICKERS PATCH ONLY THEIR OWN KEY, never the whole config. Replacing
+   * `config` wholesale would silently drop any other setting the step carries —
+   * and `ASSIGN_OWNER` gaining a second option later would then lose it every
+   * time somebody changed the person.
+   */
+  if (step.action === 'ASSIGN_OWNER') {
+    return (
+      <AssigneePicker
+        members={members}
+        value={typeof step.config.userId === 'string' ? step.config.userId : ''}
+        onSelect={(userId) => onChange({ config: { ...step.config, userId } })}
+      />
+    )
+  }
+
+  if (step.action === 'ROUND_ROBIN') {
+    return (
+      <AssigneePoolPicker
+        members={members}
+        value={
+          Array.isArray(step.config.userIds)
+            ? step.config.userIds.filter((v): v is string => typeof v === 'string')
+            : []
+        }
+        onChange={(userIds) => onChange({ config: { ...step.config, userIds } })}
+      />
     )
   }
 

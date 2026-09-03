@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation'
 
 import { FlowBuilder } from '@/components/flows/FlowBuilder'
 import { FlowEditor } from '@/components/flows/FlowEditor'
+import { listAssignableMembers } from '@/lib/crm/contacts-list'
 import { creditBearingSteps, validateFlowDefinition } from '@/lib/flows/definition'
 import { quoteCredits, type HubbleTask } from '@/lib/hubble/pricing'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -208,6 +209,11 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
           <FlowBuilder
             flowId={id}
             initialDefinition={parsedDefinition ?? validateFlowDefinition(JSON.parse(STARTER_DEFINITION))}
+            /*
+              The same roster the CRM's assign control uses. Resolved here so a
+              workspace's member list never needs a client-reachable route.
+            */
+            members={await listAssignableMembers(ctx.workspace.id)}
           />
           <details className="clay p-4">
             <summary className="cursor-pointer text-xs font-semibold text-muted">
