@@ -122,13 +122,24 @@ export type ActionType = keyof typeof ACTION_TYPES
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 export const UNIMPLEMENTED_ACTIONS: readonly ActionType[] = [
-  'ADD_TO_LIST',
-  'CREATE_OPPORTUNITY',
+  /*
+   * ⚠️ THESE TWO ARE BLOCKED ON A DESIGN DECISION, NOT ON EFFORT.
+   *
+   * `DATE_CALC` and `TEXT_TRANSFORM` COMPUTE a value — and a flow run has
+   * nowhere to put one. `flow_runs` has no variables column, `gatherFacts`
+   * reads only the contact, and even Hubble's `storeAs` writes an activity row
+   * that nothing ever reads back. So a handler could calculate the answer
+   * correctly and then discard it.
+   *
+   * Implementing them means first deciding where a run keeps its working
+   * state, which is a schema change and a new surface in the branch editor —
+   * not a handler. Listing them here is the honest state: offered nowhere,
+   * promised nowhere.
+   *
+   * The other five were implemented on 2026-09-04.
+   */
   'DATE_CALC',
-  'MOVE_STAGE',
-  'REMOVE_FROM_LIST',
   'TEXT_TRANSFORM',
-  'WEBHOOK',
 ]
 
 /** Whether a flow may actually use this action today. */
@@ -482,6 +493,12 @@ const REQUIRED_ACTION_CONFIG: Partial<Record<string, readonly string[]>> = {
    * it would make clearing unpublishable.
    */
   UPDATE_FIELD: ['field'],
+  // Implemented 2026-09-04; each refuses without these at run time.
+  ADD_TO_LIST: ['listId'],
+  REMOVE_FROM_LIST: ['listId'],
+  CREATE_OPPORTUNITY: ['pipelineId', 'title'],
+  MOVE_STAGE: ['stageId'],
+  WEBHOOK: ['url'],
   /*
    * Every AI step needs somebody to bill. Stamped from the publisher in
    * `publishFlow` BEFORE this check runs — listed here so a future publish

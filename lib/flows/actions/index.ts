@@ -13,6 +13,7 @@ import { registerCrmActions } from '@/lib/flows/actions/crm'
 import { registerEmailActions } from '@/lib/flows/actions/email'
 import { registerHubbleActions } from '@/lib/flows/actions/hubble'
 import { registerNotifyAction } from '@/lib/flows/actions/notify'
+import { registerWebhookAction } from '@/lib/flows/actions/webhook'
 
 let registered = false
 
@@ -23,5 +24,6 @@ export function registerAllActions(): void {
   registerEmailActions()
   registerHubbleActions()
   registerNotifyAction()
+  registerWebhookAction()
   registered = true
 }

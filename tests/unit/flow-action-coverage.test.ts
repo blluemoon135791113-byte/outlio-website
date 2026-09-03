@@ -97,18 +97,38 @@ describe('the declared gap matches reality', () => {
     ).toEqual([])
   })
 
-  it('names the seven that were found unbacked', () => {
-    // Documented rather than merely prevented, so the next reader knows this
-    // list came from measurement and not from taste.
-    expect([...UNIMPLEMENTED_ACTIONS].sort()).toEqual([
+  it('names what is still unbacked, and why only these two remain', () => {
+    /*
+     * Seven were found unbacked. Five were implemented on 2026-09-04:
+     * ADD_TO_LIST, REMOVE_FROM_LIST, MOVE_STAGE, CREATE_OPPORTUNITY and
+     * WEBHOOK.
+     *
+     * ⚠️ THE REMAINING TWO ARE BLOCKED ON A DESIGN DECISION, NOT ON EFFORT.
+     * `DATE_CALC` and `TEXT_TRANSFORM` COMPUTE a value, and a flow run has
+     * nowhere to keep one: `flow_runs` has no variables column, `gatherFacts`
+     * reads only the contact, and even Hubble's `storeAs` writes an activity
+     * row nothing reads back. A handler could produce the right answer and
+     * then discard it. Implementing them starts with a schema change.
+     *
+     * Documented rather than merely prevented, so the next reader knows this
+     * list came from measurement and not from taste.
+     */
+    expect([...UNIMPLEMENTED_ACTIONS].sort()).toEqual(['DATE_CALC', 'TEXT_TRANSFORM'])
+  })
+
+  it('the five that were implemented really are registered now', () => {
+    // The other direction of the same claim, read from the source rather than
+    // from the declaration.
+    for (const action of [
       'ADD_TO_LIST',
-      'CREATE_OPPORTUNITY',
-      'DATE_CALC',
-      'MOVE_STAGE',
       'REMOVE_FROM_LIST',
-      'TEXT_TRANSFORM',
+      'MOVE_STAGE',
+      'CREATE_OPPORTUNITY',
       'WEBHOOK',
-    ])
+    ]) {
+      expect(registered.has(action), `${action} has no handler`).toBe(true)
+      expect(actionIsImplemented(action as ActionType)).toBe(true)
+    }
   })
 })
 

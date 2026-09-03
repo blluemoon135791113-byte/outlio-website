@@ -11,6 +11,7 @@ import 'server-only'
  * reach across tenants (CLAUDE.md).
  */
 import { recordActivity } from '@/lib/crm/activities'
+import { createOpportunity, moveStage } from '@/lib/crm/opportunities'
 import { registerAction, type ActionHandler, type ActionResult } from '@/lib/flows/engine'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -25,6 +26,9 @@ const fail = (code: string, message: string, retryable = false): ActionResult =>
   message,
   retryable,
 })
+
+/** Postgres unique-violation. Adding someone already on a list is not an error. */
+const UNIQUE_VIOLATION = '23505'
 
 /** Reads a required string from a step's config. */
 function str(config: Record<string, unknown>, key: string): string | null {
@@ -326,6 +330,205 @@ const dedupeCheck: ActionHandler = async (ctx) => {
   })
 }
 
+
+// ---------------------------------------------------------------------------
+// Lists — R-follow-up
+// ---------------------------------------------------------------------------
+
+/**
+ * ⚠️ THESE FOUR ACTIONS WERE OFFERED AND UNBACKED. `ADD_TO_LIST`,
+ * `REMOVE_FROM_LIST`, `MOVE_STAGE` and `CREATE_OPPORTUNITY` sat in
+ * `ACTION_TYPES`, appeared in the step picker and published cleanly with no
+ * runner registered — so a flow using one died on its first contact with "the
+ * X action is not available yet".
+ */
+const addToList: ActionHandler = async (ctx, config) => {
+  if (!ctx.contactId) return fail('NO_CONTACT', 'This step needs a contact to add.')
+
+  const listId = str(config, 'listId')
+  if (!listId) return fail('NO_LIST', 'This step has no list configured.')
+
+  const db = createAdminClient()
+
+  /*
+   * ⚠️ THE LIST IS VERIFIED TO BE IN THIS WORKSPACE. The id comes from a stored
+   * definition, which is a claim — and the service role bypasses RLS, so
+   * without this a hand-edited flow could write a member row into another
+   * tenant's list.
+   */
+  const { data: list } = await db
+    .from('crm_lists')
+    .select('id')
+    .eq('workspace_id', ctx.workspaceId)
+    .eq('id', listId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (!list) return fail('NO_LIST', 'That list is not in this workspace.')
+
+  const { error } = await db.from('crm_list_members').insert({
+    workspace_id: ctx.workspaceId,
+    list_id: listId,
+    contact_id: ctx.contactId,
+  })
+
+  /*
+   * ⚠️ ALREADY A MEMBER IS SUCCESS, NOT FAILURE. The primary key is
+   * (list_id, contact_id), so a re-run — or a contact who genuinely qualifies
+   * twice — hits a unique violation. The step's intent is "be on this list",
+   * and they are.
+   */
+  if (error && error.code !== UNIQUE_VIOLATION) {
+    return fail('ADD_FAILED', 'Could not add this contact to the list.', true)
+  }
+
+  return ok({ listId, added: error ? false : true })
+}
+
+const removeFromList: ActionHandler = async (ctx, config) => {
+  if (!ctx.contactId) return fail('NO_CONTACT', 'This step needs a contact to remove.')
+
+  const listId = str(config, 'listId')
+  if (!listId) return fail('NO_LIST', 'This step has no list configured.')
+
+  /*
+   * Scoped by workspace as well as by list, for the same reason as above. A
+   * delete that matches nothing is not an error: "not on this list" is the
+   * state the step asks for.
+   */
+  const { error } = await createAdminClient()
+    .from('crm_list_members')
+    .delete()
+    .eq('workspace_id', ctx.workspaceId)
+    .eq('list_id', listId)
+    .eq('contact_id', ctx.contactId)
+
+  if (error) return fail('REMOVE_FAILED', 'Could not remove this contact from the list.', true)
+  return ok({ listId, removed: true })
+}
+
+// ---------------------------------------------------------------------------
+// Deals
+// ---------------------------------------------------------------------------
+
+const createOpportunityAction: ActionHandler = async (ctx, config) => {
+  if (!ctx.contactId) return fail('NO_CONTACT', 'This step needs a contact.')
+
+  const pipelineId = str(config, 'pipelineId')
+  if (!pipelineId) return fail('NO_PIPELINE', 'This step has no pipeline configured.')
+
+  const title = str(config, 'title')
+  if (!title) return fail('NO_TITLE', 'This deal step has no name.')
+
+  const db = createAdminClient()
+
+  const { data: pipeline } = await db
+    .from('crm_pipelines')
+    .select('id')
+    .eq('workspace_id', ctx.workspaceId)
+    .eq('id', pipelineId)
+    .maybeSingle()
+
+  if (!pipeline) return fail('NO_PIPELINE', 'That pipeline is not in this workspace.')
+
+  /*
+   * ⚠️ THE VALUE IS PARSED, NOT TRUSTED, AND BLANK MEANS UNKNOWN. A deal worth
+   * nothing and a deal nobody has valued are different, and every forecast that
+   * sums them would under-report if they were the same (CLAUDE.md rule 4).
+   */
+  const rawValue = config.valueAmount
+  const valueAmount =
+    rawValue === undefined || rawValue === null || rawValue === '' ? null : Number(rawValue)
+
+  if (valueAmount !== null && (!Number.isFinite(valueAmount) || valueAmount < 0)) {
+    return fail('BAD_VALUE', 'The deal value must be a number, or left blank.')
+  }
+
+  // The contact carries its company across, so the deal is credited to both.
+  const { data: contact } = await db
+    .from('crm_contacts')
+    .select('primary_company_id')
+    .eq('workspace_id', ctx.workspaceId)
+    .eq('id', ctx.contactId)
+    .maybeSingle()
+
+  try {
+    const opportunityId = await createOpportunity(ctx.workspaceId, {
+      title,
+      pipelineId,
+      stageId: str(config, 'stageId') ?? undefined,
+      contactId: ctx.contactId,
+      companyId: contact?.primary_company_id ?? null,
+      /*
+       * ⚠️ NO OWNER. A flow runs unattended, so there is no "current user" to
+       * inherit from — and defaulting to the flow's publisher would quietly
+       * hand them every deal the automation creates.
+       */
+      ownerUserId: null,
+      valueAmount,
+    })
+
+    return ok({ opportunityId, title })
+  } catch {
+    return fail('CREATE_FAILED', 'Could not create that deal.', true)
+  }
+}
+
+const moveStageAction: ActionHandler = async (ctx, config) => {
+  if (!ctx.contactId) return fail('NO_CONTACT', 'This step needs a contact.')
+
+  const stageId = str(config, 'stageId')
+  if (!stageId) return fail('NO_STAGE', 'This step has no stage configured.')
+
+  const db = createAdminClient()
+
+  const { data: stage } = await db
+    .from('crm_pipeline_stages')
+    .select('id, pipeline_id')
+    .eq('workspace_id', ctx.workspaceId)
+    .eq('id', stageId)
+    .is('archived_at', null)
+    .maybeSingle()
+
+  if (!stage) return fail('NO_STAGE', 'That stage is not in this workspace.')
+
+  /*
+   * ⚠️ THE OPEN DEAL IN THAT STAGE'S OWN PIPELINE, NEWEST FIRST.
+   *
+   * A contact can have several deals. Moving "their deal" has to mean exactly
+   * one, and moving a CLOSED deal back into an open stage would rewrite
+   * history and the revenue reports that read from it. So: open only, and only
+   * in the pipeline the target stage belongs to — moving a deal into a stage
+   * from a different board is not a move, it is corruption.
+   */
+  const { data: opportunity } = await db
+    .from('crm_opportunities')
+    .select('id, version')
+    .eq('workspace_id', ctx.workspaceId)
+    .eq('contact_id', ctx.contactId)
+    .eq('pipeline_id', stage.pipeline_id)
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!opportunity) {
+    return fail('NO_OPPORTUNITY', 'This contact has no open deal in that pipeline.')
+  }
+
+  try {
+    /*
+     * `moveStage` takes the version it expects and refuses a stale write, so a
+     * person dragging the card at the same moment cannot be silently
+     * overwritten. Retryable: the next tick re-reads the version.
+     */
+    await moveStage(ctx.workspaceId, opportunity.id, stageId, opportunity.version)
+    return ok({ opportunityId: opportunity.id, stageId })
+  } catch {
+    return fail('MOVE_FAILED', 'Could not move that deal. It may have just been moved.', true)
+  }
+}
+
 export function registerCrmActions(): void {
   registerAction('ASSIGN_OWNER', assignOwner)
   registerAction('ROUND_ROBIN', roundRobin)
@@ -335,4 +538,8 @@ export function registerCrmActions(): void {
   registerAction('UPDATE_FIELD', updateField)
   registerAction('CREATE_ACTIVITY', createActivityAction)
   registerAction('DEDUPE_CHECK', dedupeCheck)
+  registerAction('ADD_TO_LIST', addToList)
+  registerAction('REMOVE_FROM_LIST', removeFromList)
+  registerAction('CREATE_OPPORTUNITY', createOpportunityAction)
+  registerAction('MOVE_STAGE', moveStageAction)
 }
