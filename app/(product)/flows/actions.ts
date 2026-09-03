@@ -11,12 +11,19 @@
  */
 import { revalidatePath } from 'next/cache'
 
-import { FlowDefinitionError, validateFlowDefinition, publishProblems } from '@/lib/flows/definition'
+import {
+  FlowDefinitionError,
+  definitionSendsEmail,
+  publishProblems,
+  stampSendAuthority,
+  validateFlowDefinition,
+} from '@/lib/flows/definition'
 import { startRun } from '@/lib/flows/engine'
 import { simulateFlow, type SimulationResult } from '@/lib/flows/simulate'
 import { flowTemplate } from '@/lib/flows/templates'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
+import { can } from '@/lib/workspaces/permissions'
 
 export type ActionState = { ok: true; message: string } | { ok: false; error: string } | null
 
@@ -150,10 +157,50 @@ export async function publishFlow(
     return { ok: false, error: blockers.join(' ') }
   }
 
+  /*
+   * ⚠️ SEND AUTHORITY IS STAMPED HERE, AND IS NOT AN EDITOR FIELD.
+   *
+   * `sendEmail` reads `config.actorAuthorized === true` and the gate fails
+   * closed. Nothing wrote that key anywhere in the product, so every SEND_EMAIL
+   * step refused at condition one with "this flow runs as someone who is not
+   * allowed to send email" — a flow could never send mail at all.
+   *
+   * A checkbox would be self-certification: anyone who can open the builder
+   * could tick it, which is exactly what the gate exists to prevent. Authority
+   * is a fact about the PUBLISHER, so it is read from the permission catalogue
+   * at the moment of publishing — and re-stamped on every publish, so revoking
+   * someone's access takes effect on the next version instead of being frozen
+   * in at version one.
+   */
+  const publisherMaySend = can(
+    { role: ctx.role, modules: ctx.modules },
+    'email.campaign.launch',
+  )
+
+  if (definitionSendsEmail(definition) && !publisherMaySend) {
+    /*
+     * Refused rather than published-and-broken. Publishing it would stamp
+     * `false`, and the flow would then fail on every contact it touched —
+     * the same "publishable but can only fail" shape as a blank assignee.
+     */
+    return {
+      ok: false,
+      error:
+        'This flow sends email, and you do not have permission to launch email. Ask an admin to publish it, or remove the send step.',
+    }
+  }
+
+  const authorized = stampSendAuthority(definition, publisherMaySend)
+
   const { data: version, error } = await createAdminClient().rpc('flow_publish', {
     p_workspace_id: ctx.workspace.id,
     p_flow_id: flowId,
-    p_definition: parsed as never,
+    /*
+     * ⚠️ THE STAMPED DEFINITION, NOT THE RAW ONE. Passing `parsed` here would
+     * store exactly what the browser sent — discarding the authority stamp and
+     * restoring the bug this block exists to fix.
+     */
+    p_definition: authorized as never,
     p_created_by: ctx.userId,
   })
 

@@ -306,6 +306,47 @@ export function validateFlowDefinition(input: unknown): FlowDefinition {
  *
  * Returns the problems; the caller decides whether to refuse or warn.
  */
+/**
+ * Stamps the publisher's send authority onto every SEND_EMAIL step.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ NOTHING SET `actorAuthorized`, SO NO FLOW COULD EVER SEND MAIL.      ║
+ * ║                                                                           ║
+ * ║  `sendEmail` reads `config.actorAuthorized === true` and the gate fails   ║
+ * ║  closed, refusing with "this flow runs as someone who is not allowed to   ║
+ * ║  send email". The key was read in one place, typed in another, and        ║
+ * ║  WRITTEN NOWHERE — so every send step refused at condition one.           ║
+ * ║                                                                           ║
+ * ║  ⚠️ THIS IS SET SERVER-SIDE AND IS DELIBERATELY NOT AN EDITOR FIELD.      ║
+ * ║  A checkbox reading "I am allowed to send" is self-certification: anyone  ║
+ * ║  who can open the builder could tick it, which is precisely the thing the ║
+ * ║  gate exists to prevent. Authority is a fact about the PUBLISHER, checked ║
+ * ║  against the permission catalogue at the moment of publishing, and it is  ║
+ * ║  re-stamped on every publish so revoking someone's access takes effect on ║
+ * ║  the next version rather than being frozen in at version one.             ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export function stampSendAuthority(
+  definition: FlowDefinition,
+  publisherMaySend: boolean,
+): FlowDefinition {
+  return {
+    ...definition,
+    steps: definition.steps.map((step) =>
+      step.type === 'ACTION' && step.action === 'SEND_EMAIL'
+        ? { ...step, config: { ...step.config, actorAuthorized: publisherMaySend } }
+        : step,
+    ),
+  }
+}
+
+/** Whether a definition sends mail at all — so the check is only applied when it matters. */
+export function definitionSendsEmail(definition: FlowDefinition): boolean {
+  return definition.steps.some(
+    (step) => step.type === 'ACTION' && step.action === 'SEND_EMAIL',
+  )
+}
+
 export function publishProblems(definition: FlowDefinition): string[] {
   const problems: string[] = []
 
@@ -356,7 +397,7 @@ const REQUIRED_ACTION_CONFIG: Partial<Record<string, readonly string[]>> = {
   PAUSE_SEQUENCE: ['campaignId'],
   RESUME_SEQUENCE: ['campaignId'],
   // Both, because `sendEmail` refuses on either being blank.
-  SEND_EMAIL: ['subject', 'body'],
+  SEND_EMAIL: ['accountId', 'subject', 'body'],
 }
 
 /**

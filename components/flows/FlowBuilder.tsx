@@ -73,11 +73,13 @@ export function FlowBuilder({
    */
   members,
   campaigns,
+  mailboxes,
 }: {
   flowId: string
   initialDefinition: FlowDefinition
   members: FlowMember[]
   campaigns: FlowCampaign[]
+  mailboxes: FlowMailbox[]
 }) {
   const [definition, setDefinition] = useState<FlowDefinition>(initialDefinition)
   const [editing, setEditing] = useState<string | null>(null)
@@ -213,6 +215,7 @@ export function FlowBuilder({
                 step={row.step}
                 members={members}
                 campaigns={campaigns}
+                mailboxes={mailboxes}
                 onChange={(patch) => setDefinition(updateStep(definition, row.step.id, patch))}
               />
             ) : null}
@@ -657,16 +660,145 @@ function TaskEditor({
   )
 }
 
+export type FlowMailbox = { id: string; label: string; status: string }
+
+/** The merge fields `renderTemplate` understands, as offered to the author. */
+const TEMPLATE_VARIABLES = [
+  'first_name',
+  'last_name',
+  'full_name',
+  'job_title',
+  'company_name',
+  'owner_name',
+] as const
+
+/**
+ * The one step that cannot be taken back.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THERE IS NO "I AM AUTHORISED" CHECKBOX HERE, DELIBERATELY.           ║
+ * ║                                                                           ║
+ * ║  `sendEmail` gates on `config.actorAuthorized`. Exposing that as a field  ║
+ * ║  would be self-certification — anyone who can open the builder could tick ║
+ * ║  it — which is precisely what the gate exists to prevent. It is stamped   ║
+ * ║  server-side from the publisher's own permission, in `publishFlow`.       ║
+ * ║                                                                           ║
+ * ║  ⚠️ A MISSING VARIABLE REFUSES THE SEND RATHER THAN MAILING "Hi ,".       ║
+ * ║  That is `renderTemplate`'s behaviour, and it makes the fallback syntax   ║
+ * ║  the single most useful thing to tell an author — so it is shown next to  ║
+ * ║  the fields rather than buried in documentation.                          ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+function SendEmailEditor({
+  mailboxes,
+  config,
+  onChange,
+}: {
+  mailboxes: FlowMailbox[]
+  config: Record<string, unknown>
+  onChange: (config: Record<string, unknown>) => void
+}) {
+  const accountId = typeof config.accountId === 'string' ? config.accountId : ''
+  const subject = typeof config.subject === 'string' ? config.subject : ''
+  const body = typeof config.body === 'string' ? config.body : ''
+  const known = mailboxes.some((m) => m.id === accountId)
+
+  return (
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="send-mailbox">
+          Send from
+        </label>
+        <select
+          id="send-mailbox"
+          value={accountId}
+          onChange={(event) => onChange({ ...config, accountId: event.target.value })}
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+        >
+          <option value="">No mailbox yet — this step cannot run</option>
+          {mailboxes.map((mailbox) => (
+            <option key={mailbox.id} value={mailbox.id}>
+              {mailbox.label} — {mailbox.status}
+            </option>
+          ))}
+          {accountId && !known ? (
+            <option value={accountId}>A mailbox that no longer exists</option>
+          ) : null}
+        </select>
+        {mailboxes.length === 0 ? (
+          <p className="mt-1 text-xs text-warning">
+            No mailbox is connected. Connect one under Outreach before this step can send.
+          </p>
+        ) : null}
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="send-subject">
+          Subject
+        </label>
+        <input
+          id="send-subject"
+          type="text"
+          value={subject}
+          maxLength={200}
+          placeholder="Quick question about {{company_name|your team}}"
+          onChange={(event) => onChange({ ...config, subject: event.target.value })}
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="send-body">
+          Message
+        </label>
+        <textarea
+          id="send-body"
+          rows={7}
+          value={body}
+          spellCheck
+          placeholder={'Hi {{first_name|there}},\n\n…'}
+          onChange={(event) => onChange({ ...config, body: event.target.value })}
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm leading-relaxed text-ink outline-none focus-visible:border-accent"
+        />
+      </div>
+
+      {/*
+        ⚠️ THE FALLBACK SYNTAX IS THE POINT OF THIS BLOCK. A contact with no
+        first name does not get "Hi ," — the send REFUSES, and the run fails
+        with MISSING_VARIABLES. Someone who never learns `|there` discovers
+        that one failed run at a time.
+      */}
+      <div className="rounded-[var(--radius-md)] bg-surface-muted px-3 py-2">
+        <p className="text-xs font-semibold text-ink">Merge fields</p>
+        <p className="mt-1 font-mono text-[11px] leading-relaxed text-muted">
+          {TEMPLATE_VARIABLES.map((name) => `{{${name}}}`).join('  ')}
+        </p>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted">
+          Give every one a fallback — <code className="font-mono">{'{{first_name|there}}'}</code>.
+          A contact missing the value does not get a blank; the send is refused.
+        </p>
+      </div>
+
+      <p className="text-xs leading-relaxed text-muted">
+        Sends as whoever publishes the flow, and only if they may launch email.
+        Suppressions, daily limits and mailbox health are all checked first.
+      </p>
+    </div>
+  )
+}
+
 /** Per-step settings. Deliberately small: config differs by action. */
 function StepEditor({
   step,
   members,
   campaigns,
+  mailboxes,
   onChange,
 }: {
   step: FlowDefinition['steps'][number]
   members: FlowMember[]
   campaigns: FlowCampaign[]
+  mailboxes: FlowMailbox[]
   onChange: (patch: Record<string, unknown>) => void
 }) {
   if (step.type === 'WAIT') {
@@ -743,6 +875,16 @@ function StepEditor({
         campaigns={campaigns}
         value={typeof step.config.campaignId === 'string' ? step.config.campaignId : ''}
         onSelect={(campaignId) => onChange({ config: { ...step.config, campaignId } })}
+      />
+    )
+  }
+
+  if (step.action === 'SEND_EMAIL') {
+    return (
+      <SendEmailEditor
+        mailboxes={mailboxes}
+        config={step.config}
+        onChange={(config) => onChange({ config })}
       />
     )
   }
