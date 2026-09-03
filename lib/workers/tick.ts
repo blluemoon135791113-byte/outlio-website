@@ -32,6 +32,7 @@ import { advanceRun, claimWaitingRuns } from '@/lib/flows/engine'
 import { registerAllActions } from '@/lib/flows/actions'
 import { reapExpiredClaims, runSendWorker } from '@/lib/email/send'
 import { syncWorkspaceReplies } from '@/lib/email/reply-sync'
+import { syncContactEvidenceToCrm } from '@/lib/crm/evidence-bridge'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type TickResult = {
@@ -54,6 +55,13 @@ const LIMITS = {
   webhooksPerTick: 20,
   /** Mailboxes to sync per tick, oldest sync first. */
   mailboxesPerTick: 10,
+  /*
+   * Workspaces whose research evidence is copied into the CRM per tick. Lower
+   * than the others because each one is several batched queries, and this job
+   * is catch-up work with no deadline — a workspace missed on one tick is
+   * picked up on the next.
+   */
+  evidenceWorkspacesPerTick: 5,
 }
 
 /** Runs one job, converting any throw into a recorded failure. */
@@ -166,6 +174,58 @@ export async function runTick(): Promise<TickResult> {
   await runJob(result, 'deliver_webhooks', async () => {
     const outcome = await deliverPendingWebhooks(LIMITS.webhooksPerTick)
     return `${outcome.delivered} delivered, ${outcome.retrying} retrying, ${outcome.exhausted} exhausted`
+  })
+
+  /*
+   * ⚠️ THE JOB THAT MAKES RESEARCH VISIBLE IN THE CRM.
+   *
+   * Measured on production before this existed: 111 `work_email` and
+   * `mobile_phone` evidence rows, and ZERO rows in `crm_contact_emails`. The
+   * enrichment had been working the whole time; nothing carried the result
+   * across, so the contact list showed "No email" for people whose address we
+   * already held and the marketing export produced an empty file.
+   *
+   * Runs LAST because it is the only job here that is pure catch-up: sending,
+   * replies and flows are time-sensitive, and this can safely take whatever is
+   * left of the tick.
+   */
+  await runJob(result, 'sync_contact_evidence', async () => {
+    const db = createAdminClient()
+
+    /*
+     * Workspaces with contacts that CAME FROM an extraction — the only ones
+     * that can have person evidence at all. Ordered by id so the rotation is
+     * deterministic rather than dependent on planner whim.
+     */
+    const { data: candidates } = await db
+      .from('crm_contacts')
+      .select('workspace_id')
+      .not('source_lead_id', 'is', null)
+      .is('deleted_at', null)
+      .order('workspace_id', { ascending: true })
+      .limit(500)
+
+    const workspaces = [...new Set((candidates ?? []).map((c) => c.workspace_id))].slice(
+      0,
+      LIMITS.evidenceWorkspacesPerTick,
+    )
+
+    let emails = 0
+    let phones = 0
+    let failures = 0
+
+    for (const workspaceId of workspaces) {
+      try {
+        const outcome = await syncContactEvidenceToCrm(workspaceId)
+        emails += outcome.emailsAdded
+        phones += outcome.phonesAdded
+      } catch {
+        // One workspace's malformed evidence must not stop the others.
+        failures += 1
+      }
+    }
+
+    return `${workspaces.length} workspace(s), +${emails} emails, +${phones} phones, ${failures} failed`
   })
 
   result.durationMs = Date.now() - began
