@@ -72,10 +72,12 @@ export function FlowBuilder({
    * this workspace" is a question no client should be able to ask directly.
    */
   members,
+  campaigns,
 }: {
   flowId: string
   initialDefinition: FlowDefinition
   members: FlowMember[]
+  campaigns: FlowCampaign[]
 }) {
   const [definition, setDefinition] = useState<FlowDefinition>(initialDefinition)
   const [editing, setEditing] = useState<string | null>(null)
@@ -210,6 +212,7 @@ export function FlowBuilder({
               <StepEditor
                 step={row.step}
                 members={members}
+                campaigns={campaigns}
                 onChange={(patch) => setDefinition(updateStep(definition, row.step.id, patch))}
               />
             ) : null}
@@ -504,14 +507,166 @@ function AssigneePoolPicker({
   )
 }
 
+export type FlowCampaign = { id: string; name: string; status: string; type: string }
+
+/**
+ * Which campaign a sequence step acts on.
+ *
+ * ⚠️ DRAFTS ARE OFFERED, AND THE STATUS IS SHOWN. A flow is usually built
+ * before the campaign it enrols into is launched, so hiding drafts would empty
+ * the picker at exactly the moment it is needed. Naming the status lets someone
+ * point at a draft on purpose without mistaking it for a live one.
+ */
+function CampaignPicker({
+  campaigns,
+  value,
+  onSelect,
+}: {
+  campaigns: FlowCampaign[]
+  value: string
+  onSelect: (campaignId: string) => void
+}) {
+  // Same reasoning as the assignee picker: a campaign that was deleted must
+  // stay visible rather than silently becoming whatever is selected instead.
+  const known = campaigns.some((c) => c.id === value)
+
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <label className="block text-xs font-semibold text-ink" htmlFor="campaign">
+        Campaign
+      </label>
+      <select
+        id="campaign"
+        value={value}
+        onChange={(event) => onSelect(event.target.value)}
+        className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+      >
+        <option value="">No campaign yet — this step cannot run</option>
+        {campaigns.map((campaign) => (
+          <option key={campaign.id} value={campaign.id}>
+            {campaign.name} — {campaign.status}
+          </option>
+        ))}
+        {value && !known ? (
+          <option value={value}>A campaign that no longer exists</option>
+        ) : null}
+      </select>
+
+      {campaigns.length === 0 ? (
+        <p className="mt-1 text-xs text-warning">
+          There are no campaigns yet. Create one under Outreach first.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * A task's title, when it is due, and who it lands on.
+ *
+ * ⚠️ THE TITLE IS THE ONE THAT COULD ONLY EVER FAIL BLANK. `dueInHours` has a
+ * sane default of 24 in the handler and `assignTo` is genuinely optional — an
+ * unassigned task is a real thing — so only the title is treated as required
+ * here, matching `REQUIRED_ACTION_CONFIG`.
+ */
+function TaskEditor({
+  members,
+  config,
+  titleRequired,
+  onChange,
+}: {
+  members: FlowMember[]
+  config: Record<string, unknown>
+  /** `CREATE_EMAIL_TASK` defaults its title; `CREATE_TASK` refuses without one. */
+  titleRequired: boolean
+  onChange: (patch: Record<string, unknown>) => void
+}) {
+  const title = typeof config.title === 'string' ? config.title : ''
+  const assignTo = typeof config.assignTo === 'string' ? config.assignTo : ''
+  const dueInHours = Number(config.dueInHours ?? 24)
+
+  return (
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="task-title">
+          Task title
+        </label>
+        <input
+          id="task-title"
+          type="text"
+          value={title}
+          maxLength={200}
+          placeholder={titleRequired ? 'Research this lead' : 'Send an email'}
+          onChange={(event) => onChange({ ...config, title: event.target.value })}
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent"
+        />
+        {titleRequired && title.trim() === '' ? (
+          <p className="mt-1 text-xs text-warning">
+            Without a title this step cannot run.
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-muted">
+            What the person who picks this up should do.
+          </p>
+        )}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="block text-xs font-semibold text-ink" htmlFor="task-due">
+            Due in (hours)
+          </label>
+          <input
+            id="task-due"
+            type="number"
+            min={1}
+            max={24 * 90}
+            value={Number.isFinite(dueInHours) ? dueInHours : 24}
+            onChange={(event) =>
+              onChange({ ...config, dueInHours: Number(event.target.value) || 24 })
+            }
+            className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-ink" htmlFor="task-assignee">
+            Assign to
+          </label>
+          <select
+            id="task-assignee"
+            value={assignTo}
+            onChange={(event) => onChange({ ...config, assignTo: event.target.value })}
+            className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+          >
+            {/*
+              Genuinely optional, and said so. An unassigned task appears in the
+              workspace's queue rather than nobody's — which is different from
+              the ASSIGN_OWNER step, where blank means the step cannot run.
+            */}
+            <option value="">Nobody in particular</option>
+            {members.map((member) => (
+              <option key={member.userId} value={member.userId}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Per-step settings. Deliberately small: config differs by action. */
 function StepEditor({
   step,
   members,
+  campaigns,
   onChange,
 }: {
   step: FlowDefinition['steps'][number]
   members: FlowMember[]
+  campaigns: FlowCampaign[]
   onChange: (patch: Record<string, unknown>) => void
 }) {
   if (step.type === 'WAIT') {
@@ -568,6 +723,37 @@ function StepEditor({
             : []
         }
         onChange={(userIds) => onChange({ config: { ...step.config, userIds } })}
+      />
+    )
+  }
+
+  /*
+   * All four sequence controls take the same key. Listing them explicitly
+   * rather than matching on a name prefix: a future `SEQUENCE_REPORT` that
+   * takes no campaign would silently inherit a required picker.
+   */
+  if (
+    step.action === 'ENROLL_SEQUENCE' ||
+    step.action === 'REMOVE_SEQUENCE' ||
+    step.action === 'PAUSE_SEQUENCE' ||
+    step.action === 'RESUME_SEQUENCE'
+  ) {
+    return (
+      <CampaignPicker
+        campaigns={campaigns}
+        value={typeof step.config.campaignId === 'string' ? step.config.campaignId : ''}
+        onSelect={(campaignId) => onChange({ config: { ...step.config, campaignId } })}
+      />
+    )
+  }
+
+  if (step.action === 'CREATE_TASK' || step.action === 'CREATE_EMAIL_TASK') {
+    return (
+      <TaskEditor
+        members={members}
+        config={step.config}
+        titleRequired={step.action === 'CREATE_TASK'}
+        onChange={(config) => onChange({ config })}
       />
     )
   }

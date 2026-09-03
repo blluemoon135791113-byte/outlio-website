@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation'
 import { FlowBuilder } from '@/components/flows/FlowBuilder'
 import { FlowEditor } from '@/components/flows/FlowEditor'
 import { listAssignableMembers } from '@/lib/crm/contacts-list'
+import { listSelectableCampaigns } from '@/lib/email/campaign-list'
 import { creditBearingSteps, validateFlowDefinition } from '@/lib/flows/definition'
 import { quoteCredits, type HubbleTask } from '@/lib/hubble/pricing'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -214,6 +215,7 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
               workspace's member list never needs a client-reachable route.
             */
             members={await listAssignableMembers(ctx.workspace.id)}
+            campaigns={await listSelectableCampaigns(ctx.workspace.id)}
           />
           <details className="clay p-4">
             <summary className="cursor-pointer text-xs font-semibold text-muted">

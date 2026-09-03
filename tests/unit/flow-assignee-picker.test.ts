@@ -89,6 +89,94 @@ describe('the picker cannot corrupt the step', () => {
   })
 })
 
+describe('the campaign picker', () => {
+  it('replaces the JSON box for all four sequence controls', () => {
+    // All four read `config.campaignId`; missing one leaves that step as raw
+    // JSON while its neighbours are pickers, which is worse than uniform JSON.
+    for (const action of [
+      'ENROLL_SEQUENCE',
+      'REMOVE_SEQUENCE',
+      'PAUSE_SEQUENCE',
+      'RESUME_SEQUENCE',
+    ]) {
+      expect(BUILDER, `${action} has no picker`).toContain(`step.action === '${action}'`)
+    }
+    expect(BUILDER).toContain('<CampaignPicker')
+  })
+
+  it('is fed by the page, server-side', () => {
+    expect(PAGE).toContain('listSelectableCampaigns(ctx.workspace.id)')
+    expect(PAGE).toContain('campaigns={')
+    expect(BUILDER).toContain('campaigns: FlowCampaign[]')
+  })
+
+  it('offers drafts rather than only live campaigns', () => {
+    /*
+     * ⚠️ A FLOW IS BUILT BEFORE ITS CAMPAIGN LAUNCHES. Filtering to `active`
+     * would empty the picker at precisely the moment it is needed, and look
+     * like the feature is broken.
+     */
+    const lister = read('lib/email/campaign-list.ts')
+    expect(lister).not.toMatch(/\.eq\('status'/)
+    expect(lister).toContain(".is('deleted_at', null)")
+    // The status travels with the name so the choice is informed, not blind.
+    expect(BUILDER).toContain('{campaign.name} — {campaign.status}')
+  })
+
+  it('scopes the query by workspace', () => {
+    // The service role bypasses RLS; a campaign list maps a customer's whole
+    // outbound programme.
+    const lister = read('lib/email/campaign-list.ts')
+    expect(lister).toContain("import 'server-only'")
+    expect(lister).toContain(".eq('workspace_id', workspaceId)")
+  })
+
+  it('patches only its own key', () => {
+    expect(BUILDER).toContain('onChange({ config: { ...step.config, campaignId } })')
+  })
+})
+
+describe('the task editor', () => {
+  it('replaces the JSON box for both task actions', () => {
+    expect(BUILDER).toContain("step.action === 'CREATE_TASK'")
+    expect(BUILDER).toContain("step.action === 'CREATE_EMAIL_TASK'")
+    expect(BUILDER).toContain('<TaskEditor')
+  })
+
+  it('reads the keys the handler reads', () => {
+    const crm = read('lib/flows/actions/crm.ts')
+    expect(crm).toContain("str(config, 'title')")
+    expect(crm).toContain("str(config, 'assignTo')")
+    expect(crm).toContain('config.dueInHours')
+    for (const key of ['config.title', 'config.assignTo', 'config.dueInHours']) {
+      expect(BUILDER, `${key} not read by the editor`).toContain(key)
+    }
+  })
+
+  it('treats only the title as required, matching the handler', () => {
+    /*
+     * ⚠️ `dueInHours` DEFAULTS TO 24 IN THE HANDLER AND `assignTo` IS
+     * GENUINELY OPTIONAL — an unassigned task is a real thing. Marking either
+     * as required here would block a publish the engine would have run
+     * perfectly well.
+     */
+    expect(BUILDER).toContain('titleRequired')
+    expect(BUILDER).toContain("titleRequired={step.action === 'CREATE_TASK'}")
+    expect(BUILDER).toContain('Nobody in particular')
+
+    const definition = read('lib/flows/definition.ts')
+    const table = definition.slice(
+      definition.indexOf('const REQUIRED_ACTION_CONFIG'),
+      definition.indexOf('}', definition.indexOf('const REQUIRED_ACTION_CONFIG')),
+    )
+    expect(table).toContain("CREATE_TASK: ['title']")
+    expect(table).not.toContain('dueInHours')
+    expect(table).not.toContain('assignTo')
+    // CREATE_EMAIL_TASK defaults its title, so it must not be required.
+    expect(table).not.toContain('CREATE_EMAIL_TASK')
+  })
+})
+
 describe('the empty case says so', () => {
   it('names the unset option instead of leaving it blank', () => {
     // An empty option reads as "not loaded yet". This reads as the choice it
