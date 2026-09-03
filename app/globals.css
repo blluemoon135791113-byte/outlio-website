@@ -1891,6 +1891,10 @@ details[open] .faq-mark {
   box-shadow: none;
 }
 
+.leadengine-story-panel-extraction {
+  border-radius: clamp(2.75rem, 5vw, 5.25rem);
+}
+
 .leadengine-story-panel-immersive {
   background: #000100;
 }
@@ -1945,6 +1949,10 @@ details[open] .faq-mark {
   .leadengine-story-panel {
     width: calc(100% - 0.75rem);
     border-radius: 1.5rem;
+  }
+
+  .leadengine-story-panel-extraction {
+    border-radius: 2.25rem;
   }
 
   .leadengine-story-note {

@@ -58,7 +58,7 @@ export default function LeadEnginePage() {
             <CrmEnrichmentExperience />
           </div>
 
-          <div className="leadengine-story-panel">
+          <div className="leadengine-story-panel leadengine-story-panel-extraction">
             <ExtractionJourney />
           </div>
 

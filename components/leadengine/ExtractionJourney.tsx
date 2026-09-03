@@ -1,5 +1,3 @@
-'use client'
-
 import { CALENDLY_URL } from '@/app/lib/constants'
 
 import styles from './ExtractionJourney.module.css'
@@ -15,20 +13,6 @@ const CRM_PROFILES = [
   { initials: 'TB', name: 'Theo Bennett', email: 'theo@lumagrid.example', role: 'Partnerships', phone: '+44 20 5550 0178', company: 'LumaGrid', website: 'lumagrid.example', linkedin: '/in/theo-bennett', status: 'Verified' },
   { initials: 'AS', name: 'Amara Singh', email: 'amara@asterlane.example', role: 'Head of Growth', phone: '+65 6555 0124', company: 'Asterlane', website: 'asterlane.example', linkedin: '/in/amara-singh', status: 'Enriched' },
 ] as const
-
-function CursorIcon() {
-  return (
-    <svg viewBox="0 0 28 34" aria-hidden="true">
-      <path
-        d="M3.3 2.4 24.8 20c1 .82.42 2.45-.87 2.43l-8.18-.07 3.86 7.29-4.1 2.16-3.84-7.26-5.15 6.09c-.84 1-2.5.4-2.48-.9L3.3 2.4Z"
-        fill="#111"
-        stroke="#fff"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 function OutlioMark({ small = false }: { small?: boolean }) {
   return (
@@ -50,8 +34,25 @@ function CrmMark() {
 function FeatureGlyph() {
   return (
     <span className={styles.featureGlyph} aria-hidden="true">
-      <span className={styles.glyphTarget} />
-      <span className={styles.glyphCursor}>◆</span>
+      <svg viewBox="0 0 128 128" role="presentation">
+        <defs>
+          <filter id="extraction-glyph-shadow" x="-35%" y="-30%" width="180%" height="190%">
+            <feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="#8f5a13" floodOpacity=".22" />
+          </filter>
+        </defs>
+        <g className={styles.glyphDepth} transform="translate(0 2)" filter="url(#extraction-glyph-shadow)">
+          <path d="M64 48V11A37 37 0 0 0 31.6 30.1Z" fill="#e7b0c0" />
+          <path d="M64 48 31.6 30.1A37 37 0 0 0 28.7 72.6Z" fill="#efb662" />
+          <path d="M64 48 28.7 72.6A61 61 0 0 0 100.5 105Z" fill="#a7d3d0" />
+          <path d="M64 48 88.3 24.9A33.5 33.5 0 0 0 64 14.5Z" fill="#bfd99b" />
+          <path d="M64 48 88.3 24.9A33.5 33.5 0 0 1 91.9 72.8Z" fill="#e88a91" />
+        </g>
+        <g className={styles.glyphLines}>
+          <path d="M64 48V11M64 48 31.6 30.1M64 48 28.7 72.6M64 48 100.5 105M64 48 91.9 72.8M64 48 88.3 24.9" />
+          <circle cx="64" cy="48" r="37" />
+          <circle cx="64" cy="48" r="24" />
+        </g>
+      </svg>
     </span>
   )
 }
@@ -79,7 +80,7 @@ export function ExtractionJourney() {
         <div
           className={styles.animationBox}
           role="img"
-          aria-label="Short animated demonstration of a synthetic Sales Navigator search being extracted through the Outlio extension into a compact enriched CRM table"
+          aria-label="Static Outlio workflow showing a Sales Navigator search, the open Outlio browser extension, and three complete CRM contact records"
         >
           <div className={styles.browserWindow} aria-hidden="true">
             <div className={styles.browserBar}>
@@ -92,7 +93,7 @@ export function ExtractionJourney() {
               <header className={styles.salesNavHeader}>
                 <span className={styles.linkedinLogo}>in</span>
                 <strong>Sales Navigator</strong>
-                <nav><span>Home</span><span>Accounts</span><span>Leads</span><span>Messaging</span></nav>
+                <nav><span>Home</span><span>Accounts</span><span>Leads</span></nav>
               </header>
               <div className={styles.salesNavTabs}>
                 <strong>Lead</strong><span>Account</span><b>6M+ results</b>
@@ -114,7 +115,6 @@ export function ExtractionJourney() {
                         <strong>{profile.name} <i>· 2nd</i></strong>
                         <b>{profile.role} · {profile.company}</b>
                         <small>Greater San Francisco Bay Area</small>
-                        <em>1 mutual connection&nbsp;&nbsp; · &nbsp;&nbsp;2 recent posts</em>
                       </span>
                       <button type="button" tabIndex={-1}>Save</button>
                     </article>
@@ -126,58 +126,31 @@ export function ExtractionJourney() {
             <div className={styles.extensionPanel}>
               <div className={styles.extensionHeading}>
                 <OutlioMark small />
-                <span><strong>Outlio</strong><small>Lead Engine</small></span>
+                <span><strong>Outlio</strong><small>Lead Engine extension</small></span>
                 <b>×</b>
               </div>
               <div className={styles.extensionContent}>
                 <span className={styles.detected}>Search detected</span>
                 <strong>3 profiles ready</strong>
-                <small>Duplicates are removed before enrichment.</small>
-                <button type="button" tabIndex={-1} className={styles.extractButton}>
-                  Extract profiles <span>→</span>
-                </button>
-                <div className={styles.progress}><span /></div>
-                <p>Enriching contacts…</p>
+                <small>Duplicates removed · contacts verified</small>
+                <span className={styles.extractButton}>Extract to CRM <b>→</b></span>
               </div>
-            </div>
-
-            <div className={styles.syncPanel}>
-              <header>
-                <span className={styles.syncMark}><OutlioMark small /></span>
-                <span><strong>Preparing CRM records</strong><small>Field mapping and verification</small></span>
-                <b>3 leads</b>
-              </header>
-              <ol>
-                <li><span>1</span><p><strong>Capture</strong><small>3 visible profiles collected</small></p><b>✓</b></li>
-                <li><span>2</span><p><strong>Clean</strong><small>Duplicates checked across prior lists</small></p><b>✓</b></li>
-                <li><span>3</span><p><strong>Enrich</strong><small>Email, phone and LinkedIn verified</small></p><b>✓</b></li>
-                <li><span>4</span><p><strong>Map to CRM</strong><small>Company, website, role and source retained</small></p><b>✓</b></li>
-              </ol>
-              <footer><span>Destination</span><strong>CRM · Contacts</strong><i>Syncing →</i></footer>
             </div>
 
             <div className={styles.crmTable}>
               <header className={styles.crmHeader}>
                 <div className={styles.crmTitle}>
                   <span className={styles.crmIcon}><CrmMark /></span>
-                  <span><strong>CRM Contacts <b>3</b></strong><small>Manage enriched people and sync status.</small></span>
+                  <span><strong>CRM Contacts <b>3</b></strong><small>Complete, verified records from this search</small></span>
                 </div>
-                <span className={styles.crmSynced}>✓ Synced just now</span>
+                <span className={styles.crmSynced}>✓ Synced</span>
               </header>
-              <div className={styles.crmToolbar}>
-                <span>⌕&nbsp;&nbsp;Search contacts…</span>
-                <div className={styles.crmActions}>
-                  <button type="button" tabIndex={-1}>View&nbsp;&nbsp;⌄</button>
-                  <button type="button" tabIndex={-1}>Export</button>
-                </div>
-              </div>
               <div className={styles.crmColumns}>
-                <span /><span>Member</span><span>Status</span><span>Role</span><span>Company</span><span>Direct contact</span><span />
+                <span>Member</span><span>Status</span><span>Role</span><span>Company</span><span>Direct contact</span>
               </div>
               <div className={styles.crmRows}>
                 {CRM_PROFILES.map((profile, index) => (
                   <article className={styles.crmRow} key={profile.name}>
-                    <i className={styles.checkbox} />
                     <span className={styles.crmMember}>
                       <span className={`${styles.avatar} ${styles[`avatar${index + 1}`]}`}>{profile.initials}</span>
                       <span><strong>{profile.name}</strong><small>{profile.email}</small></span>
@@ -186,28 +159,10 @@ export function ExtractionJourney() {
                     <span className={styles.crmRole}>{profile.role}</span>
                     <span className={styles.crmCompany}><strong>{profile.company}</strong><small>{profile.website}</small></span>
                     <span className={styles.crmContact}><strong>{profile.phone}</strong><small>LinkedIn {profile.linkedin}</small></span>
-                    <button type="button" tabIndex={-1} className={styles.crmMore} aria-label={`More actions for ${profile.name}`}>•••</button>
                   </article>
                 ))}
               </div>
-              <footer>
-                <span className={styles.crmSelection}><strong>1 of 3</strong> selected</span>
-                <span>Rows per page&nbsp; 10&nbsp;&nbsp;&nbsp; Page 1 of 1&nbsp;&nbsp; ‹ &nbsp;›</span>
-              </footer>
             </div>
-
-            <div className={styles.successToast}>
-              <span>✓</span>
-              <p><strong>Extraction complete</strong><small>3 enriched profiles added to CRM</small></p>
-            </div>
-
-            <div className={styles.cursor}><CursorIcon /><span /></div>
-          </div>
-
-          <div className={styles.animationCaption} aria-hidden="true">
-            <span className={styles.captionCapture}>1&nbsp; Capture</span><i />
-            <span className={styles.captionEnrich}>2&nbsp; Enrich + map</span><i />
-            <span className={styles.captionCrm}>3&nbsp; CRM ready</span>
           </div>
         </div>
       </div>

@@ -29,21 +29,36 @@ export type PipelineActionState =
 
 const PATH = '/crm/pipeline'
 
-/**
- * ⚠️ A STARTING POINT, NOT A HARDCODED METHODOLOGY. The brief is explicit that
- * no single sales process may be baked in — so these are prefilled into an
- * editable form rather than created behind the customer's back. Someone
- * selling differently deletes them; someone who does not want to think about
- * it on day one gets a working board.
+/*
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ NOTHING BUT `async function` MAY BE EXPORTED FROM THIS FILE.         ║
+ * ║                                                                           ║
+ * ║  A `SUGGESTED_STAGES` array was exported from here, and it took down the  ║
+ * ║  entire pipeline page in production:                                      ║
+ * ║                                                                           ║
+ * ║    Error: A "use server" file can only export async functions,            ║
+ * ║           found object.                                                   ║
+ * ║                                                                           ║
+ * ║  The failure is at MODULE EVALUATION, so it is not the export that        ║
+ * ║  breaks — it is every action in the file, and every action reachable      ║
+ * ║  from the same page. "New pipeline" and "New deal" both returned a 500    ║
+ * ║  and crashed the page to a black error screen, and no row was written.    ║
+ * ║                                                                           ║
+ * ║  ⚠️ NOTHING CAUGHT IT. `tsc` is happy, ESLint is happy, `next build`      ║
+ * ║  compiles and the page renders fine — the module is only evaluated when   ║
+ * ║  an action is INVOKED. Every test passed because tests import the         ║
+ * ║  functions directly, which is exactly what the runtime refuses to do.     ║
+ * ║                                                                           ║
+ * ║  The array had no importer anywhere, in this file or outside it. Dead     ║
+ * ║  code that cost the whole feature. `PipelineSetup.tsx` holds the real     ║
+ * ║  prefilled stages, where they belong: they are a form default, not a      ║
+ * ║  server concern.                                                          ║
+ * ║                                                                           ║
+ * ║  Types are erased at compile time, so `export type` above is safe.        ║
+ * ║  `tests/unit/use-server-exports.test.ts` enforces this for every          ║
+ * ║  'use server' file in the repo.                                           ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-export const SUGGESTED_STAGES: StageInput[] = [
-  { name: 'New', kind: 'open', defaultProbability: 10 },
-  { name: 'Contacted', kind: 'open', defaultProbability: 25 },
-  { name: 'Qualified', kind: 'open', defaultProbability: 50 },
-  { name: 'Proposal', kind: 'open', defaultProbability: 75 },
-  { name: 'Won', kind: 'won', defaultProbability: 100 },
-  { name: 'Lost', kind: 'lost', defaultProbability: 0 },
-]
 
 export async function createPipelineAction(
   _previous: PipelineActionState,
