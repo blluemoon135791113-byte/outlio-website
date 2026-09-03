@@ -283,7 +283,7 @@ export async function advanceRun(
 
   const { data: run, error } = await db
     .from('flow_runs')
-    .select('id, flow_id, version_id, contact_id, current_step, status')
+    .select('id, flow_id, version_id, contact_id, current_step, status, variables')
     .eq('workspace_id', workspaceId)
     .eq('id', runId)
     .single()
@@ -306,7 +306,23 @@ export async function advanceRun(
 
   const definition = validateFlowDefinition(version!.definition)
   const byId = new Map(definition.steps.map((s) => [s.id, s]))
-  const facts = await gatherFacts(workspaceId, run.contact_id)
+
+  /*
+   * ⚠️ THE RUN'S OWN VARIABLES JOIN THE FACT SET, NAMESPACED.
+   *
+   * `contact.*` comes from the database and `vars.*` from earlier steps in this
+   * run. Namespacing is what keeps a step that stores `job_title` from
+   * shadowing the contact's real one — a branch reading `contact.job_title`
+   * must never silently start reading a computed value instead.
+   *
+   * `variables` is mutated as steps run, so a branch later in the SAME pass
+   * sees what a step three lines above it just wrote. Re-reading the row per
+   * step would be a round trip for state we already hold.
+   */
+  const variables: Record<string, unknown> = { ...(run.variables as Record<string, unknown> ?? {}) }
+  const contactFacts = await gatherFacts(workspaceId, run.contact_id)
+  const facts: Record<string, unknown> = { ...contactFacts }
+  for (const [key, value] of Object.entries(variables)) facts[`vars.${key}`] = value
 
   let currentStepId: string | null = run.current_step
 
@@ -402,6 +418,29 @@ export async function advanceRun(
         status: 'failed',
         stepsExecuted,
         error: { stepId: step.id, code: result.code, message: result.message },
+      }
+    }
+
+    /*
+     * ⚠️ THE ENGINE PERSISTS THE VARIABLE, NOT THE HANDLER.
+     *
+     * A handler returns `output.value` and names nothing; `storeAs` in the
+     * step's config decides where it lands. Keeping the write here means one
+     * implementation of "remember this" instead of one per action, and a
+     * handler cannot accidentally write under a key another step is using.
+     *
+     * Written straight after the step succeeds so a branch immediately below
+     * can read it, and flushed to the row in the same update — a crash between
+     * the two would otherwise lose the value while the step reads as done.
+     */
+    if (result.ok && typeof step.config.storeAs === 'string') {
+      const key = step.config.storeAs.trim()
+      if (key) {
+        const stored = (result.output ?? {}).value
+        variables[key] = stored ?? null
+        facts[`vars.${key}`] = stored ?? null
+
+        await db.from('flow_runs').update({ variables: variables as Json }).eq('id', runId)
       }
     }
 

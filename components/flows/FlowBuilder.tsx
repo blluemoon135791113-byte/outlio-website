@@ -862,6 +862,14 @@ const BRANCH_FIELDS: { key: string; label: string }[] = [
   { key: 'contact.company_id', label: 'Contact — company' },
 ]
 
+/*
+ * ⚠️ A BRANCH CAN READ WHAT AN EARLIER STEP STORED, and the `vars.` prefix is
+ * not decoration. The engine namespaces run variables so a step that stores
+ * `job_title` cannot shadow the contact's real one — a condition reading
+ * `contact.job_title` must never silently start reading a computed value.
+ */
+const VARIABLE_PREFIX = 'vars.'
+
 const BRANCH_OPERATORS: { key: string; label: string }[] = [
   { key: 'equals', label: 'is exactly' },
   { key: 'not_equals', label: 'is not' },
@@ -961,13 +969,25 @@ function BranchEditor({
         {conditions.map((condition, index) => {
           const valueless = VALUELESS.has(condition.operator)
           const isList = LIST_OPERATORS.has(condition.operator)
-          const known = BRANCH_FIELDS.some((f) => f.key === condition.field)
+          const known =
+            BRANCH_FIELDS.some((f) => f.key === condition.field) ||
+            condition.field.startsWith(VARIABLE_PREFIX)
 
           return (
             <li key={index} className="rounded-[var(--radius-md)] bg-surface-muted p-2.5">
               <div className="grid gap-2 sm:grid-cols-2">
                 <select
-                  value={condition.field}
+                  /*
+                    ⚠️ A `vars.something` FIELD MAPS BACK TO THE BARE PREFIX.
+                    The option's value is `vars.`, so binding the full key would
+                    match no option and React would render the select as blank —
+                    losing a condition the flow is actually using.
+                  */
+                  value={
+                    condition.field.startsWith(VARIABLE_PREFIX)
+                      ? VARIABLE_PREFIX
+                      : condition.field
+                  }
                   aria-label={`Condition ${index + 1} field`}
                   onChange={(event) => update(index, { field: event.target.value })}
                   className="min-w-0 rounded-[var(--radius-md)] border border-border bg-surface px-2.5 py-1.5 text-xs text-ink outline-none [color-scheme:light]"
@@ -977,9 +997,16 @@ function BranchEditor({
                       {field.label}
                     </option>
                   ))}
+                  {/*
+                    A value an earlier step stored. Selecting it reveals a text
+                    box for the key, because the set of variables a flow
+                    produces is not knowable from the definition alone — a
+                    Hubble step's `storeAs` names one just as a DATE_CALC does.
+                  */}
+                  <option value={VARIABLE_PREFIX}>A value from an earlier step…</option>
                   {/* A field from JSON that the fact set no longer has. Kept
                       visible rather than silently reassigned. */}
-                  {condition.field && !known ? (
+                  {condition.field && !known && !condition.field.startsWith(VARIABLE_PREFIX) ? (
                     <option value={condition.field}>{condition.field} (unknown)</option>
                   ) : null}
                 </select>
@@ -997,6 +1024,19 @@ function BranchEditor({
                   ))}
                 </select>
               </div>
+
+              {condition.field.startsWith(VARIABLE_PREFIX) ? (
+                <input
+                  type="text"
+                  value={condition.field.slice(VARIABLE_PREFIX.length)}
+                  aria-label={`Condition ${index + 1} stored value name`}
+                  placeholder="followup_date"
+                  onChange={(event) =>
+                    update(index, { field: VARIABLE_PREFIX + event.target.value.trim() })
+                  }
+                  className="mt-2 w-full rounded-[var(--radius-md)] border border-border bg-surface px-2.5 py-1.5 font-mono text-xs text-ink outline-none"
+                />
+              ) : null}
 
               {!valueless ? (
                 <input
@@ -1318,6 +1358,248 @@ function HubbleStepEditor({
   )
 }
 
+
+/**
+ * A step that works something out.
+ *
+ * ⚠️ `storeAs` IS REQUIRED, AND THE COPY SAYS WHY. These steps produce a value
+ * and hand it to the engine to keep; without a name the step runs, succeeds,
+ * and throws the answer away — which looks exactly like it worked.
+ */
+function StoreAsField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (storeAs: string) => void
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-ink" htmlFor="store-as">
+        Remember it as
+      </label>
+      <input
+        id="store-as"
+        type="text"
+        value={value}
+        maxLength={60}
+        placeholder="followup_date"
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 font-mono text-sm text-ink outline-none focus-visible:border-accent"
+      />
+      <p className="mt-1 text-xs leading-relaxed text-muted">
+        {value.trim()
+          ? `Later steps and conditions read it as vars.${value.trim()}.`
+          : 'Without a name the step runs and the answer is thrown away.'}
+      </p>
+    </div>
+  )
+}
+
+function DateCalcEditor({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>
+  onChange: (config: Record<string, unknown>) => void
+}) {
+  const from = typeof config.from === 'string' ? config.from : 'now'
+  const addDays = Number(config.addDays ?? 0)
+  const addHours = Number(config.addHours ?? 0)
+
+  return (
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="date-from">
+          Starting from
+        </label>
+        <select
+          id="date-from"
+          value={from === 'now' ? 'now' : 'field'}
+          onChange={(event) =>
+            onChange({ ...config, from: event.target.value === 'now' ? 'now' : BRANCH_FIELDS[0]!.key })
+          }
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+        >
+          <option value="now">When the step runs</option>
+          <option value="field">A date from the contact or an earlier step</option>
+        </select>
+        {from !== 'now' ? (
+          <input
+            type="text"
+            value={from}
+            aria-label="Date field"
+            placeholder="vars.replied_at"
+            onChange={(event) => onChange({ ...config, from: event.target.value.trim() })}
+            className="mt-2 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 font-mono text-xs text-ink outline-none"
+          />
+        ) : null}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="block text-xs font-semibold text-ink" htmlFor="date-days">
+            Add days
+          </label>
+          <input
+            id="date-days"
+            type="number"
+            value={Number.isFinite(addDays) ? addDays : 0}
+            onChange={(event) => onChange({ ...config, addDays: Number(event.target.value) || 0 })}
+            className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-ink" htmlFor="date-hours">
+            Add hours
+          </label>
+          <input
+            id="date-hours"
+            type="number"
+            value={Number.isFinite(addHours) ? addHours : 0}
+            onChange={(event) => onChange({ ...config, addHours: Number(event.target.value) || 0 })}
+            className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent"
+          />
+        </div>
+      </div>
+      {/* Negative is a legitimate answer — "three days BEFORE the close date". */}
+      <p className="text-xs text-muted">
+        Negative numbers go backwards. The result is stored as a UTC timestamp.
+      </p>
+
+      <StoreAsField
+        value={typeof config.storeAs === 'string' ? config.storeAs : ''}
+        onChange={(storeAs) => onChange({ ...config, storeAs })}
+      />
+    </div>
+  )
+}
+
+const TEXT_OPERATION_LABELS: { key: string; label: string }[] = [
+  { key: 'lowercase', label: 'Make it lower case' },
+  { key: 'uppercase', label: 'Make it UPPER CASE' },
+  { key: 'titlecase', label: 'Capitalise Each Word' },
+  { key: 'trim', label: 'Trim the spaces off' },
+  { key: 'first_word', label: 'Take the first word' },
+  { key: 'last_word', label: 'Take the last word' },
+]
+
+function TextTransformEditor({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>
+  onChange: (config: Record<string, unknown>) => void
+}) {
+  const sourceField = typeof config.sourceField === 'string' ? config.sourceField : ''
+  const usingField = sourceField !== ''
+
+  return (
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="text-source-kind">
+          Take the text from
+        </label>
+        <select
+          id="text-source-kind"
+          value={usingField ? 'field' : 'literal'}
+          onChange={(event) =>
+            onChange(
+              event.target.value === 'field'
+                ? { ...config, sourceField: BRANCH_FIELDS[0]!.key, source: '' }
+                : { ...config, sourceField: '', source: '' },
+            )
+          }
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+        >
+          <option value="field">The contact, or an earlier step</option>
+          <option value="literal">Text I type here</option>
+        </select>
+      </div>
+
+      {usingField ? (
+        <div>
+          <label className="block text-xs font-semibold text-ink" htmlFor="text-source-field">
+            Field
+          </label>
+          <select
+            id="text-source-field"
+            value={sourceField.startsWith(VARIABLE_PREFIX) ? VARIABLE_PREFIX : sourceField}
+            onChange={(event) => onChange({ ...config, sourceField: event.target.value })}
+            className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+          >
+            {BRANCH_FIELDS.map((field) => (
+              <option key={field.key} value={field.key}>
+                {field.label}
+              </option>
+            ))}
+            <option value={VARIABLE_PREFIX}>A value from an earlier step…</option>
+          </select>
+          {sourceField.startsWith(VARIABLE_PREFIX) ? (
+            <input
+              type="text"
+              value={sourceField.slice(VARIABLE_PREFIX.length)}
+              aria-label="Stored value name"
+              placeholder="company_guess"
+              onChange={(event) =>
+                onChange({ ...config, sourceField: VARIABLE_PREFIX + event.target.value.trim() })
+              }
+              className="mt-2 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 font-mono text-xs text-ink outline-none"
+            />
+          ) : null}
+          {/*
+            ⚠️ AN ABSENT SOURCE REFUSES THE STEP. Transforming nothing into ""
+            and carrying on is how a flow writes a blank over something real
+            three steps later.
+          */}
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            If this contact has no value there, the step stops rather than
+            producing an empty result.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <label className="block text-xs font-semibold text-ink" htmlFor="text-source">
+            Text
+          </label>
+          <input
+            id="text-source"
+            type="text"
+            value={typeof config.source === 'string' ? config.source : ''}
+            maxLength={200}
+            onChange={(event) => onChange({ ...config, source: event.target.value })}
+            className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent"
+          />
+        </div>
+      )}
+
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="text-operation">
+          Do this to it
+        </label>
+        <select
+          id="text-operation"
+          value={typeof config.operation === 'string' ? config.operation : ''}
+          onChange={(event) => onChange({ ...config, operation: event.target.value })}
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none [color-scheme:light] focus-visible:border-accent"
+        >
+          <option value="">Nothing chosen — this step cannot run</option>
+          {TEXT_OPERATION_LABELS.map((operation) => (
+            <option key={operation.key} value={operation.key}>
+              {operation.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <StoreAsField
+        value={typeof config.storeAs === 'string' ? config.storeAs : ''}
+        onChange={(storeAs) => onChange({ ...config, storeAs })}
+      />
+    </div>
+  )
+}
+
 /** Per-step settings. Deliberately small: config differs by action. */
 function StepEditor({
   step,
@@ -1429,6 +1711,18 @@ function StepEditor({
         config={step.config}
         onChange={(config) => onChange({ config })}
       />
+    )
+  }
+
+  if (step.action === 'DATE_CALC') {
+    return (
+      <DateCalcEditor config={step.config} onChange={(config) => onChange({ config })} />
+    )
+  }
+
+  if (step.action === 'TEXT_TRANSFORM') {
+    return (
+      <TextTransformEditor config={step.config} onChange={(config) => onChange({ config })} />
     )
   }
 

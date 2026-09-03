@@ -97,26 +97,26 @@ describe('the declared gap matches reality', () => {
     ).toEqual([])
   })
 
-  it('names what is still unbacked, and why only these two remain', () => {
+  it('nothing in the catalogue is unbacked any more', () => {
     /*
-     * Seven were found unbacked. Five were implemented on 2026-09-04:
-     * ADD_TO_LIST, REMOVE_FROM_LIST, MOVE_STAGE, CREATE_OPPORTUNITY and
-     * WEBHOOK.
+     * Seven were found offered-and-dead. Five were implemented on 2026-09-04;
+     * DATE_CALC and TEXT_TRANSFORM followed once migration 0108 gave a run
+     * somewhere to keep a computed value — they were blocked on storage, not
+     * on effort.
      *
-     * ⚠️ THE REMAINING TWO ARE BLOCKED ON A DESIGN DECISION, NOT ON EFFORT.
-     * `DATE_CALC` and `TEXT_TRANSFORM` COMPUTE a value, and a flow run has
-     * nowhere to keep one: `flow_runs` has no variables column, `gatherFacts`
-     * reads only the contact, and even Hubble's `storeAs` writes an activity
-     * row nothing reads back. A handler could produce the right answer and
-     * then discard it. Implementing them starts with a schema change.
-     *
-     * Documented rather than merely prevented, so the next reader knows this
-     * list came from measurement and not from taste.
+     * ⚠️ THE EMPTY LIST IS NOT THE POINT; THE MECHANISM IS. It stays so the
+     * next action added to `ACTION_TYPES` cannot be offered before it works,
+     * which is exactly how seven of them came to be publishable and dead.
      */
-    expect([...UNIMPLEMENTED_ACTIONS].sort()).toEqual(['DATE_CALC', 'TEXT_TRANSFORM'])
+    expect([...UNIMPLEMENTED_ACTIONS]).toEqual([])
   })
 
-  it('the five that were implemented really are registered now', () => {
+  it('every action in the catalogue has a handler', () => {
+    const unbacked = all.filter((a) => !registered.has(a))
+    expect(unbacked, `no handler for:\n${unbacked.join('\n')}`).toEqual([])
+  })
+
+  it('the seven that were implemented really are registered now', () => {
     // The other direction of the same claim, read from the source rather than
     // from the declaration.
     for (const action of [
@@ -125,6 +125,8 @@ describe('the declared gap matches reality', () => {
       'MOVE_STAGE',
       'CREATE_OPPORTUNITY',
       'WEBHOOK',
+      'DATE_CALC',
+      'TEXT_TRANSFORM',
     ]) {
       expect(registered.has(action), `${action} has no handler`).toBe(true)
       expect(actionIsImplemented(action as ActionType)).toBe(true)

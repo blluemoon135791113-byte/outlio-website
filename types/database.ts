@@ -5321,6 +5321,7 @@ export type Database = {
           idempotency_key: string | null
           parent_run_id: string | null
           resume_at: string | null
+          variables: Json
           started_at: string
           status: Database["public"]["Enums"]["flow_run_status"]
           trigger_type: string
@@ -5340,6 +5341,7 @@ export type Database = {
           idempotency_key?: string | null
           parent_run_id?: string | null
           resume_at?: string | null
+          variables?: Json
           started_at?: string
           status?: Database["public"]["Enums"]["flow_run_status"]
           trigger_type: string
@@ -5359,6 +5361,7 @@ export type Database = {
           idempotency_key?: string | null
           parent_run_id?: string | null
           resume_at?: string | null
+          variables?: Json
           started_at?: string
           status?: Database["public"]["Enums"]["flow_run_status"]
           trigger_type?: string

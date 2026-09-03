@@ -9,6 +9,7 @@ import 'server-only'
  * would fail with ACTION_NOT_AVAILABLE depending on the entry point that
  * triggered it.
  */
+import { registerComputeActions } from '@/lib/flows/actions/compute'
 import { registerCrmActions } from '@/lib/flows/actions/crm'
 import { registerEmailActions } from '@/lib/flows/actions/email'
 import { registerHubbleActions } from '@/lib/flows/actions/hubble'
@@ -20,6 +21,7 @@ let registered = false
 /** Idempotent: safe to call from every entry point that runs flows. */
 export function registerAllActions(): void {
   if (registered) return
+  registerComputeActions()
   registerCrmActions()
   registerEmailActions()
   registerHubbleActions()

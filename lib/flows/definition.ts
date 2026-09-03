@@ -123,23 +123,14 @@ export type ActionType = keyof typeof ACTION_TYPES
  */
 export const UNIMPLEMENTED_ACTIONS: readonly ActionType[] = [
   /*
-   * ⚠️ THESE TWO ARE BLOCKED ON A DESIGN DECISION, NOT ON EFFORT.
+   * Empty as of 2026-09-04. Every action in the catalogue has a handler.
    *
-   * `DATE_CALC` and `TEXT_TRANSFORM` COMPUTE a value — and a flow run has
-   * nowhere to put one. `flow_runs` has no variables column, `gatherFacts`
-   * reads only the contact, and even Hubble's `storeAs` writes an activity row
-   * that nothing ever reads back. So a handler could calculate the answer
-   * correctly and then discard it.
-   *
-   * Implementing them means first deciding where a run keeps its working
-   * state, which is a schema change and a new surface in the branch editor —
-   * not a handler. Listing them here is the honest state: offered nowhere,
-   * promised nowhere.
-   *
-   * The other five were implemented on 2026-09-04.
+   * ⚠️ KEEP THE MECHANISM EVEN THOUGH THE LIST IS EMPTY. It is what stops the
+   * next action added to `ACTION_TYPES` from being offered before it works —
+   * which is exactly how seven of them came to be publishable and dead.
+   * `tests/unit/flow-action-coverage.test.ts` fails the moment one is added
+   * without a runner.
    */
-  'DATE_CALC',
-  'TEXT_TRANSFORM',
 ]
 
 /** Whether a flow may actually use this action today. */
@@ -499,6 +490,12 @@ const REQUIRED_ACTION_CONFIG: Partial<Record<string, readonly string[]>> = {
   CREATE_OPPORTUNITY: ['pipelineId', 'title'],
   MOVE_STAGE: ['stageId'],
   WEBHOOK: ['url'],
+  /*
+   * Both compute a value and hand it to the engine to store, so `storeAs` is
+   * required: without it the step runs, works, and throws the answer away.
+   */
+  DATE_CALC: ['storeAs'],
+  TEXT_TRANSFORM: ['operation', 'storeAs'],
   /*
    * Every AI step needs somebody to bill. Stamped from the publisher in
    * `publishFlow` BEFORE this check runs — listed here so a future publish
