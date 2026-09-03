@@ -39,12 +39,12 @@ export function MfaChallengeForm({ next }: { next: string }) {
 
   return (
     <form onSubmit={verify} className="space-y-4">
-      {error ? <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2.5 text-sm text-danger shadow-[var(--neo-shadow-inset)]">{error}</p> : null}
+      {error ? <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2.5 text-sm text-danger">{error}</p> : null}
       <label className="block space-y-1.5">
         <span className="text-sm font-medium text-ink">Authentication code</span>
-        <input value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" autoFocus required className="auth-clay-field w-full rounded-[var(--radius-md)] border-0 bg-clay-sunken px-3 py-3 text-center font-mono text-xl tracking-[0.3em] text-ink shadow-[var(--neo-shadow-inset)] outline-none transition-shadow duration-150 focus:shadow-[var(--neo-shadow-focus)]" />
+        <input value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" autoFocus required className="auth-clay-field w-full rounded-[var(--radius-md)] border border-border-strong bg-panel px-3 py-3 text-center font-mono text-xl tracking-[0.3em] text-ink outline-none transition-[border-color,box-shadow] duration-150 focus:border-focus focus:shadow-[0_0_0_1px_var(--focus)]" />
       </label>
-      <button disabled={busy} className="inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white shadow-[var(--shadow-button)] transition-[background-color,box-shadow,transform] duration-150 hover:bg-accent-deep active:scale-[0.98] active:shadow-[var(--neo-shadow-inset)] disabled:opacity-60">{busy ? 'Verifying…' : 'Verify and continue'}</button>
+      <button disabled={busy} className="inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white shadow-[var(--shadow-button)] transition-[background-color,box-shadow,transform] duration-150 hover:bg-accent-deep active:scale-[0.98] disabled:opacity-60">{busy ? 'Verifying…' : 'Verify and continue'}</button>
     </form>
   )
 }

@@ -327,7 +327,15 @@
   box-shadow: 0 0.8rem 1.55rem rgba(27, 65, 58, 0.13);
   animation: prompt-focus var(--intelligence-duration) var(--ease-out) infinite;
 }
-.promptText { overflow: hidden; color: #52625d; font-size: clamp(0.22rem, 0.49cqw, 0.3rem); text-overflow: ellipsis; white-space: nowrap; }
+.promptText {
+  overflow: hidden;
+  color: #52625d;
+  font-size: clamp(0.22rem, 0.49cqw, 0.3rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  clip-path: inset(0 100% 0 0);
+  animation: prompt-type var(--intelligence-duration) steps(28, end) infinite;
+}
 .recordPill { padding: 0.42cqh 0.55cqw; border-radius: 999px; background: #eef3f0; color: #68766f; font-size: clamp(0.18rem, 0.4cqw, 0.25rem); white-space: nowrap; }
 .promptBar button {
   display: grid;
@@ -439,13 +447,14 @@
 }
 .leadRow2::before { animation-delay: 80ms; }
 .leadRow3::before { animation-delay: 160ms; }
-.leadRow4::before { animation-delay: 240ms; }
+.leadRow4::before { opacity: 0; animation: none; }
 .leadRow > * { position: relative; z-index: 1; }
 .check {
   color: transparent;
   font-size: clamp(0.2rem, 0.44cqw, 0.27rem);
   animation: check-fill var(--intelligence-duration) var(--ease-out) infinite;
 }
+.leadRow4 .check { border-color: #61716b; background: transparent; color: transparent; animation: none; }
 .memberCell { display: flex; min-width: 0; align-items: center; gap: 0.65cqw; }
 .avatar {
   display: grid;
@@ -625,6 +634,10 @@
   0%, 8%, 20%, 100% { transform: scale(1); }
   11%, 17% { transform: scale(1.012); }
 }
+@keyframes prompt-type {
+  0%, 9%, 96%, 100% { clip-path: inset(0 100% 0 0); }
+  14.5%, 91% { clip-path: inset(0 0 0 0); }
+}
 @keyframes send-press {
   0%, 14%, 19%, 100% { transform: scale(1); }
   16.5% { transform: scale(0.9); }
@@ -651,8 +664,8 @@
   53% { opacity: 1; transform: translate3d(72cqw, 43cqh, 0); }
   56%, 60% { opacity: 1; transform: translate3d(51cqw, 43cqh, 0); }
   65%, 75% { opacity: 0; transform: translate3d(51cqw, 43cqh, 0); }
-  79%, 83% { opacity: 1; transform: translate3d(24cqw, 68cqh, 0); }
-  88%, 100% { opacity: 0; transform: translate3d(24cqw, 68cqh, 0); }
+  79%, 83% { opacity: 1; transform: translate3d(24cqw, 46cqh, 0); }
+  88%, 100% { opacity: 0; transform: translate3d(24cqw, 46cqh, 0); }
 }
 @keyframes cursor-click {
   0%, 8%, 12%, 15%, 18%, 55%, 60%, 79%, 84%, 100% { opacity: 0; transform: scale(0.8); }
@@ -705,6 +718,7 @@
   .chatTrack,
   .scrollTrack i,
   .promptBar,
+  .promptText,
   .promptBar button,
   .assistantMessage button,
   .glowOrb { animation: none; transform: none; }
@@ -713,4 +727,7 @@
   .insightCard { opacity: 1; transform: none; animation: none; }
   .leadRow::before { opacity: 1; animation: none; }
   .check { border-color: #78baa6; background: #397b69; color: #fff; transform: none; animation: none; }
+  .promptText { clip-path: none; }
+  .leadRow4::before { opacity: 0; }
+  .leadRow4 .check { border-color: #61716b; background: transparent; color: transparent; }
 }

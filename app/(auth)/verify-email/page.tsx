@@ -33,7 +33,7 @@ export default async function VerifyEmailPage({
       }
     >
       <div className="space-y-6">
-        <div className="rounded-[var(--radius-md)] border-0 bg-info-soft px-3 py-2.5 text-sm leading-relaxed text-info shadow-[var(--neo-shadow-inset)]">
+        <div className="rounded-[var(--radius-md)] bg-info-soft px-3 py-2.5 text-sm leading-relaxed text-info">
           Check your spam folder if it hasn&apos;t arrived within a few minutes.
         </div>
 

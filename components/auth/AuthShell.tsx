@@ -21,7 +21,7 @@ export function AuthShell({
   footer?: ReactNode
 }) {
   return (
-    <main className="auth-clay min-h-screen bg-clay-bg px-4 py-6 text-ink sm:px-6 sm:py-8 lg:px-8">
+    <main className="auth-clay min-h-screen bg-app px-4 py-6 text-ink sm:px-6 sm:py-8 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col sm:min-h-[calc(100vh-4rem)]">
         <header className="flex items-center justify-between gap-4">
           <Link
@@ -41,7 +41,7 @@ export function AuthShell({
               Outlio
             </span>
           </Link>
-          <span className="rounded-full bg-clay-sunken px-3 py-1.5 text-[11px] font-semibold text-muted shadow-[var(--neo-shadow-inset)]">
+          <span className="rounded-full border border-border bg-surface-muted px-3 py-1.5 text-[11px] font-semibold text-muted">
             Secure workspace
           </span>
         </header>
@@ -149,7 +149,7 @@ function AuthBenefit({
   detail: string
 }) {
   return (
-    <li className="flex items-center gap-4 rounded-[var(--radius-lg)] bg-clay-sunken px-4 py-3 shadow-[var(--neo-shadow-inset)]">
+    <li className="flex items-center gap-4 rounded-[var(--radius-lg)] border border-border bg-surface-muted px-4 py-3">
       <span className="font-mono text-[11px] font-semibold text-accent">{number}</span>
       <span className="min-w-0">
         <span className="block text-sm font-semibold text-ink">{title}</span>

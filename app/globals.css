@@ -257,6 +257,10 @@
   /* Product tokens — see :root above */
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  /* Exposed so `border-focus` resolves. The focus ring is deliberately its own
+     token and not the accent (see `--focus`), so it needs its own colour
+     utility rather than borrowing `border-accent` and re-branding the ring. */
+  --color-focus: var(--focus);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
@@ -410,23 +414,201 @@ h6 {
 }
 
 /* ==========================================================================
-   AUTHENTICATED PRODUCT — Hubble material system
-   ========================================================================== */
+   AUTHENTICATED PRODUCT — flat surface system
+   ==========================================================================
 
-/* The product was already built on semantic surface tokens. Scoping the Hubble
-   material here gives every authenticated screen one visual language without
-   leaking dashboard treatments into the public marketing site. */
+   ╔═══════════════════════════════════════════════════════════════════════════╗
+   ║  ⚠️ THE PRODUCT IS FLAT AND WHITE. THE MARKETING SITE IS NOT.            ║
+   ║                                                                           ║
+   ║  Neumorphism spends its contrast budget on describing a light source.     ║
+   ║  Every panel carried a paired shadow — dark lower-right, white upper-left ║
+   ║  — which is charming on a landing page with six elements and actively     ║
+   ║  costly on a table with 25 rows: the surface competes with the data for   ║
+   ║  the reader's attention, and there is no contrast left to mark the one    ║
+   ║  row that matters.                                                        ║
+   ║                                                                           ║
+   ║  So inside the product, hierarchy is carried by BORDERS AND SPACE rather  ║
+   ║  than by material. Panels are white on white, separated by a hairline.    ║
+   ║  Shadow is reserved for things that genuinely float above the page —      ║
+   ║  menus, dialogs, popovers — where it means "this is temporary" instead of ║
+   ║  "this is a surface".                                                     ║
+   ║                                                                           ║
+   ║  ⚠️ SCOPED TO `.product-clay` / `.auth-clay` ON PURPOSE. CLAUDE.md rule 5 ║
+   ║  makes the landing page read-only, and `/product` shares its material.    ║
+   ║  Redefining `.clay` globally would have restyled both. These overrides    ║
+   ║  win on specificity (0,2,0 over 0,1,0) without editing the base rules,    ║
+   ║  so the marketing site is bit-for-bit unchanged.                          ║
+   ║                                                                           ║
+   ║  The class NAMES stay `clay`. Renaming them across 62 files would be a    ║
+   ║  large diff that changes no pixel; they now mean "the product's surface". ║
+   ╚═══════════════════════════════════════════════════════════════════════════╝ */
 .product-clay,
 .auth-clay {
-  --app: var(--clay-bg);
-  --paper: var(--clay-bg);
-  --panel: var(--clay-raised);
-  --surface-muted: var(--clay-sunken);
-  --border: color-mix(in srgb, var(--clay-bg) 84%, var(--ink) 16%);
-  --border-strong: color-mix(in srgb, var(--clay-bg) 72%, var(--ink) 28%);
-  --shadow-sm: var(--neo-shadow-chip);
-  --shadow-md: var(--neo-shadow);
-  --shadow-lg: var(--neo-shadow-lg);
+  /* White, not cream. The one instruction that drove all of this. */
+  --app: #ffffff;
+  --paper: #ffffff;
+  --panel: #ffffff;
+  /* The only non-white neutral: row hovers, inset wells, disabled fills.
+     Warm-grey rather than pure grey so it stays kin to the brand's cream. */
+  --surface-muted: #f6f6f7;
+
+  /* ⚠️ REAL BORDERS, BECAUSE NOTHING ELSE SEPARATES SURFACES NOW.
+     The clay borders were `color-mix(cream 84%, ink 16%)` — barely visible,
+     because the shadow was doing the separating. With the shadow gone a
+     weak border means a card with no edge at all. */
+  --border: #e6e6ea;
+  --border-strong: #d2d2d9;
+
+  /* Panels get NO shadow — see below. These remain for genuinely floating
+     things, and are neutral drop shadows rather than paired neumorphic light. */
+  --shadow-sm: 0 1px 2px rgba(23, 23, 21, 0.05);
+  --shadow-md: 0 4px 12px -2px rgba(23, 23, 21, 0.08);
+  /* ⚠️ A HAIRLINE RING IS PART OF THE SHADOW. Popovers and menus are white on
+     white; a blur alone leaves the top edge of a dropdown undetectable against
+     the panel beneath it. Baking the ring in means every floating surface gets
+     an edge without each one remembering to ask for a border. */
+  --shadow-lg:
+    0 0 0 1px var(--border),
+    0 12px 32px -8px rgba(23, 23, 21, 0.16);
+
+  /* A filled button is a solid object, so it keeps a hint of lift. */
+  --shadow-button: 0 1px 2px rgba(23, 23, 21, 0.12);
+
+  /* ⚠️ THE `--clay-*` TOKENS ARE REPOINTED, NOT DELETED. They are consumed
+     directly in component markup (`bg-clay-bg`, `bg-clay-sunken`), so leaving
+     them cream would have left cream patches on a white page. */
+  --clay-bg: #ffffff;
+  --clay-surface: #ffffff;
+  --clay-raised: #ffffff;
+  --clay-sunken: #f6f6f7;
+
+  /* Tighter than the 16px clay radius. A large radius reads as "soft object";
+     a small one reads as "region of a page", which is what these now are. */
+  --radius-clay: 0.625rem;
+  --radius-clay-lg: 0.75rem;
+
+  /* Every neumorphic shadow, neutralised at the source. Anything still
+     referencing them — including rules further down this file and any
+     `shadow-[var(--neo-shadow)]` left in markup — flattens with them. */
+  --neo-shadow: none;
+  --neo-shadow-inset: none;
+  --neo-shadow-chip: none;
+  --clay-shadow: none;
+  --clay-shadow-inset: none;
+  --clay-shadow-chip: none;
+  --clay-shadow-prompt: none;
+
+  /* ⚠️ THE `-lg` PAIR IS NOT FLATTENED, AND THAT IS THE WHOLE DISTINCTION.
+     `shadow-[var(--clay-shadow-lg)]` is what the batch filter and the date
+     picker use to float their dropdowns. Setting it to `none` with the rest
+     left those menus as white rectangles on a white page with no edge and no
+     elevation — invisible, and only findable by clicking where they used to
+     be. `-lg` means "this floats", so it maps to a real drop shadow. */
+  --neo-shadow-lg: var(--shadow-lg);
+  --clay-shadow-lg: var(--shadow-lg);
+
+  /* ⚠️ FOCUS IS THE ONE SHADOW THAT MUST SURVIVE. Setting it to `none` with
+     the others would have silently removed the focus ring from every input in
+     the product — an accessibility regression disguised as a visual cleanup.
+     A crisp 2px ring replaces the diffuse neumorphic glow. */
+  --neo-shadow-focus: 0 0 0 2px var(--focus);
+  --clay-shadow-focus: 0 0 0 2px var(--focus);
+  --clay-shadow-prompt-focus: 0 0 0 2px var(--focus);
+}
+
+/* Cards, wells and raised panels: one white surface, one hairline. */
+.product-clay :is(.clay, .clay-raised, .hubble-prompt-surface, .hubble-filter-control),
+.auth-clay :is(.clay, .clay-raised, .hubble-prompt-surface, .hubble-filter-control) {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-clay);
+  box-shadow: none;
+}
+
+/* A well is the same shape, filled instead of outlined — the inset shadow that
+   used to say "recessed" no longer exists to say it. */
+.product-clay .clay-sunken,
+.auth-clay .clay-sunken {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-clay);
+  box-shadow: none;
+}
+
+/* Pressing something moves it nowhere and tints it instead. `scale(0.98)` plus
+   an inset shadow was the clay idiom for depressing a soft object; on a flat
+   surface it reads as the layout twitching. */
+.product-clay .clay-interactive:active:not(:disabled),
+.auth-clay .clay-interactive:active:not(:disabled) {
+  background-color: var(--surface-muted);
+  box-shadow: none;
+  transform: none;
+}
+
+/* ⚠️ THE SIDEBAR NEEDED ITS OWN RULE, NOT JUST THE TOKENS.
+   `.hubble-nav-panel` painted a cream gradient plus `inset -3px 0 0
+   rgba(charcoal, 0.22)` and an 18px smoky inner shadow. Repointing `--clay-bg`
+   to white left the gradient flat but kept the shadows — a hard 3px dark bar
+   and a smear of grey down the right edge of an otherwise white page, which
+   reads as a rendering artefact rather than as a divider. One hairline does
+   the same job. */
+.product-clay .hubble-nav-panel {
+  background: var(--panel);
+  background-image: none;
+  border-right: 1px solid var(--border);
+  box-shadow: none;
+}
+
+/* The selected nav item was a 16% charcoal tint carrying a drop shadow AND an
+   inset ring — three treatments saying one thing. A flat fill says it once.
+   Kept as a neutral rather than the accent: the sidebar marks WHERE YOU ARE,
+   which is not an action, and a coral block in the nav competes with the one
+   real call to action on every screen. */
+.product-clay .hubble-shell nav a[aria-current='page'],
+.hubble-shell.product-clay nav a[aria-current='page'] {
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* `.field` and the `.skeuo*` family are the other material vocabulary in this
+   file — bevelled gradients, inset highlights, a raised "key" treatment. Inside
+   the product they become the same outlined control as everything else, so
+   there is one idea of what an input looks like rather than three. */
+.product-clay :is(.field, .skeuo, .skeuo-inset, .skeuo-key, .skeuo-prompt),
+.auth-clay :is(.field, .skeuo, .skeuo-inset, .skeuo-key, .skeuo-prompt) {
+  background: var(--panel);
+  background-image: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.product-clay :is(.field, .skeuo-prompt):hover:not(:disabled),
+.auth-clay :is(.field, .skeuo-prompt):hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+/* ⚠️ `:focus-within` AS WELL AS `:focus`. `.field` is applied to WRAPPERS as
+   often as to inputs — the phone field is a div containing a select and an
+   input — so a focus style on `:focus` alone leaves those compound controls
+   with no visible focus at all. */
+.product-clay :is(.field, .skeuo-prompt):is(:focus, :focus-within),
+.auth-clay :is(.field, .skeuo-prompt):is(:focus, :focus-within) {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+  outline: none;
+}
+
+/* Overlays are the one place shadow still earns its keep: it is what says
+   "this is above the page and will go away". No backdrop-filter — CLAUDE.md
+   forbids it on dashboard surfaces, and it is expensive over scrolling tables. */
+.product-clay :is(.glass-overlay, .glass-popover),
+.auth-clay :is(.glass-overlay, .glass-popover) {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-clay);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: none;
 }
 
 .auth-clay-field:focus-visible {
@@ -445,9 +627,32 @@ h6 {
   box-shadow: var(--shadow-button);
 }
 
+/* ⚠️ INPUTS ARE OUTLINED, NOT RECESSED. They were a cream fill plus an inset
+   shadow — a hole punched in the surface. On white that fill is the only thing
+   marking the field, and it is nearly invisible; a border states the edit
+   target unambiguously and at any zoom level. */
 .product-clay :is(input, select, textarea) {
-  background-color: var(--clay-sunken);
-  box-shadow: var(--neo-shadow-inset);
+  background-color: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.product-clay :is(input, select, textarea):hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.product-clay :is(input, select, textarea):focus-visible {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+  outline: none;
+}
+
+/* A checkbox is not a text field and must not inherit the border-radius or the
+   padding that comes with one. */
+.product-clay input[type='checkbox'],
+.product-clay input[type='radio'] {
+  accent-color: var(--accent);
 }
 
 .product-clay .hubble-bar :is(input, select, textarea) {

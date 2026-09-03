@@ -34,7 +34,7 @@ export function PhoneField({
     <fieldset className="space-y-1.5">
       <legend className="block text-sm font-medium text-ink">Phone number</legend>
       <div
-        className={`auth-clay-field grid grid-cols-[minmax(132px,0.48fr)_minmax(0,1fr)] overflow-hidden rounded-[var(--radius-md)] border-0 bg-clay-sunken shadow-[var(--neo-shadow-inset)] transition-shadow duration-150 focus-within:shadow-[var(--neo-shadow-focus)]${
+        className={`auth-clay-field grid grid-cols-[minmax(132px,0.48fr)_minmax(0,1fr)] overflow-hidden rounded-[var(--radius-md)] border border-border-strong bg-panel transition-[border-color,box-shadow] duration-150 focus-within:border-focus focus-within:shadow-[0_0_0_1px_var(--focus)]${
           error ? ' ring-1 ring-danger' : ''
         }`}
       >

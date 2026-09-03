@@ -5,8 +5,15 @@ import type { InputHTMLAttributes, ReactNode } from 'react'
  * which needs its own markup for the reveal button — cannot drift away from
  * every other field.
  */
+/*
+ * ⚠️ OUTLINED, NOT FILLED. This was `border-0 bg-clay-sunken` plus an inset
+ * shadow — a recessed well, which is a legible control only while the page
+ * around it is cream. On white the fill is nearly invisible and the border is
+ * absent, so the field had no edge at all. The border is now what states the
+ * edit target, and it is the same border the product's inputs use.
+ */
 export const AUTH_INPUT_CLASS =
-  'auth-clay-field w-full rounded-[var(--radius-md)] border-0 bg-clay-sunken px-3.5 py-2.5 text-base text-ink shadow-[var(--neo-shadow-inset)] transition-[box-shadow,transform] duration-150 placeholder:text-muted/65 disabled:cursor-not-allowed disabled:opacity-60'
+  'auth-clay-field w-full rounded-[var(--radius-md)] border border-border-strong bg-panel px-3.5 py-2.5 text-base text-ink transition-[border-color,box-shadow] duration-150 placeholder:text-muted/65 hover:border-muted disabled:cursor-not-allowed disabled:opacity-60'
 
 /** The ring that marks an invalid input, shared for the same reason. */
 export const AUTH_INPUT_INVALID_CLASS = 'ring-1 ring-danger'

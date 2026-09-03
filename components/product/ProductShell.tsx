@@ -186,7 +186,14 @@ export function ProductShell({
       ) : null}
 
       <div className="min-h-dvh lg:pl-[216px]">
-        <header className="sticky top-0 z-20 border-0 bg-app px-4 sm:px-6 lg:px-8">
+        {/*
+          ⚠️ A BORDER, BECAUSE THE HEADER IS NOW WHITE ON WHITE. It was
+          `border-0` on cream above cream-and-shadow panels, where the material
+          did the separating. Flat and white, a sticky bar with no edge lets
+          scrolling content slide underneath with nothing to mark where the
+          page begins — the rows appear to be inside the header.
+        */}
+        <header className="sticky top-0 z-20 border-b border-border bg-app px-4 sm:px-6 lg:px-8">
           <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <button

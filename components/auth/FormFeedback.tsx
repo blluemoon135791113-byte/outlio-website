@@ -52,8 +52,8 @@ export function FormFeedback({ state }: { state: ActionState }) {
       tabIndex={-1}
       className={
         isError
-          ? 'rounded-[var(--radius-md)] border-0 bg-danger-soft px-3 py-2.5 text-sm leading-relaxed text-danger shadow-[var(--neo-shadow-inset)]'
-          : 'rounded-[var(--radius-md)] border-0 bg-success-soft px-3 py-2.5 text-sm leading-relaxed text-success shadow-[var(--neo-shadow-inset)]'
+          ? 'rounded-[var(--radius-md)] bg-danger-soft px-3 py-2.5 text-sm leading-relaxed text-danger'
+          : 'rounded-[var(--radius-md)] bg-success-soft px-3 py-2.5 text-sm leading-relaxed text-success'
       }
     >
       {state.message}
