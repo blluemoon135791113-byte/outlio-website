@@ -21,7 +21,7 @@ export function LeadEngineHero() {
                 Further and Beyond
               </h1>
 
-              <p className="mt-7 max-w-[34rem] text-pretty font-heading text-[1.0625rem] font-medium leading-[1.65] text-white/84 sm:text-lg">
+              <p className="mt-7 max-w-[34rem] text-pretty font-body text-[var(--leadengine-copy-size)] font-normal leading-[var(--leadengine-copy-leading)] tracking-[-0.012em] text-white/84">
                 The lead engine channels a database of 1.3 billion people across
                 the globe - in to your systems, enriched with our intelligence
                 and clear of noise.

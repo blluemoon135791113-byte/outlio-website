@@ -15,6 +15,7 @@ import {
   FlowDefinitionError,
   definitionSendsEmail,
   publishProblems,
+  stampBillingUser,
   stampSendAuthority,
   validateFlowDefinition,
 } from '@/lib/flows/definition'
@@ -141,6 +142,41 @@ export async function publishFlow(
   }
 
   /*
+   * ⚠️ TWO FACTS ABOUT THE PUBLISHER ARE STAMPED ONTO THE DEFINITION HERE,
+   * AND NEITHER IS AN EDITOR FIELD.
+   *
+   *   `actorAuthorized` — may this person send mail at all. A checkbox would
+   *   be self-certification: anyone who can open the builder could tick it,
+   *   which is exactly what the send gate exists to prevent.
+   *
+   *   `userId` — whose credit allowance an AI step spends. A dropdown would
+   *   let one member point a 10,000-contact flow at a colleague's allowance
+   *   and spend it without their knowledge (credits are user-scoped, Ledger
+   *   KI11).
+   *
+   * Both were read by their handlers and written by nothing, so SEND_EMAIL
+   * refused with "not allowed to send email" and every Hubble step refused
+   * with "nobody to bill" — politely, and with no way to tell why.
+   *
+   * Re-stamped on every publish, so revoking someone's access takes effect on
+   * the next version rather than being frozen in at version one.
+   *
+   * ⚠️ STAMPED BEFORE CHECKED, AND THAT ORDER IS LOAD-BEARING.
+   * `publishProblems` requires `userId` on every AI step, and this stamp is
+   * what puts it there. Checking first would reject every flow containing a
+   * Hubble step for missing exactly the key we are about to write.
+   */
+  const publisherMaySend = can(
+    { role: ctx.role, modules: ctx.modules },
+    'email.campaign.launch',
+  )
+
+  const authorized = stampBillingUser(
+    stampSendAuthority(definition, publisherMaySend),
+    ctx.userId,
+  )
+
+  /*
    * ⚠️ REFUSED HERE, NOT DISCOVERED IN A FAILED RUN.
    *
    * A step whose required config is blank can only ever fail. Observed in
@@ -152,30 +188,10 @@ export async function publishFlow(
    * definitions already stored, and tightening it would retroactively break
    * flows published before this check existed.
    */
-  const blockers = publishProblems(definition)
+  const blockers = publishProblems(authorized)
   if (blockers.length > 0) {
     return { ok: false, error: blockers.join(' ') }
   }
-
-  /*
-   * ⚠️ SEND AUTHORITY IS STAMPED HERE, AND IS NOT AN EDITOR FIELD.
-   *
-   * `sendEmail` reads `config.actorAuthorized === true` and the gate fails
-   * closed. Nothing wrote that key anywhere in the product, so every SEND_EMAIL
-   * step refused at condition one with "this flow runs as someone who is not
-   * allowed to send email" — a flow could never send mail at all.
-   *
-   * A checkbox would be self-certification: anyone who can open the builder
-   * could tick it, which is exactly what the gate exists to prevent. Authority
-   * is a fact about the PUBLISHER, so it is read from the permission catalogue
-   * at the moment of publishing — and re-stamped on every publish, so revoking
-   * someone's access takes effect on the next version instead of being frozen
-   * in at version one.
-   */
-  const publisherMaySend = can(
-    { role: ctx.role, modules: ctx.modules },
-    'email.campaign.launch',
-  )
 
   if (definitionSendsEmail(definition) && !publisherMaySend) {
     /*
@@ -189,8 +205,6 @@ export async function publishFlow(
         'This flow sends email, and you do not have permission to launch email. Ask an admin to publish it, or remove the send step.',
     }
   }
-
-  const authorized = stampSendAuthority(definition, publisherMaySend)
 
   const { data: version, error } = await createAdminClient().rpc('flow_publish', {
     p_workspace_id: ctx.workspace.id,

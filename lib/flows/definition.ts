@@ -340,6 +340,47 @@ export function stampSendAuthority(
   }
 }
 
+/**
+ * Stamps whose credit allowance every AI step draws on.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ NOTHING SET `userId`, SO EVERY HUBBLE STEP REFUSED.                  ║
+ * ║                                                                           ║
+ * ║  `hubbleHandler` reads `config.userId` and fails with NO_BILLING_USER —   ║
+ * ║  "this AI step has nobody to bill" — when it is absent. Nothing in the    ║
+ * ║  product wrote it. Third instance of the same shape as `actorAuthorized`  ║
+ * ║  and the claim query: a required key read in one place and written in     ║
+ * ║  none, so the whole feature refused politely and nobody could tell why.   ║
+ * ║                                                                           ║
+ * ║  ⚠️ THE PUBLISHER, NOT A PICKER — AND THAT IS A SPENDING DECISION.        ║
+ * ║  Credits are user-scoped (Ledger KI11). A dropdown here would let one     ║
+ * ║  member point a 10,000-contact flow at a colleague's allowance and spend  ║
+ * ║  it without their knowledge. The handler's own comment says the spender   ║
+ * ║  is "the flow's OWNER", so the publisher it is — shown in the editor, not ║
+ * ║  chosen there.                                                            ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export function stampBillingUser(
+  definition: FlowDefinition,
+  publisherUserId: string | null,
+): FlowDefinition {
+  return {
+    ...definition,
+    steps: definition.steps.map((step) =>
+      step.type === 'ACTION' && actionCostsCredits(step.action)
+        ? { ...step, config: { ...step.config, userId: publisherUserId ?? '' } }
+        : step,
+    ),
+  }
+}
+
+/** Whether a definition spends credits at all. */
+export function definitionSpendsCredits(definition: FlowDefinition): boolean {
+  return definition.steps.some(
+    (step) => step.type === 'ACTION' && actionCostsCredits(step.action),
+  )
+}
+
 /** Whether a definition sends mail at all — so the check is only applied when it matters. */
 export function definitionSendsEmail(definition: FlowDefinition): boolean {
   return definition.steps.some(
@@ -404,6 +445,19 @@ const REQUIRED_ACTION_CONFIG: Partial<Record<string, readonly string[]>> = {
    * it would make clearing unpublishable.
    */
   UPDATE_FIELD: ['field'],
+  /*
+   * Every AI step needs somebody to bill. Stamped from the publisher in
+   * `publishFlow` BEFORE this check runs — listed here so a future publish
+   * path that forgets to stamp is refused rather than shipping a flow that
+   * fails with NO_BILLING_USER on its first contact.
+   */
+  HUBBLE_ICP_SCORE: ['userId'],
+  HUBBLE_RESEARCH: ['userId'],
+  HUBBLE_CLASSIFY: ['userId'],
+  HUBBLE_PERSONALIZE: ['userId'],
+  HUBBLE_REPLY_DRAFT: ['userId'],
+  HUBBLE_CLASSIFY_REPLY: ['userId'],
+  HUBBLE_ACCOUNT_SUMMARY: ['userId'],
 }
 
 /**

@@ -133,9 +133,11 @@
   max-width: 35rem;
   margin: 1.6rem 0 0;
   color: var(--muted);
-  font-size: clamp(1rem, 1.35vw, 1.22rem);
+  font-family: var(--font-body);
+  font-size: var(--leadengine-copy-size);
   font-weight: var(--leadengine-copy-weight);
-  line-height: 1.58;
+  letter-spacing: -0.012em;
+  line-height: var(--leadengine-copy-leading);
   text-wrap: pretty;
 }
 

@@ -65,8 +65,11 @@
 .instruction {
   margin: 1.25rem auto 0;
   color: rgba(255, 255, 255, 0.74);
-  font-size: clamp(0.85rem, 1.4vw, 1rem);
+  font-family: var(--font-body);
+  font-size: var(--leadengine-copy-size);
   font-weight: var(--leadengine-copy-weight);
+  letter-spacing: -0.012em;
+  line-height: var(--leadengine-copy-leading);
 }
 
 .libraryPerspective {

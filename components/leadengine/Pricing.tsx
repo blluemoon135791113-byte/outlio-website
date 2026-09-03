@@ -134,11 +134,10 @@ export function Pricing({ ctaHref, ctaLabel }: PricingProps = {}) {
 
         <div className={styles.pricingStrip}>
           <div className={styles.plansTrack}>
-            {TIERS.map((tier, index) => (
+            {TIERS.map((tier) => (
               <HoverPlan
                 key={tier.key}
                 tier={tier}
-                index={`0${index + 1}`}
                 ctaHref={ctaHref}
                 ctaLabel={ctaLabel}
               />
@@ -160,20 +159,17 @@ export function Pricing({ ctaHref, ctaLabel }: PricingProps = {}) {
 
 function HoverPlan({
   tier,
-  index,
   ctaHref,
   ctaLabel,
-}: PlanPanelProps & { index: string }) {
+}: PlanPanelProps) {
   return (
     <article
       className={`${styles.planPanel} ${tier.featured ? styles.featuredPlan : ''}`}
     >
-      {tier.badge ? <span className={styles.badge}>{tier.badge}</span> : null}
-
       <div className={styles.planIntro}>
         <header>
           <div className={styles.planTopline}>
-            <p className={styles.planIndex}>{index}</p>
+            {tier.badge ? <span className={styles.badge}>{tier.badge}</span> : null}
             <span className={styles.drawerHint} aria-hidden>→</span>
           </div>
           <h3 className={styles.planName}>{tier.name}</h3>

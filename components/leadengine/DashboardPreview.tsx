@@ -20,7 +20,7 @@ export function DashboardPreview() {
           <h2 className="mt-3 font-heading text-3xl uppercase leading-tight tracking-[-0.035em] [font-weight:var(--leadengine-heading-weight)] sm:text-4xl">
             Everything in one workspace
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted [font-weight:var(--leadengine-copy-weight)]">
+          <p className="mx-auto mt-4 max-w-xl font-body text-[var(--leadengine-copy-size)] leading-[var(--leadengine-copy-leading)] tracking-[-0.012em] text-muted [font-weight:var(--leadengine-copy-weight)]">
             See your credits, extraction activity, files, account access, and subscription the moment you sign in.
           </p>
         </div>

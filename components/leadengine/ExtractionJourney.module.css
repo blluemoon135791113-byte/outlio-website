@@ -44,6 +44,16 @@
   stroke-width: 1.45;
 }
 
+.eyebrow {
+  margin: 0 0 2rem;
+  color: #c79a2b;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 780;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
 .logoSegments path {
   transform-box: view-box;
   transform-origin: 64px 49px;
@@ -80,24 +90,26 @@
   max-width: 27rem;
   margin: clamp(1.35rem, 2vw, 1.9rem) 0 0;
   color: #393833;
-  font-size: clamp(1rem, 1.2vw, 1.16rem);
+  font-family: var(--font-body);
+  font-size: var(--leadengine-copy-size);
   font-weight: var(--leadengine-copy-weight);
-  line-height: 1.55;
+  letter-spacing: -0.012em;
+  line-height: var(--leadengine-copy-leading);
   text-wrap: pretty;
 }
 
 .cta {
   display: inline-flex;
-  min-height: 3.8rem;
+  min-height: 3.45rem;
   align-items: center;
-  gap: 1.35rem;
+  gap: 1.1rem;
   margin-top: clamp(1.6rem, 2.2vw, 2.2rem);
-  padding: 0 1.55rem;
-  border-radius: 0.88rem;
+  padding: 0 1.5rem;
+  border-radius: 0.875rem;
   background: #090909;
   color: #fff;
-  font-size: 1rem;
-  font-weight: 690;
+  font-size: 0.95rem;
+  font-weight: 650;
   box-shadow:
     0 0.18rem 0.35rem rgba(38, 22, 3, 0.1),
     0 0.9rem 2rem rgba(70, 38, 0, 0.12);
@@ -128,48 +140,47 @@
 .animationBox {
   position: relative;
   display: grid;
-  width: min(100%, 46rem);
+  width: min(96%, 44.5rem);
   min-width: 0;
   justify-self: end;
   overflow: hidden;
+  box-sizing: border-box;
   border-radius: clamp(2.7rem, 4.2vw, 4.8rem);
   place-items: center;
-  background: linear-gradient(145deg, #ff8a16, #f9720c);
+  background: #ffad5c;
   box-shadow: 0 2.25rem 5.6rem rgba(154, 69, 0, 0.18);
   isolation: isolate;
-  aspect-ratio: 1.08 / 1;
+  aspect-ratio: 1.12 / 1;
 }
 
 .workflowFrame {
-  position: relative;
-  width: 100%;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
   border-radius: inherit;
-  aspect-ratio: 956 / 788;
 }
 
 .workflowFrame::after {
   position: absolute;
-  top: 12.2%;
-  left: 5.2%;
+  right: 3.5%;
+  bottom: 0;
+  left: 7%;
   z-index: 1;
-  width: 2.1%;
-  border-radius: 999px;
-  background: linear-gradient(145deg, #ff8a16, #ff7d12);
-  box-shadow: 0 0 0.35rem rgba(255, 125, 18, 0.7);
+  height: 9%;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 92%);
   content: '';
   pointer-events: none;
-  aspect-ratio: 0.7;
 }
 
 .workflowImage {
   position: absolute;
   top: -6.47%;
-  left: -79.6%;
-  width: 185.56%;
+  left: -90.2%;
+  width: auto;
   max-width: none;
-  height: auto;
+  height: 112.56%;
   user-select: none;
+  filter: brightness(1.035) saturate(0.95);
 }
 
 @keyframes logo-segment-enter {
@@ -209,7 +220,7 @@
   }
 
   .animationBox {
-    width: min(100%, 42rem);
+    width: min(96%, 40.5rem);
     justify-self: center;
   }
 }
@@ -223,12 +234,22 @@
     margin-bottom: 1rem;
   }
 
+  .eyebrow {
+    margin-bottom: 1.35rem;
+    font-size: 0.72rem;
+  }
+
   .heading {
     font-size: clamp(2.25rem, 11vw, 3.55rem);
   }
 
   .description {
     font-size: 1rem;
+  }
+
+  .cta {
+    min-height: 3.35rem;
+    padding-inline: 1.35rem;
   }
 
   .animationBox {

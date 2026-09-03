@@ -23,6 +23,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   definitionSendsEmail,
+  definitionSpendsCredits,
+  stampBillingUser,
   stampSendAuthority,
   validateFlowDefinition,
 } from '@/lib/flows/definition'
@@ -201,5 +203,157 @@ describe('the editor', () => {
      */
     const definition = read('lib/flows/definition.ts')
     expect(definition).toContain("SEND_EMAIL: ['accountId', 'subject', 'body']")
+  })
+})
+
+/**
+ * The AI steps: whose money, and what happens when it runs out.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  NOTHING SET `userId`, SO EVERY HUBBLE STEP REFUSED.                     ║
+ * ║                                                                           ║
+ * ║  `hubbleHandler` reads `config.userId` and fails with NO_BILLING_USER —   ║
+ * ║  "this AI step has nobody to bill". Nothing in the product wrote it.      ║
+ * ║  Third instance of the same shape as `actorAuthorized` and the flow-run   ║
+ * ║  claim: a required key read in one place and written in none, so the      ║
+ * ║  feature refused politely and nobody could tell why.                      ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('the AI steps get a billing user', () => {
+  const definitionWithAi = () =>
+    validateFlowDefinition({
+      trigger: { type: 'contact_created' },
+      entryStepId: 'score',
+      steps: [
+        { id: 'score', type: 'ACTION', action: 'HUBBLE_ICP_SCORE', config: {}, next: null },
+      ],
+    })
+
+  it('stamps the publisher onto every credit-bearing step', () => {
+    const stamped = stampBillingUser(definitionWithAi(), 'user-1')
+    const step = stamped.steps[0]!
+    expect(step.type === 'ACTION' && step.config.userId).toBe('user-1')
+  })
+
+  it('leaves free steps alone', () => {
+    /*
+     * ⚠️ KEYED ON `costsCredits`, NOT A HUBBLE_ NAME PREFIX. `ASSIGN_OWNER`
+     * also has a `userId` — the person a contact is assigned to — and
+     * overwriting that with the publisher would silently reassign every
+     * contact the flow touches to whoever last pressed Publish.
+     */
+    const mixed = validateFlowDefinition({
+      trigger: { type: 'contact_created' },
+      entryStepId: 'assign',
+      steps: [
+        { id: 'assign', type: 'ACTION', action: 'ASSIGN_OWNER', config: { userId: 'someone-else' }, next: 'score' },
+        { id: 'score', type: 'ACTION', action: 'HUBBLE_RESEARCH', config: {}, next: null },
+      ],
+    })
+
+    const stamped = stampBillingUser(mixed, 'publisher')
+    const assign = stamped.steps[0]!
+    const score = stamped.steps[1]!
+    expect(assign.type === 'ACTION' && assign.config.userId).toBe('someone-else')
+    expect(score.type === 'ACTION' && score.config.userId).toBe('publisher')
+  })
+
+  it('overwrites a value the browser supplied', () => {
+    // The JSON editor is right there; billing someone else must not be
+    // achievable by typing.
+    const forged = validateFlowDefinition({
+      trigger: { type: 'contact_created' },
+      entryStepId: 'score',
+      steps: [
+        { id: 'score', type: 'ACTION', action: 'HUBBLE_ICP_SCORE', config: { userId: 'victim' }, next: null },
+      ],
+    })
+    const stamped = stampBillingUser(forged, 'publisher')
+    const step = stamped.steps[0]!
+    expect(step.type === 'ACTION' && step.config.userId).toBe('publisher')
+  })
+
+  it('detects whether a definition spends credits', () => {
+    expect(definitionSpendsCredits(definitionWithAi())).toBe(true)
+    const free = validateFlowDefinition({
+      trigger: { type: 'contact_created' },
+      entryStepId: 'a',
+      steps: [{ id: 'a', type: 'ACTION', action: 'ADD_TAG', config: { tag: 'x' }, next: null }],
+    })
+    expect(definitionSpendsCredits(free)).toBe(false)
+  })
+
+  it('publish stamps it, and stamps before checking', () => {
+    expect(PUBLISH).toContain('stampBillingUser(')
+    expect(PUBLISH).toContain('ctx.userId')
+    const stampAt = PUBLISH.indexOf('const authorized = stampBillingUser')
+    const checkAt = PUBLISH.indexOf('publishProblems(authorized)')
+    expect(stampAt).toBeLessThan(checkAt)
+  })
+
+  it('requires the billing user on every AI action', () => {
+    const definition = readFileSync(join(ROOT, 'lib', 'flows', 'definition.ts'), 'utf8')
+    for (const action of [
+      'HUBBLE_ICP_SCORE', 'HUBBLE_RESEARCH', 'HUBBLE_CLASSIFY', 'HUBBLE_PERSONALIZE',
+      'HUBBLE_REPLY_DRAFT', 'HUBBLE_CLASSIFY_REPLY', 'HUBBLE_ACCOUNT_SUMMARY',
+    ]) {
+      expect(definition, `${action} does not require a billing user`).toContain(
+        `${action}: ['userId']`,
+      )
+    }
+  })
+})
+
+describe('the AI step editor', () => {
+  it('shows the billed user rather than offering a choice', () => {
+    /*
+     * ⚠️ A DROPDOWN WOULD BE A SPENDING HOLE. Credits are user-scoped, so one
+     * member could point a 10,000-contact flow at a colleague's allowance and
+     * spend it without their knowledge.
+     */
+    expect(BUILDER).toContain('charged to')
+    expect(BUILDER).toContain('whoever publishes this flow')
+    const editor = BUILDER.slice(
+      BUILDER.indexOf('function HubbleStepEditor'),
+      BUILDER.indexOf('/** Per-step settings'),
+    )
+    // No control that writes userId.
+    expect(editor).not.toMatch(/userId:/)
+  })
+
+  it('is chosen by cost, not by name', () => {
+    /*
+     * A paid action added later gets this editor automatically, and a free one
+     * can never pick up a credit warning.
+     */
+    expect(BUILDER).toContain('if (ACTION_TYPES[step.action].costsCredits)')
+    expect(BUILDER).toContain('<HubbleStepEditor')
+  })
+
+  it('offers both credit-exhaustion behaviours and defaults to continuing', () => {
+    /*
+     * ⚠️ THE DEFAULT IS LOAD-BEARING. `onNoCredits` is 'continue' unless it is
+     * exactly 'fail', so running dry records the step as
+     * succeeded-without-result and the deterministic steps the customer is
+     * still paying for carry on rather than stranding a contact halfway.
+     */
+    const hubble = readFileSync(join(ROOT, 'lib', 'flows', 'actions', 'hubble.ts'), 'utf8')
+    expect(hubble).toContain("config.onNoCredits === 'fail' ? 'fail' : 'continue'")
+    expect(BUILDER).toContain("onNoCredits: 'continue'")
+    expect(BUILDER).toContain("onNoCredits: 'fail'")
+    expect(BUILDER).toContain('Carry on without the answer')
+    expect(BUILDER).toContain('Stop the run')
+  })
+
+  it('states the price per contact', () => {
+    expect(BUILDER).toContain('per contact')
+    expect(BUILDER).toContain('quoteCredits(task)')
+  })
+
+  it('says that storeAs is optional and what blank means', () => {
+    // The handler only writes an activity row when it is set; the step still
+    // runs and still charges without it.
+    expect(BUILDER).toContain('hubble-store-as')
+    expect(BUILDER).toContain('still runs and still charges')
   })
 })

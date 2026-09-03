@@ -1828,7 +1828,9 @@ details[open] .faq-mark {
   /* Post-hero type roles share one optical weight across every section. The
      hero intentionally keeps its lighter cinematic treatment. */
   --leadengine-heading-weight: 560;
-  --leadengine-copy-weight: 500;
+  --leadengine-copy-weight: 400;
+  --leadengine-copy-size: clamp(1.0625rem, 1.35vw, 1.2rem);
+  --leadengine-copy-leading: 1.5;
 
   --coral: #d2803f;
   --coral-deep: #8f4f1a;
@@ -1939,9 +1941,11 @@ details[open] .faq-mark {
   max-width: 48rem;
   margin-top: 1.5rem;
   color: var(--muted);
-  font-size: clamp(1rem, 1.45vw, 1.18rem);
+  font-family: var(--font-body);
+  font-size: var(--leadengine-copy-size);
   font-weight: var(--leadengine-copy-weight);
-  line-height: 1.7;
+  letter-spacing: -0.012em;
+  line-height: var(--leadengine-copy-leading);
   text-wrap: pretty;
 }
 

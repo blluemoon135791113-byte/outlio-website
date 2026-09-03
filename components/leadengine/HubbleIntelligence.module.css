@@ -194,7 +194,15 @@
   filter: drop-shadow(0 0.65rem 0.8rem rgba(39, 74, 66, 0.13));
 }
 
-.eyebrow { margin: 0 0 2rem; color: #174f42; font-size: 0.82rem; font-weight: 780; letter-spacing: 0.2em; text-transform: uppercase; }
+.eyebrow {
+  margin: 0 0 2rem;
+  color: #174f42;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 780;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
 
 .heading {
   margin: 0;
@@ -210,26 +218,33 @@
   max-width: 31rem;
   margin: clamp(1.5rem, 2.3vw, 2.25rem) 0 0;
   color: #43514d;
-  font-size: clamp(1rem, 1.4vw, 1.22rem);
+  font-family: var(--font-body);
+  font-size: var(--leadengine-copy-size);
   font-weight: var(--leadengine-copy-weight);
-  line-height: 1.56;
+  letter-spacing: -0.012em;
+  line-height: var(--leadengine-copy-leading);
   text-wrap: pretty;
 }
 
 .cta {
   display: inline-flex;
-  min-height: 4.1rem;
+  min-height: 3.45rem;
   align-items: center;
-  gap: 1.2rem;
+  gap: 1.1rem;
   margin-top: 2rem;
-  padding: 0 2rem;
-  border-radius: 0.75rem;
+  padding: 0 1.5rem;
+  border-radius: 0.875rem;
   background: #173f39;
   color: #f7fffb;
-  font-size: 1rem;
-  font-weight: 720;
+  font-size: 0.95rem;
+  font-weight: 650;
   box-shadow: 0 0.8rem 1.8rem rgba(30, 83, 73, 0.17);
   transition: transform 150ms var(--ease-out), background-color 150ms ease, color 150ms ease;
+}
+
+.cta span {
+  font-size: 1.35em;
+  line-height: 1;
 }
 
 .cta:focus-visible { outline: 3px solid rgba(70, 143, 127, 0.36); outline-offset: 4px; }
@@ -258,7 +273,7 @@
   .eyebrow { margin-bottom: 1.35rem; font-size: 0.72rem; }
   .heading { font-size: clamp(2.6rem, 12vw, 3.6rem); }
   .description { font-size: 1rem; }
-  .cta { min-height: 3.7rem; margin-top: 1.5rem; padding-inline: 1.5rem; }
+  .cta { min-height: 3.35rem; margin-top: 1.5rem; padding-inline: 1.35rem; }
   .animationBox { border-radius: 1.8rem; }
   .workflowSurface { inset: 5.5%; }
 }

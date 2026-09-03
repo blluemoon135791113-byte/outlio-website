@@ -32,6 +32,7 @@ export function ExtractionJourney() {
       <div className={styles.layout}>
         <div className={styles.copy}>
           <FeatureLogo />
+          <p className={styles.eyebrow}>Lead Engine</p>
           <h2 id="extraction-journey-title" className={styles.heading}>
             Turn searches into CRM-ready records.
           </h2>

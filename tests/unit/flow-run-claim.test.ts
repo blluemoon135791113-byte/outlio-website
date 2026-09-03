@@ -111,7 +111,18 @@ describe('publish refuses a step with no config', () => {
      * Refusing at publish is cheap; refusing at parse is a migration.
      */
     expect(DEFINITION).toContain('export function publishProblems')
-    expect(PUBLISH).toContain('publishProblems(definition)')
+    /*
+     * ⚠️ CHECKED ON THE STAMPED DEFINITION, NOT THE RAW ONE, AND THE ORDER IS
+     * LOAD-BEARING. `publishProblems` requires `userId` on every AI step, and
+     * the publisher stamp is what writes it. Running the check first — which
+     * is what `publishProblems(definition)` did — would reject every flow
+     * containing a Hubble step for missing exactly the key about to be added.
+     */
+    expect(PUBLISH).toContain('publishProblems(authorized)')
+    const stampAt = PUBLISH.indexOf('const authorized = stampBillingUser')
+    const checkAt = PUBLISH.indexOf('publishProblems(authorized)')
+    expect(stampAt).toBeGreaterThan(-1)
+    expect(stampAt, 'the check runs before the stamp').toBeLessThan(checkAt)
 
     const validator = DEFINITION.slice(
       DEFINITION.indexOf('export function validateFlowDefinition'),

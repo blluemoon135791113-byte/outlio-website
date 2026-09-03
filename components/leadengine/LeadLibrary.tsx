@@ -365,7 +365,6 @@ export function LeadLibrary() {
   return (
     <section className={styles.section} aria-labelledby="lead-library-title">
       <div className={styles.headingWrap}>
-        <p className={styles.eyebrow}>Hubble Intelligence</p>
         <h2 id="lead-library-title" className={styles.heading}>
           It&apos;s not that big. Just know where to look.
         </h2>

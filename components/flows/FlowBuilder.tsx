@@ -1197,6 +1197,120 @@ function UpdateFieldEditor({
   )
 }
 
+/**
+ * An AI step: what it costs, what happens when the money runs out, and where
+ * the answer goes.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THE BILLED USER IS SHOWN, NOT CHOSEN.                                ║
+ * ║                                                                           ║
+ * ║  `hubbleHandler` reads `config.userId` and refuses with NO_BILLING_USER   ║
+ * ║  when it is absent — and nothing in the product wrote it, so every AI     ║
+ * ║  step failed. It is now stamped from the publisher in `publishFlow`.      ║
+ * ║                                                                           ║
+ * ║  A dropdown would let one member point a 10,000-contact flow at a         ║
+ * ║  colleague's allowance and spend it without their knowledge; credits are  ║
+ * ║  user-scoped (Ledger KI11). So this states the rule rather than offering  ║
+ * ║  a choice that should not exist.                                          ║
+ * ║                                                                           ║
+ * ║  ⚠️ `onNoCredits` DEFAULTS TO CONTINUE, AND THE DEFAULT IS THE POINT.     ║
+ * ║  Running dry mid-flow must not strand a contact halfway: the AI step is   ║
+ * ║  recorded as succeeded-without-result and the deterministic steps the     ║
+ * ║  customer is still paying for carry on. "Stop the run" is the deliberate  ║
+ * ║  opposite, for a flow whose later steps are meaningless without the       ║
+ * ║  answer.                                                                  ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+function HubbleStepEditor({
+  action,
+  config,
+  onChange,
+}: {
+  action: ActionType
+  config: Record<string, unknown>
+  onChange: (config: Record<string, unknown>) => void
+}) {
+  const task = TASK_FOR[action]
+  const credits = task ? quoteCredits(task) : 0
+  const failOnEmpty = config.onNoCredits === 'fail'
+  const storeAs = typeof config.storeAs === 'string' ? config.storeAs : ''
+
+  return (
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      {/*
+        The price again, at the moment of configuring rather than only when
+        choosing. A flow pointed at 10,000 contacts commits to 10,000 times
+        this, and that multiplication is the thing people get wrong.
+      */}
+      <p className="rounded-[var(--radius-md)] bg-accent-soft px-3 py-2 text-xs leading-relaxed text-accent">
+        <strong>{credits} credit{credits === 1 ? '' : 's'}</strong> per contact, charged to
+        whoever publishes this flow.
+      </p>
+
+      <fieldset>
+        <legend className="text-xs font-semibold text-ink">If credits run out</legend>
+        <div className="mt-1.5 space-y-1.5">
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input
+              type="radio"
+              name="on-no-credits"
+              checked={!failOnEmpty}
+              onChange={() => onChange({ ...config, onNoCredits: 'continue' })}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              Carry on without the answer
+              <span className="mt-0.5 block text-xs text-muted">
+                The rest of the flow still runs. A contact is never stranded halfway.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input
+              type="radio"
+              name="on-no-credits"
+              checked={failOnEmpty}
+              onChange={() => onChange({ ...config, onNoCredits: 'fail' })}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              Stop the run
+              <span className="mt-0.5 block text-xs text-muted">
+                For a flow whose later steps are meaningless without this.
+              </span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div>
+        <label className="block text-xs font-semibold text-ink" htmlFor="hubble-store-as">
+          Record the result as
+        </label>
+        <input
+          id="hubble-store-as"
+          type="text"
+          value={storeAs}
+          maxLength={60}
+          placeholder="icp_score"
+          onChange={(event) => onChange({ ...config, storeAs: event.target.value })}
+          className="mt-1.5 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent"
+        />
+        {/*
+          Optional, and says so — the handler only writes an activity row when
+          this is set. Left blank the step still runs and still charges; it
+          simply leaves no trace on the contact.
+        */}
+        <p className="mt-1 text-xs leading-relaxed text-muted">
+          Optional. Leave it blank and the step still runs and still charges — it just
+          records nothing on the contact.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 /** Per-step settings. Deliberately small: config differs by action. */
 function StepEditor({
   step,
@@ -1291,6 +1405,22 @@ function StepEditor({
         campaigns={campaigns}
         value={typeof step.config.campaignId === 'string' ? step.config.campaignId : ''}
         onSelect={(campaignId) => onChange({ config: { ...step.config, campaignId } })}
+      />
+    )
+  }
+
+  /*
+   * Every credit-bearing action shares one handler and one config shape, so
+   * they share one editor. Keyed off `costsCredits` rather than a HUBBLE_ name
+   * prefix: a paid action added later gets the editor automatically, and a
+   * free one never picks up a credit warning.
+   */
+  if (ACTION_TYPES[step.action].costsCredits) {
+    return (
+      <HubbleStepEditor
+        action={step.action}
+        config={step.config}
+        onChange={(config) => onChange({ config })}
       />
     )
   }
