@@ -51,7 +51,10 @@ PROD_URL:             https://app.outlio.io
 TEST_MAILBOXES:       NONE — 0 mailboxes connected. Blocks Phase 7. See DECISION-04
                       (a GreenMail harness exists: `npm run test:email`, Docker required)
 TEST_LINKEDIN_ACCTS:  NONE
-PROD_ACCESS:          ⚠️ CURRENTLY AVAILABLE AND HAS BEEN USED — see DECISION-05
+PROD_ACCESS:          READ + OWNER-AUTHORIZED WRITES   (owner decision, 2026-09-04)
+                      Reads and non-destructive writes: allowed.
+                      Destructive or bulk writes: require an explicit instruction
+                      in the session. See §3.7 and ADR-001.
 ```
 
 ### What this environment can and cannot prove
@@ -74,10 +77,50 @@ a UI action or a destructive test is `BLOCKED`, not `VERIFIED`.**
 - Never commit to `main`. One branch per phase, PRs only.
 - Never `git push --force`, never rewrite published history, never `git reset --hard` on shared branches.
 - Never edit a migration that has already been applied anywhere. New migration, always.
-- Never read, write or print `.env*`, secrets, tokens, or customer data. Never connect to prod.
+- Never read, write or print `.env*`, secrets, tokens, or customer data.
+- Production access is governed by §3.7, not by a blanket ban. The rule that
+  survives unchanged: never print a secret, and never widen your own access.
 - Never delete a test to make a suite pass. A failing test is a finding, not an obstacle.
 - Keep PRs reviewable: one phase, ideally < 1,500 changed lines. Split if larger.
 - If a command in §3 is missing or wrong, **stop and ask**. Do not invent one.
+
+**§3.7 Production access — owner decision, 2026-09-04.**
+
+There is one environment. `PROD_ACCESS: FORBIDDEN` was not achievable without
+standing up a second Supabase project, and a rule nobody can follow is worse
+than no rule: it gets ignored quietly and takes the rest of the contract's
+authority with it. So the boundary is drawn where it can actually hold.
+
+**Allowed without asking**
+- Any read.
+- Writes scoped to data this session created — a test contact, a probe row —
+  provided it is removed afterwards and the removal is reported.
+- Running the worker tick, publishing a flow version, and other ordinary
+  product operations the owner has asked for in the session.
+
+**Requires an explicit instruction in the session, every time**
+- Deleting or soft-deleting anything the session did not create.
+- Any bulk write — more than a handful of rows, or any operation whose `WHERE`
+  clause is a pattern rather than a list of ids.
+- Schema changes. These are applied by the owner, not the agent (DECISION-02).
+- Anything touching `auth.users`, billing, or another workspace's data.
+
+Authorization is **per operation and per session**. "Yes, delete the test
+workspaces" does not authorize deleting anything else, and does not carry into
+the next session.
+
+**Standing requirements**
+- Before any destructive operation, inspect the target and state what will be
+  affected, with counts. Two independent signals where a selection is by
+  pattern — the 121-workspace cleanup on 2026-09-04 required both an
+  `outlio-test-` name and an `outlio-test-` owner email, and a bare
+  `LIKE '%test%'` would have taken real customers.
+- Test one before doing many.
+- Report what actually changed, not what was intended. On 2026-09-04 I reported
+  25 workspaces remaining when the true figure was 23; two more had gone in a
+  cascade I had not re-checked. Re-read state after a bulk write.
+- Fixtures at §7 scale (100k contacts, 1M activities) do **not** go into
+  production under this decision. See DECISION-03.
 
 ## §4. THE EVIDENCE PROTOCOL *(the core of this contract)*
 

@@ -61,6 +61,10 @@ metadata, so it needs an explicit go-ahead.
 **Blocks:** §7 in full. Every numeric target ("100k rows, filtered, < 800 ms")
 is unmeasurable without the fixture set §7 requires *before Phase 2*.
 
+**Still open after DECISION-05.** Owner-authorized writes do not make it sensible
+to put 100k contacts and 1M activities into production alongside 23 real
+workspaces.
+
 There is no seed script. The live workspace has 44 contacts.
 
 **Recommendation:** build the generator in Phase 0.5, against a
@@ -87,7 +91,7 @@ threading against a real provider, or bounce handling.
 
 ---
 
-## DECISION-05 — `PROD_ACCESS: FORBIDDEN` conflicts with how this repo is worked · `OPEN`
+## DECISION-05 — `PROD_ACCESS: FORBIDDEN` conflicts with how this repo is worked · `ANSWERED 2026-09-04`
 
 **This is the item I would answer first.**
 
@@ -114,6 +118,18 @@ decorative from day one:
 cannot go into production. Until then, 2 is the honest description of what is
 happening.
 
+### Answer — option 2
+
+`PROD_ACCESS: READ + OWNER-AUTHORIZED WRITES`. Recorded as ADR-001 and
+implemented as §3.7, which sets out what proceeds without asking, what needs an
+explicit instruction every time, and the standing requirements — inspect before
+destroying, two signals for a pattern-matched selection, test one before many,
+re-read state after a bulk write.
+
+⚠️ **This does not unblock DECISION-03.** Authorizing writes is not the same as
+it being wise to seed 1M synthetic activities into the database serving real
+customers. §7's fixtures still need a second project or a change to the targets.
+
 ---
 
 ## DECISION-06 — §5.2 requires `permissions.yaml`; the repo uses TypeScript · `OPEN`
@@ -137,14 +153,16 @@ contract text should be corrected rather than silently ignored.
 
 ---
 
-## DECISION-07 — Where does the existing gap matrix go? · `OPEN`
+## DECISION-07 — Where does the existing gap matrix go? · `RESOLVED 2026-09-04`
 
 `docs/OUTLIO_FUNCTIONAL_GAP_MATRIX.md` already exists from the earlier ADVANCE
 brief, in prose. §8 requires `02_GAP_MATRIX.csv`, machine-checkable, one row per
 capability with `file:line`.
 
-**Recommendation:** generate the CSV fresh in Phase 0 and keep the prose file as
-history. Phase 0 has not been started.
+**Resolved by doing it.** Phase 0 generated `docs/outlio/02_GAP_MATRIX.csv`
+fresh — 78 capability rows, every one carrying a `file:line`. The prose file is
+kept as history and is not maintained. No owner answer was needed; this was mine
+to decide and the recommendation stood.
 
 ---
 
@@ -153,9 +171,15 @@ history. Phase 0 has not been started.
 - **`docs/SYSTEM_HANDOFF.md`** (written 2026-09-04) already covers much of what
   Phase 0's narrative audit asks for, with production-verified claims. It is a
   head start on Phase 0, not a substitute for the CSV.
-- **§6.2 email law** — I have not yet checked whether `List-Unsubscribe` and a
-  postal address are emitted on send. That is a Phase 7/8 finding and I have not
-  claimed either way.
+- **§6.2 email law — checked in Phase 0, and the answer is bad.** Neither
+  `List-Unsubscribe` nor a postal address is emitted on send. The header
+  builders (`lib/email/unsubscribe.ts:134`, `lib/email/campaign-policy.ts:131`)
+  are called by nothing, and `OutboundMessage` (`lib/email/provider.ts:52`) has
+  no `headers` field to carry them through, so this is not a one-line
+  reconnection. A sender postal address does not exist anywhere in the codebase.
+  Nothing has been sent — `email_accounts` is 0 rows — so the exposure is ahead
+  of us. Moved from "Phase 7/8 finding" to **Phase 0.5 Tier 1**, because
+  DECISION-04 is one app password away from making it live.
 - **Three of §5's decisions already match the repo**: 5.1 (Postgres-native
   queues with `FOR UPDATE SKIP LOCKED`), 5.4 (hybrid custom fields — the repo
   has both `crm_custom_field_definitions` and `crm_custom_field_values`), and

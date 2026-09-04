@@ -1,0 +1,82 @@
+subsystem,capability,status,ui,api,service,db,worker,provider,tests,evidence_ref,owner_action,repair_phase
+auth,Sign in with email and password,COMPLETE,YES,NO,YES,YES,NO,supabase-auth,YES,lib/auth/actions.ts:244,,-
+auth,Sign up and workspace creation,COMPLETE,YES,NO,YES,YES,NO,supabase-auth,YES,lib/auth/actions.ts:95,,-
+auth,Access gating (approved / pending / denied),COMPLETE,YES,NO,YES,YES,NO,none,YES,lib/auth/decide.ts:1,,-
+auth,Permission resolution (45 permissions),COMPLETE,YES,YES,YES,YES,NO,none,YES,lib/workspaces/permissions.ts:246,DECISION-06 (yaml vs ts),-
+auth,Edge route guard,COMPLETE,NO,NO,YES,NO,NO,none,PARTIAL,proxy.ts:1,,-
+crm,Contact list with sort and paging,COMPLETE,YES,YES,YES,YES,NO,none,YES,lib/crm/contacts-list.ts:84,,-
+crm,Contact detail,COMPLETE,YES,YES,YES,YES,NO,none,YES,app/(product)/crm/contacts/[id]/page.tsx:1,,-
+crm,Contact create / edit / soft delete,COMPLETE,YES,NO,YES,YES,NO,none,YES,lib/crm/contact-actions.ts:1,,-
+crm,Company list and detail,COMPLETE,YES,YES,YES,YES,NO,none,YES,app/(product)/crm/companies/page.tsx:1,,-
+crm,Contact export (CRM + marketing kinds),COMPLETE,YES,NO,YES,YES,NO,none,YES,lib/crm/contact-export.ts:92,,-
+crm,CSV import with column mapping,PARTIAL,YES,NO,YES,YES,NO,none,YES,lib/crm/csv-import.ts:265,,P2
+crm,Duplicate detection and merge,COMPLETE,YES,NO,YES,YES,NO,none,YES,lib/crm/duplicates.ts:320,,-
+crm,Pipelines and stages,COMPLETE,YES,YES,YES,YES,NO,none,YES,lib/crm/opportunities.ts:47,,-
+crm,Opportunity create and stage move,COMPLETE,YES,YES,YES,YES,NO,none,YES,lib/crm/opportunities.ts:299,,-
+crm,Tasks,COMPLETE,YES,YES,YES,YES,NO,none,YES,app/(product)/crm/tasks/actions.ts:1,,-
+crm,Activity timeline (append-only),COMPLETE,YES,YES,YES,YES,NO,none,YES,lib/crm/activities.ts:1,,-
+crm,Notes,PARTIAL,YES,NO,YES,YES,NO,none,PARTIAL,lib/crm/repository.ts:1,,P2
+crm,Static lists,BACKEND_ONLY,PARTIAL,YES,PARTIAL,YES,NO,none,PARTIAL,app/(product)/crm/lists/page.tsx:77,,P2
+crm,Custom fields,DEAD_CODE,NO,NO,YES,YES,NO,none,YES,lib/crm/custom-fields.ts:265,,P3
+crm,Saved views,NOT_IMPLEMENTED,NO,NO,NO,YES,NO,none,NO,supabase/migrations:crm_saved_views,,P3
+crm,Reports (pipeline / funnel / leaderboard / forecast),COMPLETE,YES,NO,YES,YES,NO,none,YES,lib/crm/reports.ts:28,,-
+crm,Report CSV export,COMPLETE,YES,NO,YES,YES,NO,none,YES,app/(product)/crm/reports/export/route.ts:33,,-
+crm,Custom dashboards and widgets,PARTIAL,YES,NO,YES,YES,NO,none,PARTIAL,lib/reports/dashboards.ts:47,,P3
+email,Mailbox connect (SMTP/IMAP),PARTIAL,YES,NO,YES,YES,NO,smtp-imap,YES,app/(product)/email/actions.ts:1,DECISION-04 app password,P7
+email,Send worker with idempotency,COMPLETE,NO,NO,YES,YES,YES,smtp,YES,lib/email/send.ts:224,,-
+email,Reply sync and threading,COMPLETE,NO,NO,YES,YES,YES,imap,YES,lib/email/reply-sync.ts:309,,-
+email,Campaigns and sequence steps,PARTIAL,YES,NO,YES,YES,YES,none,YES,lib/email/sequence.ts:1,,P7
+email,Enrollment / pause / resume,COMPLETE,YES,NO,YES,YES,YES,none,YES,lib/email/enrollment.ts:1,,-
+email,Inbox and unified thread view,PARTIAL,YES,NO,YES,YES,NO,none,PARTIAL,lib/email/inbox.ts:1,,P7
+email,Analytics,PARTIAL,YES,NO,YES,YES,NO,none,PARTIAL,app/(product)/email/analytics/page.tsx:1,,P7
+email,Warm-up ramp and sending window,COMPLETE,YES,NO,YES,YES,YES,none,YES,lib/email/ramp.ts:1,,-
+email,Suppression list enforced on send,COMPLETE,NO,NO,YES,YES,YES,none,YES,lib/email/send.ts:109,,-
+email,Unsubscribe landing page and token,COMPLETE,YES,NO,YES,YES,NO,none,YES,app/u/[token]/route.ts:21,,-
+email,List-Unsubscribe header on outbound mail,BROKEN,NO,NO,YES,NO,NO,none,YES,lib/email/unsubscribe.ts:134,LEGAL - see PHASE_0_EVIDENCE #1,P0.5
+email,Unsubscribe link in message body,NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,lib/email/send.ts:279,LEGAL - see PHASE_0_EVIDENCE #1,P0.5
+email,Sender postal address in message,NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,lib/email/provider.ts:52,LEGAL - see PHASE_0_EVIDENCE #1,P0.5
+email,Auto-reply / OOO detection,COMPLETE,NO,NO,YES,YES,YES,none,YES,lib/email/auto-reply.ts:1,,-
+email,DNS readiness (SPF/DKIM/DMARC),COMPLETE,YES,NO,YES,YES,NO,dns,YES,lib/email/dns.ts:1,,-
+flows,Visual flow builder,COMPLETE,YES,NO,YES,YES,NO,none,PARTIAL,components/flows/FlowBuilder.tsx:1,,-
+flows,Immutable published versions,COMPLETE,YES,NO,YES,YES,NO,none,YES,app/(product)/flows/actions.ts:1,,-
+flows,Run engine with step claiming and lease,COMPLETE,NO,NO,YES,YES,YES,none,YES,lib/flows/engine.ts:276,,-
+flows,Run variable store (vars.*),COMPLETE,YES,NO,YES,YES,YES,none,PARTIAL,lib/flows/engine.ts:276,,-
+flows,29 action handlers registered,COMPLETE,YES,NO,YES,YES,YES,none,YES,lib/flows/actions/crm.ts:533,,-
+flows,Trigger dispatch - 6 of 17 types fire,PARTIAL,YES,NO,PARTIAL,YES,NO,none,PARTIAL,lib/flows/definition.ts:25,see PHASE_0_EVIDENCE #2,P4
+flows,Trigger contact_assigned,NOT_IMPLEMENTED,YES,NO,NO,YES,NO,none,NO,lib/flows/definition.ts:27,,P4
+flows,Trigger list_added,NOT_IMPLEMENTED,YES,NO,NO,YES,NO,none,NO,lib/flows/definition.ts:28,,P4
+flows,Trigger batch_added,NOT_IMPLEMENTED,YES,NO,NO,YES,NO,none,NO,lib/flows/definition.ts:29,,P4
+flows,Trigger campaign_enrolled,NOT_IMPLEMENTED,YES,NO,NO,YES,NO,none,NO,lib/flows/definition.ts:30,,P4
+flows,Trigger email_sent,NOT_IMPLEMENTED,YES,NO,NO,YES,NO,none,NO,lib/flows/definition.ts:33,,P4
+flows,Trigger email_unsubscribed,NOT_IMPLEMENTED,YES,NO,NO,YES,NO,none,NO,lib/flows/definition.ts:35,,P4
+flows,Trigger call_booked,UI_ONLY,YES,NO,PARTIAL,YES,NO,none,NO,lib/meetings/ingest.ts:150,see PHASE_0_EVIDENCE #2,P4
+flows,Trigger no_activity,NOT_IMPLEMENTED,YES,NO,NO,YES,NO,none,NO,lib/flows/definition.ts:38,,P4
+flows,Trigger webhook,NOT_IMPLEMENTED,YES,NO,NO,YES,NO,none,NO,lib/flows/definition.ts:39,,P4
+flows,Trigger scheduled,NOT_IMPLEMENTED,YES,NO,NO,YES,NO,none,NO,lib/flows/definition.ts:40,,P4
+flows,Trigger manual,PARTIAL,YES,NO,YES,YES,NO,none,PARTIAL,app/(product)/flows/actions.ts:343,,P4
+flows,Send authority gate,COMPLETE,NO,NO,YES,YES,YES,none,YES,lib/flows/send-gate.ts:1,,-
+flows,Dry-run simulation,PARTIAL,YES,NO,YES,NO,NO,none,PARTIAL,lib/flows/simulate.ts:1,,P4
+intelligence,Hubble ask / research run,COMPLETE,YES,YES,YES,YES,YES,ollama+search,PARTIAL,lib/hubble/ask.ts:150,,-
+intelligence,Credit metering,COMPLETE,YES,YES,YES,YES,NO,none,YES,lib/hubble/execute.ts:164,,-
+intelligence,Evidence store with citations,COMPLETE,NO,YES,YES,YES,YES,none,YES,lib/hubble/store.ts:1,,-
+intelligence,Evidence to CRM contact bridge,COMPLETE,NO,NO,YES,YES,YES,none,YES,lib/crm/evidence-bridge.ts:90,,-
+intelligence,Page fetch with SSRF guard,COMPLETE,NO,NO,YES,NO,NO,none,YES,lib/hubble/net/guard.ts:1,,-
+intelligence,Qualification profiles,PARTIAL,YES,NO,YES,YES,NO,none,PARTIAL,app/(product)/dashboard/intelligence/profiles/page.tsx:1,,P6
+extraction,HTML upload,COMPLETE,YES,NO,YES,YES,NO,none,YES,app/(product)/dashboard/extract/new/page.tsx:1,,-
+extraction,Job queue with claim and backoff,COMPLETE,YES,NO,YES,YES,YES,none,YES,lib/worker/process-job.ts:743,,-
+extraction,Sales Navigator parser,COMPLETE,NO,NO,YES,YES,YES,cheerio,YES,lib/worker/process-job.ts:147,,-
+extraction,Lead export CSV / XLSX,COMPLETE,YES,NO,YES,YES,YES,none,YES,lib/worker/rebuild-export.ts:1,,-
+extraction,Browser extension pairing and capture,COMPLETE,YES,YES,YES,YES,NO,none,PARTIAL,app/api/extension/capture/route.ts:42,,-
+platform,Public API v1 (6 resources),COMPLETE,YES,YES,YES,YES,NO,none,YES,lib/api/handler.ts:46,,-
+platform,API key issue and revoke,COMPLETE,YES,NO,YES,YES,NO,none,YES,lib/api/keys.ts:63,,-
+platform,Outbound webhooks with retry,COMPLETE,YES,NO,YES,YES,YES,none,YES,lib/api/webhooks.ts:69,,-
+platform,Scheduled tick (6 jobs),COMPLETE,NO,YES,YES,YES,YES,github-actions,PARTIAL,lib/workers/tick.ts:95,,-
+platform,Billing and plan limits,COMPLETE,YES,YES,YES,YES,NO,fastspring,YES,lib/limits/plans.ts:122,,-
+platform,GoHighLevel integration,PARTIAL,YES,YES,YES,YES,NO,ghl,PARTIAL,lib/integrations/ghl.ts:1,,P8
+platform,Google Sheets export,PARTIAL,YES,YES,YES,YES,NO,google,PARTIAL,lib/integrations/google-exports.ts:1,,P8
+platform,Calendly meeting ingest,PARTIAL,NO,YES,YES,YES,NO,calendly,PARTIAL,lib/meetings/ingest.ts:150,,P8
+platform,Admin console and audit log,COMPLETE,YES,NO,YES,YES,NO,none,YES,app/(product)/dashboard/access/page.tsx:1,,-
+platform,E2E acceptance harness,NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,package.json:1,DECISION-01,P0.5
+platform,Seed fixture generator (§7 scale),NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,package.json:1,DECISION-03,P0.5
+platform,Migration history in supabase_migrations,BROKEN,NO,NO,NO,PARTIAL,NO,supabase,NO,supabase/migrations:0001,DECISION-02,P0.5
+platform,Migration 0109 append-only FK repair,BROKEN,NO,NO,NO,NO,NO,none,YES,supabase/migrations/0109_fix_user_fk_append_only.sql:59,APPLY IN SQL EDITOR,P0.5
