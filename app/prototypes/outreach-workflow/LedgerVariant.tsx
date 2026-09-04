@@ -9,8 +9,8 @@ export function LedgerVariant() {
         <div className={styles.ledgerFeatures}>
           <FeatureNode icon="inbox">Connected<br />inboxes</FeatureNode>
           <FeatureNode icon="score">CRM account<br />scoring</FeatureNode>
-          <FeatureNode icon="mail">Personalized<br />email</FeatureNode>
-          <FeatureNode icon="linkedin">LinkedIn drafts<br />for review</FeatureNode>
+          <FeatureNode icon="context">Verified lead<br />context</FeatureNode>
+          <FeatureNode icon="sync">Reply<br />tracking</FeatureNode>
         </div>
 
         <div className={styles.ledgerPriorityRoute} aria-hidden="true">
@@ -22,8 +22,8 @@ export function LedgerVariant() {
         <CompactTable className={styles.ledgerTable} />
 
         <div className={styles.ledgerNurtureRoute} aria-hidden="true">
-          <span className={styles.routeLabel}>SCORE C–D · NURTURE</span>
           <span className={styles.routeLine} />
+          <span className={styles.routeLabel}>SCORE C–D · NURTURE + RE-SCORE</span>
         </div>
 
         <div className={styles.ledgerOutputs}>

@@ -231,16 +231,16 @@
 
 .ledgerPriorityRoute {
   position: absolute;
-  top: 30.5%;
-  right: 26%;
-  left: 14%;
-  height: 16%;
+  top: 51%;
+  right: 3%;
+  left: 61.5%;
+  height: 3rem;
 }
 
 .ledgerPriorityRoute .routeLine {
   position: absolute;
   top: 1rem;
-  right: 46%;
+  right: 50%;
   left: 0;
   border-top: 2px dotted rgba(53, 47, 41, 0.48);
 }
@@ -257,13 +257,13 @@
   transform: rotate(45deg);
 }
 
-.ledgerPriorityRoute .routeLabel { position: absolute; top: 0; right: 6%; }
+.ledgerPriorityRoute .routeLabel { position: absolute; top: 0; right: 3%; }
 
 .ledgerPriorityRoute .routeStem {
   position: absolute;
   top: 2rem;
-  right: 27%;
-  height: calc(100% - 2rem);
+  right: 28%;
+  height: 3.1rem;
   border-left: 2px dotted rgba(53, 47, 41, 0.48);
 }
 
@@ -277,10 +277,10 @@
 
 .ledgerTable {
   position: absolute;
-  bottom: -2.5rem;
-  left: -2.25rem;
-  width: 70%;
-  border-radius: 0 1rem 0 0;
+  bottom: 3.5%;
+  left: 0;
+  width: 66%;
+  border-radius: 0 1rem 1rem 0;
 }
 
 .crmHead,
@@ -342,19 +342,19 @@
 
 .ledgerNurtureRoute {
   position: absolute;
-  top: 49%;
+  top: 86%;
   right: 3%;
-  left: 63%;
+  left: 61.5%;
   height: 3rem;
 }
 
-.ledgerNurtureRoute .routeLabel { position: absolute; top: 0; left: 9%; }
-.ledgerNurtureRoute .routeLine { position: absolute; top: 1rem; right: 0; left: 0; border-top: 2px dotted rgba(53, 47, 41, 0.48); }
+.ledgerNurtureRoute .routeLabel { position: absolute; top: 0; right: 0; }
+.ledgerNurtureRoute .routeLine { position: absolute; top: 1rem; right: 70%; left: 0; border-top: 2px dotted rgba(53, 47, 41, 0.48); }
 
 .ledgerOutputs {
   position: absolute;
   right: 4.5%;
-  bottom: 12%;
+  top: 62%;
   display: grid;
   width: 29%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -548,8 +548,8 @@
   .copyBlock h1 { font-size: clamp(2.8rem, 12vw, 4rem); }
   .workflowPanel { min-height: 38rem; border-radius: 1.7rem; }
   .ledgerFeatures { right: 2%; left: 2%; }
-  .ledgerPriorityRoute { top: 28%; right: 16%; left: 10%; }
-  .ledgerTable { left: -4%; width: 72%; }
+  .ledgerPriorityRoute { top: 51%; right: 2%; left: 61%; }
+  .ledgerTable { left: 0; width: 66%; }
   .ledgerOutputs { right: 2%; width: 29%; grid-template-columns: 1fr; }
   .ledgerOutputs .outputNode + .outputNode { margin-top: 0.35rem; }
   .scorecardGrid { grid-template-columns: minmax(0, 1fr) 2.4rem minmax(0, 0.9fr); gap: 0.45rem; }

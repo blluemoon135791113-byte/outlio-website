@@ -11,7 +11,7 @@ export const ACCOUNTS = [
   { name: 'Summit Works', score: 'C', route: 'nurture' },
 ] as const
 
-type IconName = 'inbox' | 'score' | 'mail' | 'linkedin' | 'sync'
+type IconName = 'inbox' | 'score' | 'mail' | 'linkedin' | 'sync' | 'context'
 
 export function WorkflowIcon({ name }: { name: IconName }) {
   if (name === 'linkedin') {
@@ -44,6 +44,13 @@ export function WorkflowIcon({ name }: { name: IconName }) {
           <path d="M3.5 4.5V8H7" />
           <path d="M4.5 15.5A8 8 0 0 0 18 18.5l2.5-2.5" />
           <path d="M20.5 19.5V16H17" />
+        </>
+      )}
+      {name === 'context' && (
+        <>
+          <circle cx="9" cy="9" r="3" />
+          <path d="M4.5 18c.7-3 2.2-4.5 4.5-4.5s3.8 1.5 4.5 4.5" />
+          <path d="m15.5 11.5 1.7 1.7 3.3-3.7" />
         </>
       )}
     </svg>

@@ -114,10 +114,21 @@ migration, the one genuinely pending. DoD item 9 is mechanical from here.
 
 ---
 
-## DECISION-03 — No seed fixtures · `OPEN`
+## DECISION-03 — No seed fixtures · `OPEN` · ⚠️ **now blocking Phase 1**
 
-**Blocks:** §7 in full. Every numeric target ("100k rows, filtered, < 800 ms")
-is unmeasurable without the fixture set §7 requires *before Phase 2*.
+**Blocks:** §7 in full, and — as of Phase 1's brief — **DoD item 4**, the
+tenant-isolation test, which needs two workspaces, two roles and seeded contacts.
+
+⚠️ **Escalated 2026-09-04.** This was a Phase 2 concern. It is now the thing
+standing between Phase 1 and a `VERIFIED` acceptance journey, because building a
+tenant-isolation suite means manufacturing tenants — in the database that already
+holds **43 leaked `outlio-test-*` accounts** from ordinary test runs. Creating
+more tenants in production to prove tenants are isolated is not a trade I will
+make silently.
+
+**Two ways forward:** a second Supabase project, or Phase 1's journey is checked
+by hand once and filed `INFERRED` rather than `VERIFIED` — which weakens §4 for
+the one phase where isolation is the whole subject.
 
 **Still open after DECISION-05.** Owner-authorized writes do not make it sensible
 to put 100k contacts and 1M activities into production alongside 23 real
