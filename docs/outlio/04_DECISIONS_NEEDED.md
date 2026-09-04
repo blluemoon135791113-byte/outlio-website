@@ -40,15 +40,27 @@ mechanism the document calls its most important contribution.
 **Blocks:** DoD item 9 ("migration applied + rollback path stated") as a
 repeatable step, and §5.15's expand→backfill→contract discipline.
 
-The remote `supabase_migrations.schema_migrations` table does not record the
-109 migrations in this repo, because every one was applied by pasting into the
-SQL editor. Consequence, established 2026-09-04: **`supabase db push` tries to
-replay from `0001` against production.** It was attempted and failed at 0080's
-trigram index before doing damage. That was luck.
+⚠️ **Corrected 2026-09-04 (Phase 0.5).** The first version of this item said
+the remote table records none of this repo's migrations and that `db push`
+replays from `0001`. `supabase migration list --linked` shows the truth:
+**0001–0079 are recorded; 0080–0111 are not.** The `db push` attempt failed at
+`0080`'s trigram index because that is where it correctly started — not because
+it went back to the beginning.
+
+The hazard stands, smaller and better understood: `db push` would replay **32**
+migrations against production, several of which are not idempotent. It was
+attempted and stopped at the first one.
+
+Hand-applying does not record anything: `0110` was applied by the owner and
+verified working, and still shows `remote: ""`.
 
 **Options**
 1. Repair the migration history (`supabase migration repair --status applied`
-   for each), so `db push` becomes safe and DoD 9 is mechanical.
+   for each), so `db push` becomes safe and DoD 9 is mechanical. The set is
+   `0080`–`0108` plus `0110` — 30 migrations, all confirmed applied. `0109` is
+   **excluded because its status is unconfirmed**, and `0111` because it has not
+   been applied. Marking either as applied when it is not would be worse than
+   the current state: `db push` would then skip it forever.
 2. Keep applying by hand and document the SQL-editor path as the official one.
 
 **Recommendation:** 1, done in Phase 0.5 — but it touches production migration

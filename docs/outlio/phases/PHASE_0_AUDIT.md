@@ -287,11 +287,15 @@ the admin console with same-transaction audit logging.
 **Partial:** GoHighLevel, Google Sheets export and Calendly ingest — four
 `integration_connections` rows, no meeting bookings.
 
-**Broken:** the remote `supabase_migrations.schema_migrations` table does not
-record this repo's 109 migrations, because every one was applied by hand in the
-SQL editor. `supabase db push` therefore **replays from `0001` against
-production** — attempted on 2026-09-04, failed at `0080`'s trigram index before
-doing damage. **DECISION-02.**
+**Broken, but not in the way Phase 0 first recorded it.** ⚠️ **Correction,
+2026-09-04:** the original finding said the remote
+`supabase_migrations.schema_migrations` table records none of this repo's
+migrations and that `db push` "replays from 0001". `supabase migration list
+--linked` shows otherwise: **0001–0079 are recorded as applied; 0080–0111 are
+not.** That is why the `db push` attempt failed at `0080`'s trigram index — it
+started at the first unrecorded migration, which is exactly what it is supposed
+to do. The hazard is real and its shape was wrong: `db push` would replay 32
+migrations, not 111. **DECISION-02.**
 
 **Also broken:** migration `0109` is written, unit-tested and unapplied. Until it
 runs, any user who has ever performed a CRM action cannot be deleted, and the
