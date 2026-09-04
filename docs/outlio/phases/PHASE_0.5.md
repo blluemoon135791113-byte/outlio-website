@@ -8,9 +8,9 @@ approved.
 
 ## What Phase 0.5 is for
 
-Phase 0 found four defects that no type check, no linter, no build and no test
-could see, in a repo with 2,563 passing unit tests and a clean `tsc`. They are
-all the same shape:
+Phase 0 found five defects that no type check, no linter and no build could
+see, in a repo with 2,563 passing unit tests and a clean `tsc`. Four of them no
+test could see either. They are all the same shape:
 
 > **Code that is correct, tested, and never called — or rejected by the runtime
 > while every check passes.**
@@ -23,8 +23,17 @@ hung at step one; `actorAuthorized` read by the send gate and written nowhere;
 `userId` read by every AI step and written nowhere; 190 Tailwind classes pointing
 at two tokens that did not exist.
 
-Phase 0.5 is not "add tests". It is: **build the specific instruments that would
-have caught these**, and close the two gaps that are unsafe to carry into Phase 1.
+The fifth — the signup gate (evidence #1) — is the one that should change how
+this brief is read. A test **did** catch it, three assertions failing with
+`expected null not to be null`. It had been failing for eleven days, because the
+integration suite takes 25 minutes and so nobody ran it. The detection existed.
+The feedback loop did not, which made the detection worthless.
+
+Phase 0.5 is therefore not "add tests". It is: **build the specific instruments
+that would have caught these, and make the instruments cheap enough to actually
+run**, then close the gaps that are unsafe to carry into Phase 1. Item 2.2 —
+splitting the suite so the fast half is affordable — is not housekeeping; it is
+the reason a control could sit broken in production for eleven days.
 
 ## Ordering principle
 
@@ -34,6 +43,40 @@ Tier 1 is optional; nothing in Tier 3 blocks Phase 1.
 ---
 
 ## Tier 1 — must land before Phase 1
+
+### 1.0 Apply migration `0110` — restore the signup gate
+
+**The only item here that is broken in production right now**, rather than
+waiting to break. Everything else in Tier 1 is exposure ahead of us.
+
+Since 2026-08-24, `handle_new_user()` has not validated the signup reservation
+token, has not claimed the device fingerprint, has not blocked email / phone /
+LinkedIn reuse, and has not written the profile contact fields — because
+`0070_workspaces.sql` replaced it. 915 reservations created, 19 consumed. 39 of
+60 profiles with a null name, phone and LinkedIn URL. Evidence #1.
+
+`supabase/migrations/0110_restore_signup_gate.sql` merges the gate, the profile
+fields and the workspace bootstrap into one function and verifies itself against
+`pg_proc`, raising `0110 failed: …` naming whichever responsibility is missing.
+
+⚠️ **It makes signup stricter, deliberately.** After it runs, any signup without
+all four 64-hex hashes and a live reservation is refused — which is what shipped
+between 0019 and 0070. The server path already sends all five values on every
+attempt, so the sign-up form is unaffected. What will start failing, correctly:
+`admin.createUser()` without signup metadata (including seed scripts), and any
+second account reusing a device, email, phone or LinkedIn URL.
+
+**Owner action** — §3.7 puts schema changes with the owner.
+
+**Already landed alongside it:** `tests/unit/signup-gate-intact.test.ts`, which
+asserts the *last* definition of `handle_new_user` carries all five
+responsibilities. Verified non-vacuous by removing 0110: 9 of 12 assertions
+fail, each naming the dropped responsibility and the migration that added it.
+
+**Not backfilled, deliberately.** The 39 profiles cannot be repaired from this
+migration. The values still exist in `auth.users.raw_user_meta_data`, so a
+backfill is possible — as a separate data migration with its own review. Guessing
+is worse than a visible null (CLAUDE.md rule 4).
 
 ### 1.1 Email compliance: header transport, body link, postal address
 
@@ -76,24 +119,29 @@ raising `0109 failed: N ON DELETE SET NULL foreign key(s) remain` if any survive
 
 ### 1.3 Reachability guards
 
-Four structural tests. Each must be verified non-vacuous by breaking the thing it
+Five structural tests. Each must be verified non-vacuous by breaking the thing it
 watches — a guard that passes against a deliberately broken input is worse than
 no guard, and three guards written in this session were wrong the first time in
 exactly that way.
 
 | Guard | Fails when | Would have caught |
 |---|---|---|
-| **Trigger producer** | a `TRIGGER_TYPES` member has no `dispatchFlowTrigger`/`startRun` producer | evidence #2 (11 triggers) |
-| **Orphan module** | a file under `lib/` has zero importers outside its own tests | evidence #3 (custom fields) |
-| **Schema without code** | a table in the migrations is referenced by no `.from('…')` | evidence #4 (saved views) |
+| **Trigger producer** | a `TRIGGER_TYPES` member has no `dispatchFlowTrigger`/`startRun` producer | evidence #3 (11 triggers) |
+| **Orphan module** | a file under `lib/` has zero importers outside its own tests | evidence #4 (custom fields) |
+| **Schema without code** | a table in the migrations is referenced by no `.from('…')` | evidence #5 (saved views) |
 | **Field consumed, never produced** | a config/fact key is read and never written | `actorAuthorized`, `userId`, and the send-path headers |
+| **Trigger responsibility** | the last `create or replace` of a trigger function drops a job an earlier one added | evidence #1 (the signup gate) — **already written and proven** |
 
 The first three are mechanical. The fourth is the hardest and the most valuable
-— it is the shape of the majority of this repo's real defects.
+— it is the shape of the majority of this repo's real defects. The fifth exists
+already as `tests/unit/signup-gate-intact.test.ts` and is currently
+`handle_new_user`-specific; generalising it to every replaced function in
+`supabase/migrations/` is the Phase 0.5 work.
 
-**Expected initial state: all four fail.** They should be landed with an explicit
-allowlist of today's known offenders, so the guard blocks *new* instances
-immediately and the backlog is worked down against a list rather than a memory.
+**Expected initial state: the first four fail.** They should be landed with an
+explicit allowlist of today's known offenders, so each guard blocks *new*
+instances immediately and the backlog is worked down against a list rather than
+a memory.
 
 ---
 
@@ -107,9 +155,10 @@ it is not a script.
 
 ### 2.2 Split the test suite
 
-Evidence #5: the integration suite ran for over ten minutes without completing,
-against production over the network. A gate nobody can afford to run is not a
-gate.
+Evidence #6: the integration suite costs roughly 25 minutes — 44 files run
+serially against production over the network, ~39s each, almost all of it
+round-trips. It is not broken; it is unaffordable, and a gate nobody runs is not
+a gate.
 
 - `npm test` → unit only (141 files, 2,563 tests, **37.6s**). This is the
   pre-commit gate.
@@ -170,7 +219,8 @@ goes, it should be a decision with an ADR, not a drift.
 ## What I need from the owner to start
 
 1. **Approve this brief** (§13 step 5).
-2. **Apply migration `0109`** — 1.2.
+2. **Apply migrations `0110` and `0109`** — 1.0 and 1.2. `0110` first; it is the
+   only production defect currently in effect.
 3. **Answer DECISION-01** (E2E harness) — decides 2.3.
 4. **Answer DECISION-02** (migration repair) — decides 3.1.
 5. **Answer DECISION-03** (a second Supabase project, or amended §7 targets) —

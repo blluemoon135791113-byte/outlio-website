@@ -15,20 +15,38 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 
 Ran: `tsc --noEmit` exit 0 · `npm run lint` 0 errors / 97 warnings ·
 `vitest run tests/unit` 141 files, 2,563 tests, all passed, 37.6s ·
-42-table read-only production census. The integration suite exceeded 10 minutes
-without completing and is itself a finding.
+`vitest run tests/integration` **1,482s — 403 passed, 4 failed, 46 skipped** ·
+42-table read-only production census.
 
-Four defects found that no type check, linter, build or test could see:
+Of the four integration failures, three are finding #1 below and one was my own
+regression: `sync_contact_evidence` was added to the tick this session without
+being added to `worker-tick.test.ts`'s expected-job list. Fixed. The suite's
+25-minute cost is itself finding #6.
 
-1. **No message Outlio sends can carry `List-Unsubscribe`** — the header
+Five defects found that no type check, linter or build could see:
+
+1. ⚠️ **The signup gate has not run since 2026-08-24.** `0070_workspaces.sql` —
+   a migration about workspaces — redefined `handle_new_user()` and, because
+   `create or replace function` replaces rather than merges, deleted the
+   reservation check (0018), the device claim (0019), the identity-reuse block
+   (0019) and the profile contact fields (0009). Production: **915 signup
+   reservations created, 19 ever consumed**; 39 of 60 profiles with a null name,
+   phone and LinkedIn URL. Identity and device reuse are unenforced, leaving only
+   the in-app rate limiter, which fails open by design.
+
+   An integration test **did** catch this. It has been failing for eleven days
+   because the suite takes 25 minutes and nobody ran it. Repair written and
+   unapplied: `0110_restore_signup_gate.sql`. Guard written and proven
+   non-vacuous: `tests/unit/signup-gate-intact.test.ts`.
+2. **No message Outlio sends can carry `List-Unsubscribe`** — the header
    builders are called by nothing and `OutboundMessage` has no field to carry
    them. No body link, no postal address. CAN-SPAM and bulk-sender exposure,
    ahead of us rather than behind us (0 rows in `email_accounts`).
-2. **Eleven of seventeen flow triggers can never fire**, all of them selectable
+3. **Eleven of seventeen flow triggers can never fire**, all of them selectable
    in the builder.
-3. **`lib/crm/custom-fields.ts` has zero importers** — 326 lines, passing tests,
+4. **`lib/crm/custom-fields.ts` has zero importers** — 326 lines, passing tests,
    two empty tables.
-4. **`crm_saved_views` is a table with no code of any kind.**
+5. **`crm_saved_views` is a table with no code of any kind.**
 
 Phase 0 is `COMPLETE` in the §13 sense — the deliverables exist. It is **not**
 `COMPLETE` in the §10 DoD sense and is not claimed as such: there is no E2E
@@ -42,9 +60,12 @@ DECISION-03 (§7 fixtures — still blocked after ADR-001), DECISION-04 (mailbox
 DECISION-06 (`permissions.yaml` vs TypeScript).
 DECISION-05 (production access) was answered 2026-09-04 → ADR-001, §3.7.
 
-⚠️ **Migration `0109` is written, unit-tested and unapplied.** Until it runs, a
-user who has performed any CRM action cannot be deleted and the error blames the
-append-only guard instead of the foreign key.
+⚠️ **Migrations `0110` and `0109` are written, unit-tested and unapplied.**
+`0110` restores the signup gate and is the only production defect currently in
+effect — apply it first. `0109` re-points four `ON DELETE SET NULL` user foreign
+keys on append-only tables; until it runs, a user who has performed any CRM
+action cannot be deleted and the error blames the append-only guard instead of
+the foreign key.
 
 ⚠️ **`PRODUCT_SPEC.md` does not exist and cannot be written** without the
 original prompt's sections E–CE. §2's authority order therefore has a hole at

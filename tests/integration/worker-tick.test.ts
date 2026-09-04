@@ -20,13 +20,21 @@ import { hasSupabaseEnv } from './helpers'
 
 const describeIf = hasSupabaseEnv ? describe : describe.skip
 
-/** Every job the tick is responsible for. */
+/**
+ * Every job the tick is responsible for.
+ *
+ * ⚠️ ADDING A JOB TO THE TICK MEANS ADDING IT HERE. The exact-list assertion
+ * below is deliberately not a subset check, so a job appearing or disappearing
+ * both fail. `sync_contact_evidence` was added to the tick and not added here,
+ * and this test is what caught it.
+ */
 const EXPECTED_JOBS = [
   'reap_email_claims',
   'send_email',
   'sync_replies',
   'advance_flows',
   'deliver_webhooks',
+  'sync_contact_evidence',
 ] as const
 
 describeIf('the tick runs every background job', () => {

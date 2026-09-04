@@ -11,8 +11,20 @@ thing to read this document with.
 
 ## 1. Auth, workspaces and permissions
 
-**Current state:** the most finished subsystem in the repo, and the only one
-where the abstraction and the usage agree everywhere I looked.
+**Current state:** the best-designed subsystem in the repo and the one carrying
+the worst live defect. Both statements are true and they are the same story —
+the design is intact and one migration disconnected a third of it.
+
+**Broken, and in effect right now:** **the signup gate has not run since
+2026-08-24.** `0070_workspaces.sql` redefined `handle_new_user()` and, because
+`create or replace function` replaces rather than merges, deleted the
+reservation-token check (0018), the device claim (0019), the identity-reuse
+block (0019) and the profile contact fields (0009). Measured in production: 915
+signup reservations created, **19 ever consumed**; newest device and identity
+claim 2026-08-24; 39 of 60 profiles with a null name, phone and LinkedIn URL.
+Identity and device reuse are unenforced, leaving only the in-app rate limiter,
+which CLAUDE.md states **fails open by design**. Full detail: evidence #1.
+Repair written and unapplied: `0110_restore_signup_gate.sql`.
 
 **Functional:** email/password sign-in and sign-up; workspace creation on
 sign-up; the approved/pending/denied access gate; a 45-permission model resolved
@@ -22,7 +34,12 @@ field-targeted error focus, and an anti-enumeration rule that deliberately
 withholds the field name on a bad credential pair while supplying it on every
 sign-up rejection.
 
-**Models:** `workspaces`, `workspace_memberships`, `profiles`, `plans`. RLS on
+⚠️ That sign-up work collected, validated and normalised a name, a phone number
+and a LinkedIn URL that the database has been discarding for eleven days. The
+form is correct. Nothing downstream of it was listening.
+
+**Models:** `workspaces`, `workspace_memberships`, `profiles`, `plans`,
+`signup_ip_claims`, `signup_device_claims`, `signup_identity_claims`. RLS on
 all.
 
 **Permissions:** `lib/workspaces/permissions.ts:246` (`decidePermission`) with a
@@ -36,10 +53,19 @@ by a different mechanism. **DECISION-06**; §2.1 already resolves it in the
 repo's favour, but the contract text should be corrected rather than quietly
 ignored.
 
-**Security risks:** none found in this phase. The service role bypasses RLS and
-every service-role query I read scopes by `workspace_id` in code.
+**Security risks:** the signup gate above — the single most serious finding in
+Phase 0, and the only one already in effect rather than ahead of us. Separately,
+the service role bypasses RLS and every service-role query I read scopes by
+`workspace_id` in code; no issue found there.
 
-**Repair phase:** none.
+**Tests:** `tests/integration/signup-ip-gate.test.ts` **did catch this**, three
+tests failing with `expected null not to be null`. It has been failing for
+eleven days because the integration suite takes 25 minutes and nobody ran it
+(finding #6). The detection worked; the feedback loop did not.
+
+**Repair phase:** **P0.5 Tier 1** — apply `0110`, and land
+`tests/unit/signup-gate-intact.test.ts` (written, and verified non-vacuous) so
+the next migration to touch this function cannot drop a responsibility silently.
 
 ---
 
@@ -67,12 +93,12 @@ create a list in the UI.** The page has one `Link`, to `/crm/contacts`. Both
 tables are empty.
 
 **Dead:** `lib/crm/custom-fields.ts` — 326 lines, eight field types, a passing
-test file, **zero importers**, two empty tables. See evidence #3.
+test file, **zero importers**, two empty tables. See evidence #4.
 
 **Missing:** `crm_saved_views` — a table with no code of any kind.
 
 **APIs:** six v1 resources, all correctly authenticated and workspace-scoped
-through `apiRoute` (evidence #6).
+through `apiRoute` (evidence #7).
 
 **Events:** contact creation, stage change, opportunity won and task completion
 all dispatch flow triggers. This is the CRM's main outward edge and it works.
@@ -109,7 +135,7 @@ token, verification and landing route.
 and `OutboundMessage` (`lib/email/provider.ts:52`) has no `headers` field to
 carry them through. No unsubscribe link is written into the body either, and a
 sender postal address does not exist anywhere in the codebase. Full detail and
-the legal citations are evidence #1.
+the legal citations are evidence #2.
 
 **Partial:** campaigns and sequence steps (0 rows); inbox; analytics. Mailbox
 connect works as far as it can be tested — the SMTP error classifier was fixed
@@ -159,7 +185,7 @@ update-field, date-calc and text-transform steps; the send-authority gate.
 **Missing:** **eleven of seventeen triggers never fire.** Six do. `call_booked`
 fires only behind an `options.triggerFlowId` that no caller supplies. All
 eleven remain selectable in the builder, and a flow built on one is silently
-inert forever — `flow_runs` is 0 rows. Evidence #2.
+inert forever — `flow_runs` is 0 rows. Evidence #3.
 
 **Models:** `flows`, `flow_versions` (immutable), `flow_runs` (now with
 `variables jsonb`), `flow_step_runs`.

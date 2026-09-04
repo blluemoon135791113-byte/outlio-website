@@ -14,7 +14,7 @@ rests on reading code rather than executing it, it says so.
 | `npx tsc --noEmit` | **exit 0** | No `typecheck` script in `package.json` yet; run directly. |
 | `npm run lint` | **0 errors, 97 warnings** | All warnings are unused-vars. |
 | `npx vitest run tests/unit` | **141 files, 2563 tests, all passed, 37.6s** | |
-| `npx vitest run tests/integration` | **exceeded 10 min, backgrounded** | 44 files against production Supabase over the network. See finding #5. |
+| `npx vitest run tests/integration` | **~25 min; running at time of writing** | 44 files against production Supabase over the network. One file measured directly: `flow-engine.test.ts`, 9 tests, **passed, 39.4s**. See finding #6. |
 | Read-only production query, 42 tables | completed | Row counts below. |
 
 `npm run build` was not run. `tsc --noEmit` and `next lint` both pass and no
@@ -61,7 +61,83 @@ once this week.
 
 Ordered by consequence. Each one names how it was established.
 
-### 1. Outlio cannot attach a `List-Unsubscribe` header to any message it sends
+### 1. The signup gate has not run since 2026-08-24. `0070_workspaces.sql` deleted it.
+
+**Established by production measurement, and it is not ambiguous.**
+
+Found because three tests in `tests/integration/signup-ip-gate.test.ts` failed
+with `expected null not to be null` — a duplicate identity signing up
+successfully where the test expects a rejection.
+
+`create or replace function` does not merge; it replaces.
+`0070_workspaces.sql` — a migration whose subject is workspaces — redefines
+`handle_new_user()` with a body that creates a profile and a workspace **and
+nothing else**. It is the last of five definitions, so it is the live one. In
+replacing the previous body it deleted, with no error and no line in the diff
+that reads like a deletion:
+
+| Responsibility | Added by | Status since 0070 |
+|---|---|---|
+| Validate and consume the one-time reservation token | 0018 | gone |
+| Claim the device fingerprint | 0019 | gone |
+| Block email / phone / LinkedIn reuse | 0019 | gone |
+| Write `full_name`, `phone`, `linkedin_url` to `profiles` | 0009 | gone |
+
+**Measured in production, 2026-09-04:**
+
+```
+signup_ip_claims       915 rows   19 with claimed_at set   19 with user_id set
+signup_device_claims    19 rows   newest 2026-08-24
+signup_identity_claims  62 rows   newest 2026-08-24
+profiles                60 rows   newest 2026-09-04
+profiles with null full_name / phone / linkedin_url     39 of 60
+```
+
+Nineteen reservations have ever been consumed, out of 915 — and 19 is exactly
+the `signup_device_claims` count. The gate worked for the first 19 signups and
+has recorded nothing for eleven days while 41 more accounts were created. The
+three most recent reservations all have `claimed_at: null`.
+
+**Nothing failed.** `lib/auth/actions.ts:183-187` still computes all four hashes
+and reserves an IP on every attempt; `lib/auth/signup-gate.ts:100-104` still
+returns them. The comment at `actions.ts:174` still says *"The database trigger
+consumes this one-time token before creating the profile. Direct calls to
+Supabase Auth without a reservation fail."* The producer is intact and correct.
+The consumer was overwritten. Neither side raised anything.
+
+**What is actually exposed.** The `signup-ip-gate` test asserting that a direct
+anonymous `supabase.auth.signUp` is rejected still **passes**, so the anon path
+is blocked by something else — most likely project-level auth configuration.
+What is definitely not enforced is **identity and device reuse**: one person can
+open unlimited accounts reusing the same phone, LinkedIn URL and browser, and
+the only remaining brake is the in-app rate limiter, which CLAUDE.md states
+**fails open by design**. For a product whose free trial is gated on exactly
+these signals, that is the whole anti-abuse story.
+
+**Second, quieter consequence:** 39 of 60 profiles have a null name, phone and
+LinkedIn URL — the three fields the sign-up form collects, validates and, this
+session, had its UI polished for. They were captured, sent, and dropped on the
+floor. They still exist in `auth.users.raw_user_meta_data`, so a backfill is
+possible; it is a separate data migration and not something to guess at.
+
+**Repair written, not applied.** `supabase/migrations/0110_restore_signup_gate.sql`
+merges the gate, the profile fields and the workspace bootstrap into one
+function and verifies itself against `pg_proc`. Per §3.7 schema changes are the
+owner's to apply.
+
+**Guard written and proven.** `tests/unit/signup-gate-intact.test.ts` asserts
+that the *last* definition of `handle_new_user` carries all five
+responsibilities. Verified non-vacuous by removing 0110: 9 of its 12 assertions
+fail, naming each dropped responsibility and the migration that introduced it.
+The scanner's own health check passes in both states, deliberately.
+
+⚠️ **This is the strongest argument in the repo for the Phase 0.5 guards.** A
+security control was deleted by a migration about something else, in a repo with
+2,563 passing unit tests, a clean `tsc`, and an integration test that *did* catch
+it — a test nobody ran for eleven days because the suite takes 25 minutes
+(finding #6). Every individual mechanism worked. The composition did not.
+
+### 2. Outlio cannot attach a `List-Unsubscribe` header to any message it sends
 
 **Established statically, and the static evidence is conclusive** — the field
 does not exist in the type.
@@ -115,7 +191,7 @@ CAPTCHA solving and bot evasion *specifically because deliverability is the
 asset that pays for everything else*. Missing `List-Unsubscribe` damages exactly
 that asset, from the inside.
 
-### 2. Eleven of seventeen flow triggers can never fire
+### 3. Eleven of seventeen flow triggers can never fire
 
 Established by enumerating `TRIGGER_TYPES` (`lib/flows/definition.ts:25`) and
 cross-referencing every `dispatchFlowTrigger` and `startRun` call site.
@@ -150,7 +226,7 @@ It is v3 and back on `contact_created` (`flow_versions` confirms: v1
 `stage_changed`, v1 `contact_created`, v2 `contact_assigned`, v3
 `contact_created`). Nothing in the product would have told the owner.
 
-### 3. `lib/crm/custom-fields.ts` is imported by nothing
+### 4. `lib/crm/custom-fields.ts` is imported by nothing
 
 Established statically: zero importers across `app/`, `lib/`, `components/`.
 
@@ -165,22 +241,33 @@ This is the cleanest specimen of the defect class this repo keeps producing:
 can see it, because a fully-tested module with no importers is indistinguishable
 from a library.
 
-### 4. `crm_saved_views` exists only as a table
+### 5. `crm_saved_views` exists only as a table
 
 Zero references in `app/`, `lib/` and `components/`. Not dead code — code that
 was never written against a schema that was.
 
-### 5. The integration suite cannot function as a gate
+### 6. The integration suite cannot function as a gate
 
-Established by running it: **over 10 minutes without completing**, against
-production Supabase over the public internet.
+Established by running it. 44 files, executed serially against **production**
+Supabase over the public internet. A representative file,
+`tests/integration/flow-engine.test.ts`, passes 9 tests in **39.4s** — almost
+all of it network round-trips. At roughly that rate the suite needs ~25 minutes,
+which matches the two runs that were still going when I stopped them.
 
-44 files. Because it talks to the real database, it is also the mechanism by
-which a test run mutates production — which §3.7 now governs but does not make
-fast. A suite nobody can afford to run before a commit is not a gate, whatever
-its pass rate.
+**It does not hang.** I briefly believed it did, on the strength of a loop that
+had silently failed — macOS has no `timeout` binary, so the command exited
+without running anything and produced no summary lines to grep. Running the file
+directly took 39s and passed. The eight `*-live.test.ts` files, which would be
+the obvious suspects, skip cleanly behind env flags (`RUN_HUBBLE_LLM=1` and
+friends) and cost 229ms.
 
-### 6. A grep-shaped near-miss, recorded deliberately
+So the finding is slowness, not breakage — but the consequence stands. A suite
+that costs 25 minutes will not be run before a commit, and a gate nobody runs is
+not a gate whatever its pass rate. It is also, today, the mechanism by which
+running `npm test` writes to the production database, which §3.7 now governs but
+does not make fast.
+
+### 7. A grep-shaped near-miss, recorded deliberately
 
 `grep -c authenticateApiKey app/api/v1/*/route.ts` returns **0 for all six
 routes**, which reads like an unauthenticated public API.
@@ -192,8 +279,8 @@ by `context.workspaceId`, and the file's own header comment explains that the
 handler has no way to read a workspace id from the request — which is what makes
 cross-tenant reads impossible rather than merely forbidden.
 
-Recorded because it is the counterexample to findings #1–#4: **absence in a grep
-is a question, not an answer.** Findings #1–#4 were each carried past this point
+Recorded because it is the counterexample to findings #2–#5: **absence in a grep
+is a question, not an answer.** Findings #2–#5 were each carried past this point
 by following the indirection until it terminated. This one terminated in
 correct code.
 
@@ -210,8 +297,9 @@ Stated plainly rather than left to inference.
   `npm run test:email` exercises SMTP and IMAP against a local GreenMail
   container, which proves mechanics and proves nothing about deliverability,
   provider threading, or bounce handling.
-- **The integration suite's pass/fail is unknown** as of writing; it did not
-  finish. The unit suite's result is complete and green.
+- **The integration suite's overall pass/fail is unknown** as of writing; it was
+  still running. The one file measured directly passed. The unit suite's result
+  is complete and green.
 - **`PRODUCT_SPEC.md` does not exist and cannot be written.** §8 lists it and §2
   places it at authority level 4; the sections it is to be built from (the
   original prompt's E–CE) have not been supplied. **§2's authority order

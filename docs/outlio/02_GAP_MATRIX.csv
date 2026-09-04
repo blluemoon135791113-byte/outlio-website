@@ -1,6 +1,10 @@
 subsystem,capability,status,ui,api,service,db,worker,provider,tests,evidence_ref,owner_action,repair_phase
 auth,Sign in with email and password,COMPLETE,YES,NO,YES,YES,NO,supabase-auth,YES,lib/auth/actions.ts:244,,-
-auth,Sign up and workspace creation,COMPLETE,YES,NO,YES,YES,NO,supabase-auth,YES,lib/auth/actions.ts:95,,-
+auth,Sign up and workspace creation,PARTIAL,YES,NO,YES,YES,NO,supabase-auth,YES,lib/auth/actions.ts:95,see PHASE_0_EVIDENCE #1,P0.5
+auth,Signup reservation token consumed,BROKEN,NO,NO,YES,NO,NO,none,YES,supabase/migrations/0070_workspaces.sql:1,APPLY 0110,P0.5
+auth,Device fingerprint reuse blocked,BROKEN,NO,NO,YES,NO,NO,none,YES,supabase/migrations/0019_signup_device_identity_claims.sql:98,APPLY 0110,P0.5
+auth,Email/phone/LinkedIn reuse blocked,BROKEN,NO,NO,YES,NO,NO,none,YES,supabase/migrations/0019_signup_device_identity_claims.sql:101,APPLY 0110,P0.5
+auth,Profile name/phone/LinkedIn persisted on signup,BROKEN,YES,NO,YES,NO,NO,none,YES,supabase/migrations/0070_workspaces.sql:1,APPLY 0110 - 39 of 60 rows null,P0.5
 auth,Access gating (approved / pending / denied),COMPLETE,YES,NO,YES,YES,NO,none,YES,lib/auth/decide.ts:1,,-
 auth,Permission resolution (45 permissions),COMPLETE,YES,YES,YES,YES,NO,none,YES,lib/workspaces/permissions.ts:246,DECISION-06 (yaml vs ts),-
 auth,Edge route guard,COMPLETE,NO,NO,YES,NO,NO,none,PARTIAL,proxy.ts:1,,-
@@ -80,3 +84,4 @@ platform,E2E acceptance harness,NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,package.j
 platform,Seed fixture generator (§7 scale),NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,package.json:1,DECISION-03,P0.5
 platform,Migration history in supabase_migrations,BROKEN,NO,NO,NO,PARTIAL,NO,supabase,NO,supabase/migrations:0001,DECISION-02,P0.5
 platform,Migration 0109 append-only FK repair,BROKEN,NO,NO,NO,NO,NO,none,YES,supabase/migrations/0109_fix_user_fk_append_only.sql:59,APPLY IN SQL EDITOR,P0.5
+platform,Migration 0110 signup gate repair,BROKEN,NO,NO,NO,NO,NO,none,YES,supabase/migrations/0110_restore_signup_gate.sql:44,APPLY IN SQL EDITOR,P0.5
