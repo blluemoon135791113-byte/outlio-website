@@ -312,3 +312,43 @@ Nine pages return 200 to a setter with their mutations guarded and their data
 correctly scoped. `/crm/lists` shows list names, which is right —
 `crm.list.manage` is a setter permission. Whether any remaining VIEW should be
 narrowed is a product decision per page, not a defect.
+
+
+### What is verified about the twenty-page gating change (4a94fb0)
+
+**Runtime, 2026-09-05.** Signed in as an entitled owner (custom plan, all
+modules) and loaded every page under the three module layouts:
+
+```
+ok 200 /crm/contacts   734c   ok 200 /crm/reports             1495c
+ok 200 /crm/companies  537c   ok 200 /crm/reports/dashboards   626c
+ok 200 /crm/pipeline   729c   ok 200 /email                   1082c
+ok 200 /crm/tasks      508c   ok 200 /email/campaigns          532c
+ok 200 /crm/lists      560c   ok 200 /email/inbox              507c
+ok 200 /crm/import     571c   ok 200 /email/analytics          677c
+ok 200 /crm/duplicates 625c   ok 200 /flows                    589c
+                                             failures: 0
+```
+
+⚠️ **The character counts are the control, not decoration.** The first attempt
+at this reported ten of fourteen "passing" while every page returned an
+identical 931 characters — because sign-in had silently failed and all fourteen
+were the same sign-in page, matching on a word in the nav. Distinct lengths are
+what proves these are fourteen different pages that actually rendered.
+
+Each page was additionally asserted NOT to contain the layout's refusal copy, so
+"gated on a permission the owner lacks" fails loudly instead of looking like a
+heading that did not match.
+
+**Statically.** `module-page-guard.test.ts` derives each page's required
+permission FROM its layout and asserts they are the same string. That makes the
+silent-blank-page regression structurally impossible: identical permission,
+identical context, identical `decidePermission` result — so a layout that
+renders `{children}` can never sit above a page that refuses.
+
+**Not shipped.** A fourteen-page Playwright smoke test covering the same ground
+was written and removed. It could not be made reliably green against `next dev`
+here — sign-in intermittently failed inside the Playwright harness while
+succeeding through a plain script and through the direct API seconds apart. The
+evidence above was gathered the way that worked. Shipping a test I could not
+stand behind would have been worse than recording the gap.
