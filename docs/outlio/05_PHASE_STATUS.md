@@ -9,7 +9,7 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 0 | Reality audit | **COMPLETE** | `platform-m1-workspaces` | [`02_GAP_MATRIX.csv`](02_GAP_MATRIX.csv) · [`PHASE_0_EVIDENCE.md`](phases/PHASE_0_EVIDENCE.md) · [`PHASE_0_AUDIT.md`](phases/PHASE_0_AUDIT.md) |
 | 0.5 | Safety net | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_0.5.md`](phases/PHASE_0.5.md) · [`PHASE_0.5_EVIDENCE.md`](phases/PHASE_0.5_EVIDENCE.md) |
 | 1 | Wiring sweep + authorization core | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_1.md`](phases/PHASE_1.md) · [`PHASE_1_EVIDENCE.md`](phases/PHASE_1_EVIDENCE.md) |
-| 2 | CRM table: filter/sort/pagination, bulk actions, saved views | **IN_PROGRESS** — DoD 9 pending (0112 not on production) | `platform-m1-workspaces` | [`PHASE_2.md`](phases/PHASE_2.md) · [`PHASE_2_EVIDENCE.md`](phases/PHASE_2_EVIDENCE.md) |
+| 2 | CRM table: filter/sort/pagination, bulk actions, saved views | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_2.md`](phases/PHASE_2.md) · [`PHASE_2_EVIDENCE.md`](phases/PHASE_2_EVIDENCE.md) |
 | 3–25 | see §9 | NOT_STARTED | — | — |
 
 ## Phase 0 result (2026-09-04)
@@ -119,6 +119,44 @@ unchecked would have reported a security emergency that did not exist.
 - **Role-based denial with a real under-privileged user** is untested at the
   route layer. Both isolation suites create workspace OWNERS; a `viewer` needs a
   second member and the invitation flow — Phase 2 fixture work.
+
+## Phase 2 result (2026-09-05) — COMPLETE
+
+`tsc` 0 · lint 0 errors · **154 unit files, 2,844 tests** · 9 E2E · build clean ·
+§7 worst p95 **5.0ms** against an 800ms budget. Detail in
+[`PHASE_2_EVIDENCE.md`](phases/PHASE_2_EVIDENCE.md).
+
+**All eleven DoD items are `VERIFIED`.**
+
+- **§7 fixture and measurement** — 100k contacts on staging, every list scenario
+  on an index. DECISION-08 option A: activities deferred to Phase 14, which is
+  the phase that uses them.
+- **Migration 0112** — an index for `full_name`, the sort that had none. The plan
+  was a parallel seq scan over the whole workspace on every page.
+- **Filters** — tag (AND), company, created range, `hasEmail`, source.
+- **Bulk actions** — tag, add-to-list, soft delete, behind one helper holding the
+  permission, the bound and the empty-selection refusal.
+- **Private saved views** — DECISION-09.
+
+⚠️ **The benchmark measured my own network first**, reporting PASS at 766ms and
+FAIL at 1149ms for the same query an hour apart. Rewritten to take the verdict
+from `EXPLAIN (ANALYZE, BUFFERS)`. Testing that guard by dropping 0112's index
+produced p95 397.5ms — **under budget, so the clock said PASS** — while scanning
+3,102 buffers. The plan check fails it anyway.
+
+## Still open going into Phase 3
+
+- **Saved views have no UI.** Storage, actions and unit tests exist; nothing
+  saves a view and restores it. `crm_saved_views` leaving the unused-schema
+  allowlist is a weaker claim than the feature being finished.
+- **Role-based denial with a real under-privileged user**, carried from Phase 1.
+  Every fixture creates workspace OWNERS.
+- **DECISION-04** — no mailbox.
+- ⚠️ **The `agency` plan's limits blob is malformed** in production and staging.
+  Inactive with zero users; must be fixed before it is enabled.
+- ⚠️ **43 legacy `outlio-test-*` accounts in production**, no longer accumulating.
+- ⚠️ **`PRODUCT_SPEC.md` still does not exist**, so §2's authority order has a
+  hole at level 4.
 
 ## Work already done outside this contract
 

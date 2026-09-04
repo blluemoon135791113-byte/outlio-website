@@ -71,13 +71,34 @@ the PLAN, not the clock"* — and I rediscovered it the expensive way.
 | 6 | Typecheck, lint, unit, E2E green | VERIFIED |
 | 7 | No new dead exports | VERIFIED — `crm_saved_views` left the allowlist |
 | 8 | Feature flag, works with it off | N/A — additive filters, no flag |
-| 9 | Migration applied + rollback stated | ⚠️ **staging only**; 0112 rollback is `drop index concurrently` |
+| 9 | Migration applied + rollback stated | VERIFIED — 0112 on production 2026-09-05; rollback `drop index concurrently` |
 | 10 | Docs updated | VERIFIED |
 | 11 | This file | VERIFIED |
 
-⚠️ **Item 9 is the one blocking a clean `COMPLETE`.** `0112` is applied to
-staging and not production. Until it is, the production contact list still does a
-parallel seq scan over the whole workspace whenever anyone sorts by name.
+### Item 9 — closed 2026-09-05, after it did not apply the first time
+
+⚠️ **The first attempt reported done and had not happened.** `migration list`
+showed `0112` unrecorded and, more importantly, `supabase inspect db index-stats
+--linked` showed the index absent from production — nine indexes on
+`crm_contacts`, none of them `workspace_name`.
+
+The cause is the one the migration's own header warns about: `create index
+concurrently` cannot run inside a transaction block, and the SQL editor wraps
+statements in one. Applied with `supabase db push`, which does not.
+
+**Verified by asking the database, not the exit code:**
+
+```
+0112 index in PRODUCTION: YES
+  crm_contacts_workspace_name_idx | workspace_id,full_name | 16 kB
+migration history: 112 of 112 recorded
+```
+
+⚠️ **Worth recording for the next index.** The `concurrently` requirement is
+right for a table at volume and was over-cautious here: production holds **49
+contacts**, where a plain `create index` locks the table for milliseconds. The
+migration stays as written — it has to be correct for when the table is large —
+but the friction it caused bought nothing at today's size.
 
 ## What I could not verify, and why
 
