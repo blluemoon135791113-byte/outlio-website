@@ -90,3 +90,12 @@ graphify-out/
 # Playwright
 test-results/
 playwright-report/
+
+# Staging DB credentials — NEVER COMMITTED.
+# ⚠️ .staging-db-url embeds the password in the connection string. Listing
+# .staging-db-password alone is not enough, and missing this one put the
+# credential into a commit on 2026-09-04.
+.staging-db-password
+.staging-db-url
+.env.staging
+.env.*.local

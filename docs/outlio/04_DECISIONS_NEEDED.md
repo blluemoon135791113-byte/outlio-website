@@ -114,10 +114,14 @@ migration, the one genuinely pending. DoD item 9 is mechanical from here.
 
 ---
 
-## DECISION-03 — No seed fixtures · `PARTIALLY ANSWERED 2026-09-04`
+## DECISION-03 — No seed fixtures · `ANSWERED 2026-09-04`
 
-**For Phase 1: option 2** — no fixtures, journey filed `INFERRED`. See ADR-004.
-**For §7 and Phase 2 onward: still open.**
+**Answered by building it.** `outlio-staging` (`ahfyvhibzgxrhfjobbqn`) exists, on
+the free plan at no cost, with all 111 migrations applied. The integration suite
+targets it by default. See **ADR-005**.
+
+⚠️ ADR-004's concession — filing Phase 1's tenant journey `INFERRED` — is
+**withdrawn**. It can now be built and `VERIFIED`.
 
 **Blocks:** §7 in full, and — as of Phase 1's brief — **DoD item 4**, the
 tenant-isolation test, which needs two workspaces, two roles and seeded contacts.

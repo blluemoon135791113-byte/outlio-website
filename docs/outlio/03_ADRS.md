@@ -211,3 +211,67 @@ code, and it is exactly the kind of inference Phase 0 was written to distrust.
 
 **Revisit when** DECISION-03 is answered with a second project. This ADR is a
 concession to circumstance, not a judgement that the test is unnecessary.
+
+---
+
+## ADR-005 — A staging Supabase project, and integration tests move off production
+
+**Date:** 2026-09-04 · **Status:** Accepted · **Closes:** DECISION-03 · **Supersedes:** ADR-004's premise
+
+### Context
+
+`.env.local` pointed at production and `tests/setup.ts` loaded it, so **`npm test`
+wrote to the database serving real customers.** A census found **43
+`outlio-test-*@example.com` accounts** left there by ordinary runs. ADR-004 had
+already conceded Phase 1's tenant-isolation journey to `INFERRED` because proving
+tenants are isolated would have meant manufacturing tenants in production.
+
+### Decision
+
+Create `outlio-staging` (`ahfyvhibzgxrhfjobbqn`, `us-east-2`, Outlio org) and
+point the integration suite at it.
+
+**Cost: none.** The Outlio organisation is on the **free plan** — established
+not by reading docs but by the API refusing `--size micro` with *"Instance size
+cannot be specified for free plan organizations"*. Free tier allows two active
+projects per org and this is the second.
+
+`us-east-2` matches production, so latency behaviour stays comparable.
+
+### How the switch works
+
+`tests/setup.ts` prefers `.env.staging` when it exists, falls back to
+`.env.local`, and `OUTLIO_TEST_TARGET=production` forces the old behaviour.
+
+⚠️ **The default is the safe one, deliberately.** A developer who has not set
+staging up still runs against `.env.local` and nothing breaks; anyone who has
+gets isolation without remembering a flag. The suite now prints a warning when
+it is about to write to production, because 43 accounts accumulated there
+precisely by nobody being told.
+
+**Verified by observation, not by reading the code:** default run reports
+`https://ahfyvhibzgxrhfjobbqn`, `OUTLIO_TEST_TARGET=production` reports
+`https://ptewhpmxzenbmxlizxhu`.
+
+### The thing this incidentally proved
+
+⚠️ **All 111 migrations applied cleanly to an empty database, in order, for the
+first time ever.** Production was built by hand over months; nobody had run the
+set start to finish. It works — including `0080`'s trigram index, which failed
+against production during the `db push` attempt and applies fine here because
+`0024_move_pg_trgm_extension` runs before it in a clean sequence.
+
+That is a real check on the migration set that the repaired history (DECISION-02)
+made possible and that no amount of reading could have produced.
+
+### Consequences
+
+- Phase 1's tenant-isolation journey can now be **built and `VERIFIED`**, which
+  ADR-004 conceded as `INFERRED`. That concession is withdrawn.
+- §7's scale fixtures have somewhere to go.
+- The 43 production test accounts are still there. They are now *legacy* rather
+  than an ongoing leak, and clearing them is a separate owner decision.
+- ⚠️ **Staging holds no customer data and must never be pointed at by
+  `.env.local`.** Both files carry a header saying so.
+- The staging database password lives in `.staging-db-password`, gitignored and
+  `chmod 600`. It was generated, never reused from anywhere.
