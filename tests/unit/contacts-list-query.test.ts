@@ -32,6 +32,12 @@ const DEFAULTS: ContactsTableQuery = {
   owner: '',
   sort: 'created',
   direction: 'desc',
+  tagIds: [],
+  company: '',
+  createdAfter: '',
+  createdBefore: '',
+  hasEmail: '',
+  source: '',
 }
 
 describe('contactsHref', () => {

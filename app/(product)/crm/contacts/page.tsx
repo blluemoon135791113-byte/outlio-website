@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { BulkAssign } from '@/components/crm/BulkAssign'
+import { ContactFilters, activeFilterCount } from '@/components/crm/ContactFilters'
 import { ContactSearch } from '@/components/crm/ContactSearch'
 import {
   ContactsTable,
@@ -9,7 +10,7 @@ import {
   type ContactsTableQuery,
 } from '@/components/crm/ContactsTable'
 import { NewContactButton } from '@/components/crm/NewContact'
-import { isContactSort, listContacts } from '@/lib/crm/contacts-list'
+import { isContactSort, isContactSource, listContacts } from '@/lib/crm/contacts-list'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
@@ -40,6 +41,13 @@ export default async function ContactsPage({
     owner?: string
     sort?: string
     dir?: string
+    // `tag` may repeat; Next gives an array when it does.
+    tag?: string | string[]
+    company?: string
+    after?: string
+    before?: string
+    email?: string
+    source?: string
   }>
 }) {
   const ctx = await requireWorkspace()
@@ -62,12 +70,66 @@ export default async function ContactsPage({
    */
   const sort = isContactSort(params.sort) ? params.sort : 'created'
   const direction = params.dir === 'asc' ? 'asc' : 'desc'
+
+  /*
+   * ⚠️ EVERY ONE OF THESE IS VALIDATED BEFORE IT REACHES A QUERY, for the same
+   * reason `sort` is: a URL is user input. Ids are checked for uuid shape,
+   * `source` against the database enum, and dates by `Date.parse` — an
+   * unparseable date silently becomes "no filter" rather than a 500.
+   */
+  const isUuid = (value: string | undefined): string =>
+    value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+      ? value
+      : ''
+
+  const isDate = (value: string | undefined): string =>
+    value && !Number.isNaN(Date.parse(value)) ? value : ''
+
+  const tagIds = (Array.isArray(params.tag) ? params.tag : params.tag ? [params.tag] : [])
+    .map((t: string) => isUuid(t))
+    .filter(Boolean)
+    // Bounded: an unbounded tag list becomes an unbounded `.in()` clause.
+    .slice(0, 20)
+
+  const company = isUuid(params.company)
+  const createdAfter = isDate(params.after)
+  const createdBefore = isDate(params.before)
+  const source = isContactSource(params.source) ? params.source : ''
+  /*
+   * ⚠️ THREE STATES, NOT TWO. `yes` / `no` / absent. Coercing to a boolean
+   * would make "absent" mean `false`, and "contacts with no email" would become
+   * the default view — which reads as a broken database rather than a filter.
+   */
+  const hasEmailParam = params.email === 'yes' ? 'yes' : params.email === 'no' ? 'no' : ''
   const scopedToSelf = dataScope(ctx.role) === 'assigned'
   /*
    * A setter cannot reassign, so they get no checkboxes — a control that
    * always refuses is worse than no control.
    */
   const canAssign = can({ role: ctx.role, modules: ctx.modules }, 'crm.contact.assign')
+
+  /*
+   * ⚠️ CAPPED, AND SCOPED. Both lists feed <select> elements; an uncapped one
+   * would render 30,000 <option> nodes at the volume this list is built for.
+   * The cap is a display limit, not a security boundary — the workspace filter
+   * is what stops another tenant's tags appearing.
+   */
+  const db0 = createAdminClient()
+  const [{ data: tagRows }, { data: companyRows }] = await Promise.all([
+    db0
+      .from('crm_tags')
+      .select('id, name')
+      .eq('workspace_id', ctx.workspace.id)
+      .order('name')
+      .limit(50),
+    db0
+      .from('crm_companies')
+      .select('id, name')
+      .eq('workspace_id', ctx.workspace.id)
+      .is('deleted_at', null)
+      .order('name')
+      .limit(200),
+  ])
 
   const assignees = canAssign
     ? await (async () => {
@@ -85,7 +147,7 @@ export default async function ContactsPage({
           .select('id, full_name, email')
           .in('id', ids)
 
-        return (profiles ?? []).map((p) => ({
+  return (profiles ?? []).map((p) => ({
           id: p.id,
           name: p.full_name ?? p.email ?? 'Unnamed member',
         }))
@@ -104,6 +166,13 @@ export default async function ContactsPage({
     pageSize: PAGE_SIZE,
     sort,
     direction,
+    tagIds: tagIds.length > 0 ? tagIds : undefined,
+    companyId: company || undefined,
+    createdAfter: createdAfter || undefined,
+    createdBefore: createdBefore || undefined,
+    // '' means "no filter"; only an explicit yes/no becomes a boolean.
+    hasEmail: hasEmailParam === '' ? undefined : hasEmailParam === 'yes',
+    source: source || undefined,
   })
 
   const lastPage = Math.max(Math.ceil(result.total / result.pageSize), 1)
@@ -119,6 +188,12 @@ export default async function ContactsPage({
     owner: scopedToSelf ? '' : ownerFilter,
     sort,
     direction,
+    tagIds,
+    company,
+    createdAfter,
+    createdBefore,
+    hasEmail: hasEmailParam,
+    source,
   }
 
   /*
@@ -211,6 +286,15 @@ export default async function ContactsPage({
           ) : null}
         </div>
       </div>
+
+      <ContactFilters
+        query={query}
+        tags={(tagRows ?? []).map((t) => ({ id: t.id, name: t.name }))}
+        // A company row can have a null display name; the filter still needs a
+        // label, and an empty option is unclickable.
+        companies={(companyRows ?? []).map((c) => ({ id: c.id, name: c.name ?? 'Unnamed company' }))}
+        activeCount={activeFilterCount(query)}
+      />
 
       {result.rows.length === 0 ? (
         <div className="clay p-10 text-center">

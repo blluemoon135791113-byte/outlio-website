@@ -2,13 +2,13 @@ import type { Metadata } from 'next'
 
 import Footer from '@/app/components/Footer'
 import Nav from '@/app/components/Nav'
-import { CrmEnrichmentExperience } from '@/components/leadengine/CrmEnrichmentExperience'
 import { DashboardPreview } from '@/components/leadengine/DashboardPreview'
 import { ExtractionJourney } from '@/components/leadengine/ExtractionJourney'
 import { HubbleIntelligence } from '@/components/leadengine/HubbleIntelligence'
 import { LeadEngineHero } from '@/components/leadengine/LeadEngineHero'
 import { LeadLibrary } from '@/components/leadengine/LeadLibrary'
 import { OutreachAutomation } from '@/components/leadengine/OutreachAutomation'
+import { PlatformOverview } from '@/components/leadengine/PlatformOverview'
 import { Pricing } from '@/components/leadengine/Pricing'
 import { appUrl } from '@/lib/site'
 
@@ -55,8 +55,8 @@ export default function LeadEnginePage() {
         <LeadEngineHero />
 
         <div className="leadengine-story-flow">
-          <div className="leadengine-story-panel leadengine-story-panel-immersive">
-            <CrmEnrichmentExperience />
+          <div className="leadengine-story-panel">
+            <PlatformOverview />
           </div>
 
           <div className="leadengine-story-panel leadengine-story-panel-extraction">

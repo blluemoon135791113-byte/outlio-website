@@ -24,6 +24,19 @@ export type ContactsTableQuery = {
   owner: string
   sort: ContactSort
   direction: 'asc' | 'desc'
+  /*
+   * ⚠️ EVERY FILTER ADDED HERE MUST ALSO BE ADDED TO `contactsHref` BELOW, and
+   * the failure is silent: the filter works until the user sorts or pages, at
+   * which point it vanishes and the list quietly widens. That exact bug is
+   * recorded in the comment on `contactsHref`, and
+   * `contacts-href.test.ts` now asserts the two stay in step.
+   */
+  tagIds: string[]
+  company: string
+  createdAfter: string
+  createdBefore: string
+  hasEmail: string
+  source: string
 }
 
 /**
@@ -44,6 +57,14 @@ export function contactsHref(
 
   if (merged.search) params.set('q', merged.search)
   if (merged.owner) params.set('owner', merged.owner)
+  if (merged.company) params.set('company', merged.company)
+  if (merged.createdAfter) params.set('after', merged.createdAfter)
+  if (merged.createdBefore) params.set('before', merged.createdBefore)
+  if (merged.hasEmail) params.set('email', merged.hasEmail)
+  if (merged.source) params.set('source', merged.source)
+  // Repeated key rather than a joined string: a tag id containing the
+  // separator would otherwise split into two ids that match nothing.
+  for (const tagId of merged.tagIds ?? []) params.append('tag', tagId)
   // Omitted when it is the default, so the common URL stays short and shareable.
   if (merged.sort !== 'created') params.set('sort', merged.sort)
   if (merged.direction !== 'desc') params.set('dir', merged.direction)
