@@ -52,32 +52,46 @@ Phase 0 is `COMPLETE` in the §13 sense — the deliverables exist. It is **not*
 `COMPLETE` in the §10 DoD sense and is not claimed as such: there is no E2E
 harness, so no UI row in the gap matrix is `VERIFIED` under §4.
 
-## Blocking Phase 0.5
+## Phase 0.5 result (2026-09-04)
 
-Per §13 step 5, Phase 1 does not start until the Phase 0.5 brief is approved.
-Open: DECISION-01 (E2E harness), DECISION-02 (migration history repair),
-DECISION-03 (§7 fixtures — still blocked after ADR-001), DECISION-04 (mailbox),
-DECISION-06 (`permissions.yaml` vs TypeScript).
-DECISION-05 (production access) was answered 2026-09-04 → ADR-001, §3.7.
+Approved and implemented. `tsc` 0 · lint 0 errors · **147 unit files, 2,654
+tests** · 6 E2E · `next build` clean. Detail in
+[`PHASE_0.5_EVIDENCE.md`](phases/PHASE_0.5_EVIDENCE.md).
 
-✅ **`0110` applied 2026-09-04 and verified 6/6.** The signup gate consumes
-reservations, claims devices, blocks identity reuse and writes profile contact
-fields again.
+- **Suite split** — `npm test` is unit-only and fast. Previously the default
+  test command took 25 minutes *and wrote to production*, which is why finding
+  #1 sat unread for eleven days.
+- **Four structural guards**, each proven non-vacuous by breaking what it
+  watches. Two were caught being wrong by that step. They found **5 orphan
+  modules and 9 unused tables** where Phase 0's manual audit found one of each.
+- **Email compliance closed** — `List-Unsubscribe`, body link, postal address.
+- **E2E tripwire** — Playwright, `PARTIAL` not `COMPLETE`.
+- **All migrations applied; history repaired.** 111 of 111 recorded.
+- **ADR-002** — dead code decided per module, and one answer changed.
 
-⚠️ **`0109` status unconfirmed.** It re-points four `ON DELETE SET NULL` user
-foreign keys on append-only tables. Until it runs, a user who has performed any
-CRM action cannot be deleted and the error blames the append-only guard instead
-of the foreign key.
+⚠️ **Phase 0.5 is `COMPLETE`; that is not the same as §10 `VERIFIED`.** No UI row
+in the gap matrix is `VERIFIED` under §4, because the E2E harness deliberately
+omits the journeys that would require signing up against production.
 
-⚠️ **Six orphan test accounts** (`outlio-test-*@example.com`, 2026-09-04
-10:25–10:30) remain in production from Phase 0 verification runs. They exist
-*because* the gate was off — with `0110` live they can no longer be created.
-Awaiting instruction to remove.
+## Still open going into Phase 1
 
-⚠️ **`PRODUCT_SPEC.md` does not exist and cannot be written** without the
-original prompt's sections E–CE. §2's authority order therefore has a hole at
-level 4, and every status in the gap matrix is measured against the code's own
-intent rather than against a specification.
+- **DECISION-03 is the binding constraint.** It blocks §7's fixtures, the
+  sign-up and mailbox E2E journeys, and safely clearing the test accounts.
+- **DECISION-04** — no mailbox. Email is proven by construction and by GreenMail,
+  never against a real provider.
+- **DECISION-06** — `permissions.yaml` vs TypeScript. No behaviour rides on it.
+- ⚠️ **43 `outlio-test-*@example.com` accounts in production**, left by test runs
+  across 2026-09-04. Corrects an earlier report of "six", which came from
+  counting against a stale baseline. The number matters less than the mechanism:
+  **integration runs leak accounts into production.**
+- ⚠️ **`PRODUCT_SPEC.md` does not exist and cannot be written** without the
+  original prompt's sections E–CE. §2's authority order has a hole at level 4,
+  so every status in the gap matrix is measured against the code's own intent
+  rather than a specification.
+- **39 profiles still have a null name, phone and LinkedIn URL** from the 0070
+  window. The values survive in `auth.users.raw_user_meta_data`; a backfill is a
+  separate migration with its own review, and guessing is worse than a visible
+  null.
 
 ## Work already done outside this contract
 
