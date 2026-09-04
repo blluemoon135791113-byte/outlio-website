@@ -274,6 +274,52 @@ at all today so there is nothing to migrate either way.
 
 ---
 
+## DECISION-10 — Does a bridged value carry a citation, or get re-derived? · `OPEN`
+
+**Blocks:** Phase 3's provenance surfacing.
+
+⚠️ **The citation does not survive the bridge today.** `research_evidence` carries
+`source_provider`, `source_url`, `source_confidence`, `confidence`,
+`retrieved_at` and `research_run_id`. `crm_contact_emails` carries `source` — an
+enum, not a citation. A search of every column in the database for `%evidence%`,
+`%citation%` or `%source_url%` returns nothing on any `crm_*` table.
+
+So once `syncContactEvidenceToCrm` copies an address into the CRM, the link to
+the page it came from is gone.
+
+This is in tension with **CLAUDE.md rule 4**: a value may be stored only if
+literally observed *"and the evidence row naming the provider and URL is kept as
+its citation"*. The row is kept, in another table, reachable only by inference.
+
+| Option | Cost | Consequence |
+|---|---|---|
+| **A. Add `evidence_id`** to `crm_contact_emails` / `_phones` | one migration | The citation becomes a foreign key. Exact, cheap, and rule 4's intent is met structurally. Existing rows get NULL — honestly "unknown" rather than a guess. |
+| B. Re-derive by matching value + field + entity | none | Crosses the user_id/workspace_id tenancy seam, returns the wrong row when a value was observed twice, and degrades as evidence grows. |
+
+**Recommendation: A.** B looks cheaper and is wrong occasionally — the worst
+combination, and the exact shape this project has spent three phases finding.
+
+⚠️ Neither table is append-only (checked), so `ON DELETE SET NULL` is safe here,
+unlike the four tables migration 0109 had to repair.
+
+---
+
+## DECISION-11 — What does a value with no provenance say? · `OPEN`
+
+**Blocks:** the missing-data state Phase 3 owes CLAUDE.md rule 4, which requires
+`NULL` **plus an indicator** — the pages currently render an empty cell, which
+reads as "not applicable" rather than "we never found this".
+
+Most CRM data has no evidence: typed by hand, CSV-imported, or bridged before a
+citation column existed.
+
+**Recommendation: distinguish "entered" from "unknown".** `crm_contacts.source`
+already records `manual`, `csv_import`, `lead_engine`, `api`, `flow`, so the data
+can already tell them apart. Labelling a hand-typed value "source unknown" would
+be a small lie repeated on every row.
+
+---
+
 ## Not blocking, but worth knowing
 
 - **`docs/SYSTEM_HANDOFF.md`** (written 2026-09-04) already covers much of what
