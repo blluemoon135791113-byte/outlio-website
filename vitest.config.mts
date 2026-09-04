@@ -63,7 +63,7 @@ export default defineConfig({
           name: 'integration',
           environment: 'node',
           include: ['tests/integration/**/*.test.ts'],
-          setupFiles: ['tests/setup.ts'],
+          setupFiles: ['tests/setup.integration.ts'],
           /*
            * ⚠️ SERIAL, AND IT MUST STAY SERIAL. These create and delete real
            * users in a real Supabase project. Two files racing on the same

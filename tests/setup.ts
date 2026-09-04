@@ -1,43 +1,17 @@
 /**
- * Test setup — decides which database the integration suite talks to.
+ * Unit-test setup. Loads `.env.local`, deliberately.
  *
- * ╔═══════════════════════════════════════════════════════════════════════════╗
- * ║  UNTIL PHASE 1 THIS LOADED `.env.local`, WHICH POINTS AT PRODUCTION.     ║
- * ║                                                                           ║
- * ║  So `npm test` wrote to the database serving real customers. A census on  ║
- * ║  2026-09-04 found 43 `outlio-test-*@example.com` accounts left there by   ║
- * ║  ordinary test runs — and the tenant-isolation suite Phase 1 needs could  ║
- * ║  not be written at all, because proving tenants are isolated would have   ║
- * ║  meant manufacturing tenants in production (ADR-004).                     ║
- * ║                                                                           ║
- * ║  ⚠️ `.env.staging` NOW WINS WHEN IT EXISTS. That is the safe default: a    ║
- * ║  developer who has not set staging up still runs against `.env.local` and ║
- * ║  nothing breaks, while anyone who has gets the isolated database without  ║
- * ║  remembering a flag. Set `OUTLIO_TEST_TARGET=production` to override,     ║
- * ║  which you should need approximately never.                               ║
- * ╚═══════════════════════════════════════════════════════════════════════════╝
+ * ⚠️ UNIT TESTS STAY ON `.env.local` AND THAT IS NOT AN OVERSIGHT.
+ *
+ * The staging redirect exists to stop tests WRITING to production. Unit tests
+ * open no sockets, so pointing them elsewhere buys no safety — and it broke
+ * `provider-registry.test.ts`, which reads provider API keys from the
+ * environment to decide the live waterfall. `.env.staging` deliberately has no
+ * third-party keys, so the registry came out shorter and the test failed for a
+ * reason that had nothing to do with the code under test.
+ *
+ * The integration suite uses `tests/setup.integration.ts` instead.
  */
-import { existsSync } from 'node:fs'
-
 import { config } from 'dotenv'
 
-const wantsProduction = process.env.OUTLIO_TEST_TARGET === 'production'
-const stagingExists = existsSync('.env.staging')
-
-const envFile = !wantsProduction && stagingExists ? '.env.staging' : '.env.local'
-
-config({ path: envFile, quiet: true })
-
-/*
- * ⚠️ SAID OUT LOUD, EVERY RUN. A suite that silently writes to production is
- * exactly how 43 accounts accumulated there unnoticed. If this line ever reads
- * "production" when you did not intend it to, stop.
- */
-if (envFile === '.env.local' && !stagingExists) {
-  console.warn(
-    '\n⚠️  Tests are running against .env.local (PRODUCTION). ' +
-      'Create .env.staging to use the isolated database.\n',
-  )
-} else if (wantsProduction) {
-  console.warn('\n⚠️  OUTLIO_TEST_TARGET=production — writing to the live database.\n')
-}
+config({ path: '.env.local', quiet: true })
