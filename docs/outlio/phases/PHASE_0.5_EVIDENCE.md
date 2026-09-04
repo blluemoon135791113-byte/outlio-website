@@ -125,7 +125,42 @@ This is DECISION-03's strongest argument to date, and DECISION-03 is still open.
 Until 0111 runs, the send path throws a named error rather than silently sending
 non-compliant mail — deliberate, see the block in `complianceContext`.
 
-### 3.1, 3.3 — not started
+### 3.3 — done, and it changed one answer (ADR-002)
 
-Migration history repair (DECISION-02) and the dead-code decision. The guards
-now hold the line on both, so neither blocks Phase 1.
+The brief said deleting the orphaned modules was "probably the right one".
+Per-module review made that wrong once, expensively.
+
+`lib/fastspring/access.ts` mirrors `public.fastspring_subscription_grants_access`
+— the SQL function that decides whether a paying customer has access. Its own
+comment says "Both must change together"; nothing made that true, and the
+TypeScript half was imported by nothing.
+
+⚠️ **A dead mirror is worse than no mirror.** It reads as a second opinion that
+agrees, so someone changing the billing rule updates the file they can see and
+ships nothing. `fastspring-access-parity.test.ts` now parses the accepted-state
+list out of the migration and asserts both agree for every state × active pair.
+The list is never hard-coded — that would be a third definition. Verified
+non-vacuous by flipping `canceled` → `overdue`: three assertions fail.
+
+The other four are product decisions, recorded in ADR-002 with size and purpose.
+
+### 3.1 — investigated, and it corrected a Phase 0 finding
+
+⚠️ **Phase 0 said the remote migration table records none of this repo's
+migrations and that `db push` "replays from 0001". Both were wrong.**
+`supabase migration list --linked` shows **0001–0079 recorded, 0080–0111 not**.
+The `db push` that failed at `0080`'s trigram index started there because that
+is the first unrecorded migration — correct behaviour, not a replay from the
+beginning.
+
+I inferred "replays from 0001" from a failure at 0080 without checking, then
+wrote it into the audit and DECISION-02 as established fact. Corrected in both.
+
+The hazard is real and smaller: `db push` would replay **32** migrations,
+several not idempotent.
+
+The repair set is `0080`–`0108` plus `0110` — thirty migrations, all confirmed
+applied. **`0109` is excluded** (status unconfirmed) and **`0111`** (not
+applied). Marking either applied when it is not would be worse than doing
+nothing: `db push` would skip it permanently. Not run — it writes production
+migration metadata.
