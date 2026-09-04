@@ -1,8 +1,7 @@
 # Phase 0.5 — Safety net
 
-**Status:** BRIEF — awaiting owner approval. Nothing here is implemented.
-Contract §13 step 4. Per §13 step 5, Phase 1 does not start until this is
-approved.
+**Status:** APPROVED 2026-09-04. Implementation in progress — see
+`PHASE_0.5_EVIDENCE.md` for what has landed and what it cost.
 
 ---
 

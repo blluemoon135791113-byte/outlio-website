@@ -12,6 +12,7 @@
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:all": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "ext:build": "node extensions/scripts/build.mjs --target=chrome && node extensions/scripts/build.mjs --target=firefox",
     "ext:chrome": "node extensions/scripts/build.mjs --target=chrome",
@@ -47,6 +48,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/country-list": "^2.1.4",
     "@types/jsdom": "^30.0.0",
