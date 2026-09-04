@@ -9,7 +9,8 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 0 | Reality audit | **COMPLETE** | `platform-m1-workspaces` | [`02_GAP_MATRIX.csv`](02_GAP_MATRIX.csv) · [`PHASE_0_EVIDENCE.md`](phases/PHASE_0_EVIDENCE.md) · [`PHASE_0_AUDIT.md`](phases/PHASE_0_AUDIT.md) |
 | 0.5 | Safety net | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_0.5.md`](phases/PHASE_0.5.md) · [`PHASE_0.5_EVIDENCE.md`](phases/PHASE_0.5_EVIDENCE.md) |
 | 1 | Wiring sweep + authorization core | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_1.md`](phases/PHASE_1.md) · [`PHASE_1_EVIDENCE.md`](phases/PHASE_1_EVIDENCE.md) |
-| 2–25 | see §9 | NOT_STARTED | — | — |
+| 2 | CRM table: filter/sort/pagination, bulk actions, saved views | **IN_PROGRESS** — DoD 9 pending (0112 not on production) | `platform-m1-workspaces` | [`PHASE_2.md`](phases/PHASE_2.md) · [`PHASE_2_EVIDENCE.md`](phases/PHASE_2_EVIDENCE.md) |
+| 3–25 | see §9 | NOT_STARTED | — | — |
 
 ## Phase 0 result (2026-09-04)
 
