@@ -34,9 +34,9 @@ Five defects found that no type check, linter or build could see:
    phone and LinkedIn URL. Identity and device reuse are unenforced, leaving only
    the in-app rate limiter, which fails open by design.
 
-   An integration test **did** catch this. It has been failing for eleven days
-   because the suite takes 25 minutes and nobody ran it. Repair written and
-   unapplied: `0110_restore_signup_gate.sql`. Guard written and proven
+   An integration test **did** catch this. It had been failing for eleven days
+   because the suite takes 25 minutes and nobody ran it. **`0110` applied by the
+   owner 2026-09-04; `signup-ip-gate.test.ts` now 6/6.** Guard landed and proven
    non-vacuous: `tests/unit/signup-gate-intact.test.ts`.
 2. **No message Outlio sends can carry `List-Unsubscribe`** — the header
    builders are called by nothing and `OutboundMessage` has no field to carry
@@ -60,12 +60,19 @@ DECISION-03 (§7 fixtures — still blocked after ADR-001), DECISION-04 (mailbox
 DECISION-06 (`permissions.yaml` vs TypeScript).
 DECISION-05 (production access) was answered 2026-09-04 → ADR-001, §3.7.
 
-⚠️ **Migrations `0110` and `0109` are written, unit-tested and unapplied.**
-`0110` restores the signup gate and is the only production defect currently in
-effect — apply it first. `0109` re-points four `ON DELETE SET NULL` user foreign
-keys on append-only tables; until it runs, a user who has performed any CRM
-action cannot be deleted and the error blames the append-only guard instead of
-the foreign key.
+✅ **`0110` applied 2026-09-04 and verified 6/6.** The signup gate consumes
+reservations, claims devices, blocks identity reuse and writes profile contact
+fields again.
+
+⚠️ **`0109` status unconfirmed.** It re-points four `ON DELETE SET NULL` user
+foreign keys on append-only tables. Until it runs, a user who has performed any
+CRM action cannot be deleted and the error blames the append-only guard instead
+of the foreign key.
+
+⚠️ **Six orphan test accounts** (`outlio-test-*@example.com`, 2026-09-04
+10:25–10:30) remain in production from Phase 0 verification runs. They exist
+*because* the gate was off — with `0110` live they can no longer be created.
+Awaiting instruction to remove.
 
 ⚠️ **`PRODUCT_SPEC.md` does not exist and cannot be written** without the
 original prompt's sections E–CE. §2's authority order therefore has a hole at

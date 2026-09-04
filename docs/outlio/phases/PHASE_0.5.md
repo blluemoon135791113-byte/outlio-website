@@ -44,10 +44,15 @@ Tier 1 is optional; nothing in Tier 3 blocks Phase 1.
 
 ## Tier 1 — must land before Phase 1
 
-### 1.0 Apply migration `0110` — restore the signup gate
+### 1.0 ✅ DONE — migration `0110`, the signup gate
 
-**The only item here that is broken in production right now**, rather than
-waiting to break. Everything else in Tier 1 is exposure ahead of us.
+**Applied by the owner and verified 2026-09-04.** `pg_proc` shows all five
+responsibilities present (`body_len` 2525) and `signup-ip-gate.test.ts` is 6/6,
+after eleven days of three failing assertions. This was the only Tier 1 item
+broken in production rather than waiting to break; the rest is exposure ahead
+of us.
+
+Record of what it was:
 
 Since 2026-08-24, `handle_new_user()` has not validated the signup reservation
 token, has not claimed the device fingerprint, has not blocked email / phone /
@@ -66,7 +71,7 @@ attempt, so the sign-up form is unaffected. What will start failing, correctly:
 `admin.createUser()` without signup metadata (including seed scripts), and any
 second account reusing a device, email, phone or LinkedIn URL.
 
-**Owner action** — §3.7 puts schema changes with the owner.
+**Done.** §3.7 put the change with the owner; the verification above is mine.
 
 **Already landed alongside it:** `tests/unit/signup-gate-intact.test.ts`, which
 asserts the *last* definition of `handle_new_user` carries all five
@@ -219,8 +224,8 @@ goes, it should be a decision with an ADR, not a drift.
 ## What I need from the owner to start
 
 1. **Approve this brief** (§13 step 5).
-2. **Apply migrations `0110` and `0109`** — 1.0 and 1.2. `0110` first; it is the
-   only production defect currently in effect.
+2. ~~Apply `0110`~~ — **done 2026-09-04, verified 6/6.** `0109` (1.2) still needs
+   confirming; its check returns zero rows when applied.
 3. **Answer DECISION-01** (E2E harness) — decides 2.3.
 4. **Answer DECISION-02** (migration repair) — decides 3.1.
 5. **Answer DECISION-03** (a second Supabase project, or amended §7 targets) —

@@ -120,10 +120,20 @@ session, had its UI polished for. They were captured, sent, and dropped on the
 floor. They still exist in `auth.users.raw_user_meta_data`, so a backfill is
 possible; it is a separate data migration and not something to guess at.
 
-**Repair written, not applied.** `supabase/migrations/0110_restore_signup_gate.sql`
-merges the gate, the profile fields and the workspace bootstrap into one
-function and verifies itself against `pg_proc`. Per §3.7 schema changes are the
-owner's to apply.
+**Repair applied and verified, 2026-09-04.**
+`supabase/migrations/0110_restore_signup_gate.sql` merges the gate, the profile
+fields and the workspace bootstrap into one function. Applied by the owner;
+`pg_proc` confirms all five responsibilities present, `body_len` 2525. The three
+failing tests in `signup-ip-gate.test.ts` now pass, and so do the other three —
+**6/6**.
+
+Confirming this needed care, because the honest signal is a set of counts that
+do *not* move. The test creates a user, asserts duplicates are refused, then
+deletes it in a `finally`; migration 0026 releases the claims on delete. So
+`signup_device_claims` and `signup_identity_claims` correctly return to 19 and
+62. What does move is `signup_ip_claims`, 915 → 927, with `consumed` still 19 —
+reservations accumulating and being released exactly as designed. A first read
+of "counts unchanged" looks like failure and is the opposite.
 
 **Guard written and proven.** `tests/unit/signup-gate-intact.test.ts` asserts
 that the *last* definition of `handle_new_user` carries all five
