@@ -20,6 +20,7 @@ import { redirect } from 'next/navigation'
 import { cache } from 'react'
 
 import { requireUser, assertUser } from '@/lib/auth/access'
+import type { TenantScope } from '@/lib/auth/scope'
 import { AppError } from '@/lib/errors/catalog'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
@@ -58,6 +59,16 @@ export type WorkspaceContext = {
   /** Seats including the owner. `null` means unlimited. */
   memberLimit: number | null
   memberCount: number
+  /**
+   * The tenant scope for this request.
+   *
+   * ⚠️ CARRIED ON THE CONTEXT SO A CALL SITE CANNOT ASSEMBLE ITS OWN. Pass it
+   * to `scopedFrom` and the tenant filter is applied for you, with the right
+   * column — this codebase has two tenancy models live at once, and
+   * `.eq('workspace_id', …)` against a user-scoped table matches nothing and
+   * renders as an empty state rather than an error.
+   */
+  scope: TenantScope
 }
 
 /** Every workspace the user belongs to, most recently joined last. */
@@ -133,6 +144,7 @@ async function resolve(userId: string, email: string | null): Promise<WorkspaceC
     modules: entitlements.modules,
     memberLimit: entitlements.memberLimit,
     memberCount,
+    scope: { workspaceId: active.id, userId },
   }
 }
 

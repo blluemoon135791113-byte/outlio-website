@@ -92,7 +92,7 @@ export default async function ContactsPage({
       })()
     : []
 
-  const result = await listContacts(ctx.workspace.id, {
+  const result = await listContacts(ctx.scope, {
     search,
     ownerUserId: scopedToSelf
       ? ctx.userId

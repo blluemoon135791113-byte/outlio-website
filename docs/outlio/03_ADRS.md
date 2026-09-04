@@ -142,3 +142,72 @@ it does not.
   `crm_custom_field_definitions` is — it appears in a SQL function body. Half
   the feature is reachable from the database and half is not, which is worth
   knowing before anyone decides to finish or drop it.
+
+---
+
+## ADR-003 — Permissions stay in TypeScript; §5.2 is amended
+
+**Date:** 2026-09-04 · **Status:** Accepted · **Supersedes:** §5.2 · **Closes:** DECISION-06
+
+§5.2 names `permissions.yaml` as the single source of truth for authorization,
+with types generated from it. The repo instead holds 45 permissions in
+`lib/workspaces/permissions.ts` as a typed `Record`, resolved by one pure
+function (`decidePermission`, `:246`) over a total role hierarchy, with matrix
+tests.
+
+**Decision: keep TypeScript.** §2.1 already settles this — running code outranks
+the contract — but the contract text was corrected rather than quietly ignored,
+which is the point of writing it down.
+
+The repo satisfies §5.2's *intent* by a different mechanism: one source, one
+resolver, types that cannot drift from it. Moving to YAML would add a generation
+step, a build-time failure mode and a second file to keep in sync, in exchange
+for nothing a reader or a test can detect.
+
+⚠️ **What the decision does not excuse.** §5.2's real requirement is that
+authorization has exactly one definition. TypeScript satisfies that for
+*permissions* and did **not** satisfy it for *tenancy*, which had no single
+definition at all until `lib/auth/scope.ts`. The YAML question was the less
+important half of §5.2 and answering it should not imply the other half was fine.
+
+---
+
+## ADR-004 — Phase 1's tenant-isolation journey is filed `INFERRED`
+
+**Date:** 2026-09-04 · **Status:** Accepted · **Closes:** DECISION-03 for Phase 1 only
+
+DoD item 4 requires a tenant-isolation test "via API and via direct URL". That
+needs two workspaces, two roles and seeded contacts.
+
+`.env.local` points at production. Ordinary test runs have already left **43
+`outlio-test-*` accounts** there. Building a tenant-isolation suite would mean
+manufacturing tenants in the live database in order to prove tenants are
+isolated.
+
+**Decision: do not create the fixtures. File the journey `INFERRED`, not
+`VERIFIED`,** and say so wherever the status appears.
+
+**Options rejected and why:**
+- *A second Supabase project* — the right answer, and a recurring cost the owner
+  declined for now.
+- *Reuse the 27 real workspaces* — a cross-tenant test that writes to a
+  customer's workspace to prove it is protected is self-evidently unacceptable,
+  and a read-only version cannot test writes, which is where isolation fails.
+
+⚠️ **What this costs, stated plainly.** Phase 1's subject is tenant isolation,
+and it will close with its central property unproven by test. What *is* proven:
+
+- **Zero tables leak rows to an anonymous client** — measured against production,
+  86 rejected outright, 21 positively protected, 17 inconclusive because empty.
+- **Every table's tenancy is classified and checked against the real schema** —
+  `tests/unit/tenant-scope.test.ts`, 131 assertions, verified non-vacuous both
+  ways.
+- **The v1 API cannot express a cross-tenant read** — `apiRoute` takes the
+  workspace from the key and handlers have no way to read one from the request.
+
+What is **not** proven is the runtime behaviour of a signed-in member of
+workspace A requesting workspace B's record. That remains an inference from the
+code, and it is exactly the kind of inference Phase 0 was written to distrust.
+
+**Revisit when** DECISION-03 is answered with a second project. This ADR is a
+concession to circumstance, not a judgement that the test is unnecessary.

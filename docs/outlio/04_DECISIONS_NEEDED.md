@@ -114,7 +114,10 @@ migration, the one genuinely pending. DoD item 9 is mechanical from here.
 
 ---
 
-## DECISION-03 — No seed fixtures · `OPEN` · ⚠️ **now blocking Phase 1**
+## DECISION-03 — No seed fixtures · `PARTIALLY ANSWERED 2026-09-04`
+
+**For Phase 1: option 2** — no fixtures, journey filed `INFERRED`. See ADR-004.
+**For §7 and Phase 2 onward: still open.**
 
 **Blocks:** §7 in full, and — as of Phase 1's brief — **DoD item 4**, the
 tenant-isolation test, which needs two workspaces, two roles and seeded contacts.
@@ -201,7 +204,9 @@ customers. §7's fixtures still need a second project or a change to the targets
 
 ---
 
-## DECISION-06 — §5.2 requires `permissions.yaml`; the repo uses TypeScript · `OPEN`
+## DECISION-06 — §5.2 requires `permissions.yaml`; the repo uses TypeScript · `ANSWERED 2026-09-04`
+
+**Answer: keep TypeScript.** Recorded as ADR-003, which amends §5.2.
 
 **Authority conflict.** §2.1 says running code beats the contract. §5.2 says
 `permissions.yaml` is "the single source of truth" and that types are generated

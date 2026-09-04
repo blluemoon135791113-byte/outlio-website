@@ -11,6 +11,7 @@ import 'server-only'
  * whole workspace; `dataScope` is what narrows a setter to their own records,
  * and a caller that forgets it shows them the entire company's book.
  */
+import type { TenantScope } from '@/lib/auth/scope'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type ContactListRow = {
@@ -81,10 +82,21 @@ export function isContactSort(value: string | undefined): value is ContactSort {
  * indexes (migration 0080), so a partial word matches — someone typing "sam"
  * expects to find Samuel.
  */
+/**
+ * ⚠️ TAKES A `TenantScope`, NOT A BARE STRING.
+ *
+ * A `workspaceId: string` parameter is indistinguishable from any other string
+ * at a call site — passing a contact id, a user id, or another tenant's id all
+ * typecheck. `TenantScope` can only be produced by `scopeFor` from a
+ * `WorkspaceContext`, which can only be produced by an authenticated request.
+ * That is the same property that makes `apiRoute` safe: the scope is not
+ * something a caller can invent.
+ */
 export async function listContacts(
-  workspaceId: string,
+  scope: TenantScope,
   options: ListContactsOptions = {},
 ): Promise<ContactListPage> {
+  const workspaceId = scope.workspaceId
   const db = createAdminClient()
   const pageSize = Math.min(Math.max(options.pageSize ?? 25, 1), MAX_PAGE_SIZE)
   const page = Math.max(options.page ?? 1, 1)
