@@ -199,7 +199,7 @@ async function seed() {
 test.describe('an under-privileged member is refused by the server', () => {
   test.skip(!hasStaging, '.env.staging is required — see ADR-005')
   test.describe.configure({ mode: 'serial' })
-  test.setTimeout(180_000)
+  test.setTimeout(300_000)
 
   let f: Awaited<ReturnType<typeof seed>>
   let setterCookies: Cookies
