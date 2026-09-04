@@ -117,9 +117,9 @@ unchecked would have reported a security emergency that did not exist.
 - **39 profiles still have a null name, phone and LinkedIn URL** from the 0070
   window. Values survive in `auth.users.raw_user_meta_data`; a backfill is a
   separate migration, and guessing is worse than a visible null.
-- **Role-based denial with a real under-privileged user** is untested at the
-  route layer. Both isolation suites create workspace OWNERS; a `viewer` needs a
-  second member and the invitation flow — Phase 2 fixture work.
+- ~~**Role-based denial with a real under-privileged user** is untested at the
+  route layer.~~ **Closed 2026-09-05** — `e2e/role-denial.spec.ts` puts a real
+  `setter` inside another member's workspace. It found a leak: see below.
 
 ## Phase 2 result (2026-09-05) — COMPLETE
 
@@ -149,8 +149,8 @@ produced p95 397.5ms — **under budget, so the clock said PASS** — while scan
 
 - ~~Saved views have no UI.~~ **Closed 2026-09-05** — interface shipped, round
   trip proven end to end.
-- **Role-based denial with a real under-privileged user**, carried from Phase 1.
-  Every fixture creates workspace OWNERS.
+- ~~**Role-based denial with a real under-privileged user**, carried from
+  Phase 1.~~ **Closed 2026-09-05.**
 - **DECISION-04** — no mailbox.
 - ⚠️ **The `agency` plan's limits blob is malformed** in production and staging.
   Inactive with zero users; must be fixed before it is enabled.
@@ -183,12 +183,19 @@ value can be CHECKED.** A citation nobody can reach did not achieve that.
 
 - **12 of 64 production emails are honestly backfillable**; the other 52 have no
   source lead and are already correct. An owner decision, now bounded.
-- **Role-based denial with a real under-privileged user** (Phase 1).
-- **Most company evidence has no home** — `funding_*`, `tech_stack`,
-  `recent_news` are the majority of 952 rows; `company_links` and
-  `company_signals` remain on the unused-schema allowlist.
+- ~~**Role-based denial with a real under-privileged user** (Phase 1).~~
+  **Closed 2026-09-05** — and it found a real leak, recorded below.
+- ~~**Most company evidence has no home**~~ **Closed 2026-09-05** — funding,
+  tech stack, news and socials now render in a "More details" section on both
+  the company and the contact page, each item carrying its citation.
+  `company_links` and `company_signals` remain on the unused-schema allowlist.
 - **DECISION-04** — no mailbox.
 - ⚠️ **The `agency` plan's limits blob is malformed**; inactive with zero users.
+  ⚠️ **The outage risk is fixed** (2026-09-05): `listActivePlans` skips a plan
+  it cannot read instead of throwing, so activating it no longer takes /admin
+  and /dashboard/access down for everyone. The blob itself is unchanged — the
+  allowance is a pricing decision, and 0002 seeded the row as "PLACEHOLDER —
+  pending final pricing".
 - ⚠️ **43 legacy `outlio-test-*` accounts in production.**
 - ⚠️ **`PRODUCT_SPEC.md` still does not exist.**
 
@@ -198,3 +205,54 @@ This repo was worked extensively before the contract was adopted. That work is
 not retro-labelled `VERIFIED` — §4 applies from adoption forward. The prior
 state is recorded in `docs/SYSTEM_HANDOFF.md`, which distinguishes what was
 verified against production from what was not.
+
+
+---
+
+## Role denial, closed 2026-09-05 — and what it found
+
+`e2e/role-denial.spec.ts` closes the gap Phase 1 recorded and Phase 2 deferred:
+a real `setter`, a real member of somebody else's workspace, refused by the
+server rather than by a hidden button.
+
+**It found a leak on its first probe.**
+
+`/dashboard/settings/developers` called `requireWorkspace()` and used the
+`workspace.settings.manage` permission only to decide which CONTROLS rendered.
+Measured on staging, as a `setter` — the second-lowest role:
+
+```
+LEAKS   api key NAME
+LEAKS   api key PREFIX
+LEAKS   webhook URL (token-bearing)
+safe    webhook signing secret
+```
+
+⚠️ **A webhook URL is a credential.** Slack, Teams and Zapier put a bearer token
+in the path; holding the URL is holding the secret. The API key itself was never
+at risk — the hash is not selected and a prefix cannot be used — so the exposure
+was the inventory plus one live secret.
+
+⚠️ **The notifications page one directory over already knew this**, and passes
+only `hostOf(url)` with a comment saying exactly why. Same repo, same risk,
+opposite handling, and nothing compared the two.
+
+⚠️ **`requireWorkspacePermission` existed the whole time.** It is named in
+`context.ts`'s own header as the guard pages call, it sits in
+`action-authorization.test.ts`'s allowlist — and it had **zero callers**. The
+defect class this project keeps finding.
+
+**Fixed:** both `workspace.settings.manage` pages now gate the route.
+`tests/unit/settings-route-guard.test.ts` fails if either reverts, including the
+partial revert that imports the strong guard and calls the weak one.
+
+**Measured and NOT changed:** 61 server actions call `assertWorkspacePermission`,
+so mutations were never exposed. `/crm/contacts/[id]` correctly 404s a setter
+who types another member's contact id. `/dashboard/settings/team` already gates
+its content on `workspace.member.view`.
+
+**Still open:** eleven other pages load at 200 for a setter
+(`/flows`, `/crm/reports`, `/crm/duplicates`, `/crm/import`, `/email/inbox` and
+others). Their mutations are guarded and several render deliberately read-only,
+so whether the VIEW should also be gated is a product decision per page, not a
+defect — recorded here rather than changed unilaterally.

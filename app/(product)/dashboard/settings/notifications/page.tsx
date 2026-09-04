@@ -4,7 +4,7 @@ import { NotificationChannels, type ChannelRow } from '@/components/settings/Not
 import { SettingsShell } from '@/components/settings/SettingsShell'
 import type { ChannelProvider } from '@/lib/notifications/format'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { requireWorkspacePermission } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -19,7 +19,13 @@ export const metadata: Metadata = {
  * credential to the browser inside the serialised RSC payload.
  */
 export default async function NotificationSettingsPage() {
-  const ctx = await requireWorkspace()
+  /*
+   * ⚠️ GATED AT THE ROUTE. `workspace.settings.manage` is admin-only, and this
+   * page renders channel names, delivery failure counts and `last_error` —
+   * which carries whatever the remote endpoint said back. The URL was already
+   * reduced to its host here (see above); the route guard is the other half.
+   */
+  const ctx = await requireWorkspacePermission('workspace.settings.manage')
   const canManage = can({ role: ctx.role, modules: ctx.modules }, 'workspace.settings.manage')
 
   const { data } = await createAdminClient()

@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { ApiKeys, Webhooks } from '@/components/settings/DeveloperSettings'
 import { SettingsShell } from '@/components/settings/SettingsShell'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { requireWorkspacePermission } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -18,9 +18,30 @@ export const metadata: Metadata = {
  * that could reconstruct a key — the hash exists so that a database dump is not
  * a set of working credentials, and putting it in a server component's props
  * would send it to the browser as serialised RSC payload.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ GATED AT THE ROUTE, NOT ONLY AT THE BUTTONS. This page used to call    ║
+ * ║  `requireWorkspace()` and pass `canManage` down purely to decide which     ║
+ * ║  CONTROLS rendered — so any member could load it. Measured on staging: a   ║
+ * ║  `setter`, the second-lowest role, read the API key names, the key         ║
+ * ║  prefixes, and the full webhook URLs.                                     ║
+ * ║                                                                           ║
+ * ║  ⚠️ A WEBHOOK URL IS A CREDENTIAL. Slack, Teams and Zapier all put a       ║
+ * ║  bearer token in the PATH — whoever holds the URL can post as the app.     ║
+ * ║  The notifications page one directory over already knew this and passes    ║
+ * ║  only `hostOf(url)` for exactly this reason; this page shipped the whole   ║
+ * ║  thing. Same risk, same codebase, opposite handling.                      ║
+ * ║                                                                           ║
+ * ║  `workspace.settings.manage` is admin-only, which is what CLAUDE.md rule 8 ║
+ * ║  means by authorization being server-side: hiding the buttons left the     ║
+ * ║  data in the RSC payload for anyone who typed the URL.                    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 export default async function DeveloperSettingsPage() {
-  const ctx = await requireWorkspace()
+  const ctx = await requireWorkspacePermission('workspace.settings.manage')
+  // Still computed rather than hardcoded true: the guard above and the controls
+  // below then answer the same question through the same function, so a future
+  // change to the policy table moves both together.
   const canManage = can({ role: ctx.role, modules: ctx.modules }, 'workspace.settings.manage')
   const db = createAdminClient()
 
