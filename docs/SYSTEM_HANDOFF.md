@@ -360,9 +360,19 @@ Stated plainly, because a handoff that hides these is worthless.
 - `SEND_EMAIL` body is a plain textarea, not a template editor.
 - No dark mode, by decision.
 
+**Schema**
+- Migration `0109` re-points the `ON DELETE SET NULL` user references on four
+  append-only tables to NO ACTION, finishing what `0091` started — that
+  migration fixed `email_events` and wrongly stated `crm_activities` "has been
+  right all along". Until 0109 is applied, a user who has performed any CRM
+  action cannot be deleted, and the error names the append-only guard rather
+  than the foreign key.
+
 **Operational**
-- ~130 `outlio-test-*` workspaces pollute the production database, left by
-  integration tests whose cleanup failed. Not yet removed.
+- Test-workspace leak is **cleared** (121 removed, 2026-09-04) but the *cause*
+  is not: `deleteTestUser` deletes the auth user, which fails on any workspace
+  holding CRM activity. The working order is workspace first, user second.
+  Until the helper is changed, every integration run leaks again.
 - `types/database.ts` was hand-edited to declare `flow_runs.variables`;
   regenerate with the Supabase CLI when convenient.
 - 97 ESLint warnings (0 errors), mostly unused-var noise in generated files.
