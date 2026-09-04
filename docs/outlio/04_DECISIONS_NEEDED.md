@@ -87,15 +87,30 @@ now sorts *before* the last remote migration and counts as out-of-order. Push
 requires `--include-all` to apply it. `0111` is not mentioned — it sorts after
 `0110` and is an ordinary pending migration.
 
-**Remaining:** establish whether `0109` was ever applied. Two clean outcomes:
+### Closed — `0109` resolved 2026-09-04
 
-- **Applied** → `supabase migration repair --linked --status applied 0109`. The
-  out-of-order warning disappears and `db push` proposes only `0111`.
-- **Not applied** → run it in the SQL editor (it verifies itself), then repair.
+A read-only `pg_constraint` query settled it by asking the database what it
+currently does rather than what anyone remembered doing: **zero `ON DELETE SET
+NULL` references remain** on the six append-only tables. `0109` had been applied
+all along and was simply never recorded.
 
-⚠️ **Do not use `--include-all` to make the warning go away.** That applies
-`0109` out of order without anyone deciding it should be applied, which is the
-class of silent action this whole item exists to prevent.
+Recorded with `supabase migration repair --linked --status applied 0109`.
+
+⚠️ `--include-all` was deliberately **not** used to clear the out-of-order
+warning. It would have applied `0109` without anyone establishing whether it
+should be — the silent-action class this item exists to prevent. The check cost
+one query and produced a fact instead of an assumption.
+
+**End state, verified:**
+
+```
+migration list : 110 of 111 recorded, only 0111 outstanding
+db push --dry-run : Would push these migrations:
+                      • 0111_sender_postal_address.sql
+```
+
+`db push` is now a normal tool rather than a loaded gun: it proposes exactly one
+migration, the one genuinely pending. DoD item 9 is mechanical from here.
 
 ---
 
