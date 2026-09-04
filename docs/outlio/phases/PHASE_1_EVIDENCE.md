@@ -52,10 +52,10 @@ inconclusive (table empty, proves nothing)        17
 
 | # | Item | Status |
 |---|---|---|
-| 1 | E2E journey from production entry point | ⚠️ **INFERRED** — ADR-004 |
+| 1 | E2E journey from production entry point | PARTIAL — data layer `VERIFIED`, page layer `INFERRED` |
 | 2 | Reachability chain named and unbroken | VERIFIED |
 | 3 | RBAC matrix passes, allow and deny | VERIFIED |
-| 4 | Tenant isolation via API and direct URL | ⚠️ **INFERRED** — ADR-004 |
+| 4 | Tenant isolation via API and direct URL | **VERIFIED** — `tenant-isolation.test.ts`, 14 tests |
 | 5 | Persistence survives reload; events consumed | N/A |
 | 6 | Typecheck, lint, unit, E2E green | VERIFIED |
 | 7 | No new dead exports | VERIFIED — see below |
@@ -64,16 +64,33 @@ inconclusive (table empty, proves nothing)        17
 | 10 | Docs updated | VERIFIED |
 | 11 | This file | VERIFIED |
 
-⚠️ **Phase 1 is not `COMPLETE` under §10.** Items 1 and 4 are `INFERRED`. Its
-subject is tenant isolation and its central property is unproven by test.
+⚠️ **Item 4 was `INFERRED` and is now `VERIFIED`.** ADR-005 created
+`outlio-staging`, which made the suite buildable without manufacturing tenants in
+production. ADR-004's concession is withdrawn.
+
+**Item 1 remains partial.** Isolation is proven at the data layer with real user
+JWTs; it is *not* proven by driving the Next app at a URL with a session cookie.
+The data layer is where isolation actually lives, and the page layer is a thin
+wrapper over it — but that is an argument, not a test.
 
 ## What I could not verify, and why
 
-**The tenant-isolation journey.** ADR-004. Proving it needs two workspaces, two
-roles and seeded contacts; `.env.local` points at production, which already holds
-43 leaked `outlio-test-*` accounts from ordinary test runs. Manufacturing tenants
-in the live database to prove tenants are isolated is not a trade worth making
-silently. Blocked on DECISION-03.
+**~~The tenant-isolation journey.~~ RESOLVED** — see `tenant-isolation.test.ts`.
+14 tests, real user JWTs, verified by disabling RLS on staging and confirming
+three read tests fail.
+
+⚠️ **What that experiment corrected.** With RLS off, every *write* test still
+passed, because `authenticated` holds **`SELECT` only** on `crm_contacts` —
+writes are refused by PostgREST before RLS is consulted. Those assertions
+therefore prove no signed-in client can write through PostgREST at all, which is
+stronger than an RLS write policy but is a *different claim*. Had I not broken it
+deliberately, this file would have recorded that RLS protects writes. It does
+not.
+
+**Role-based denial at the route layer, with a real under-privileged user.** The
+suite creates two workspace OWNERS. Proving a `viewer` is refused an edit needs a
+second member in one workspace and an invitation flow, which is Phase 2 fixture
+work.
 
 **Whether the *right* permission is checked.** `action-authorization.test.ts`
 proves every action establishes a caller. It does **not** prove the action then
