@@ -7,9 +7,9 @@ import { SoftGalleryVariant } from './SoftGalleryVariant'
 import { SystemLedgerVariant } from './SystemLedgerVariant'
 
 const VARIANTS = [
-  { name: 'Color Field', render: EditorialRowVariant },
-  { name: 'Split Signal', render: SystemLedgerVariant },
-  { name: 'Accent Rail', render: SoftGalleryVariant },
+  { name: 'Gallery Balance', render: EditorialRowVariant },
+  { name: 'Object Alcove', render: SystemLedgerVariant },
+  { name: 'Editorial Stack', render: SoftGalleryVariant },
 ] as const
 
 export function PrototypeHarness({ initialIndex }: { initialIndex: number }) {

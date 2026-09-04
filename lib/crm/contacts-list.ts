@@ -12,6 +12,7 @@ import 'server-only'
  * and a caller that forgets it shows them the entire company's book.
  */
 import type { TenantScope } from '@/lib/auth/scope'
+import type { Database } from '@/types/database'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type ContactListRow = {
@@ -61,6 +62,54 @@ export type ListContactsOptions = {
    */
   sort?: ContactSort
   direction?: 'asc' | 'desc'
+  /**
+   * Contacts carrying ALL of these tag ids.
+   *
+   * ⚠️ AND, NOT OR. "Marketing qualified" AND "London" is a segment; the OR of
+   * them is nearly the whole list and nobody asks for it. Each tag therefore
+   * narrows, which also means an empty array must mean "no tag filter" rather
+   * than "no tags allowed" — the two are opposite and the second is useless.
+   */
+  tagIds?: string[]
+  /** Contacts at this company. */
+  companyId?: string | null
+  /** ISO date; contacts created on or after it. */
+  createdAfter?: string | null
+  /** ISO date; contacts created strictly before it. */
+  createdBefore?: string | null
+  /**
+   * `true` → only contacts with at least one email address.
+   * `false` → only contacts with none.
+   *
+   * ⚠️ `undefined` IS A THIRD STATE and means "do not filter". A boolean with a
+   * default of `false` would silently hide every contact that has an email —
+   * which is most of them — and read as an empty database.
+   */
+  hasEmail?: boolean
+  /**
+   * Where the contact came from.
+   *
+   * ⚠️ THE DATABASE ENUM, NOT `string`. Typing this as a string would let a
+   * caller pass anything and get a PostgREST error at runtime; the union makes
+   * an invalid source a compile failure and needs no separate allowlist —
+   * which is the same reasoning behind `isContactSort`.
+   */
+  source?: ContactSource | null
+}
+
+/** `crm_record_source`, from the generated database types. */
+export type ContactSource = Database['public']['Enums']['crm_record_source']
+
+export const CONTACT_SOURCES: readonly ContactSource[] = [
+  'lead_engine',
+  'csv_import',
+  'manual',
+  'api',
+  'flow',
+]
+
+export function isContactSource(value: string | undefined): value is ContactSource {
+  return (CONTACT_SOURCES as readonly string[]).includes(value ?? '')
 }
 
 /** The sortable columns, and the database column each one means. */
@@ -92,6 +141,64 @@ export function isContactSort(value: string | undefined): value is ContactSort {
  * That is the same property that makes `apiRoute` safe: the scope is not
  * something a caller can invent.
  */
+/**
+ * A uuid that cannot exist, for the empty-set case.
+ *
+ * ⚠️ POSTGREST REJECTS `not.id.in.()` WITH AN EMPTY LIST as a syntax error, and
+ * the natural fallback — skipping the clause — inverts the filter: "contacts
+ * with no email" would return EVERY contact the moment none had one. A
+ * guaranteed-absent id keeps the meaning intact.
+ */
+const NO_UUID = '00000000-0000-0000-0000-000000000000'
+
+/**
+ * Contacts carrying every one of `tagIds`.
+ *
+ * ⚠️ INTERSECTION, COMPUTED HERE. `crm_contact_tags` has one row per (contact,
+ * tag), so a plain `.in('tag_id', ids)` returns contacts with ANY of them —
+ * which is a different, much larger, and much less useful answer than the one
+ * the caller asked for.
+ */
+async function contactIdsWithAllTags(
+  db: ReturnType<typeof createAdminClient>,
+  workspaceId: string,
+  tagIds: string[],
+): Promise<string[]> {
+  const { data, error } = await db
+    .from('crm_contact_tags')
+    .select('contact_id, tag_id')
+    .eq('workspace_id', workspaceId)
+    .in('tag_id', tagIds)
+
+  if (error) throw new Error(`tag filter failed: ${error.message}`)
+
+  const counts = new Map<string, Set<string>>()
+  for (const row of data ?? []) {
+    const seen = counts.get(row.contact_id) ?? new Set<string>()
+    seen.add(row.tag_id)
+    counts.set(row.contact_id, seen)
+  }
+
+  return [...counts.entries()]
+    .filter(([, seen]) => seen.size === tagIds.length)
+    .map(([contactId]) => contactId)
+}
+
+/** Contacts with at least one non-deleted email address. */
+async function contactIdsWithEmail(
+  db: ReturnType<typeof createAdminClient>,
+  workspaceId: string,
+): Promise<string[]> {
+  const { data, error } = await db
+    .from('crm_contact_emails')
+    .select('contact_id')
+    .eq('workspace_id', workspaceId)
+    .is('deleted_at', null)
+
+  if (error) throw new Error(`email filter failed: ${error.message}`)
+  return [...new Set((data ?? []).map((r) => r.contact_id))]
+}
+
 export async function listContacts(
   scope: TenantScope,
   options: ListContactsOptions = {},
@@ -152,6 +259,33 @@ export async function listContacts(
   if (options.ownerUserId) query = query.eq('owner_user_id', options.ownerUserId)
   // Nobody, as opposed to everyone. See the note on `unassignedOnly`.
   if (options.unassignedOnly) query = query.is('owner_user_id', null)
+
+  if (options.companyId) query = query.eq('primary_company_id', options.companyId)
+  if (options.source) query = query.eq('source', options.source)
+  if (options.createdAfter) query = query.gte('created_at', options.createdAfter)
+  if (options.createdBefore) query = query.lt('created_at', options.createdBefore)
+
+  /*
+   * ⚠️ TAGS AND EMAILS LIVE ON CHILD TABLES, SO THEY ARE RESOLVED TO AN ID SET
+   * FIRST AND APPLIED AS `.in()`.
+   *
+   * PostgREST can filter on an embedded resource, but not in a way that
+   * composes with the `or()` the search already uses — and the failure mode is
+   * a filter that silently does nothing rather than an error. Two extra
+   * round-trips per request is the honest price; both are indexed lookups
+   * scoped to the workspace.
+   */
+  if (options.tagIds && options.tagIds.length > 0) {
+    const ids = await contactIdsWithAllTags(db, workspaceId, options.tagIds)
+    // No match must return nothing, NOT "no filter". `.in()` with an empty
+    // array is the correct expression of that and PostgREST honours it.
+    query = query.in('id', ids)
+  }
+
+  if (options.hasEmail !== undefined) {
+    const withEmail = await contactIdsWithEmail(db, workspaceId)
+    query = options.hasEmail ? query.in('id', withEmail) : query.not('id', 'in', `(${withEmail.join(',') || NO_UUID})`)
+  }
 
   if (search) {
     const escaped = search.replace(/[%_,()]/g, '')

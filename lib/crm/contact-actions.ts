@@ -316,3 +316,206 @@ export async function bulkAssignAction(
       : `${moved} contact${moved === 1 ? '' : 's'} unassigned.`,
   }
 }
+
+/**
+ * The selection every bulk action starts from.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THREE THINGS MUST HOLD FOR EVERY BULK ACTION, AND MISSING ANY ONE     ║
+ * ║  LOOKS LIKE WORKING CODE.                                                ║
+ * ║                                                                           ║
+ * ║   1. A PERMISSION, checked server-side. A bulk action multiplies the cost ║
+ * ║      of a missing check by the size of the selection.                    ║
+ * ║   2. A BOUND. An unbounded write is how one form submission rewrites a    ║
+ * ║      whole book of business.                                             ║
+ * ║   3. A WORKSPACE FILTER. Ids arrive from a form — they are a CLAIM, not a ║
+ * ║      fact — and the service role bypasses RLS, so nothing else stops an   ║
+ * ║      id belonging to another tenant.                                     ║
+ * ║                                                                           ║
+ * ║  Centralised here so a new bulk action cannot quietly omit one.          ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+const BULK_LIMIT = 200
+
+type BulkSelection =
+  | { ok: true; ctx: Awaited<ReturnType<typeof assertWorkspacePermission>>; ids: string[] }
+  | { ok: false; error: string }
+
+async function bulkSelection(
+  formData: FormData,
+  permission: Parameters<typeof assertWorkspacePermission>[0],
+  refusal: string,
+): Promise<BulkSelection> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission(permission)
+  } catch {
+    return { ok: false, error: refusal }
+  }
+
+  const ids = formData.getAll('contactId').map(String).filter(Boolean)
+  if (ids.length === 0) return { ok: false, error: 'Select some contacts first.' }
+  if (ids.length > BULK_LIMIT) {
+    return { ok: false, error: `Select at most ${BULK_LIMIT} contacts at a time.` }
+  }
+
+  return { ok: true, ctx, ids }
+}
+
+export type BulkState = { ok: true; message: string } | { ok: false; error: string } | { ok: null }
+
+/** Attach a tag to every selected contact. */
+export async function bulkTagAction(
+  _previous: BulkState,
+  formData: FormData,
+): Promise<BulkState> {
+  const selection = await bulkSelection(
+    formData,
+    'crm.contact.edit',
+    'You do not have permission to tag contacts.',
+  )
+  if (!selection.ok) return selection
+
+  const { ctx, ids } = selection
+  const tagId = String(formData.get('tagId') ?? '')
+  if (!tagId) return { ok: false, error: 'Choose a tag.' }
+
+  const db = createAdminClient()
+
+  /*
+   * ⚠️ THE TAG MUST BELONG TO THIS WORKSPACE. Same reasoning as the owner check
+   * in `bulkAssignAction`: the id comes from a form. Without this a crafted
+   * request attaches another tenant's tag, and the tag list then leaks their
+   * taxonomy back through the UI.
+   */
+  const { data: tag } = await db
+    .from('crm_tags')
+    .select('id')
+    .eq('workspace_id', ctx.workspace.id)
+    .eq('id', tagId)
+    .maybeSingle()
+
+  if (!tag) return { ok: false, error: 'That tag no longer exists.' }
+
+  /*
+   * ⚠️ THE CONTACT IDS ARE FILTERED BEFORE THE INSERT, not trusted from the
+   * form. `crm_contact_tags` rows are written directly, so an id from another
+   * workspace would otherwise create a cross-tenant association that every
+   * later read treats as real.
+   */
+  const { data: owned } = await db
+    .from('crm_contacts')
+    .select('id')
+    .eq('workspace_id', ctx.workspace.id)
+    .in('id', ids)
+    .is('deleted_at', null)
+
+  const validIds = (owned ?? []).map((r) => r.id)
+  if (validIds.length === 0) return { ok: false, error: 'Those contacts no longer exist.' }
+
+  const { error } = await db.from('crm_contact_tags').upsert(
+    validIds.map((contactId) => ({
+      workspace_id: ctx.workspace.id,
+      contact_id: contactId,
+      tag_id: tagId,
+    })),
+    // Tagging something already tagged is a no-op, not an error — a user
+    // re-applying a tag to a mixed selection is doing something reasonable.
+    { onConflict: 'contact_id,tag_id', ignoreDuplicates: true },
+  )
+
+  if (error) return { ok: false, error: 'Could not tag those contacts.' }
+
+  revalidatePath('/crm/contacts')
+  return { ok: true, message: `Tagged ${validIds.length} contact${validIds.length === 1 ? '' : 's'}.` }
+}
+
+/** Add every selected contact to a static list. */
+export async function bulkAddToListAction(
+  _previous: BulkState,
+  formData: FormData,
+): Promise<BulkState> {
+  const selection = await bulkSelection(
+    formData,
+    'crm.contact.edit',
+    'You do not have permission to change lists.',
+  )
+  if (!selection.ok) return selection
+
+  const { ctx, ids } = selection
+  const listId = String(formData.get('listId') ?? '')
+  if (!listId) return { ok: false, error: 'Choose a list.' }
+
+  const db = createAdminClient()
+
+  const { data: list } = await db
+    .from('crm_lists')
+    .select('id')
+    .eq('workspace_id', ctx.workspace.id)
+    .eq('id', listId)
+    .maybeSingle()
+
+  if (!list) return { ok: false, error: 'That list no longer exists.' }
+
+  const { data: owned } = await db
+    .from('crm_contacts')
+    .select('id')
+    .eq('workspace_id', ctx.workspace.id)
+    .in('id', ids)
+    .is('deleted_at', null)
+
+  const validIds = (owned ?? []).map((r) => r.id)
+  if (validIds.length === 0) return { ok: false, error: 'Those contacts no longer exist.' }
+
+  const { error } = await db.from('crm_list_members').upsert(
+    validIds.map((contactId) => ({
+      workspace_id: ctx.workspace.id,
+      list_id: listId,
+      contact_id: contactId,
+    })),
+    { onConflict: 'list_id,contact_id', ignoreDuplicates: true },
+  )
+
+  if (error) return { ok: false, error: 'Could not add those contacts to the list.' }
+
+  revalidatePath('/crm/contacts')
+  revalidatePath('/crm/lists')
+  return { ok: true, message: `Added ${validIds.length} to the list.` }
+}
+
+/**
+ * Soft-delete every selected contact.
+ *
+ * ⚠️ SOFT, AND THAT IS NOT A HEDGE. `crm_activities` is append-only and
+ * references contacts; a hard delete would either be refused by the guard or
+ * rewrite history. Everything downstream already filters on
+ * `deleted_at is null`, so a soft delete is the delete this product has.
+ */
+export async function bulkDeleteAction(
+  _previous: BulkState,
+  formData: FormData,
+): Promise<BulkState> {
+  const selection = await bulkSelection(
+    formData,
+    'crm.contact.delete',
+    'You do not have permission to delete contacts.',
+  )
+  if (!selection.ok) return selection
+
+  const { ctx, ids } = selection
+
+  const { data, error } = await createAdminClient()
+    .from('crm_contacts')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('workspace_id', ctx.workspace.id)
+    .in('id', ids)
+    // Deleting an already-deleted contact should not report success for it.
+    .is('deleted_at', null)
+    .select('id')
+
+  if (error) return { ok: false, error: 'Could not delete those contacts.' }
+
+  const removed = data?.length ?? 0
+  revalidatePath('/crm/contacts')
+  return { ok: true, message: `Deleted ${removed} contact${removed === 1 ? '' : 's'}.` }
+}

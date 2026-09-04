@@ -23,10 +23,10 @@ export const PILLARS: readonly Pillar[] = [
     title: 'Automated Outbound',
     description:
       'Connect your inboxes and build personalized campaigns from verified lead context. Outlio manages delivery, replies, bounces, and suppressions, while LinkedIn messages stay rep-reviewed before every manual send.',
-    asset: '/prototypes/outlio-platform-cards/automated-outbound-clay-v3.png',
+    asset: '/prototypes/outlio-platform-cards/automated-outbound-smooth-v5.png',
     width: 760,
     height: 297,
-    alt: 'A compact matte-black clay waveform representing hidden engagement signals',
+    alt: 'A smooth graphite and bronze waveform representing hidden engagement signals',
     capabilities: ['Connected inboxes', 'Personalized campaigns', 'Reply handling'],
   },
   {
@@ -34,10 +34,10 @@ export const PILLARS: readonly Pillar[] = [
     title: 'Safe Data Extraction',
     description:
       'Save Sales Navigator pages and turn them into structured, de-duplicated CRM records without sharing a LinkedIn password, storing session cookies, or letting Outlio navigate on your behalf.',
-    asset: '/prototypes/outlio-platform-cards/safe-extraction-clay-v3.png',
+    asset: '/prototypes/outlio-platform-cards/safe-extraction-smooth-v5.png',
     width: 640,
     height: 656,
-    alt: 'A tilted powder-blue clay data structure shaped like the number five',
+    alt: 'A smooth tilted blue data structure shaped like the number five',
     capabilities: ['User-saved pages', 'De-duplicated records', 'CRM-ready export'],
   },
   {
@@ -45,10 +45,10 @@ export const PILLARS: readonly Pillar[] = [
     title: 'Intelligence',
     description:
       'Research companies and people across reputable sources, preserve citations, score account fit, assign clear owners, and move qualified leads through shared pipelines with complete context.',
-    asset: '/prototypes/outlio-platform-cards/intelligence-clay-v4.png',
+    asset: '/prototypes/outlio-platform-cards/intelligence-smooth-v5.png',
     width: 680,
     height: 552,
-    alt: 'A smooth ivory clay architecture of connected modules and routing lines',
+    alt: 'A smooth ivory, olive, and bronze architecture of connected modules',
     capabilities: ['Source-backed research', 'Account scoring', 'Pipeline ownership'],
   },
 ] as const
