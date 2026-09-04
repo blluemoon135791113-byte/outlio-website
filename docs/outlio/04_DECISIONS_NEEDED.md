@@ -320,7 +320,27 @@ be a small lie repeated on every row.
 
 ---
 
-## DECISION-12 — Why has only 4% of extracted leads reached the CRM? · `OPEN`
+## DECISION-12 — Why has only 4% of extracted leads reached the CRM? · `WITHDRAWN 2026-09-05`
+
+⚠️ **The question was malformed and I withdrew it after measuring the dates.**
+
+```
+extracted_leads    2026-08-09 → 2026-08-18
+crm_contacts       2026-08-30 → 2026-09-04
+```
+
+The CRM did not exist while those leads were extracted. Since it shipped, ONE
+extraction job has run (25 leads kept) and the CRM holds 44 `lead_engine`
+contacts — more than that job produced, because people pulled from the backlog.
+
+So the ingest path has been used *more* than post-CRM extraction volume. The 4%
+was a two-week extraction history divided by a CRM that shipped afterwards: an
+accurate number about nothing. The three human explanations I offered were all
+wrong because the real answer was a fourth — **chronology**.
+
+**Nothing to decide.** See `PHASE_4.md`, which is withdrawn pending usage.
+
+### The original question, kept as written
 
 **Blocks:** what Phase 4 should actually build.
 

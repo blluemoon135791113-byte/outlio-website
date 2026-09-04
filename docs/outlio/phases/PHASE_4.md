@@ -5,28 +5,69 @@ implementation.**
 
 ---
 
-## GOAL
+## ⚠️ STATUS: WITHDRAWN — the number this brief was built on is an artifact
 
-§9: *"Lead Engine → CRM control (identity resolution + merge first, then
-Manual/Ask/Auto)"*.
+**Do not implement this phase yet.** The headline below was wrong, and I am
+leaving it visible rather than quietly editing it, because the way it was wrong
+is the useful part.
 
-⚠️ **The headline measurement, taken from production on 2026-09-05:**
+### What the brief said
+
+> 87 extraction jobs produced 1,193 leads. Three batches ever reached the CRM,
+> carrying 49 records… roughly **4%** of what it extracted has crossed into the
+> CRM. That is the phase.
+
+### What the dates say
 
 ```
-extraction jobs          87
-extracted leads       1,193
-crm_lead_batches          3
-batch members            49
-crm_contacts             98
+extracted_leads    2026-08-09 → 2026-08-18
+crm_contacts       2026-08-30 → 2026-09-04
 ```
 
-**87 extraction jobs produced 1,193 leads. Three batches ever reached the CRM,
-carrying 49 records.** The product's whole premise is that saved LinkedIn pages
-become a working lead database, and roughly **4% of what it extracted has
-crossed into the CRM.**
+**The CRM did not exist while those leads were being extracted.** Every one of
+them predates the first CRM contact by twelve days.
 
-That is the phase. Not "build a pipeline" — the pipeline exists and works. The
-question is why almost nothing goes through it.
+Since the CRM shipped, exactly **one** extraction job has run, keeping **25**
+leads. The CRM holds **44** `lead_engine` contacts — *more* than that one job
+produced, because people pulled from the August backlog.
+
+⚠️ **So the ingest path has been used MORE than post-CRM extraction volume, not
+less.** There is no evidence of a UX failure. There is barely any evidence at
+all: 4 distinct users, one job in the window where the question is even
+meaningful.
+
+### What I actually did wrong
+
+I divided a two-week extraction history by a CRM that shipped afterwards and read
+the ratio as a behavioural finding. The measurement was accurate; the comparison
+was meaningless. **A number can be correct and still not be about the thing you
+think it is about** — and I wrote it as this phase's headline before checking
+whether the two populations overlapped in time.
+
+DECISION-12 asked "why is it 4%?" and offered three human explanations. The
+answer was a fourth I had not listed: **chronology**.
+
+### What to do instead
+
+**Defer Phase 4 until there is usage to learn from.** Automation built now would
+be designed against one job. Every option in DECISION-12 — notification,
+automation, placement — is a fix for a problem no data supports.
+
+⚠️ Building it anyway would be the more expensive mistake: an automatic ingest
+that arrives before anyone has expressed a preference changes the product's
+behaviour for four real users on the strength of a ratio that meant nothing.
+
+**Revisit when** there are, say, twenty extraction jobs completed *after* the CRM
+existed. Then the ratio is about behaviour and the question can be answered
+rather than guessed.
+
+The analysis below is kept because it is still accurate about the CODE — the
+missing automatic path, the two callers that are both a click, and the fact that
+identity resolution is already built. Only the motivation was wrong.
+
+---
+
+## GOAL (as originally written — see the withdrawal above)
 
 ## OUT OF SCOPE
 
