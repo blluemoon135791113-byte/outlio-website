@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { ValueProvenance } from '@/components/crm/ValueProvenance'
+import { companyCitations, type Provenance } from '@/lib/crm/provenance'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { dataScope } from '@/lib/workspaces/permissions'
@@ -32,7 +34,8 @@ export default async function CompanyPage({
   // Scoped by workspace in code — the service role bypasses RLS.
   const { data: company } = await db
     .from('crm_companies')
-    .select('id, name, domain, industry, employee_count, headquarters, linkedin_url, owner_user_id')
+    // `source_company_id` is the structural link to research evidence (Phase 3).
+    .select('id, name, domain, industry, employee_count, headquarters, linkedin_url, owner_user_id, source, source_company_id')
     .eq('workspace_id', ctx.workspace.id)
     .eq('id', id)
     .is('deleted_at', null)
@@ -69,11 +72,31 @@ export default async function CompanyPage({
   const people = (contacts ?? []).filter((c) => !scopedToSelf || c.owner_user_id === ctx.userId)
   const deals = opportunities ?? []
 
-  const facts: { label: string; value: string | null }[] = [
+  /*
+   * ⚠️ 952 OF 1,000 SAMPLED EVIDENCE ROWS IN PRODUCTION ARE COMPANY-LEVEL, and
+   * they cover exactly these fields — industry, employee_count, headquarters.
+   * Until now none of it was reachable from this page.
+   */
+  const citations = await companyCitations(ctx.scope, {
+    sourceCompanyId: company.source_company_id,
+    source: company.source,
+    values: {
+      industry: company.industry,
+      employee_count: company.employee_count,
+      headquarters: company.headquarters,
+    },
+  })
+
+  const facts: { label: string; value: string | null; provenance?: Provenance }[] = [
+    // Domain has no evidence field of its own on this page's vocabulary.
     { label: 'Domain', value: company.domain },
-    { label: 'Industry', value: company.industry },
-    { label: 'Employees', value: company.employee_count ? String(company.employee_count) : null },
-    { label: 'Location', value: company.headquarters },
+    { label: 'Industry', value: company.industry, provenance: citations.industry },
+    {
+      label: 'Employees',
+      value: company.employee_count ? String(company.employee_count) : null,
+      provenance: citations.employee_count,
+    },
+    { label: 'Location', value: company.headquarters, provenance: citations.headquarters },
   ]
 
   return (
@@ -100,6 +123,16 @@ export default async function CompanyPage({
               <dd className={fact.value ? 'text-sm text-ink' : 'text-sm text-muted'}>
                 {fact.value ?? 'Not recorded'}
               </dd>
+              {/*
+                ⚠️ ONLY ON A VALUE THAT EXISTS. "Not recorded" already says
+                everything there is to say; adding "added by hand" underneath it
+                would describe the provenance of nothing.
+              */}
+              {fact.value && fact.provenance ? (
+                <dd className="mt-0.5">
+                  <ValueProvenance provenance={fact.provenance} />
+                </dd>
+              ) : null}
             </div>
           ))}
         </dl>

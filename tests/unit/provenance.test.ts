@@ -17,7 +17,15 @@
  */
 import { describe, expect, it } from 'vitest'
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { safeSourceUrl, withProvenance, type Provenance } from '@/lib/crm/provenance'
+
+const SOURCE_PROVENANCE = readFileSync(
+  join(__dirname, '..', '..', 'lib/crm/provenance.ts'),
+  'utf8',
+)
 
 describe('safeSourceUrl', () => {
   it('accepts http and https', () => {
@@ -140,5 +148,46 @@ describe('the read path is scoped on the tenancy seam', () => {
 
     const query = source.slice(source.indexOf(".from('research_evidence')"))
     expect(query.slice(0, 700)).toContain("eq('user_id'")
+  })
+})
+
+describe('company citations only credit a value that still matches', () => {
+  /*
+   * ⚠️ THE PROPERTY THAT MAKES COMPANY CITATIONS HONEST.
+   *
+   * Contacts store each value as its own row, so `evidence_id` pins the exact
+   * value that was observed. Company values are COLUMNS, and a column can be
+   * edited after import — at which point the evidence explains a value that is
+   * no longer there. Crediting a provider for a person's edit is a fabrication
+   * about provenance, and rule 4 does not distinguish that from fabricating the
+   * value itself.
+   *
+   * Asserted on the source, because the alternative needs a database and the
+   * property is about what the code can do rather than what one run did.
+   */
+  it('compares the observed value against the stored one', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const source = readFileSync(join(__dirname, '..', '..', 'lib/crm/provenance.ts'), 'utf8')
+
+    const fn = source.slice(source.indexOf('export async function companyCitations'))
+    expect(
+      fn,
+      'companyCitations does not compare the observed value with the current one, ' +
+        'so an edited column would still be credited to a provider',
+    ).toMatch(/String\(current\)\.trim\(\) !== observed/)
+  })
+
+  it('starts from the workspace-scoped row and still filters by user_id', () => {
+    /*
+     * Same seam as `citationsFor`. `companies` and `research_evidence` are
+     * user_id-keyed; `crm_companies` is workspace_id-keyed. The caller has
+     * already proved the company belongs to this workspace — this is the second
+     * filter, because the service role ignores RLS.
+     */
+    const source = SOURCE_PROVENANCE
+    const fn = source.slice(source.indexOf('export async function companyCitations'))
+    expect(fn).toContain("eq('user_id', scope.userId)")
+    expect(fn).toContain("eq('entity_id', company.sourceCompanyId)")
   })
 })
