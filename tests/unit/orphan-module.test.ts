@@ -130,9 +130,22 @@ const KNOWN_ORPHANS = new Set(
      * only because `lib/auth/access.ts` shares its basename.
      */
     'lib/companies/links.ts',
-    'lib/fastspring/access.ts',
     'lib/integrations/catalogue.ts',
     'lib/jobs/lead-pagination.ts',
+    /*
+     * ⚠️ `lib/fastspring/access.ts` IS A DELIBERATE EXCEPTION — it stays
+     * uncalled ON PURPOSE and must not be deleted. See ADR-002.
+     *
+     * It is a mirror of `public.fastspring_subscription_grants_access`, which
+     * is the function that actually decides whether a paying customer has
+     * access. Its own comment says "Both must change together", and nothing
+     * made that true until `fastspring-access-parity.test.ts` did: that test
+     * parses the SQL out of the migrations and asserts the two agree for every
+     * state. So this module is no longer dead code — it is an executable
+     * specification of a rule enforced in SQL, and deleting it would delete
+     * the only check that the SQL rule is what anyone intended.
+     */
+    'lib/fastspring/access.ts',
   ].map((p) => p.replace(/\//g, sep)),
 )
 
