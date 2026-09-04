@@ -71,26 +71,53 @@ typed something a crawler found.
 | 6 | Typecheck, lint, unit, E2E green | VERIFIED |
 | 7 | No new dead exports | VERIFIED |
 | 8 | Feature flag | N/A — additive display |
-| 9 | Migration applied + rollback stated | ⚠️ **staging only** — 0113 not on production |
+| 9 | Migration applied + rollback stated | VERIFIED — 0113 on production 2026-09-05, 113 of 113 recorded |
 | 10 | Docs updated | VERIFIED |
 | 11 | This file | VERIFIED |
 
-⚠️ **Item 9 blocks `COMPLETE`.** Production holds 64 emails, 22 phones and 2,294
-evidence rows that cannot be connected until `0113` is applied there.
+### Item 9 — closed 2026-09-05
+
+`0113` applied to production and verified by querying the column, not by reading
+an exit code: `evidence_id` present on both tables (64 emails, 22 phones),
+migration history **113 of 113**.
 
 ## What I could not verify, and why
 
 **Contact citations in production.** `0113` is on staging. The round trip is
 proven there; production has the data and not the column.
 
-**Existing production rows will show `unknown`, not a citation.** They were
-bridged before `0113` and their `evidence_id` is `NULL`. That is the honest
-outcome — a backfill would have to guess which of 2,294 evidence rows produced
-each of 64 addresses, and a plausible citation is worse than an absent one
-because nobody can tell it is wrong. ⚠️ **Re-running the bridge will not fix
-them**: `attachContactEmails` skips addresses that already exist, so the
-citations attach only to values bridged from now on. Backfilling is a separate,
-reviewable decision.
+**Existing production rows show `unknown`, not a citation** — measured after
+applying `0113`: **0 of 64 emails cited.** They were bridged before the column
+existed. ⚠️ **Re-running the bridge will not fix them**: `attachContactEmails`
+skips addresses that already exist, so citations attach only to values bridged
+from now on.
+
+⚠️ **A measurement corrected my own assumption about backfilling.** The brief
+said a backfill "would have to guess which of 2,294 evidence rows produced each
+of 64 addresses". Matching each uncited email on `source_lead_id + address`
+against `research_evidence` gives:
+
+```
+uncited emails                       64
+  exactly one matching evidence row   8
+  more than one match                 4
+  no matching evidence                0
+  contact has no source lead at all  52
+```
+
+The 52 are correct as they stand: no `source_lead_id` means the contact never
+came from research, so `entered` / `unknown` is the true answer.
+
+And the 4 "ambiguous" ones are **not ambiguous in the way that mattered**. My
+objection was that a value-match "returns the wrong row when a value was observed
+twice" — but those four are multiple evidence rows observing *the same address
+for the same lead*. Any of them is a TRUE citation; there is no wrong answer to
+pick. The risk I named applies to matching a value across *different* entities,
+which `source_lead_id` already prevents.
+
+So **12 of 64 are honestly backfillable** and the rest are already correct. That
+remains an owner decision — it is a production data write — but it is a small,
+bounded and checkable one rather than the guess the brief assumed.
 
 **Company provenance beyond three fields.** `industry`, `employee_count` and
 `headquarters` are cited. `funding_*`, `tech_stack`, `recent_news` and the rest —

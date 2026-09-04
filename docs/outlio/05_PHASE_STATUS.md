@@ -10,7 +10,7 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 0.5 | Safety net | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_0.5.md`](phases/PHASE_0.5.md) · [`PHASE_0.5_EVIDENCE.md`](phases/PHASE_0.5_EVIDENCE.md) |
 | 1 | Wiring sweep + authorization core | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_1.md`](phases/PHASE_1.md) · [`PHASE_1_EVIDENCE.md`](phases/PHASE_1_EVIDENCE.md) |
 | 2 | CRM table: filter/sort/pagination, bulk actions, saved views | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_2.md`](phases/PHASE_2.md) · [`PHASE_2_EVIDENCE.md`](phases/PHASE_2_EVIDENCE.md) |
-| 3 | Contact + Company workspaces; evidence/provenance | **IN_PROGRESS** — DoD 9 pending (0113 not on production) | `platform-m1-workspaces` | [`PHASE_3.md`](phases/PHASE_3.md) · [`PHASE_3_EVIDENCE.md`](phases/PHASE_3_EVIDENCE.md) |
+| 3 | Contact + Company workspaces; evidence/provenance | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_3.md`](phases/PHASE_3.md) · [`PHASE_3_EVIDENCE.md`](phases/PHASE_3_EVIDENCE.md) |
 | 4–25 | see §9 | NOT_STARTED | — | — |
 
 ## Phase 0 result (2026-09-04)
@@ -158,6 +158,41 @@ produced p95 397.5ms — **under budget, so the clock said PASS** — while scan
 - ⚠️ **43 legacy `outlio-test-*` accounts in production**, no longer accumulating.
 - ⚠️ **`PRODUCT_SPEC.md` still does not exist**, so §2's authority order has a
   hole at level 4.
+
+## Phase 3 result (2026-09-05) — COMPLETE
+
+`tsc` 0 · lint 0 errors · **155 unit files, 2,857 tests** · 10 E2E · build clean.
+Detail in [`PHASE_3_EVIDENCE.md`](phases/PHASE_3_EVIDENCE.md).
+
+**All eleven DoD items are `VERIFIED`.**
+
+- **2,294 evidence rows became reachable.** They were correctly stored and
+  entirely invisible — `crm_contact_emails` carried `source` (an enum), never a
+  citation, so the page a value came from was unrecoverable once bridged.
+- **`0113`** — `evidence_id`, nullable and `ON DELETE SET NULL`, because evidence
+  expires while the address stays true.
+- **Companies needed no migration** — `source_company_id` is an exact structural
+  link, so DECISION-10's objection (matching on *value*) does not apply.
+- **`safeSourceUrl`** — `source_url` is attacker-influenced data in an `href`.
+  Rejected, never sanitised.
+- **DECISION-11** — `lead_engine` with no citation is `unknown`, not "entered".
+
+⚠️ **Rule 4's purpose is not only that we avoid fabricating — it is that a stored
+value can be CHECKED.** A citation nobody can reach did not achieve that.
+
+## Still open going into Phase 4
+
+- **12 of 64 production emails are honestly backfillable**; the other 52 have no
+  source lead and are already correct. An owner decision, now bounded.
+- **Saved views still have no UI** (Phase 2).
+- **Role-based denial with a real under-privileged user** (Phase 1).
+- **Most company evidence has no home** — `funding_*`, `tech_stack`,
+  `recent_news` are the majority of 952 rows; `company_links` and
+  `company_signals` remain on the unused-schema allowlist.
+- **DECISION-04** — no mailbox.
+- ⚠️ **The `agency` plan's limits blob is malformed**; inactive with zero users.
+- ⚠️ **43 legacy `outlio-test-*` accounts in production.**
+- ⚠️ **`PRODUCT_SPEC.md` still does not exist.**
 
 ## Work already done outside this contract
 
