@@ -25,6 +25,17 @@ export function ConnectMailbox() {
   const [open, setOpen] = useState(false)
   const [wantsReplies, setWantsReplies] = useState(true)
 
+  /*
+   * ⚠️ REACT 19 CLEARS UNCONTROLLED FIELDS WHEN A FORM ACTION RETURNS. Without
+   * this echo, one wrong password wiped the address, both hostnames, the
+   * username and the from-name as well — and connecting a mailbox is precisely
+   * the flow where the first attempt usually fails.
+   *
+   * The password is not echoed and must not be: it is the one field worth
+   * retyping.
+   */
+  const prior = state && !state.ok ? (state.values ?? {}) : {}
+
   if (!open) {
     return (
       <button
@@ -49,20 +60,20 @@ export function ConnectMailbox() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field name="displayName" label="Mailbox name" placeholder="Sales — Dana" required
+        <Field defaultValue={prior.displayName ?? ''} name="displayName" label="Mailbox name" placeholder="Sales — Dana" required
           hint="Only you see this." />
-        <Field name="fromEmail" label="Send from" type="email" placeholder="dana@yourcompany.com"
+        <Field defaultValue={prior.fromEmail ?? ''} name="fromEmail" label="Send from" type="email" placeholder="dana@yourcompany.com"
           required hint="The address recipients will see." />
-        <Field name="fromName" label="From name" placeholder="Dana Reyes"
+        <Field defaultValue={prior.fromName ?? ''} name="fromName" label="From name" placeholder="Dana Reyes"
           hint="Optional. Shown beside the address." />
-        <Field name="username" label="Username" placeholder="dana@yourcompany.com" required
+        <Field defaultValue={prior.username ?? ''} name="username" label="Username" placeholder="dana@yourcompany.com" required
           hint="Usually the same as the address." />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field name="smtpHost" label="SMTP server" placeholder="smtp.gmail.com" required
+        <Field defaultValue={prior.smtpHost ?? ''} name="smtpHost" label="SMTP server" placeholder="smtp.gmail.com" required
           className="sm:col-span-2" />
-        <Field name="smtpPort" label="Port" type="number" defaultValue="587" required
+        <Field name="smtpPort" label="Port" type="number" defaultValue={prior.smtpPort ?? '587'} required
           hint="587, or 465 for TLS." />
       </div>
 
@@ -91,9 +102,9 @@ export function ConnectMailbox() {
 
       {wantsReplies ? (
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field name="imapHost" label="IMAP server" placeholder="imap.gmail.com"
+          <Field defaultValue={prior.imapHost ?? ''} name="imapHost" label="IMAP server" placeholder="imap.gmail.com"
             className="sm:col-span-2" />
-          <Field name="imapPort" label="Port" type="number" defaultValue="993" />
+          <Field name="imapPort" label="Port" type="number" defaultValue={prior.imapPort ?? '993'} />
         </div>
       ) : null}
 

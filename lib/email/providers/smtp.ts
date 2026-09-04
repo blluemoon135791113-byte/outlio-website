@@ -169,15 +169,59 @@ function imapClientFor(account: EmailAccountHandle, secret: SmtpSecret): ImapFlo
  * hammering a server that has already told us the answer — which is how a
  * sending domain earns a reputation problem.
  */
-function classifySmtpError(error: unknown): { retryable: boolean; code: string; message: string } {
+function classifySmtpError(
+  error: unknown,
+  /*
+   * ⚠️ THE SAME 5xx MEANS DIFFERENT THINGS IN THE TWO PLACES THIS RUNS. During
+   * a send there IS a message to reject; during `verify()` there is not, and
+   * telling someone connecting a mailbox that "the mail server rejected this
+   * message" describes an event that did not happen.
+   */
+  context: 'send' | 'connect' = 'send',
+): { retryable: boolean; code: string; message: string } {
   const err = error as { responseCode?: number; code?: string; message?: string }
   const responseCode = err?.responseCode
+
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ AUTH IS CHECKED BEFORE THE 5xx RANGE, AND THE ORDER IS THE BUG    ║
+   * ║  THAT WAS HERE.                                                       ║
+   * ║                                                                       ║
+   * ║  Gmail answers a bad app password with `535 5.7.8 Username and        ║
+   * ║  Password not accepted`. 535 IS a 5xx, so the permanent branch caught ║
+   * ║  it first and the user was told "the mail server rejected this        ║
+   * ║  message permanently" — during a connection test, where no message    ║
+   * ║  exists — which sends them to check their SMTP host instead of their  ║
+   * ║  password. It is the single most common failure when connecting a     ║
+   * ║  mailbox, reported as the one thing it is not.                        ║
+   * ║                                                                       ║
+   * ║  It also suppressed `reconnectRequired`, which `#verify` derives from ║
+   * ║  `SMTP_AUTH` — so the account was never flagged as needing new        ║
+   * ║  credentials either.                                                  ║
+   * ║                                                                       ║
+   * ║  ⚠️ 535 IS MATCHED EXPLICITLY as well as `EAUTH`. Not every server    ║
+   * ║  sets nodemailer's `EAUTH`, but 535 is "authentication credentials    ║
+   * ║  invalid" in RFC 4954 and means nothing else.                         ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   */
+  if (err?.code === 'EAUTH' || responseCode === 535 || responseCode === 534) {
+    return {
+      retryable: false,
+      code: 'SMTP_AUTH',
+      message:
+        'The username or password for this mailbox was rejected. ' +
+        'Gmail and Outlook need an app password, not your normal one.',
+    }
+  }
 
   if (typeof responseCode === 'number' && responseCode >= 500 && responseCode < 600) {
     return {
       retryable: false,
       code: 'SMTP_PERMANENT',
-      message: 'The mail server rejected this message permanently.',
+      message:
+        context === 'connect'
+          ? 'The mail server refused the connection and will not accept a retry.'
+          : 'The mail server rejected this message permanently.',
     }
   }
 
@@ -186,14 +230,6 @@ function classifySmtpError(error: unknown): { retryable: boolean; code: string; 
       retryable: true,
       code: 'SMTP_TEMPORARY',
       message: 'The mail server asked us to try again later.',
-    }
-  }
-
-  if (err?.code === 'EAUTH') {
-    return {
-      retryable: false,
-      code: 'SMTP_AUTH',
-      message: 'The username or password for this mailbox was rejected.',
     }
   }
 
@@ -300,7 +336,7 @@ export class SmtpProvider implements EmailProvider {
           message: error.message,
         }
       }
-      const { code, message } = classifySmtpError(error)
+      const { code, message } = classifySmtpError(error, 'connect')
       return { ok: false, reconnectRequired: code === 'SMTP_AUTH', code, message }
     }
 

@@ -141,6 +141,9 @@ describe('ordinary mail servers still work', () => {
  * sends someone to check their password. Found by actually using the connect
  * form against a host that does not exist.
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { classifySmtpErrorForTest } from '@/lib/email/providers/smtp'
 
 describe('connection error messages are actionable', () => {
@@ -165,8 +168,133 @@ describe('connection error messages are actionable', () => {
     expect(auth.retryable).toBe(false)
   })
 
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THE SHAPE ABOVE IS NOT THE SHAPE A REAL SERVER SENDS, AND THAT IS ║
+   * ║  WHY THE BUG SURVIVED.                                                ║
+   * ║                                                                       ║
+   * ║  Gmail answers a bad app password with `535 5.7.8 Username and        ║
+   * ║  Password not accepted`, so nodemailer reports BOTH `code: 'EAUTH'`   ║
+   * ║  AND `responseCode: 535`. The classifier checked the 5xx range first, ║
+   * ║  so the permanent branch won and the user connecting a mailbox was    ║
+   * ║  told "the mail server rejected this message permanently" — during a  ║
+   * ║  connection test, where there is no message.                          ║
+   * ║                                                                       ║
+   * ║  The test above passes either way, because it omits `responseCode`.   ║
+   * ║  Coverage that models a simpler world than the one the code runs in.  ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   */
+  it('reads a real Gmail auth rejection as auth, not as a permanent 5xx', () => {
+    const gmail = classifySmtpErrorForTest({
+      code: 'EAUTH',
+      responseCode: 535,
+      message: '535-5.7.8 Username and Password not accepted',
+    })
+    expect(gmail.code).toBe('SMTP_AUTH')
+    expect(gmail.message).toContain('app password')
+    expect(gmail.retryable).toBe(false)
+  })
+
+  it('reads 535 as auth even when the driver sets no EAUTH', () => {
+    // RFC 4954: 535 is "authentication credentials invalid" and nothing else.
+    const bare = classifySmtpErrorForTest({ responseCode: 535 })
+    expect(bare.code).toBe('SMTP_AUTH')
+  })
+
+  it('does not claim a message was rejected during a connection test', () => {
+    /*
+     * The same classifier runs for sends and for `verify()`. A genuine 5xx on
+     * connect is a refused connection; describing it as a rejected message
+     * describes an event that did not happen.
+     */
+    const onConnect = classifySmtpErrorForTest({ responseCode: 550 }, 'connect')
+    expect(onConnect.code).toBe('SMTP_PERMANENT')
+    expect(onConnect.message).not.toContain('message')
+    expect(onConnect.message).toContain('connection')
+
+    const onSend = classifySmtpErrorForTest({ responseCode: 550 })
+    expect(onSend.message).toContain('message')
+  })
+
+  it('the connect path asks for the connect wording', () => {
+    // A classifier that can phrase correctly is no use if the caller does not
+    // tell it which situation it is in.
+    const source = readFileSync(
+      join(__dirname, '..', '..', 'lib', 'email', 'providers', 'smtp.ts'),
+      'utf8',
+    )
+    expect(source).toContain("classifySmtpError(error, 'connect')")
+  })
+
   it('never leaks the provider’s own text, which can echo recipients', () => {
     const unknown = classifySmtpErrorForTest({ message: '550 no such user bob@private.example' })
     expect(unknown.message).not.toContain('bob@private.example')
+  })
+})
+
+/**
+ * A failed connection must not cost every field.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  REACT 19 CLEARS UNCONTROLLED FIELDS WHEN A FORM ACTION RETURNS.         ║
+ * ║                                                                           ║
+ * ║  Observed 2026-09-04: one wrong password wiped the address, both          ║
+ * ║  hostnames, the username and the from-name as well. Connecting a mailbox  ║
+ * ║  is the flow where the first attempt usually fails, so this landed on     ║
+ * ║  every user, every time — and retyping six fields to correct one of them  ║
+ * ║  is how somebody gives up on the feature.                                 ║
+ * ║                                                                           ║
+ * ║  Same defect, same fix, as `lib/auth/actions.ts`.                         ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('the connect form survives a failed attempt', () => {
+  const ACTIONS = readFileSync(
+    join(__dirname, '..', '..', 'app', '(product)', 'email', 'actions.ts'),
+    'utf8',
+  )
+  const FORM = readFileSync(
+    join(__dirname, '..', '..', 'components', 'email', 'ConnectMailbox.tsx'),
+    'utf8',
+  )
+
+  it('the action echoes what was typed', () => {
+    expect(ACTIONS).toContain('values?: Record<string, string>')
+    expect(ACTIONS).toContain('const reject = (error: string): ActionState')
+  })
+
+  it('every failure path echoes, not just the first', () => {
+    /*
+     * A `reject` helper that half the returns ignore is worse than none: the
+     * field loss then depends on which error you hit, which is impossible to
+     * reason about from the outside.
+     */
+    const body = ACTIONS.slice(
+      ACTIONS.indexOf('export async function connectSmtpAccount'),
+      ACTIONS.indexOf('export async function', ACTIONS.indexOf('export async function connectSmtpAccount') + 10),
+    )
+    // The permission refusal happens before any input is read, so it is exempt.
+    const rawReturns = [...body.matchAll(/return \{ ok: false, error:/g)]
+    expect(rawReturns.length, 'a failure path still returns without values').toBe(1)
+    expect(body).toContain('return reject(')
+  })
+
+  it('never echoes the password', () => {
+    /*
+     * ⚠️ THE ONE FIELD THAT MUST BE RETYPED. Echoing a credential puts it in
+     * the page source and in any error report that captures the DOM.
+     */
+    const values = ACTIONS.slice(ACTIONS.indexOf('const values = {'), ACTIONS.indexOf('const reject'))
+    expect(values).not.toContain('password')
+  })
+
+  it('the form reads them back into every field', () => {
+    for (const field of [
+      'displayName', 'fromEmail', 'fromName', 'username', 'smtpHost', 'imapHost',
+    ]) {
+      expect(FORM, `${field} is not restored`).toContain(`prior.${field}`)
+    }
+    // Ports keep their sensible defaults but prefer what was typed.
+    expect(FORM).toContain("prior.smtpPort ?? '587'")
+    expect(FORM).toContain("prior.imapPort ?? '993'")
   })
 })

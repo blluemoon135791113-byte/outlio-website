@@ -23,7 +23,23 @@ import { requireProvider } from '@/lib/email/providers/registry'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
-export type ActionState = { ok: true; message: string } | { ok: false; error: string } | null
+/**
+ * ⚠️ `values` ECHOES BACK WHAT WAS TYPED, AND THE PASSWORD IS NEVER IN IT.
+ *
+ * React 19 resets uncontrolled fields once a form action completes, so without
+ * this a single wrong password wiped the From name, address, SMTP host, IMAP
+ * host and username too — every field, on every failed attempt. Connecting a
+ * mailbox is exactly the flow where the first attempt usually fails, and
+ * retyping six fields to correct one of them is how people give up.
+ *
+ * The password is deliberately excluded, the same as `lib/auth/actions.ts`
+ * does: echoing a credential back into the HTML puts it in the page source and
+ * in any error report that captures it.
+ */
+export type ActionState =
+  | { ok: true; message: string }
+  | { ok: false; error: string; values?: Record<string, string> }
+  | null
 
 /**
  * Connects an SMTP mailbox.
@@ -54,13 +70,26 @@ export async function connectSmtpAccount(
   const username = String(formData.get('username') ?? '').trim()
   const password = String(formData.get('password') ?? '')
 
+  // Everything except the password, so a failed attempt costs one field, not six.
+  const values = {
+    displayName,
+    fromEmail,
+    fromName,
+    smtpHost,
+    smtpPort: String(smtpPort),
+    imapHost,
+    imapPort: String(imapPort),
+    username,
+  }
+  const reject = (error: string): ActionState => ({ ok: false, error, values })
+
   if (!displayName || !fromEmail || !smtpHost || !username || !password) {
-    return { ok: false, error: 'Fill in the mailbox name, address, server, username and password.' }
+    return reject('Fill in the mailbox name, address, server, username and password.')
   }
 
   const address = normalizeSendingAddress(fromEmail)
   if (!address) {
-    return { ok: false, error: `"${fromEmail}" is not an address Outlio can send from.` }
+    return reject(`"${fromEmail}" is not an address Outlio can send from.`)
   }
 
   const configuration = {
@@ -85,7 +114,7 @@ export async function connectSmtpAccount(
   })
 
   if (!test.account.ok) {
-    return { ok: false, error: test.account.message }
+    return reject(test.account.message)
   }
 
   try {
