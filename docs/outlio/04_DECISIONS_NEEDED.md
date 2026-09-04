@@ -320,6 +320,46 @@ be a small lie repeated on every row.
 
 ---
 
+## DECISION-12 — Why has only 4% of extracted leads reached the CRM? · `OPEN`
+
+**Blocks:** what Phase 4 should actually build.
+
+Measured on production 2026-09-05:
+
+```
+extraction jobs          87
+extracted leads       1,193
+crm_lead_batches          3      (49 records)
+crm_contacts             98
+```
+
+`ingestExtractionJob` has two callers and both are **a person clicking**. There
+is no automatic path — `process-job.ts` ingests companies on completion and does
+nothing equivalent for contacts.
+
+⚠️ **The three explanations lead to different builds:**
+
+| If… | then the fix is |
+|---|---|
+| Nobody noticed the job finished | a notification, not automation |
+| Leads were reviewed and rejected | **nothing** — 4% is correct, and automating it floods the CRM with records a human declined |
+| The button is somewhere people do not look | placement |
+
+I can measure that jobs completed and were not ingested. I cannot measure whether
+that was a decision. **This is a question about humans and the owner's answer is
+worth more than anything I would infer from the tables.**
+
+---
+
+## DECISION-13 — Default ingest mode · `OPEN`
+
+**Recommendation: `manual`, unchanged.** Automation that arrives switched on
+changes behaviour for existing workspaces without anyone choosing it — and per
+DECISION-12 the current rate may be considered rather than accidental. Opt-in
+makes the change visible.
+
+---
+
 ## Not blocking, but worth knowing
 
 - **`docs/SYSTEM_HANDOFF.md`** (written 2026-09-04) already covers much of what
