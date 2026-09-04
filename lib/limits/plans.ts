@@ -100,13 +100,10 @@ export type Plan = {
   limits: PlanLimits
 }
 
-function toPlan(row: PlanRow): Plan {
+/** A plan we can read, or null. Nothing is defaulted; nothing is guessed. */
+function tryPlan(row: PlanRow): Plan | null {
   const parsed = planLimitsSchema.safeParse(row.limits)
-  if (!parsed.success) {
-    throw new Error(
-      `Plan "${row.key}" has a malformed limits blob: ${parsed.error.message}`,
-    )
-  }
+  if (!parsed.success) return null
   return {
     id: row.id,
     key: row.key,
@@ -114,6 +111,27 @@ function toPlan(row: PlanRow): Plan {
     isActive: row.is_active,
     limits: parsed.data,
   }
+}
+
+/**
+ * A plan, or a thrown error.
+ *
+ * ⚠️ USED WHERE THE ANSWER DRIVES A DECISION. Returning null here would read as
+ * "this user has no plan" and quietly downgrade a paying customer; returning
+ * defaults would grant an allowance nobody priced. Throwing is the only answer
+ * that is not a lie about what we know.
+ */
+function toPlan(row: PlanRow): Plan {
+  const plan = tryPlan(row)
+  if (!plan) {
+    const parsed = planLimitsSchema.safeParse(row.limits)
+    throw new Error(
+      `Plan "${row.key}" has a malformed limits blob: ${
+        parsed.success ? 'unknown' : parsed.error.message
+      }`,
+    )
+  }
+  return plan
 }
 
 export async function getPlanById(planId: string): Promise<Plan | null> {
@@ -149,7 +167,45 @@ export async function listActivePlans(): Promise<Plan[]> {
     .order('sort_order', { ascending: true })
 
   if (error) throw new Error(`listActivePlans failed: ${error.message}`)
-  return (data as PlanRow[]).map(toPlan)
+
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ A LISTING, NOT A DECISION — SO ONE UNREADABLE ROW IS SKIPPED RATHER    ║
+   * ║  THAN THROWN.                                                             ║
+   * ║                                                                           ║
+   * ║  This used to be `.map(toPlan)`, and one malformed plan rejected the      ║
+   * ║  whole call. Production's `agency` blob is missing `credits_per_month`;   ║
+   * ║  it is inactive today, so flipping ONE BOOLEAN would have taken /admin    ║
+   * ║  and /dashboard/access down for every user in the system — from an admin  ║
+   * ║  change that looks entirely safe.                                         ║
+   * ║                                                                           ║
+   * ║  ⚠️ SKIPPING IS SAFE HERE PRECISELY BECAUSE IT IS FAIL-CLOSED. A dropped   ║
+   * ║  plan cannot be seen or bought. DEFAULTING its limits would be fail-open  ║
+   * ║  — an allowance nobody priced — which is what the schema's "fail loudly"  ║
+   * ║  rule exists to prevent, and why `getPlanById` still throws.              ║
+   * ║                                                                           ║
+   * ║  ⚠️ AND IT IS REPORTED. A plan that vanishes from the pricing page with    ║
+   * ║  no trace is a support ticket nobody can reproduce. Degrading means       ║
+   * ║  staying up, not going quiet.                                             ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const plans: Plan[] = []
+  for (const row of data as PlanRow[]) {
+    const plan = tryPlan(row)
+    if (plan) {
+      plans.push(plan)
+      continue
+    }
+    // The key and the offending paths only — a limits blob is configuration,
+    // not a secret, but there is no reason to spill the whole row into a log.
+    const parsed = planLimitsSchema.safeParse(row.limits)
+    console.error('[plans] skipping a plan with a malformed limits blob', {
+      key: row.key,
+      issues: parsed.success ? [] : parsed.error.issues.map((i) => i.path.join('.')),
+    })
+  }
+
+  return plans
 }
 
 /** `null` limit means unlimited. */
