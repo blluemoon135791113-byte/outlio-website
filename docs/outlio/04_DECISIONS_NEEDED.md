@@ -244,6 +244,43 @@ to decide and the recommendation stood.
 
 ---
 
+## DECISION-08 — §7's fixture does not fit on the free tier · `OPEN`
+
+**Blocks:** Phase 2's performance measurement, and §7 in full.
+
+§7 requires 100k contacts, 30k companies, 20k opportunities and **1M activities**
+seeded before Phase 2.
+
+⚠️ **Measured on staging, not estimated from documentation:** `crm_contacts`
+averages **146 bytes/row**, `crm_activities` **213 bytes/row**. Heap alone is
+~15 MB + ~213 MB; `crm_contacts` carries nine indexes including a trigram index.
+Realistic total **400–550 MB** against Supabase's **500 MB free-tier cap**,
+beyond which the project goes read-only. Staging is currently 23 MB.
+
+| Option | Cost | Consequence |
+|---|---|---|
+| **A. Seed only what Phase 2 measures** — contacts, companies, opportunities | none | Every §7 target Phase 2 is judged on becomes measurable. 1M activities is a **Phase 14** figure. |
+| B. Seed all of §7 | none until it breaks | Likely exceeds the cap mid-run, leaving staging read-only. |
+| C. Upgrade staging to Pro | **~$25/month** | All of §7 measurable now. |
+
+**Recommendation: A.** It costs nothing, measures everything Phase 2 needs, and
+defers the one number Phase 2 does not use to the phase that does.
+
+---
+
+## DECISION-09 — Saved views: shared or private? · `OPEN`
+
+**Blocks:** the saved-views half of Phase 2.
+
+A view a manager saves for the team and a view an individual saves for themselves
+are different features — different permissions, different tenancy, different UI.
+
+**Recommendation: private first.** The private case is a strict subset, so
+shipping it does not foreclose sharing later, and `crm_saved_views` has no code
+at all today so there is nothing to migrate either way.
+
+---
+
 ## Not blocking, but worth knowing
 
 - **`docs/SYSTEM_HANDOFF.md`** (written 2026-09-04) already covers much of what
