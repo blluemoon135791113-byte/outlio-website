@@ -15,9 +15,14 @@
  * ║  claim mean something.                                                    ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { parseDefinition, viewToOptions } from '@/lib/crm/saved-views'
+
+const SOURCE = readFileSync(join(__dirname, '..', '..', 'lib/crm/saved-views.ts'), 'utf8')
 
 describe('parseDefinition keeps what it recognises', () => {
   it('accepts a full, valid definition', () => {
@@ -120,7 +125,7 @@ describe('viewToOptions', () => {
 })
 
 describe('the module is private-only by construction (DECISION-09)', () => {
-  it('never writes is_shared true', async () => {
+  it('never writes is_shared true', () => {
     /*
      * ⚠️ ASSERTED ON THE SOURCE because the alternative — a live insert — needs
      * a database, and this property is about what the code CAN do rather than
@@ -128,12 +133,7 @@ describe('the module is private-only by construction (DECISION-09)', () => {
      * until DECISION-09 is revisited, writing it true from here would ship
      * sharing by accident.
      */
-    const { readFileSync } = await import('node:fs')
-    const { join } = await import('node:path')
-    const source = readFileSync(
-      join(__dirname, '..', '..', 'lib/crm/saved-views.ts'),
-      'utf8',
-    ).replace(/^[ \t]*\/\/.*\n/gm, '')
+    const source = SOURCE.replace(/^[ \t]*\/\/.*\n/gm, '')
 
     expect(source).toContain('is_shared: false')
     expect(source).not.toMatch(/is_shared:\s*true/)
@@ -145,11 +145,7 @@ describe('the module is private-only by construction (DECISION-09)', () => {
      * everyone — which is the SHARED feature, arrived at by omission rather
      * than by decision.
      */
-    const source = require('node:fs').readFileSync(
-      require('node:path').join(__dirname, '..', '..', 'lib/crm/saved-views.ts'),
-      'utf8',
-    )
-    const statements = [...source.matchAll(/\.from\('crm_saved_views'\)([\s\S]{0,600}?)\n\n/g)]
+    const statements = [...SOURCE.matchAll(/\.from\('crm_saved_views'\)([\s\S]{0,600}?)\n\n/g)]
 
     /*
      * ⚠️ INSERTS ARE EXCLUDED, AND THAT IS NOT A LOOPHOLE. An insert carries the
