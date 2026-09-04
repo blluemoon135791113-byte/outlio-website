@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { DuplicateList, type DuplicateRow } from '@/components/crm/DuplicateCenter'
 import { listDuplicateCandidates, type DuplicateCenterTab } from '@/lib/crm/duplicates'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -37,7 +37,10 @@ export default async function DuplicatesPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const params = await searchParams
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('crm.contact.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
   const policy = { role: ctx.role, modules: ctx.modules }
 
   if (!can(policy, 'crm.duplicate.resolve')) {

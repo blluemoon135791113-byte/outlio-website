@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { InboxList, InboxTabs } from '@/components/email/InboxList'
 import { isInboxView, listThreads, seesAllThreads, viewCounts } from '@/lib/email/inbox'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -25,7 +25,10 @@ export default async function InboxPage({
   searchParams: Promise<{ view?: string; cursor?: string }>
 }) {
   const params = await searchParams
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('email.campaign.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
   const policy = { role: ctx.role, modules: ctx.modules }
 
   if (!can(policy, 'email.inbox.view')) {

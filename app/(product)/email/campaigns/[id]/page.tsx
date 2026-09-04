@@ -7,7 +7,7 @@ import { notFound } from 'next/navigation'
 import { CampaignControls } from '@/components/email/CampaignControls'
 import { policyFor, type CampaignType } from '@/lib/email/campaign-policy'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -28,7 +28,10 @@ export default async function CampaignPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('email.campaign.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
   const db = createAdminClient()
 
   const { data: campaign } = await db

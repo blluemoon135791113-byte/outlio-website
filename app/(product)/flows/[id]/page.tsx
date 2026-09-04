@@ -13,7 +13,7 @@ import { listEmailAccounts } from '@/lib/email/accounts'
 import { creditBearingSteps, validateFlowDefinition } from '@/lib/flows/definition'
 import { quoteCredits, type HubbleTask } from '@/lib/hubble/pricing'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -41,7 +41,10 @@ const TASK_FOR: Record<string, HubbleTask> = {
  */
 export default async function FlowPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('flow.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
   const db = createAdminClient()
 
   const { data: flow } = await db

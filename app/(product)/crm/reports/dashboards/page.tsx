@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 import { CreateDashboard } from '@/components/reports/DashboardEditor'
 import { listDashboards } from '@/lib/reports/dashboards'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -18,7 +18,10 @@ export const metadata: Metadata = {
  * the one it actually runs.
  */
 export default async function DashboardsPage() {
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('crm.contact.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
   const canEdit = can({ role: ctx.role, modules: ctx.modules }, 'crm.export')
   const dashboards = await listDashboards(ctx.workspace.id)
 

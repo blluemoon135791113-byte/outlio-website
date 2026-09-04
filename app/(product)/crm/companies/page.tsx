@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -25,7 +25,10 @@ export default async function CompaniesPage({
   searchParams: Promise<{ page?: string }>
 }) {
   const params = await searchParams
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('crm.contact.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
 
   if (!can({ role: ctx.role, modules: ctx.modules }, 'crm.company.view')) {
     return (

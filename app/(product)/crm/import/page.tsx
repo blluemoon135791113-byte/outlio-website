@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 import { ImportContacts } from '@/components/crm/ImportContacts'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -17,7 +17,10 @@ export const metadata: Metadata = {
  * at all. The only route in was the browser extension.
  */
 export default async function ImportPage() {
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('crm.contact.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
 
   if (!can({ role: ctx.role, modules: ctx.modules }, 'crm.import')) {
     return (

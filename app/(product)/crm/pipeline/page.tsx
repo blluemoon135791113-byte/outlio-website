@@ -5,7 +5,7 @@ import { NewOpportunityButton } from '@/components/crm/NewOpportunity'
 import { NewPipelineButton, PipelineSetup } from '@/components/crm/PipelineSetup'
 import { getBoard, getPipeline } from '@/lib/crm/opportunities'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -26,7 +26,10 @@ export default async function PipelinePage({
 }: {
   searchParams: Promise<{ pipeline?: string; owner?: string }>
 }) {
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('crm.contact.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
   const params = await searchParams
 
   const pipelineId = params.pipeline ?? (await defaultPipelineId(ctx.workspace.id))

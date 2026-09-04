@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 
 /**
  * A real under-privileged member, refused by the route rather than by the UI.
@@ -38,6 +38,8 @@ function stagingEnv(): Record<string, string> {
   }
   return out
 }
+
+const BASE = 'http://127.0.0.1:3000'
 
 const ENV = stagingEnv()
 const hasStaging = Boolean(ENV.NEXT_PUBLIC_SUPABASE_URL && ENV.SUPABASE_SERVICE_ROLE_KEY)
@@ -85,6 +87,53 @@ async function makeUser(db: SupabaseClient, label: string) {
     .eq('id', data.user.id)
 
   return { userId: data.user.id, email, password }
+}
+
+/**
+ * Sign in ONCE per role, then replay the session cookies into each test.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ SIGNING IN PER TEST BURNS THE PRODUCT'S OWN RATE LIMIT. `RULES.signIn` ║
+ * ║  is 5 attempts per 15 minutes per (IP, email) — so a suite that signs the  ║
+ * ║  same user in seven times has its LAST tests refused by a control that is  ║
+ * ║  working exactly as designed.                                             ║
+ * ║                                                                           ║
+ * ║  ⚠️ AND THE FAILURE IS INDISTINGUISHABLE FROM A BROKEN PASSWORD. The       ║
+ * ║  sign-in action reports every failure with one deliberately-vague message  ║
+ * ║  (correctly — it must not become an account-enumeration oracle), so being  ║
+ * ║  rate-limited looks exactly like wrong credentials from the outside. That  ║
+ * ║  cost a long detour: the product was right and the fixture was wrong.     ║
+ * ║                                                                           ║
+ * ║  Two sign-ins for the whole file, replayed as cookies. Faster, and it      ║
+ * ║  stops the suite fighting a security control it is not testing.           ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+type Cookies = Awaited<ReturnType<BrowserContext['cookies']>>
+
+async function signInOnce(
+  browser: Browser,
+  email: string,
+  password: string,
+): Promise<Cookies> {
+  const context = await browser.newContext()
+  const page = await context.newPage()
+  await page.goto(`${BASE}/sign-in`)
+  await page.getByLabel(/email/i).fill(email)
+  await page.getByLabel(/^password$/i).fill(password)
+  await page.getByRole('button', { name: /sign in/i }).click()
+
+  /*
+   * ⚠️ POLLED, NOT `waitForURL`. That waits for `load`, which Next's App Router
+   * never fires on a soft navigation — it hangs on a redirect that already
+   * succeeded. `contact-filters.spec.ts` records the same trap.
+   */
+  await expect
+    .poll(() => new URL(page.url()).pathname, { timeout: 90_000, intervals: [250] })
+    .not.toMatch(/^\/sign-in/)
+
+  const cookies = await context.cookies()
+  await context.close()
+  return cookies
 }
 
 async function seed() {
@@ -153,9 +202,14 @@ test.describe('an under-privileged member is refused by the server', () => {
   test.setTimeout(180_000)
 
   let f: Awaited<ReturnType<typeof seed>>
+  let setterCookies: Cookies
+  let ownerCookies: Cookies
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
     f = await seed()
+    // Two sign-ins for the entire file — see `signInOnce`.
+    setterCookies = await signInOnce(browser, f.setter.email, f.setter.password)
+    ownerCookies = await signInOnce(browser, f.owner.email, f.owner.password)
   })
 
   test.afterAll(async () => {
@@ -164,22 +218,24 @@ test.describe('an under-privileged member is refused by the server', () => {
     if (f?.owner?.userId) await db.auth.admin.deleteUser(f.owner.userId)
   })
 
-  /** Sign in as the setter AND pin the active workspace to the owner's. */
+  /** Replay the setter's session, and pin the active workspace to the owner's. */
   async function signInAsSetter(page: Page) {
-    await page.goto('/sign-in')
-    await page.getByLabel(/email/i).fill(f.setter.email)
-    await page.getByLabel(/^password$/i).fill(f.setter.password)
-    await page.getByRole('button', { name: /sign in/i }).click()
-    await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), { timeout: 20_000 })
-
     await page.context().addCookies([
-      {
-        name: 'outlio_workspace',
-        value: f.workspaceId,
-        domain: '127.0.0.1',
-        path: '/',
-      },
+      ...setterCookies,
+      /*
+       * ⚠️ THE WORKSPACE COOKIE IS LOAD-BEARING. `pickActive` prefers a
+       * workspace the user OWNS, and every signup gets one — so without this the
+       * "setter" is tested inside their own workspace as its OWNER and every
+       * denial below silently becomes an allow. It only SELECTS among proven
+       * memberships, so it grants nothing they did not already have.
+       */
+      { name: 'outlio_workspace', value: f.workspaceId, domain: '127.0.0.1', path: '/' },
     ])
+  }
+
+  /** Replay the owner's session. */
+  async function signInAsOwner(page: Page) {
+    await page.context().addCookies(ownerCookies)
   }
 
   test('the fixture really is a setter in the owner\'s workspace', async ({ page }) => {
@@ -344,11 +400,7 @@ test.describe('an under-privileged member is refused by the server', () => {
      * ║  This is the assertion that the guard discriminates by ROLE.           ║
      * ╚═══════════════════════════════════════════════════════════════════════╝
      */
-    await page.goto('/sign-in')
-    await page.getByLabel(/email/i).fill(f.owner.email)
-    await page.getByLabel(/^password$/i).fill(f.owner.password)
-    await page.getByRole('button', { name: /sign in/i }).click()
-    await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), { timeout: 20_000 })
+    await signInAsOwner(page)
 
     await page.goto('/dashboard/settings/developers', { waitUntil: 'domcontentloaded' })
     expect(
@@ -361,5 +413,174 @@ test.describe('an under-privileged member is refused by the server', () => {
 
     await page.goto('/dashboard/settings/notifications', { waitUntil: 'domcontentloaded' })
     expect(new URL(page.url()).pathname).toBe('/dashboard/settings/notifications')
+  })
+
+  test('no product page shows a setter another member\'s contact', async ({ page }) => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE BROAD SWEEP, AND THE REASON IT EXISTS. Auditing two pages found ║
+     * ║  a leak, so stopping at two was not an audit — it was a sample. This   ║
+     * ║  plants one owner-only record per module and checks EVERY page a       ║
+     * ║  setter can reach.                                                     ║
+     * ║                                                                        ║
+     * ║  ⚠️ THE CONTACT NAME IS THE NEEDLE THAT MATTERS. `dataScope('setter')` ║
+     * ║  is 'assigned', and eleven pages load at 200 for a setter. Nine of     ║
+     * ║  them read contacts. One forgotten owner filter puts another rep's     ║
+     * ║  prospect on screen — which is the CRM equivalent of reading somebody  ║
+     * ║  else's mail, and it would look like an ordinary list.                 ║
+     * ║                                                                        ║
+     * ║  Measured 2026-09-05: all clean on this needle. `/flows` leaked a      ║
+     * ║  FLOW NAME (fixed — `flow.view` is manager-only and the page did not   ║
+     * ║  ask). `/crm/lists` shows list names, which is correct: those are      ║
+     * ║  workspace objects and `crm.list.manage` is a setter permission.       ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const db = admin()
+    const W = f.workspaceId
+
+    const { data: pipe } = await db
+      .from('crm_pipelines')
+      .insert({ workspace_id: W, name: 'Owners Pipeline' })
+      .select('id')
+      .single()
+    const { data: stage } = await db
+      .from('crm_pipeline_stages')
+      .insert({ workspace_id: W, pipeline_id: pipe!.id, name: 'New', sort_order: 1 })
+      .select('id')
+      .single()
+
+    // Every one of these hangs off the OWNER's contact, never the setter's.
+    const seeds = await Promise.all([
+      db.from('crm_tasks').insert({
+        workspace_id: W,
+        title: 'Call the owners prospect',
+        contact_id: f.othersContactId,
+        assigned_to_user_id: f.owner.userId,
+      }),
+      db.from('crm_opportunities').insert({
+        workspace_id: W,
+        title: 'Owners Big Deal',
+        pipeline_id: pipe!.id,
+        stage_id: stage!.id,
+        owner_user_id: f.owner.userId,
+        value_amount: 90000,
+        currency: 'USD',
+      }),
+      db.from('flows').insert({
+        workspace_id: W,
+        name: 'ZZFLOW Owners Secret Automation',
+        status: 'draft',
+      }),
+    ])
+    /*
+     * ⚠️ SEED FAILURES ARE FATAL, NOT IGNORED. An earlier version of this audit
+     * discarded them, a webhook insert failed on a missing column, and the
+     * result read as "does not leak" when nothing had been planted. A fixture
+     * that fails silently turns a leak test into a green tick.
+     */
+    for (const s of seeds) expect(s.error?.message ?? null).toBeNull()
+
+    await signInAsSetter(page)
+
+    for (const route of [
+      '/crm/duplicates',
+      '/crm/lists',
+      '/crm/tasks',
+      '/crm/pipeline',
+      '/crm/companies',
+      '/crm/reports',
+      '/email/inbox',
+      '/email/campaigns',
+      '/crm/import',
+      '/crm/reports/dashboards',
+    ]) {
+      await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+      expect(
+        await page.content(),
+        `${route} showed a setter a contact assigned to somebody else`,
+      ).not.toContain('Somebody Elses Prospect')
+    }
+
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE PAYLOAD, NOT THE PIXELS — THIS IS THE ASSERTION THAT MATTERS.  ║
+     * ║                                                                        ║
+     * ║  `/flows` still answers 200 and still says "You do not have access",   ║
+     * ║  by design: the layout distinguishes "not in your plan" from "not your ║
+     * ║  role", and redirecting to /dashboard would throw that away.           ║
+     * ║                                                                        ║
+     * ║  But the layout dropping `{children}` never stopped the PAGE running.  ║
+     * ║  Measured before the fix, as a setter: the flow name was absent from   ║
+     * ║  the visible text and PRESENT in the RSC flight payload —              ║
+     * ║  `"children":"ZZFLOW Owners Secret Automation"` — one View Source away. ║
+     * ║                                                                        ║
+     * ║  So this checks `page.content()` (full HTML, script payload included), ║
+     * ║  not `innerText`. Asserting on what the user SEES would have passed    ║
+     * ║  against the bug.                                                      ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    await page.goto('/flows', { waitUntil: 'domcontentloaded', timeout: 60_000 })
+
+    const visible = await page.locator('body').innerText()
+    expect(visible, 'the layout no longer explains the refusal').toMatch(
+      /do not have access|not included in your plan/i,
+    )
+    expect(
+      await page.content(),
+      'the flow name reached the RSC payload — hidden on screen, readable in View Source',
+    ).not.toContain('ZZFLOW Owners Secret Automation')
+  })
+
+  test('a workspace without the CRM module does not receive its contacts', async ({ page }) => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE ENTITLEMENT HALF OF THE SAME BUG, AND THE SHARPER ONE. This    ║
+     * ║  uses the OWNER — the highest role there is — so role is not the       ║
+     * ║  variable. Only the MODULE is missing.                                 ║
+     * ║                                                                        ║
+     * ║  Measured before the fix, with `module.crm` switched off:              ║
+     * ║                                                                        ║
+     * ║      contact in VISIBLE: false                                          ║
+     * ║      contact in PAYLOAD: true                                           ║
+     * ║                                                                        ║
+     * ║  The page said "Flows/CRM are not included in your plan", the nav      ║
+     * ║  dropped the CRM links — and the contact rows shipped anyway. A        ║
+     * ║  customer who downgrades keeps having the data they no longer pay for  ║
+     * ║  sent to their browser on every visit.                                  ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const db = admin()
+    const { error } = await db
+      .from('workspace_feature_flags')
+      // ⚠️ `module.crm`, not `crm`. The flag values live in `MODULE_FLAG`; a
+      // wrong string here switches nothing off and the test passes vacuously —
+      // which happened on the first attempt.
+      .insert({ workspace_id: f.workspaceId, flag: 'module.crm', enabled: false })
+    expect(error?.message ?? null, 'could not switch the CRM module off').toBeNull()
+
+    try {
+      await signInAsOwner(page)
+      await page.goto('/crm/contacts', { waitUntil: 'domcontentloaded', timeout: 60_000 })
+
+      expect(await page.locator('body').innerText()).toMatch(/not included in your plan/i)
+      expect(
+        await page.content(),
+        'contacts reached the RSC payload of a workspace with no CRM entitlement',
+      ).not.toContain('Setters Own Prospect')
+    } finally {
+      // Always restored, or every later run inherits a workspace with no CRM.
+      await db
+        .from('workspace_feature_flags')
+        .delete()
+        .eq('workspace_id', f.workspaceId)
+        .eq('flag', 'module.crm')
+    }
+
+    // The control: with the module back on, the owner sees contacts again.
+    await page.goto('/crm/contacts', { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    expect(
+      await page.content(),
+      'restoring the module did not restore access — the guard is not module-driven',
+    ).toContain('Setters Own Prospect')
   })
 })

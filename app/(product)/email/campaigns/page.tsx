@@ -5,7 +5,7 @@ import { CreateCampaign } from '@/components/email/CreateCampaign'
 import { listEmailAccounts } from '@/lib/email/accounts'
 import { policyFor, type CampaignType } from '@/lib/email/campaign-policy'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -21,7 +21,10 @@ export const metadata: Metadata = {
  * point; a campaign with nowhere to send from is a draft nobody can finish.
  */
 export default async function CampaignsPage() {
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('email.campaign.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
   const policy = { role: ctx.role, modules: ctx.modules }
   const canCreate = can(policy, 'email.campaign.create')
 

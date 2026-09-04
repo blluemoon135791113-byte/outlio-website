@@ -6,7 +6,7 @@ import { SenderAddress } from '@/components/email/SenderAddress'
 import { listEmailAccounts } from '@/lib/email/accounts'
 import { getDomainHealth } from '@/lib/email/readiness-runner'
 import { SCORE_CAVEAT, SCORE_LABEL } from '@/lib/email/readiness'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -24,7 +24,10 @@ export const metadata: Metadata = {
  * stopping (Ledger D42).
  */
 export default async function MailboxesPage() {
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('email.campaign.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
   const canConnect = can({ role: ctx.role, modules: ctx.modules }, 'email.account.connect')
 
   const [accounts, domains, { data: workspace }] = await Promise.all([

@@ -256,3 +256,59 @@ its content on `workspace.member.view`.
 others). Their mutations are guarded and several render deliberately read-only,
 so whether the VIEW should also be gated is a product decision per page, not a
 defect — recorded here rather than changed unilaterally.
+
+
+---
+
+## A module layout does not stop its pages running (2026-09-05)
+
+Finishing the role audit — nine pages were still unprobed after the first two
+found a leak — turned up a bug one level below the one it was looking for.
+
+All three module layouts (`crm`, `email`, `flows`) refuse by rendering an
+EmptyState **instead of** `{children}`. Each calls itself "THE ACCESS BOUNDARY".
+
+⚠️ **Next renders the layout and the page together.** Dropping `{children}`
+hides the page's output; it does not stop the page component executing,
+querying, or having its result serialised into the RSC flight payload that
+ships to the browser. Measured on staging:
+
+```
+/flows as a setter        visible: false   payload: TRUE
+                          → "children":"ZZFLOW Owners Secret Automation"
+/crm/contacts, module off visible: false   payload: TRUE
+                          → contact rows, under "not included in your plan"
+```
+
+⚠️ **The second case uses the OWNER** — the highest role there is. Only the
+module is missing. A workspace that downgrades, or never had CRM, still has its
+contact data sent to the browser on every visit, readable in View Source. That
+is an entitlement bypass rather than a cross-tenant leak: it is the customer's
+own data, shown to a customer we told could not see it.
+
+**Fixed** across 20 pages with `workspaceContextIfPermitted`, which returns
+`null` rather than redirecting — the layout still distinguishes "not in your
+plan" from "not your role", and support needs those to stay different.
+`tests/unit/module-page-guard.test.ts` covers every page under all three
+surfaces and pins each layout's permission, so a page gated on the *wrong*
+permission cannot pass by agreeing with itself.
+
+### Two things that looked like product bugs and were not
+
+- **Sign-in "failing" in the E2E.** `RULES.signIn` is 5 attempts per 15 minutes
+  per (IP, email); the suite signed one user in seven times. The product was
+  right and the fixture was wrong. ⚠️ It is invisible from outside because the
+  sign-in action reports every failure with one deliberately-vague message —
+  correctly, so it cannot become an account-enumeration oracle — so
+  rate-limited and wrong-password are indistinguishable. The suite now signs in
+  twice per file and replays cookies.
+- **`waitForURL` hanging.** It waits for `load`, which the App Router never
+  fires on a soft navigation. Real, and already recorded in
+  `contact-filters.spec.ts` — but not the cause here. Polling the URL proved it.
+
+### Still open
+
+Nine pages return 200 to a setter with their mutations guarded and their data
+correctly scoped. `/crm/lists` shows list names, which is right —
+`crm.list.manage` is a setter permission. Whether any remaining VIEW should be
+narrowed is a product decision per page, not a defect.

@@ -15,7 +15,7 @@ import { companyDetails, companyWebsite } from '@/lib/crm/company-details'
 import { getContactDetail, listAssignableMembers } from '@/lib/crm/contacts-list'
 import { citationsFor, safeSourceUrl, withProvenance } from '@/lib/crm/provenance'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
 
 /**
@@ -31,7 +31,15 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>
 }): Promise<Metadata> {
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('crm.contact.view')
+  /*
+   * ⚠️ THE TITLE IS THE CONTACT'S NAME, SO IT IS ALSO A DISCLOSURE. Metadata is
+   * rendered whatever the layout decides — a caller without CRM access would
+   * otherwise read the person's name off the browser tab and the document
+   * <title> while the page itself says they have no access.
+   */
+  if (!ctx) return { title: 'Outlio', robots: { index: false, follow: false } }
+
   const { id } = await params
   const contact = await getContactDetail(ctx.workspace.id, id)
 
@@ -53,7 +61,10 @@ export default async function ContactDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('crm.contact.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
   const { id } = await params
 
   const contact = await getContactDetail(ctx.workspace.id, id)

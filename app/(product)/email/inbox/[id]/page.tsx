@@ -7,7 +7,7 @@ import { ReplyComposer } from '@/components/email/ReplyComposer'
 import { LocalTime } from '@/components/ui/LocalTime'
 import { defaultPipeline } from '@/lib/crm/opportunities'
 import { getThread, replyableMessageId } from '@/lib/email/inbox'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -29,7 +29,10 @@ const CLASSIFICATION_LABEL: Record<string, string> = {
  * timeline and every report built on it.
  */
 export default async function ThreadPage({ params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('email.campaign.view')
+  // The layout renders the reason; this only stops the page computing and
+  // serialising its result into the RSC payload.
+  if (!ctx) return null
   const { id } = await params
 
   const detail = await getThread({

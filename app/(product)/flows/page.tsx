@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 import { CreateFlow } from '@/components/flows/CreateFlow'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireWorkspace } from '@/lib/workspaces/context'
+import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -11,8 +11,21 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
+/**
+ * ⚠️ `flow.view` IS MANAGER-ONLY, AND THIS PAGE DID NOT ASK. It called
+ * `requireWorkspace()` and used `flow.manage` purely to decide which controls
+ * rendered — so a `setter` loaded it and read every flow's name, description,
+ * status and run counts. A flow name describes what a company is doing to whom;
+ * the policy table already says that is not a setter's business.
+ *
+ * Measured on staging, alongside the same shape on the developer settings page.
+ * `flow.view` and `flow.manage` are both `manager`, so gating on `flow.view`
+ * changes nothing for anyone who could already act here.
+ */
 export default async function FlowsPage() {
-  const ctx = await requireWorkspace()
+  const ctx = await workspaceContextIfPermitted('flow.view')
+  // The layout renders the reason; this only stops the page computing.
+  if (!ctx) return null
   const canManage = can({ role: ctx.role, modules: ctx.modules }, 'flow.manage')
   const db = createAdminClient()
 

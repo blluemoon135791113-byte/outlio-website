@@ -185,6 +185,46 @@ export async function requireWorkspacePermission(
 }
 
 /**
+ * Page guard for a surface whose LAYOUT already explains the refusal.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ A LAYOUT THAT RENDERS AN EmptyState INSTEAD OF `{children}` DOES NOT   ║
+ * ║  STOP THE PAGE RUNNING.                                                   ║
+ * ║                                                                           ║
+ * ║  Next renders layout and page together. If the layout drops `{children}`, ║
+ * ║  the page's output is not DISPLAYED — but the page component still        ║
+ * ║  executed, still queried, and its result is still serialised into the RSC ║
+ * ║  flight payload sent to the browser. It is one View Source away.          ║
+ * ║                                                                           ║
+ * ║  Measured on staging, 2026-09-05, with `module.crm` switched off for a    ║
+ * ║  workspace: /crm/contacts showed the "not included in your plan" message  ║
+ * ║  and dropped the CRM nav — and shipped the contact rows anyway:           ║
+ * ║                                                                           ║
+ * ║      contact in VISIBLE: false                                            ║
+ * ║      contact in PAYLOAD: true                                             ║
+ * ║                                                                           ║
+ * ║  The same held for /flows with a `setter`, whose flow names and           ║
+ * ║  descriptions arrived in the payload under a "You do not have access"     ║
+ * ║  heading. Each module layout calls itself THE ACCESS BOUNDARY; each was   ║
+ * ║  defeated by a rendering detail rather than by a missing check.           ║
+ * ║                                                                           ║
+ * ║  ⚠️ RETURNS NULL RATHER THAN REDIRECTING, DELIBERATELY. The layout already ║
+ * ║  distinguishes "your plan does not include this" from "your role does     ║
+ * ║  not permit this", and those need different answers from support.         ║
+ * ║  Redirecting to /dashboard would fix the leak and throw that away — the   ║
+ * ║  page returns null, the layout keeps saying why.                          ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function workspaceContextIfPermitted(
+  permission: Permission,
+): Promise<WorkspaceContext | null> {
+  const ctx = await getWorkspaceContext()
+  if (!ctx) return null
+  const decision = decidePermission({ role: ctx.role, modules: ctx.modules }, permission)
+  return decision.allowed ? ctx : null
+}
+
+/**
  * Action / route-handler guard.
  *
  * THIS IS THE API-LEVEL ENFORCEMENT. Hiding a nav item is not access control
