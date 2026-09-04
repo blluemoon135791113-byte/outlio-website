@@ -70,6 +70,7 @@ describe('a broadcast is a single message', () => {
         hasAccount: true,
         hasUnsubscribeSupport: true,
         enrollmentCount: 10,
+      senderPostalAddress: '9 Example Street, Springfield, IL 62704',
       }),
     ).toThrow(/sales sequence/)
   })
@@ -99,6 +100,7 @@ describe('unsubscribe', () => {
         hasAccount: true,
         hasUnsubscribeSupport: false,
         enrollmentCount: 10,
+      senderPostalAddress: '9 Example Street, Springfield, IL 62704',
       }),
     ).toThrow(/one-click unsubscribe/)
   })
@@ -111,6 +113,7 @@ describe('unsubscribe', () => {
         hasAccount: true,
         hasUnsubscribeSupport: false,
         enrollmentCount: 10,
+      senderPostalAddress: '9 Example Street, Springfield, IL 62704',
       }),
     ).not.toThrow()
   })
@@ -139,6 +142,7 @@ describe('launch validation catches misconfiguration before anyone is mailed', (
     hasAccount: true,
     hasUnsubscribeSupport: true,
     enrollmentCount: 25,
+      senderPostalAddress: '9 Example Street, Springfield, IL 62704',
   }
 
   it('accepts a well-formed campaign', () => {

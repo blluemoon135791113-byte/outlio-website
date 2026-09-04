@@ -250,21 +250,32 @@ export async function launchCampaign(
 
   if (!campaign) return { ok: false, error: 'That campaign no longer exists.' }
 
-  const [{ count: stepCount }, { count: enrollmentCount }] = await Promise.all([
-    db.from('email_sequence_steps').select('id', { count: 'exact', head: true })
-      .eq('campaign_id', campaignId),
-    db.from('email_enrollments').select('id', { count: 'exact', head: true })
-      .eq('campaign_id', campaignId).in('status', ['active', 'paused']),
-  ])
+  const [{ count: stepCount }, { count: enrollmentCount }, { data: workspace }] =
+    await Promise.all([
+      db.from('email_sequence_steps').select('id', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId),
+      db.from('email_enrollments').select('id', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId).in('status', ['active', 'paused']),
+      // Migration 0111. Read at launch rather than cached, so setting the
+      // address unblocks the next launch without any other step.
+      db.from('workspaces').select('sender_postal_address')
+        .eq('id', ctx.workspace.id).maybeSingle(),
+    ])
 
   try {
     assertLaunchable({
       type: campaign.type as CampaignType,
       stepCount: stepCount ?? 0,
       hasAccount: Boolean(campaign.account_id),
-      // Outlio adds the RFC 8058 header itself, so this is always available.
+      /*
+       * Outlio adds the RFC 8058 headers itself — which became true in Phase
+       * 0.5. Before that this line was correct in intent and false in fact:
+       * `OutboundMessage` had no `headers` field, so no message could carry
+       * one. See lib/email/compliance.ts.
+       */
       hasUnsubscribeSupport: true,
       enrollmentCount: enrollmentCount ?? 0,
+      senderPostalAddress: workspace?.sender_postal_address ?? null,
     })
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Cannot launch yet.' }
@@ -459,4 +470,69 @@ export async function updateSendingSettings(
 
   revalidatePath('/email')
   return { ok: true, message: 'Sending settings saved.' }
+}
+
+export type PostalAddressState =
+  | { ok: true; message: string }
+  | { ok: false; error: string }
+  | { ok: null }
+
+/**
+ * The workspace's sender postal address — Phase 0.5, migration 0111.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  UNTIL PHASE 0.5 THERE WAS NOWHERE TO PUT ONE. The string "postal        ║
+ * ║  address" appeared nowhere in this codebase — no column, no field, no    ║
+ * ║  TODO — while CAN-SPAM §7704(a)(5) requires a valid physical address in  ║
+ * ║  every commercial email.                                                 ║
+ * ║                                                                           ║
+ * ║  ⚠️ SETTING IT IS WHAT UNBLOCKS LAUNCHING A CAMPAIGN. `assertLaunchable`  ║
+ * ║  refuses any campaign that would carry an unsubscribe footer while this   ║
+ * ║  is empty — which is every campaign except a manual one-to-one message.  ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function updateSenderPostalAddress(
+  _previous: PostalAddressState,
+  formData: FormData,
+): Promise<PostalAddressState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('email.account.manage')
+  } catch {
+    return { ok: false, error: 'You do not have permission to change sending settings.' }
+  }
+
+  const address = String(formData.get('senderPostalAddress') ?? '').trim()
+
+  /*
+   * ⚠️ BLANK IS ALLOWED AND CLEARS IT. Refusing to clear would mean a workspace
+   * that mistyped an address is stuck with a WRONG one, and a wrong postal
+   * address in commercial mail is its own §7704(a)(5) violation — worse than an
+   * absent one, because it looks compliant. Launching stays blocked while empty.
+   */
+  if (address !== '' && address.length < 10) {
+    return { ok: false, error: 'That looks too short to be a postal address.' }
+  }
+
+  if (address.length > 500) {
+    return { ok: false, error: 'That is longer than an address needs to be.' }
+  }
+
+  const { error } = await createAdminClient()
+    .from('workspaces')
+    .update({ sender_postal_address: address === '' ? null : address })
+    .eq('id', ctx.workspace.id)
+
+  if (error) {
+    return {
+      ok: false,
+      error: 'We could not save that. If this persists, contact support.',
+    }
+  }
+
+  revalidatePath('/email')
+  return {
+    ok: true,
+    message: address === '' ? 'Address cleared.' : 'Address saved.',
+  }
 }

@@ -2,8 +2,10 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   position: relative;
   padding: clamp(1.5rem, 2.7vw, 3rem);
-  background: #fff;
-  color: #151513;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(201, 122, 93, 0.12), transparent 30rem),
+    linear-gradient(135deg, #fffaf3 0%, #f7e7d3 100%);
+  color: #191612;
 }
 
 .layout {
@@ -46,7 +48,7 @@
 
 .eyebrow {
   margin: 0 0 2rem;
-  color: #c79a2b;
+  color: #a9472c;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
   font-size: 0.82rem;
   font-weight: 780;
@@ -89,7 +91,7 @@
 .description {
   max-width: 27rem;
   margin: clamp(1.35rem, 2vw, 1.9rem) 0 0;
-  color: #393833;
+  color: #4b4038;
   font-family: var(--font-body);
   font-size: var(--leadengine-copy-size);
   font-weight: var(--leadengine-copy-weight);
@@ -106,13 +108,13 @@
   margin-top: clamp(1.6rem, 2.2vw, 2.2rem);
   padding: 0 1.5rem;
   border-radius: 0.875rem;
-  background: #090909;
-  color: #fff;
+  background: #c45332;
+  color: #fff8f0;
   font-size: 0.95rem;
   font-weight: 650;
   box-shadow:
-    0 0.18rem 0.35rem rgba(38, 22, 3, 0.1),
-    0 0.9rem 2rem rgba(70, 38, 0, 0.12);
+    0 0.18rem 0.35rem rgba(111, 48, 29, 0.14),
+    0 0.9rem 2rem rgba(152, 70, 43, 0.2);
   transition:
     transform 160ms var(--ease-out),
     background-color 160ms ease;
@@ -124,12 +126,12 @@
 }
 
 .cta:hover {
-  background: #27231d;
+  background: #a94328;
   transform: translateY(-2px);
 }
 
 .cta:focus-visible {
-  outline: 3px solid rgba(255, 143, 25, 0.42);
+  outline: 3px solid rgba(196, 83, 50, 0.34);
   outline-offset: 4px;
 }
 
@@ -147,8 +149,8 @@
   box-sizing: border-box;
   border-radius: clamp(2.7rem, 4.2vw, 4.8rem);
   place-items: center;
-  background: #ffad5c;
-  box-shadow: 0 2.25rem 5.6rem rgba(154, 69, 0, 0.18);
+  background: #c97a5d;
+  box-shadow: 0 2.25rem 5.6rem rgba(129, 58, 38, 0.2);
   isolation: isolate;
   aspect-ratio: 1.12 / 1;
 }
@@ -180,7 +182,8 @@
   max-width: none;
   height: 112.56%;
   user-select: none;
-  filter: brightness(1.035) saturate(0.95);
+  filter: none;
+  image-rendering: auto;
 }
 
 @keyframes logo-segment-enter {

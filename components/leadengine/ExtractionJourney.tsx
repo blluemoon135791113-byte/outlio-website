@@ -54,7 +54,7 @@ export function ExtractionJourney() {
           <div className={styles.workflowFrame}>
             <Image
               className={styles.workflowImage}
-              src="/leadengine/extraction-workflow-reference.png"
+              src="/leadengine/extraction-workflow-reference-terra.png"
               width={1774}
               height={887}
               alt=""

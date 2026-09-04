@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 
 import { ConnectMailbox } from '@/components/email/ConnectMailbox'
 import { MailboxCard } from '@/components/email/MailboxCard'
+import { SenderAddress } from '@/components/email/SenderAddress'
 import { listEmailAccounts } from '@/lib/email/accounts'
 import { getDomainHealth } from '@/lib/email/readiness-runner'
 import { SCORE_CAVEAT, SCORE_LABEL } from '@/lib/email/readiness'
@@ -26,9 +27,15 @@ export default async function MailboxesPage() {
   const ctx = await requireWorkspace()
   const canConnect = can({ role: ctx.role, modules: ctx.modules }, 'email.account.connect')
 
-  const [accounts, domains] = await Promise.all([
+  const [accounts, domains, { data: workspace }] = await Promise.all([
     listEmailAccounts(ctx.workspace.id),
     getDomainHealth(ctx.workspace.id),
+    // Migration 0111. Required in the footer of every campaign email.
+    createAdminClient()
+      .from('workspaces')
+      .select('sender_postal_address')
+      .eq('id', ctx.workspace.id)
+      .maybeSingle(),
   ])
 
   // The latest assessment per mailbox, for the explained checks.
@@ -62,6 +69,8 @@ export default async function MailboxesPage() {
         </div>
         {canConnect ? <ConnectMailbox /> : null}
       </div>
+
+      <SenderAddress address={workspace?.sender_postal_address ?? null} />
 
       {accounts.length === 0 ? (
         <div className="clay p-8 text-center">

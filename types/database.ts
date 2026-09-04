@@ -7895,6 +7895,9 @@ export type Database = {
           member_limit_override: number | null
           name: string
           owner_user_id: string
+          // Migration 0111. Nullable on purpose: enforced at campaign launch,
+          // because backfilling it would mean inventing a postal address.
+          sender_postal_address: string | null
           updated_at: string
         }
         Insert: {
@@ -7904,6 +7907,7 @@ export type Database = {
           member_limit_override?: number | null
           name: string
           owner_user_id: string
+          sender_postal_address?: string | null
           updated_at?: string
         }
         Update: {
@@ -7913,6 +7917,7 @@ export type Database = {
           member_limit_override?: number | null
           name?: string
           owner_user_id?: string
+          sender_postal_address?: string | null
           updated_at?: string
         }
         Relationships: []

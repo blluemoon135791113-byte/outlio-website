@@ -396,6 +396,15 @@ export class SmtpProvider implements EmailProvider {
         html: message.html ?? undefined,
         replyTo: message.replyTo,
         messageId: messageIdFor(message.idempotencyKey, domain),
+        /*
+         * ⚠️ `List-Unsubscribe` AND `List-Unsubscribe-Post` ARRIVE HERE.
+         *
+         * Before Phase 0.5 there was no `headers` field on OutboundMessage at
+         * all, so no message Outlio sent could carry them — see the block on
+         * `OutboundMessage.headers`. Dropping this line silently restores that
+         * bug, and `email-compliance.test.ts` exists to stop that.
+         */
+        headers: message.headers,
         // Threading headers, so a reply lands against the right conversation.
         inReplyTo: message.inReplyToMessageId,
         references: message.inReplyToMessageId ? [message.inReplyToMessageId] : undefined,

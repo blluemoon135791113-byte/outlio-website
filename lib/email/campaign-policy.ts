@@ -140,6 +140,17 @@ export type LaunchInput = {
   hasAccount: boolean
   hasUnsubscribeSupport: boolean
   enrollmentCount: number
+  /**
+   * `workspaces.sender_postal_address`, migration 0111.
+   *
+   * ⚠️ CHECKED HERE RATHER THAN IN THE DATABASE, DELIBERATELY. The column is
+   * nullable because making it NOT NULL means backfilling every existing
+   * workspace, and there is no honest value to backfill with — a WRONG postal
+   * address in commercial mail is its own CAN-SPAM §7704(a)(5) violation, and
+   * one that passes every check we could write. So the requirement is enforced
+   * at the single moment there is a human to ask.
+   */
+  senderPostalAddress: string | null
 }
 
 /**
@@ -170,6 +181,28 @@ export function assertLaunchable(input: LaunchInput): void {
   if (policy.requiresUnsubscribe && !input.hasUnsubscribeSupport) {
     throw new CampaignPolicyError(
       'A marketing broadcast must include a one-click unsubscribe link. This is required by Gmail and Yahoo for bulk mail, and by law in most countries.',
+    )
+  }
+
+  /*
+   * ⚠️ EVERY CAMPAIGN THAT CARRIES AN UNSUBSCRIBE FOOTER MUST ALSO CARRY A
+   * POSTAL ADDRESS — not just `marketing_broadcast`.
+   *
+   * `requiresUnsubscribe` above is narrower on purpose: it decides which
+   * campaigns may not LAUNCH without unsubscribe support. This is a different
+   * question. `shouldIncludeUnsubscribe` returns true for sales sequences too,
+   * so a sequence sends a footer, and a footer without a postal address is the
+   * §7704(a)(5) gap. Tying this to `requiresUnsubscribe` would have left every
+   * sequence non-compliant while looking correct.
+   */
+  if (
+    shouldIncludeUnsubscribe(input.type) &&
+    (input.senderPostalAddress ?? '').trim().length < 10
+  ) {
+    throw new CampaignPolicyError(
+      'Add your business postal address in workspace settings before launching. ' +
+        'Commercial email is required by law to include one, and mail without it ' +
+        'is far more likely to be marked as spam.',
     )
   }
 

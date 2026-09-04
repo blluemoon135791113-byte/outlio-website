@@ -25,6 +25,8 @@ import 'server-only'
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 import { getEmailAccount } from '@/lib/email/accounts'
+import { applyCompliance } from '@/lib/email/compliance'
+import { type CampaignType } from '@/lib/email/campaign-policy'
 import { providerFor } from '@/lib/email/providers/registry'
 import { checkRampAllowance } from '@/lib/email/ramp'
 import { isAccountSendable, rampSettingsOf, todayIn } from '@/lib/email/readiness-runner'
@@ -35,6 +37,105 @@ import {
   UnusableScheduleError,
   type SendSchedule,
 } from '@/lib/email/schedule'
+
+/**
+ * The public origin, for the unsubscribe link and header.
+ *
+ * ⚠️ A WRONG BASE URL HERE PRODUCES A DEAD UNSUBSCRIBE LINK IN MAIL THAT HAS
+ * ALREADY BEEN SENT, which cannot be recalled. It therefore falls back to the
+ * production origin rather than to localhost: a link to the real site is at
+ * worst useless in a dev environment, while `http://localhost:3000/u/…` in a
+ * real recipient's inbox is a compliance failure that looks like a working
+ * link.
+ */
+function siteUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ?? 'https://outlio.io'
+  )
+}
+
+type ComplianceContext = {
+  campaignId: string | null
+  campaignType: CampaignType
+  postalAddress: string | null
+}
+
+/**
+ * Campaign type and sender address for a batch of claimed messages.
+ *
+ * ⚠️ THE DEFAULT WHEN ANYTHING IS MISSING IS `manual`, AND THAT IS THE SAFE
+ * DIRECTION ONLY BECAUSE OF WHAT `manual` MEANS HERE. It suppresses the
+ * unsubscribe footer — appropriate for a one-to-one reply, and wrong for bulk.
+ * A message with no campaign row IS a one-off: everything bulk goes through a
+ * campaign. If that ever stops being true, this default becomes a compliance
+ * hole and `email-compliance.test.ts` is where to catch it.
+ */
+async function complianceContext(
+  db: ReturnType<typeof createAdminClient>,
+  messageIds: string[],
+): Promise<Map<string, ComplianceContext>> {
+  const out = new Map<string, ComplianceContext>()
+  if (messageIds.length === 0) return out
+
+  /*
+   * ⚠️ THREE EXPLICIT QUERIES, NOT ONE EMBEDDED JOIN. `types/database.ts`
+   * declares `Relationships: []` for every table and says why: this codebase
+   * does not use PostgREST's embedded-resource syntax. An
+   * `email_campaigns(type)` select typechecks against those empty
+   * relationships and is not something any other query here does.
+   *
+   * Still three round trips per CLAIM, not per message.
+   */
+  const { data: messages, error } = await db
+    .from('email_messages')
+    .select('id, workspace_id, campaign_id')
+    .in('id', messageIds)
+
+  if (error) throw new Error(`compliance context failed: ${error.message}`)
+
+  const campaignIds = [...new Set((messages ?? []).map((m) => m.campaign_id).filter(Boolean))]
+  const workspaceIds = [...new Set((messages ?? []).map((m) => m.workspace_id))]
+
+  const types = new Map<string, CampaignType>()
+  if (campaignIds.length > 0) {
+    const { data } = await db
+      .from('email_campaigns')
+      .select('id, type')
+      .in('id', campaignIds as string[])
+    for (const c of data ?? []) types.set(c.id, c.type as CampaignType)
+  }
+
+  const addresses = new Map<string, string | null>()
+  const { data: workspaces, error: wsError } = await db
+    .from('workspaces')
+    .select('id, sender_postal_address')
+    .in('id', workspaceIds)
+
+  /*
+   * ⚠️ A MISSING COLUMN FAILS LOUDLY RATHER THAN DEFAULTING TO NULL.
+   *
+   * Treating "column does not exist" as "no address configured" would send
+   * legally non-compliant mail because a migration had not been run — the
+   * silent-fallback shape that produced Phase 0's finding #1. If this throws,
+   * apply 0111.
+   */
+  if (wsError) {
+    throw new Error(
+      `compliance context failed reading sender_postal_address: ${wsError.message}. ` +
+        `If this says the column does not exist, apply migration 0111.`,
+    )
+  }
+  for (const w of workspaces ?? []) addresses.set(w.id, w.sender_postal_address ?? null)
+
+  for (const row of messages ?? []) {
+    out.set(row.id, {
+      campaignId: row.campaign_id ?? null,
+      campaignType: row.campaign_id ? (types.get(row.campaign_id) ?? 'manual') : 'manual',
+      postalAddress: addresses.get(row.workspace_id) ?? null,
+    })
+  }
+  return out
+}
 
 export type EnqueueInput = {
   workspaceId: string
@@ -238,6 +339,19 @@ export async function runSendWorker(
   if (error) throw new Error(`claim_email_messages failed: ${error.message}`)
   result.claimed = claimed?.length ?? 0
 
+  /*
+   * ⚠️ THE CLAIM RPC DOES NOT RETURN `campaign_id`, so compliance context is
+   * fetched separately rather than by widening the claim — changing that
+   * function's signature is a schema change, and this needs no lock.
+   *
+   * One batched read for the whole claim, never one per message: a query inside
+   * the send loop is a query that runs once per recipient.
+   */
+  const context = await complianceContext(
+    db,
+    (claimed ?? []).map((m) => m.message_id),
+  )
+
   for (const message of claimed ?? []) {
     const account = await getEmailAccount(message.workspace_id, message.account_id)
 
@@ -276,18 +390,44 @@ export async function runSendWorker(
         configuration: account.configuration,
         secretReference: account.secretReference,
       },
-      {
-        to: message.to_email,
-        subject: message.subject,
-        text: message.body_text,
-        html: message.body_html,
-        replyTo: account.replyToEmail ?? undefined,
-        threadId: message.thread_id ?? undefined,
-        // Carried at last to the provider, which has always known what to do
-        // with it.
-        inReplyToMessageId: message.in_reply_to_message_id ?? undefined,
-        idempotencyKey: message.idempotency_key,
-      },
+      (() => {
+        /*
+         * ⚠️ COMPLIANCE IS APPLIED HERE, ON THE WAY OUT, AND NOWHERE ELSE.
+         *
+         * Doing it at enqueue time would mean the footer is baked into
+         * `email_messages.body_text` — so a message queued before the owner
+         * sets a postal address would send without one forever, and fixing the
+         * address would not fix the queue. Applying it at send time means the
+         * message that leaves is always built from the CURRENT settings.
+         */
+        const ctx = context.get(message.message_id)
+        const compliant = applyCompliance({
+          subject: {
+            workspaceId: message.workspace_id,
+            email: message.to_email,
+            campaignId: ctx?.campaignId ?? null,
+          },
+          campaignType: ctx?.campaignType ?? 'manual',
+          baseUrl: siteUrl(),
+          postalAddress: ctx?.postalAddress ?? null,
+          bodyText: message.body_text,
+          bodyHtml: message.body_html,
+        })
+
+        return {
+          to: message.to_email,
+          subject: message.subject,
+          text: compliant.bodyText,
+          html: compliant.bodyHtml,
+          headers: compliant.headers,
+          replyTo: account.replyToEmail ?? undefined,
+          threadId: message.thread_id ?? undefined,
+          // Carried at last to the provider, which has always known what to do
+          // with it.
+          inReplyToMessageId: message.in_reply_to_message_id ?? undefined,
+          idempotencyKey: message.idempotency_key,
+        }
+      })(),
     )
 
     if (outcome.ok) {

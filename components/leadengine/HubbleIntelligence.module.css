@@ -187,10 +187,9 @@
 
 .satelliteMark {
   display: block;
-  width: clamp(7rem, 9vw, 9.5rem);
+  width: clamp(5.15rem, 6.45vw, 6.65rem);
   height: auto;
-  margin: 0 0 1.4rem -0.35rem;
-  color: #19483e;
+  margin: 0 0 1.45rem -0.2rem;
   filter: drop-shadow(0 0.65rem 0.8rem rgba(39, 74, 66, 0.13));
 }
 
@@ -269,7 +268,7 @@
 @media (max-width: 38rem) {
   .section { margin: 0.2rem; padding: 2.35rem 0.75rem 0.75rem; border-radius: 2.35rem; }
   .copy { padding-inline: 0.35rem; }
-  .satelliteMark { width: 7rem; margin-bottom: 1rem; }
+  .satelliteMark { width: 4.95rem; margin-bottom: 1rem; }
   .eyebrow { margin-bottom: 1.35rem; font-size: 0.72rem; }
   .heading { font-size: clamp(2.6rem, 12vw, 3.6rem); }
   .description { font-size: 1rem; }

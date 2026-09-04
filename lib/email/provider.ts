@@ -60,6 +60,31 @@ export type OutboundMessage = {
   threadId?: string
   attachments?: OutboundAttachment[]
   /**
+   * Extra RFC 5322 headers to set on the outgoing message.
+   *
+   * ╔═════════════════════════════════════════════════════════════════════════╗
+   * ║  THIS FIELD DID NOT EXIST UNTIL PHASE 0.5, AND ITS ABSENCE WAS THE      ║
+   * ║  WHOLE OF FINDING #2.                                                   ║
+   * ║                                                                         ║
+   * ║  `unsubscribeHeaders()` in lib/email/unsubscribe.ts built                ║
+   * ║  `List-Unsubscribe` and `List-Unsubscribe-Post` correctly, with a       ║
+   * ║  comment explaining that RFC 8058 needs both. It was called by nothing. ║
+   * ║  `shouldIncludeUnsubscribe()` decided which campaigns carry them. Also  ║
+   * ║  called by nothing.                                                     ║
+   * ║                                                                         ║
+   * ║  Reconnecting them was not a one-line fix, because there was no slot to ║
+   * ║  put a header in. The message type could not express the thing the      ║
+   * ║  capability model (lib/email/capabilities.ts) already claimed to        ║
+   * ║  support. Both functions were fully unit-tested and both tests passed.  ║
+   * ║                                                                         ║
+   * ║  ⚠️ ADAPTERS MUST PASS THIS THROUGH. A provider that silently drops it   ║
+   * ║  puts us back where we started, and the recipient loses their one-click ║
+   * ║  exit — which is a CAN-SPAM §7704(a)(3) problem before it is a          ║
+   * ║  deliverability one.                                                    ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   */
+  headers?: Record<string, string>
+  /**
    * ⚠️ THE SAME KEY MUST NEVER PRODUCE TWO DELIVERIES.
    *
    * A worker that is killed after the provider accepted a message but before
