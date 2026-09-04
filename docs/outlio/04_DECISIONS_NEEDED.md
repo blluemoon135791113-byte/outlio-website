@@ -7,7 +7,16 @@ Status: `OPEN` until the owner answers here.
 
 ---
 
-## DECISION-01 — There is no E2E harness · `OPEN`
+## DECISION-01 — There is no E2E harness · `ANSWERED 2026-09-04`
+
+**Answered by building it.** Playwright landed in Phase 0.5 (`e2e/auth.spec.ts`)
+and grew a tenant-isolation journey in Phase 1 (`e2e/tenant-isolation.spec.ts`),
+proven non-vacuous by removing `.eq('workspace_id', …)` from `getContactDetail`.
+`npm run test:e2e`, 7 tests. The original text is kept below as the reasoning
+that led there.
+
+---
+
 
 **Blocks:** §4's evidence requirement for *every* UI action, and DoD item 1
 ("E2E acceptance journey passes from the real production entry point") for
@@ -35,7 +44,7 @@ mechanism the document calls its most important contribution.
 
 ---
 
-## DECISION-02 — Migrations are applied by hand · `OPEN`
+## DECISION-02 — Migrations are applied by hand · `CLOSED 2026-09-04`
 
 **Blocks:** DoD item 9 ("migration applied + rollback path stated") as a
 repeatable step, and §5.15's expand→backfill→contract discipline.
@@ -123,29 +132,13 @@ targets it by default. See **ADR-005**.
 ⚠️ ADR-004's concession — filing Phase 1's tenant journey `INFERRED` — is
 **withdrawn**. It can now be built and `VERIFIED`.
 
-**Blocks:** §7 in full, and — as of Phase 1's brief — **DoD item 4**, the
-tenant-isolation test, which needs two workspaces, two roles and seeded contacts.
+**Superseded detail.** The text that stood here described the problem — no seed
+script, no non-production database, and the escalation when it began blocking
+DoD item 4. All of it is resolved by ADR-005 and preserved in that ADR.
 
-⚠️ **Escalated 2026-09-04.** This was a Phase 2 concern. It is now the thing
-standing between Phase 1 and a `VERIFIED` acceptance journey, because building a
-tenant-isolation suite means manufacturing tenants — in the database that already
-holds **43 leaked `outlio-test-*` accounts** from ordinary test runs. Creating
-more tenants in production to prove tenants are isolated is not a trade I will
-make silently.
-
-**Two ways forward:** a second Supabase project, or Phase 1's journey is checked
-by hand once and filed `INFERRED` rather than `VERIFIED` — which weakens §4 for
-the one phase where isolation is the whole subject.
-
-**Still open after DECISION-05.** Owner-authorized writes do not make it sensible
-to put 100k contacts and 1M activities into production alongside 23 real
-workspaces.
-
-There is no seed script. The live workspace has 44 contacts.
-
-**Recommendation:** build the generator in Phase 0.5, against a
-non-production database (see DECISION-05). Seeding 100k contacts and 1M
-activities into production is not something I will do.
+⚠️ **What is NOT resolved: §7's fixture size.** A staging project existing is not
+the same as §7's 1M activities fitting on it. That is **DECISION-08**, raised
+with measurements in Phase 2's brief.
 
 ---
 
