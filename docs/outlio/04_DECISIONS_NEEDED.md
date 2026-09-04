@@ -63,8 +63,39 @@ verified working, and still shows `remote: ""`.
    the current state: `db push` would then skip it forever.
 2. Keep applying by hand and document the SQL-editor path as the official one.
 
-**Recommendation:** 1, done in Phase 0.5 — but it touches production migration
-metadata, so it needs an explicit go-ahead.
+### Done 2026-09-04 — option 1, and verified by behaviour
+
+Owner ran `supabase migration repair --linked --status applied` for `0080`–`0108`
+plus `0110`. Verified: **109 of 111 recorded, no version mismatches, only `0109`
+and `0111` outstanding.**
+
+The count is not the proof. `supabase db push --linked --dry-run` is:
+
+```
+LegacyDbPushMissingRemoteError: Found local migration files to be inserted
+before the last migration on remote database.
+  supabase/migrations/0109_fix_user_fk_append_only.sql
+```
+
+⚠️ **That refusal is the success condition, not a problem.** Before the repair,
+`db push` would have replayed 32 migrations against production, several not
+idempotent. Now it declines to touch anything and names one file.
+
+The reason it names `0109` is the hazard predicted when `0109` was deliberately
+excluded from the repair set: `0110` is recorded and `0109` is not, so `0109`
+now sorts *before* the last remote migration and counts as out-of-order. Push
+requires `--include-all` to apply it. `0111` is not mentioned — it sorts after
+`0110` and is an ordinary pending migration.
+
+**Remaining:** establish whether `0109` was ever applied. Two clean outcomes:
+
+- **Applied** → `supabase migration repair --linked --status applied 0109`. The
+  out-of-order warning disappears and `db push` proposes only `0111`.
+- **Not applied** → run it in the SQL editor (it verifies itself), then repair.
+
+⚠️ **Do not use `--include-all` to make the warning go away.** That applies
+`0109` out of order without anyone deciding it should be applied, which is the
+class of silent action this whole item exists to prevent.
 
 ---
 
