@@ -376,6 +376,13 @@ Stated plainly, because a handoff that hides these is worthless.
 - `types/database.ts` was hand-edited to declare `flow_runs.variables`;
   regenerate with the Supabase CLI when convenient.
 - 97 ESLint warnings (0 errors), mostly unused-var noise in generated files.
+- **Never run `supabase db push` on this project.** Migrations have always been
+  applied by hand through the SQL editor, so the remote
+  `supabase_migrations.schema_migrations` table does not record them — `db push`
+  therefore tries to replay from `0001` against the live database. Attempted
+  2026-09-04; it failed at 0080's trigram index (`pg_trgm` not in the session's
+  search path) before doing damage, which was luck rather than safety. Apply a
+  new migration by pasting the file into the SQL editor.
 - Migrations are applied by hand — there is no direct DB URL in the environment.
 
 ---
