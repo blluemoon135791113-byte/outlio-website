@@ -7,7 +7,7 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | Phase | Name | Status | Branch | Evidence |
 |---|---|---|---|---|
 | 0 | Reality audit | **COMPLETE** | `platform-m1-workspaces` | [`02_GAP_MATRIX.csv`](02_GAP_MATRIX.csv) · [`PHASE_0_EVIDENCE.md`](phases/PHASE_0_EVIDENCE.md) · [`PHASE_0_AUDIT.md`](phases/PHASE_0_AUDIT.md) |
-| 0.5 | Safety net | **BLOCKED** — brief awaiting approval | — | [`PHASE_0.5.md`](phases/PHASE_0.5.md) |
+| 0.5 | Safety net | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_0.5.md`](phases/PHASE_0.5.md) · [`PHASE_0.5_EVIDENCE.md`](phases/PHASE_0.5_EVIDENCE.md) |
 | 1 | Wiring sweep + authorization core | NOT_STARTED | — | — |
 | 2–25 | see §9 | NOT_STARTED | — | — |
 

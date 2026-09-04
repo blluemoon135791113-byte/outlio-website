@@ -1,10 +1,10 @@
 subsystem,capability,status,ui,api,service,db,worker,provider,tests,evidence_ref,owner_action,repair_phase
 auth,Sign in with email and password,COMPLETE,YES,NO,YES,YES,NO,supabase-auth,YES,lib/auth/actions.ts:244,,-
-auth,Sign up and workspace creation,PARTIAL,YES,NO,YES,YES,NO,supabase-auth,YES,lib/auth/actions.ts:95,see PHASE_0_EVIDENCE #1,P0.5
-auth,Signup reservation token consumed,BROKEN,NO,NO,YES,NO,NO,none,YES,supabase/migrations/0070_workspaces.sql:1,APPLY 0110,P0.5
-auth,Device fingerprint reuse blocked,BROKEN,NO,NO,YES,NO,NO,none,YES,supabase/migrations/0019_signup_device_identity_claims.sql:98,APPLY 0110,P0.5
-auth,Email/phone/LinkedIn reuse blocked,BROKEN,NO,NO,YES,NO,NO,none,YES,supabase/migrations/0019_signup_device_identity_claims.sql:101,APPLY 0110,P0.5
-auth,Profile name/phone/LinkedIn persisted on signup,BROKEN,YES,NO,YES,NO,NO,none,YES,supabase/migrations/0070_workspaces.sql:1,APPLY 0110 - 39 of 60 rows null,P0.5
+auth,Sign up and workspace creation,COMPLETE,YES,NO,YES,YES,NO,supabase-auth,YES,lib/auth/actions.ts:95,,-
+auth,Signup reservation token consumed,COMPLETE,NO,NO,YES,YES,NO,none,YES,supabase/migrations/0110_restore_signup_gate.sql:44,,-
+auth,Device fingerprint reuse blocked,COMPLETE,NO,NO,YES,YES,NO,none,YES,supabase/migrations/0110_restore_signup_gate.sql:96,,-
+auth,Email/phone/LinkedIn reuse blocked,COMPLETE,NO,NO,YES,YES,NO,none,YES,supabase/migrations/0110_restore_signup_gate.sql:99,,-
+auth,Profile name/phone/LinkedIn persisted on signup,COMPLETE,YES,NO,YES,YES,NO,none,YES,supabase/migrations/0110_restore_signup_gate.sql:106,39 pre-existing rows still null - backfill not attempted,-
 auth,Access gating (approved / pending / denied),COMPLETE,YES,NO,YES,YES,NO,none,YES,lib/auth/decide.ts:1,,-
 auth,Permission resolution (45 permissions),COMPLETE,YES,YES,YES,YES,NO,none,YES,lib/workspaces/permissions.ts:246,DECISION-06 (yaml vs ts),-
 auth,Edge route guard,COMPLETE,NO,NO,YES,NO,NO,none,PARTIAL,proxy.ts:1,,-
@@ -36,9 +36,9 @@ email,Analytics,PARTIAL,YES,NO,YES,YES,NO,none,PARTIAL,app/(product)/email/analy
 email,Warm-up ramp and sending window,COMPLETE,YES,NO,YES,YES,YES,none,YES,lib/email/ramp.ts:1,,-
 email,Suppression list enforced on send,COMPLETE,NO,NO,YES,YES,YES,none,YES,lib/email/send.ts:109,,-
 email,Unsubscribe landing page and token,COMPLETE,YES,NO,YES,YES,NO,none,YES,app/u/[token]/route.ts:21,,-
-email,List-Unsubscribe header on outbound mail,BROKEN,NO,NO,YES,NO,NO,none,YES,lib/email/unsubscribe.ts:134,LEGAL - see PHASE_0_EVIDENCE #1,P0.5
-email,Unsubscribe link in message body,NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,lib/email/send.ts:279,LEGAL - see PHASE_0_EVIDENCE #1,P0.5
-email,Sender postal address in message,NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,lib/email/provider.ts:52,LEGAL - see PHASE_0_EVIDENCE #1,P0.5
+email,List-Unsubscribe header on outbound mail,COMPLETE,NO,NO,YES,YES,YES,smtp,YES,lib/email/compliance.ts:69,,-
+email,Unsubscribe link in message body,COMPLETE,NO,NO,YES,YES,YES,none,YES,lib/email/compliance.ts:83,,-
+email,Sender postal address in message,COMPLETE,YES,NO,YES,YES,YES,none,YES,components/email/SenderAddress.tsx:20,,-
 email,Auto-reply / OOO detection,COMPLETE,NO,NO,YES,YES,YES,none,YES,lib/email/auto-reply.ts:1,,-
 email,DNS readiness (SPF/DKIM/DMARC),COMPLETE,YES,NO,YES,YES,NO,dns,YES,lib/email/dns.ts:1,,-
 flows,Visual flow builder,COMPLETE,YES,NO,YES,YES,NO,none,PARTIAL,components/flows/FlowBuilder.tsx:1,,-
@@ -80,8 +80,8 @@ platform,GoHighLevel integration,PARTIAL,YES,YES,YES,YES,NO,ghl,PARTIAL,lib/inte
 platform,Google Sheets export,PARTIAL,YES,YES,YES,YES,NO,google,PARTIAL,lib/integrations/google-exports.ts:1,,P8
 platform,Calendly meeting ingest,PARTIAL,NO,YES,YES,YES,NO,calendly,PARTIAL,lib/meetings/ingest.ts:150,,P8
 platform,Admin console and audit log,COMPLETE,YES,NO,YES,YES,NO,none,YES,app/(product)/dashboard/access/page.tsx:1,,-
-platform,E2E acceptance harness,NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,package.json:1,DECISION-01,P0.5
+platform,E2E acceptance harness,PARTIAL,YES,NO,NO,NO,NO,playwright,YES,e2e/auth.spec.ts:1,signup+mailbox journeys blocked on DECISION-03,P1
 platform,Seed fixture generator (§7 scale),NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,package.json:1,DECISION-03,P0.5
-platform,Migration history in supabase_migrations,BROKEN,NO,NO,NO,PARTIAL,NO,supabase,NO,supabase/migrations:0001,DECISION-02,P0.5
-platform,Migration 0109 append-only FK repair,BROKEN,NO,NO,NO,NO,NO,none,YES,supabase/migrations/0109_fix_user_fk_append_only.sql:59,APPLY IN SQL EDITOR,P0.5
-platform,Migration 0110 signup gate repair,BROKEN,NO,NO,NO,NO,NO,none,YES,supabase/migrations/0110_restore_signup_gate.sql:44,APPLY IN SQL EDITOR,P0.5
+platform,Migration history in supabase_migrations,COMPLETE,NO,NO,NO,YES,NO,supabase,NO,supabase/migrations:0111,,-
+platform,Migration 0109 append-only FK repair,COMPLETE,NO,NO,NO,YES,NO,none,YES,supabase/migrations/0109_fix_user_fk_append_only.sql:59,,-
+platform,Migration 0110 signup gate repair,COMPLETE,NO,NO,NO,YES,NO,none,YES,supabase/migrations/0110_restore_signup_gate.sql:44,,-

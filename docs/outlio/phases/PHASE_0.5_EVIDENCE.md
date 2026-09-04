@@ -119,11 +119,19 @@ is the more important half.
 
 This is DECISION-03's strongest argument to date, and DECISION-03 is still open.
 
-### 1.2 / 1.0 — migrations
+### 1.0 / 1.2 — migrations: all applied, history fully repaired
 
-`0110` applied and verified. **`0109` unconfirmed** and **`0111` not applied.**
-Until 0111 runs, the send path throws a named error rather than silently sending
-non-compliant mail — deliberate, see the block in `complianceContext`.
+- **`0110`** applied by the owner, verified 6/6.
+- **`0109`** — a read-only `pg_constraint` query showed **zero `ON DELETE SET
+  NULL` references remain**, so it had been applied all along and merely never
+  recorded. ⚠️ The FK hazard had therefore been closed for some time with no way
+  to tell — state and record disagreeing, with nothing to notice. Recorded.
+- **`0111`** applied via `supabase db push` and verified: the column is readable
+  through the exact query the send path makes.
+
+**`supabase migration list --linked`: 111 of 111 recorded, none outstanding.**
+`db push --dry-run` reports up to date. Before Phase 0.5 it would have replayed
+32 migrations against production.
 
 ### 3.3 — done, and it changed one answer (ADR-002)
 
