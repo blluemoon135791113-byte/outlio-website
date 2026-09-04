@@ -19,17 +19,6 @@ export type Pillar = {
 
 export const PILLARS: readonly Pillar[] = [
   {
-    key: 'outbound',
-    title: 'Automated Outbound',
-    description:
-      'Connect your inboxes and build personalized campaigns from verified lead context. Outlio manages delivery, replies, bounces, and suppressions, while LinkedIn messages stay rep-reviewed before every manual send.',
-    asset: '/prototypes/outlio-platform-cards/automated-outbound-smooth-v5.png',
-    width: 760,
-    height: 297,
-    alt: 'A smooth graphite and bronze waveform representing hidden engagement signals',
-    capabilities: ['Connected inboxes', 'Personalized campaigns', 'Reply handling'],
-  },
-  {
     key: 'extraction',
     title: 'Safe Data Extraction',
     description:
@@ -41,6 +30,17 @@ export const PILLARS: readonly Pillar[] = [
     capabilities: ['User-saved pages', 'De-duplicated records', 'CRM-ready export'],
   },
   {
+    key: 'outbound',
+    title: 'Automated Outbound',
+    description:
+      'Connect your inboxes and build personalized campaigns from verified lead context. Outlio manages delivery, replies, bounces, and suppressions, while LinkedIn messages stay rep-reviewed before every manual send.',
+    asset: '/prototypes/outlio-platform-cards/automated-outbound-clay-v3.png',
+    width: 760,
+    height: 297,
+    alt: 'A smooth black three-dimensional waveform representing engagement signals',
+    capabilities: ['Connected inboxes', 'Personalized campaigns', 'Reply handling'],
+  },
+  {
     key: 'intelligence',
     title: 'Intelligence',
     description:
@@ -48,7 +48,7 @@ export const PILLARS: readonly Pillar[] = [
     asset: '/prototypes/outlio-platform-cards/intelligence-smooth-v5.png',
     width: 680,
     height: 552,
-    alt: 'A smooth ivory, olive, and bronze architecture of connected modules',
+    alt: 'A detailed ivory and olive intelligence architecture of connected modules',
     capabilities: ['Source-backed research', 'Account scoring', 'Pipeline ownership'],
   },
 ] as const

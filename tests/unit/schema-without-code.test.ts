@@ -103,8 +103,12 @@ function isReferenced(table: string): boolean {
  * table. Phase 0 filed `crm_saved_views` as NOT_IMPLEMENTED for exactly this.
  */
 const KNOWN_UNUSED = new Set([
-  // Phase 0, evidence #5 — the one found by hand.
-  'crm_saved_views',
+  /*
+   * ⚠️ `crm_saved_views` WAS HERE AND IS NOT ANY MORE. Phase 2 built
+   * `lib/crm/saved-views.ts` against it, and this list's both-direction
+   * assertion failed the moment it did — which is the entry paying for itself.
+   * The allowlist may only ever shrink; this is what shrinking looks like.
+   */
   /*
    * The eight below were found by this guard. Phase 0's manual audit found ONE
    * of the nine, which is the argument for automating it. Each was verified to
