@@ -9,7 +9,9 @@ import { Monogram } from '@/components/ui/Monogram'
 import { threadsForContact } from '@/lib/email/inbox'
 import { listContactTimeline } from '@/lib/crm/activities'
 import { checkCollision } from '@/lib/crm/collision'
+import { ValueProvenance } from '@/components/crm/ValueProvenance'
 import { getContactDetail, listAssignableMembers } from '@/lib/crm/contacts-list'
+import { citationsFor, withProvenance } from '@/lib/crm/provenance'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
@@ -58,6 +60,20 @@ export default async function ContactDetailPage({
   if (dataScope(ctx.role) === 'assigned' && contact.ownerUserId !== ctx.userId) {
     notFound()
   }
+
+  /*
+   * ⚠️ RESOLVED HERE, NOT INSIDE THE COMPONENT. One batched lookup for every
+   * value on the page rather than one per address — and it keeps the
+   * user_id/workspace_id seam crossing in a single place that can be reasoned
+   * about, instead of scattered through JSX.
+   */
+  const citations = await citationsFor(ctx.scope, [
+    ...contact.emails.map((e) => e.evidenceId),
+    ...contact.phones.map((p) => p.evidenceId),
+  ].filter((value): value is string => Boolean(value)))
+
+  const emails = withProvenance(contact.emails, citations, contact.source)
+  const phones = withProvenance(contact.phones, citations, contact.source)
 
   const policy = { role: ctx.role, modules: ctx.modules }
   const canAssign = can(policy, 'crm.contact.assign')
@@ -128,7 +144,7 @@ export default async function ContactDetailPage({
 
             <dl className="mt-4 grid gap-3 sm:grid-cols-2">
               <Field label="Email">
-                {contact.emails.length === 0 ? (
+                {emails.length === 0 ? (
                   <Missing>No email on file</Missing>
                 ) : (
                   /*
@@ -136,7 +152,7 @@ export default async function ContactDetailPage({
                    * write to; rendering it as text made the only useful thing
                    * on the page a copy-and-paste job.
                    */
-                  contact.emails.map((e) => (
+                  emails.map((e) => (
                     <span key={e.id} className="block">
                       <a
                         href={`mailto:${e.address}`}
@@ -144,20 +160,31 @@ export default async function ContactDetailPage({
                       >
                         {e.address}
                       </a>
-                      {e.isPrimary && contact.emails.length > 1 ? (
+                      {e.isPrimary && emails.length > 1 ? (
                         <span className="ml-1 text-[10px] uppercase tracking-wide text-muted">
                           primary
                         </span>
                       ) : null}
+                      {/*
+                        ⚠️ EVERY VALUE CARRIES A STATEMENT ABOUT ITS ORIGIN.
+                        Production holds 2,294 evidence rows and, until this
+                        line, no CRM user had ever seen one. Rule 4's purpose is
+                        not only that we avoid fabricating — it is that a stored
+                        value can be CHECKED, and a citation nobody can reach
+                        does not achieve that.
+                      */}
+                      <span className="mt-0.5 block">
+                        <ValueProvenance provenance={e.provenance} />
+                      </span>
                     </span>
                   ))
                 )}
               </Field>
               <Field label="Phone">
-                {contact.phones.length === 0 ? (
+                {phones.length === 0 ? (
                   <Missing>No phone on file</Missing>
                 ) : (
-                  contact.phones.map((p) => (
+                  phones.map((p) => (
                     // The raw value is DISPLAYED, not the E.164: it is what the
                     // source gave us, and a number we could not regionalize has
                     // no E.164 at all (Ledger D12). The dial link prefers the
@@ -170,6 +197,9 @@ export default async function ContactDetailPage({
                       >
                         {p.raw}
                       </a>
+                      <span className="mt-0.5 block">
+                        <ValueProvenance provenance={p.provenance} />
+                      </span>
                     </span>
                   ))
                 )}

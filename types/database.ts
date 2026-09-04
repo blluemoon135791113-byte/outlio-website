@@ -1998,6 +1998,8 @@ export type Database = {
           contact_id: string
           created_at: string
           deleted_at: string | null
+          // Migration 0113 — the research_evidence row this value was observed in.
+          evidence_id: string | null
           id: string
           identity_key: string
           is_primary: boolean
@@ -2010,6 +2012,7 @@ export type Database = {
           contact_id: string
           created_at?: string
           deleted_at?: string | null
+          evidence_id?: string | null
           id?: string
           identity_key: string
           is_primary?: boolean
@@ -2022,6 +2025,7 @@ export type Database = {
           contact_id?: string
           created_at?: string
           deleted_at?: string | null
+          evidence_id?: string | null
           id?: string
           identity_key?: string
           is_primary?: boolean
@@ -2051,6 +2055,8 @@ export type Database = {
           contact_id: string
           created_at: string
           deleted_at: string | null
+          // Migration 0113 — the research_evidence row this value was observed in.
+          evidence_id: string | null
           e164: string | null
           id: string
           is_primary: boolean
@@ -2064,6 +2070,7 @@ export type Database = {
           contact_id: string
           created_at?: string
           deleted_at?: string | null
+          evidence_id?: string | null
           e164?: string | null
           id?: string
           is_primary?: boolean
@@ -2077,6 +2084,7 @@ export type Database = {
           contact_id?: string
           created_at?: string
           deleted_at?: string | null
+          evidence_id?: string | null
           e164?: string | null
           id?: string
           is_primary?: boolean

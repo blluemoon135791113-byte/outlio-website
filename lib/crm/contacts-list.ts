@@ -402,8 +402,20 @@ export type ContactDetail = {
   source: string
   createdAt: string
   company: { id: string; name: string | null } | null
-  emails: { id: string; address: string; isPrimary: boolean }[]
-  phones: { id: string; raw: string; e164: string | null; isPrimary: boolean }[]
+  /*
+   * ⚠️ `evidenceId` TRAVELS WITH THE VALUE. Resolving citations separately by
+   * matching addresses would cross the user_id/workspace_id seam and return the
+   * wrong row whenever a value was observed twice — which is why 0113 added the
+   * column rather than leaving it to a lookup.
+   */
+  emails: { id: string; address: string; isPrimary: boolean; evidenceId: string | null }[]
+  phones: {
+    id: string
+    raw: string
+    e164: string | null
+    isPrimary: boolean
+    evidenceId: string | null
+  }[]
   tags: { id: string; name: string }[]
 }
 
@@ -427,14 +439,15 @@ export async function getContactDetail(
   const [emails, phones, tags, company, owner] = await Promise.all([
     db
       .from('crm_contact_emails')
-      .select('id, address, is_primary')
+      // `evidence_id` is the citation this value carries (0113).
+      .select('id, address, is_primary, evidence_id')
       .eq('workspace_id', workspaceId)
       .eq('contact_id', contactId)
       .is('deleted_at', null)
       .order('is_primary', { ascending: false }),
     db
       .from('crm_contact_phones')
-      .select('id, raw, e164, is_primary')
+      .select('id, raw, e164, is_primary, evidence_id')
       .eq('workspace_id', workspaceId)
       .eq('contact_id', contactId)
       .is('deleted_at', null)
@@ -478,11 +491,13 @@ export async function getContactDetail(
       id: e.id,
       address: e.address,
       isPrimary: e.is_primary,
+      evidenceId: e.evidence_id,
     })),
     phones: (phones.data ?? []).map((p) => ({
       id: p.id,
       raw: p.raw,
       e164: p.e164,
+      evidenceId: p.evidence_id,
       isPrimary: p.is_primary,
     })),
     tags: ((tags.data ?? []) as unknown as TagJoin[])

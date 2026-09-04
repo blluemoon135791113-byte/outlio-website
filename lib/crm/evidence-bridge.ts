@@ -48,6 +48,8 @@ export type EvidenceBridgeResult = {
 }
 
 type EvidenceRow = {
+  /** The citation this value carries into the CRM (0113). */
+  id: string
   entity_id: string
   field: string
   value_json: Record<string, unknown>
@@ -139,7 +141,8 @@ export async function syncContactEvidenceToCrm(
 
   const { data: evidence, error: evidenceError } = await db
     .from('research_evidence')
-    .select('entity_id, field, value_json, source_confidence, confidence')
+    // `id` is the citation this value will carry into the CRM (0113).
+    .select('id, entity_id, field, value_json, source_confidence, confidence')
     .eq('entity_type', 'person')
     .in('field', CONTACT_FIELDS as unknown as string[])
     .in('entity_id', leadIds)
@@ -150,8 +153,14 @@ export async function syncContactEvidenceToCrm(
     throw new Error(`syncContactEvidenceToCrm failed: ${evidenceError.message}`)
   }
 
-  const emailsFor = new Map<string, { address: string; identityKey: string }[]>()
-  const phonesFor = new Map<string, { raw: string; e164: string | null }[]>()
+  const emailsFor = new Map<
+    string,
+    { address: string; identityKey: string; evidenceId: string }[]
+  >()
+  const phonesFor = new Map<
+    string,
+    { raw: string; e164: string | null; evidenceId: string }[]
+  >()
 
   for (const row of (evidence ?? []) as EvidenceRow[]) {
     const contactId = contactByLead.get(row.entity_id)
@@ -191,7 +200,17 @@ export async function syncContactEvidenceToCrm(
       }
       const list = emailsFor.get(contactId) ?? []
       if (!list.some((e) => e.identityKey === identity.identityKey)) {
-        list.push({ address: identity.address, identityKey: identity.identityKey })
+        /*
+         * ⚠️ THE ROW'S OWN ID, NOT A LOOKUP. This is what makes the citation
+         * exact: the value and its provenance leave `research_evidence`
+         * together, so nothing has to match them up again later across the
+         * user_id/workspace_id seam.
+         */
+        list.push({
+          address: identity.address,
+          identityKey: identity.identityKey,
+          evidenceId: row.id,
+        })
       }
       emailsFor.set(contactId, list)
     } else {
@@ -209,7 +228,7 @@ export async function syncContactEvidenceToCrm(
       }
       const list = phonesFor.get(contactId) ?? []
       if (!list.some((p) => p.raw === identity.raw)) {
-        list.push({ raw: identity.raw, e164: identity.e164 })
+        list.push({ raw: identity.raw, e164: identity.e164, evidenceId: row.id })
       }
       phonesFor.set(contactId, list)
     }

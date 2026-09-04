@@ -279,7 +279,13 @@ export async function upsertContact(
 export async function attachContactEmails(
   workspaceId: string,
   contactId: string,
-  emails: { address: string; identityKey: string }[],
+  /*
+   * ⚠️ `evidenceId` IS THE CITATION, AND IT IS OPTIONAL FOR A REASON. A value
+   * typed by hand has no citation and must not be given one — CLAUDE.md rule 4
+   * forbids storing a plausible source as readily as it forbids storing a
+   * plausible value. Absent means absent.
+   */
+  emails: { address: string; identityKey: string; evidenceId?: string | null }[],
   source: RecordSource = 'manual',
 ): Promise<void> {
   if (emails.length === 0) return
@@ -300,6 +306,7 @@ export async function attachContactEmails(
       contact_id: contactId,
       address: email.address,
       identity_key: email.identityKey,
+      evidence_id: email.evidenceId ?? null,
       // The first address a contact ever gets becomes primary; later ones do
       // not silently take over the address campaigns send to.
       is_primary: !hasPrimary,
@@ -323,7 +330,8 @@ export async function attachContactEmails(
 export async function attachContactPhones(
   workspaceId: string,
   contactId: string,
-  phones: { raw: string; e164: string | null }[],
+  // See the note on attachContactEmails: absent citation means absent.
+  phones: { raw: string; e164: string | null; evidenceId?: string | null }[],
   source: RecordSource = 'manual',
 ): Promise<void> {
   if (phones.length === 0) return
@@ -352,6 +360,7 @@ export async function attachContactPhones(
       contact_id: contactId,
       raw: phone.raw,
       e164: phone.e164,
+      evidence_id: phone.evidenceId ?? null,
       is_primary: !hasPrimary,
       source,
     })
