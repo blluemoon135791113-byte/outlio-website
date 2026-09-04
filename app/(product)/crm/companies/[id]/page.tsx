@@ -2,8 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { MoreDetails } from '@/components/crm/MoreDetails'
 import { ValueProvenance } from '@/components/crm/ValueProvenance'
-import { companyCitations, type Provenance } from '@/lib/crm/provenance'
+import { companyDetails, companyWebsite, linkedInSlug } from '@/lib/crm/company-details'
+import { companyCitations, safeSourceUrl, type Provenance } from '@/lib/crm/provenance'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { dataScope } from '@/lib/workspaces/permissions'
@@ -87,9 +89,41 @@ export default async function CompanyPage({
     },
   })
 
-  const facts: { label: string; value: string | null; provenance?: Provenance }[] = [
-    // Domain has no evidence field of its own on this page's vocabulary.
-    { label: 'Domain', value: company.domain },
+  /*
+   * The micro detail — funding, tech stack, socials, news. Read separately from
+   * the facts above because these have no column to compare against: they are
+   * evidence rows and nothing else, which is precisely why they were invisible.
+   */
+  const details = await companyDetails(ctx.scope, company.source_company_id)
+
+  const facts: {
+    label: string
+    value: string | null
+    /*
+     * ⚠️ WHAT IS SHOWN, WHEN THE STORED VALUE IS TOO LONG TO SHOW. A full
+     * LinkedIn URL is ~50 characters and this is a four-column grid: rendered
+     * raw it wrapped out of its cell and overlapped the Industry column, so two
+     * facts became one unreadable one. `value` still decides "Not recorded";
+     * `display` only decides what the reader sees.
+     */
+    display?: string
+    href?: string | null
+    provenance?: Provenance
+  }[] = [
+    /*
+     * ⚠️ A DOMAIN IS THE THING PEOPLE CLICK. It sat here as plain text while
+     * being the fastest way to answer "who are these people" — and the stored
+     * value is a bare host, so the scheme is added HERE for the link only. The
+     * displayed text stays exactly what we observed.
+     */
+    { label: 'Website', value: company.domain, href: companyWebsite(company.domain) },
+    {
+      label: 'LinkedIn',
+      value: company.linkedin_url,
+      // The slug carries the identity; the rest of the URL is boilerplate.
+      display: linkedInSlug(company.linkedin_url) ?? 'Company page',
+      href: safeSourceUrl(company.linkedin_url),
+    },
     { label: 'Industry', value: company.industry, provenance: citations.industry },
     {
       label: 'Employees',
@@ -121,7 +155,29 @@ export default async function CompanyPage({
                 forbids inventing the difference away.
               */}
               <dd className={fact.value ? 'text-sm text-ink' : 'text-sm text-muted'}>
-                {fact.value ?? 'Not recorded'}
+                {fact.value === null ? (
+                  'Not recorded'
+                ) : fact.href ? (
+                  <a
+                    href={fact.href}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    // `break-words`: a long domain must wrap inside its own
+                    // cell rather than spilling across the one beside it.
+                    className="break-words underline decoration-border decoration-dotted underline-offset-2 transition-colors duration-150 hover:text-accent hover:decoration-accent"
+                    title={fact.value}
+                  >
+                    {fact.display ?? fact.value}
+                  </a>
+                ) : (
+                  /*
+                    ⚠️ A VALUE WITH NO USABLE LINK IS STILL SHOWN. `companyWebsite`
+                    returns null for anything it cannot turn into an http(s) URL,
+                    and dropping the text along with the link would hide a fact we
+                    hold because we could not make it clickable.
+                  */
+                  <span className="break-words">{fact.value}</span>
+                )}
               </dd>
               {/*
                 ⚠️ ONLY ON A VALUE THAT EXISTS. "Not recorded" already says
@@ -137,6 +193,14 @@ export default async function CompanyPage({
           ))}
         </dl>
       </section>
+
+      {/*
+        ⚠️ BELOW THE FACTS, COLLAPSED. Funding, tech stack, news and socials are
+        the detail somebody goes looking for once — not the thing they opened
+        this page to read. It renders nothing at all when there is nothing to
+        show, so a company nobody has researched looks exactly as it did before.
+      */}
+      <MoreDetails details={details} />
 
       <section className="clay p-4">
         <h3 className="text-sm font-semibold text-ink">

@@ -401,7 +401,25 @@ export type ContactDetail = {
   ownerName: string | null
   source: string
   createdAt: string
-  company: { id: string; name: string | null } | null
+  /*
+   * ⚠️ THE COMPANY'S OWN FIELDS TRAVEL WITH THE CONTACT. A lead is worked as a
+   * person AT a company, and "how big are they" / "what is their site" are part
+   * of deciding whether to write at all — asking for them meant a second page
+   * load, which in practice meant not asking.
+   *
+   * `sourceCompanyId` is the structural link to research evidence, so the
+   * researched detail can be read from here without a second company query.
+   */
+  company: {
+    id: string
+    name: string | null
+    domain: string | null
+    employeeCount: number | null
+    headquarters: string | null
+    linkedInUrl: string | null
+    source: string | null
+    sourceCompanyId: string | null
+  } | null
   /*
    * ⚠️ `evidenceId` TRAVELS WITH THE VALUE. Resolving citations separately by
    * matching addresses would cross the user_id/workspace_id seam and return the
@@ -460,7 +478,17 @@ export async function getContactDetail(
     contact.primary_company_id
       ? db
           .from('crm_companies')
-          .select('id, name')
+          .select(
+            'id, name, domain, employee_count, headquarters, linkedin_url, source, source_company_id',
+          )
+          /*
+           * ⚠️ SCOPED BY WORKSPACE, even though `primary_company_id` came off a
+           * row this workspace owns. The service role bypasses RLS, so an id in
+           * a column is the only thing standing between this query and another
+           * tenant's company — and a mis-set foreign key would resolve silently.
+           * Defence in depth, the same rule `citationsFor` follows.
+           */
+          .eq('workspace_id', workspaceId)
           .eq('id', contact.primary_company_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
@@ -486,7 +514,18 @@ export async function getContactDetail(
     ownerName: owner.data?.full_name?.trim() || owner.data?.email || null,
     source: contact.source,
     createdAt: contact.created_at,
-    company: company.data ? { id: company.data.id, name: company.data.name } : null,
+    company: company.data
+      ? {
+          id: company.data.id,
+          name: company.data.name,
+          domain: company.data.domain,
+          employeeCount: company.data.employee_count,
+          headquarters: company.data.headquarters,
+          linkedInUrl: company.data.linkedin_url,
+          source: company.data.source,
+          sourceCompanyId: company.data.source_company_id,
+        }
+      : null,
     emails: (emails.data ?? []).map((e) => ({
       id: e.id,
       address: e.address,

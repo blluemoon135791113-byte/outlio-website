@@ -9,9 +9,11 @@ import { Monogram } from '@/components/ui/Monogram'
 import { threadsForContact } from '@/lib/email/inbox'
 import { listContactTimeline } from '@/lib/crm/activities'
 import { checkCollision } from '@/lib/crm/collision'
+import { MoreDetails } from '@/components/crm/MoreDetails'
 import { ValueProvenance } from '@/components/crm/ValueProvenance'
+import { companyDetails, companyWebsite } from '@/lib/crm/company-details'
 import { getContactDetail, listAssignableMembers } from '@/lib/crm/contacts-list'
-import { citationsFor, withProvenance } from '@/lib/crm/provenance'
+import { citationsFor, safeSourceUrl, withProvenance } from '@/lib/crm/provenance'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
@@ -74,6 +76,19 @@ export default async function ContactDetailPage({
 
   const emails = withProvenance(contact.emails, citations, contact.source)
   const phones = withProvenance(contact.phones, citations, contact.source)
+
+  /*
+   * ⚠️ BOTH GO THROUGH A VALIDATOR BEFORE REACHING AN `href`. A domain is a bare
+   * host, so an unprefixed href would resolve RELATIVE to /crm/contacts and 404;
+   * a `linkedin_url` was written by an importer and is attacker-influenced, so a
+   * `javascript:` value there is stored XSS on a page every rep opens.
+   */
+  const companyUrl = companyWebsite(contact.company?.domain ?? null)
+  const companyLinkedIn = safeSourceUrl(contact.company?.linkedInUrl ?? null)
+
+  // The researched micro detail — funding, tech stack, socials, news — for the
+  // company this person works at. Empty (and renders nothing) when unresearched.
+  const details = await companyDetails(ctx.scope, contact.company?.sourceCompanyId ?? null)
 
   const policy = { role: ctx.role, modules: ctx.modules }
   const canAssign = can(policy, 'crm.contact.assign')
@@ -207,6 +222,50 @@ export default async function ContactDetailPage({
               <Field label="Location">
                 {contact.location ?? <Missing>Not recorded</Missing>}
               </Field>
+              {/*
+                ⚠️ THE COMPANY'S FIELDS, ON THE PERSON'S PAGE. Size, site and
+                company LinkedIn are part of deciding whether this lead is worth
+                writing to — and they lived one click away on a page nobody
+                opened mid-triage. The contact and the company stay distinct
+                objects; this displays the company without becoming it.
+              */}
+              <Field label="Employees">
+                {contact.company?.employeeCount ? (
+                  String(contact.company.employeeCount)
+                ) : (
+                  <Missing>Company size not recorded</Missing>
+                )}
+              </Field>
+              <Field label="Website">
+                {companyUrl ? (
+                  <a
+                    href={companyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="transition-colors duration-150 hover:text-accent"
+                  >
+                    {contact.company?.domain}
+                  </a>
+                ) : (
+                  // The domain is still shown when it cannot be linked — a value
+                  // we hold should not vanish because it would not make a URL.
+                  (contact.company?.domain ?? <Missing>No website on file</Missing>)
+                )}
+              </Field>
+              <Field label="Company LinkedIn">
+                {companyLinkedIn ? (
+                  <a
+                    href={companyLinkedIn}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="transition-colors duration-150 hover:text-accent"
+                  >
+                    {contact.company?.name ?? 'Company page'}
+                  </a>
+                ) : (
+                  <Missing>Not recorded</Missing>
+                )}
+              </Field>
               <Field label="Source">{contact.source.replace(/_/g, ' ')}</Field>
               <Field label="Added">
                 <LocalTime iso={contact.createdAt} dateOnly />
@@ -237,6 +296,14 @@ export default async function ContactDetailPage({
               </ul>
             ) : null}
           </section>
+
+          {/*
+            ⚠️ COLLAPSED, AND BELOW THE FIELDS SOMEBODY CAME FOR. Tech stack
+            alone can be forty vendor names; inline, it would push the email
+            address off the screen. Renders nothing when the company has no
+            researched detail, so an unresearched contact looks unchanged.
+          */}
+          <MoreDetails details={details} />
 
           {/*
             ⚠️ THE ACTIONS BELONG ON THE PERSON, not only on a separate screen.
