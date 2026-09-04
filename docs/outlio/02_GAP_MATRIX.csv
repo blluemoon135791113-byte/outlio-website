@@ -80,7 +80,10 @@ platform,GoHighLevel integration,PARTIAL,YES,YES,YES,YES,NO,ghl,PARTIAL,lib/inte
 platform,Google Sheets export,PARTIAL,YES,YES,YES,YES,NO,google,PARTIAL,lib/integrations/google-exports.ts:1,,P8
 platform,Calendly meeting ingest,PARTIAL,NO,YES,YES,YES,NO,calendly,PARTIAL,lib/meetings/ingest.ts:150,,P8
 platform,Admin console and audit log,COMPLETE,YES,NO,YES,YES,NO,none,YES,app/(product)/dashboard/access/page.tsx:1,,-
-platform,E2E acceptance harness,PARTIAL,YES,NO,NO,NO,NO,playwright,YES,e2e/auth.spec.ts:1,signup+mailbox journeys blocked on DECISION-03,P1
+platform,E2E acceptance harness,COMPLETE,YES,NO,NO,NO,NO,playwright,YES,e2e/tenant-isolation.spec.ts:1,,-
+platform,Staging environment,COMPLETE,NO,NO,NO,YES,NO,supabase,YES,scripts/with-staging-env.mjs:1,,-
+platform,Tenant isolation proven end to end,COMPLETE,YES,YES,YES,YES,NO,none,YES,tests/integration/tenant-isolation.test.ts:1,,-
+platform,Plan 'agency' limits blob is malformed,BROKEN,NO,NO,YES,YES,NO,none,YES,lib/limits/plans.ts:106,inactive plan with 0 users - fix before re-enabling,P2
 platform,Seed fixture generator (§7 scale),NOT_IMPLEMENTED,NO,NO,NO,NO,NO,none,NO,package.json:1,DECISION-03,P0.5
 platform,Migration history in supabase_migrations,COMPLETE,NO,NO,NO,YES,NO,supabase,NO,supabase/migrations:0111,,-
 platform,Migration 0109 append-only FK repair,COMPLETE,NO,NO,NO,YES,NO,none,YES,supabase/migrations/0109_fix_user_fk_append_only.sql:59,,-

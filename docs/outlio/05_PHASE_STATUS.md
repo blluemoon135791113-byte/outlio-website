@@ -8,7 +8,7 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 |---|---|---|---|---|
 | 0 | Reality audit | **COMPLETE** | `platform-m1-workspaces` | [`02_GAP_MATRIX.csv`](02_GAP_MATRIX.csv) · [`PHASE_0_EVIDENCE.md`](phases/PHASE_0_EVIDENCE.md) · [`PHASE_0_AUDIT.md`](phases/PHASE_0_AUDIT.md) |
 | 0.5 | Safety net | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_0.5.md`](phases/PHASE_0.5.md) · [`PHASE_0.5_EVIDENCE.md`](phases/PHASE_0.5_EVIDENCE.md) |
-| 1 | Wiring sweep + authorization core | **IN_PROGRESS** — DoD 1 & 4 `INFERRED` | `platform-m1-workspaces` | [`PHASE_1.md`](phases/PHASE_1.md) · [`PHASE_1_EVIDENCE.md`](phases/PHASE_1_EVIDENCE.md) |
+| 1 | Wiring sweep + authorization core | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_1.md`](phases/PHASE_1.md) · [`PHASE_1_EVIDENCE.md`](phases/PHASE_1_EVIDENCE.md) |
 | 2–25 | see §9 | NOT_STARTED | — | — |
 
 ## Phase 0 result (2026-09-04)
@@ -73,25 +73,51 @@ tests** · 6 E2E · `next build` clean. Detail in
 in the gap matrix is `VERIFIED` under §4, because the E2E harness deliberately
 omits the journeys that would require signing up against production.
 
-## Still open going into Phase 1
+## Phase 1 result (2026-09-04) — COMPLETE
 
-- **DECISION-03 is the binding constraint.** It blocks §7's fixtures, the
-  sign-up and mailbox E2E journeys, and safely clearing the test accounts.
+`tsc` 0 · lint 0 errors · **151 unit files, 2,802 tests** · 7 E2E · 14 tenant
+tests. Detail in [`PHASE_1_EVIDENCE.md`](phases/PHASE_1_EVIDENCE.md).
+
+**All eleven DoD items are `VERIFIED`.** Items 1 and 4 were `INFERRED` under
+ADR-004 and are now proven, because ADR-005 created a staging project.
+
+- **`lib/auth/scope.ts`** — a `TenantScope` only `scopeFor` can produce.
+  `listContacts` took a bare `workspaceId: string`, indistinguishable from any
+  other string at a call site.
+- **Two live tenancy models named for the first time** — 64 tables on
+  `workspace_id`, 42 on `user_id`, 18 global. The wrong filter matches nothing
+  and renders as an empty state.
+- **All 45 server actions and every API route are gated**, with two
+  credential-exchange exceptions that assert their own rate limiting.
+- **RLS measured by behaviour:** 0 tables leak to anon.
+- **Tenant isolation proven by breaking it** — RLS disabled on staging, three
+  read tests failed; `.eq('workspace_id', …)` removed from `getContactDetail`,
+  the E2E journey failed.
+
+⚠️ **Seven wrong scanner versions across this phase, every one wrong in the
+alarming direction** — accusing correct code. The first reported "92 unscoped
+service-role reads"; the true figure was zero. Publishing any of those runs
+unchecked would have reported a security emergency that did not exist.
+
+## Still open going into Phase 2
+
 - **DECISION-04** — no mailbox. Email is proven by construction and by GreenMail,
   never against a real provider.
-- **DECISION-06** — `permissions.yaml` vs TypeScript. No behaviour rides on it.
-- ⚠️ **43 `outlio-test-*@example.com` accounts in production**, left by test runs
-  across 2026-09-04. Corrects an earlier report of "six", which came from
-  counting against a stale baseline. The number matters less than the mechanism:
-  **integration runs leak accounts into production.**
+- ⚠️ **43 `outlio-test-*@example.com` accounts in production**, legacy from when
+  the suite ran there. No longer accumulating; clearing them is an owner call.
 - ⚠️ **`PRODUCT_SPEC.md` does not exist and cannot be written** without the
   original prompt's sections E–CE. §2's authority order has a hole at level 4,
-  so every status in the gap matrix is measured against the code's own intent
-  rather than a specification.
+  so every gap-matrix status is measured against the code's own intent rather
+  than a specification.
+- ⚠️ **The `agency` plan's limits blob is malformed** in production and staging —
+  no `credits_per_month`, so `getPlanById` throws. Harmless today because the
+  plan is inactive with zero users; it must be fixed before it is ever enabled.
 - **39 profiles still have a null name, phone and LinkedIn URL** from the 0070
-  window. The values survive in `auth.users.raw_user_meta_data`; a backfill is a
-  separate migration with its own review, and guessing is worse than a visible
-  null.
+  window. Values survive in `auth.users.raw_user_meta_data`; a backfill is a
+  separate migration, and guessing is worse than a visible null.
+- **Role-based denial with a real under-privileged user** is untested at the
+  route layer. Both isolation suites create workspace OWNERS; a `viewer` needs a
+  second member and the invitation flow — Phase 2 fixture work.
 
 ## Work already done outside this contract
 

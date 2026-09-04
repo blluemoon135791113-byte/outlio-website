@@ -2,15 +2,15 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import { LedgerVariant } from './LedgerVariant'
-import { ScorecardVariant } from './ScorecardVariant'
-import { SignalShelfVariant } from './SignalShelfVariant'
+import { ChannelRowVariant } from './ChannelRowVariant'
+import { InboxRailVariant } from './InboxRailVariant'
+import { ReviewRouteVariant } from './ReviewRouteVariant'
 import styles from './prototype.module.css'
 
 const VARIANTS = [
-  { name: 'Ledger', component: LedgerVariant },
-  { name: 'Scorecard', component: ScorecardVariant },
-  { name: 'Signal Shelf', component: SignalShelfVariant },
+  { name: 'Channel Row', component: ChannelRowVariant },
+  { name: 'Inbox Rail', component: InboxRailVariant },
+  { name: 'Review Route', component: ReviewRouteVariant },
 ] as const
 
 export function PrototypeHarness({ initialActive }: { initialActive: number }) {
@@ -20,8 +20,8 @@ export function PrototypeHarness({ initialActive }: { initialActive: number }) {
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(() => setReady(true)))
-    return () => window.cancelAnimationFrame(frame)
+    const first = requestAnimationFrame(() => requestAnimationFrame(() => setReady(true)))
+    return () => cancelAnimationFrame(first)
   }, [])
 
   useLayoutEffect(() => {
@@ -33,37 +33,36 @@ export function PrototypeHarness({ initialActive }: { initialActive: number }) {
   }, [active])
 
   useEffect(() => {
-    const moveHighlight = () => {
+    const move = () => {
       const item = itemRefs.current[active]
       const highlight = highlightRef.current
       if (!item || !highlight) return
       highlight.style.width = `${item.offsetWidth}px`
       highlight.style.transform = `translateX(${item.offsetLeft}px)`
     }
-    window.addEventListener('resize', moveHighlight)
-    return () => window.removeEventListener('resize', moveHighlight)
-  }, [active])
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
+    const keydown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const number = Number.parseInt(event.key, 10)
-      if (number >= 1 && number <= VARIANTS.length) selectVariant(number - 1)
-      else if (event.key === 'ArrowRight') selectVariant((active + 1) % VARIANTS.length)
-      else if (event.key === 'ArrowLeft') selectVariant((active - 1 + VARIANTS.length) % VARIANTS.length)
+      if (number >= 1 && number <= VARIANTS.length) select(number - 1)
+      else if (event.key === 'ArrowRight') select((active + 1) % VARIANTS.length)
+      else if (event.key === 'ArrowLeft') select((active - 1 + VARIANTS.length) % VARIANTS.length)
     }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+    addEventListener('resize', move)
+    document.addEventListener('keydown', keydown)
+    return () => {
+      removeEventListener('resize', move)
+      document.removeEventListener('keydown', keydown)
+    }
   })
 
-  function selectVariant(index: number) {
+  function select(index: number) {
     if (index < 0 || index >= VARIANTS.length) return
     setActive(index)
-    const url = new URL(window.location.href)
+    const url = new URL(location.href)
     url.searchParams.set('v', String(index + 1))
-    window.history.replaceState(null, '', url)
+    history.replaceState(null, '', url)
   }
 
   const ActiveVariant = VARIANTS[active].component
@@ -79,7 +78,7 @@ export function PrototypeHarness({ initialActive }: { initialActive: number }) {
             data-active={index === active ? '' : undefined}
             aria-current={index === active ? 'true' : undefined}
             key={variant.name}
-            onClick={() => selectVariant(index)}
+            onClick={() => select(index)}
             ref={(node) => { itemRefs.current[index] = node }}
             type="button"
           >

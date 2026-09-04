@@ -52,7 +52,7 @@ inconclusive (table empty, proves nothing)        17
 
 | # | Item | Status |
 |---|---|---|
-| 1 | E2E journey from production entry point | PARTIAL — data layer `VERIFIED`, page layer `INFERRED` |
+| 1 | E2E journey from production entry point | **VERIFIED** — `e2e/tenant-isolation.spec.ts` |
 | 2 | Reachability chain named and unbroken | VERIFIED |
 | 3 | RBAC matrix passes, allow and deny | VERIFIED |
 | 4 | Tenant isolation via API and direct URL | **VERIFIED** — `tenant-isolation.test.ts`, 14 tests |
@@ -64,14 +64,41 @@ inconclusive (table empty, proves nothing)        17
 | 10 | Docs updated | VERIFIED |
 | 11 | This file | VERIFIED |
 
-⚠️ **Item 4 was `INFERRED` and is now `VERIFIED`.** ADR-005 created
+⚠️ **Items 1 and 4 were `INFERRED` and are now both `VERIFIED`.** ADR-005 created
 `outlio-staging`, which made the suite buildable without manufacturing tenants in
 production. ADR-004's concession is withdrawn.
 
-**Item 1 remains partial.** Isolation is proven at the data layer with real user
-JWTs; it is *not* proven by driving the Next app at a URL with a session cookie.
-The data layer is where isolation actually lives, and the page layer is a thin
-wrapper over it — but that is an argument, not a test.
+**Item 1 is now closed too.** `e2e/tenant-isolation.spec.ts` signs a real user
+into a real browser session and requests another workspace's contact by URL.
+Proven non-vacuous the only way that counts: **removing
+`.eq('workspace_id', …)` from `getContactDetail` makes it fail**, naming the
+cross-tenant read; restoring it passes.
+
+⚠️ **What that journey cost, and what it found.** Five failures before it passed,
+none of them isolation problems:
+
+| Symptom | Actual cause |
+|---|---|
+| Locator not visible | matched the hidden `<title>` |
+| Heading not found | the name is not rendered as a heading |
+| Navigation timeout | `next dev` compiles the route on first request |
+| Credentials rejected | **Playwright reused a `next dev` pointed at PRODUCTION** |
+| Server 500 | the seeded `agency` plan is malformed |
+
+⚠️ **The fourth is the one that matters.** `reuseExistingServer` is true locally,
+and a plain `next dev` loads `.env.local` — production. The test signed a staging
+user into the live app. It failed benignly because the user does not exist there;
+the same misdirection on a **sign-up** journey would have created real accounts in
+the customer database, which is how 43 of them got there. The test now observes
+Supabase hostnames from real network traffic and refuses to continue if they are
+not staging's.
+
+⚠️ **The fifth is a production defect found by accident.** The seeded `agency`
+plan has no `credits_per_month`, which `planLimitsSchema` requires, so
+`getPlanById` throws and every page resolving entitlements 500s. It is present in
+**production too** — harmless only because `agency` is inactive with zero users.
+Filed `BROKEN` in the gap matrix; it must be fixed before that plan is ever
+enabled.
 
 ## What I could not verify, and why
 

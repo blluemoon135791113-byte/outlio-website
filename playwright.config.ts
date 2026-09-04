@@ -56,7 +56,13 @@ export default defineConfig({
    * results earlier in this project were invalidated by exactly that.
    */
   webServer: {
-    command: 'npm run dev',
+    /*
+     * ⚠️ `dev:staging`, NOT `dev`. The tenant-isolation journey signs users in
+     * and reads their data; pointed at production it would create real accounts
+     * and its fixtures would not exist, so it would "pass" by finding nothing.
+     * See scripts/with-staging-env.mjs.
+     */
+    command: 'npm run dev:staging',
     url: 'http://127.0.0.1:3000/sign-in',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

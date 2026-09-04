@@ -6,7 +6,5 @@ export default async function OutreachWorkflowPrototypePage({
   searchParams: Promise<{ v?: string }>
 }) {
   const requested = Number.parseInt((await searchParams).v ?? '1', 10) - 1
-  const initialActive = requested >= 0 && requested < 3 ? requested : 0
-
-  return <PrototypeHarness initialActive={initialActive} />
+  return <PrototypeHarness initialActive={requested >= 0 && requested < 3 ? requested : 0} />
 }
