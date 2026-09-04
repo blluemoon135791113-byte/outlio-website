@@ -3,6 +3,7 @@ import Link from 'next/link'
 
 import { BulkAssign } from '@/components/crm/BulkAssign'
 import { ContactFilters, activeFilterCount } from '@/components/crm/ContactFilters'
+import { SavedViews } from '@/components/crm/SavedViews'
 import { ContactSearch } from '@/components/crm/ContactSearch'
 import {
   ContactsTable,
@@ -11,6 +12,7 @@ import {
 } from '@/components/crm/ContactsTable'
 import { NewContactButton } from '@/components/crm/NewContact'
 import { isContactSort, isContactSource, listContacts } from '@/lib/crm/contacts-list'
+import { listSavedViews } from '@/lib/crm/saved-views'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWorkspace } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
@@ -114,6 +116,10 @@ export default async function ContactsPage({
    * The cap is a display limit, not a security boundary — the workspace filter
    * is what stops another tenant's tags appearing.
    */
+  // Private to this user (DECISION-09), so it is read per request rather than
+  // cached across the workspace.
+  const savedViews = await listSavedViews(ctx.scope)
+
   const db0 = createAdminClient()
   const [{ data: tagRows }, { data: companyRows }] = await Promise.all([
     db0
@@ -286,6 +292,8 @@ export default async function ContactsPage({
           ) : null}
         </div>
       </div>
+
+      <SavedViews query={query} views={savedViews} activeCount={activeFilterCount(query)} />
 
       <ContactFilters
         query={query}

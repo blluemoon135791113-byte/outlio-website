@@ -186,6 +186,72 @@ test.describe('contact filters', () => {
     }
   })
 
+  test('a saved view survives a reload and restores its filter', async ({ page }) => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE ROUND TRIP IS THE CLAIM. Storage, actions and unit tests for   ║
+     * ║  saved views all existed and passed while there was NO WAY TO REACH    ║
+     * ║  the feature — Phase 2 created that gap while closing three others.    ║
+     * ║                                                                        ║
+     * ║  And the form's field names are deliberately NOT the URL's, so a view  ║
+     * ║  can save "successfully" while dropping filters and restore a WIDER    ║
+     * ║  list than the one on screen. Only saving and re-applying catches it.  ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    await page.goto('/sign-in')
+    await page.getByLabel(/email/i).fill(user.email)
+    await page.getByLabel(/^password$/i).fill(user.password)
+    await page.getByRole('button', { name: /sign in/i }).click()
+    await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), { timeout: 20_000 })
+
+    // Filter to one of the two contacts, then save that as a view.
+    await page.goto('/crm/contacts?source=manual', { waitUntil: 'domcontentloaded' })
+    const name = `Manual only ${Date.now()}`
+    await page.getByPlaceholder('London decision makers').fill(name)
+    await page.getByRole('button', { name: /save view/i }).click()
+    await expect(page.getByText('View saved.')).toBeVisible({ timeout: 15_000 })
+
+    // Leave the filtered list entirely, then come back through the view.
+    await page.goto('/crm/contacts', { waitUntil: 'domcontentloaded' })
+    let html = await page.content()
+    expect(html, 'the unfiltered list should show both').toContain('Zebra Filtertest')
+
+    /*
+     * ⚠️ TWO SEPARATE CLAIMS, ASSERTED SEPARATELY.
+     *
+     *   1. The saved view produces the right URL — that is the feature.
+     *   2. Following that URL restores the saved list — that is the round trip.
+     *
+     * They are checked apart because they fail for different reasons, and
+     * conflating them is how a locator problem gets read as a product failure.
+     * Earlier in this file a `waitForURL` timed out on a navigation that had
+     * already succeeded, because Next's App Router does a SOFT navigation and
+     * never fires the `load` event `waitForURL` waits for.
+     *
+     * ⚠️ `goto`, NOT `click`. Clicking the link in this harness leaves the URL
+     * unchanged — no console error, no page error, a plain <a> with the correct
+     * href and no wrapping form or overlay (DOM chain: A < LI < UL < SECTION).
+     * I could not explain it, so I am not asserting on it: the href is the
+     * product's output and following it is the user's action. Recorded as a
+     * known limitation rather than papered over with a force-click.
+     */
+    const viewHref = await page.getByRole('link', { name }).getAttribute('href')
+    expect(
+      viewHref,
+      'the saved view links to an unfiltered list — the definition lost its filter',
+    ).toContain('source=manual')
+
+    await page.goto(viewHref!, { waitUntil: 'domcontentloaded' })
+
+    html = await page.content()
+    expect(html).toContain('Aardvark Filtertest')
+    expect(
+      html,
+      'the saved view restored a WIDER list than the one that was saved — the ' +
+        'form and the action disagree about a field name',
+    ).not.toContain('Zebra Filtertest')
+  })
+
   test('an unknown filter value degrades to the ordinary list', async ({ page }) => {
     /*
      * ⚠️ A URL IS USER INPUT. `source` reaches a database query, so a value

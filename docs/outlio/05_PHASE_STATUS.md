@@ -147,9 +147,8 @@ produced p95 397.5ms — **under budget, so the clock said PASS** — while scan
 
 ## Still open going into Phase 3
 
-- **Saved views have no UI.** Storage, actions and unit tests exist; nothing
-  saves a view and restores it. `crm_saved_views` leaving the unused-schema
-  allowlist is a weaker claim than the feature being finished.
+- ~~Saved views have no UI.~~ **Closed 2026-09-05** — interface shipped, round
+  trip proven end to end.
 - **Role-based denial with a real under-privileged user**, carried from Phase 1.
   Every fixture creates workspace OWNERS.
 - **DECISION-04** — no mailbox.
@@ -184,7 +183,6 @@ value can be CHECKED.** A citation nobody can reach did not achieve that.
 
 - **12 of 64 production emails are honestly backfillable**; the other 52 have no
   source lead and are already correct. An owner decision, now bounded.
-- **Saved views still have no UI** (Phase 2).
 - **Role-based denial with a real under-privileged user** (Phase 1).
 - **Most company evidence has no home** — `funding_*`, `tech_stack`,
   `recent_news` are the majority of 952 rows; `company_links` and

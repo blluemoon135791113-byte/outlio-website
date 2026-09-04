@@ -115,9 +115,26 @@ bound and workspace scoping — structurally, not by executing 200 writes.
 Every fixture creates workspace OWNERS; proving a `viewer` is refused needs a
 second member and the invitation flow.
 
-**Saved views end to end.** The module and actions are unit-tested and the table
-left the unused-schema allowlist, but no E2E journey saves a view, reloads, and
-restores it. The UI for views is not built — only the storage and actions are.
+**~~Saved views end to end.~~ CLOSED 2026-09-05.** `components/crm/SavedViews.tsx`
+ships the interface; `e2e/contact-filters.spec.ts` saves a view, leaves the
+filtered list, and restores it.
+
+⚠️ **The guard written alongside it caught a real bug on its first run.** The
+save form's field names are deliberately *not* the URL's — the URL says `q`,
+`after`, `email`; the action reads `search`, `createdAfter`, `hasEmail`. The
+first version of the form omitted `unassigned` entirely, so saving a view while
+filtered to "Unassigned" would have stored a definition missing that filter,
+saved successfully, and restored **the whole workspace**. Nothing errors on that
+path: `formData.get` returns null, the field becomes `undefined`, and
+`parseDefinition` accepts it.
+
+⚠️ **Known limitation, not papered over.** The E2E asserts the view's `href` and
+then *navigates* to it rather than clicking. Clicking the link in the harness
+leaves the URL unchanged — no console error, no page error, a plain `<a>` with
+the correct href and no wrapping form or overlay (DOM chain `A < LI < UL <
+SECTION`). I could not explain it, so I assert the product's output (the href)
+and the user's outcome (following it) rather than force-clicking to make a green
+result.
 
 ## Guards added, and the ones that caught something
 
