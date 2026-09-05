@@ -914,3 +914,63 @@ be blocked on, and a much better brief to write against.
 
 ⚠️ **If any of them fail, that matters more than the mailbox question**, because
 five phases downstream assume this layer is sound.
+
+
+## A mailbox IS attached, and the readiness check could not see its DKIM
+
+`00_BUILD_CONTRACT.md` §3 still says `TEST_MAILBOXES: NONE`. **That is stale.**
+Production holds one connected account:
+
+```
+provider smtp · scope workspace · status ramping · health 78
+from hus***@outlio.io · domain outlio.io
+smtpHost smtppro.zoho.com:587 · imapHost imappro.zoho.com:993
+ramp 20/day → 200/day · window 09:00–17:00 UTC
+connected 2026-09-04 · last_send NEVER · last_sync NEVER
+```
+
+Connected, correctly shaped, and never exercised. SMTP host and SPF agree —
+`v=spf1 include:zohomail.com` against `smtppro.zoho.com` — and IMAP is configured,
+so reply sync has somewhere to read from.
+
+### ⚠️ The finding: this product could not see DKIM on its own sending domain
+
+`checkDomainAuth('outlio.io')` reported:
+
+```
+spf   pass   v=spf1 include:zohomail.com ~all
+dkim  UNKNOWN  "could not find a DKIM key at any common selector"
+dmarc warn   p=none, reporting to Cloudflare
+```
+
+The key is published. It is just not where the code looked:
+
+```
+dig +short TXT zoho._domainkey.outlio.io   → (nothing)
+dig +short TXT zmail._domainkey.outlio.io  → "v=DKIM1; k=rsa; p=MIGf…"
+```
+
+`COMMON_DKIM_SELECTORS` had `zoho` and not `zmail`, which is the selector Zoho
+actually publishes. After adding it: **`dkim=pass`, "A DKIM key is published at
+`zmail._domainkey`."**
+
+⚠️ **Reporting `unknown` rather than `fail` is the right call and is exactly what
+hid this.** The comment above that list argues, correctly, that telling a
+well-configured customer their DKIM is broken teaches them to distrust every
+other check on the page. A false negative that is careful about its own
+uncertainty reads as honest, so nobody goes looking.
+
+⚠️ **And it is not cosmetic.** Gmail and Yahoo's bulk-sender rules require DKIM.
+Phase 7 turns on this surface being right, and the one provider this product
+could not see was its own.
+
+### What is still open for Phase 7
+
+- **DMARC is `p=none`** — monitor only. Meets the minimum; move to `quarantine`
+  once the Cloudflare reports show legitimate mail passing.
+- **Nothing has been sent or synced.** `last_send` and `last_sync` are both
+  `never`, so the live path is configured but unproven.
+- ⚠️ **The send window is 09:00–17:00 UTC**, which is 14:00–22:00 in Karachi.
+  Deliberate if the targets are US/EU; worth confirming, not changing.
+- **I have not sent anything.** Sending from a real domain is outward-facing and
+  needs its own explicit go-ahead, separate from "a mailbox is attached".

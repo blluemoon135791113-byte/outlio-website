@@ -52,6 +52,23 @@ const COMMON_DKIM_SELECTORS = [
   'mail',
   'smtp',
   'zoho',
+  /*
+   * ⚠️ `zmail` IS THE SELECTOR ZOHO ACTUALLY PUBLISHES, and `zoho` alone was
+   * missing it. Found against this product's own sending domain on 2026-09-05:
+   *
+   *     dig +short TXT zoho._domainkey.outlio.io   → (nothing)
+   *     dig +short TXT zmail._domainkey.outlio.io  → "v=DKIM1; k=rsa; p=MIGf…"
+   *
+   * So `checkDomainAuth('outlio.io')` reported DKIM `unknown` for a domain whose
+   * DKIM is published and correct. The comment above explains why `unknown` is
+   * reported instead of `fail` — that judgement is right, and it is exactly what
+   * made this invisible: a false negative that is polite about itself.
+   *
+   * It is not cosmetic. Gmail and Yahoo's bulk-sender rules require DKIM, and
+   * `outlio.io` sends through Zoho (`v=spf1 include:zohomail.com`), so this was
+   * the one provider whose key this product could not see on its own domain.
+   */
+  'zmail', // Zoho's published selector
   'fm1', // Fastmail
 ] as const
 

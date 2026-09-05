@@ -4,6 +4,9 @@
  * Parsed from record text rather than from live DNS, so every rule below is
  * pinned without a network. The lookups themselves are a thin wrapper.
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { isAligned, parseDmarc, parseSpf } from '@/lib/email/dns'
@@ -130,5 +133,49 @@ describe('from-domain alignment', () => {
   it('does not align when either side is missing', () => {
     expect(isAligned('', 'acme.example')).toBe(false)
     expect(isAligned('acme.example', '')).toBe(false)
+  })
+})
+
+describe('the DKIM selectors we guess', () => {
+  /**
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THIS PRODUCT SENDS THROUGH ZOHO AND COULD NOT SEE ITS OWN DKIM KEY.   ║
+   * ║                                                                           ║
+   * ║  Measured against `outlio.io` on 2026-09-05 — the domain in               ║
+   * ║  `email_accounts.from_domain`, whose SPF is `v=spf1 include:zohomail.com`: ║
+   * ║                                                                           ║
+   * ║      dig +short TXT zoho._domainkey.outlio.io   → (nothing)               ║
+   * ║      dig +short TXT zmail._domainkey.outlio.io  → "v=DKIM1; k=rsa; p=…"   ║
+   * ║                                                                           ║
+   * ║  The list had `zoho` and not `zmail`, so `checkDomainAuth` reported DKIM  ║
+   * ║  `unknown` for a domain that is correctly configured.                     ║
+   * ║                                                                           ║
+   * ║  ⚠️ REPORTING `unknown` RATHER THAN `fail` IS THE RIGHT CALL AND IS WHAT  ║
+   * ║  HID THIS. A false negative that is careful about its own uncertainty     ║
+   * ║  reads as honest, so nobody goes looking. It is not cosmetic: Gmail and   ║
+   * ║  Yahoo's bulk-sender rules require DKIM, and Phase 7 turns on exactly     ║
+   * ║  this surface being right.                                               ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const source = readFileSync(join(__dirname, '..', '..', 'lib/email/dns.ts'), 'utf8')
+  const list = source.slice(
+    source.indexOf('const COMMON_DKIM_SELECTORS'),
+    source.indexOf('] as const', source.indexOf('const COMMON_DKIM_SELECTORS')),
+  )
+
+  it('includes zmail, which is the selector Zoho actually publishes', () => {
+    expect(
+      /'zmail'/.test(list),
+      "`zmail` is gone. outlio.io publishes its DKIM key there and nowhere else, " +
+        'so removing it makes this product blind to DKIM on its own sending domain.',
+    ).toBe(true)
+  })
+
+  it('still covers the other providers it claims to', () => {
+    // A positive control: without it, an emptied list would pass the check above
+    // only by accident of the string never being found either way.
+    for (const selector of ['google', 'selector1', 'k1', 's1', 'zoho', 'fm1']) {
+      expect(list, `${selector} was dropped from the selector list`).toContain(`'${selector}'`)
+    }
   })
 })
