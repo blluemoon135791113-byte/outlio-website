@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 
 import Footer from '@/app/components/Footer'
 import Nav from '@/app/components/Nav'
-import { DashboardPreview } from '@/components/leadengine/DashboardPreview'
 import { ExtractionJourney } from '@/components/leadengine/ExtractionJourney'
 import { HubbleIntelligence } from '@/components/leadengine/HubbleIntelligence'
 import { LeadEngineHero } from '@/components/leadengine/LeadEngineHero'
@@ -49,7 +48,7 @@ export default function LeadEnginePage() {
      * page moves. See globals.css.
      */
     <div className="leadengine-surface">
-      <Nav surface="leadengine" variant="heroGlass" />
+      <Nav surface="leadengine" />
 
       <main className="leadengine-story">
         <LeadEngineHero />
@@ -69,27 +68,6 @@ export default function LeadEnginePage() {
 
           <div className="leadengine-story-panel leadengine-story-panel-inner-only">
             <OutreachAutomation />
-          </div>
-
-          <aside className="leadengine-story-note" aria-labelledby="software-access-title">
-            <p className="leadengine-story-kicker">Software access only</p>
-            <div>
-              <h2 id="software-access-title" className="leadengine-story-note-title">
-                Software access, not a managed outreach service
-              </h2>
-              <p className="leadengine-story-note-copy">
-                Lead Engine extracts, enriches, de-duplicates, organizes, scores, and
-                exports B2B data, and supports user-configured email campaigns from
-                connected inboxes. LinkedIn drafts remain user-reviewed and manually
-                sent. It does not perform managed outreach for customers or include
-                agency or appointment-setting services. FastSpring payments on this
-                application purchase access to the software only.
-              </p>
-            </div>
-          </aside>
-
-          <div className="leadengine-story-panel">
-            <DashboardPreview />
           </div>
 
           <div className="leadengine-story-panel">

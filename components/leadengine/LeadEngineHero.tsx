@@ -17,7 +17,7 @@ export function LeadEngineHero() {
                 Lead Engine
               </p>
 
-              <h1 className="mt-5 text-balance font-heading text-[clamp(2.75rem,5.6vw,5.25rem)] font-light leading-[0.98] tracking-[-0.045em] text-white">
+              <h1 className="mt-5 text-balance font-heading text-[clamp(2.75rem,5.6vw,5.25rem)] [font-weight:var(--leadengine-heading-weight)] leading-[0.98] tracking-[-0.045em] text-white">
                 Further and Beyond
               </h1>
 

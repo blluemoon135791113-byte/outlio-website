@@ -3,8 +3,8 @@
   position: relative;
   padding: clamp(1.5rem, 2.7vw, 3rem);
   background:
-    radial-gradient(circle at 18% 18%, rgba(201, 122, 93, 0.12), transparent 30rem),
-    linear-gradient(135deg, #fffaf3 0%, #f7e7d3 100%);
+    radial-gradient(circle at 18% 18%, rgba(201, 122, 93, 0.035), transparent 30rem),
+    linear-gradient(135deg, #fff 0%, #fffdf9 100%);
   color: #191612;
 }
 
@@ -24,6 +24,7 @@
 
 .featureLogo {
   display: block;
+  color: #0d1725;
   width: clamp(3.4rem, 3.9vw, 4rem);
   margin: 0 0 clamp(1.25rem, 1.8vw, 1.65rem) -0.15rem;
   overflow: hidden;
@@ -41,10 +42,15 @@
 }
 
 .featureLogo path {
-  stroke: #262522;
+  stroke: currentColor;
   stroke-linejoin: round;
-  stroke-width: 1.45;
+  stroke-width: 1.7;
 }
+
+.logoSegments path { fill: rgba(13, 23, 37, 0.08); }
+.logoSegments path:nth-child(2),
+.logoSegments path:nth-child(4) { fill: rgba(13, 23, 37, 0.16); }
+.logoSegments path:nth-child(3) { fill: rgba(13, 23, 37, 0.12); }
 
 .eyebrow {
   margin: 0 0 2rem;
@@ -69,10 +75,11 @@
 
 .logoGuides {
   fill: none;
-  stroke: rgba(38, 37, 34, 0.62);
-  stroke-dasharray: 2.6 4.1;
+  stroke: currentColor;
+  stroke-dasharray: 2.1 3.6;
   stroke-linecap: round;
-  stroke-width: 0.9;
+  stroke-width: 1.05;
+  opacity: 0.7;
   pointer-events: none;
   animation: logo-guides-enter 300ms var(--ease-out) 310ms both;
 }
@@ -155,6 +162,17 @@
   aspect-ratio: 1.12 / 1;
 }
 
+.animationBox::after {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(#c97a5d, #c97a5d) top / 100% 10px no-repeat;
+  box-shadow: inset 0 0 0 4px #c97a5d;
+  content: '';
+  pointer-events: none;
+}
+
 .workflowFrame {
   position: absolute;
   inset: 0;
@@ -176,11 +194,11 @@
 
 .workflowImage {
   position: absolute;
-  top: -6.47%;
-  left: -90.2%;
+  top: -3.8%;
+  left: -90.1%;
   width: auto;
   max-width: none;
-  height: 112.56%;
+  height: 110%;
   user-select: none;
   filter: none;
   image-rendering: auto;

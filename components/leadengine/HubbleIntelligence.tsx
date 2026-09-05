@@ -43,7 +43,7 @@ export function HubbleIntelligence() {
         <div
           className={styles.animationBox}
           role="img"
-          aria-label="Hubble Intelligence workflow: ask what is changing across a market, identify macro trends across multiple data sources, and create a market insight brief"
+          aria-label="Hubble AI Intelligence workflow: ask what is changing across a market, analyze multiple data sources for macro trends, and create a market insight brief"
         >
           <div className={styles.workflowSurface} aria-hidden="true">
             <article className={styles.promptCard}>
@@ -90,9 +90,9 @@ export function HubbleIntelligence() {
             See the pattern across the market.
           </h2>
           <p className={styles.description}>
-            Hubble analyzes company, people, hiring, funding, market, and engagement
-            data at scale—surfacing trends, correlations, and opportunities across
-            entire lead sets.
+            Hubble uses AI to analyze company, people, hiring, funding, market, and
+            engagement data at scale—surfacing trends, correlations, and opportunities
+            across entire lead sets.
           </p>
           <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" className={styles.cta}>
             Book a demo <span aria-hidden="true">→</span>

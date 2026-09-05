@@ -41,7 +41,7 @@ const LEADS: LeadInsight[] = [
     website: 'northstarlabs.example',
     portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/90.jpg',
     summary:
-      'Maya leads revenue operations for a growing analytics company. Recent hiring across sales operations and enablement suggests the team is standardizing its pipeline systems and may value cleaner, source-backed account data.',
+      'Northstar Labs is standardizing its revenue systems, creating a timely need for cleaner, source-backed account data.',
   },
   {
     id: 'elias-morgan',
@@ -55,7 +55,7 @@ const LEADS: LeadInsight[] = [
     website: 'quarryai.example',
     portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/54.jpg',
     summary:
-      'Elias owns strategic partnerships at an applied-AI platform expanding into Europe. Public launch activity points to a need for precise partner mapping and faster identification of technical decision-makers.',
+      'Quarry AI is expanding into Europe, increasing the need for precise partner mapping and verified technical decision-makers.',
   },
   {
     id: 'priya-raman',
@@ -69,7 +69,7 @@ const LEADS: LeadInsight[] = [
     website: 'atlasgrid.example',
     portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/17.jpg',
     summary:
-      'Priya runs growth for a distributed infrastructure business. The company is entering new APAC markets, making verified regional contacts, expansion signals, and locally relevant personalization especially useful.',
+      'AtlasGrid is entering new APAC markets, making verified regional contacts and local expansion signals especially valuable.',
   },
   {
     id: 'noah-williams',
@@ -83,7 +83,7 @@ const LEADS: LeadInsight[] = [
     website: 'sablesystems.example',
     portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/24.jpg',
     summary:
-      'Noah oversees commercial strategy at a security software company preparing its next enterprise push. New channel roles and product launches indicate active territory planning and a likely appetite for richer account intelligence.',
+      'Sable Systems is preparing an enterprise push, signaling active territory planning and demand for richer account intelligence.',
   },
   {
     id: 'sofia-patel',
@@ -97,7 +97,7 @@ const LEADS: LeadInsight[] = [
     website: 'meridiancloud.example',
     portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/49.jpg',
     summary:
-      'Sophia leads global demand generation for a cloud operations platform. A growing field-marketing team and new enterprise campaigns suggest an active need for cleaner account segmentation and higher-confidence contact data.',
+      'Meridian Cloud is expanding enterprise campaigns while growing field marketing—creating a clear need for cleaner segmentation and verified contact data.',
   },
   {
     id: 'luca-bennett',
@@ -111,7 +111,7 @@ const LEADS: LeadInsight[] = [
     website: 'evernorth.example',
     portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/46.jpg',
     summary:
-      'Luca manages enterprise sales for a workflow automation company. Recent expansion into regulated industries points to longer buying committees and a stronger need for verified stakeholder mapping.',
+      'Evernorth Systems is entering regulated industries, increasing the need for verified stakeholder maps across longer buying cycles.',
   },
   {
     id: 'amina-yusuf',
@@ -125,7 +125,7 @@ const LEADS: LeadInsight[] = [
     website: 'cinderlabs.example',
     portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/43.jpg',
     summary:
-      'Amina is building the partner ecosystem for an infrastructure startup. New integration announcements indicate an opportunity to identify adjacent platforms, technical champions, and regional channel partners.',
+      'Cinder Labs is growing its integration ecosystem, creating an opportunity to identify technical champions and regional partners.',
   },
   {
     id: 'theo-laurent',
@@ -139,7 +139,7 @@ const LEADS: LeadInsight[] = [
     website: 'vantageworks.example',
     portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/13.jpg',
     summary:
-      'Theo oversees operations at a distributed professional-services platform. Multi-market hiring and new delivery partnerships signal a priority around repeatable go-to-market processes and reliable account research.',
+      'VantageWorks is hiring across markets, signaling a need for repeatable go-to-market processes and reliable account research.',
   },
   {
     id: 'elena-rossi',
@@ -153,7 +153,7 @@ const LEADS: LeadInsight[] = [
     website: 'fluxera.example',
     portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/female/256/45.jpg',
     summary:
-      'Elena owns go-to-market strategy for a product analytics business. Recent leadership hires and packaging changes suggest active positioning work and a need for precise competitive and buyer intelligence.',
+      'Fluxera is refining its positioning after leadership and packaging changes, making precise buyer intelligence especially useful.',
   },
   {
     id: 'marcus-lee',
@@ -167,7 +167,7 @@ const LEADS: LeadInsight[] = [
     website: 'canopystack.example',
     portraitUrl: 'https://cdn.jsdelivr.net/gh/faker-js/assets-person-portrait/male/256/95.jpg',
     summary:
-      'Marcus leads revenue for a developer tooling company expanding across APAC. New account-executive roles and solution partnerships point to active territory planning and demand for better buying-signal coverage.',
+      'CanopyStack is expanding across APAC, pointing to active territory planning and stronger demand for buying-signal coverage.',
   },
 ]
 
@@ -285,23 +285,6 @@ const BOOK_BAYS = DENSE_BOOK_ROWS.map((row) => {
 
 const leadById = new Map(LEADS.map((lead) => [lead.id, lead]))
 const SCENE_LEADS = LEADS.map(({ id, initials, name }) => ({ id, initials, name }))
-
-function FieldIcon({ type }: { type: 'company' | 'email' | 'linkedin' | 'phone' | 'role' | 'website' }) {
-  const paths = {
-    company: <path d="M4.5 20.5v-15h10v15m0-10h5v10M8 9h3M8 13h3M8 17h3M17.5 14h.1M17.5 17.5h.1M3 20.5h18" />,
-    email: <path d="M3.5 6.5h17v11h-17zM4 7l8 6 8-6" />,
-    phone: <path d="M8.1 3.5 5.4 5.2c-.7.5-.9 1.4-.5 2.2 2.7 5.3 6.5 9.1 11.8 11.8.8.4 1.7.2 2.2-.5l1.7-2.7-4.5-2.1-1.4 1.8a15.8 15.8 0 0 1-6.4-6.4l1.8-1.4z" />,
-    linkedin: <path d="M6.2 9.4v8.4M6.2 6.2v.1M10.1 17.8v-8.4m0 3.7c.8-2.1 5.8-2.5 5.8 1.5v3.2" />,
-    role: <path d="M8 7V5.5c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2V7M3.5 8h17v11.5h-17zM3.5 12.5c4.4 2 12.6 2 17 0M10 13.5h4" />,
-    website: <path d="M3.5 12h17M12 3.5c3.4 3.6 3.4 13.4 0 17m0-17c-3.4 3.6-3.4 13.4 0 17M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17Z" />,
-  }
-
-  return (
-    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      {paths[type]}
-    </svg>
-  )
-}
 
 export function LeadLibrary() {
   const [activeLead, setActiveLead] = useState<LeadInsight | null>(null)
@@ -474,57 +457,52 @@ export function LeadLibrary() {
             aria-describedby="lead-insight-summary"
             className={styles.modal}
           >
-            <button ref={closeButtonRef} type="button" onClick={closeLead} className={styles.closeButton} aria-label="Close lead insight">
-              <span aria-hidden>×</span>
-            </button>
+            <header className={styles.modalBand}>
+              <span className={styles.enrichedStack} aria-hidden><i /><i /><i /></span>
+              <span>Enriched</span>
+              <button ref={closeButtonRef} type="button" onClick={closeLead} className={styles.closeButton} aria-label="Close lead insight">
+                <span aria-hidden>×</span>
+              </button>
+            </header>
 
-            <div className={styles.profileHeader}>
-              <div className={styles.avatar} aria-hidden>
-                <span className={styles.avatarFallback}>{activeLead.initials}</span>
-                <Image
-                  src={activeLead.portraitUrl}
-                  alt=""
-                  width={256}
-                  height={256}
-                  sizes="(max-width: 640px) 77px, 117px"
-                  className={styles.avatarImage}
-                />
-              </div>
-              <div className={styles.profileCopy}>
-                <h3 id="lead-insight-name">{activeLead.name}</h3>
-                <div className={styles.identityRow}>
-                  <span className={styles.identityIcon}><FieldIcon type="role" /></span>
-                  <span><small>Role</small>{activeLead.role}</span>
+            <div className={styles.modalBody}>
+              <div className={styles.profileHeader}>
+                <div className={styles.avatar} aria-hidden>
+                  <span className={styles.avatarFallback}>{activeLead.initials}</span>
+                  <Image
+                    src={activeLead.portraitUrl}
+                    alt=""
+                    width={256}
+                    height={256}
+                    sizes="58px"
+                    className={styles.avatarImage}
+                  />
                 </div>
-                <div className={styles.identityRow}>
-                  <span className={styles.identityIcon}><FieldIcon type="company" /></span>
-                  <span><small>Company</small>{activeLead.company}</span>
+                <div className={styles.profileCopy}>
+                  <h3 id="lead-insight-name">{activeLead.name}</h3>
+                  <p className={styles.profileSubtitle}>{activeLead.role} at {activeLead.company}</p>
                 </div>
               </div>
-            </div>
 
-            <dl className={styles.fields}>
-              <div className={styles.field}>
-                <dt><FieldIcon type="email" />Email</dt>
-                <dd>{activeLead.email}</dd>
-              </div>
-              <div className={styles.field}>
-                <dt><FieldIcon type="phone" />Phone</dt>
-                <dd>{activeLead.phone}</dd>
-              </div>
-              <div className={styles.field}>
-                <dt><FieldIcon type="linkedin" />LinkedIn</dt>
-                <dd>{activeLead.linkedin}</dd>
-              </div>
-              <div className={styles.field}>
-                <dt><FieldIcon type="website" />Website</dt>
-                <dd>{activeLead.website}</dd>
-              </div>
-            </dl>
+              <dl className={styles.fields}>
+                <div className={styles.field}>
+                  <dt>Email</dt>
+                  <dd>{activeLead.email}</dd>
+                </div>
+                <div className={styles.field}>
+                  <dt>Phone</dt>
+                  <dd>{activeLead.phone}</dd>
+                </div>
+                <div className={styles.field}>
+                  <dt>Company</dt>
+                  <dd>{activeLead.company}</dd>
+                </div>
+              </dl>
 
-            <div className={styles.summary}>
-              <p>Summary</p>
-              <div id="lead-insight-summary">{activeLead.summary}</div>
+              <div className={styles.summary}>
+                <p>Summary</p>
+                <div id="lead-insight-summary">{activeLead.summary}</div>
+              </div>
             </div>
           </div>
         </div>

@@ -16,10 +16,9 @@ function FeatureLogo() {
           <path d="M64 49 88.6 25.7A34 34 0 0 1 92.3 74.2Z" fill="#dc7d89" />
         </g>
         <g className={styles.logoGuides}>
-          <circle cx="64" cy="49" r="45" />
           <circle cx="64" cy="49" r="38" />
           <circle cx="64" cy="49" r="25" />
-          <path d="M64 4v105M22 26l82 46M23 75l81-49" />
+          <path d="M64 11v76" />
         </g>
       </svg>
     </span>
@@ -54,9 +53,9 @@ export function ExtractionJourney() {
           <div className={styles.workflowFrame}>
             <Image
               className={styles.workflowImage}
-              src="/leadengine/extraction-workflow-reference-terra.png"
-              width={1774}
-              height={887}
+              src="/leadengine/extraction-workflow-reference-terra-hq.png"
+              width={3548}
+              height={1774}
               alt=""
               draggable={false}
               unoptimized

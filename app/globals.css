@@ -1894,12 +1894,12 @@ details[open] .faq-mark {
 }
 
 .leadengine-story-panel-extraction {
-  border-color: rgba(151, 72, 47, 0.13);
+  border-color: rgba(151, 72, 47, 0.065);
   border-radius: clamp(2.75rem, 5vw, 5.25rem);
-  background: #f7e7d3;
+  background: #fffdf9;
   box-shadow:
-    0 2.25rem 5.5rem rgba(129, 58, 38, 0.1),
-    inset 0 1px 0 rgba(255, 250, 243, 0.9);
+    0 2.25rem 5.5rem rgba(129, 58, 38, 0.055),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
 }
 
 .leadengine-story-panel-immersive {

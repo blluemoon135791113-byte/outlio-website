@@ -15,14 +15,14 @@
   display: grid;
   width: min(100%, 88rem);
   margin-inline: auto;
-  grid-template-columns: minmax(32rem, 1fr) minmax(24rem, 0.96fr);
+  grid-template-columns: minmax(37rem, 1.18fr) minmax(19rem, 0.82fr);
   gap: clamp(2.5rem, 4.5vw, 5.5rem);
   align-items: center;
 }
 
 .animationBox {
   position: relative;
-  width: min(100%, 42rem);
+  width: min(100%, 44.5rem);
   min-width: 0;
   overflow: hidden;
   justify-self: start;
@@ -36,7 +36,7 @@
     0 1.6rem 3.8rem rgba(32, 74, 64, 0.18);
   isolation: isolate;
   container-type: size;
-  aspect-ratio: 0.82;
+  aspect-ratio: 1.1125 / 1;
 }
 
 .animationBox::before {
@@ -109,9 +109,9 @@
 .sendButton svg { width: 70%; fill: none; stroke: currentColor; stroke-linejoin: round; stroke-width: 2; }
 
 .resultCard {
-  top: 31.5%;
-  right: 1%;
-  left: 21%;
+  top: 26.5%;
+  right: 4%;
+  left: 18%;
   padding: 2.5cqh 3.6cqw;
   border-radius: clamp(1.2rem, 2.7cqw, 1.85rem);
 }
@@ -150,8 +150,8 @@
 }
 
 .savedCard {
-  right: 10%;
-  bottom: -2%;
+  right: 7%;
+  bottom: -3%;
   left: 7%;
   display: grid;
   min-height: 12.5cqh;
@@ -190,7 +190,12 @@
   width: clamp(5.15rem, 6.45vw, 6.65rem);
   height: auto;
   margin: 0 0 1.45rem -0.2rem;
-  filter: drop-shadow(0 0.65rem 0.8rem rgba(39, 74, 66, 0.13));
+  opacity: 0.96;
+  filter:
+    grayscale(1)
+    brightness(0.22)
+    contrast(1.85)
+    drop-shadow(0.08rem 0.14rem 0 rgba(13, 23, 37, 0.2));
 }
 
 .eyebrow {
@@ -255,11 +260,11 @@
 
 @media (max-width: 70rem) {
   .section { padding: clamp(1.75rem, 3vw, 2.75rem); }
-  .layout { grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr); gap: clamp(2rem, 3vw, 3rem); }
+  .layout { grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); gap: clamp(2rem, 3vw, 3rem); }
   .heading { font-size: clamp(2.65rem, 4.8vw, 4rem); }
 }
 
-@media (max-width: 48rem) {
+@media (max-width: 54rem) {
   .layout { grid-template-columns: 1fr; }
   .copy { max-width: 44rem; order: -1; }
   .animationBox { width: min(100%, 42rem); justify-self: center; margin-inline: auto; }

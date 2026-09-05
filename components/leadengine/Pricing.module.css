@@ -307,7 +307,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.55rem;
-  margin-top: 1.35rem;
+  margin-top: 1.05rem;
   padding: 1rem 0.75rem;
   border: 1px solid rgba(81, 6, 0, 0.1);
   border-radius: 1rem;
@@ -319,7 +319,7 @@
 
 .planIntro > .cta,
 .planIntro > .checkoutCta {
-  margin-top: 0.75rem;
+  margin-top: 0.55rem;
 }
 
 .planStat {
@@ -455,6 +455,7 @@
   border-radius: 1rem;
   background: rgba(255, 253, 248, 0.76);
   color: #321d10;
+  font-family: var(--font-body), sans-serif;
   font-size: 0.78rem;
   font-weight: 760;
   transition:
@@ -630,7 +631,7 @@
 
   .planIntro > .cta,
   .planIntro > .checkoutCta {
-    margin-top: 0.75rem;
+    margin-top: 0.55rem;
   }
 }
 
