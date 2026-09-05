@@ -469,3 +469,89 @@ I did not delete the 100k-row volume fixture to make the suite green. It is
 named, deliberate, referenced by the §7 latency work, and reseedable via
 `scripts/seed-volume.mjs` — removing it is the owner's call, and it would hide
 the scaling question in point 1 rather than answer it.
+
+
+---
+
+## 0115 — workspace RLS could not use an index (2026-09-05)
+
+Chasing the tenant-isolation timeout to root cause found something bigger than
+the test.
+
+**Every workspace RLS policy was O(rows-in-table), not O(rows-you-can-see).**
+
+`is_workspace_member(workspace_id)` is `security definer`, and PostgreSQL NEVER
+inlines a security-definer SQL function. So it stayed an opaque per-row call: the
+planner could not turn it into an index condition, and it ran a two-table join
+once per row. On staging that is 100,048 joins for one user's single contact.
+
+Isolated by predicate — same user, same data:
+
+```
+where is_admin()                        → completes
+where (select public.is_admin())        → completes
+where is_workspace_member(workspace_id) → TIMES OUT      ← the culprit
+```
+
+⚠️ **`limit` did not help, which is the tell.** `limit 100`, `limit 500` and
+`limit 1000` all timed out at ~8.4–8.6s: the policy must be evaluated before rows
+can be discarded, so a bounded query still visits every row. That also ruled out
+"just bound the test" as a fix.
+
+### The change
+
+```
+before:  is_workspace_member(workspace_id) or is_admin()
+after:   workspace_id in (select public.my_workspace_ids())
+           or (select public.is_admin())
+```
+
+Both halves become uncorrelated subqueries, evaluated ONCE as InitPlans instead
+of once per row, and `workspace_id in (<constant set>)` is an index condition.
+
+**Semantically identical**, which is the only thing that matters:
+`is_workspace_member(w)` is true exactly when `w` is in the caller's set of
+non-deleted workspaces, and `my_workspace_ids()` returns that set from the same
+two tables with the same predicates.
+
+Applied by matching the exact predicate text, not a table list — a list of 56
+tables is a list that rots. **56 policies rewritten.** The two with bespoke
+predicates (email accounts; the one keyed on `id`) are deliberately untouched.
+The migration refuses to report success if it matched nothing or left any old
+shape behind.
+
+### Evidence
+
+Same query, same user, same 100,048 rows:
+
+```
+before:  Seq Scan → 57014 canceling statement due to statement timeout, ~8.7s
+after:   Index Only Scan using crm_contacts_id_workspace_id_key
+         Filter: ((ANY (workspace_id = (hashed SubPlan 1).col1)) OR (InitPlan 2).col1)
+         actual rows=1, buffers shared hit=1486, completes
+```
+
+⚠️ **Isolation re-proven, not assumed.** Rewriting 56 security policies is the
+highest-stakes change of this session; a subtly weaker predicate is a
+cross-tenant leak on 56 tables. `tenant-isolation` (14) and `companies-rls` (10)
+both run green afterwards — 24 of 24 — including the test that was failing,
+which now passes because the query COMPLETES rather than because it returned
+nothing.
+
+### ⚠️ Status: STAGING ONLY
+
+Applied to staging and verified there. **Not applied to production** — schema
+changes are the owner's, per §3.7. The migration is self-verifying and will
+raise rather than half-apply.
+
+### What this did not fix
+
+The other three integration failures are unrelated and remain: two in
+`webhook-delivery`, one in `company-backfill`. Both come from workers that scan
+globally — `deliverPendingWebhooks` and `listUsersWithUnlinkedLeads` take no
+workspace filter, which is right for a worker and makes those tests sensitive to
+shared-database state. Confirmed still failing after 0115.
+
+I did not delete the 100k-row volume fixture. It is what made this visible, and
+removing it would have turned a real production scaling problem back into an
+invisible one.
