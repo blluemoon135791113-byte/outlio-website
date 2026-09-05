@@ -1,0 +1,248 @@
+import 'server-only'
+
+/**
+ * The live provider registry.
+ *
+ * ⚠️ ORDER IS THE WATERFALL. The first provider in a category that returns an
+ * acceptable answer wins and the rest are never called, so this list is a cost
+ * decision as much as a quality one.
+ *
+ * The defaults below encode two rules:
+ *
+ *   1. **A stated fact beats an inferred one.** Wikidata says what a company's
+ *      website IS; `domain-discovery` notices that a domain looks like the
+ *      company's name. Wikidata therefore runs first, and the heuristic only
+ *      sees companies Wikidata has never heard of — which, for a Sales
+ *      Navigator list, will be most of them.
+ *
+ *   2. **A free source is the last line, not the first.** GDELT sits behind
+ *      Tavily in both waterfalls: worse coverage, but it needs no key, so a
+ *      missing or throttled search key degrades research to a free source
+ *      instead of to `unknown`.
+ *
+ * `INTELLIGENCE_PROVIDER_ORDER` overrides any of this without a deploy.
+ */
+import { createRegistry, parseProviderOrder, type ProviderRegistry } from '@/lib/intelligence/registry'
+import {
+  eraseProviderType,
+  type AnyIntelligenceProvider,
+  type ToolCategory,
+} from '@/lib/intelligence/types'
+import { hasWebSearch } from '@/lib/search'
+import { apolloEmailProvider } from './apollo'
+import { companiesHouseProvider } from './companies-house'
+import { companyContactProvider } from './company-contact'
+import { dnsTechProvider } from './dns-tech'
+import { domainDiscoveryProvider } from './domain-discovery'
+import { domainProbeProvider } from './domain-probe'
+import { githubProvider } from './github'
+import { hackerNewsProvider } from './hackernews'
+import { gdeltFundingProvider, searchFundingProvider, tavilyFundingProvider } from './funding'
+import { pageSpeedTechProvider } from './pagespeed'
+import { gleifProvider } from './gleif'
+import { prospeoEmailProvider, prospeoPhoneProvider } from './prospeo'
+import { secEdgarProvider } from './sec-edgar'
+import { scoutEmailProvider } from './scout'
+import { companyScoutProvider, socialScoutProvider } from './social-scout'
+import { gdeltWebResearchProvider, searchWebResearchProvider, tavilyWebResearchProvider } from './web-research'
+import { searchCompanyProfileProvider } from './search-profile'
+import {
+  hasPublicContactSearch,
+  searchContactEmailProvider,
+  searchContactPhoneProvider,
+} from './search-contact'
+import { usaSpendingProvider } from './usaspending'
+import { wikidataProvider } from './wikidata'
+
+/** Every provider that exists, regardless of whether it is configured. */
+export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
+  eraseProviderType(wikidataProvider),
+  eraseProviderType(usaSpendingProvider),
+  eraseProviderType(githubProvider),
+  eraseProviderType(hackerNewsProvider),
+  eraseProviderType(companiesHouseProvider),
+  eraseProviderType(companyContactProvider),
+  eraseProviderType(gleifProvider),
+  eraseProviderType(secEdgarProvider),
+  eraseProviderType(domainDiscoveryProvider),
+  eraseProviderType(domainProbeProvider),
+  eraseProviderType(companyScoutProvider),
+  eraseProviderType(searchCompanyProfileProvider),
+  eraseProviderType(searchFundingProvider),
+  eraseProviderType(tavilyFundingProvider),
+  eraseProviderType(gdeltFundingProvider),
+  eraseProviderType(tavilyWebResearchProvider),
+  eraseProviderType(searchWebResearchProvider),
+  eraseProviderType(gdeltWebResearchProvider),
+  eraseProviderType(dnsTechProvider),
+  eraseProviderType(pageSpeedTechProvider),
+  eraseProviderType(scoutEmailProvider),
+  eraseProviderType(socialScoutProvider),
+  eraseProviderType(searchContactEmailProvider),
+  eraseProviderType(searchContactPhoneProvider),
+  eraseProviderType(prospeoEmailProvider),
+  eraseProviderType(prospeoPhoneProvider),
+  eraseProviderType(apolloEmailProvider),
+]
+
+export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
+  /*
+   * Stated facts first, inference last. `usaspending` sits at the end because
+   * it answers only federal-award fields and declines everything else through
+   * `canHandle` — its position costs nothing, but stating it beats relying on
+   * registration order.
+   */
+  company_profile: [
+    'wikidata',
+    'companies-house',
+    // GLEIF: free, official, and the only registry here that reaches every
+    // LEI-issuing jurisdiction, including the small ones no other source has.
+    'gleif',
+    'sec-edgar',
+    'search-company-profile',
+    'tavily-domain-discovery',
+    // The keyless last line: probe the hosts the name implies and verify by
+    // page content. Runs only when everything above declined or found nothing.
+    'domain-probe',
+    // Company-scoped social discovery: reads the site domain-probe may have
+    // just verified, and inventories the accounts the company publishes —
+    // LinkedIn recorded first-class, never fetched.
+    'social-scout-company',
+    'company-contact',
+    'usaspending',
+  ],
+  funding: ['search-funding', 'tavily-funding', 'gdelt-funding'],
+  web_research: ['search-web', 'tavily-web', 'gdelt-web'],
+  /*
+   * DNS first: it is free, ~50ms, and sees the marketing and sales stack that
+   * matters to an ICP question. PageSpeed is slower, costs a rendered page, and
+   * only names the CMS and framework.
+   */
+  tech_stack: ['dns-tech', 'pagespeed-tech'],
+  /*
+   * The email waterfall. The two Scout sources first: FREE (website + social
+   * harvest; SMTP probing is separately opted in), so they answer before
+   * anything metered is considered. Prospeo and Apollo remain behind them,
+   * reachable only when paid providers are explicitly enabled.
+   */
+  // Both free, and the only providers in their categories.
+  technical_presence: ['github'],
+  product_activity: ['hackernews'],
+  contact_email: ['scout', 'social-scout', 'search-contact-email', 'prospeo-email', 'apollo-email'],
+  contact_phone: ['search-contact-phone', 'prospeo-phone'],
+}
+
+/**
+ * Builds the registry for this deployment.
+ *
+ * An environment override is MERGED over the defaults per category, not
+ * substituted wholesale: naming one category must not silently disable every
+ * other waterfall.
+ *
+ * Providers whose credentials are absent stay registered. They decline through
+ * `canHandle`, which keeps the reason visible as "no provider could answer"
+ * rather than making a category vanish from the configuration.
+ */
+/**
+ * Providers that charge per call.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ EXCLUDED UNLESS PAID PROVIDERS ARE EXPLICITLY ENABLED.               ║
+ * ║                                                                          ║
+ * ║  This list is the single point where money can enter the system, and it  ║
+ * ║  is enforced at REGISTRY CONSTRUCTION — not at each call site. A new     ║
+ * ║  code path cannot spend by forgetting a check, because a disabled        ║
+ * ║  provider is never in the registry to be called.                         ║
+ * ║                                                                          ║
+ * ║  Default is OFF. Enabling costs money, so it must be a deliberate act    ║
+ * ║  (`OUTLIO_ALLOW_PAID_PROVIDERS=true`), never something inherited from a  ║
+ * ║  missing variable.                                                       ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export const PAID_PROVIDERS: ReadonlySet<string> = new Set([
+  'prospeo-email',
+  'prospeo-phone',
+  'apollo-email',
+  'tavily-funding',
+  'tavily-web',
+  'tavily-domain-discovery',
+])
+
+/** True only when an operator has explicitly opted in to metered providers. */
+export function paidProvidersEnabled(): boolean {
+  return process.env.OUTLIO_ALLOW_PAID_PROVIDERS === 'true'
+}
+
+export function buildLiveRegistry(
+  env: string | undefined = process.env.INTELLIGENCE_PROVIDER_ORDER,
+): ProviderRegistry {
+  const usable = paidProvidersEnabled()
+    ? ALL_PROVIDERS
+    : ALL_PROVIDERS.filter((provider) => !PAID_PROVIDERS.has(provider.name))
+
+  return createRegistry(usable, {
+    ...DEFAULT_PROVIDER_ORDER,
+    ...parseProviderOrder(env),
+  })
+}
+
+/**
+ * Which providers are actually usable right now.
+ *
+ * Exposed so an operator can see at a glance why a category is returning
+ * `unknown` — almost always a missing key rather than a bug.
+ */
+export function providerReadiness(): Array<{
+  name: string
+  category: ToolCategory
+  configured: boolean
+}> {
+  return ALL_PROVIDERS.map((provider) => ({
+    name: provider.name,
+    category: provider.category,
+    configured: isConfigured(provider.name),
+  }))
+}
+
+function isConfigured(name: string): boolean {
+  switch (name) {
+    case 'tavily-domain-discovery':
+    case 'tavily-funding':
+    case 'tavily-web':
+      return Boolean(process.env.TAVILY_API_KEY)
+    case 'search-funding':
+    case 'search-web':
+    case 'search-company-profile':
+      return hasWebSearch()
+    case 'search-contact-email':
+    case 'search-contact-phone':
+      return hasPublicContactSearch()
+    case 'pagespeed-tech':
+      return Boolean(process.env.PAGESPEED_API_KEY)
+    // No key exists for DNS — it uses the system resolver.
+    case 'dns-tech':
+    // Free public APIs. GitHub works unauthenticated at a lower rate limit;
+    // GLEIF is open published data; domain-probe fetches candidate sites.
+    case 'github':
+    case 'gleif':
+    case 'domain-probe':
+    case 'hackernews':
+      return true
+    case 'scout':
+    case 'company-contact':
+      // Website harvesting works everywhere; SMTP probing additionally
+      // requires the SCOUT_SMTP_VERIFY opt-in, checked at execution time so a
+      // Vercel deployment still gets published-address answers.
+      return true
+    case 'prospeo-email':
+    case 'prospeo-phone':
+      return Boolean(process.env.PROSPEO_API_KEY)
+    case 'apollo-email':
+      return Boolean(process.env.APOLLO_API_KEY)
+    case 'companies-house':
+      return Boolean(process.env.COMPANIES_HOUSE_API_KEY)
+    // Wikidata and GDELT are open APIs and need no credential.
+    default:
+      return true
+  }
+}

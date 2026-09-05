@@ -1,0 +1,492 @@
+/**
+ * The local LLM provider, and the domain that makes search precise.
+ */
+import { describe, expect, it } from 'vitest'
+
+import { isLocalModel, LlmWaterfall, OllamaLlmProvider } from '@/lib/hubble/providers/ollama-llm'
+import { siteScopedQuery } from '@/lib/hubble/domain'
+import type { LlmRequest, LlmResult, LLMProvider, LlmVendor } from '@/lib/intelligence/llm/provider'
+
+describe('isLocalModel', () => {
+  it('REFUSES :cloud models, which are local in name only', () => {
+    /*
+     * ⚠️ Ollama serves `glm-4.7:cloud` by proxying to ollama.com. The data
+     * leaves the machine while every log still says "ollama". Refusing the
+     * name outright is what stops the privacy claim quietly becoming false.
+     */
+    // ⚠️ BOTH SEPARATORS. Ollama names them `:cloud` AND `-cloud`; matching
+    // only the first let `qwen3-coder:480b-cloud` through as "local".
+    expect(isLocalModel('glm-4.7:cloud')).toBe(false)
+    expect(isLocalModel('qwen3-coder:480b-cloud')).toBe(false)
+    expect(isLocalModel('deepseek-v3.1:671b-cloud')).toBe(false)
+  })
+
+  it('accepts genuinely local models', () => {
+    expect(isLocalModel('qwen2.5:7b-instruct')).toBe(true)
+    expect(isLocalModel('llama3.1:8b')).toBe(true)
+    expect(isLocalModel('nomic-embed-text')).toBe(true)
+  })
+})
+
+describe('OllamaLlmProvider', () => {
+  it('is not configured without a URL', () => {
+    const previous = process.env.OLLAMA_URL
+    delete process.env.OLLAMA_URL
+
+    expect(new OllamaLlmProvider().isConfigured()).toBe(false)
+
+    if (previous) process.env.OLLAMA_URL = previous
+  })
+
+  it('reports NOT CONFIGURED for a cloud model, rather than proxying silently', async () => {
+    const prevUrl = process.env.OLLAMA_URL
+    const prevModel = process.env.OLLAMA_LLM_MODEL
+    process.env.OLLAMA_URL = 'http://127.0.0.1:11434'
+    process.env.OLLAMA_LLM_MODEL = 'glm-4.7:cloud'
+
+    const provider = new OllamaLlmProvider()
+    expect(provider.isConfigured()).toBe(false)
+
+    const result = await provider.generateJson({ system: 's', user: 'u', schema: {} })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.code).toBe('not_configured')
+
+    if (prevUrl) process.env.OLLAMA_URL = prevUrl
+    if (prevModel) process.env.OLLAMA_LLM_MODEL = prevModel
+    else delete process.env.OLLAMA_LLM_MODEL
+  })
+
+  it('refuses an unauthenticated remote Ollama endpoint', () => {
+    const prevUrl = process.env.OLLAMA_URL
+    const prevToken = process.env.OLLAMA_AUTH_TOKEN
+    const prevModel = process.env.OLLAMA_LLM_MODEL
+    process.env.OLLAMA_URL = 'https://ollama.example.com'
+    process.env.OLLAMA_LLM_MODEL = 'llama3.1:8b'
+    delete process.env.OLLAMA_AUTH_TOKEN
+
+    expect(new OllamaLlmProvider().isConfigured()).toBe(false)
+
+    if (prevUrl) process.env.OLLAMA_URL = prevUrl
+    else delete process.env.OLLAMA_URL
+    if (prevToken) process.env.OLLAMA_AUTH_TOKEN = prevToken
+    else delete process.env.OLLAMA_AUTH_TOKEN
+    if (prevModel) process.env.OLLAMA_LLM_MODEL = prevModel
+    else delete process.env.OLLAMA_LLM_MODEL
+  })
+})
+
+/** A provider that fails a set number of times, then succeeds. */
+function stubProvider(failures: number, name: string): LLMProvider & { calls: number } {
+  return {
+    vendor: 'openrouter' as LlmVendor,
+    model: name,
+    calls: 0,
+    isConfigured: () => true,
+    async generateJson(_request: LlmRequest): Promise<LlmResult> {
+      this.calls += 1
+      if (this.calls <= failures) {
+        return { ok: false, code: 'unavailable', detail: 'down' }
+      }
+      return { ok: true, json: { from: name }, vendor: 'openrouter', model: name }
+    },
+  }
+}
+
+function deadlineAwareLocal(): LLMProvider & { deadlines: Array<number | undefined> } {
+  return {
+    vendor: 'openrouter',
+    model: 'local-deadline-probe',
+    deadlines: [],
+    isConfigured: () => true,
+    async generateJson(request) {
+      this.deadlines.push(request.deadlineAt)
+      return { ok: false, code: 'unavailable', detail: 'slow local model' }
+    },
+  }
+}
+
+describe('LlmWaterfall', () => {
+  it('uses the local model when it works, and never touches the hosted one', async () => {
+    const local = stubProvider(0, 'local')
+    const hosted = stubProvider(0, 'hosted')
+
+    const result = await new LlmWaterfall(local, hosted).generateJson({ system: 's', user: 'u', schema: {} })
+
+    expect(result.ok && result.json).toEqual({ from: 'local' })
+    expect(hosted.calls).toBe(0)
+  })
+
+  it('RETRIES the local model once — a cold load often fails then succeeds', async () => {
+    const local = stubProvider(1, 'local')
+    const hosted = stubProvider(0, 'hosted')
+
+    const result = await new LlmWaterfall(local, hosted).generateJson({ system: 's', user: 'u', schema: {} })
+
+    expect(local.calls).toBe(2)
+    expect(result.ok && result.json).toEqual({ from: 'local' })
+    expect(hosted.calls).toBe(0)
+  })
+
+  it('falls back to hosted when local fails twice', async () => {
+    /*
+     * ⚠️ NOT A DETAIL. Local inference dies for ordinary reasons — a restart,
+     * an OOM kill. Without this, each one turns a question that already cost
+     * 40 seconds of web fetching into no answer at all.
+     */
+    const local = stubProvider(99, 'local')
+    const hosted = stubProvider(0, 'hosted')
+
+    const result = await new LlmWaterfall(local, hosted).generateJson({ system: 's', user: 'u', schema: {} })
+
+    expect(local.calls).toBe(2)
+    expect(result.ok && result.json).toEqual({ from: 'hosted' })
+    expect(result.attempts?.map((attempt) => attempt.model)).toEqual(['local', 'local', 'hosted'])
+  })
+
+  it('returns the local failure when there is no hosted fallback configured', async () => {
+    const local = stubProvider(99, 'local')
+    const hosted = { ...stubProvider(0, 'hosted'), isConfigured: () => false }
+
+    const result = await new LlmWaterfall(local, hosted).generateJson({ system: 's', user: 'u', schema: {} })
+    expect(result.ok).toBe(false)
+  })
+
+  it('protects time for hosted fallback instead of giving local the whole deadline', async () => {
+    const local = deadlineAwareLocal()
+    const hosted = stubProvider(0, 'hosted')
+    const overallDeadline = Date.now() + 30_000
+
+    const result = await new LlmWaterfall(local, hosted).generateJson({
+      system: 's',
+      user: 'u',
+      schema: {},
+      deadlineAt: overallDeadline,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(local.deadlines[0]).toBeLessThan(overallDeadline)
+    expect((local.deadlines[0] ?? overallDeadline) - Date.now()).toBeLessThanOrEqual(8_000)
+    expect(hosted.calls).toBe(1)
+  })
+})
+
+describe('siteScopedQuery', () => {
+  it('scopes the question to the company own site', () => {
+    expect(siteScopedQuery('What does their pricing look like?', 'acme.com')).toBe(
+      'site:acme.com what does their pricing look like',
+    )
+  })
+
+  it('drops short words that carry no search signal', () => {
+    expect(siteScopedQuery('who is the CEO', 'acme.com')).toBe('site:acme.com')
+  })
+})
+
+describe('learnDomainFromSources — the gating logic', () => {
+  it('requires BOTH a name match and a real host', async () => {
+    /*
+     * ⚠️ Being cited is better evidence of ownership than ranking first in a
+     * search: the page was retrieved, its content answered a question about
+     * this company, AND the host matches the name. Either alone is not enough
+     * — a cited page on a non-matching host is just a good source.
+     */
+    const { looksLikeOwnDomain } = await import('@/lib/hubble/source-quality')
+
+    // Cited AND matching → the company's own site.
+    expect(looksLikeOwnDomain('atlasai.co', 'Atlas AI Solutions')).toBe(true)
+
+    // Cited but NOT matching → a good source, not their website.
+    expect(looksLikeOwnDomain('cloud.google.com', 'Atlas AI Solutions')).toBe(false)
+    expect(looksLikeOwnDomain('en.wikipedia.org', 'Atlas AI Solutions')).toBe(false)
+  })
+
+  it('does nothing without a company, a name, or any sources', async () => {
+    const { learnDomainFromSources } = await import('@/lib/hubble/domain')
+
+    await expect(learnDomainFromSources('u', null, 'Acme Corp', ['https://acme.com'])).resolves.toBeNull()
+    await expect(learnDomainFromSources('u', 'c', null, ['https://acme.com'])).resolves.toBeNull()
+    await expect(learnDomainFromSources('u', 'c', 'Acme Corp', [])).resolves.toBeNull()
+  })
+})
+
+describe('canonical company-domain redirects', () => {
+  it('accepts a matching host only when the stored domain itself redirected there', async () => {
+    const { domainFromVerifiedRedirect } = await import('@/lib/hubble/domain')
+
+    expect(
+      domainFromVerifiedRedirect(
+        'hirecaddie.ai',
+        'https://hirecaddie.ai/',
+        'https://caddie.app/',
+        'Caddie AI',
+      ),
+    ).toBe('caddie.app')
+
+    expect(
+      domainFromVerifiedRedirect(
+        'hirecaddie.ai',
+        'https://search.example/result',
+        'https://caddie.app/',
+        'Caddie AI',
+      ),
+    ).toBeNull()
+
+    expect(
+      domainFromVerifiedRedirect(
+        'hirecaddie.ai',
+        'https://hirecaddie.ai/',
+        'https://unrelated.example/',
+        'Caddie AI',
+      ),
+    ).toBeNull()
+  })
+})
+
+describe('the waterfall consults isUsable, not just isConfigured', () => {
+  it('SKIPS a named-but-unpulled local model entirely', async () => {
+    /*
+     * ⚠️ Setting OLLAMA_LLM_MODEL to a model that has not finished downloading
+     * makes isConfigured() true while every call 404s. Without this check the
+     * waterfall burns TWO failed local calls before falling back, on every
+     * single question — pure latency, invisible in the result.
+     */
+    const local = {
+      ...stubProvider(99, 'local'),
+      isUsable: async () => false,
+    }
+    const hosted = stubProvider(0, 'hosted')
+
+    const result = await new LlmWaterfall(local, hosted).generateJson({ system: 's', user: 'u', schema: {} })
+
+    expect(local.calls).toBe(0)
+    expect(result.ok && result.json).toEqual({ from: 'hosted' })
+  })
+
+  it('uses the local model once it reports usable', async () => {
+    const local = { ...stubProvider(0, 'local'), isUsable: async () => true }
+    const hosted = stubProvider(0, 'hosted')
+
+    const result = await new LlmWaterfall(local, hosted).generateJson({ system: 's', user: 'u', schema: {} })
+
+    expect(result.ok && result.json).toEqual({ from: 'local' })
+    expect(hosted.calls).toBe(0)
+  })
+})
+
+describe('evidence budget follows the model', () => {
+  it('gives a LOCAL model far less to chew on', async () => {
+    /*
+     * ⚠️ MEASURED, NOT GUESSED. On an M2 with 8GB the same answer call took
+     * 35s at 3.8KB, 48s at 7.5KB, 67s at 12.5KB — and TIMED OUT at 25.5KB,
+     * which is what twelve full passages produce. Sending the hosted default
+     * to a local model does not answer slowly, it fails outright and takes
+     * 40 seconds of completed web research down with it.
+     */
+    const { LOCAL_EVIDENCE, HOSTED_EVIDENCE, evidenceBudgetFor } = await import('@/lib/hubble/reason')
+
+    expect(LOCAL_EVIDENCE.maxPassages).toBeLessThan(HOSTED_EVIDENCE.maxPassages)
+    expect(LOCAL_EVIDENCE.maxCharsEach).toBeLessThan(HOSTED_EVIDENCE.maxCharsEach)
+
+    // Sized to land near 7.5KB, comfortably inside the local timeout.
+    expect(LOCAL_EVIDENCE.maxPassages * LOCAL_EVIDENCE.maxCharsEach).toBeLessThan(10_000)
+
+    await expect(evidenceBudgetFor({ isUsable: async () => true })).resolves.toEqual(LOCAL_EVIDENCE)
+  })
+
+  it('does NOT trim a hosted model, which has no such limit', async () => {
+    // Trimming it would discard corroboration for no benefit.
+    const { HOSTED_EVIDENCE, evidenceBudgetFor } = await import('@/lib/hubble/reason')
+
+    await expect(evidenceBudgetFor({ isUsable: async () => false })).resolves.toEqual(HOSTED_EVIDENCE)
+    await expect(evidenceBudgetFor({})).resolves.toEqual(HOSTED_EVIDENCE)
+  })
+})
+
+describe('the local LLM is opt-IN, by name', () => {
+  it('is DORMANT when OLLAMA_LLM_MODEL is unset, even with a URL and a model installed', async () => {
+    /*
+     * ⚠️ THE BUG THIS PREVENTS. A hardcoded default model used to sit here and
+     * silently defeat the only way to turn Ollama off. Unsetting the variable
+     * to move to a hosted vendor left the default in force; the model was
+     * still installed, so isUsable() said true, and a question took 167
+     * SECONDS on a machine that cannot run it — instead of 5 on the hosted
+     * vendor that had been explicitly configured.
+     */
+    const prevUrl = process.env.OLLAMA_URL
+    const prevModel = process.env.OLLAMA_LLM_MODEL
+    process.env.OLLAMA_URL = 'http://127.0.0.1:11434'
+    delete process.env.OLLAMA_LLM_MODEL
+
+    const provider = new OllamaLlmProvider()
+    expect(provider.model).toBe('')
+    expect(provider.isConfigured()).toBe(false)
+    await expect(provider.isUsable()).resolves.toBe(false)
+
+    const result = await provider.generateJson({ system: 's', user: 'u', schema: {} })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.code).toBe('not_configured')
+
+    if (prevUrl) process.env.OLLAMA_URL = prevUrl
+    if (prevModel) process.env.OLLAMA_LLM_MODEL = prevModel
+  })
+})
+
+describe('BraveSearchProvider', () => {
+  it('is not configured without a key', async () => {
+    const { BraveSearchProvider } = await import('@/lib/hubble/providers/search')
+    const previous = process.env.BRAVE_API_KEY
+    delete process.env.BRAVE_API_KEY
+
+    const provider = new BraveSearchProvider()
+    expect(provider.isConfigured()).toBe(false)
+    // Empty array, never a throw: a dead search engine lowers confidence, it
+    // does not turn the user's question into a 500.
+    await expect(provider.search('anything', 5)).resolves.toEqual([])
+
+    if (previous) process.env.BRAVE_API_KEY = previous
+  })
+})
+
+describe('the search waterfall is ordered by cost', () => {
+  it('goes cached → operator-owned → free-no-card → free-with-card → paid', async () => {
+    /*
+     * ⚠️ GETTING THIS BACKWARDS SPENDS MONEY WHILE A FREE PROVIDER SITS IDLE.
+     *
+     * Brave sits below Google CSE deliberately: its free tier requires a card
+     * on file, which is not free in the way that matters to someone choosing
+     * a provider. Solr is first because reusing Hubble's indexed evidence is
+     * cheaper than a search.
+     */
+    const source = await import('node:fs/promises').then((fs) =>
+      fs.readFile('lib/search/engines.ts', 'utf8'),
+    )
+
+    const order = [
+      'SolrSearchProvider()',
+      'McpWebResearchSearchProvider()',
+      'GoogleCseSearchProvider()',
+      'BraveSearchProvider()',
+      // Keyless and uncapped: exhausted before a metered vendor is billed.
+      'MojeekSearchProvider()',
+      'TavilySearchProvider()',
+    ].map((name) => source.lastIndexOf(name))
+
+    expect(order[0]).toBeGreaterThan(-1)
+    for (let i = 1; i < order.length; i += 1) {
+      expect(order[i]).toBeGreaterThan(order[i - 1]!)
+    }
+  })
+})
+
+describe('GoogleCseSearchProvider', () => {
+  it('needs BOTH a key and an engine id', async () => {
+    /*
+     * ⚠️ A key without a `cx` can only ever return 400s. Counting it as
+     * configured would spend a waterfall slot on a provider guaranteed to
+     * fail, ahead of ones that would have worked.
+     */
+    const { GoogleCseSearchProvider } = await import('@/lib/hubble/providers/search')
+    const prevKey = process.env.GOOGLE_CSE_API_KEY
+    const prevMaps = process.env.GOOGLE_MAPS_API_KEY
+    const prevId = process.env.GOOGLE_CSE_ID
+
+    process.env.GOOGLE_CSE_API_KEY = 'key'
+    delete process.env.GOOGLE_CSE_ID
+    expect(new GoogleCseSearchProvider().isConfigured()).toBe(false)
+
+    process.env.GOOGLE_CSE_ID = 'engine'
+    expect(new GoogleCseSearchProvider().isConfigured()).toBe(true)
+
+    delete process.env.GOOGLE_CSE_API_KEY
+    delete process.env.GOOGLE_MAPS_API_KEY
+    expect(new GoogleCseSearchProvider().isConfigured()).toBe(false)
+
+    if (prevKey) process.env.GOOGLE_CSE_API_KEY = prevKey
+    else delete process.env.GOOGLE_CSE_API_KEY
+    if (prevMaps) process.env.GOOGLE_MAPS_API_KEY = prevMaps
+    if (prevId) process.env.GOOGLE_CSE_ID = prevId
+    else delete process.env.GOOGLE_CSE_ID
+  })
+
+  it('reuses the Maps key when no dedicated key is set', async () => {
+    // Same Google Cloud project; one key can serve both APIs.
+    const { GoogleCseSearchProvider } = await import('@/lib/hubble/providers/search')
+    const prevKey = process.env.GOOGLE_CSE_API_KEY
+    delete process.env.GOOGLE_CSE_API_KEY
+    process.env.GOOGLE_MAPS_API_KEY = 'maps-key'
+    process.env.GOOGLE_CSE_ID = 'engine'
+
+    expect(new GoogleCseSearchProvider().isConfigured()).toBe(true)
+
+    if (prevKey) process.env.GOOGLE_CSE_API_KEY = prevKey
+    delete process.env.GOOGLE_CSE_ID
+  })
+})
+
+describe('the search circuit breaker', () => {
+  it('STOPS RE-PAYING A DEAD PROVIDER\'S TIMEOUT', async () => {
+    /*
+     * ⚠️ MEASURED: a SearXNG whose container is stopped takes 3.5 SECONDS to
+     * fail, because the HTTP layer retries with backoff — right for a flaky
+     * host, wasteful for one that is gone. A question runs 3-4 queries, so
+     * that was ~14 seconds per question spent on a provider that cannot
+     * answer, before the one that can was even tried.
+     */
+    const { SearchWaterfall, resetSearchCircuitBreaker } = await import('@/lib/hubble/providers/search')
+    resetSearchCircuitBreaker()
+
+    let calls = 0
+    const dead = {
+      name: 'dead',
+      isConfigured: () => true,
+      async search() {
+        calls += 1
+        return []
+      },
+    }
+    const alive = {
+      name: 'alive',
+      isConfigured: () => true,
+      async search() {
+        return [{ url: 'https://example.com', title: null, snippet: null, publishedDate: null }]
+      },
+    }
+
+    const waterfall = new SearchWaterfall([dead, alive])
+
+    for (let i = 0; i < 4; i += 1) {
+      const hits = await waterfall.search(`query ${i}`, 5)
+      expect(hits).toHaveLength(1)
+    }
+
+    // Asked once, then skipped without a request for the remaining queries.
+    expect(calls).toBe(1)
+    resetSearchCircuitBreaker()
+  })
+
+  it('lets a recovered provider back in', async () => {
+    const { SearchWaterfall, resetSearchCircuitBreaker } = await import('@/lib/hubble/providers/search')
+    resetSearchCircuitBreaker()
+
+    let healthy = false
+    const flaky = {
+      name: 'flaky',
+      isConfigured: () => true,
+      async search() {
+        return healthy ? [{ url: 'https://ok.example', title: null, snippet: null, publishedDate: null }] : []
+      },
+    }
+
+    const waterfall = new SearchWaterfall([flaky])
+    expect(await waterfall.search('a', 5)).toHaveLength(0)
+
+    // Within the cooldown it is skipped even though it now works.
+    healthy = true
+    expect(await waterfall.search('b', 5)).toHaveLength(0)
+
+    // After a reset (as the cooldown expiry does) it is tried again.
+    resetSearchCircuitBreaker()
+    expect(await waterfall.search('c', 5)).toHaveLength(1)
+    resetSearchCircuitBreaker()
+  })
+})

@@ -19,7 +19,7 @@ export function CreditsSummary({
   const lines = [
     leadsPerCredit
       ? { term: '1 credit', detail: `covers up to ${leadsPerCredit} leads` }
-      : { term: '1 credit', detail: 'covers one extraction, whatever its size' },
+      : { term: '1 credit', detail: 'covers one lead search, whatever its size' },
     leadsPerCredit
       ? {
           term: 'By leads',
@@ -27,7 +27,7 @@ export function CreditsSummary({
         }
       : {
           term: 'Per run',
-          detail: `up to ${maxFiles} files in one extraction`,
+          detail: `up to ${maxFiles} files in one lead search`,
         },
     EXPORT_CREDIT_COST === 0
       ? { term: 'Free', detail: 'every CSV download, always' }

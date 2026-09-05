@@ -31,7 +31,7 @@ type FileState = {
 }
 
 const inputClass =
-  'w-full rounded-[var(--radius-md)] border border-border bg-panel px-3 py-2.5 text-sm text-ink transition-colors duration-150 hover:border-border-strong focus:border-accent'
+  'w-full field px-3 py-2.5 text-sm text-ink'
 
 export function UploadForm({
   maxFiles,
@@ -195,10 +195,17 @@ export function UploadForm({
         />
 
         <p className="mt-4 text-xs leading-relaxed text-muted">
-          Upload only .html files you saved manually from a lead search-results page.
-          Do not upload files from any other source.
+          Upload only .html files you saved manually from a lead search-results
+          page or an account list. Do not upload files from any other source.
         </p>
         <p className="mt-1 text-xs text-muted">
+          {/*
+            ⚠️ ONE KIND PER RUN. The worker refuses a batch mixing the two,
+            because charging for the leads while quietly ingesting the
+            companies would report one number for two jobs. Saying so here
+            costs a line; discovering it from a failed run costs an upload.
+          */}
+          One kind per run — lead pages and account lists cannot be mixed.
           Up to {maxFiles} files, {formatBytes(maxFileBytes)} each.
           {leadsPerCredit
             ? ` 1 credit per ${leadsPerCredit} leads, counted across the whole run.`

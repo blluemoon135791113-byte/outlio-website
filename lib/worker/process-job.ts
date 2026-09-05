@@ -15,9 +15,17 @@ import 'server-only'
  */
 import { createHash } from 'node:crypto'
 
+import { linkLeadsToCompanies } from '@/lib/companies/repository'
 import { toCsv, type CsvColumn } from '@/lib/export/sanitize'
+import { ALWAYS_EXPORTED, EXPORT_COLUMN_HEADERS } from '@/lib/export/leads'
 import { dedupeLeads, type DedupeMode, type KeyedLead } from '@/lib/leads/dedupe'
 import { ParseError, parseSearchResults } from '@/lib/leads/parse'
+import { detectSavedPageType } from '@/lib/leads/page-type'
+import { AccountListParseError, parseAccountList, type ParsedAccount } from '@/lib/companies/parse-account-list'
+import { ingestAccounts } from '@/lib/companies/ingest-accounts'
+import { persistAccountList } from '@/lib/companies/account-list-store'
+import { buildAccountRecordCsv } from '@/lib/export/accounts'
+import { loadAccountExportRecords } from '@/lib/export/account-loader'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SNIFF_BYTES, sniffHtml } from '@/lib/upload/sniff'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
@@ -25,6 +33,9 @@ import {
   mapInConcurrentBatches,
   resolveFileConcurrency,
 } from '@/lib/worker/concurrency'
+import { enrichAccountCompaniesFree, enrichJobFree } from '@/lib/worker/enrich-free'
+import { rebuildAccountListExport } from '@/lib/worker/rebuild-account-export'
+import { rebuildJobExport } from '@/lib/worker/rebuild-export'
 
 /**
  * Exports live in their OWN bucket, not alongside uploads.
@@ -46,18 +57,78 @@ export type ProcessOutcome = {
   filesFailed: number
 }
 
-/** CSV column order. `sanitizeCell` is applied by `toCsv` to every cell. */
-const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
-  { header: 'Name', value: (l) => l.fullName },
-  { header: 'LinkedIn Profile', value: (l) => l.linkedinUrl },
-  { header: 'Job Title', value: (l) => l.jobTitle },
-  { header: 'Company', value: (l) => l.companyName },
-  { header: 'Company URL', value: (l) => l.companyUrl },
-  { header: 'Location', value: (l) => l.location },
-  { header: 'Summary', value: (l) => l.personBlurb },
-  { header: 'Time in Role', value: (l) => l.tenureInRole },
-  { header: 'Time at Company', value: (l) => l.tenureInCompany },
-  { header: 'Sales Navigator URL', value: (l) => l.salesNavUrl },
+/**
+ * CSV column order. `sanitizeCell` is applied by `toCsv` to every cell.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ TWO DIFFERENT URLS, AND THE NAMES INVITE CONFUSING THEM.             ║
+ * ║                                                                          ║
+ * ║    ParsedLead.companyUrl         → the LinkedIn/Sales Navigator company  ║
+ * ║                                    page  (`/sales/company/123`)          ║
+ * ║    ParsedLead.companyWebsiteUrl  → the company's OWN external website    ║
+ * ║                                                                          ║
+ * ║  while on the export side the header keys read the other way round:      ║
+ * ║                                                                          ║
+ * ║    EXPORT_COLUMN_HEADERS.companyUrl         → "Company Website URL"      ║
+ * ║    EXPORT_COLUMN_HEADERS.companyLinkedInUrl → "Company LinkedIn URL"     ║
+ * ║                                                                          ║
+ * ║  This file previously paired `EXPORT_COLUMN_HEADERS.companyUrl` with     ║
+ * ║  `l.companyUrl`, so the downloaded CSV had a column headed "Company      ║
+ * ║  Website URL" full of linkedin.com addresses — and the real website,     ║
+ * ║  which the extension does extra work to capture, reached no CSV at all.  ║
+ * ║  `tests/unit/parse-leads.test.ts` pins the pairing now.                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * The order matches `EXPORT_COLUMN_ORDER`, so a downloaded CSV and a CRM push
+ * of the same leads have the same columns in the same places.
+ */
+export const CSV_COLUMNS: CsvColumn<KeyedLead>[] = [
+  // The person, and both of their links together.
+  { header: EXPORT_COLUMN_HEADERS.name, value: (l) => l.fullName },
+  { header: EXPORT_COLUMN_HEADERS.linkedinProfile, value: (l) => l.linkedinUrl },
+  { header: EXPORT_COLUMN_HEADERS.salesNavigatorUrl, value: (l) => l.salesNavUrl },
+  { header: EXPORT_COLUMN_HEADERS.jobTitle, value: (l) => l.jobTitle },
+  { header: EXPORT_COLUMN_HEADERS.location, value: (l) => l.location },
+
+  // The company, and all of its links together.
+  { header: EXPORT_COLUMN_HEADERS.company, value: (l) => l.companyName },
+  { header: EXPORT_COLUMN_HEADERS.companyLinkedInUrl, value: (l) => l.companyUrl },
+  /*
+   * Derived from the Sales Navigator company URL already on the row — a pure
+   * rewrite, no page visit. The COUNTS below are the page-only ones.
+   */
+  { header: EXPORT_COLUMN_HEADERS.companyPublicLinkedIn, value: (l) => l.companyPublicLinkedInUrl },
+  { header: EXPORT_COLUMN_HEADERS.companyUrl, value: (l) => l.companyWebsiteUrl },
+  { header: EXPORT_COLUMN_HEADERS.companyIndustry, value: (l) => l.companyIndustry },
+  { header: EXPORT_COLUMN_HEADERS.companySize, value: (l) => l.companySize },
+  { header: EXPORT_COLUMN_HEADERS.companyEmployeeCount, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyDecisionMakers, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyInvestors, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyContactEmail, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyContactEmailStatus, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyContactPhone, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.companyContactPhoneStatus, value: () => null },
+
+  // Populated by the post-extraction rebuild, once public research completes.
+  { header: EXPORT_COLUMN_HEADERS.workEmail, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.emailStatus, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.mobilePhone, value: () => null },
+  { header: EXPORT_COLUMN_HEADERS.phoneStatus, value: () => null },
+
+  // The relationship.
+  { header: EXPORT_COLUMN_HEADERS.connectionDegree, value: (l) => l.connectionDegree },
+  {
+    header: EXPORT_COLUMN_HEADERS.reachable,
+    // `null` means the badge was absent, which is not the same as "no".
+    value: (l) => (l.isReachable === true ? 'Yes' : null),
+  },
+  { header: EXPORT_COLUMN_HEADERS.listCount, value: (l) => l.listCount },
+  { header: EXPORT_COLUMN_HEADERS.lastActivity, value: (l) => l.lastActivity },
+
+  // Provenance.
+  { header: EXPORT_COLUMN_HEADERS.leadSource, value: () => 'search' },
+  { header: EXPORT_COLUMN_HEADERS.sourceList, value: (l) => l.sourceList },
+  { header: EXPORT_COLUMN_HEADERS.recordType, value: () => 'Lead' },
 ]
 
 /** Truncates upstream error text so an HTML error page never reaches a log. */
@@ -78,7 +149,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
 
   const { data: job } = await supabase
     .from('extraction_jobs')
-    .select('id, user_id, dedupe_mode')
+    .select('id, user_id, dedupe_mode, capture_session_id')
     .eq('id', jobId)
     // Service role bypasses RLS — scoping by user_id is mandatory.
     .eq('user_id', userId)
@@ -96,13 +167,17 @@ export async function processJob(jobId: string, userId: string): Promise<Process
   const fileList = files ?? []
   const total = fileList.length
 
-  const allLeads: Array<Awaited<ReturnType<typeof parseOne>>['leads'][number]> = []
+  type ParsedLeadRow = Extract<Awaited<ReturnType<typeof parseOne>>, { kind: 'lead_search' }>['leads'][number]
+
+  const allLeads: Array<ParsedLeadRow & { uploadedFileId: string }> = []
+  /* Accounts accumulate alongside leads; a job resolves to one kind below. */
+  const allAccounts: ParsedAccount[] = []
   let filesProcessed = 0
   let filesFailed = 0
   const fileConcurrency = resolveFileConcurrency(process.env.WORKER_FILE_CONCURRENCY)
 
   type FileResult =
-    | { ok: true; fileId: string; leads: Awaited<ReturnType<typeof parseOne>>['leads'] }
+    | { ok: true; fileId: string; leads: ParsedLeadRow[]; accounts: ParsedAccount[] }
     | { ok: false; fileId: string }
 
   await mapInConcurrentBatches(
@@ -110,20 +185,23 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     fileConcurrency,
     async (file): Promise<FileResult> => {
       try {
-        const { leads } = await parseOne(file.storage_path, file.id, userId, jobId)
+        const parsed = await parseOne(file.storage_path, file.id, userId, jobId)
+        const leads = parsed.kind === 'lead_search' ? parsed.leads : []
+        const accounts = parsed.kind === 'account_list' ? parsed.accounts : []
 
         await supabase
           .from('uploaded_files')
           .update({
             status: 'processed',
-            leads_found: leads.length,
+            // `leads_found` counts what the file yielded, whichever kind it is.
+            leads_found: leads.length + accounts.length,
             processed_at: new Date().toISOString(),
           })
           .eq('id', file.id)
           .eq('extraction_job_id', jobId)
           .eq('user_id', userId)
 
-        return { ok: true, fileId: file.id, leads }
+        return { ok: true, fileId: file.id, leads, accounts }
       } catch (e) {
         // PER-FILE ISOLATION: record and continue. One bad file never fails the batch.
         const code = e instanceof ParseError ? e.code : 'ERR_FILE_FORMAT'
@@ -157,6 +235,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
         for (const result of results) {
           if (result.ok) {
             allLeads.push(...result.leads.map((lead) => ({ ...lead, uploadedFileId: result.fileId })))
+            allAccounts.push(...result.accounts)
             filesProcessed += 1
           } else {
             filesFailed += 1
@@ -175,6 +254,129 @@ export async function processJob(jobId: string, userId: string): Promise<Process
       },
     },
   )
+
+  /*
+   * ╔══════════════════════════════════════════════════════════════════════════╗
+   * ║  AN ACCOUNT RUN LEAVES HERE. IT IS NOT A LEAD RUN WITH DIFFERENT ROWS.   ║
+   * ║                                                                          ║
+   * ║  Everything below — credit charging per block of leads, person dedupe,   ║
+   * ║  lead inserts, the CSV export — is shaped around people. Threading       ║
+   * ║  companies through it would mean a charge computed from a lead count     ║
+   * ║  that is zero, a dedupe keyed on a person who does not exist, and an     ║
+   * ║  export with person headers. The queue, claim, retry and reaper are      ║
+   * ║  shared because they are the hard part; the OUTPUT is not.               ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  if (allAccounts.length > 0) {
+    /*
+     * ⚠️ MIXED UPLOADS ARE REFUSED, NOT SILENTLY HALVED. A batch holding both
+     * page types has no honest outcome: charging for the leads and quietly
+     * ingesting the companies would report one number for two jobs. Say so and
+     * let the user split the upload.
+     */
+    if (allLeads.length > 0) {
+      await supabase
+        .from('extraction_jobs')
+        .update({
+          status: 'failed',
+          error_code: 'ERR_FILE_FORMAT',
+          error_message:
+            'This upload mixes lead search pages with account lists. ' +
+            'Upload each kind separately.',
+          progress_step: 'Mixed page types',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+        .eq('user_id', userId)
+
+      await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
+
+      return {
+        jobId,
+        status: 'failed',
+        leadsParsed: allLeads.length,
+        leadsKept: 0,
+        filesProcessed,
+        filesFailed,
+      }
+    }
+
+    const ingest = await ingestAccounts(userId, allAccounts)
+    const persisted = await persistAccountList(userId, jobId, ingest)
+
+    /*
+     * ---- account export ---------------------------------------------------
+     *
+     * Written to the SAME `export_storage_path` column the lead runs use, so
+     * the existing signed-URL download action serves it with no change: it
+     * only ever signs whatever key the job carries, and the key is
+     * server-generated from ids. The filename differs so a user with both
+     * kinds open does not end up with two `leads.csv` in their downloads.
+     *
+     * The durable account rows are joined with the current trusted company and
+     * recommended-contact projections. This is the same provider-neutral
+     * dataset used by every CRM adapter, so exports cannot drift by provider.
+     */
+    const accountRecords = await loadAccountExportRecords(userId, jobId)
+    const accountCsv = buildAccountRecordCsv(accountRecords)
+    const accountExportPath = `${userId}/${jobId}/accounts.csv`
+
+    const { error: accountUploadError } = await supabase.storage
+      .from(EXPORT_BUCKET)
+      .upload(accountExportPath, new TextEncoder().encode(accountCsv), {
+        contentType: 'text/csv',
+        upsert: true,
+      })
+
+    if (accountUploadError) {
+      throw new Error(`account export upload failed: ${concise(accountUploadError.message)}`)
+    }
+
+    await supabase
+      .from('extraction_jobs')
+      .update({
+        kind: 'account_list',
+        export_storage_path: accountExportPath,
+        accounts_parsed: allAccounts.length,
+        accounts_created: ingest.created,
+        accounts_matched: ingest.matched,
+        accounts_unidentified: ingest.unidentified,
+        status: filesFailed > 0 ? 'partially_completed' : 'completed',
+        progress_step: filesFailed > 0 ? 'Completed with errors' : 'Completed',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', jobId)
+      .eq('user_id', userId)
+
+    await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
+
+    /*
+     * Company rows are researched even if LinkedIn supplied no person. Real
+     * recommendations use the ordinary lead contact pipeline. Both passes are
+     * free-only, bounded, and happen after the account list is already usable.
+     */
+    void Promise.all([
+      enrichAccountCompaniesFree(jobId, userId, persisted.companyIds),
+      persisted.recommendedLeadIds.length > 0
+        ? enrichJobFree(jobId, userId, persisted.recommendedLeadIds)
+        : Promise.resolve(null),
+    ])
+      .then(async () => {
+        await rebuildAccountListExport(jobId, userId)
+      })
+      .catch(() => {
+        // Account membership and CRM export remain available without research.
+      })
+
+    return {
+      jobId,
+      status: filesFailed > 0 ? ('partially_completed' as const) : ('completed' as const),
+      filesProcessed,
+      filesFailed,
+      leadsParsed: 0,
+      leadsKept: 0,
+    }
+  }
 
   // ---- charge ------------------------------------------------------------
   /*
@@ -264,9 +466,21 @@ export async function processJob(jobId: string, userId: string): Promise<Process
       uploaded_file_id: (l as { uploadedFileId?: string }).uploadedFileId ?? null,
       full_name: l.fullName,
       linkedin_url: l.linkedinUrl,
+      sales_navigator_url: l.salesNavUrl,
       job_title: l.jobTitle,
       company_name: l.companyName,
       company_url: l.companyUrl,
+      company_website_url: l.companyWebsiteUrl,
+      source_list: l.sourceList,
+      company_public_linkedin_url: l.companyPublicLinkedInUrl,
+      company_industry: l.companyIndustry,
+      company_size: l.companySize,
+      company_headquarters: l.companyHeadquarters,
+      connection_degree: l.connectionDegree,
+      is_reachable: l.isReachable,
+      list_count: l.listCount,
+      last_activity: l.lastActivity,
+      added_to_list_at: l.addedToListAt,
       location: l.location,
       person_blurb: l.personBlurb,
       tenure_in_role: l.tenureInRole,
@@ -284,13 +498,46 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     }
   }
 
+  /*
+   * Resolve each lead to a company so company-level research runs once per
+   * company rather than once per employee.
+   *
+   * Deliberately non-fatal, for the same reason as the capture-totals roll-up
+   * below: the leads are already committed and the user's CSV is about to be
+   * written. A failure here costs a later backfill, not the run. Unlinked leads
+   * are exactly what `backfillCompaniesForUser` selects.
+   */
+  if (kept.length > 0) {
+    try {
+      const { data: insertedLeads } = await supabase
+        .from('extracted_leads')
+        .select('id, company_name, company_url, company_website_url')
+        .eq('extraction_job_id', jobId)
+        .eq('user_id', userId)
+
+      if (insertedLeads && insertedLeads.length > 0) {
+        await linkLeadsToCompanies(
+          userId,
+          insertedLeads.map((row) => ({
+            id: row.id,
+            companyName: row.company_name,
+            companyWebsiteUrl: row.company_website_url,
+            companyLinkedInUrl: row.company_url,
+          })),
+        )
+      }
+    } catch {
+      // Company linking is repairable after the fact; lead data is not.
+    }
+  }
+
   // ---- export ------------------------------------------------------------
   await supabase
     .from('extraction_jobs')
     .update({ progress_step: 'Generating export' })
     .eq('id', jobId)
 
-  const csv = toCsv(kept, CSV_COLUMNS)
+  const csv = toCsv(kept, CSV_COLUMNS, { alwaysKeep: ALWAYS_EXPORTED })
   const exportPath = `${userId}/${jobId}/leads.csv`
 
   const { error: uploadError } = await supabase.storage
@@ -307,6 +554,10 @@ export async function processJob(jobId: string, userId: string): Promise<Process
   if (uploadError) throw new Error(`export upload failed: ${concise(uploadError.message)}`)
 
   // ---- finalise ----------------------------------------------------------
+  // ⚠️ FINALISE FIRST. The extraction is done the moment the CSV exists —
+  // holding the job at "Processing" for the minutes the enrichment waterfall
+  // takes stalled the user's workflow against a finished file. Enrichment now
+  // continues in the background and the CSV is silently rebuilt when it lands.
   const status: ProcessOutcome['status'] =
     filesProcessed === 0 ? 'failed' : filesFailed > 0 ? 'partially_completed' : 'completed'
 
@@ -333,6 +584,64 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     .eq('id', jobId)
 
   await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
+
+  /*
+   * ---- free enrichment, off the critical path ------------------------------
+   *
+   * FREE SOURCES ONLY. This runs on every extraction, so anything metered here
+   * would bill on every upload with nobody pressing a button. It fills company
+   * gaps the hover card missed and stands aside entirely if paid providers have
+   * been switched on.
+   *
+   * The pass runs the ordinary research pipeline over the job's leads —
+   * company facts AND the free contact sources (scout: website-published
+   * emails; social-scout: bio emails and handle inventories). Only verified-
+   * by-publication addresses are ever stored; nothing is guessed.
+   *
+   * Not awaited: the user is already reading their leads. When the waterfall
+   * settles, the CSV is rewritten in place with whatever was found.
+   */
+  void enrichJobFree(jobId, userId)
+    .then(async (enriched) => {
+      if (enriched.evidenceWritten > 0 || enriched.leadsUpdated > 0) {
+        await rebuildJobExport(jobId, userId)
+      }
+    })
+    .catch(() => {
+      // The extraction stands on its own; enrichment is additive.
+    })
+
+  /*
+   * Extension captures only: roll the per-page result into its capture
+   * session so the popup and the dashboard widget show live totals.
+   *
+   * Deliberately last, and deliberately non-fatal. The leads are already
+   * committed and the CSV is written by this point; a failure to update a
+   * progress counter must never fail a job whose real work succeeded.
+   */
+  if (job.capture_session_id) {
+    try {
+      const { data: page } = await supabase
+        .from('capture_pages')
+        .select('id')
+        .eq('extraction_job_id', jobId)
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (page) {
+        await supabase.rpc('roll_capture_totals', {
+          p_page_id: page.id,
+          p_user_id: userId,
+          p_job_id: jobId,
+          p_leads_found: report.totalParsed,
+          p_leads_kept: report.uniqueKept,
+          p_status: status === 'failed' ? 'failed' : 'processed',
+        })
+      }
+    } catch {
+      // Counters are cosmetic; the lead data is the product.
+    }
+  }
 
   return {
     jobId,
@@ -386,7 +695,43 @@ async function parseOne(storagePath: string, fileId: string, userId: string, job
   // Decode with the encoding the sniffer detected, not a hardcoded UTF-8 —
   // that assumption is defect G3 in the original scraper.
   const html = new TextDecoder(sniff.encoding, { fatal: false }).decode(bytes)
-  return parseSearchResults(html)
+
+  /*
+   * ⚠️ ROUTE BEFORE PARSING, SO A VALID FILE IS NOT CALLED BROKEN.
+   *
+   * An Account Hub page fed to the lead parser yields zero leads, which is
+   * correctly raised as ERR_FILE_FORMAT — and is nonetheless the wrong answer:
+   * the file was fine, we pointed the wrong reader at it. The user then gets
+   * "this page could not be read" for a page we can read, and no hint that
+   * they uploaded the wrong KIND of export.
+   *
+   * Account lists are parsed by `lib/companies/parse-account-list.ts`, but
+   * this pipeline persists LEADS — companies have no ingestion path yet — so
+   * for now the file is refused with a message that names what it actually is.
+   * That is a smaller lie than "malformed", and it is the honest state until
+   * company ingestion exists.
+   */
+  /*
+   * ⚠️ ROUTE BEFORE PARSING, SO A VALID FILE IS NOT CALLED BROKEN.
+   *
+   * An Account Hub page fed to the lead parser yields zero leads, which is
+   * correctly raised as ERR_FILE_FORMAT — and is nonetheless the wrong answer:
+   * the file was fine, we pointed the wrong reader at it.
+   */
+  if (detectSavedPageType(html) === 'account_list') {
+    try {
+      const result = parseAccountList(html)
+      return { kind: 'account_list' as const, accounts: result.accounts }
+    } catch (error) {
+      // The parser's own error already names what went wrong with the layout.
+      throw new ParseError(
+        'ERR_FILE_FORMAT',
+        error instanceof AccountListParseError ? error.message : 'account list could not be read',
+      )
+    }
+  }
+
+  return { kind: 'lead_search' as const, ...parseSearchResults(html) }
 }
 
 /**

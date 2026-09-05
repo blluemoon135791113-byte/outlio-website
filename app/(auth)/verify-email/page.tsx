@@ -27,13 +27,13 @@ export default async function VerifyEmailPage({
           : 'Your email address needs to be verified before you can continue.'
       }
       footer={
-        <Link href="/sign-in" className="font-medium text-accent hover:underline">
+        <Link href="/sign-in" className="font-semibold text-accent hover:underline">
           Back to sign in
         </Link>
       }
     >
       <div className="space-y-6">
-        <div className="rounded-[var(--radius-md)] border border-info/25 bg-info-soft px-3 py-2.5 text-sm leading-relaxed text-info">
+        <div className="rounded-[var(--radius-md)] bg-info-soft px-3 py-2.5 text-sm leading-relaxed text-info">
           Check your spam folder if it hasn&apos;t arrived within a few minutes.
         </div>
 

@@ -19,11 +19,40 @@ export type ParsedLead = {
   memberUrn: string | null
   jobTitle: string | null
   companyName: string | null
+  /** External company website, only when LinkedIn exposed it in the page UI. */
+  companyWebsiteUrl: string | null
+  /** Sales Navigator company page. */
   companyUrl: string | null
   location: string | null
   personBlurb: string | null
   tenureInRole: string | null
   tenureInCompany: string | null
+
+  /* ---- also on the row, previously discarded ------------------------------
+   * Every one of these was verified present in an attribute census of a real
+   * saved page. See docs/SELECTOR_MAP.md §6. */
+
+  /** "1st" / "2nd" / "3rd". */
+  connectionDegree: string | null
+  /** LinkedIn's own "Reachable" badge. */
+  isReachable: boolean | null
+  /** How many of the user's saved lists already hold this lead. */
+  listCount: number | null
+  /** "No activity", "Posted 2d ago", … kept verbatim. */
+  lastActivity: string | null
+  /** ISO date the lead entered the list, from the page's own display. */
+  addedToListAt: string | null
+
+  /* ---- from the company hover card, via the extension --------------------- */
+  /** The Sales Navigator list or search this page belonged to. */
+  sourceList: string | null
+  /** The public `linkedin.com/company/<id>` page, derived from `companyUrl`. */
+  companyPublicLinkedInUrl: string | null
+  companyIndustry: string | null
+  /** A RANGE as rendered — "2-10 employees" — never parsed into a number. */
+  companySize: string | null
+  companyHeadquarters: string | null
+
   sourceRowIndex: number
 }
 
@@ -83,9 +112,30 @@ function extractMemberUrn(salesNavHref: string | null, scrollUrn: string | null)
  * This is construction from an extracted identifier, not inference: no part of
  * the URL is guessed.
  */
-function publicProfileUrl(memberUrn: string | null): string | null {
-  if (!memberUrn) return null
-  return `https://www.linkedin.com/in/${memberUrn}`
+function publicProfileUrl(
+  href: string | null | undefined,
+  memberUrn: string | null,
+): string | null {
+  const absolute = absolutize(href)
+  if (absolute) {
+    try {
+      const parsed = new URL(absolute)
+      if (
+        /(^|\.)linkedin\.com$/i.test(parsed.hostname)
+        && /^\/in\/[^/?#]+/i.test(parsed.pathname)
+      ) return absolute
+    } catch {
+      // Fall through to the stable member identifier captured from Sales Nav.
+    }
+  }
+
+  return memberUrn ? `https://www.linkedin.com/in/${memberUrn}` : null
+}
+
+function canonicalSalesNavUrl(href: string | null, memberUrn: string | null): string | null {
+  return absolutize(href) ?? (memberUrn
+    ? `https://www.linkedin.com/sales/lead/${memberUrn}`
+    : null)
 }
 
 /**
@@ -136,6 +186,123 @@ function absolutize(href: string | null | undefined): string | null {
 }
 
 /**
+ * Company URLs must identify a Sales Navigator company page. In the current
+ * table layout a company label can sit inside a broader anchor for the person;
+ * accepting the nearest arbitrary anchor silently writes the person's URL into
+ * Company URL.
+ */
+function companyProfileUrl(href: string | null | undefined): string | null {
+  const absolute = absolutize(href)
+  if (!absolute) return null
+
+  try {
+    const parsed = new URL(absolute)
+    if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return null
+    if (!/^\/sales\/company\/[^/?#]+/i.test(parsed.pathname)) return null
+    return absolute
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The PUBLIC company page, derived from the Sales Navigator one.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  `/sales/company/106158339` → `/company/106158339`                        ║
+ * ║                                                                          ║
+ * ║  LinkedIn resolves a numeric id on the public path and redirects to the  ║
+ * ║  slug, so this needs no page visit and no lookup — it is a pure rewrite  ║
+ * ║  of a URL already on the row. That is the difference between filling     ║
+ * ║  this column for every lead with a company and filling it for none.      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Returns null for anything that is not a Sales Navigator company URL, so a
+ * malformed href becomes an absent value rather than a broken link.
+ */
+export function publicCompanyUrl(salesNavUrl: string | null | undefined): string | null {
+  if (!salesNavUrl) return null
+
+  try {
+    const parsed = new URL(salesNavUrl)
+    if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return null
+
+    const match = /^\/sales\/company\/(\d{1,20})/i.exec(parsed.pathname)
+    if (!match) return null
+
+    return `https://www.linkedin.com/company/${match[1]}`
+  } catch {
+    return null
+  }
+}
+
+/** The user's own name for the list, from the page title. */
+function extractSourceList($: cheerio.CheerioAPI): string | null {
+  const heading = text($('h1').first().text())
+  const title = text($('title').first().text())
+
+  const cleaned = (value: string | null): string | null => {
+    if (!value) return null
+    // Drop LinkedIn's own trailing sections; keep the user's name for the list.
+    const head = value.split(/\s*[|·]\s*/)[0]?.trim() ?? ''
+    return head && head.length <= 120 && !/^sales navigator$/i.test(head) ? head : null
+  }
+
+  return cleaned(heading) ?? cleaned(title)
+}
+
+/** "3rd degree connection" / "3rd" → "3rd". */
+function extractConnectionDegree(row: { text(): string }): string | null {
+  const text = row.text().replace(/\s+/g, ' ')
+  const match = /\b(1st|2nd|3rd)\b/i.exec(text)
+  return match ? match[1]!.toLowerCase() : null
+}
+
+/**
+ * LinkedIn's "Reachable" badge.
+ *
+ * ⚠️ ABSENT IS NOT FALSE. The badge only renders when the lead IS reachable, so
+ * its absence means "not marked", not "unreachable" — returning `false` would
+ * be asserting something the page never said.
+ */
+function extractReachable(row: { text(): string }): boolean | null {
+  const text = row.text()
+  return /\breachable\b/i.test(text) ? true : null
+}
+
+/** "2 Lists" → 2. */
+function extractListCount(row: { text(): string }): number | null {
+  const match = /\b(\d{1,3})\s+Lists?\b/i.exec(row.text().replace(/\s+/g, ' '))
+  if (!match) return null
+  const value = Number.parseInt(match[1]!, 10)
+  return Number.isFinite(value) ? value : null
+}
+
+/** The activity cell, verbatim. */
+function extractLastActivity(row: { text(): string }): string | null {
+  const match = /\b(No activity|Posted [^|]{1,40}?ago|Shared [^|]{1,40}?ago)\b/i.exec(
+    row.text().replace(/\s+/g, ' '),
+  )
+  return match ? match[1]!.trim() : null
+}
+
+/**
+ * The date the lead was added to the list.
+ *
+ * ⚠️ The page renders it US-style, `M/D/YYYY`. Read as D/M it would turn
+ * 8 June into 6 August without complaining, so the order is pinned here rather
+ * than left to `Date.parse`.
+ */
+function extractAddedDate(row: { text(): string }): string | null {
+  const match = /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/.exec(row.text())
+  if (!match) return null
+
+  const [, month, day, year] = match
+  const iso = `${year}-${month!.padStart(2, '0')}-${day!.padStart(2, '0')}`
+  return Number.isNaN(Date.parse(`${iso}T00:00:00Z`)) ? null : iso
+}
+
+/**
  * Parses one saved search-results page.
  *
  * @throws ParseError ERR_FILE_FORMAT when the row anchor matches nothing —
@@ -144,6 +311,16 @@ function absolutize(href: string | null | undefined): string | null {
  */
 export function parseSearchResults(html: string): ParseResult {
   const $ = cheerio.load(html)
+
+  /*
+   * The list this page belonged to, read once for the whole file.
+   *
+   * `<title>` is "Tech Leads 4 | Lead Lists | Sales Navigator" — the suffixes
+   * are LinkedIn's chrome, not the user's name for the list, so they are
+   * stripped. Provenance survives the source file being deleted; without it,
+   * leads from three different searches are indistinguishable in one export.
+   */
+  const sourceList = extractSourceList($)
 
   // LinkedIn currently ships both the legacy card list and a newer people
   // table. Stable data attributes are used instead of generated CSS classes.
@@ -172,7 +349,10 @@ export function parseSearchResults(html: string): ParseResult {
     // Sales Nav href: the anchor wrapping the name, else the headshot link.
     const nameAnchor = nameEl.closest('a[href]')
     const salesNavHref =
-      nameAnchor.attr('href') ??
+      row.find('a[href*="/sales/lead/"]').first().attr('href') ??
+      (/\/sales\/lead\//i.test(nameAnchor.attr('href') ?? '')
+        ? nameAnchor.attr('href')
+        : undefined) ??
       row
         .find('[data-anonymize="headshot-photo"]')
         .closest('a[href]')
@@ -187,6 +367,10 @@ export function parseSearchResults(html: string): ParseResult {
       null
 
     const memberUrn = extractMemberUrn(salesNavHref, scrollUrn)
+    const publicHref = row
+      .find('a[href^="/in/"], a[href*="linkedin.com/in/"]')
+      .first()
+      .attr('href')
 
     // No name AND no identity means nothing usable. Count it, do not invent it.
     if (!fullName && !memberUrn) {
@@ -217,11 +401,17 @@ export function parseSearchResults(html: string): ParseResult {
 
     // Company is an anchor in the card layout and a span in the table layout.
     const companyEl = row.find('[data-anonymize="company-name"]').first()
-    const companyAnchor = companyEl.is('a[href]')
+    const companyAnchor = companyEl.is('a[href*="/sales/company/"]')
       ? companyEl
-      : companyEl.closest('a[href]')
+      : companyEl.closest('a[href*="/sales/company/"]').length > 0
+        ? companyEl.closest('a[href*="/sales/company/"]')
+        : row.find('a[href*="/sales/company/"]').first()
     let companyName = text(companyEl.text())
-    const companyUrl = absolutize(companyAnchor.attr('href') ?? null)
+    const companyUrl = companyProfileUrl(companyAnchor.attr('href') ?? null)
+    const companyWebsiteUrl = text(companyEl.attr('data-outlio-company-website'))
+    const companyIndustry = text(companyEl.attr('data-outlio-company-industry'))
+    const companySize = text(companyEl.attr('data-outlio-company-size'))
+    const companyHeadquarters = text(companyEl.attr('data-outlio-company-hq'))
 
     // …otherwise the name is a BARE TEXT NODE in the subtitle. Without this
     // fallback we silently lose the company on ~20% of leads (1 of 5 on a real
@@ -244,16 +434,27 @@ export function parseSearchResults(html: string): ParseResult {
 
     leads.push({
       fullName,
-      linkedinUrl: publicProfileUrl(memberUrn),
-      salesNavUrl: absolutize(salesNavHref),
+      linkedinUrl: publicProfileUrl(publicHref, memberUrn),
+      salesNavUrl: canonicalSalesNavUrl(salesNavHref, memberUrn),
       memberUrn,
       jobTitle,
       companyName,
       companyUrl,
+      companyWebsiteUrl,
       location: text(row.find('[data-anonymize="location"]').first().text()),
       personBlurb: text(row.find('[data-anonymize="person-blurb"]').first().text()),
       tenureInRole,
       tenureInCompany,
+      connectionDegree: extractConnectionDegree(row),
+      isReachable: extractReachable(row),
+      listCount: extractListCount(row),
+      lastActivity: extractLastActivity(row),
+      addedToListAt: extractAddedDate(row),
+      sourceList,
+      companyPublicLinkedInUrl: publicCompanyUrl(companyUrl),
+      companyIndustry,
+      companySize,
+      companyHeadquarters,
       sourceRowIndex: index + 1,
     })
   })

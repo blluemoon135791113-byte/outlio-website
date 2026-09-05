@@ -122,7 +122,7 @@ export default function OrbitalCaseStudies() {
     <div className="relative w-full">
 
       {/* Centered orbital area */}
-      <div className="relative mx-auto w-full max-w-[750px] py-4" style={{ aspectRatio: "1 / 1" }}>
+      <div className="relative mx-auto w-full max-w-[560px] py-2" style={{ aspectRatio: "1 / 1" }}>
         {/* Orbital rings SVG */}
         <svg className="absolute inset-0 w-full h-full" viewBox={`0 0 ${SIZE} ${SIZE}`}>
           <defs>
@@ -149,9 +149,11 @@ export default function OrbitalCaseStudies() {
         {/* Center stat */}
         <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
           <div className="text-center">
-            <div className="text-5xl sm:text-6xl font-bold text-white">$640K+</div>
-            <div className="mt-2 text-sm sm:text-base font-medium text-white/40">Total Revenue Generated</div>
-            <div className="mt-3 text-xl sm:text-2xl font-semibold text-white/70">163+ Calls Booked</div>
+            <div className="text-[clamp(1.75rem,8vw,3.75rem)] font-bold text-white">$640K+</div>
+            <div className="mx-auto mt-1 max-w-32 text-[10px] font-medium leading-tight text-white/72 sm:mt-2 sm:max-w-none sm:text-base">
+              Total Revenue Generated
+            </div>
+            <div className="mt-2 text-sm font-semibold text-white/82 sm:mt-3 sm:text-2xl">163+ Calls Booked</div>
           </div>
         </div>
 
@@ -183,7 +185,7 @@ export default function OrbitalCaseStudies() {
                 >
                   {/* Hover tooltip */}
                   <div
-                    className={`absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-[opacity,transform] duration-200 pointer-events-none ${
+                    className={`absolute -top-10 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-[opacity,transform] duration-200 pointer-events-none md:block ${
                       hoveredCase === study.id ? "opacity-100 -translate-y-1" : "opacity-0 translate-y-0"
                     }`}
                     style={{
@@ -206,7 +208,7 @@ export default function OrbitalCaseStudies() {
 
                   {/* Icon */}
                   <div
-                    className={`relative w-[4rem] h-[4rem] rounded-full flex items-center justify-center overflow-hidden transition-colors duration-300 ${
+                    className={`relative flex size-11 items-center justify-center overflow-hidden rounded-full transition-colors duration-300 sm:size-16 ${
                       selectedCase === study.id
                         ? "border border-white/30"
                         : "border border-white/10"
@@ -221,7 +223,7 @@ export default function OrbitalCaseStudies() {
                       alt={study.name}
                       width={64}
                       height={64}
-                      className={study.id === "3" ? "w-9 h-9 object-contain" : "w-full h-full object-cover rounded-full"}
+                      className={study.id === "3" ? "size-7 object-contain sm:size-9" : "size-full rounded-full object-cover"}
                     />
                   </div>
                 </div>
@@ -242,8 +244,7 @@ export default function OrbitalCaseStudies() {
 
           {/* Modal */}
           <div
-            className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl p-8 sm:p-10 animate-[fadeSlideUp_0.3s_ease-out]"
-            data-lenis-prevent
+            className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl p-5 animate-[fadeSlideUp_0.3s_ease-out] sm:p-10"
             style={{
               background: "linear-gradient(160deg, rgba(240,238,235,0.92) 0%, rgba(225,222,218,0.88) 100%)",
               backdropFilter: "blur(40px) saturate(180%)",
@@ -255,7 +256,8 @@ export default function OrbitalCaseStudies() {
             {/* Close button */}
             <button
               onClick={() => setSelectedCase(null)}
-              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-ink flex items-center justify-center text-white hover:bg-ink/80 transition-colors"
+              className="absolute right-4 top-4 flex size-10 items-center justify-center rounded-full bg-ink text-white transition-colors hover:bg-ink/80 sm:right-6 sm:top-6"
+              aria-label="Close case study"
             >
               <span className="text-lg">&times;</span>
             </button>
@@ -341,6 +343,13 @@ export default function OrbitalCaseStudies() {
           to { opacity: 1; }
         }
         @media (prefers-reduced-motion: reduce) {
+          .orbital-track,
+          .orbital-body {
+            animation: none;
+            will-change: auto;
+          }
+        }
+        @media (max-width: 1023px) {
           .orbital-track,
           .orbital-body {
             animation: none;

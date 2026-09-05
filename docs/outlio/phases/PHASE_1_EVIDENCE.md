@@ -1,0 +1,161 @@
+# Phase 1 — Evidence
+
+Date: 2026-09-04 · Branch: `platform-m1-workspaces` · Brief: `PHASE_1.md`
+
+---
+
+## What ran
+
+| Command | Result |
+|---|---|
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | 0 errors, 97 warnings |
+| `npm test` (unit) | **150 files, 2,797 tests** |
+| `npm run test:e2e` | 6 passed |
+| `npm run build` | clean |
+| Read-only anon probe, 124 tables | completed |
+
+## Delivered
+
+**`lib/auth/scope.ts`** — `TenantScope`, producible only by `scopeFor` from an
+authenticated `WorkspaceContext`. `listContacts` previously took
+`workspaceId: string`, which is indistinguishable from any other string at a
+call site; it now takes a scope. `scopedFrom` applies the filter and picks the
+right column.
+
+**The two-tenancy-model finding.** 64 tables carry `workspace_id` (CRM era), 42
+carry only `user_id` (extraction era), 18 are global. Nothing named that split
+before. ⚠️ `.eq('workspace_id', …)` against a user-scoped table matches nothing
+and renders as an empty state — the wrong filter looks like a tenant with no
+data.
+
+**`tenant-scope.test.ts`** — 131 assertions, every table's classification checked
+against its real columns including ones added by later `alter table`.
+
+**`service-role-scoping.test.ts`** — guards service-role reads with no filter at
+all.
+
+**`action-authorization.test.ts`** — all 45 server actions and all API routes
+gated, with two documented credential-exchange exceptions that assert their own
+rate limiting.
+
+**RLS, measured by behaviour:**
+
+```
+leaked to anon                                     0
+rejected outright by PostgREST (42501)            86
+proven protected (has rows, anon saw none)        21
+inconclusive (table empty, proves nothing)        17
+```
+
+## DoD status
+
+| # | Item | Status |
+|---|---|---|
+| 1 | E2E journey from production entry point | **VERIFIED** — `e2e/tenant-isolation.spec.ts` |
+| 2 | Reachability chain named and unbroken | VERIFIED |
+| 3 | RBAC matrix passes, allow and deny | VERIFIED |
+| 4 | Tenant isolation via API and direct URL | **VERIFIED** — `tenant-isolation.test.ts`, 14 tests |
+| 5 | Persistence survives reload; events consumed | N/A |
+| 6 | Typecheck, lint, unit, E2E green | VERIFIED |
+| 7 | No new dead exports | VERIFIED — see below |
+| 8 | Feature flag, works with it off | N/A |
+| 9 | Migration applied + rollback | N/A — no migrations |
+| 10 | Docs updated | VERIFIED |
+| 11 | This file | VERIFIED |
+
+⚠️ **Items 1 and 4 were `INFERRED` and are now both `VERIFIED`.** ADR-005 created
+`outlio-staging`, which made the suite buildable without manufacturing tenants in
+production. ADR-004's concession is withdrawn.
+
+**Item 1 is now closed too.** `e2e/tenant-isolation.spec.ts` signs a real user
+into a real browser session and requests another workspace's contact by URL.
+Proven non-vacuous the only way that counts: **removing
+`.eq('workspace_id', …)` from `getContactDetail` makes it fail**, naming the
+cross-tenant read; restoring it passes.
+
+⚠️ **What that journey cost, and what it found.** Five failures before it passed,
+none of them isolation problems:
+
+| Symptom | Actual cause |
+|---|---|
+| Locator not visible | matched the hidden `<title>` |
+| Heading not found | the name is not rendered as a heading |
+| Navigation timeout | `next dev` compiles the route on first request |
+| Credentials rejected | **Playwright reused a `next dev` pointed at PRODUCTION** |
+| Server 500 | the seeded `agency` plan is malformed |
+
+⚠️ **The fourth is the one that matters.** `reuseExistingServer` is true locally,
+and a plain `next dev` loads `.env.local` — production. The test signed a staging
+user into the live app. It failed benignly because the user does not exist there;
+the same misdirection on a **sign-up** journey would have created real accounts in
+the customer database, which is how 43 of them got there. The test now observes
+Supabase hostnames from real network traffic and refuses to continue if they are
+not staging's.
+
+⚠️ **The fifth is a production defect found by accident.** The seeded `agency`
+plan has no `credits_per_month`, which `planLimitsSchema` requires, so
+`getPlanById` throws and every page resolving entitlements 500s. It is present in
+**production too** — harmless only because `agency` is inactive with zero users.
+Filed `BROKEN` in the gap matrix; it must be fixed before that plan is ever
+enabled.
+
+## What I could not verify, and why
+
+**~~The tenant-isolation journey.~~ RESOLVED** — see `tenant-isolation.test.ts`.
+14 tests, real user JWTs, verified by disabling RLS on staging and confirming
+three read tests fail.
+
+⚠️ **What that experiment corrected.** With RLS off, every *write* test still
+passed, because `authenticated` holds **`SELECT` only** on `crm_contacts` —
+writes are refused by PostgREST before RLS is consulted. Those assertions
+therefore prove no signed-in client can write through PostgREST at all, which is
+stronger than an RLS write policy but is a *different claim*. Had I not broken it
+deliberately, this file would have recorded that RLS protects writes. It does
+not.
+
+**Role-based denial at the route layer, with a real under-privileged user.** The
+suite creates two workspace OWNERS. Proving a `viewer` is refused an edit needs a
+second member in one workspace and an invitation flow, which is Phase 2 fixture
+work.
+
+**Whether the *right* permission is checked.** `action-authorization.test.ts`
+proves every action establishes a caller. It does **not** prove the action then
+checks the appropriate permission — that `deleteContact` requires
+`crm.contact.delete` rather than merely a logged-in user. Deciding that
+statically needs intent, not syntax. Covered by review and by
+`workspace-permissions.test.ts` at the matrix layer, with the gap stated here.
+
+**Service-role reads filtered by something other than the tenant column.** The
+guard asks "filtered at all?", not "filtered by tenant". The stricter question
+produced 32 findings of which the first three inspected were all correct, each
+safe by a different mechanism — most commonly "fetch parent scoped, read children
+by parent id", which is not decidable without dataflow analysis.
+
+**The 17 inconclusive RLS tables.** Empty, so an anon read returning nothing
+proves nothing. Most are already on the dead-schema list.
+
+## Guards written this phase, and how many were wrong first
+
+Four corrections across two scanners, **every one wrong in the alarming
+direction** — accusing correct code:
+
+| Scanner | Wrong version | Effect |
+|---|---|---|
+| service-role | fixed 600-char window | 92 false "unscoped" |
+| service-role | comments → blank lines, blank line ends a chain | better-documented scoping was *more* likely flagged |
+| service-role | asked "filtered by tenant column?" | 32 findings, first 3 all correct |
+| service-role | `storage.from('avatars')` treated as a table | flagged correct code |
+| action-auth | GATES guessed, not enumerated | whole intelligence API called public |
+| action-auth | read only the action's own body | a helper-centralised gate called public |
+| action-auth | looked only for gate functions | missed 4 valid mechanisms |
+
+⚠️ **The pattern is worth naming: a scanner's first draft is confidently wrong,
+and its errors are frightening rather than reassuring.** Publishing any of these
+runs unchecked would have reported a security emergency that did not exist.
+
+**My own Phase 0.5 orphan guard caught me** leaving `lib/auth/scope.ts` with no
+production importer — the authorization core, written and wired to nothing. That
+is DoD item 7 and precisely the defect class this project keeps producing.
+Allowlisting it was the wrong answer; it is now on `WorkspaceContext` and
+consumed by the contacts list.

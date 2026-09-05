@@ -230,3 +230,118 @@ Company hrefs canonicalise to `li:company:{N}` from `/sales/company/(\d+)`.
 
 Every column stays **nullable** in the schema regardless. Two pages is better
 than one; it is not proof.
+
+---
+
+## 5. Company pages — a second, optional source
+
+**Added 2026-08-17.** The results page exposes a company's website only through
+a hovercard, which LinkedIn renders inconsistently. The **company page** carries
+it as a labelled field.
+
+> ⚠️ **NOTHING NAVIGATES TO THESE PAGES.** CLAUDE.md rule 1 stands unchanged.
+> The extension reads a company page only when the **user** has opened it, during
+> a session the **user** started — the same standing a saved results page has
+> always had. `extensions/adapters/salesnav-company.ts` contains no code that
+> opens, clicks or follows a link, and must never acquire any.
+
+**URL shape:** `linkedin.com/sales/company/{numericId}`
+
+| Field | Selector, in order tried | Notes |
+|---|---|---|
+| `websiteUrl` | `a[data-control-name="visit_company_website"]` | The labelled field |
+| | `a[data-test-company-website]` | |
+| | `[data-anonymize="company-website"] a[href]` | |
+| | `[data-anonymize="company-website"]` | Rendered as text, not a link |
+| | *fallback:* first external link inside the company's top card | **Bounded to the card** |
+| `companyName` | `[data-anonymize="company-name"]`, else `main h1` | Display only |
+| `companyId` | the URL | The only id both pages agree on |
+
+### The three refusals
+
+1. **The fallback is bounded to the company's own card.** An external link
+   elsewhere on the page may be an employee's personal site or a link inside a
+   posted update. Attributing one to the company would be a confident wrong
+   answer, which is worse than a blank column.
+2. **`linkedin.com`, `lnkd.in`, `licdn.com`, `bit.ly` and `t.co` are rejected.**
+   A shortener resolves somewhere useful but tells us nothing on its own, and
+   stored as a domain it would poison company identity matching.
+3. **Non-http(s) schemes are rejected.** The value is stored and later rendered
+   as a link, so `javascript:` is the same stored-XSS risk that the refinement
+   on evidence `source_url` exists to prevent.
+
+### What happens with it
+
+`POST /api/extension/company` → `recordCompanyObservation()`:
+
+- Fills `extracted_leads.company_website_url` for every lead that user holds at
+  that company **whose cell is currently NULL**. A website already stored came
+  from the results page for that specific lead; a company page the user happened
+  to open must not rewrite it.
+- Lets the `companies` row adopt the domain, so the intelligence layer starts
+  from it rather than paying a provider to rediscover it.
+
+**Not a capture.** No HTML is uploaded, no leads are created, no credit is
+consumed and the session page count does not move. A company page yields no
+leads; billing it as a capture would charge for nothing.
+
+---
+
+## 6. What a real page actually carries — census, 2026-08-19
+
+Measured against a real saved page (25 rows), then deleted. **Nothing below is
+inferred; each was seen rendered.**
+
+### `data-anonymize` census
+
+| Attribute | Count | Note |
+|---|---|---|
+| `location` | 26 | |
+| `headshot-photo` | 26 | `src` is a LOCAL saved-page asset, not a URL |
+| `company-name` | 26 | |
+| `person-name` | 25 | one per row |
+| `job-title` | 25 | **the real title on this layout** |
+| `industry` | 1 | company hover card only |
+| `company-size` | 1 | company hover card only |
+
+> ⚠️ **`data-anonymize="title"` DOES NOT EXIST on this layout.** §3 lists it as
+> the real job title. On the table layout the title is `job-title`, which §3 also
+> warns is tenure text on the *card* layout. Both are true, on different layouts,
+> and the parser branches on which it found.
+>
+> ⚠️ **`person-blurb` does not exist either.** `person_blurb`, `tenure_in_role`
+> and `tenure_in_company` were NULL on 400 of 400 real leads.
+
+### Also on the row, now extracted
+
+| Field | Rendered as |
+|---|---|
+| `connection_degree` | `3rd` / "Third-degree connection" |
+| `is_reachable` | a "Reachable" badge — **absent means unmarked, not false** |
+| `list_count` | `2 Lists` |
+| `last_activity` | `No activity` |
+| `added_to_list_at` | `8/6/2026` — **US `M/D/YYYY`**, pinned in the parser |
+
+### The company hover card
+
+The ONLY source of company industry, headcount and HQ. A results row carries the
+company's name and its LinkedIn URL and nothing more.
+
+```
+TrueSeal AI
+Software Development                 ← industry
+San Francisco, California, US        ← headquarters
+2-10 employees                       ← size, A RANGE
+0 Lists                              ← the USER's lists, not the company
+```
+
+Read by shape, never by position: headcount carries "employees", a location
+carries a comma, the industry is what remains. Position-based reading would
+silently return the wrong field after any LinkedIn redesign.
+
+### ⚠️ What is NOT on the page, at any layout
+
+**Email and phone.** Verified: zero addresses, zero `tel:` links. These come
+from the enrichment providers or they do not come at all. Any feature promising
+contact details from extraction alone is promising something the page cannot
+give.

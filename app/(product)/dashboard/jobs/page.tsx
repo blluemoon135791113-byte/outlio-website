@@ -6,17 +6,18 @@ import { requireAccess } from '@/lib/auth/access'
 import {
   DASHBOARD_FILE_SELECT,
   DASHBOARD_JOB_SELECT,
-  DASHBOARD_LEAD_SELECT,
   type CreditSnapshot,
   type DashboardFile,
   type DashboardJob,
-  type DashboardLead,
 } from '@/lib/jobs/dashboard-types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { claimAndProcessJob } from '@/lib/worker/process-job'
+import { getClayConnectionMetadata } from '@/lib/integrations/repository'
+import { getGoogleConnectionMetadata } from '@/lib/integrations/google-repository'
+import { getGhlConnectionMetadata } from '@/lib/integrations/ghl-repository'
 
 export const metadata: Metadata = {
-  title: 'Extraction workspace | Outlio',
+  title: 'Lead sources | Outlio',
   robots: { index: false, follow: false },
 }
 
@@ -42,7 +43,7 @@ export default async function JobsPage() {
     // The dashboard can still read the last known state if a sweep fails.
   }
 
-  const [jobResult, fileResult, leadResult, balanceResult] = await Promise.all([
+  const [jobResult, fileResult, balanceResult, clayConnection, googleConnection, ghlConnection] = await Promise.all([
     supabase
       .from('extraction_jobs')
       .select(DASHBOARD_JOB_SELECT)
@@ -57,13 +58,10 @@ export default async function JobsPage() {
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(500),
-    supabase
-      .from('extracted_leads')
-      .select(DASHBOARD_LEAD_SELECT)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(100),
     supabase.rpc('credit_balance', { p_user_id: userId }),
+    getClayConnectionMetadata(userId),
+    getGoogleConnectionMetadata(userId),
+    getGhlConnectionMetadata(userId),
   ])
 
   const balanceRow = Array.isArray(balanceResult.data) ? balanceResult.data[0] : null
@@ -96,9 +94,10 @@ export default async function JobsPage() {
       userId={userId}
       initialJobs={jobs}
       initialFiles={(fileResult.data ?? []) as DashboardFile[]}
-      initialLeads={(leadResult.data ?? []) as DashboardLead[]}
       credits={credits}
-      planName={ctx.plan?.name ?? null}
+      clayConnected={clayConnection?.status === 'connected'}
+      googleConnected={googleConnection?.status === 'connected'}
+      ghlConnected={ghlConnection?.status === 'connected'}
     />
   )
 }

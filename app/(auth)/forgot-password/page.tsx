@@ -13,9 +13,9 @@ export default function ForgotPasswordPage() {
   return (
     <AuthShell
       title="Reset your password"
-      subtitle="Enter your email and we'll send you a link to set a new one."
+      subtitle="Enter your email and we’ll send a secure link to set a new password."
       footer={
-        <Link href="/sign-in" className="font-medium text-accent hover:underline">
+        <Link href="/sign-in" className="font-semibold text-accent hover:underline">
           Back to sign in
         </Link>
       }

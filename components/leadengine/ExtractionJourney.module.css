@@ -1,0 +1,286 @@
+.section {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  position: relative;
+  padding: clamp(1.5rem, 2.7vw, 3rem);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(201, 122, 93, 0.035), transparent 30rem),
+    linear-gradient(135deg, #fff 0%, #fffdf9 100%);
+  color: #191612;
+}
+
+.layout {
+  display: grid;
+  width: min(100%, 92rem);
+  margin-inline: auto;
+  grid-template-columns: minmax(19rem, 0.82fr) minmax(37rem, 1.18fr);
+  gap: clamp(2.2rem, 4.6vw, 5.5rem);
+  align-items: center;
+}
+
+.copy {
+  max-width: 34rem;
+  padding-left: clamp(0rem, 1vw, 1rem);
+}
+
+.featureLogo {
+  display: block;
+  color: #0d1725;
+  width: clamp(3.4rem, 3.9vw, 4rem);
+  margin: 0 0 clamp(1.25rem, 1.8vw, 1.65rem) -0.15rem;
+  overflow: hidden;
+  filter: drop-shadow(0 0.35rem 0.5rem rgba(73, 47, 20, 0.11));
+  aspect-ratio: 1;
+  contain: paint;
+}
+
+.featureLogo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  shape-rendering: geometricPrecision;
+}
+
+.featureLogo path {
+  stroke: currentColor;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.logoSegments path { fill: rgba(13, 23, 37, 0.08); }
+.logoSegments path:nth-child(2),
+.logoSegments path:nth-child(4) { fill: rgba(13, 23, 37, 0.16); }
+.logoSegments path:nth-child(3) { fill: rgba(13, 23, 37, 0.12); }
+
+.eyebrow {
+  margin: 0 0 2rem;
+  color: #a9472c;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 780;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.logoSegments path {
+  transform-box: view-box;
+  transform-origin: 64px 49px;
+  animation: logo-segment-enter 460ms var(--ease-out) both;
+}
+
+.logoSegments path:nth-child(2) { animation-delay: 45ms; }
+.logoSegments path:nth-child(3) { animation-delay: 90ms; }
+.logoSegments path:nth-child(4) { animation-delay: 135ms; }
+.logoSegments path:nth-child(5) { animation-delay: 180ms; }
+
+.logoGuides {
+  fill: none;
+  stroke: currentColor;
+  stroke-dasharray: 2.1 3.6;
+  stroke-linecap: round;
+  stroke-width: 1.05;
+  opacity: 0.7;
+  pointer-events: none;
+  animation: logo-guides-enter 300ms var(--ease-out) 310ms both;
+}
+
+.heading {
+  max-width: 32rem;
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(2.4rem, 3.65vw, 4.15rem);
+  font-weight: var(--leadengine-heading-weight);
+  letter-spacing: -0.064em;
+  line-height: 0.99;
+  text-wrap: balance;
+}
+
+.description {
+  max-width: 27rem;
+  margin: clamp(1.35rem, 2vw, 1.9rem) 0 0;
+  color: #4b4038;
+  font-family: var(--font-body);
+  font-size: var(--leadengine-copy-size);
+  font-weight: var(--leadengine-copy-weight);
+  letter-spacing: -0.012em;
+  line-height: var(--leadengine-copy-leading);
+  text-wrap: pretty;
+}
+
+.cta {
+  display: inline-flex;
+  min-height: 3.45rem;
+  align-items: center;
+  gap: 1.1rem;
+  margin-top: clamp(1.6rem, 2.2vw, 2.2rem);
+  padding: 0 1.5rem;
+  border-radius: 0.875rem;
+  background: #c45332;
+  color: #fff8f0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  box-shadow:
+    0 0.18rem 0.35rem rgba(111, 48, 29, 0.14),
+    0 0.9rem 2rem rgba(152, 70, 43, 0.2);
+  transition:
+    transform 160ms var(--ease-out),
+    background-color 160ms ease;
+}
+
+.cta span {
+  font-size: 1.35em;
+  line-height: 1;
+}
+
+.cta:hover {
+  background: #a94328;
+  transform: translateY(-2px);
+}
+
+.cta:focus-visible {
+  outline: 3px solid rgba(196, 83, 50, 0.34);
+  outline-offset: 4px;
+}
+
+.cta:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.animationBox {
+  position: relative;
+  display: grid;
+  width: min(96%, 44.5rem);
+  min-width: 0;
+  justify-self: end;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: clamp(2.7rem, 4.2vw, 4.8rem);
+  place-items: center;
+  background: #c97a5d;
+  box-shadow: 0 2.25rem 5.6rem rgba(129, 58, 38, 0.2);
+  isolation: isolate;
+  aspect-ratio: 1.12 / 1;
+}
+
+.animationBox::after {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(#c97a5d, #c97a5d) top / 100% 10px no-repeat;
+  box-shadow: inset 0 0 0 4px #c97a5d;
+  content: '';
+  pointer-events: none;
+}
+
+.workflowFrame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.workflowFrame::after {
+  position: absolute;
+  right: 3.5%;
+  bottom: 0;
+  left: 7%;
+  z-index: 1;
+  height: 9%;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 92%);
+  content: '';
+  pointer-events: none;
+}
+
+.workflowImage {
+  position: absolute;
+  top: -3.8%;
+  left: -90.1%;
+  width: auto;
+  max-width: none;
+  height: 110%;
+  user-select: none;
+  filter: none;
+  image-rendering: auto;
+}
+
+@keyframes logo-segment-enter {
+  from { opacity: 0; transform: rotate(-3deg) scale(0.94); }
+  to { opacity: 1; transform: rotate(0) scale(1); }
+}
+
+@keyframes logo-guides-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 70rem) {
+  .layout {
+    grid-template-columns: minmax(16rem, 0.72fr) minmax(31rem, 1.28fr);
+    gap: 2rem;
+  }
+
+  .heading {
+    font-size: clamp(2.2rem, 3.9vw, 3.3rem);
+  }
+}
+
+@media (max-width: 54rem) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .copy {
+    max-width: 38rem;
+    padding: 0.5rem clamp(0.25rem, 2vw, 1rem);
+  }
+
+  .heading,
+  .description {
+    max-width: 34rem;
+  }
+
+  .animationBox {
+    width: min(96%, 40.5rem);
+    justify-self: center;
+  }
+}
+
+@media (max-width: 38rem) {
+  .section {
+    padding: 1.3rem;
+  }
+
+  .featureLogo {
+    margin-bottom: 1rem;
+  }
+
+  .eyebrow {
+    margin-bottom: 1.35rem;
+    font-size: 0.72rem;
+  }
+
+  .heading {
+    font-size: clamp(2.25rem, 11vw, 3.55rem);
+  }
+
+  .description {
+    font-size: 1rem;
+  }
+
+  .cta {
+    min-height: 3.35rem;
+    padding-inline: 1.35rem;
+  }
+
+  .animationBox {
+    border-radius: 2.35rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logoSegments path,
+  .logoGuides {
+    animation: logo-guides-enter 180ms ease both;
+  }
+}

@@ -27,7 +27,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function TermsAndConditions() {
   return (
     <>
-      <Nav homePrefix="/" />
+      <Nav />
       <Breadcrumbs />
       <main className="mx-auto w-full max-w-3xl px-6 py-20 sm:py-28">
         <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
@@ -84,36 +84,43 @@ export default function TermsAndConditions() {
           </ul>
         </Section>
 
-        <Section title="4. Refund Policy">
-          <p>This is the core of our guarantee, so read it carefully.</p>
+        <Section title="4. Refunds and Cancellation">
+          <p>
+            We do not offer a results-based refund, and we would rather say so here than imply one
+            elsewhere. What protects you is the structure: a small first commitment, full visibility
+            while the work happens, and no lock-in.
+          </p>
           <ul className="list-disc space-y-2 pl-5">
             <li>
-              <strong>No refunds after the first week.</strong> Once your one-week trial period ends
-              and you move into a paid month, that month's fee is non-refundable, regardless of
-              results.
+              <strong>You commit one week at a time to begin.</strong> The first week is paid
+              separately, before any monthly commitment, so the amount at risk is one week&apos;s fee
+              rather than a month&apos;s.
             </li>
             <li>
-              <strong>During the trial week only:</strong> if we underperform, you're entitled to a
-              refund of that week's fee, or the rest of that month free while we keep working — your
-              choice.
+              <strong>You see the work as it happens.</strong> Every message, reply and KPI is in a
+              shared CRM you can access daily. You are not waiting on a report to find out what was
+              done.
             </li>
             <li>
-              <strong>Burden of proof is on the client.</strong> To qualify for a trial-week refund,
-              you must demonstrate — with specifics — that Outlio failed to deliver the agreed scope
-              of work (e.g., failed to launch outreach, failed to hit the agreed activity volume, or
-              failed to provide reporting). General dissatisfaction with results, lead quality, or
-              lack of booked meetings — where the agreed activity and process were actually carried
-              out — does not qualify for a refund. Outbound results depend on market response, which
-              we don't control.
+              <strong>Months are month-to-month.</strong> You can stop at the end of any billing
+              period. We do not require a minimum term.
             </li>
             <li>
-              Refund requests must be submitted in writing within 7 days of the trial week ending.
-              Requests made after that window will not be considered.
+              <strong>If we fail to deliver the agreed scope,</strong> tell us in writing within 7
+              days of that period ending — for example if outreach was never launched, the agreed
+              activity volume was missed, or reporting was not provided. Where that is the case we
+              will refund that period or continue at no charge, your choice.
             </li>
             <li>
-              No refunds are issued for any month beyond the first, for setup fees, ad spend already
-              deployed on your behalf, or for third-party costs (tools, platforms, ad accounts)
-              incurred on your behalf.
+              <strong>Market response is not part of that.</strong> Where the agreed activity was
+              carried out, a disappointing reply rate or a period with no booked meetings is not
+              refundable. We do not control whether your market responds, and we will not pretend
+              otherwise to close a deal.
+            </li>
+            <li>
+              Fees already paid are otherwise non-refundable, including setup fees, ad spend already
+              deployed on your behalf, and third-party costs (tools, platforms, ad accounts) incurred
+              on your behalf.
             </li>
           </ul>
         </Section>
@@ -167,7 +174,11 @@ export default function TermsAndConditions() {
               territories.
             </li>
           </ul>
-          <p>Delays on your end can delay results, and do not extend refund windows.</p>
+          <p>
+            Delays on your end can delay results. Where our delivery is blocked waiting on your
+            access, approvals or assets, that period is not a failure to deliver the agreed scope
+            under Section 4.
+          </p>
         </Section>
 
         <Section title="8. Third-Party Platform & Legal Compliance">

@@ -84,7 +84,7 @@ export function BookingModal() {
           ref={triggerRef}
           type="button"
           onClick={() => setIsOpen(true)}
-          className="mt-5 inline-flex h-11 items-center justify-center rounded-[var(--radius-md)] bg-accent px-6 text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
+          className="mt-5 inline-flex h-11 items-center justify-center rounded-[var(--radius-md)] bg-accent px-6 text-base font-semibold text-cream transition-colors duration-150 hover:bg-[#f4a914] hover:text-[#140104]"
         >
           Book a call
         </button>

@@ -1,21 +1,14 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
 import Nav from "./components/Nav";
 import Footer from "./components/Footer";
 import Reveal from "./components/Reveal";
 import HeroHeadline from "./components/HeroHeadline";
-import CaseStudies from "./components/CaseStudies";
-import OfferModal from "./components/OfferModal";
 import TestimonialFlipCard from "./components/TestimonialFlipCard";
 import HeroScrollFade from "./components/HeroScrollFade";
 import InteractiveWorldMap from "./components/InteractiveWorldMap";
 import AnimatedArrow from "./components/AnimatedArrow";
 import HeroWidgets from "./components/HeroWidgets";
-import PinboardWidgetA from "./components/PinboardWidgetA";
-import PinboardWidgetB from "./components/PinboardWidgetB";
 import OrbitalCaseStudies from "./components/OrbitalCaseStudies";
 import Starfield from "./components/Starfield";
 import MeteorShower from "./components/MeteorShower";
@@ -23,99 +16,82 @@ import StarFieldCanvas from "./components/StarFieldCanvas";
 import FAQSchema from "./components/FAQSchema";
 import { CALENDLY_URL } from "./lib/constants";
 
-const SERVICES = [
+const OUTBOUND_OFFERS = [
   {
-    name: "Outbound",
-    tagline: "Finding new clients shouldn't take up your entire day.",
-    description: "We build and manage your outbound system so you can spend less time prospecting and more time closing deals.",
+    tier: "Tier 1",
+    name: "Contained Outreach",
+    price: "$1,000/mo",
+    description: "A focused, human-led outbound operation across four channels.",
+    highlights: [
+      "40 touchpoints per day",
+      "200–240 weekly interactions",
+      "5 follow-ups per lead",
+      "2 dedicated sales reps",
+    ],
+    clientProvides: [
+      "Qualified lead lists with verified contact data, including Instagram, LinkedIn, X, and email.",
+      "Personal brand operations, including regular posting and engagement, running in-house to support outbound.",
+    ],
     included: [
-      "Ideal Customer Profile (ICP) research",
-      "Competitor research",
-      "Manual lead sourcing",
-      "Human-written personalized outreach",
-      "LinkedIn outreach",
-      "X (Twitter) outreach",
-      "Instagram outreach",
-      "Cold email campaigns",
-      "Follow-up sequences",
-      "Appointment setting",
-      "Weekly reporting & optimization",
-    ],
-    execution: [
-      "Up to 4 dedicated outreach accounts",
-      "Up to 40 personalized touchpoints every day",
-      "Multi-channel outreach across LinkedIn, X, Instagram, and Email",
-    ],
-    perfectFor: [
-      "SaaS & Tech startups",
-      "B2B agencies",
-      "Service businesses",
-      "Founders who want a predictable sales pipeline",
-    ],
-  },
-  {
-    name: "Growth Accelerator",
-    badge: "Custom",
-    tagline: "Building a product is only half the journey.",
-    description: "Getting customers consistently is what turns a startup into a business. We'll work alongside your team to build your growth strategy, improve your sales process, execute outbound campaigns, and solve the bottlenecks stopping you from scaling. We're an outsourced operations team, not consultants who hand in PDFs and disappear.",
-    included: [
-      "Growth strategy",
-      "Business development",
-      "Go-to-market planning",
-      "Sales systems",
-      "Outbound infrastructure",
-      "Team training",
-      "Founder advisory",
-      "KPI tracking",
-      "Weekly optimization",
-      "Tailored growth initiatives",
-    ],
-    perfectFor: [
-      "Early-stage startups",
-      "SaaS companies",
-      "Tech startups",
-      "B2B agencies",
-      "Founder-led businesses ready to scale",
-    ],
-    footer: "Every Growth Accelerator engagement is built around your business. No cookie-cutter packages. No generic advice. Just practical execution that helps you grow.",
-  },
-];
-
-const OFFERS = [
-  {
-    name: "Standard",
-    tagline: "The outbound engine, run by hand.",
-    features: [
-      "Around 50 hand-picked prospects a day, deliberately capped",
-      "Every message written by hand, A/B tested head-to-head",
-      "Account health protected: email, LinkedIn, X, Instagram",
-      "Reply rates we'll say out loud, 15-20% on low and mid-ticket",
-      "Fresh sales strategy as your market shifts",
-      "Live shared CRM, updated daily",
+      "Personalized engagement across LinkedIn, Instagram, X, and email.",
+      "40 custom touchpoints per day across all four channels.",
+      "5 follow-ups per lead.",
+      "200–240 lead interactions per week.",
+      "15% average reply rate.",
+      "2 dedicated sales reps working exclusively on your operations.",
     ],
     featured: false,
   },
   {
-    name: "Premium",
-    tagline: "The whole growth engine, outbound, inbound, and creative.",
-    features: [
-      "Everything in Standard",
-      "Inbound handled, no lead sits cold in your inbox",
-      "Your socials managed: LinkedIn and X end to end, Instagram ideation",
-      "SaaS explainer video, produced start to finish",
-      "Motion-design ad creatives once outbound pays for itself",
+    tier: "Tier 2",
+    name: "Research-Led Outbound",
+    price: "$1,700/mo",
+    description: "Deeper research, higher volume, and personal-brand support built into execution.",
+    highlights: [
+      "60 qualified leads per day",
+      "300 weekly interactions",
+      "8 follow-ups per lead",
+      "4 dedicated sales reps",
+    ],
+    clientProvides: [
+      "Marketing and brand material for personal brand build-up.",
+    ],
+    included: [
+      "Deep ICP research by Outlio's client research department.",
+      "60 qualified leads sourced per day across LinkedIn, Instagram, email, and X.",
+      "A 2-day warm-up engagement cycle with each prospect before outreach begins.",
+      "60 tailored touchpoints per day across all channels, including email.",
+      "8 follow-ups per lead, sequenced across channels.",
+      "300 leads researched, engaged, and interacted with per week.",
+      "Personal brand building optimized to channel inbound attention toward closing.",
+      "2 outbound strategies shipped every 15 days for A/B testing and review with you.",
+      "15% average reply rate maintained.",
+      "4 dedicated sales reps working exclusively on your operations.",
     ],
     featured: true,
   },
   {
-    name: "Custom",
-    tagline: "Consultation and team growth, built around your stage.",
-    features: [
-      "Starts with a consultation, not a package",
-      "Any mix of Standard and Premium, tailored to fit",
-      "In-house sales training on our systems",
-      "We help you hire and build your own backend team",
-      "When you're ready, we hand over the keys",
+    tier: "Tier 3",
+    name: "Custom Plan",
+    price: "Custom",
+    description: "A scaled lead-generation and closing operation designed around your product and volume.",
+    highlights: [
+      "Lead engine and custom CRM",
+      "Uncapped follow-ups",
+      "5-day lead warm-up",
+      "Lead generation and closing team",
+    ],
+    clientProvides: [],
+    included: [
+      "Everything in Tiers 1 and 2.",
+      "ICP research and lead generation at scale, powered by Outlio's in-house lead engine.",
+      "Access to our lead engine dashboard and a custom CRM to track performance and refine strategy using past data.",
+      "Product launch and demo assets made for your startup.",
+      "Uncapped follow-ups, with every lead assessed and updated against your qualification criteria.",
+      "A 5-day engagement period per lead before outreach begins.",
+      "Closing support handled by our team of specialized closers.",
+      "A team of dedicated sales reps covering both lead generation and closing operations.",
+      "Deep product research feeding new outbound strategies and different weekly volumes for A/B testing.",
     ],
     featured: false,
   },
@@ -149,22 +125,14 @@ const STEPS = [
   },
 ];
 
-const STATS = [
-  { value: "$100K+ MRR", label: "Addx Studio, within 6 months" },
-  { value: "53+", label: "meetings booked, Addx Studio" },
-  { value: "23 calls + $10K", label: "in 2.5 months, Click Labs" },
-  { value: "~$500K", label: "closed revenue, Knowledge City, on $50K+ deals" },
-  { value: "$20,000", label: "in 2.5 months, Motionisr, from zero" },
-];
-
 const FAQS = [
   {
     q: "We've been burned by an agency before.",
-    a: "So have most of our clients. That's exactly why you pay for one week first and watch everything live in a shared CRM. We earn month two.",
+    a: "So have most of our clients. That's why every message, reply, and KPI stays visible to you in a shared CRM. You can see the operation as it happens instead of waiting for a polished report.",
   },
   {
     q: "What if you don't perform?",
-    a: "Refund, or the rest of the month free while we keep working. Your pick.",
+    a: "We agree the scope and success criteria before work starts, then keep every message and KPI visible in the shared CRM. If something is underperforming, you see it early and we adjust the targeting, messaging, or channel strategy with you.",
   },
   {
     q: "How many clients can you actually bring in?",
@@ -247,26 +215,10 @@ const TEAM = [
 ];
 
 export default function Home() {
-  const [selectedOffer, setSelectedOffer] = useState<typeof OFFERS[0] | null>(null);
-  const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
-
-  const openOfferModal = (offer: typeof OFFERS[0]) => {
-    setSelectedOffer(offer);
-    setIsOfferModalOpen(true);
-  };
-
   return (
     <>
       <FAQSchema faqs={FAQS} />
       <Nav />
-      <OfferModal
-        offer={selectedOffer}
-        isOpen={isOfferModalOpen}
-        onClose={() => {
-          setIsOfferModalOpen(false);
-          setSelectedOffer(null);
-        }}
-      />
       <main>
         {/* ========== 1. HERO ========== */}
         <section className="relative px-4 py-6 sm:px-6 lg:px-8">
@@ -285,14 +237,22 @@ export default function Home() {
             <HeroWidgets />
 
             {/* Main Content - CENTERED */}
-            <div className="relative z-20 flex min-h-[700px] items-center justify-center px-8 py-24 sm:px-12 lg:min-h-[800px] lg:px-16 lg:py-32">
+            <div className="relative z-20 flex min-h-[590px] items-center justify-center px-5 py-20 sm:min-h-[660px] sm:px-10 sm:py-24 lg:min-h-[760px] lg:px-16 lg:py-28 xl:min-h-[800px] xl:py-32">
               <div className="mx-auto max-w-5xl text-center">
-                <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
-                  Outlio &middot; Hands-on growth accelerator
+                {/*
+                  ⚠️ A SECOND <h1> USED TO SIT HERE, above `HeroHeadline` —
+                  which renders its own. Two competing headings, and the
+                  paragraph beneath it restated the concise one further down
+                  almost word for word. `HeroHeadline` is the hero; this block
+                  was crowding it.
+                */}
+                <h1 className="text-4xl font-bold uppercase tracking-tight text-ink sm:text-5xl">
+                  Hands-on growth accelerator for tech startups and SaaS
+                </h1>
+                <p className="mt-3 text-base leading-relaxed text-muted/80 sm:text-lg">
+                  Outlio isn't a consultancy. We research your market, identify your ideal customers, write every message by hand, and run your outbound ourselves, then show you all of it live in a shared CRM. Our approach is research-first, human-led, and built to scale with you — from the intro call through launch and beyond. We help tech startups and SaaS companies fill the pipeline so you can focus on building your product.
                 </p>
-                <div className="mt-3">
-                  <HeroHeadline />
-                </div>
+                <HeroHeadline />
                 <HeroScrollFade>
                   <p className="mx-auto mt-6 max-w-3xl text-base leading-relaxed text-muted sm:text-lg">
                     Outlio isn't a consultancy. We research your market, write every message by hand, and
@@ -315,14 +275,15 @@ export default function Home() {
                     See the results
                   </Link>
                 </div>
-                <p className="mt-4 text-sm text-muted">
-                  First week only, before any monthly commitment. If we underperform, you don't pay.
+                <p className="mx-auto mt-4 max-w-xl text-sm text-muted">
+                  Choose a contained, research-led, or custom outbound operation—and watch every
+                  message and KPI in a shared CRM.
                 </p>
               </div>
             </div>
 
             {/* Marquee strip at bottom */}
-            <div className="relative border-t border-gray-200/60 bg-purple-50/50 py-6 overflow-hidden" aria-hidden="true">
+            <div className="relative hidden overflow-hidden border-t border-gray-200/60 bg-purple-50/50 py-6 sm:block" aria-hidden="true">
               <div className="relative overflow-hidden">
                 <div className="marquee-track flex w-max items-center gap-12 px-12 text-sm font-semibold uppercase tracking-[0.18em]">
                   {Array.from({ length: 3 }).map((_, i) => (
@@ -331,7 +292,7 @@ export default function Home() {
                         "Research-first outbound",
                         "Every message written by hand",
                         "Live shared CRM",
-                        "The one-week deal",
+                        "Three ways to scale",
                         "No autopilot",
                       ].map((t) => (
                         <span key={t} className="flex items-center gap-12">
@@ -363,7 +324,7 @@ export default function Home() {
           <StarFieldCanvas />
 
           {/* Starfield with hero stars — bottom-left, feathered edges */}
-          <div className="absolute bottom-[15%] left-[3%] pointer-events-none" aria-hidden="true"
+          <div className="absolute bottom-[15%] left-[3%] hidden pointer-events-none md:block" aria-hidden="true"
             style={{
               maskImage: "radial-gradient(ellipse at center, black 30%, transparent 75%)",
               WebkitMaskImage: "radial-gradient(ellipse at center, black 30%, transparent 75%)",
@@ -413,9 +374,9 @@ export default function Home() {
             filter: "blur(2px)",
           }} />
 
-          <div className="relative z-10 mx-auto max-w-7xl px-6 pt-16 sm:px-10 sm:pt-20 pb-6 sm:pb-8">
+          <div className="relative z-10 mx-auto max-w-7xl px-6 pb-2 pt-10 sm:px-10 sm:pt-12">
             <Reveal>
-              <h2 className="max-w-3xl text-4xl font-black uppercase leading-tight tracking-tight sm:text-5xl text-white">
+              <h2 className="max-w-3xl text-3xl font-black uppercase leading-tight tracking-tight text-white sm:text-4xl">
                 You asked for the numbers, and so the numbers have spoken
               </h2>
             </Reveal>
@@ -427,14 +388,14 @@ export default function Home() {
         </section>
 
         {/* ========== 2. PROBLEM ========== */}
-        <section className="mx-auto max-w-7xl px-6 py-24 sm:px-10 sm:py-32">
+        <section className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
           <Reveal>
-            <h2 className="max-w-3xl text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
+            <h2 className="max-w-3xl text-3xl font-bold uppercase leading-tight tracking-tight sm:text-4xl">
               You know how to build. <span className="text-accent">Nobody taught you how to sell.</span>
             </h2>
           </Reveal>
-          <div className="mt-16 grid gap-12 lg:grid-cols-[1fr_1.1fr]">
-            <div className="space-y-8 text-lg leading-relaxed sm:text-xl">
+          <div className="mt-9 grid items-center gap-8 lg:grid-cols-[1fr_1.05fr]">
+            <div className="space-y-4 text-base leading-relaxed sm:text-lg">
               {[
                 "You shipped the product. Launched on Product Hunt. Got the upvotes.",
                 "Then, quiet.",
@@ -447,148 +408,27 @@ export default function Home() {
                 </Reveal>
               ))}
             </div>
-            <Reveal delay={200} className="lg:sticky lg:top-32 lg:self-start">
+            <Reveal delay={200}>
               <InteractiveWorldMap />
             </Reveal>
           </div>
         </section>
 
 
-        {/* ========== SERVICES ========== */}
-        <section id="services" className="scroll-mt-24 border-t border-ink/10">
-          <div className="mx-auto max-w-7xl px-6 py-24 sm:px-10 sm:py-32">
-            <Reveal>
-              <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-6xl">
-                Our <span className="text-accent">Services.</span>
-              </h2>
-              <p className="mt-5 max-w-xl text-lg text-muted">
-                Everything we do is hands-on, human-driven, and built around one goal: getting you customers.
-              </p>
-            </Reveal>
-
-            {/* Full Services Display, 2 Side by Side Cards */}
-            <div className="mt-16 grid gap-8 lg:grid-cols-2">
-              {SERVICES.map((service, index) => (
-                <Reveal key={service.name} delay={index * 150}>
-                  <div
-                    id={service.name.toLowerCase().replace(/\s+/g, '-')}
-                    className="scroll-mt-24 rounded-2xl border border-white/30 p-6 backdrop-blur-xl transition-all duration-500 hover:border-accent/30 hover:shadow-xl hover:shadow-accent/10"
-                    style={{
-                      background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.45) 100%)',
-                      backdropFilter: 'blur(24px) saturate(180%)',
-                      WebkitBackdropFilter: 'blur(24px) saturate(180%)'
-                    }}
-                  >
-                    {service.badge && (
-                      <span className="inline-block rounded-full bg-accent px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-cream mb-3">
-                        {service.badge}
-                      </span>
-                    )}
-
-                    <h3 className="text-2xl font-bold tracking-tight">{service.name}</h3>
-                    <p className="mt-2 text-base font-medium leading-relaxed text-ink">{service.tagline}</p>
-                    <p className="mt-3 text-sm leading-relaxed text-muted">{service.description}</p>
-
-                    {/* All content in one strip */}
-                    <div className="mt-6 space-y-5">
-                      {/* What's Included */}
-                      <div>
-                        <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent mb-3">What's Included</h4>
-                        <ul className="space-y-2">
-                          {service.included.map((item) => (
-                            <li key={item} className="flex gap-2 text-[13px] leading-snug">
-                              <span aria-hidden className="mt-[4px] size-1 shrink-0 rounded-full bg-accent" />
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* How We Execute */}
-                      {service.execution && (
-                        <div>
-                          <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent mb-3">How We Execute</h4>
-                          <ul className="space-y-2">
-                            {service.execution.map((item) => (
-                              <li key={item} className="flex gap-2 text-[13px] leading-snug">
-                                <span aria-hidden className="mt-[4px] size-1 shrink-0 rounded-full bg-accent" />
-                                {item}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Perfect For */}
-                      <div>
-                        <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent mb-3">Perfect For</h4>
-                        <ul className="space-y-2">
-                          {service.perfectFor.map((item) => (
-                            <li key={item} className="flex gap-2 text-[13px] leading-snug">
-                              <span aria-hidden className="mt-[4px] size-1 shrink-0 rounded-full bg-accent" />
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-
-                    {service.footer && (
-                      <p className="mt-6 border-t border-ink/10 pt-4 text-xs font-medium leading-relaxed text-ink/80 italic">
-                        {service.footer}
-                      </p>
-                    )}
-
-                    <Link
-                      href="#book"
-                      className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink px-7 py-3.5 text-sm font-semibold text-cream transition-all hover:bg-accent hover:scale-105"
-                    >
-                      Get started <span aria-hidden>&rarr;</span>
-                    </Link>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-
-            {/* signature statement */}
-            <Reveal>
-              <blockquote
-                className="mx-auto mt-32 max-w-4xl text-center p-10 rounded-3xl backdrop-blur-xl border border-white/30 shadow-xl transition-all duration-500 hover:border-accent/40 hover:shadow-2xl hover:shadow-accent/10"
-                style={{
-                  background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.45) 100%)',
-                  backdropFilter: 'blur(24px) saturate(180%)',
-                  WebkitBackdropFilter: 'blur(24px) saturate(180%)'
-                }}
-              >
-                <p className="text-3xl font-bold leading-snug tracking-tight sm:text-5xl">
-                  A human writing 50 personalized messages a day, will{" "}
-                  <span className="text-accent">outpace, outlast, and outwin</span> an LLM writing 200
-                </p>
-                <p className="mt-6 text-lg text-muted">
-                  That's not theory. It's a game-plan.
-                </p>
-              </blockquote>
-            </Reveal>
-          </div>
-        </section>
-
         {/* ========== 4. HOW IT WORKS ========== */}
         <section id="how" className="scroll-mt-24 border-t border-ink/10 bg-panel/50">
-          <div className="mx-auto max-w-7xl px-6 py-24 sm:px-10 sm:py-32">
+          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
             <Reveal>
-              <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-6xl">
+              <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-4xl">
                 No mystery. <span className="text-accent">No 90-slide deck.</span>
               </h2>
             </Reveal>
-            <ol className="mt-16 max-w-3xl">
+            <ol className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {STEPS.map((s, i) => (
-                <Reveal key={s.n} delay={i * 80}>
-                  <li className="relative grid grid-cols-[auto_1fr] gap-6 pb-14 sm:gap-10 last:pb-0">
-                    {i < STEPS.length - 1 && (
-                      <span aria-hidden className="absolute left-6 top-14 h-full w-px bg-ink/15 sm:left-7" />
-                    )}
+                <Reveal key={s.n} delay={i * 60} className="h-full">
+                  <li className="h-full rounded-2xl border border-ink/10 bg-white/55 p-4">
                     <span
-                      className="grid size-12 shrink-0 place-items-center rounded-full border border-white/30 text-sm font-bold sm:size-14 backdrop-blur-xl transition-all duration-500 hover:border-accent/40 hover:shadow-lg hover:shadow-accent/10"
+                      className="grid size-9 shrink-0 place-items-center rounded-full border border-white/30 text-xs font-bold backdrop-blur-xl transition-all duration-500 hover:border-accent/40 hover:shadow-lg hover:shadow-accent/10"
                       style={{
                         background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.4) 100%)',
                         backdropFilter: 'blur(20px) saturate(180%)',
@@ -597,9 +437,9 @@ export default function Home() {
                     >
                       {s.n}
                     </span>
-                    <div className="pt-1.5 sm:pt-3">
-                      <h3 className="text-2xl font-semibold tracking-tight">{s.title}</h3>
-                      <p className="mt-3 max-w-xl leading-relaxed text-muted">{s.body}</p>
+                    <div className="mt-4">
+                      <h3 className="text-lg font-semibold tracking-tight">{s.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-muted">{s.body}</p>
                     </div>
                   </li>
                 </Reveal>
@@ -608,55 +448,131 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== 6. GUARANTEE — deep minimal gradient band ========== */}
-        <section className="grad-band relative overflow-hidden text-cream">
-          {/* soft glows so the band reads glassy, not flat */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(50% 65% at 85% 10%, rgba(124, 121, 255, 0.22), transparent 70%), radial-gradient(45% 55% at 8% 95%, rgba(79, 75, 255, 0.16), transparent 70%)",
-            }}
-          />
-          <div className="relative mx-auto max-w-7xl px-6 py-28 sm:px-10 sm:py-40">
+        {/* ========== OUTBOUND OFFERS ========== */}
+        <section id="offers" className="scroll-mt-24 border-y border-ink/10 bg-white font-sans text-ink [&_h2]:font-sans [&_h3]:font-sans [&_h4]:font-sans">
+          <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
             <Reveal>
-              <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-cream/55">
-                The guarantee
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+                Outbound offers
               </p>
-              <h2 className="mt-6 text-5xl font-bold uppercase tracking-tight sm:text-7xl">
-                The one-week deal.
+              <h2 className="mt-3 max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl">
+                Choose the support your team needs.
               </h2>
-            </Reveal>
-            <div className="mt-14 max-w-2xl space-y-6 text-2xl leading-snug sm:text-3xl">
-              <Reveal delay={80}>
-                <p>No monthly retainer upfront. You pay for one week.</p>
-              </Reveal>
-              <Reveal delay={160}>
-                <p className="text-cream/85">
-                  If we underperform: a refund, or the rest of the month free while we keep working.
-                </p>
-              </Reveal>
-              <Reveal delay={240}>
-                <p className="font-semibold">Either way, we keep working.</p>
-              </Reveal>
-            </div>
-            <Reveal delay={320}>
-              <p className="mt-14 text-base text-cream/55">
-                Most agencies ask for trust first and results later. We flipped the order.
+              <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">
+                Three straightforward ways to run outbound with Outlio.
               </p>
             </Reveal>
+
+            <div className="mt-9 grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {OUTBOUND_OFFERS.map((offer, index) => (
+                <Reveal
+                  key={offer.name}
+                  delay={index * 70}
+                  className={`h-full ${index === 2 ? "md:col-span-2 lg:col-span-1" : ""}`}
+                >
+                  <article
+                    className={`offer-card flex h-full flex-col rounded-2xl border bg-transparent p-5 sm:p-6 ${
+                      offer.featured
+                        ? "border-accent/35"
+                        : "border-ink/12"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
+                        {offer.tier}
+                      </p>
+                      {offer.featured && (
+                        <span className="rounded-full border border-accent/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-accent">
+                          Full-service
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="mt-4 text-xl font-bold tracking-tight sm:text-2xl">
+                      {offer.name}
+                    </h3>
+                    <p className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                      {offer.price}
+                    </p>
+                    <p className="mt-3 text-sm leading-relaxed text-muted">
+                      {offer.description}
+                    </p>
+
+                    <div className="mt-5 border-t border-ink/10 pt-5">
+                      <h4 className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                        At a glance
+                      </h4>
+                      <ul className="mt-3 space-y-2.5">
+                        {offer.highlights.map((item) => (
+                          <li key={item} className="flex gap-2.5 text-sm leading-snug text-ink/80">
+                            <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-accent" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <details className="group mt-5 border-t border-ink/10 pt-4">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-ink">
+                        Full plan details
+                        <span aria-hidden className="text-lg font-normal text-muted transition-transform group-open:rotate-45">+</span>
+                      </summary>
+                      <div className="pt-4">
+                        {offer.clientProvides.length > 0 && (
+                          <div>
+                            <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
+                              What you provide
+                            </h4>
+                            <ul className="mt-3 space-y-2">
+                              {offer.clientProvides.map((item) => (
+                                <li key={item} className="text-[13px] leading-relaxed text-muted">
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <div className={offer.clientProvides.length > 0 ? "mt-5" : ""}>
+                          <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
+                            What&apos;s included
+                          </h4>
+                          <ul className="mt-3 space-y-2">
+                            {offer.included.map((item) => (
+                              <li key={item} className="flex gap-2 text-[13px] leading-relaxed text-muted">
+                                <span aria-hidden className="text-accent">—</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </details>
+
+                    <div className="mt-auto pt-6">
+                      <Link
+                        href={CALENDLY_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent"
+                      >
+                        Discuss this plan <span aria-hidden className="ml-2">&rarr;</span>
+                      </Link>
+                    </div>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
           </div>
         </section>
         {/* ========== 8. TESTIMONIALS ========== */}
         <section className="border-t border-ink/10 bg-panel/50">
-          <div className="mx-auto max-w-7xl px-6 py-24 sm:px-10 sm:py-32">
+          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
             <Reveal>
-              <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-6xl">
+              <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-4xl">
                 Don't take <span className="text-accent">our word</span> for it.
               </h2>
             </Reveal>
-            <div className="mt-16 grid gap-6 md:grid-cols-2">
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
               {[
                 {
                   quote: "Liam Ottley closed, alhamdulillah.",
@@ -682,10 +598,10 @@ export default function Home() {
         </section>
 
         {/* ========== 9. FAQ ========== */}
-        <section id="faq" className="mx-auto max-w-7xl scroll-mt-24 px-6 py-24 sm:px-10 sm:py-32">
-          <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr]">
+        <section id="faq" className="mx-auto max-w-7xl scroll-mt-24 px-6 py-14 sm:px-10 sm:py-16">
+          <div className="grid gap-8 lg:grid-cols-[1fr_1.4fr]">
             <Reveal>
-              <h2 className="text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
+              <h2 className="text-3xl font-bold uppercase leading-tight tracking-tight sm:text-4xl">
                 The questions you're <span className="text-accent">already thinking.</span>
               </h2>
               <AnimatedArrow />
@@ -693,13 +609,13 @@ export default function Home() {
             <div className="divide-y divide-ink/10 border-y border-ink/10">
               {FAQS.map((f, i) => (
                 <details key={f.q} open={i === 0} className="group">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-6 text-lg font-semibold tracking-tight sm:text-xl">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-5 py-4 text-base font-semibold tracking-tight sm:text-lg">
                     {f.q}
                     <span aria-hidden className="faq-mark grid size-9 shrink-0 place-items-center rounded-full border border-ink text-xl leading-none">
                       +
                     </span>
                   </summary>
-                  <p className="max-w-2xl pb-7 leading-relaxed text-muted">{f.a}</p>
+                  <p className="max-w-2xl pb-5 text-sm leading-relaxed text-muted sm:text-base">{f.a}</p>
                 </details>
               ))}
             </div>
@@ -708,15 +624,15 @@ export default function Home() {
 
         {/* ========== 10. FOUNDER STORY ========== */}
         <section id="about" className="scroll-mt-24 border-t border-ink/10 bg-panel/50">
-          <div className="mx-auto max-w-7xl px-6 py-24 sm:px-10 sm:py-32">
-            <div className="grid gap-16 lg:grid-cols-[1.1fr_1fr]">
+          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
+            <div className="grid items-center gap-8 lg:grid-cols-[1.1fr_1fr] lg:gap-10">
               <div>
                 <Reveal>
-                  <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-6xl">
+                  <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-4xl">
                     Built <span className="text-accent">the hard way.</span>
                   </h2>
                 </Reveal>
-                <div className="mt-10 max-w-xl space-y-6 text-lg leading-relaxed">
+                <div className="mt-6 max-w-xl space-y-3 text-base leading-relaxed">
                   {[
                     "Our founder started at fifteen with nothing, no money, and at times no stable place to live.",
                     "E-commerce didn't take off. Trading the markets took a toll, but it taught him how markets, and startups, actually behave.",
@@ -730,7 +646,7 @@ export default function Home() {
                     </Reveal>
                   ))}
                 </div>
-                <div className="mt-12 space-y-3 text-2xl font-semibold tracking-tight sm:text-3xl">
+                <div className="mt-6 space-y-2 text-xl font-semibold tracking-tight sm:text-2xl">
                   {["Get a life.", "Stay humble, nobody knows everything.", "Say no, including to clients who aren't a fit."].map(
                     (v, i) => (
                       <Reveal key={v} delay={i * 80}>
@@ -745,8 +661,8 @@ export default function Home() {
                   )}
                 </div>
               </div>
-              <Reveal delay={150} className="lg:sticky lg:top-32 lg:self-start">
-                <div className="relative aspect-[4/5] overflow-hidden rounded-2xl">
+              <Reveal delay={150}>
+                <div className="relative mx-auto aspect-[4/5] w-full max-w-[390px] overflow-hidden rounded-2xl">
                   <Image
                     src="/office picture.png"
                     alt="Outlio team office"
@@ -762,14 +678,14 @@ export default function Home() {
         </section>
 
         {/* ========== TEAM ========== */}
-        <section id="team" className="relative scroll-mt-24 overflow-hidden border-t border-ink/10 bg-panel/50 py-24 sm:py-32">
+        <section id="team" className="relative scroll-mt-24 overflow-hidden border-t border-ink/10 bg-panel/50 py-14 sm:py-16">
           <div className="relative mx-auto max-w-7xl px-6 sm:px-10">
             <Reveal>
-              <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-5xl text-ink">
+              <h2 className="text-3xl font-bold uppercase tracking-tight text-ink sm:text-4xl">
                 The people <span className="text-accent">behind the engine.</span>
               </h2>
             </Reveal>
-            <div className="mt-16 grid gap-6 md:grid-cols-3">
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
               {TEAM.map((m, i) => {
                 return (
                   <Reveal key={m.name} delay={i * 120} className="h-full">
@@ -809,7 +725,7 @@ export default function Home() {
                             </a>
                           ))}
                         </div>
-                        <h3 className="mt-4 px-1 text-2xl font-semibold tracking-tight text-ink">{m.name}</h3>
+                        <h3 className="mt-3 px-1 text-xl font-semibold tracking-tight text-ink">{m.name}</h3>
                         <p className="mb-2 mt-1 px-1 text-sm text-muted">{m.role}</p>
                       </div>
                     </article>
@@ -820,7 +736,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ========== 11. FINAL CTA — same deep gradient band as the guarantee ========== */}
+        {/* ========== 11. FINAL CTA — same deep gradient band as "How we start" ========== */}
         <section id="book" className="grad-band relative scroll-mt-24 overflow-hidden text-cream">
           <div
             aria-hidden
@@ -830,24 +746,24 @@ export default function Home() {
                 "radial-gradient(55% 70% at 50% 0%, rgba(124, 121, 255, 0.2), transparent 70%)",
             }}
           />
-          <div className="relative mx-auto max-w-7xl px-6 py-28 text-center sm:px-10 sm:py-36">
+          <div className="relative mx-auto max-w-7xl px-6 py-16 text-center sm:px-10 sm:py-20">
             <Reveal>
-              <h2 className="text-5xl font-bold uppercase tracking-tight sm:text-7xl">
+              <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-5xl">
                 You've read enough.
               </h2>
-              <p className="mx-auto mt-8 max-w-xl text-xl leading-relaxed text-cream/75">
+              <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-cream/75 sm:text-lg">
                 One call. Fifteen minutes. No pitch, if we can't help you, we'll say so on the call.
               </p>
               <Link
                 href={CALENDLY_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-10 inline-block rounded-full bg-cream px-10 py-4 text-lg font-semibold text-ink transition-all hover:scale-105 hover:bg-white"
+                className="mt-6 inline-block rounded-full bg-cream px-8 py-3.5 text-base font-semibold text-ink transition-all hover:scale-105 hover:bg-white"
               >
                 Book a call
               </Link>
-              <p className="mt-6 text-sm text-cream/55">
-                First week billed before anything monthly. You'll see the results before you commit.
+              <p className="mt-4 text-sm text-cream/55">
+                Clear scope, visible execution, and a shared CRM from day one.
               </p>
             </Reveal>
           </div>

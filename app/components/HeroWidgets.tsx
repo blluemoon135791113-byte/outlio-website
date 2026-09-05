@@ -2,7 +2,7 @@
 
 export default function HeroWidgets() {
   return (
-    <div className="pointer-events-none absolute inset-0">
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden xl:block">
       {/* Top Left - Yellow Sticky Note with Check Button */}
       <div className="absolute left-[2%] top-[4%] hidden md:left-[3%] md:top-[6%] md:block">
         {/* 3D Board Shadow/Silhouette */}
@@ -325,23 +325,6 @@ export default function HeroWidgets() {
         </div>
       </div>
 
-      {/* Mobile: Single small widget */}
-      <div className="absolute left-[1rem] top-[2rem] block md:hidden">
-        <div
-          className="h-[7rem] w-[7rem] rounded-[0.75rem] bg-gradient-to-b from-yellow-100 to-yellow-200 p-[0.75rem]"
-          style={{
-            transform: 'rotate(-6deg)',
-            boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.12), 0 0.125rem 0.375rem rgba(0,0,0,0.08)',
-          }}
-        >
-          <div className="absolute left-1/2 top-[0.5rem] h-[0.625rem] w-[0.625rem] -translate-x-1/2 rounded-full bg-red-400" />
-          <div className="font-handwriting text-xs leading-relaxed text-gray-700">
-            Research
-            <br />
-            first.
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

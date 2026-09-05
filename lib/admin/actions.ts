@@ -13,6 +13,10 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
+import {
+  backfillCompaniesForUser,
+  listUsersWithUnlinkedLeads,
+} from '@/lib/companies/backfill'
 import { assertAdmin } from '@/lib/auth/access'
 import { consume } from '@/lib/auth/rate-limit'
 import { grantEntitlement, revokeEntitlement } from '@/lib/payments/grant'
@@ -109,6 +113,70 @@ export async function revokeUserAction(
 
   revalidatePath('/admin')
   return { status: 'success', message: 'Access revoked.' }
+}
+
+/**
+ * Links leads that carry no company yet.
+ *
+ * Maintenance, not user management: it changes no one's access, so it does not
+ * go through `protectAdminMutation`. It is idempotent and safe to run
+ * repeatedly — leads that already have a company are never selected.
+ *
+ * Bounded per invocation so it cannot outlive a function timeout. Run it again
+ * while the result still reports remaining work.
+ */
+export async function backfillCompaniesAction(
+  _prev: AdminActionState,
+  _formData: FormData,
+): Promise<AdminActionState> {
+  const admin = await assertAdmin()
+
+  const limit = await consume(ACTION_LIMITS.adminMutation, `admin:${admin.userId}`)
+  if (!limit.allowed) {
+    return { status: 'error', message: 'Too many admin changes. Please wait and try again.' }
+  }
+
+  let leadsLinked = 0
+  let leadsUnidentified = 0
+  let usersProcessed = 0
+  let hasMore = false
+
+  try {
+    const scan = await listUsersWithUnlinkedLeads()
+
+    // A truncated scan means accounts exist that were never enumerated. Saying
+    // "finished" here is how a backfill silently skips whole accounts.
+    hasMore = scan.truncated
+
+    for (const userId of scan.userIds) {
+      const result = await backfillCompaniesForUser(userId)
+      leadsLinked += result.leadsLinked
+      leadsUnidentified += result.leadsUnidentified
+      usersProcessed += 1
+      hasMore = hasMore || result.hasMore
+    }
+  } catch {
+    return { status: 'error', message: 'Could not finish the backfill. Please try again.' }
+  }
+
+  await createAdminClient()
+    .from('admin_audit_logs')
+    .insert({
+      admin_id: admin.userId,
+      action: 'companies.backfill',
+      target_type: 'companies',
+      after_state: { usersProcessed, leadsLinked, leadsUnidentified, hasMore },
+      reason: 'Company backfill run from the admin panel',
+    })
+
+  revalidatePath('/admin')
+  return {
+    status: 'success',
+    message: hasMore
+      ? `Linked ${leadsLinked} leads across ${usersProcessed} accounts. More remain — run it again.`
+      : `Linked ${leadsLinked} leads across ${usersProcessed} accounts. ` +
+        `${leadsUnidentified} carried no company to match.`,
+  }
 }
 
 export async function suspendUserAction(

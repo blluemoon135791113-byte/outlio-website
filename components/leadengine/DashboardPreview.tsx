@@ -17,20 +17,27 @@ export function DashboardPreview() {
           <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-accent">
             Inside Lead Engine
           </p>
-          <h2 className="mt-3 text-3xl font-bold uppercase leading-tight tracking-tight sm:text-4xl">
+          <h2 className="mt-3 font-heading text-3xl uppercase leading-tight tracking-[-0.035em] [font-weight:var(--leadengine-heading-weight)] sm:text-4xl">
             Everything in one workspace
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted">
+          <p className="mx-auto mt-4 max-w-xl font-body text-[var(--leadengine-copy-size)] leading-[var(--leadengine-copy-leading)] tracking-[-0.012em] text-muted [font-weight:var(--leadengine-copy-weight)]">
             See your credits, extraction activity, files, account access, and subscription the moment you sign in.
           </p>
         </div>
 
-        <div className="mt-10 overflow-hidden rounded-[20px] border border-accent/15 bg-white shadow-[0_28px_80px_rgba(80,55,140,0.14)] sm:mt-12">
-          <div className="flex h-10 items-center gap-1.5 border-b border-border bg-[#fcfbff] px-4">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#ff8a80]" />
-            <span className="h-2.5 w-2.5 rounded-full bg-[#ffd180]" />
-            <span className="h-2.5 w-2.5 rounded-full bg-[#8bd3a8]" />
-            <span className="mx-auto -translate-x-5 text-[10px] font-medium tracking-wide text-muted/70">
+        <div
+          role="img"
+          aria-label="Preview of the Lead Engine workspace showing credits, extraction activity, account access and subscription status"
+          className="mt-10 overflow-hidden rounded-[20px] border border-accent/15 bg-white shadow-[0_28px_80px_color-mix(in_srgb,var(--charcoal)_16%,transparent)] sm:mt-12"
+        >
+          {/* ⚠️ Was a violet-white bar with generic macOS traffic lights
+              (#ff8a80 / #ffd180 / #8bd3a8) — four hardcoded colours belonging
+              to no palette. Now the brand's own three. */}
+          <div className="flex h-10 items-center gap-1.5 border-b border-border bg-ivory px-4">
+            <span className="h-2.5 w-2.5 rounded-full bg-coral" />
+            <span className="h-2.5 w-2.5 rounded-full bg-lilac" />
+            <span className="h-2.5 w-2.5 rounded-full bg-sage" />
+            <span className="mx-auto -translate-x-5 text-[10px] font-medium tracking-wide text-muted">
               app.outlio.io
             </span>
           </div>
@@ -44,7 +51,7 @@ export function DashboardPreview() {
                 <span className="font-heading text-sm font-semibold tracking-tight">Outlio</span>
               </div>
               <div className="px-3 py-7">
-                <p className="px-3 text-[9px] font-semibold uppercase tracking-[0.17em] text-muted/65">Workspace</p>
+                <p className="px-3 text-[9px] font-semibold uppercase tracking-[0.17em] text-muted/80">Workspace</p>
                 <nav aria-label="Dashboard preview" className="mt-3 space-y-1 text-[12px]">
                   <PreviewNav active icon="⊞">Overview</PreviewNav>
                   <PreviewNav icon="↓">New extraction</PreviewNav>
@@ -117,7 +124,7 @@ export function DashboardPreview() {
                         <PreviewRow label="Access" value="Active subscription" />
                       </dl>
                     </div>
-                    <div className="rounded-xl border border-accent/15 bg-[linear-gradient(145deg,#fbf9ff,#f0eaff)] p-4">
+                    <div className="rounded-xl border border-accent/15 bg-[linear-gradient(145deg,var(--lilac-soft),color-mix(in_srgb,var(--lilac)_45%,white))] p-4">
                       <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-accent">Subscription</p>
                       <p className="mt-2 text-sm font-semibold text-ink">Professional</p>
                       <p className="mt-1 text-[10px] text-muted">Active · Monthly</p>
@@ -130,7 +137,7 @@ export function DashboardPreview() {
         </div>
 
         <div className="mt-7 flex justify-center">
-          <Link href="/sign-up" className="inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-accent/35 decoration-2 underline-offset-4 transition-[color,transform] duration-150 ease-out hover:text-accent active:scale-[0.97]">
+          <Link href="/sign-up" className="inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-accent/35 decoration-2 underline-offset-4 transition-[color,transform] duration-150 ease-out hover:text-[#dd6300] active:scale-[0.97]">
             Get your workspace <span aria-hidden>→</span>
           </Link>
         </div>
@@ -144,7 +151,7 @@ function PreviewNav({ children, icon, active = false }: { children: React.ReactN
 }
 
 function PreviewMetric({ label, value, note, featured = false, width, className = '' }: { label: string; value: string; note: string; featured?: boolean; width: string; className?: string }) {
-  return <article className={`${className} min-h-[135px] rounded-xl border p-3.5 ${featured ? 'product-gradient border-accent/20 text-white shadow-[var(--shadow-md)]' : 'border-border bg-panel shadow-[var(--shadow-sm)]'}`}><p className={featured ? 'text-[9px] font-medium text-white/75' : 'text-[9px] font-medium text-muted'}>{label}</p><p className="mt-4 font-heading text-2xl font-semibold leading-none tracking-[-0.04em]">{value}</p><div className={featured ? 'mt-5 h-1 rounded-full bg-white/25' : 'mt-5 h-1 rounded-full bg-surface-muted'}><div className={featured ? 'h-full rounded-full bg-white' : 'h-full rounded-full bg-accent'} style={{ width }} /></div><p className={featured ? 'mt-2 text-[8px] text-white/70' : 'mt-2 text-[8px] text-muted'}>{note}</p></article>
+  return <article className={`${className} min-h-[135px] rounded-xl border p-3.5 ${featured ? 'product-gradient border-accent/20 text-white shadow-[var(--shadow-md)]' : 'border-border bg-panel shadow-[var(--shadow-sm)]'}`}><p className={featured ? 'text-[9px] font-medium text-white/84' : 'text-[9px] font-medium text-muted'}>{label}</p><p className="mt-4 font-heading text-2xl font-semibold leading-none tracking-[-0.04em]">{value}</p><div className={featured ? 'mt-5 h-1 rounded-full bg-white/25' : 'mt-5 h-1 rounded-full bg-surface-muted'}><div className={featured ? 'h-full rounded-full bg-white' : 'h-full rounded-full bg-accent'} style={{ width }} /></div><p className={featured ? 'mt-2 text-[8px] text-white/80' : 'mt-2 text-[8px] text-muted'}>{note}</p></article>
 }
 
 function PreviewRow({ label, value }: { label: string; value: string }) {

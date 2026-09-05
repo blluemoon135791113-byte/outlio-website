@@ -1,0 +1,60 @@
+# Outlio Developer Resources
+
+## Product: Outlio
+## Version: 0.1.0
+## Description: B2B lead intelligence SaaS - research-first outbound sales system
+
+## API Documentation
+- Base URL: https://outlio.io/api
+- Authentication: Bearer token via Supabase edge functions
+- Main endpoints:
+  - /api/intelligence/query - Intelligence queries
+  - /api/hubble/ask - Hubble AI questions
+  - /api/extension/* - Extension management
+  - /api/integrations/* - Third-party integrations
+  - /api/webhooks/* - Webhook handlers
+
+## Authentication
+- Supabase JWT tokens
+- OAuth where applicable
+- API keys for external services
+
+## MCP Server
+- Context: Outlio MCP client integration
+- Purpose: Agent-to-agent communication for lead intelligence
+
+## Webhooks
+- FastSpring webhook handler: /api/webhooks/fastspring
+- Payment events and status updates
+
+## Search & Discovery
+- Site map: https://outlio.io/sitemap.xml
+- Robots: https://outlio.io/robots.txt
+- Brand name: Outlio
+- Primary domain: outlio.io
+
+## Contact
+- Email: hello@outlio.io
+- Support: https://outlio.io/contact
+
+## Key Features
+- Research-first outbound sales
+- Human-written messaging
+- Shared CRM with live KPIs
+- Lead engine for B2B intelligence
+- Multi-channel outreach (LinkedIn, email, X)
+
+## Integrations
+- Supabase (database & auth)
+- Google Calendar (booking)
+- FastSpring (payments)
+- Various AI providers (Gemini, Groq, Cerebras)
+
+## Deployment
+- Platform: Vercel
+- Domain: outlio.io
+- Environment: .env.local configuration
+
+## License
+- Proprietary source code
+- Free-tier friendly policy: OUTLIO_ALLOW_PAID_PROVIDERS=false by default

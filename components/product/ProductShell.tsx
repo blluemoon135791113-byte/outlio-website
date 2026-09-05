@@ -7,15 +7,30 @@ import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 
 import { ProductIcon, ProductNav } from '@/components/product/ProductNav'
+import { NavigationProgress } from '@/components/product/NavigationProgress'
 import { SidebarReferral } from '@/components/product/SidebarReferral'
 import { signOutAction } from '@/lib/auth/actions'
 
 function pageLabel(pathname: string) {
   if (pathname.startsWith('/admin')) return 'User administration'
-  if (pathname.startsWith('/dashboard/extract/new')) return 'New extraction'
-  if (pathname.startsWith('/dashboard/jobs')) return 'Extraction workspace'
+  if (pathname.startsWith('/crm/contacts')) return 'Contacts'
+  if (pathname.startsWith('/crm/pipeline')) return 'Pipeline'
+  if (pathname.startsWith('/crm/reports')) return 'Reports'
+  if (pathname.startsWith('/crm')) return 'CRM'
+  if (pathname.startsWith('/dashboard/extract/new')) return 'Find leads'
+  if (pathname.startsWith('/dashboard/jobs')) return 'Lead sources'
+  if (pathname.startsWith('/dashboard/intelligence')) return 'Intelligence'
   if (pathname.startsWith('/dashboard/access')) return 'Access status'
   if (pathname.startsWith('/dashboard/settings')) return 'Settings'
+  /*
+   * ⚠️ EMAIL AND FLOWS WERE MISSING, so both fell through to "Overview" —
+   * every screen in two whole modules announced itself as the dashboard. The
+   * fallback is meant for `/dashboard` itself, and a fallback that silently
+   * catches new top-level sections is why nobody noticed for two milestones.
+   */
+  if (pathname.startsWith('/email')) return 'Email'
+  if (pathname.startsWith('/flows')) return 'Flows'
+  if (pathname.startsWith('/extension')) return 'Extension'
   return 'Overview'
 }
 
@@ -28,63 +43,66 @@ function initials(name: string | null, email: string) {
 function SidebarContent({
   isAdmin,
   canUseScraper,
+  showCrm,
+  showEmail,
+  showFlows,
   referralLink,
   onNavigate,
 }: {
   isAdmin: boolean
   canUseScraper: boolean
+  showCrm: boolean
+  showEmail: boolean
+  showFlows: boolean
   /** `null` until a profile has a code allocated. */
   referralLink: string | null
   onNavigate?: () => void
 }) {
   return (
     <>
-      <div className="px-4 pb-7 pt-5">
+      <div className="px-5 pb-8 pt-6">
         <Link
           href="/dashboard"
           onClick={onNavigate}
           className="inline-flex items-center gap-2.5 rounded-lg text-ink focus-visible:outline-offset-4"
         >
-          <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border bg-ink shadow-[var(--shadow-sm)]">
+          <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-ink">
             <Image
               src="/icon.png"
               alt=""
-              width={36}
-              height={36}
-              style={{ width: 36, height: 36 }}
+              width={32}
+              height={32}
+              style={{ width: 32, height: 32 }}
             />
           </span>
-          <span className="font-heading text-[17px] font-semibold tracking-[-0.025em]">
+          <span className="font-heading text-[16px] font-semibold tracking-[-0.025em]">
             Outlio
           </span>
         </Link>
       </div>
 
-      <div className="flex-1 px-4">
-        <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-          Workspace
-        </p>
+      <div className="flex-1 px-3">
         <ProductNav
           isAdmin={isAdmin}
           canUseScraper={canUseScraper}
+          showCrm={showCrm}
+          showEmail={showEmail}
+          showFlows={showFlows}
           onNavigate={onNavigate}
         />
       </div>
 
       {referralLink ? (
-        <div className="px-4 pb-4 pt-2">
+        <div className="px-3 pb-2 pt-2">
           <SidebarReferral link={referralLink} onNavigate={onNavigate} />
         </div>
       ) : null}
 
-      <div className="border-t border-border px-4 py-4">
-        <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-          Outlio
-        </p>
+      <div className="px-3 pb-5 pt-2">
         <Link
           href="/"
           onClick={onNavigate}
-          className="flex h-10 items-center gap-3 rounded-[var(--radius-md)] px-3 text-sm font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
+          className="flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]"
         >
           <ProductIcon name="website" className="h-[18px] w-[18px]" />
           Back to website
@@ -101,6 +119,9 @@ export function ProductShell({
   planName,
   isAdmin,
   canUseScraper,
+  showCrm = false,
+  showEmail = false,
+  showFlows = false,
   avatarUrl,
   referralLink = null,
 }: {
@@ -110,6 +131,9 @@ export function ProductShell({
   planName: string | null
   isAdmin: boolean
   canUseScraper: boolean
+  showCrm?: boolean
+  showEmail?: boolean
+  showFlows?: boolean
   avatarUrl?: string | null
   referralLink?: string | null
 }) {
@@ -117,11 +141,18 @@ export function ProductShell({
   const [mobileOpen, setMobileOpen] = useState(false)
   const userInitials = useMemo(() => initials(fullName, email), [email, fullName])
   const displayName = fullName?.trim() || email.split('@')[0] || 'Outlio user'
-
   return (
-    <div className="app-shell min-h-dvh bg-app text-ink">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-border bg-panel lg:flex">
-        <SidebarContent isAdmin={isAdmin} canUseScraper={canUseScraper} referralLink={referralLink} />
+    <div className="app-shell product-clay hubble-shell min-h-dvh bg-app text-ink">
+      <NavigationProgress />
+      <aside className="hubble-nav-panel fixed inset-y-0 left-0 z-30 hidden w-[216px] flex-col border-0 lg:flex">
+        <SidebarContent
+          isAdmin={isAdmin}
+          canUseScraper={canUseScraper}
+          showCrm={showCrm}
+          showEmail={showEmail}
+          showFlows={showFlows}
+          referralLink={referralLink}
+        />
       </aside>
 
       {mobileOpen ? (
@@ -130,9 +161,9 @@ export function ProductShell({
             type="button"
             aria-label="Close navigation"
             onClick={() => setMobileOpen(false)}
-            className="absolute inset-0 bg-ink/25 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-ink/25"
           />
-          <aside className="relative flex h-full w-[min(86vw,280px)] flex-col border-r border-border bg-panel shadow-[var(--shadow-lg)]">
+          <aside className="hubble-nav-panel relative flex h-full w-[min(86vw,280px)] flex-col border-0 shadow-[var(--shadow-lg)]">
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
@@ -144,6 +175,9 @@ export function ProductShell({
             <SidebarContent
               isAdmin={isAdmin}
               canUseScraper={canUseScraper}
+              showCrm={showCrm}
+              showEmail={showEmail}
+          showFlows={showFlows}
               referralLink={referralLink}
               onNavigate={() => setMobileOpen(false)}
             />
@@ -151,8 +185,15 @@ export function ProductShell({
         </div>
       ) : null}
 
-      <div className="min-h-dvh lg:pl-[232px]">
-        <header className="sticky top-0 z-20 border-b border-border bg-panel/95 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+      <div className="min-h-dvh lg:pl-[216px]">
+        {/*
+          ⚠️ A BORDER, BECAUSE THE HEADER IS NOW WHITE ON WHITE. It was
+          `border-0` on cream above cream-and-shadow panels, where the material
+          did the separating. Flat and white, a sticky bar with no edge lets
+          scrolling content slide underneath with nothing to mark where the
+          page begins — the rows appear to be inside the header.
+        */}
+        <header className="sticky top-0 z-20 border-b border-border bg-app px-4 sm:px-6 lg:px-8">
           <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <button
@@ -196,7 +237,7 @@ export function ProductShell({
                   ▾
                 </span>
               </summary>
-              <div className="absolute right-0 top-[calc(100%+8px)] w-64 origin-top-right rounded-xl border border-border bg-panel p-2 shadow-[var(--shadow-lg)]">
+              <div className="absolute right-0 top-[calc(100%+8px)] w-64 origin-top-right rounded-xl border-0 bg-panel p-2 shadow-[var(--shadow-lg)]">
                 <div className="border-b border-border px-2 py-2">
                   <p className="truncate font-heading text-sm font-semibold text-ink">{displayName}</p>
                   <p className="mt-0.5 truncate text-xs text-muted">{email}</p>

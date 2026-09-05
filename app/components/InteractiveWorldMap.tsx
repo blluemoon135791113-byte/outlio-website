@@ -210,7 +210,7 @@ export default function InteractiveWorldMap() {
 
   return (
     <div
-      className="relative w-full"
+      className="relative mx-auto w-full max-w-[440px] lg:max-w-[470px]"
       style={{
         maskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
         WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",

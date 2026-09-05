@@ -6,6 +6,8 @@ import { getCountries, getCountryCallingCode } from 'libphonenumber-js/min'
 type PhoneFieldProps = {
   defaultCountry?: string
   defaultValue?: string
+  /** Message for this field, when the action rejected the number. */
+  error?: string
 }
 
 // country-list ships one static ISO dataset. Avoid Intl.DisplayNames here:
@@ -19,7 +21,11 @@ const countries = getCountries()
   }))
   .sort((a, b) => a.name.localeCompare(b.name, 'en'))
 
-export function PhoneField({ defaultCountry = 'US', defaultValue = '' }: PhoneFieldProps) {
+export function PhoneField({
+  defaultCountry = 'US',
+  defaultValue = '',
+  error,
+}: PhoneFieldProps) {
   const safeDefault = countries.some((country) => country.code === defaultCountry)
     ? defaultCountry
     : 'US'
@@ -27,14 +33,18 @@ export function PhoneField({ defaultCountry = 'US', defaultValue = '' }: PhoneFi
   return (
     <fieldset className="space-y-1.5">
       <legend className="block text-sm font-medium text-ink">Phone number</legend>
-      <div className="grid grid-cols-[minmax(132px,0.48fr)_minmax(0,1fr)] overflow-hidden rounded-[var(--radius-md)] border border-border bg-paper transition-[border-color,box-shadow] duration-150 focus-within:border-accent/60 focus-within:shadow-[0_0_0_3px_rgba(139,92,246,0.12)] hover:border-border-strong">
+      <div
+        className={`auth-clay-field grid grid-cols-[minmax(132px,0.48fr)_minmax(0,1fr)] overflow-hidden rounded-[var(--radius-md)] border border-border-strong bg-panel transition-[border-color,box-shadow] duration-150 focus-within:border-focus focus-within:shadow-[0_0_0_1px_var(--focus)]${
+          error ? ' ring-1 ring-danger' : ''
+        }`}
+      >
         <label className="sr-only" htmlFor="phone_country">Country code</label>
         <select
           id="phone_country"
           name="phone_country"
           defaultValue={safeDefault}
           autoComplete="tel-country-code"
-          className="min-w-0 border-r border-border bg-accent-soft/45 px-3 py-2.5 text-sm font-semibold text-ink outline-none"
+          className="min-w-0 border-r border-border bg-transparent px-3 py-2.5 text-sm font-semibold text-ink outline-none [color-scheme:light]"
           required
         >
           {countries.map((country) => (
@@ -54,12 +64,20 @@ export function PhoneField({ defaultCountry = 'US', defaultValue = '' }: PhoneFi
           maxLength={30}
           placeholder="Phone number"
           defaultValue={defaultValue}
+          aria-describedby={`phone-hint${error ? ' phone-error' : ''}`}
+          aria-invalid={error ? true : undefined}
           className="min-w-0 bg-transparent px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted/60"
         />
       </div>
-      <p className="text-xs leading-relaxed text-muted">
+      <p id="phone-hint" className="text-xs leading-relaxed text-muted">
         Choose your country, then enter the local number. We store it securely in international format.
       </p>
+      {error ? (
+        <p id="phone-error" className="flex gap-1.5 text-xs leading-relaxed text-danger">
+          <span aria-hidden="true">↳</span>
+          <span>{error}</span>
+        </p>
+      ) : null}
     </fieldset>
   )
 }

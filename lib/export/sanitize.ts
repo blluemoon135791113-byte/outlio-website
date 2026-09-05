@@ -83,15 +83,55 @@ export type CsvColumn<T> = {
 export function toCsv<T>(
   rows: readonly T[],
   columns: readonly CsvColumn<T>[],
-  options: { bom?: boolean } = {},
+  options: { bom?: boolean; emptyValue?: string; alwaysKeep?: readonly string[] } = {},
 ): string {
-  const { bom = true } = options
+  /*
+   * ⚠️ AN EMPTY CELL IS AMBIGUOUS. It reads as "this person has no job title"
+   * as easily as "we could not find one", and a spreadsheet gives the reader no
+   * way to tell. `N/A` states that a value was looked for and is not available.
+   *
+   * Applied here rather than per column so no export path can forget it, and
+   * overridable because a machine-read file may want a true empty.
+   */
+  const { bom = true, emptyValue = 'N/A', alwaysKeep } = options
+
+  /*
+   * ⚠️ A COLUMN THAT IS EMPTY ON EVERY ROW IS DROPPED.
+   *
+   * A whole column of "N/A" reads as the extractor having failed, when what it
+   * actually means is that the field is not on the page that was captured. The
+   * absence of the column says the same thing without implying a fault.
+   *
+   * `alwaysKeep` pins the columns that must survive regardless, so an import
+   * mapping built on the core fields keeps working even for a sparse batch. A
+   * fully dynamic file would be one nobody could map against.
+   *
+   * Dropping is the DEFAULT rather than opt-in: a caller that forgets the flag
+   * should get the honest file, not the one full of N/A.
+   */
+  const pinned = new Set(alwaysKeep ?? [])
+
+  const kept = columns.filter((column) => {
+    if (pinned.has(column.header)) return true
+    return rows.some((row) => {
+      const cell = sanitizeCell(column.value(row))
+      return cell !== null && cell !== ''
+    })
+  })
 
   const lines: string[] = []
-  lines.push(columns.map((c) => csvField(sanitizeCell(c.header))).join(','))
+  lines.push(kept.map((c) => csvField(sanitizeCell(c.header))).join(','))
 
   for (const row of rows) {
-    lines.push(columns.map((c) => csvField(sanitizeCell(c.value(row)))).join(','))
+    lines.push(
+      kept
+        .map((column) => {
+          const cell = sanitizeCell(column.value(row))
+          // `0` and `false` are values, not absences.
+          return csvField(cell === null || cell === '' ? emptyValue : cell)
+        })
+        .join(','),
+    )
   }
 
   const body = lines.join('\r\n') + '\r\n'

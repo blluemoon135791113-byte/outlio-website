@@ -7,7 +7,9 @@ function job(overrides: Partial<DashboardJob> = {}): DashboardJob {
   return {
     id: '00000000-0000-4000-8000-000000000000',
     status: 'processing',
+    trashed_at: null,
     dedupe_mode: 'remove_exact',
+    capture_session_id: null,
     file_count: 18,
     total_bytes: 1,
     progress_step: 'Processing file 5 of 18',
@@ -15,6 +17,10 @@ function job(overrides: Partial<DashboardJob> = {}): DashboardJob {
     progress_total: 18,
     leads_parsed: 0,
     leads_kept: 0,
+    kind: 'lead_search',
+    accounts_parsed: 0,
+    accounts_created: 0,
+    accounts_matched: 0,
     duplicates_found: 0,
     duplicates_removed: 0,
     export_storage_path: null,
@@ -51,5 +57,36 @@ describe('job progress presentation', () => {
     expect(currentStage(job())).toBe(1)
     expect(currentStage(job({ progress_step: 'Removing duplicates' }))).toBe(2)
     expect(currentStage(job({ progress_step: 'Generating export' }))).toBe(3)
+  })
+})
+
+describe('a run reports its output in its own units', () => {
+  it('⚠️ an account run is not a lead run with zero leads', () => {
+    /*
+     * Reading `leads_kept` for every job renders a successful ingest of 25
+     * companies as "0 leads kept" — a run that worked, shown as one that
+     * produced nothing. Worse than a blank cell, because the number is
+     * confidently wrong rather than absent.
+     */
+    const accountRun = job({
+      kind: 'account_list',
+      status: 'completed',
+      leads_kept: 0,
+      leads_parsed: 0,
+      accounts_parsed: 25,
+      accounts_created: 18,
+      accounts_matched: 7,
+    })
+
+    expect(accountRun.accounts_created + accountRun.accounts_matched).toBe(25)
+    expect(accountRun.leads_kept).toBe(0)
+    // The lead counters stay zero; the account counters carry the result.
+    expect(accountRun.kind).toBe('account_list')
+  })
+
+  it('leaves lead runs reporting leads', () => {
+    const leadRun = job({ kind: 'lead_search', status: 'completed', leads_kept: 42 })
+    expect(leadRun.leads_kept).toBe(42)
+    expect(leadRun.accounts_created).toBe(0)
   })
 })

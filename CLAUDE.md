@@ -24,15 +24,50 @@ It is a **file processor**, not a crawler.
 
 ## Hard rules — never violate
 
-1. **No LinkedIn automation.** No requests to `linkedin.com`, no headless browser,
-   no Playwright/Puppeteer/Selenium. The only input is a user-uploaded file.
+1. **No LinkedIn automation.** No requests to `linkedin.com` from our servers, no
+   headless browser, no Playwright/Puppeteer/Selenium, **no automated navigation
+   of any kind** — no clicking Next, opening profiles, messaging, connecting or
+   changing filters, and no anti-detection, stealth or CAPTCHA-bypass code.
+   **Revised 2026-08-11:** input is a page the user opened themselves, arriving
+   by one of exactly two routes — a file they upload, or a page captured by the
+   browser extension during a session they explicitly started. The extension
+   observes; the user navigates. Outside an active session it reads nothing.
+
+   **Revised 2026-09-03 — owner decision, broader fetching permitted.** Outlio
+   may fetch pages from sources beyond the company's own site in order to find
+   contact details. The owner was shown this rule and the exposure below, and
+   chose to widen it.
+
+   **What did NOT change, and why:**
+   - **No CAPTCHA solving and no bot-detection evasion.** Not a moral line — a
+     commercial one. Those are what get an IP range and a sending domain
+     blocklisted, and Outlio sells email deliverability. Losing it would break
+     the product that pays for the scraping.
+   - **No LinkedIn credential login** (rule 2 stands, unrevised). Holding a
+     customer's LinkedIn password is a breach liability with no upside; the
+     extension already covers pages they are signed in to.
+   - **Node, not Python.** The standing runtime decision is unchanged, so
+     Scrapling is not a dependency. Equivalent extraction runs on the existing
+     `cheerio` parser and `lib/hubble/fetch`.
+
+   **Exposure the owner accepted, stated once and not re-litigated:** target-site
+   ToS, and GDPR Art. 14 — which requires notifying a person whose personal data
+   was collected without their knowledge, within a month.
 2. **No LinkedIn credentials or cookies** collected, stored, transmitted, or
    logged — ever. Strip them if present in uploaded HTML.
 3. **Never render uploaded HTML in a browser.** No `dangerouslySetInnerHTML`, no
    `innerHTML`, no `iframe srcdoc`. Parsing is server-side only.
 4. **Never fabricate lead data.** Missing value → `NULL` + a missing-data
-   indicator. No inference, no enrichment, no LLM gap-filling.
+   indicator. No inference, no LLM gap-filling.
    See `docs/UNSUPPORTED_FIELDS.md`.
+
+   **Revised 2026-09-03:** enrichment from external sources is now permitted
+   (see rule 1), but the anti-fabrication rule is **unchanged and load-bearing**:
+   a value may only be stored if it was **literally observed** somewhere, and the
+   evidence row naming the provider and URL is kept as its citation. Synthesising
+   `first.last@company.com` from a name and a domain is still forbidden — it
+   looks right, it is often right, and when it is wrong nobody can tell.
+   `lib/crm/evidence-bridge.ts` is where this is enforced for contact details.
 5. **Do not modify the existing landing page.** Read-only reference. Only
    permitted change: promoting a hardcoded value into the shared theme, and only
    after flagging it.

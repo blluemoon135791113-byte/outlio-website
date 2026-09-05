@@ -1,7 +1,8 @@
 import Link from 'next/link'
 
-import { CALENDLY_URL } from '@/app/lib/constants'
 import { BookingModal } from '@/components/leadengine/BookingModal'
+
+import styles from './Pricing.module.css'
 
 /**
  * Pricing — a CREDIT model billed by LEAD.
@@ -40,8 +41,8 @@ const TIERS: Tier[] = [
     key: 'starter',
     name: 'Lead Engine',
     blurb: 'For steady, weekly prospecting.',
-    price: '$28',
-    period: '/ month',
+    price: '$28/month',
+    period: 'or $245/year',
     credits: '100 credits',
     leads: '2,500',
     features: [
@@ -51,14 +52,14 @@ const TIERS: Tier[] = [
       'Duplicate removal across every upload',
       'Free CSV export — downloads never cost credits',
     ],
-    cta: { label: 'Convert your first list free', href: '/sign-up' },
+    cta: { label: 'See monthly & yearly prices', href: '/pricing' },
   },
   {
     key: 'professional',
     name: 'Pro',
     blurb: 'For teams running lists every day.',
-    price: '$43',
-    period: '/ month',
+    price: '$43/month',
+    period: 'or $380/year',
     credits: '300 credits',
     leads: '7,500',
     features: [
@@ -68,26 +69,26 @@ const TIERS: Tier[] = [
       'Longer export retention (90 days)',
       'Priority support',
     ],
-    cta: { label: 'Get Pro plan', href: '/sign-up?plan=professional' },
+    cta: { label: 'See monthly & yearly prices', href: '/pricing' },
     featured: true,
     badge: 'Most popular',
   },
   {
     key: 'custom',
-    name: 'Custom',
+    name: 'Pro + Hubble',
     blurb: 'For agencies and high-volume teams.',
-    price: '25,000+',
-    period: 'leads / month',
+    price: '$69/month',
+    period: 'or $612/year',
     credits: '1000+ credits',
     leads: '25,000+',
     features: [
       '**1 credit per 25 leads** — same rule, no ceiling we cannot raise',
       '**50 files** per batch',
-      'Everything in Pro',
+      'Everything in Pro plus Hubble intelligence',
       'Retention and limits set with you',
       'Direct line to the team',
     ],
-    cta: { label: 'Contact us', href: CALENDLY_URL, external: true },
+    cta: { label: 'See monthly & yearly prices', href: '/pricing' },
   },
 ]
 
@@ -98,7 +99,7 @@ function RichText({ value }: { value: string }) {
     <>
       {parts.map((part, i) =>
         part.startsWith('**') && part.endsWith('**') ? (
-          <strong key={i} className="font-semibold text-ink">
+          <strong key={i} className={styles.featureStrong}>
             {part.slice(2, -2)}
           </strong>
         ) : (
@@ -109,85 +110,39 @@ function RichText({ value }: { value: string }) {
   )
 }
 
-export function Pricing() {
+type PricingProps = {
+  ctaHref?: string
+  ctaLabel?: string
+}
+
+type PlanPanelProps = Pick<PricingProps, 'ctaHref' | 'ctaLabel'> & {
+  tier: Tier
+}
+
+export function Pricing({ ctaHref, ctaLabel }: PricingProps = {}) {
   return (
-    <section id="pricing" className="scroll-mt-20 bg-paper px-4 py-20 sm:py-28">
-      <div className="mx-auto max-w-6xl">
-        <div className="text-center">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
+    <section id="pricing" className={styles.section} aria-labelledby="pricing-title">
+      <div className={styles.container}>
+        <div className={styles.intro}>
+          <p className={styles.eyebrow}>
             Pricing
           </p>
-          <h2 className="mt-4 text-4xl font-bold uppercase leading-tight tracking-tight sm:text-5xl">
-            Simple credits. Predictable cost.
+          <h2 id="pricing-title" className={styles.heading}>
+            A Model that Fits your Workflow
           </h2>
-          <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-            One credit covers 25 leads, counted across the whole run — so you pay
-            for what you extract, not for how many files it arrived in.
-            Downloading your CSV is always free.
-          </p>
         </div>
 
-        <div className="mt-14 grid gap-6 lg:grid-cols-3">
-          {TIERS.map((tier) => (
-            <div
-              key={tier.key}
-              className={
-                tier.featured
-                  ? 'relative flex flex-col rounded-[var(--radius-xl)] border-2 border-accent bg-panel p-8 shadow-[var(--shadow-lg)]'
-                  : 'relative flex flex-col rounded-[var(--radius-xl)] border border-border bg-panel p-8'
-              }
-            >
-              {tier.badge ? (
-                <span className="absolute -top-3 left-8 rounded-full bg-accent px-3 py-0.5 text-[11px] font-bold uppercase tracking-[0.16em] text-cream">
-                  {tier.badge}
-                </span>
-              ) : null}
-
-              <h3 className="text-2xl font-bold tracking-tight">{tier.name}</h3>
-              <p className="mt-1.5 text-sm text-muted">{tier.blurb}</p>
-
-              <p className="mt-6 flex items-baseline gap-2">
-                <span className="text-5xl font-black tracking-tight">{tier.price}</span>
-                <span className="text-base font-medium text-muted">{tier.period}</span>
-              </p>
-
-              <p className="mt-2 inline-flex w-fit rounded-full bg-accent-soft px-3 py-1 text-[12px] font-bold uppercase tracking-[0.14em] text-accent">
-                {tier.credits}
-              </p>
-
-              <p className="mt-4 border-t border-border pt-4 text-lg font-bold tracking-tight text-ink">
-                {tier.leads} leads
-                <span className="ml-1.5 text-sm font-medium text-muted">a month</span>
-              </p>
-
-              <ul className="mt-7 flex-1 space-y-3 text-base">
-                {tier.features.map((f) => (
-                  <li key={f} className="flex gap-2.5 text-muted">
-                    <Tick />
-                    <span>
-                      <RichText value={f} />
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              {/* CTA centred within the card, per spec. */}
-              <div className="mt-8 flex justify-center">
-                <Link
-                  href={tier.cta.href}
-                  target={tier.cta.external ? '_blank' : undefined}
-                  rel={tier.cta.external ? 'noopener noreferrer' : undefined}
-                  className={
-                    tier.featured
-                      ? 'w-full rounded-[var(--radius-md)] bg-accent px-5 py-3 text-center text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep'
-                      : 'w-full rounded-[var(--radius-md)] border border-ink px-5 py-3 text-center text-base font-semibold text-ink transition-colors duration-150 hover:bg-cream'
-                  }
-                >
-                  {tier.cta.label}
-                </Link>
-              </div>
-            </div>
-          ))}
+        <div className={styles.pricingStrip}>
+          <div className={styles.plansTrack}>
+            {TIERS.map((tier) => (
+              <HoverPlan
+                key={tier.key}
+                tier={tier}
+                ctaHref={ctaHref}
+                ctaLabel={ctaLabel}
+              />
+            ))}
+          </div>
         </div>
 
         {/*
@@ -197,21 +152,105 @@ export function Pricing() {
           this slot books a call instead.
         */}
         <BookingModal />
-
-        <p className="mt-10 text-center text-sm text-muted">
-          Lead totals are your credits × 25, and a part-full page still costs one credit.
-          Credits are charged once a run is processed, so you always pay for the leads
-          actually found. The{' '}
-          <strong className="font-semibold text-ink">3-day free trial</strong> includes
-          10 credits — 250 leads — and 5 files per batch, no card required.
-        </p>
-
-        <p className="mt-3 text-center text-sm text-muted">
-          Access is approved manually so we can keep an eye on how the tool is used.
-          You will normally hear back the same day.
-        </p>
       </div>
     </section>
+  )
+}
+
+function HoverPlan({
+  tier,
+  ctaHref,
+  ctaLabel,
+}: PlanPanelProps) {
+  return (
+    <article
+      className={`${styles.planPanel} ${tier.featured ? styles.featuredPlan : ''}`}
+    >
+      <div className={styles.planIntro}>
+        <header>
+          <div className={styles.planTopline}>
+            {tier.badge ? <span className={styles.badge}>{tier.badge}</span> : null}
+            <span className={styles.drawerHint} aria-hidden>→</span>
+          </div>
+          <h3 className={styles.planName}>{tier.name}</h3>
+          <p className={styles.planBlurb}>{tier.blurb}</p>
+        </header>
+
+        <div className={styles.priceBlock}>
+          <p className={styles.price}>{tier.price}</p>
+          <p className={styles.period}>{tier.period}</p>
+        </div>
+
+        <dl className={styles.planMetrics}>
+          <PlanStat label="Credits" value={tier.credits} />
+          <PlanStat label="Capacity" value={`${tier.leads} / month`} />
+        </dl>
+
+        <PlanLink
+          tier={tier}
+          ctaHref={ctaHref}
+          ctaLabel={ctaLabel}
+          featured={tier.featured}
+        />
+      </div>
+
+      <div className={styles.planIncludes}>
+        <div className={styles.includesInner}>
+          <p className={styles.listLabel}>Plan Includes</p>
+          <FeatureList tier={tier} />
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function PlanStat({ label, value }: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className={styles.planStat}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  )
+}
+
+function FeatureList({
+  tier,
+}: {
+  tier: Tier
+}) {
+  return (
+    <ul className={styles.features}>
+      {tier.features.map((feature) => (
+        <li key={feature}>
+          <Tick />
+          <span>
+            <RichText value={feature} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function PlanLink({
+  tier,
+  ctaHref,
+  ctaLabel,
+  featured = false,
+}: PlanPanelProps & { featured?: boolean }) {
+  return (
+    <Link
+      href={ctaHref ?? tier.cta.href}
+      target={tier.cta.external ? '_blank' : undefined}
+      rel={tier.cta.external ? 'noopener noreferrer' : undefined}
+      className={`${styles.cta} ${featured ? styles.ctaFeatured : ''}`}
+    >
+      {ctaLabel ?? 'Get This'}
+      <span aria-hidden>↗</span>
+    </Link>
   )
 }
 
@@ -220,7 +259,7 @@ function Tick() {
     <svg
       aria-hidden
       viewBox="0 0 20 20"
-      className="mt-1 h-4 w-4 shrink-0 text-accent"
+      className={styles.tick}
       fill="currentColor"
     >
       <path

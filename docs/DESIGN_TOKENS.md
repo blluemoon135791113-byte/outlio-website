@@ -219,8 +219,47 @@ there is nothing to inherit but the tokens and the focus ring.
   never the hero's `clamp()`. Table cells and body at `text-sm`/`text-base`.
 - **Spacing:** 8px baseline. Compress the marketing rhythm.
 - **Backgrounds:** `--grad-band`, `.hero-aurora`, starfield/meteor canvases appear
-  **only** on sign-in, sign-up, and access pages. Authenticated surfaces use flat
-  `--paper` / `--panel`.
+  **only** on the marketing site. Authenticated surfaces — and, since the flat
+  pass below, the auth screens too — use flat `--paper` / `--panel`.
+
+### The product is flat and white (revised 2026-09-03)
+
+The authenticated product and the auth screens are **white surfaces separated by
+hairline borders**. Neumorphism/claymorphism is gone from both.
+
+| | Marketing (`:root`) | Product (`.product-clay`, `.auth-clay`) |
+|---|---|---|
+| Canvas | `--app: #faf9ff`, `--clay-bg: #fffaf0` | `#ffffff` |
+| Panel | cream + paired neumorphic shadow | `#ffffff` + `1px solid var(--border)` |
+| Border | `#e9e4f3` | `#e6e6ea`, strong `#d2d2d9` |
+| Muted fill | `--clay-sunken: #f4eadb` | `#f6f6f7` |
+| Card radius | `--radius-clay: 1rem` | `0.625rem` |
+| Panel shadow | `--neo-shadow` | **none** |
+| Input | cream fill + inset shadow | white fill + border |
+
+**Why.** Neumorphism spends its contrast budget describing a light source. That
+is charming on a landing page with six elements and costly on a table with 25
+rows: the surface competes with the data, and there is no contrast left to mark
+the row that matters. Hierarchy now comes from borders and space.
+
+**Rules.**
+- Shadow means **"this floats and will go away"** — menus, popovers, dialogs
+  only. A panel that sits on the page gets a border, never a shadow.
+- `--shadow-lg` bakes in a `0 0 0 1px var(--border)` ring. Floating surfaces are
+  white on white; a blur alone leaves a dropdown's top edge undetectable.
+- **`--neo-shadow-focus` is never flattened.** It is a real 2px ring. Setting it
+  to `none` alongside the other shadows removes the focus indicator from every
+  input in the product — an accessibility regression wearing a visual cleanup's
+  clothes.
+- **`--neo-shadow-lg` / `--clay-shadow-lg` are never flattened either.** They are
+  what the batch filter and date picker use to float dropdowns.
+
+**Scoping — do not lift this to `:root`.** CLAUDE.md rule 5 makes the landing
+page read-only and `/product` shares its material. The flat rules win on
+specificity (`.product-clay .clay` = 0,2,0 over `.clay` = 0,1,0) without editing
+the base rules, so the marketing site is bit-for-bit unchanged. The `clay` class
+names are kept: renaming them across 62 files is a large diff that changes no
+pixel. They now mean "the product's surface".
 - **Motion:** ≤150ms on interactive feedback. Keep the decelerate curve
   `cubic-bezier(0.22, 1, 0.36, 1)`; **drop the overshoot curve** — bounce reads as
   latency on data screens.

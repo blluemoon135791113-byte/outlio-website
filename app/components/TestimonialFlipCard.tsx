@@ -14,26 +14,38 @@ export default function TestimonialFlipCard({ quote, who, proofImage }: Testimon
 
   return (
     <div
-      className="perspective-1000"
+      className="perspective-1000 relative w-full"
       style={{
-        minHeight: "280px",
+        minHeight: "220px",
         height: "100%"
       }}
       onMouseEnter={() => setIsFlipped(true)}
       onMouseLeave={() => setIsFlipped(false)}
     >
+      <button
+        type="button"
+        aria-pressed={isFlipped}
+        aria-label={
+          isFlipped
+            ? `Proof from ${who} is shown. Return to testimonial.`
+            : `${quote} — ${who}. View proof.`
+        }
+        onClick={() => setIsFlipped((current) => !current)}
+        className="absolute inset-0 z-20 cursor-pointer appearance-none rounded-2xl border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+      />
       <div
+        aria-hidden="true"
         className="relative transition-transform duration-700 preserve-3d"
         style={{
           transformStyle: "preserve-3d",
           transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-          minHeight: "280px",
+          minHeight: "220px",
           height: "100%"
         }}
       >
         {/* Front Side */}
         <figure
-          className="absolute inset-0 flex h-full flex-col justify-between p-6 backdrop-blur-xl border border-white/30 rounded-2xl transition-all duration-500 hover:border-accent/40 hover:shadow-lg hover:shadow-accent/10 sm:p-8 backface-hidden"
+          className="absolute inset-0 flex h-full flex-col justify-between rounded-2xl border border-white/30 p-5 backdrop-blur-xl transition-all duration-500 backface-hidden hover:border-accent/40 hover:shadow-lg hover:shadow-accent/10 sm:p-6"
           style={{
             background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.45) 100%)',
             backdropFilter: 'blur(24px) saturate(180%)',
@@ -46,7 +58,7 @@ export default function TestimonialFlipCard({ quote, who, proofImage }: Testimon
           </blockquote>
           <figcaption className="mt-6 text-sm text-muted">- {who}</figcaption>
           <div className="mt-3 text-xs text-accent uppercase tracking-wider">
-            Hover to see proof
+            View proof
           </div>
         </figure>
 

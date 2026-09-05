@@ -74,7 +74,7 @@ export function createTestSignupSecurityMetadata(
   }
 }
 
-/** Reserve a fabricated network identity through the same database gate as production. */
+/** Reserve a fabricated one-time attempt through the same database gate as production. */
 export async function createTestSignupReservation(
   label: string,
   ipHashOverride?: string,
@@ -230,4 +230,66 @@ export async function seedJob(userId: string): Promise<string> {
     throw new Error(`seedJob failed: ${error?.message ?? 'no row'}`)
   }
   return data.id
+}
+
+/**
+ * Whether a migration is deployed — and, crucially, whether we could tell.
+ *
+ * ⚠️ "COULD NOT CHECK" IS NOT "NOT DEPLOYED".
+ *
+ * Integration suites gate themselves on schema probes so they degrade politely
+ * before a migration is applied. The first version treated ANY probe error as
+ * "missing", so a transient network hiccup or rate limit during a full run
+ * silently skipped thirteen tests covering the runner, tenant isolation and
+ * scoring — and reported a green suite. A skip is not a pass.
+ *
+ * Only PostgREST's genuine "this table/column does not exist" answers count as
+ * missing. Anything else is `unknown`, and the caller must fail loudly.
+ */
+export type ProbeOutcome = 'present' | 'missing' | 'unknown'
+
+export function classifyProbeError(error: { code?: string; message?: string } | null): ProbeOutcome {
+  if (!error) return 'present'
+
+  const code = error.code ?? ''
+  const message = (error.message ?? '').toLowerCase()
+
+  // PGRST205: table not in the schema cache. PGRST204/42703: unknown column.
+  if (code === 'PGRST205' || code === 'PGRST204' || code === '42703') return 'missing'
+  if (message.includes('does not exist') || message.includes('could not find the table')) {
+    return 'missing'
+  }
+
+  return 'unknown'
+}
+
+export type MigrationProbe = { migration: string; probe: () => Promise<{ error: unknown }> }
+
+/**
+ * Resolves which of the given migrations are absent.
+ *
+ * Throws when a probe fails for any reason other than the schema genuinely
+ * lacking the object, so an unreachable database fails the suite instead of
+ * quietly disabling it.
+ */
+export async function missingMigrations(probes: readonly MigrationProbe[]): Promise<string[]> {
+  if (!hasSupabaseEnv) return ['(no Supabase environment)']
+
+  const missing: string[] = []
+
+  for (const { migration, probe } of probes) {
+    const { error } = await probe()
+    const outcome = classifyProbeError(error as { code?: string; message?: string } | null)
+
+    if (outcome === 'missing') missing.push(migration)
+    else if (outcome === 'unknown') {
+      throw new Error(
+        `Could not check whether ${migration} is applied: ` +
+          `${(error as { message?: string })?.message ?? 'unknown error'}. ` +
+          'Refusing to skip — an unverifiable schema must fail loudly.',
+      )
+    }
+  }
+
+  return missing
 }

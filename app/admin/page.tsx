@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 
+import { CompanyBackfill } from '@/components/admin/CompanyBackfill'
+import { RunWorkers } from '@/components/admin/RunWorkers'
 import { UserRow, type AdminUser } from '@/components/admin/UserRow'
 import { requireAdmin } from '@/lib/auth/access'
 import { listActivePlans } from '@/lib/limits/plans'
@@ -127,6 +129,27 @@ export default async function AdminPage() {
       </section>
 
       <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Maintenance</h2>
+        <p className="text-sm text-muted">
+          Resolve leads to companies so company-level research runs once per
+          company instead of once per lead. Safe to run repeatedly — leads that
+          already have a company are skipped.
+        </p>
+        <CompanyBackfill />
+      </section>
+
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Background workers</h2>
+        <p className="text-sm text-muted">
+          Runs the same pass the scheduled job runs at 06:00 UTC — due email,
+          reply sync, flows, webhooks and the evidence bridge. It changes no
+          schedule: a message that is not yet due stays queued, and send windows,
+          sending days and ramp limits are enforced where they always were.
+        </p>
+        <RunWorkers />
+      </section>
+
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
         <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Recent activity</h2>
         <p className="text-sm text-muted">
           Audit log entries are append-only and cannot be edited or deleted.
@@ -161,7 +184,7 @@ export default async function AdminPage() {
 function AdminMetric({ label, value, featured = false }: { label: string; value: number; featured?: boolean }) {
   return (
     <article className={featured ? 'rounded-[var(--radius-lg)] border border-accent bg-accent p-4 text-white shadow-[var(--shadow-md)]' : 'rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)]'}>
-      <p className={featured ? 'text-xs font-medium text-white/75' : 'text-xs font-medium text-muted'}>{label}</p>
+      <p className={featured ? 'text-xs font-medium text-white/84' : 'text-xs font-medium text-muted'}>{label}</p>
       <p className="mt-3 font-heading text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums">
         {value.toLocaleString()}
       </p>

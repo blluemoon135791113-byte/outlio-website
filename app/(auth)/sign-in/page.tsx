@@ -23,13 +23,13 @@ export default async function SignInPage({
 
   return (
     <AuthShell
-      title="Sign in"
-      subtitle="Access your lead database."
+      title="Welcome back"
+      subtitle="Sign in to continue to your lead intelligence workspace."
       footer={
         <>
           Don&apos;t have an account?{' '}
-          <Link href="/sign-up" className="font-medium text-accent hover:underline">
-            Create one
+          <Link href="/sign-up" className="font-semibold text-accent hover:underline">
+            Create your workspace
           </Link>
         </>
       }
