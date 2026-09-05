@@ -17,7 +17,7 @@ import 'server-only'
  * ║  which is exactly what "pre-filter before any classification" means.      ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-import { classifyInbound, countsAsReply, shouldStopSequence } from '@/lib/email/auto-reply'
+import { classifyInbound, countsAsReply, isOwnOutbound, shouldStopSequence } from '@/lib/email/auto-reply'
 import { recordActivity } from '@/lib/crm/activities'
 import { getEmailAccount } from '@/lib/email/accounts'
 import { providerFor } from '@/lib/email/providers/registry'
@@ -92,7 +92,7 @@ export async function syncMailbox(
   outcome.fetched = replies.length
 
   for (const reply of replies) {
-    await processInbound(workspaceId, account.id, reply, outcome)
+    await processInbound(workspaceId, account.id, reply, outcome, account.fromEmail)
   }
 
   // Only now is the cursor persisted.
@@ -112,9 +112,34 @@ async function processInbound(
   accountId: string,
   reply: NormalizedReply,
   outcome: SyncOutcome,
+  /** The mailbox this sync is reading. Never a prospect. */
+  accountFromEmail: string,
 ): Promise<void> {
   const db = createAdminClient()
   const from = reply.fromEmail.toLowerCase()
+
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ MAIL FROM THIS MAILBOX IS NOT A REPLY TO THIS MAILBOX.                ║
+   * ║                                                                           ║
+   * ║  Matching is `email_enrollments.to_email = <from address>`, and nothing   ║
+   * ║  here used to exclude the account's own address. So a contact whose email ║
+   * ║  IS the sending address — somebody adding themselves to test, or a shared ║
+   * ║  team alias that is also a prospect record — gets sent a sequence step,   ║
+   * ║  that step lands in this same INBOX, and the next sync reads it back as a ║
+   * ║  genuine reply.                                                           ║
+   * ║                                                                           ║
+   * ║  The consequences are all real: the sequence stops, an `email_replied`    ║
+   * ║  flow trigger fires, and the CRM timeline records a reply that nobody      ║
+   * ║  wrote. Confirmed reachable — the "Outlio mailbox test" message this      ║
+   * ║  product sent to itself is sitting in `email_threads` as inbound mail.    ║
+   * ║                                                                           ║
+   * ║  ⚠️ SKIPPED, NOT COUNTED AS UNMATCHED. It is not an unrecognised sender    ║
+   * ║  to investigate; it is our own outbound, and inflating `unmatched` would  ║
+   * ║  make a clean sync look like it had strangers in it.                      ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  if (isOwnOutbound(reply.fromEmail, accountFromEmail)) return
 
   // ⚠️ STEP ONE, BEFORE ANY ACTION.
   const classification = classifyInbound({

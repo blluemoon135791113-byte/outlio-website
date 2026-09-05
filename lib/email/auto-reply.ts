@@ -222,3 +222,28 @@ export function countsAsReply(classification: ReplyClassification): boolean {
   // rate is worse than no reply rate, because people act on it.
   return classification.kind === 'reply'
 }
+
+/**
+ * Whether an inbound message is this mailbox's own outbound copy.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ A SEQUENCE STEP SENT TO THE SENDING ADDRESS LANDS IN THE SENDING       ║
+ * ║  INBOX. `reply-sync` matches on `enrollments.to_email = <from>`, so        ║
+ * ║  without this the product reads its own message back as a prospect reply:  ║
+ * ║  the sequence stops, `email_replied` fires, and the CRM timeline records a ║
+ * ║  reply nobody wrote.                                                       ║
+ * ║                                                                           ║
+ * ║  Confirmed reachable, not theoretical — the "Outlio mailbox test" message  ║
+ * ║  this product sent to itself is in `email_threads` as inbound mail.       ║
+ * ║                                                                           ║
+ * ║  ⚠️ CASE AND SURROUNDING SPACE ARE NORMALISED. Providers do not agree on   ║
+ * ║  the case of the local part, and a header arrives with whatever spacing    ║
+ * ║  the sender's client produced. Comparing raw strings would let             ║
+ * ║  `Husnain@Outlio.io` through the guard it exists to enforce.              ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export function isOwnOutbound(fromEmail: string, accountFromEmail: string): boolean {
+  const norm = (v: string) => v.trim().toLowerCase()
+  if (!norm(fromEmail) || !norm(accountFromEmail)) return false
+  return norm(fromEmail) === norm(accountFromEmail)
+}

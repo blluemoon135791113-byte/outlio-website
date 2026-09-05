@@ -10,11 +10,15 @@
  * the filter only fires on strong, standards-based signals, and everything
  * else is treated as a genuine reply.
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import {
   classifyInbound,
   countsAsReply,
+  isOwnOutbound,
   shouldStopSequence,
   type InboundMessage,
 } from '@/lib/email/auto-reply'
@@ -182,5 +186,85 @@ describe('every decision is explainable', () => {
     expect(classifyInbound(msg({ headers: { 'auto-submitted': 'AUTO-REPLIED' } })).kind).toBe(
       'auto_reply',
     )
+  })
+})
+
+describe('isOwnOutbound', () => {
+  /**
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THE PRODUCT COULD READ ITS OWN MESSAGE BACK AS A PROSPECT REPLY.      ║
+   * ║                                                                           ║
+   * ║  `reply-sync` matches on `enrollments.to_email = <from address>` and had  ║
+   * ║  no exclusion for the sending mailbox. A sequence step addressed to the   ║
+   * ║  sending address lands in that same INBOX, and the next sync treats it as ║
+   * ║  a genuine reply: the sequence stops, `email_replied` fires, and the CRM  ║
+   * ║  timeline records a reply nobody wrote.                                  ║
+   * ║                                                                           ║
+   * ║  Found while building the reply E2E fixture — the naive version of that   ║
+   * ║  fixture would have gone green without a human ever replying.            ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  it('recognises the mailbox writing to itself', () => {
+    expect(isOwnOutbound('husnain@outlio.io', 'husnain@outlio.io')).toBe(true)
+  })
+
+  it('normalises case and spacing, which providers do not agree on', () => {
+    // A raw comparison would let this through the guard it exists to enforce.
+    expect(isOwnOutbound('Husnain@Outlio.IO', 'husnain@outlio.io')).toBe(true)
+    expect(isOwnOutbound('  husnain@outlio.io  ', 'husnain@outlio.io')).toBe(true)
+  })
+
+  it('still lets a real prospect through', () => {
+    /*
+     * The positive control. A guard that returned true for everything would
+     * silence every reply in the product and pass the assertions above.
+     */
+    expect(isOwnOutbound('prospect@acme.example', 'husnain@outlio.io')).toBe(false)
+    expect(isOwnOutbound('husnain@other.example', 'husnain@outlio.io')).toBe(false)
+    expect(isOwnOutbound('someone@outlio.io', 'husnain@outlio.io')).toBe(false)
+  })
+
+  it('does not treat an empty address as our own', () => {
+    // An unparsed From header must not be silently swallowed as self-mail.
+    expect(isOwnOutbound('', 'husnain@outlio.io')).toBe(false)
+    expect(isOwnOutbound('husnain@outlio.io', '')).toBe(false)
+  })
+})
+
+describe('the self-send guard is actually wired into reply-sync', () => {
+  /**
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ TESTING THE PREDICATE IS NOT TESTING THE GUARD. Deleting the call from ║
+   * ║  `reply-sync.ts` left all 2,980 unit tests green — `isOwnOutbound` was    ║
+   * ║  still correct, still covered, and no longer used. That is the defect     ║
+   * ║  class this project keeps finding, reproduced by its own fix.            ║
+   * ║                                                                           ║
+   * ║  The end-to-end path belongs to `email-reply-sync.test.ts`, which needs   ║
+   * ║  GreenMail and is SKIPPED wherever Docker is absent — including the        ║
+   * ║  machine this was written on. So a structural check is what stands        ║
+   * ║  between the guard and a silent deletion.                                ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const source = readFileSync(join(__dirname, '..', '..', 'lib/email/reply-sync.ts'), 'utf8')
+
+  it('calls isOwnOutbound', () => {
+    expect(
+      source.includes('isOwnOutbound('),
+      'reply-sync no longer skips the mailbox\'s own outbound mail, so a sequence ' +
+        'step addressed to the sending address will be read back as a prospect reply.',
+    ).toBe(true)
+  })
+
+  it('skips before matching enrollments, not after', () => {
+    /*
+     * Order is the whole point. Checked after the enrollment lookup, the sync
+     * would already have counted an `unmatched` or recorded an inbound row for
+     * its own message before deciding to ignore it.
+     */
+    const guard = source.indexOf('isOwnOutbound(')
+    const match = source.indexOf("from('email_enrollments')")
+    expect(guard).toBeGreaterThan(-1)
+    expect(match).toBeGreaterThan(-1)
+    expect(guard, 'the self-send check runs after the enrollment match').toBeLessThan(match)
   })
 })
