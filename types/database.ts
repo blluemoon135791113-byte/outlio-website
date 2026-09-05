@@ -7746,6 +7746,33 @@ export type Database = {
           },
         ]
       }
+      worker_runs: {
+        Row: {
+          duration_ms: number
+          finished_at: string
+          id: string
+          jobs: Json
+          ok: boolean
+          started_at: string
+        }
+        Insert: {
+          duration_ms: number
+          finished_at?: string
+          id?: string
+          jobs?: Json
+          ok: boolean
+          started_at: string
+        }
+        Update: {
+          duration_ms?: number
+          finished_at?: string
+          id?: string
+          jobs?: Json
+          ok?: boolean
+          started_at?: string
+        }
+        Relationships: []
+      }
       workspace_feature_flags: {
         Row: {
           enabled: boolean

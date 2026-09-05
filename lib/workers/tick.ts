@@ -245,5 +245,43 @@ export async function runTick(): Promise<TickResult> {
   })
 
   result.durationMs = Date.now() - began
+  await recordRun(result)
   return result
+}
+
+/** Runs older than this are deleted; the table answers "recently", not "ever". */
+const RUN_RETENTION_DAYS = 30
+
+/**
+ * Writes the heartbeat row — see `0117_worker_runs.sql` for why it exists.
+ *
+ * ⚠️ NEVER THROWS. A tick that sent mail and then failed to record itself did
+ * still send the mail; turning that into a 500 would make the scheduler retry
+ * the whole tick and re-do the work that already succeeded. The recording is
+ * strictly less important than the thing it records.
+ */
+async function recordRun(result: TickResult): Promise<void> {
+  try {
+    const db = createAdminClient()
+
+    const { error } = await db.from('worker_runs').insert({
+      started_at: result.startedAt,
+      duration_ms: result.durationMs,
+      jobs: result.jobs,
+      // The tick RAN; `ok` is about what happened inside it.
+      ok: Object.values(result.jobs).every((job) => job.ok),
+    })
+    if (error) throw new Error(error.message)
+
+    /*
+     * Pruned here rather than on a schedule of its own, because this is the
+     * one job guaranteed to run whenever rows are being created. An indexed
+     * range delete that usually removes nothing.
+     */
+    const cutoff = new Date(Date.now() - RUN_RETENTION_DAYS * 86_400_000).toISOString()
+    await db.from('worker_runs').delete().lt('started_at', cutoff)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'failed'
+    console.error('[tick] recording the run failed', { message })
+  }
 }

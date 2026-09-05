@@ -2,7 +2,9 @@ import type { Metadata } from 'next'
 
 import { CompanyBackfill } from '@/components/admin/CompanyBackfill'
 import { RunWorkers } from '@/components/admin/RunWorkers'
+import { SchedulerStatus } from '@/components/admin/SchedulerStatus'
 import { UserRow, type AdminUser } from '@/components/admin/UserRow'
+import { schedulerHealth } from '@/lib/admin/scheduler-health'
 import { requireAdmin } from '@/lib/auth/access'
 import { listActivePlans } from '@/lib/limits/plans'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -20,7 +22,8 @@ export default async function AdminPage() {
   const ctx = await requireAdmin()
   const supabase = createAdminClient()
 
-  const [{ data: profiles }, { data: requests }, { data: audit }, plans] = await Promise.all([
+  const [{ data: profiles }, { data: requests }, { data: audit }, plans, { data: lastRun }] =
+    await Promise.all([
     supabase
       .from('profiles')
       .select(
@@ -38,8 +41,34 @@ export default async function AdminPage() {
       .select('id, action, reason, created_at')
       .order('created_at', { ascending: false })
       .limit(15),
-    listActivePlans(),
-  ])
+      listActivePlans(),
+      /*
+       * The scheduler heartbeat. `maybeSingle` because an empty table is the
+       * expected state before the first tick, not an error — and it is exactly
+       * the state the panel needs to report.
+       */
+      supabase
+        .from('worker_runs')
+        .select('started_at, jobs, ok')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ])
+
+  const health = schedulerHealth(lastRun?.started_at ?? null)
+
+  /*
+   * TickResult's `jobs` is a Record<string, {ok, detail}>, but it arrives from
+   * Postgres as unvalidated `Json`. Narrowed defensively rather than cast: a
+   * malformed row must not take out the admin page that exists to diagnose it.
+   */
+  const lastJobs = Object.entries(
+    (lastRun?.jobs ?? {}) as Record<string, { ok?: unknown; detail?: unknown }>,
+  ).map(([name, value]) => ({
+    name,
+    ok: value?.ok !== false,
+    detail: typeof value?.detail === 'string' ? value.detail : '',
+  }))
 
   const planNames = new Map(plans.map((p) => [p.id, p.name]))
   const pendingByUser = new Map(
@@ -140,11 +169,16 @@ export default async function AdminPage() {
 
       <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
         <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Background workers</h2>
+        <SchedulerStatus health={health} lastJobs={lastJobs} />
+
+        <hr className="border-border" />
+
         <p className="text-sm text-muted">
-          Runs the same pass the scheduled job runs at 06:00 UTC — due email,
-          reply sync, flows, webhooks and the evidence bridge. It changes no
-          schedule: a message that is not yet due stays queued, and send windows,
-          sending days and ramp limits are enforced where they always were.
+          Runs the same pass the scheduled job runs every five minutes — due
+          email, reply sync, flows, webhooks and the evidence bridge. It changes
+          no schedule: a message that is not yet due stays queued, and send
+          windows, sending days and ramp limits are enforced where they always
+          were.
         </p>
         <RunWorkers />
       </section>

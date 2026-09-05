@@ -35,10 +35,30 @@ trap cleanup EXIT
 
 cleanup
 docker run -d --name "$CONTAINER" -e POSTGRES_PASSWORD=check postgres:16 >/dev/null
-for _ in $(seq 1 30); do
-  docker exec "$CONTAINER" pg_isready -U postgres >/dev/null 2>&1 && break
+# ⚠️ NOT pg_isready. The postgres image starts a TEMPORARY server to run its
+# init scripts, then shuts it down and starts the real one. pg_isready answers
+# "yes" during that first window, so the loop broke early and every psql after
+# it failed with "No such file or directory" on the socket -- a confusing error
+# that looks like Docker is broken rather than like a race.
+#
+# Waiting on an actual query, twice a second apart, only passes once the real
+# server is up and staying up.
+ready=""
+for _ in $(seq 1 60); do
+  if docker exec "$CONTAINER" psql -U postgres -X -q -c 'select 1' >/dev/null 2>&1; then
+    sleep 1
+    if docker exec "$CONTAINER" psql -U postgres -X -q -c 'select 1' >/dev/null 2>&1; then
+      ready=yes
+      break
+    fi
+  fi
   sleep 1
 done
+if [ -z "$ready" ]; then
+  echo "Postgres in $CONTAINER never accepted a connection." >&2
+  docker logs "$CONTAINER" 2>&1 | tail -20 >&2
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Scaffold. Deliberately minimal: only the objects the CRM migrations reference,

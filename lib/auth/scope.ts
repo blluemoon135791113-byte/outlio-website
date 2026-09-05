@@ -78,6 +78,9 @@ export const TABLE_TENANCY: Record<string, Tenancy> = {
   web_research_cache: 'global',
   web_research_jobs: 'global',
   web_research_lead_results: 'global',
+  // One scheduler serves every tenant, so a run belongs to none of them.
+  // Admin-only to read; see 0117_worker_runs.sql.
+  worker_runs: 'global',
   // `workspaces` is keyed by `id`, not `workspace_id`, so it cannot use the
   // generic filter. Callers scope it explicitly by id or owner_user_id.
   workspaces: 'global',
