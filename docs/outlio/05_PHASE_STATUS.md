@@ -352,3 +352,48 @@ here — sign-in intermittently failed inside the Playwright harness while
 succeeding through a plain script and through the direct API seconds apart. The
 evidence above was gathered the way that worked. Shipping a test I could not
 stand behind would have been worse than recording the gap.
+
+
+---
+
+## Public API v1 — reviewed 2026-09-05, no defects found
+
+Checked because it is the one authenticated surface this session had not looked
+at, and it is reachable by anyone holding a key.
+
+**Sound.** All six routes go through `apiRoute`, each declares the `:read` scope
+matching its resource, and each runs exactly one query filtered by
+`context.workspaceId` — a value the handler is given and cannot ask to change.
+`api_key_for_hash` filters `revoked_at is null` and the expiry in SQL, and is
+revoked from `public`, `anon` and `authenticated`, so only the service role can
+call it. Rate limiting deliberately runs BEFORE the scope check, so a caller
+hammering an endpoint they lack the scope for is still metered.
+
+**And it is tested.** `tests/integration/public-api.test.ts` — 35 assertions,
+run 2026-09-05, all passing in 105s. It already covers cross-tenant reads, a
+revoked key, a missing key, a key that was never issued, a key lacking the
+route's scope, a workspace id smuggled in the query string, the same in a
+header, the paging cap, nonsense paging, log hygiene (no query strings, no
+activity metadata) and soft-deleted records. I did not add to it; there was
+nothing missing worth adding.
+
+### ⚠️ One thing to decide: six `:write` scopes with no endpoint
+
+`api_scope` declares `contacts:write`, `companies:write`, `opportunities:write`,
+`activities:write`, `tasks:write` and `lists:write`. **No write endpoint exists** —
+all six routes are `GET`.
+
+The developer settings UI offers a `write` checkbox for every resource, so a
+customer can create a key granting `contacts:write`, reasonably believe the API
+accepts writes, and find that nothing does. Not a security hole: an unused scope
+grants nothing, and the enforcement is `scopes.includes(required)` against a
+scope no route ever requires.
+
+It is not tracked anywhere. `schema-without-code.test.ts` watches unused TABLES,
+so an unused enum value falls through it — the same defect class this project
+keeps finding, one type-system level down.
+
+**Not changed, because it is a product call.** The UI's own comment shows write
+was anticipated by design ("an integration that only needs to read contacts
+could also delete them"). Either hide the write checkboxes until the endpoints
+land, or ship the endpoints. Leaving it offers a capability that does nothing.
