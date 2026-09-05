@@ -30,11 +30,59 @@
  * next worker tick, which you trigger from /admin.
  */
 import { createClient } from '@supabase/supabase-js'
+import { resolveMx } from 'node:dns/promises'
 import { readFileSync } from 'node:fs'
 
-const TO = (process.argv[2] ?? '').trim().toLowerCase()
+const args = process.argv.slice(2)
+/*
+ * ⚠️ `--dry-run` EXISTS BECAUSE VERIFYING THE VALIDATION USED TO SEED. Checking
+ * that a real domain passes the MX guard ran the whole script, created a
+ * contact, a campaign and an active enrollment for an address belonging to a
+ * stranger, and had to be deleted by hand. A validator you cannot exercise
+ * without side effects is one nobody exercises.
+ */
+const DRY = args.includes('--dry-run')
+const TO = (args.find((a) => !a.startsWith('--')) ?? '').trim().toLowerCase()
+
 if (!TO || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(TO)) {
-  console.error('Usage: node scripts/seed-reply-test.mjs <address-you-can-reply-from>')
+  console.error('Usage: node scripts/seed-reply-test.mjs <address-you-can-reply-from> [--dry-run]')
+  process.exit(1)
+}
+
+/*
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THE DOMAIN MUST ACTUALLY RECEIVE MAIL, AND SHAPE IS NOT ENOUGH.       ║
+ * ║                                                                           ║
+ * ║  The first run of this script was given the literal placeholder from its   ║
+ * ║  own usage line, with a wrapped `node` stuck to the end:                   ║
+ * ║                                                                           ║
+ * ║      your-other@address.comnode                                           ║
+ * ║                                                                           ║
+ * ║  That passes an `x@y.z` regex perfectly. Had a tick run before anyone      ║
+ * ║  noticed, a RAMPING mailbox would have attempted delivery to a domain      ║
+ * ║  that does not exist and taken a hard bounce — which `reply-sync`'s own    ║
+ * ║  comment calls "the most avoidable reputation damage there is".           ║
+ * ║                                                                           ║
+ * ║  An MX lookup costs one DNS query and refuses exactly that class of        ║
+ * ║  mistake. Placeholder domains are named explicitly too, because            ║
+ * ║  `example.com` DOES have an MX record and would otherwise sail through.   ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+const PLACEHOLDERS = ['example.com', 'example.org', 'example.net', 'address.com', 'domain.com']
+const domain = TO.split('@')[1]
+
+if (PLACEHOLDERS.includes(domain)) {
+  console.error(`\nRefusing: ${TO} uses the placeholder domain ${domain}.`)
+  console.error('Pass an address you can actually receive at and reply from.\n')
+  process.exit(1)
+}
+
+try {
+  const mx = await resolveMx(domain)
+  if (!mx.length) throw new Error('no MX records')
+} catch {
+  console.error(`\nRefusing: ${domain} publishes no MX record, so it cannot receive mail.`)
+  console.error('Sending to it would earn a hard bounce on a ramping mailbox.\n')
   process.exit(1)
 }
 
@@ -63,6 +111,11 @@ if (TO === account.from_email.toLowerCase()) {
       `different address you can send from.\n`,
   )
   process.exit(1)
+}
+
+if (DRY) {
+  console.log(`OK: ${TO} passes every check. Re-run without --dry-run to seed.`)
+  process.exit(0)
 }
 
 const WORKSPACE = account.workspace_id
