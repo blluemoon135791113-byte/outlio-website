@@ -234,3 +234,95 @@ npm run build
 npm run typecheck    # "tsc --noEmit"  — NOT YET ADDED
 npm test             # Vitest          — NOT YET INSTALLED
 ```
+
+---
+
+## Cost-Aware Agent Orchestration
+
+Project-level subagents live in `.claude/agents/`. They exist to route routine,
+bounded, or read-only work to a cheaper model without sacrificing correctness.
+This section only governs *how agents are used*; it does not change any rule
+above it.
+
+### Default execution flow
+
+For meaningful engineering tasks:
+
+1. Understand the task.
+2. Use the built-in **Explore** agent for repository discovery — file
+   location, dependency tracing, "where does X happen". Do not create a
+   custom Explore agent; the built-in one already covers this.
+3. Use **docs-auditor** when documentation or setup accuracy is in question.
+4. Produce clear acceptance criteria before implementing.
+5. Use **feature-implementer** for approved, scoped implementation.
+6. Run **verification-reviewer** after implementation.
+7. Run **product-risk-reviewer** for changes touching auth, tenant scoping,
+   money, migrations, email sending, or anything user-facing with real
+   consequences.
+8. Resolve findings; rerun verification after fixes.
+9. Give a final ship / no-ship recommendation.
+
+### Model routing
+
+| Model | Use for |
+|---|---|
+| **Haiku** | Repository discovery, documentation checks, bounded read-only searches, deterministic verification |
+| **Sonnet** | Normal feature implementation, bug fixes, refactors, product/risk review, non-trivial tests |
+| **Opus** (`architecture-advisor`) | Difficult architecture, ambiguous production failures, security-sensitive design, large migrations, conflicting reviewer findings, or repeated failure by cheaper agents — never the default |
+
+Do not reach for Opus because it might produce a marginally nicer answer.
+
+### Do not duplicate work
+
+Do not have multiple agents independently implement the same feature to
+compare outputs. Parallel dispatch is for independent research, independent
+verification, and independent risk review — not competing implementations.
+
+### Context control
+
+Give each subagent only the task-specific context it needs: acceptance
+criteria and targeted file references, not entire directories or full logs.
+
+### Human approval boundary (restates existing rules above, does not relax them)
+
+Never, regardless of which agent is running:
+
+- deploy to production (`vercel deploy --prod`, `supabase db push` against
+  production)
+- run a destructive database operation or delete significant data
+- run an irreversible migration without the owner's explicit go-ahead
+- send external messages, rotate secrets, change production credentials,
+  spend money, or push to a remote branch without being asked to in that
+  session
+
+Local coding, testing, linting, type checking, building, and reading files do
+not require re-approval once the task is already requested.
+
+### Task sizing
+
+- **Trivial** (typo, one-line fix): handle directly, no subagent ceremony.
+- **Small** (localized bug, small component): Explore if needed →
+  feature-implementer → verification-reviewer.
+- **Medium** (multi-file feature, integration): Explore → acceptance criteria
+  → feature-implementer → verification-reviewer → product-risk-reviewer.
+- **High risk** (auth, billing, tenant isolation, sensitive data, destructive
+  migration, secrets, concurrency): Explore → plan → architecture-advisor if
+  genuinely warranted → feature-implementer → verification-reviewer →
+  product-risk-reviewer. Opus is an escalation, not the starting point.
+
+### Repository specifics for agents to use
+
+- Package manager: **npm** (`package-lock.json` present — never suggest pnpm/yarn).
+- Commands: `npm run typecheck`, `npm run lint`, `npm test` (unit, fast),
+  `npm run test:integration` (hits real Supabase — slower, serial),
+  `npm run test:e2e` (Playwright, staging only), `npm run build`,
+  `npm run db:types` (regenerate Supabase types after a migration).
+- Two tenancy models coexist: `workspace_id` (64 tables) and `user_id`
+  (42 tables). Scoping to the wrong one is a silent empty-result bug, not an
+  error.
+- Server actions are public HTTP endpoints. Every exported action must gate
+  (`assertWorkspacePermission`/`assertAdmin`/`assertAccess`) **and** be called
+  from somewhere outside its own file — this repo has repeatedly shipped
+  gated actions with zero callers.
+- Never fabricate data (CLAUDE.md rule 4, above) — this applies to agent output
+  too, not just application code.
