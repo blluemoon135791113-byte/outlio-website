@@ -614,3 +614,33 @@ by relaxing an assertion.**
 
 ⚠️ **0115 and 0116 are applied to STAGING ONLY.** Production is the owner's, per
 §3.7. Staging and production schemas now differ by these two migrations.
+
+
+### 0115 — the two policies it deliberately did not touch
+
+"56 rewritten" invites "what about the rest?", so the audit, run against staging
+after the migration:
+
+```
+policies now using my_workspace_ids            56
+policies still calling is_workspace_member      2
+WITH CHECK clauses with the old shape           0   ← writes were never affected
+```
+
+Neither remaining policy is an oversight:
+
+- **`workspaces_select_member`** — `(is_workspace_member(id) OR is_admin())`, on
+  `workspaces` itself, keyed on `id` rather than `workspace_id`. 39 rows, bounded
+  by customer count. ⚠️ **And it must not be rewritten to use
+  `my_workspace_ids()`, which reads `workspaces`.** The helper is
+  `security definer` so it would not recurse through RLS, but a policy on a table
+  defined in terms of a function that reads that table is a trap to leave
+  un-set.
+- **`email_accounts_select_member`** — a compound predicate that also checks
+  `scope`, ownership and workspace role per row. Semantically richer than the
+  shape 0115 matched, and the table holds one row per connected mailbox.
+
+⚠️ **`WITH CHECK` was never affected, which is worth stating explicitly.** Writes
+validate a single row, so the per-row cost that made reads time out never applied
+to them — and confirming that is why 0115 matched on `qual` alone rather than
+rewriting every predicate it could find.
