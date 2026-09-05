@@ -65,14 +65,72 @@ const LIMITS = {
   evidenceWorkspacesPerTick: 5,
 }
 
-/** Runs one job, converting any throw into a recorded failure. */
-async function runJob(
+/*
+ * ⚠️ THE TICK RUNS INSIDE A 60-SECOND FUNCTION (`maxDuration` on the route).
+ *
+ * Measured on production before these existed: a quarter of scheduled runs
+ * failed, and every one of them took 61-62 seconds while every success took
+ * 6-13. They were not flaky, they were hitting the wall. One unreachable IMAP
+ * host or one customer webhook endpoint that accepts a connection and never
+ * answers is enough, because nothing here had a timeout.
+ *
+ * Being killed at the wall is the worst available outcome: every job ordered
+ * AFTER the hung one is skipped with no record that it was skipped, and the
+ * heartbeat row is never written either, so the tick leaves no trace at all.
+ *
+ * A budget turns that into an ordinary bad tick — the hung job is abandoned,
+ * the rest still run, and the record says which one ate the time.
+ */
+export const TICK_BUDGET_MS = 45_000
+/** No single job may take the whole budget, however stuck it is. */
+export const JOB_BUDGET_MS = 20_000
+
+/**
+ * Runs one job, converting any throw into a recorded failure, and refusing to
+ * let it overrun the tick's remaining budget.
+ *
+ * ⚠️ A TIMED-OUT JOB IS ABANDONED, NOT CANCELLED. Promises have no cancellation
+ * — the underlying send or sync keeps running until its socket gives up. That
+ * is safe here only because every one of these jobs is claim-based and
+ * idempotent: the work it completes after we stop waiting is work that would
+ * have been done anyway, and the claim stops the next tick redoing it.
+ */
+export async function runJob(
   result: TickResult,
   name: string,
   job: () => Promise<string>,
+  /*
+   * When the tick started. A parameter rather than a module-level clock so a
+   * test can hand in a start time in the past and exercise an exhausted budget
+   * in milliseconds instead of waiting 45 seconds for one.
+   */
+  began: number,
 ): Promise<void> {
+  const remaining = TICK_BUDGET_MS - (Date.now() - began)
+  if (remaining <= 0) {
+    /*
+     * Recorded, not silently dropped. "This job did not run because an earlier
+     * one used the whole tick" is the single most useful line in the record
+     * when somebody asks why replies stopped syncing.
+     */
+    result.jobs[name] = { ok: false, detail: 'skipped — tick budget exhausted' }
+    return
+  }
+
+  const limit = Math.min(remaining, JOB_BUDGET_MS)
+  let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
-    result.jobs[name] = { ok: true, detail: await job() }
+    const detail = await Promise.race([
+      job(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`timed out after ${Math.round(limit / 1000)}s`)),
+          limit,
+        )
+      }),
+    ])
+    result.jobs[name] = { ok: true, detail }
   } catch (error) {
     /*
      * ⚠️ LOGGED WITHOUT THE PAYLOAD. A failing send must not put a recipient
@@ -82,6 +140,9 @@ async function runJob(
     const detail = error instanceof Error ? error.message : 'failed'
     console.error(`[tick] ${name} failed`, { message: detail })
     result.jobs[name] = { ok: false, detail }
+  } finally {
+    // Otherwise a pending timer keeps the function alive after the tick is done.
+    clearTimeout(timer)
   }
 }
 
@@ -105,7 +166,7 @@ export async function runTick(): Promise<TickResult> {
   await runJob(result, 'reap_email_claims', async () => {
     const reaped = await reapExpiredClaims()
     return `${reaped} stale claim${reaped === 1 ? '' : 's'} released`
-  })
+  }, began)
 
   /*
    * ⚠️ BEFORE `send_email`, DELIBERATELY. This enqueues the steps that are due;
@@ -120,7 +181,7 @@ export async function runTick(): Promise<TickResult> {
       `${outcome.stopped} stopped, ${outcome.deferred} deferred, ` +
       `${outcome.unrenderable} unrenderable, ${outcome.failed} failed`
     )
-  })
+  }, began)
 
   await runJob(result, 'send_email', async () => {
     /*
@@ -130,7 +191,7 @@ export async function runTick(): Promise<TickResult> {
      */
     const outcome = await runSendWorker(`tick-${began}`, LIMITS.emailsPerTick)
     return `${outcome.claimed} claimed, ${outcome.sent} sent, ${outcome.failed} failed, ${outcome.skipped} skipped`
-  })
+  }, began)
 
   await runJob(result, 'sync_replies', async () => {
     const db = createAdminClient()
@@ -164,7 +225,7 @@ export async function runTick(): Promise<TickResult> {
     }
 
     return `${workspaces.length} workspace(s), ${replies} replies, ${failures} failed`
-  })
+  }, began)
 
   await runJob(result, 'advance_flows', async () => {
     /*
@@ -185,12 +246,12 @@ export async function runTick(): Promise<TickResult> {
     }
 
     return `${advanced} run(s) advanced, ${failures} failed`
-  })
+  }, began)
 
   await runJob(result, 'deliver_webhooks', async () => {
     const outcome = await deliverPendingWebhooks(LIMITS.webhooksPerTick)
     return `${outcome.delivered} delivered, ${outcome.retrying} retrying, ${outcome.exhausted} exhausted`
-  })
+  }, began)
 
   /*
    * ⚠️ THE JOB THAT MAKES RESEARCH VISIBLE IN THE CRM.
@@ -242,7 +303,7 @@ export async function runTick(): Promise<TickResult> {
     }
 
     return `${workspaces.length} workspace(s), +${emails} emails, +${phones} phones, ${failures} failed`
-  })
+  }, began)
 
   result.durationMs = Date.now() - began
   await recordRun(result)
