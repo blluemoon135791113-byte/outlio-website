@@ -14,7 +14,8 @@
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 
-import { createEmailAccount, disconnectEmailAccount, normalizeSendingAddress } from '@/lib/email/accounts'
+import { createEmailAccount, disconnectEmailAccount, getEmailAccount, normalizeSendingAddress } from '@/lib/email/accounts'
+import { formatDiagnostics, type MailboxDiagnostics } from '@/lib/email/diagnostics'
 import { assertLaunchable, type CampaignType } from '@/lib/email/campaign-policy'
 import { bulkEnroll, summarize } from '@/lib/email/enrollment'
 import { assessAccount } from '@/lib/email/readiness-runner'
@@ -182,6 +183,96 @@ export async function recheckAccount(
     return { ok: true, message: `Checked. Setup and sending health is ${result.score}/100.` }
   } catch {
     return { ok: false, error: 'Could not check that mailbox.' }
+  }
+}
+
+/**
+ * Runs the mailbox connection diagnostic and returns a SANITIZED report.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THIS RUNS WHEREVER THE ENCRYPTION KEY IS. The stored credential is    ║
+ * ║  decrypted inside the provider; a machine whose                           ║
+ * ║  `INTEGRATION_ENCRYPTION_KEY` differs from the one that wrote the         ║
+ * ║  envelope fails there and never reaches the mail server. So this proves   ║
+ * ║  the provider path only when run in the deployed environment — which is   ║
+ * ║  the entire reason it exists as an action rather than as a script.        ║
+ * ║                                                                           ║
+ * ║  ⚠️ ADMIN ONLY. `email.account.manage` is `minRole: admin`, matching       ║
+ * ║  `disconnectAccount`. It decrypts a credential and can put a message on   ║
+ * ║  the wire; a setter has no business doing either.                         ║
+ * ║                                                                           ║
+ * ║  ⚠️ THE TEST RECIPIENT IS NOT FREE-FORM, AND THAT IS A SECURITY CHOICE.   ║
+ * ║  An unrestricted destination would turn a diagnostic into a way to send   ║
+ * ║  arbitrary mail from a warmed domain with no campaign, no suppression     ║
+ * ║  check, no ramp and no record — every control this product has, routed    ║
+ * ║  around by design. It is therefore limited to the mailbox's own address   ║
+ * ║  or a member of the workspace: "an address you control", enforced rather  ║
+ * ║  than assumed.                                                            ║
+ * ║                                                                           ║
+ * ║  ⚠️ IT BYPASSES THE SCHEDULER ONLY — no send window, no ramp, no daily     ║
+ * ║  counter, because an operator pressing "test" wants an answer now. It     ║
+ * ║  does NOT bypass provider authentication, and it changes no account        ║
+ * ║  configuration: not the window, not `send_days`, not the ramp.            ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function testMailboxConnection(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await assertWorkspacePermission('email.account.manage')
+    const accountId = String(formData.get('accountId') ?? '')
+    if (!accountId) return { ok: false, error: 'No mailbox selected.' }
+
+    const account = await getEmailAccount(ctx.workspace.id, accountId)
+    if (!account) return { ok: false, error: 'That mailbox no longer exists.' }
+
+    const requested = String(formData.get('sendTestTo') ?? '').trim().toLowerCase()
+    let sendTestTo: string | undefined
+
+    if (requested) {
+      const db = createAdminClient()
+      const { data: members } = await db
+        .from('workspace_memberships')
+        .select('profiles!inner(email)')
+        .eq('workspace_id', ctx.workspace.id)
+
+      const allowed = new Set<string>([account.fromEmail.toLowerCase()])
+      for (const row of (members ?? []) as unknown as { profiles: { email: string | null } }[]) {
+        if (row.profiles?.email) allowed.add(row.profiles.email.toLowerCase())
+      }
+
+      if (!allowed.has(requested)) {
+        return {
+          ok: false,
+          error:
+            'A test message can only be sent to this mailbox\'s own address or to a ' +
+            'member of this workspace.',
+        }
+      }
+      sendTestTo = requested
+    }
+
+    const provider = requireProvider(account.provider)
+    if (typeof (provider as { runDiagnostics?: unknown }).runDiagnostics !== 'function') {
+      return { ok: false, error: 'This provider does not support connection diagnostics yet.' }
+    }
+
+    const report = await (
+      provider as unknown as {
+        runDiagnostics: (a: typeof account, o: { sendTestTo?: string }) => Promise<MailboxDiagnostics>
+      }
+    ).runDiagnostics(account, { sendTestTo })
+
+    /*
+     * ⚠️ `formatDiagnostics` RETURNS ONLY CLASSIFIED CODES, CURATED MESSAGES AND
+     * A SCRUBBED EXCERPT. No password, no ciphertext, no auth tag, no key —
+     * see `scrubProviderDetail`, which also removes the literal secret.
+     */
+    return { ok: true, message: formatDiagnostics(report) }
+  } catch {
+    // Deliberately opaque: a thrown error here could carry provider text.
+    return { ok: false, error: 'Could not run the mailbox connection test.' }
   }
 }
 

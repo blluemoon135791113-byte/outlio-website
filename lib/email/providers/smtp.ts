@@ -29,6 +29,11 @@ import { simpleParser } from 'mailparser'
 import nodemailer from 'nodemailer'
 
 import {
+  classifyImapError,
+  scrubProviderDetail,
+  type MailboxDiagnostics,
+} from '@/lib/email/diagnostics'
+import {
   capabilitiesFor,
   type EmailAccountConfiguration,
   type EmailCapabilities,
@@ -364,6 +369,145 @@ export class SmtpProvider implements EmailProvider {
     }
 
     return { ok: true, fromEmail: account.fromEmail, displayName: account.fromName }
+  }
+
+  /**
+   * SMTP and IMAP checked SEPARATELY, with every result scrubbed.
+   *
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ RUNS WHEREVER THE ENCRYPTION KEY IS, WHICH IS THE POINT. The stored   ║
+   * ║  credential is decrypted here by `readAccountSecret`; a machine without   ║
+   * ║  the deployed `INTEGRATION_ENCRYPTION_KEY` fails at that line and never   ║
+   * ║  reaches the provider. That is the isolation working, not a bug, and it   ║
+   * ║  is why this check has to run server-side in the deployed environment.   ║
+   * ║                                                                           ║
+   * ║  ⚠️ NOTHING HERE BYPASSES PROVIDER AUTHENTICATION. It bypasses the        ║
+   * ║  campaign SCHEDULER only — no send window, no ramp, no daily counter —    ║
+   * ║  because this is a diagnostic the operator asked for, not a campaign. The ║
+   * ║  mail server still has to accept the credential.                          ║
+   * ║                                                                           ║
+   * ║  ⚠️ `verify()` DOES CONNECT AND AUTH TOGETHER, so the two lines below are ║
+   * ║  derived from the CLASSIFICATION rather than measured independently: an   ║
+   * ║  `SMTP_AUTH` failure means the socket got far enough to be rejected on    ║
+   * ║  credentials, so connection passed and authentication failed. Anything    ║
+   * ║  else at that stage is reported as the connection failing with            ║
+   * ║  authentication `not_attempted` — stated rather than implied, because     ║
+   * ║  "authentication: failed" would otherwise be a guess.                     ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  async runDiagnostics(
+    account: EmailAccountHandle,
+    options: { sendTestTo?: string } = {},
+  ): Promise<MailboxDiagnostics> {
+    const secret = await readAccountSecret<SmtpSecret>(account.id, account.secretReference)
+    const secrets = [secret.smtpPassword, secret.imapPassword, secret.smtpUsername, secret.imapUsername]
+
+    const result: MailboxDiagnostics = {
+      accountId: account.id,
+      fromEmail: account.fromEmail,
+      smtp: { connection: 'not_attempted', authentication: 'not_attempted' },
+      imap: { connection: 'not_configured', authentication: 'not_configured', inbox: 'not_configured' },
+      send: { attempted: false, accepted: 'not_attempted' },
+    }
+
+    // ---- SMTP -------------------------------------------------------------
+    let transport
+    try {
+      transport = transportFor(account, secret)
+      await transport.verify()
+      result.smtp.connection = 'passed'
+      result.smtp.authentication = 'passed'
+    } catch (error) {
+      const classified =
+        error instanceof UnsafeMailEndpointError
+          ? { code: 'SMTP_UNSAFE_HOST', message: error.message }
+          : classifySmtpError(error, 'connect')
+
+      const authRejected = classified.code === 'SMTP_AUTH'
+      result.smtp.connection = authRejected ? 'passed' : 'failed'
+      result.smtp.authentication = authRejected ? 'failed' : 'not_attempted'
+      result.smtp.code = classified.code
+      result.smtp.message = classified.message
+      result.smtp.providerDetail = scrubProviderDetail(
+        (error as { message?: string })?.message,
+        secrets,
+      )
+    } finally {
+      try {
+        transport?.close()
+      } catch {
+        // Closing a transport that never opened is not a diagnostic result.
+      }
+    }
+
+    // ---- One test message, only if asked and only if SMTP works -----------
+    if (options.sendTestTo && result.smtp.authentication === 'passed') {
+      result.send.attempted = true
+      const sent = await this.send(account, {
+        to: options.sendTestTo,
+        subject: 'Outlio mailbox test',
+        text:
+          'This message was sent by the Outlio mailbox connection test. ' +
+          'It is not part of any campaign or sequence.',
+        html:
+          '<p>This message was sent by the Outlio mailbox connection test. ' +
+          'It is not part of any campaign or sequence.</p>',
+        idempotencyKey: `mailbox-test-${account.id}-${Date.now()}`,
+      } as OutboundMessage)
+
+      if (sent.ok) {
+        result.send.accepted = 'passed'
+        result.send.messageId = sent.providerMessageId
+      } else {
+        result.send.accepted = 'failed'
+        result.send.code = sent.code
+        result.send.message = sent.message
+        result.send.providerDetail = scrubProviderDetail(sent.message, secrets)
+      }
+    }
+
+    // ---- IMAP -------------------------------------------------------------
+    if (account.configuration.imapHost) {
+      result.imap = { connection: 'not_attempted', authentication: 'not_attempted', inbox: 'not_attempted' }
+      let client: ImapFlow | undefined
+      try {
+        client = imapClientFor(account, secret)
+        await client.connect()
+        result.imap.connection = 'passed'
+        result.imap.authentication = 'passed'
+
+        /*
+         * ⚠️ READ-ONLY. A diagnostic must not mark mail as seen, move it, or
+         * touch the UID cursor the reply sync depends on.
+         */
+        const box = await client.mailboxOpen('INBOX', { readOnly: true })
+        result.imap.inbox = box ? 'passed' : 'failed'
+      } catch (error) {
+        const classified = classifyImapError(error)
+        result.imap.connection = classified.authFailed ? 'passed' : 'failed'
+        result.imap.authentication = classified.authFailed ? 'failed' : 'not_attempted'
+        result.imap.inbox = 'not_attempted'
+        result.imap.code = classified.code
+        result.imap.message = classified.message
+        result.imap.providerDetail = scrubProviderDetail(
+          (error as { message?: string })?.message,
+          secrets,
+        )
+      } finally {
+        // Always log out, so the diagnostic never leaves a session open.
+        try {
+          await client?.logout()
+        } catch {
+          try {
+            client?.close()
+          } catch {
+            // Nothing further to do; the socket is the server's problem now.
+          }
+        }
+      }
+    }
+
+    return result
   }
 
   async send(account: EmailAccountHandle, message: OutboundMessage): Promise<SendResult> {

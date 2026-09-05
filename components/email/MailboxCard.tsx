@@ -7,7 +7,12 @@ import {
   type AccountSchedule,
 } from '@/components/email/SendingSettings'
 
-import { disconnectAccount, recheckAccount, type ActionState } from '@/app/(product)/email/actions'
+import {
+  disconnectAccount,
+  recheckAccount,
+  testMailboxConnection,
+  type ActionState,
+} from '@/app/(product)/email/actions'
 
 type Check = { id: string; label: string; status: string; detail: string }
 
@@ -46,6 +51,10 @@ export function MailboxCard({
   const [expanded, setExpanded] = useState(false)
   const [recheckState, recheck, rechecking] = useActionState<ActionState, FormData>(
     recheckAccount,
+    null,
+  )
+  const [testState, runTest, testing] = useActionState<ActionState, FormData>(
+    testMailboxConnection,
     null,
   )
   const [disconnectState, disconnect, disconnecting] = useActionState<ActionState, FormData>(
@@ -164,6 +173,30 @@ export function MailboxCard({
               </button>
             </form>
 
+            {/*
+              ⚠️ SEPARATE FROM "Re-check", WHICH ONLY RE-READS DNS. This one
+              decrypts the stored credential and actually talks to the mail
+              server, so it is the only control that can prove SMTP and IMAP
+              authentication. It sends nothing unless a recipient is given, and
+              the action refuses any address outside this workspace.
+            */}
+            <form action={runTest} className="flex items-center gap-1.5">
+              <input type="hidden" name="accountId" value={account.id} />
+              <input
+                type="email"
+                name="sendTestTo"
+                placeholder="optional: send a test to…"
+                className="w-52 rounded-[var(--radius-md)] border border-border bg-surface px-2 py-1.5 text-xs text-ink placeholder:text-muted"
+              />
+              <button
+                type="submit"
+                disabled={testing}
+                className="rounded-[var(--radius-md)] border border-border px-3 py-1.5 text-xs font-semibold text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink disabled:opacity-60"
+              >
+                {testing ? 'Testing…' : 'Test connection'}
+              </button>
+            </form>
+
             <form action={disconnect}>
               <input type="hidden" name="accountId" value={account.id} />
               <button
@@ -190,6 +223,20 @@ export function MailboxCard({
         <p className={recheckState.ok ? 'text-xs text-success' : 'text-xs text-danger'}>
           {recheckState.ok ? recheckState.message : recheckState.error}
         </p>
+      ) : null}
+      {testState ? (
+        testState.ok ? (
+          /*
+            A report, not a sentence — `formatDiagnostics` returns aligned
+            lines and collapsing them into a paragraph loses the columns that
+            make SMTP and IMAP comparable at a glance.
+          */
+          <pre className="overflow-x-auto whitespace-pre-wrap rounded-[var(--radius-md)] border border-border bg-surface-muted p-3 text-xs leading-relaxed text-ink">
+            {testState.message}
+          </pre>
+        ) : (
+          <p className="text-xs text-danger">{testState.error}</p>
+        )
       ) : null}
       {disconnectState && !disconnectState.ok ? (
         <p className="text-xs text-danger">{disconnectState.error}</p>
