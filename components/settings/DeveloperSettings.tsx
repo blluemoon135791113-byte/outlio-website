@@ -22,6 +22,30 @@ const SCOPE_GROUPS = [
 ] as const
 
 /**
+ * Which modes this form may offer.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ `write` IS NOT HERE BECAUSE THERE IS NO WRITE ENDPOINT. `api_scope`    ║
+ * ║  declares six `:write` values and all six API routes are `GET`. Offering  ║
+ * ║  the checkbox let a customer grant `contacts:write`, reasonably conclude  ║
+ * ║  the API accepts writes, and discover that nothing does.                  ║
+ * ║                                                                           ║
+ * ║  Not a security hole — enforcement is `scopes.includes(required)` against ║
+ * ║  a scope no route ever requires, so an unused scope grants nothing. It is ║
+ * ║  a promise the product cannot keep, which is its own kind of bug.         ║
+ * ║                                                                           ║
+ * ║  ⚠️ EXISTING KEYS KEEP THEIR WRITE SCOPES. This only stops new ones being  ║
+ * ║  minted; revoking a granted scope would be a silent behaviour change for  ║
+ * ║  an integration that might rely on it the day writes ship.                ║
+ * ║                                                                           ║
+ * ║  `api-scope-parity.test.ts` derives the answer from the routes that       ║
+ * ║  actually exist, so the day a write endpoint lands this list is wrong and ║
+ * ║  the suite says so.                                                       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+const OFFERED_MODES = ['read'] as const
+
+/**
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║  THE SECRET IS SHOWN ONCE, AND THE UI HAS TO MAKE THAT UNMISSABLE.       ║
  * ║                                                                           ║
@@ -139,7 +163,7 @@ export function ApiKeys({
               {SCOPE_GROUPS.map((group) => (
                 <div key={group.resource} className="flex items-center gap-4 text-sm">
                   <span className="w-32 text-muted">{group.label}</span>
-                  {(['read', 'write'] as const).map((mode) => (
+                  {OFFERED_MODES.map((mode) => (
                     <label key={mode} className="flex items-center gap-1.5 text-xs text-ink">
                       <input
                         type="checkbox" name="scopes"
