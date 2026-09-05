@@ -397,3 +397,75 @@ keeps finding, one type-system level down.
 was anticipated by design ("an integration that only needs to read contacts
 could also delete them"). Either hide the write checkboxes until the endpoints
 land, or ship the endpoints. Leaving it offers a capability that does nothing.
+
+
+---
+
+## The integration suite, actually run (2026-09-05)
+
+470 tests, 45 files, ~17 minutes, twice. **4 failed, 420 passed, 46 skipped —
+the same four both times.**
+
+This project lost eleven days to a broken signup gate because the suite that
+caught it was never run. It had not been run this session either, across a
+twenty-page authorization change and an edit to `lib/workspaces/context.ts`.
+Neither of those is implicated in any failure below.
+
+### 1. `tenant-isolation` — a security assertion that could pass against nothing ⚠️ FIXED
+
+```
+A cannot read B's contact by listing everything
+AssertionError: expected [] to include '7703bc22-…'
+```
+
+The unfiltered read was returning **HTTP 500, `57014: canceling statement due to
+statement timeout`** after ~8.7s, because staging carries 100,016 contacts from
+the §7 volume fixture. Reproduced directly: unfiltered → 500 in 8691ms; the same
+select filtered by `workspace_id` → 1 row in 344ms.
+
+⚠️ **The test discarded the error.** `const { data } = …` turns a 500 into
+`data: null`, so `ids` is `[]`, so `not.toContain(b.contactId)` PASSES — an empty
+list contains nothing. The central claim, that an unfiltered list does not leak
+another tenant, would have been reported as holding by a query that never ran.
+
+Its positive control is the only reason anyone noticed. The error is now
+asserted, matching the sibling test three lines above which always did. The
+failure message is now the diagnosis rather than a riddle.
+
+⚠️ **It still fails, and that is correct.** Two things are worth deciding:
+
+- The staging volume fixture makes this query untenable today.
+- **The query will not survive production growth either.** "Select every row and
+  check what comes back" is the right attack to model and the wrong way to ask
+  it at scale — at a million contacts it times out for everyone. Bounding it
+  with `.limit()` would let it run and would weaken it: with 100k rows visible
+  in another workspace, a broken RLS policy could fill the page without ever
+  including B's specific contact. I did not weaken a security test to make it
+  green.
+
+### 2–3. `webhook-delivery` — two failures, shared cause
+
+`deliverPendingWebhooks()` selects every pending delivery due now, across all
+workspaces, with `limit = 20` and no workspace filter. Correct for a worker;
+it makes the test sensitive to anything else pending in the shared database.
+The first test got `delivered: 0`, its delivery stayed pending, and the second
+then received 4 payloads where it expected 3 — consistent with the first test's
+undelivered row arriving late.
+
+### 4. `company-backfill` — `admits truncation instead of reporting a complete scan`
+
+`listUsersWithUnlinkedLeads(1, SMALL_PAGE)` expected `truncated: true` and got
+`false`, meaning it found at most one account with unlinked leads. Also a global
+scan over shared state.
+
+### The pattern, and what I did not do
+
+All four depend on accumulated state in a shared database rather than on product
+behaviour. **Only the first was traced to root cause and fixed**; for the other
+three the mechanism is identified and consistent with the symptoms, but I did
+not isolate them, and I am not claiming they are harmless on that basis.
+
+I did not delete the 100k-row volume fixture to make the suite green. It is
+named, deliberate, referenced by the §7 latency work, and reseedable via
+`scripts/seed-volume.mjs` — removing it is the owner's call, and it would hide
+the scaling question in point 1 rather than answer it.

@@ -164,9 +164,38 @@ describeIf('tenant isolation', () => {
     })
 
     it('A cannot read B’s contact by listing everything', async () => {
-      const { data } = await a.user.client.from('crm_contacts').select('id')
+      /*
+       * ╔═══════════════════════════════════════════════════════════════════════╗
+       * ║  ⚠️ THE ERROR IS ASSERTED, AND THAT IS THE WHOLE POINT OF THIS EDIT.   ║
+       * ║                                                                        ║
+       * ║  This read used to be `const { data } = …`, discarding the error. On   ║
+       * ║  2026-09-05 the unfiltered select began returning HTTP 500 —           ║
+       * ║  `57014: canceling statement due to statement timeout`, ~8.7s —        ║
+       * ║  because staging carries 100,016 contacts from the §7 volume fixture.  ║
+       * ║                                                                        ║
+       * ║  A discarded error makes `data` null, so `ids` is `[]`, so             ║
+       * ║  `not.toContain(b.contactId)` PASSES — an empty list contains nothing. ║
+       * ║  The central claim of this test, that an unfiltered list does not leak ║
+       * ║  another tenant, would have been reported as holding by a query that   ║
+       * ║  never ran.                                                            ║
+       * ║                                                                        ║
+       * ║  ⚠️ ITS POSITIVE CONTROL IS WHAT CAUGHT THIS. `toContain(a.contactId)` ║
+       * ║  failed with "expected [] to include …", which is the only reason the  ║
+       * ║  timeout was ever noticed. Asserting the error turns that riddle into  ║
+       * ║  the actual message, and the sibling test above already does it.      ║
+       * ╚═══════════════════════════════════════════════════════════════════════╝
+       */
+      const { data, error } = await a.user.client.from('crm_contacts').select('id')
+
+      expect(
+        error,
+        'the unfiltered read failed, so the leak assertion below would pass against nothing',
+      ).toBeNull()
+
       const ids = (data ?? []).map((r) => r.id)
-      expect(ids).toContain(a.contactId)
+      expect(ids, 'owner A cannot see their own contact — this test proves nothing').toContain(
+        a.contactId,
+      )
       expect(ids, 'an unfiltered list leaked another workspace').not.toContain(b.contactId)
     })
 
