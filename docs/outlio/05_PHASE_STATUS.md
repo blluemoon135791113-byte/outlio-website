@@ -644,3 +644,52 @@ Neither remaining policy is an oversight:
 validate a single row, so the per-row cost that made reads time out never applied
 to them — and confirming that is why 0115 matched on `qual` alone rather than
 rewriting every predicate it could find.
+
+
+---
+
+## The E2E "dev server is on staging" guard is vacuous (2026-09-05)
+
+Three specs — `contact-filters`, `company-details`, `tenant-isolation` — carry:
+
+```ts
+expect(
+  [...supabaseHosts].filter((h) => h !== expectedHost),
+  'the dev server is not on staging — use `npm run dev:staging`',
+).toEqual([])
+```
+
+`supabaseHosts` is populated from browser requests during `page.goto('/sign-in')`.
+**Loading that page makes no request to `*.supabase.co` at all** — confirmed
+twice, once by a network listener at `networkidle` plus 1.5s, and once by reading
+the network log of a live preview tab. Sign-in is a server action, so the
+credentials go to Next, and Next talks to Supabase server-side.
+
+So the filter runs over an empty set and compares it to `[]`. It passes for every
+possible server, including the wrong one. ⚠️ **It is not a weak check; it is not
+a check.**
+
+### Why it is not being repaired
+
+The protection it claims is already structural. Every E2E spec builds its admin
+client from `.env.staging` explicitly — none reads `process.env` for the
+service-role key — so fixtures are created in staging no matter where the app
+under test points. A mismatch means the app cannot find the user that was just
+created, and sign-in fails loudly on the first test.
+
+Repairing the assertion means moving it after an authenticated page load in three
+files, to detect a condition that already announces itself. Recorded instead, so
+nobody reads those three lines as evidence of something they do not establish.
+
+### ⚠️ And a correction: I built a global guard on a false premise
+
+I wrote `e2e/global-setup.ts` to refuse any non-staging server, on the stated
+grounds that "run the suite and it signs up test users in the customer database".
+**That is wrong.** It describes the INTEGRATION suite's historical accident —
+`.env.local` pointing at production, which is where the 43 `outlio-test-*`
+accounts came from and which Phase 1 fixed. The E2E specs never had that
+exposure, because each one reads `.env.staging` by name.
+
+The implementation was also broken: with no Supabase request to observe, its
+fail-closed branch refused every run, staging included. Reverted. The finding
+above is what survived it, and it is worth more than the guard would have been.
