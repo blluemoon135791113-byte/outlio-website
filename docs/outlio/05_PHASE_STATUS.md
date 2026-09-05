@@ -693,3 +693,54 @@ exposure, because each one reads `.env.staging` by name.
 The implementation was also broken: with no Supabase request to observe, its
 fail-closed branch refused every run, staging included. Reverted. The finding
 above is what survived it, and it is worth more than the guard would have been.
+
+
+---
+
+## Auditing for the vacuity pattern (2026-09-05)
+
+Four separate vacuous checks turned up by accident today, so I looked for the
+rest deliberately rather than waiting for a fifth.
+
+**The first scan was useless and I did not ship it.** "Asserts absence with no
+presence assertion in the same block" returned **129** hits, nearly all
+legitimate — a read that names a specific id CAN come back non-empty, so
+asserting it is empty is a real test. A heuristic that flags 129 things flags
+nothing.
+
+Narrowing to the exact shape of the bug that bit us — *absence asserted on a read
+whose `error` is discarded* — gave **25**. Narrowing again to unbounded reads,
+the ones with real error exposure, gave **4**, of which **2 were false
+positives** (the regex had matched `insert` statements).
+
+### The two real ones, both in `security-suite`
+
+`never returns an SMTP password, by any route` and `never returns an API key
+hash`. Measured against staging:
+
+```
+email_account_secrets  status=403  data=null  error=42501 permission denied
+api_keys               status=403  data=null  error=42501 permission denied
+```
+
+Neither table is granted to `authenticated` at all, so RLS never runs. `data` is
+**null**, `data ?? []` is `[]`, and both assertions pass **because the read was
+refused — not because anything was inspected and found safe.** They would pass
+identically against a dropped or renamed table.
+
+⚠️ **A leak would still have been caught** — leaked rows fail `toEqual([])` — so
+this was a schema-drift blind spot, not a security hole. Both now assert
+`error?.code === '42501'`, naming the mechanism.
+
+**Proven by granting it.** `grant select on api_keys to authenticated` on
+staging: the new assertion fails with "api_keys became readable by
+authenticated", and — the point — `error` came back `undefined` while the old
+`toEqual([])` still passed. The blind spot was real, not theoretical. Grant
+revoked; confirmed back to `(none)`.
+
+### The 23 not changed
+
+Each names a specific id or a small table, where an error is unlikely and a leak
+still fails the assertion. Changing 23 security tests to chase a low-probability
+drift case is churn with its own risk. Recorded so the next person knows the
+shape exists and where it was judged not to matter.

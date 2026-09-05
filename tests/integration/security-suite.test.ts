@@ -383,7 +383,16 @@ describeIf('NO SECRET EXPOSURE', () => {
   }
 
   it('never returns an SMTP password, by any route', async () => {
-    const { data } = await alice!.client.from('email_account_secrets').select('*')
+    const { data, error } = await alice!.client.from('email_account_secrets').select('*')
+
+    /*
+     * ⚠️ THE SECRETS TABLE IS NOT GRANTED TO `authenticated` AT ALL. Measured:
+     * `403, data null, 42501 permission denied for table email_account_secrets`.
+     * So `data ?? []` is `[]` and the substring check below passes without
+     * having read anything — it would pass just as well against a dropped
+     * table. Asserting the refusal is what makes the pass mean something.
+     */
+    expect(error?.code, 'email_account_secrets became readable by authenticated').toBe('42501')
     expect(JSON.stringify(data ?? [])).not.toContain('THE-PLAINTEXT-NOBODY-MAY-READ')
 
     // ...and the account row itself must not carry it either.
@@ -408,7 +417,27 @@ describeIf('NO SECRET EXPOSURE', () => {
   it('never returns an API key hash', async () => {
     // The hash exists so that a database dump is not a set of working
     // credentials. Handing it out over the API defeats the point of hashing.
-    const { data } = await alice!.client.from('api_keys').select('*')
+    const { data, error } = await alice!.client.from('api_keys').select('*')
+
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE REFUSAL IS ASSERTED, NOT JUST THE EMPTINESS. Measured against  ║
+     * ║  staging: this read returns `status 403, data null, 42501 permission   ║
+     * ║  denied for table api_keys` — the table is not granted to              ║
+     * ║  `authenticated` at all, so RLS never even runs.                       ║
+     * ║                                                                        ║
+     * ║  `data ?? []` therefore turns `null` into `[]`, and `toEqual([])`      ║
+     * ║  passes because the read was REFUSED, not because anything was         ║
+     * ║  inspected and found safe. It would pass identically if the table were ║
+     * ║  renamed or dropped.                                                   ║
+     * ║                                                                        ║
+     * ║  A leak would still be caught — leaked rows fail `toEqual([])` — so    ║
+     * ║  this is a schema-drift blind spot rather than a security hole. Naming ║
+     * ║  the mechanism closes it, and makes the test fail loudly the day the   ║
+     * ║  grant is relaxed, which is when RLS starts carrying this table alone. ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    expect(error?.code, 'api_keys became readable by authenticated').toBe('42501')
     expect(data ?? []).toEqual([])
   }, 30_000)
 })
