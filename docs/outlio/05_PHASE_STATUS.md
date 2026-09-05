@@ -854,3 +854,63 @@ purpose.
 subtly wrong, no user-visible behaviour changes today. It would surface the first
 time someone writes a query that relies on RLS alone — which is precisely the
 scenario 0115 was written to make survivable.
+
+
+---
+
+## DECISION-04 is two questions, and one of them is answerable today
+
+Phase 7 (`EMAIL REAL END-TO-END VALIDATION`) is recorded as blocked on
+`TEST_MAILBOXES: NONE`, and it gates five later phases. That framing is broader
+than the actual obstacle.
+
+### There is already a real mail-server harness
+
+`npm run test:email` starts **GreenMail** in Docker — an actual SMTP+IMAP server
+— and runs three suites against it. Between them, 17 assertions:
+
+```
+email-smtp          connects and verifies a send-only account
+                    actually delivers a message
+                    produces the SAME Message-ID when a retry reuses the key
+                    reads a reply back over IMAP and normalizes it
+                    resumes from the UID cursor instead of re-reading the mailbox
+                    reports no quota rather than inventing one
+                    refuses to sync replies for an account with no IMAP host
+                    refuses to accept a webhook, since SMTP has no push channel
+
+email-send-worker   sends a queued message exactly once
+                    treats a re-enqueue with the same key as a no-op
+                    does not re-send a message whose worker died mid-handover
+                    keeps the FIRST suppression reason when a second arrives
+
+email-reply-sync    stops the sales sequence on a genuine reply, within one cycle
+                    does NOT stop the sequence on an out-of-office
+                    leaves a marketing broadcast running when someone replies
+                    suppresses the address and stops enrollments on a bounce
+                    processes the same inbound message only once across two syncs
+```
+
+⚠️ **And the harness is honest.** `available` is a real TCP probe of both ports,
+each test calls `skip()` rather than passing when nothing is listening, and
+`beforeAll` prints a loud warning naming the ports. It does not go quietly green
+in the absence of a mail server — which, given how many checks in this codebase
+did exactly that, was worth confirming rather than assuming.
+
+### So the blocker splits
+
+1. **"Can the code send, receive, dedupe and react correctly?"** — answerable
+   **now**, with no customer mailbox. It needs Docker, which is not installed on
+   this machine, so I could not run it. `docker info` fails; that is the only
+   thing standing between the repo and those 17 results.
+2. **"Does it work against real providers at real deliverability?"** — genuinely
+   needs authorized mailboxes: Gmail/Outlook OAuth, spam placement, per-provider
+   quirks. This is the part DECISION-04 is actually about.
+
+**Recommendation:** run `npm run test:email` before treating Phase 7 as blocked.
+If those 17 pass, the remaining question is narrowed to provider behaviour rather
+than to whether the mechanism works at all — and that is a much smaller thing to
+be blocked on, and a much better brief to write against.
+
+⚠️ **If any of them fail, that matters more than the mailbox question**, because
+five phases downstream assume this layer is sound.
