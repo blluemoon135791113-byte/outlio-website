@@ -974,3 +974,55 @@ could not see was its own.
   Deliberate if the targets are US/EU; worth confirming, not changing.
 - **I have not sent anything.** Sending from a real domain is outward-facing and
   needs its own explicit go-ahead, separate from "a mailbox is attached".
+
+
+---
+
+## Deployed to production 2026-09-05
+
+`vercel deploy --prod` → `dpl_FV48rVs1LY8gykDynyfyNRFgzd17`, aliased to
+`outlio.io`. Production had last been deployed **two days earlier**, so this
+shipped every app change from this session in one batch — the twenty gated
+module pages, the two gated settings pages, `/flows`, the `listActivePlans`
+resilience, the webhook RPC switch, `More details`, the DKIM `zmail` fix and the
+new mailbox Test Connection flow.
+
+⚠️ **Ordering was the thing that mattered.** 0115 and 0116 were already applied,
+so the deployed code never met a missing RPC. Shipping the code first would have
+made `deliverPendingWebhooks` call a function that did not exist.
+
+Verified after:
+
+```
+outlio.io                       200      /dashboard                     307
+outlio.io/sign-in               200      /crm/contacts                  307
+outlio.io/pricing               200      /email                         307
+                                         /flows                         307
+                                         /dashboard/settings/developers 307
+```
+
+307 rather than 500 on every gated route is the check that matters — it proves
+the twenty pages returning `null` redirect cleanly instead of crashing. And the
+pricing page renders real plan content (57KB, plan names present), which is the
+check for `listActivePlans` now SKIPPING unreadable plans: an empty plan list
+would still have been a 200.
+
+### Why a preview deployment could not have done this
+
+```
+INTEGRATION_ENCRYPTION_KEY   Secret   Production
+SUPABASE_SERVICE_ROLE_KEY    Secret   Production
+```
+
+Both are scoped to Production only, so a preview cannot decrypt a stored
+credential — the mailbox test would fail there exactly as it does locally. That
+is correct isolation, and it is why the diagnostic had to be a deployed action
+rather than a script.
+
+### ⚠️ The queued test message will not arrive Monday
+
+`vercel.json` runs `/api/cron` **daily at 06:00 UTC**. The queued message
+(`9420c816-a432-44f3-bee9-3ecb236b4e9a`) becomes due Monday 09:00 UTC, so the
+first tick that can claim it is **Tuesday 06:00 UTC**. The scheduler and the
+cron are both behaving correctly; they just compose into a longer wait than
+"Monday morning" implies.
