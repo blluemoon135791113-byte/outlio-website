@@ -31,6 +31,7 @@ import { deliverPendingWebhooks } from '@/lib/api/webhooks'
 import { advanceRun, claimWaitingRuns } from '@/lib/flows/engine'
 import { registerAllActions } from '@/lib/flows/actions'
 import { reapExpiredClaims, runSendWorker } from '@/lib/email/send'
+import { advanceSequences } from '@/lib/email/sequence-runner'
 import { syncWorkspaceReplies } from '@/lib/email/reply-sync'
 import { syncContactEvidenceToCrm } from '@/lib/crm/evidence-bridge'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -104,6 +105,21 @@ export async function runTick(): Promise<TickResult> {
   await runJob(result, 'reap_email_claims', async () => {
     const reaped = await reapExpiredClaims()
     return `${reaped} stale claim${reaped === 1 ? '' : 's'} released`
+  })
+
+  /*
+   * ⚠️ BEFORE `send_email`, DELIBERATELY. This enqueues the steps that are due;
+   * running it after would leave every one of them waiting a full tick — a
+   * daily cron, so a full DAY — before anything went out. Ordering the two
+   * jobs the other way round is a silent 24-hour delay on every sequence.
+   */
+  await runJob(result, 'advance_sequences', async () => {
+    const outcome = await advanceSequences(LIMITS.emailsPerTick)
+    return (
+      `${outcome.due} due, ${outcome.queued} queued, ${outcome.completed} completed, ` +
+      `${outcome.stopped} stopped, ${outcome.deferred} deferred, ` +
+      `${outcome.unrenderable} unrenderable, ${outcome.failed} failed`
+    )
   })
 
   await runJob(result, 'send_email', async () => {

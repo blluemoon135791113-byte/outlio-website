@@ -203,6 +203,14 @@ const { data: enrollment, error: enrollError } = await db
     contact_id: contact.id,
     to_email: TO,
     status: 'active',
+    /*
+     * ⚠️ WITHOUT THIS THE ENROLLMENT IS NEVER DUE. `advanceSequences` selects on
+     * `next_action_at <= now()`, and a raw insert leaves it null — which
+     * `launchCampaign` sets for exactly this reason. The first fixture omitted
+     * it and the tick correctly did nothing, which read as "sequences are
+     * broken" when the enrollment simply had no due time.
+     */
+    next_action_at: new Date().toISOString(),
   })
   .select('id, status, to_email')
   .single()
