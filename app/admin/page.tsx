@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 
 import { CompanyBackfill } from '@/components/admin/CompanyBackfill'
+import { RunWorkers } from '@/components/admin/RunWorkers'
 import { UserRow, type AdminUser } from '@/components/admin/UserRow'
 import { requireAdmin } from '@/lib/auth/access'
 import { listActivePlans } from '@/lib/limits/plans'
@@ -135,6 +136,17 @@ export default async function AdminPage() {
           already have a company are skipped.
         </p>
         <CompanyBackfill />
+      </section>
+
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Background workers</h2>
+        <p className="text-sm text-muted">
+          Runs the same pass the scheduled job runs at 06:00 UTC — due email,
+          reply sync, flows, webhooks and the evidence bridge. It changes no
+          schedule: a message that is not yet due stays queued, and send windows,
+          sending days and ramp limits are enforced where they always were.
+        </p>
+        <RunWorkers />
       </section>
 
       <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">

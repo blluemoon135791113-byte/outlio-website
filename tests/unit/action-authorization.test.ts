@@ -69,12 +69,76 @@ const GATES = [
   'requireAccess',
   'assertHubbleAccess',
   'requireHubbleAccess',
+  /*
+   * ⚠️ THE SUPABASE CLIENT IS ITSELF A GATE WHEN THE RESULT IS CHECKED.
+   * `updatePasswordAction` has no named helper — it calls
+   * `supabase.auth.getUser()` and refuses when there is no user, which is the
+   * only thing that can gate a password reset: the caller holds a recovery
+   * session and nothing else. Leaving it out reported the reset flow as a
+   * public mutation.
+   */
+  '.auth.getUser',
 ]
 
 /** The body of one exported async function, by bracket depth. */
+/**
+ * The body of the function declared at `start`.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ "THE FIRST `{` AFTER THE NAME" IS THE TYPE ANNOTATION, NOT THE BODY.  ║
+ * ║                                                                           ║
+ * ║  This used to take the first brace it found, which for a signature like    ║
+ * ║                                                                           ║
+ * ║    export async function f(i: { a: string }): Promise<{ b?: string }>     ║
+ * ║                                                                           ║
+ * ║  is the PARAMETER type — so the scan examined `{ a: string }`, found no    ║
+ * ║  gate in it, and reported a correctly-gated action as a public endpoint.   ║
+ * ║  Caught when the walk was widened to `lib/`, where three such actions      ║
+ * ║  (`exportSelectedLeadsToGoogleAction`, `createUploadSessionAction`,        ║
+ * ║  `finalizeUploadAction`) were flagged despite each calling                 ║
+ * ║  `assertAccess()` on its first line.                                      ║
+ * ║                                                                           ║
+ * ║  ⚠️ THE ERROR DIRECTION WAS SAFE — a truncated body finds no gate, so it   ║
+ * ║  over-reports rather than under-reports. That is the only reason this      ║
+ * ║  never shipped a false clean bill of health.                              ║
+ * ║                                                                           ║
+ * ║  The body brace is the first `{` at angle-bracket depth 0 after the        ║
+ * ║  parameter list closes: `Promise<{ … }>` keeps its brace inside `<>`, and  ║
+ * ║  a parameter's braces are consumed with the parameter list itself.         ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
 function functionBody(source: string, start: number): string {
-  const open = source.indexOf('{', start)
+  // Step past the parameter list by matching its parentheses.
+  const paren = source.indexOf('(', start)
+  if (paren === -1) return ''
+  let parenDepth = 0
+  let afterParams = -1
+  for (let i = paren; i < source.length; i += 1) {
+    if (source[i] === '(') parenDepth += 1
+    else if (source[i] === ')') {
+      parenDepth -= 1
+      if (parenDepth === 0) {
+        afterParams = i + 1
+        break
+      }
+    }
+  }
+  if (afterParams === -1) return ''
+
+  // Then the first brace that is not inside a generic type argument.
+  let angle = 0
+  let open = -1
+  for (let i = afterParams; i < source.length; i += 1) {
+    const c = source[i]!
+    if (c === '<') angle += 1
+    else if (c === '>') angle = Math.max(0, angle - 1)
+    else if (c === '{' && angle === 0) {
+      open = i
+      break
+    }
+  }
   if (open === -1) return ''
+
   let depth = 0
   for (let i = open; i < source.length; i += 1) {
     const c = source[i]!
@@ -87,12 +151,13 @@ function functionBody(source: string, start: number): string {
   return source.slice(open)
 }
 
+
 type Action = { file: string; name: string; gated: boolean }
 
 function serverActions(): Action[] {
   const out: Action[] = []
 
-  for (const file of walk('app')) {
+  for (const file of [...walk('app'), ...walk('lib')]) {
     const raw = readFileSync(join(ROOT, file), 'utf8')
     if (!raw.includes("'use server'")) continue
     const src = stripComments(raw)
@@ -132,11 +197,32 @@ function serverActions(): Action[] {
 /**
  * Actions that legitimately run without a gate.
  *
- * ⚠️ EMPTY, AND IT SHOULD STAY EMPTY. An ungated server action is a public
- * mutation endpoint. If something genuinely belongs here it needs a reason
- * written next to it and an ADR, not a quiet addition.
+ * ⚠️ IT WAS EMPTY WHILE THE SCAN ONLY WALKED `app/`. Widening it to `lib/`
+ * brought in the AUTHENTICATION surface, which is categorically different from
+ * every other action: it is what a caller uses when they have no session yet.
+ * Requiring a gate on sign-in is circular.
+ *
+ * ⚠️ EACH ENTRY IS PUBLIC BY NECESSITY, NOT BY OVERSIGHT, and each is defended
+ * by something other than a gate — `lib/auth/rate-limit.ts` bounds every one of
+ * them, and the signup gate additionally applies to registration. Anything
+ * added here later needs the same standard: a reason it CANNOT be gated, not a
+ * reason nobody got round to it.
  */
-const ALLOWED = new Set<string>([])
+const ALLOWED = new Set<string>([
+  // No session exists yet; these create or resume one.
+  'lib/auth/actions.ts:signUpAction',
+  'lib/auth/actions.ts:signInAction',
+  // Ends a session. Takes no input and can only affect the caller's own cookie.
+  'lib/auth/actions.ts:signOutAction',
+  // Both are the "I cannot get in" path, so requiring a session defeats them.
+  'lib/auth/actions.ts:requestPasswordResetAction',
+  'lib/auth/actions.ts:resendVerificationAction',
+  /*
+   * Reads one environment flag and returns a boolean. No tenant data, no
+   * mutation, and the answer is already visible in the sign-up UI.
+   */
+  'lib/access/actions.ts:invitationsEnabled',
+])
 
 describe('the scanner itself', () => {
   it('finds the server actions', () => {
