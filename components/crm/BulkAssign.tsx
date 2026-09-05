@@ -2,9 +2,11 @@
 
 import { useActionState, useRef, useState } from 'react'
 
+import { enrolContacts, type ActionState } from '@/app/(product)/email/actions'
 import { bulkAssignAction, type BulkAssignState } from '@/lib/crm/contact-actions'
 
 export type Assignee = { id: string; name: string }
+export type EnrollableCampaign = { id: string; name: string }
 
 /**
  * Selecting contacts and assigning them in one go — R2.
@@ -25,10 +27,16 @@ export type Assignee = { id: string; name: string }
  */
 export function BulkAssign({
   assignees,
+  campaigns = [],
   canAssign,
   children,
 }: {
   assignees: Assignee[]
+  /**
+   * Campaigns this workspace may enrol into. Empty when the caller lacks
+   * `email.campaign.create`, which hides the control rather than disabling it.
+   */
+  campaigns?: EnrollableCampaign[]
   /** False for a setter: no checkboxes are rendered, so no bar either. */
   canAssign: boolean
   /** The table. Its checkboxes must be `<input name="contactId">`. */
@@ -45,15 +53,19 @@ export function BulkAssign({
    */
   if (!canAssign) return <>{children}</>
   return (
-    <BulkAssignForm assignees={assignees}>{children}</BulkAssignForm>
+    <BulkAssignForm assignees={assignees} campaigns={campaigns}>
+      {children}
+    </BulkAssignForm>
   )
 }
 
 function BulkAssignForm({
   assignees,
+  campaigns,
   children,
 }: {
   assignees: Assignee[]
+  campaigns: EnrollableCampaign[]
   children: React.ReactNode
 }) {
   const formRef = useRef<HTMLFormElement>(null)
@@ -61,8 +73,20 @@ function BulkAssignForm({
     bulkAssignAction,
     null,
   )
+  /*
+   * ⚠️ A SECOND ACTION ON THE SAME FORM, VIA `formAction`. The checkboxes belong
+   * to this form; a separate <form> for enrolment would submit an empty
+   * selection, and nesting forms is invalid HTML. React 19 lets a button
+   * redirect the same submission elsewhere, so both actions see exactly what is
+   * ticked on screen.
+   */
+  const [enrolState, enrolAction, enrolling] = useActionState<ActionState, FormData>(
+    enrolContacts,
+    null,
+  )
   const [selected, setSelected] = useState(0)
   const [owner, setOwner] = useState('')
+  const [campaign, setCampaign] = useState('')
 
   /*
    * Counted from the DOM, not mirrored in state. The number shown can then
@@ -150,6 +174,50 @@ function BulkAssignForm({
           {state ? (state.ok ? state.message : state.error) : ''}
         </p>
       </div>
+
+      {/*
+        ⚠️ THE STEP THAT DID NOT EXIST. `enrolContacts` was written, permission
+        -gated and never called from anywhere — so a user could connect a
+        mailbox, author a sequence and press Launch on a campaign containing
+        nobody, with nothing saying so.
+      */}
+      {campaigns.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
+          <label className="flex items-center gap-2">
+            <span className="sr-only">Add selected contacts to a campaign</span>
+            <select
+              name="campaignId"
+              value={campaign}
+              onChange={(event) => setCampaign(event.target.value)}
+              className="rounded-[var(--radius-md)] border border-line bg-surface px-3 py-1.5 text-xs text-ink [color-scheme:light]"
+            >
+              <option value="">Add to campaign…</option>
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="submit"
+            formAction={enrolAction}
+            disabled={enrolling || !campaign || selected === 0}
+            className="rounded-[var(--radius-md)] border border-border px-3 py-1.5 text-xs font-semibold text-ink transition-colors duration-150 hover:bg-surface-muted disabled:opacity-60"
+          >
+            {enrolling ? 'Adding…' : `Add ${selected || ''}`.trim()}
+          </button>
+
+          <p
+            role="status"
+            aria-live="polite"
+            className={`text-xs ${enrolState?.ok ? 'text-success' : 'text-danger'}`}
+          >
+            {enrolState ? (enrolState.ok ? enrolState.message : enrolState.error) : ''}
+          </p>
+        </div>
+      ) : null}
     </form>
   )
 }

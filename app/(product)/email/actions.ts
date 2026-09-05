@@ -449,12 +449,22 @@ export async function enrolContacts(
     const ctx = await assertWorkspacePermission('email.campaign.create')
 
     const campaignId = String(formData.get('campaignId') ?? '')
-    const contactIds = String(formData.get('contactIds') ?? '')
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean)
+
+    /*
+     * ⚠️ `getAll('contactId')`, MATCHING EVERY OTHER BULK ACTION. This used to
+     * read a comma-separated `contactIds` string, which no bulk form in the
+     * product produces — `bulkAssignAction`, `bulkTagAction`,
+     * `bulkAddToListAction` and `bulkDeleteAction` all use repeated
+     * `contactId` fields.
+     *
+     * That mismatch is almost certainly WHY this action had no caller: it could
+     * not be dropped into the existing selection bar, so a user could author a
+     * sequence, launch it, and never put anybody in it.
+     */
+    const contactIds = formData.getAll('contactId').map(String).filter(Boolean)
 
     if (contactIds.length === 0) return { ok: false, error: 'Select some contacts first.' }
+    if (!campaignId) return { ok: false, error: 'Choose a campaign first.' }
 
     const result = await bulkEnroll({
       workspaceId: ctx.workspace.id,

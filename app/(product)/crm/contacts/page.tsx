@@ -140,6 +140,32 @@ export default async function ContactsPage({
       .limit(200),
   ])
 
+  /*
+   * ⚠️ GATED ON THE PERMISSION THE ACTION ENFORCES, not on a different one.
+   * `enrolContacts` calls `assertWorkspacePermission('email.campaign.create')`,
+   * so offering the control to anyone else renders a button that always fails.
+   *
+   * ⚠️ AND ONLY CAMPAIGNS THAT CAN ACTUALLY RECEIVE PEOPLE. Enrolling into a
+   * `completed` or `stopped` campaign puts contacts somewhere nothing will ever
+   * send from, which looks identical to success.
+   */
+  const canEnrol =
+    can({ role: ctx.role, modules: ctx.modules }, 'email.campaign.create') &&
+    ctx.modules.has('email')
+
+  const campaigns = canEnrol
+    ? await (async () => {
+        const { data } = await createAdminClient()
+          .from('email_campaigns')
+          .select('id, name')
+          .eq('workspace_id', ctx.workspace.id)
+          .in('status', ['draft', 'scheduled', 'running', 'paused'])
+          .order('created_at', { ascending: false })
+          .limit(50)
+        return (data ?? []).map((c) => ({ id: c.id, name: c.name }))
+      })()
+    : []
+
   const assignees = canAssign
     ? await (async () => {
         const db = createAdminClient()
@@ -319,7 +345,7 @@ export default async function ContactsPage({
           </p>
         </div>
       ) : (
-        <BulkAssign assignees={assignees} canAssign={canAssign}>
+        <BulkAssign assignees={assignees} campaigns={campaigns} canAssign={canAssign}>
           <ContactsTable
             rows={result.rows}
             query={query}
