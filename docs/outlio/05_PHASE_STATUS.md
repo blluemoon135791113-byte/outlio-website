@@ -807,3 +807,50 @@ I did not create a production account to close it. This project already carries
 44th to re-prove a staging-proven property is a bad trade. **The owner signing in
 and seeing their contact list is the check** — that is the one behaviour the
 rewrite could plausibly have altered.
+
+
+### ⚠️ Correction: "just sign in and check" would have proved nothing
+
+I told the owner that signing in and seeing their contact list was the check for
+0115, because it was "the one behaviour the rewrite could plausibly have
+altered". **That was wrong**, and auditing what actually depends on those
+policies is what showed it.
+
+Only five files in the whole codebase run a query through an RLS-enforced client
+(`lib/supabase/server` or `client`, as opposed to `admin`). Between them they
+touch nine tables:
+
+```
+profiles · subscriptions · fastspring_subscriptions · capture_sessions
+extracted_leads · hubble_answers · research_evidence · extraction_jobs
+uploaded_files
+```
+
+Checked against `information_schema`: **every one is `user_id`-scoped.** Not one
+has a `workspace_id` column, so not one is governed by a policy 0115 touched.
+
+Everything `workspace_id`-scoped — contacts, companies, opportunities, the whole
+CRM — is read through the **admin client with an explicit workspace filter**,
+which bypasses RLS entirely. That was verified independently earlier for all six
+public API routes and the twenty module pages.
+
+**Two consequences, and they pull in opposite directions:**
+
+- ✅ **0115 cannot have broken the running application.** Its blast radius on
+  live code paths is zero. The rewritten policies are a backstop that no request
+  currently traverses.
+- ⚠️ **Therefore the application working proves nothing about them.** The CRM
+  listing contacts exercises the admin path, not the policy. My suggested check
+  would have returned a confident green while telling us nothing — the same
+  vacuity this file has catalogued four other instances of, and I proposed it.
+
+What does verify them: a read of a `workspace_id` table through an authenticated
+non-admin client. `tenant-isolation` and `companies-rls` do exactly that, 24 of
+24 green on staging against the identical migration. Nothing in production does
+it, which is why re-proving it there would require manufacturing a user for the
+purpose.
+
+**Where that leaves the risk.** Bounded and not urgent: if those policies were
+subtly wrong, no user-visible behaviour changes today. It would surface the first
+time someone writes a query that relies on RLS alone — which is precisely the
+scenario 0115 was written to make survivable.
