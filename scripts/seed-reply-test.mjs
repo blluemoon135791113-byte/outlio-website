@@ -68,12 +68,30 @@ if (!TO || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(TO)) {
  * ║  `example.com` DOES have an MX record and would otherwise sail through.   ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-const PLACEHOLDERS = ['example.com', 'example.org', 'example.net', 'address.com', 'domain.com']
-const domain = TO.split('@')[1]
+const PLACEHOLDER_DOMAINS = ['example.com', 'example.org', 'example.net', 'address.com', 'domain.com']
+/*
+ * ⚠️ AND PLACEHOLDER LOCAL PARTS, ON REAL DOMAINS. `you@gmail.com` passes an MX
+ * check because gmail.com plainly receives mail — it is the LOCAL part that is
+ * a stand-in, and `you@`, `test@` and `me@` at a live domain are somebody
+ * else's mailbox. Blocking only the domain caught two of these and missed the
+ * third; the instruction to "use your address" is copied verbatim more often
+ * than it is followed, so the script has to assume that.
+ */
+const PLACEHOLDER_LOCALS = [
+  'you', 'your-other', 'youremail', 'test', 'testing', 'someone', 'me', 'user',
+  'example', 'foo', 'bar', 'changeme', 'prospect', 'address',
+]
+const [local, domain] = TO.split('@')
 
-if (PLACEHOLDERS.includes(domain)) {
+if (PLACEHOLDER_DOMAINS.includes(domain)) {
   console.error(`\nRefusing: ${TO} uses the placeholder domain ${domain}.`)
   console.error('Pass an address you can actually receive at and reply from.\n')
+  process.exit(1)
+}
+
+if (PLACEHOLDER_LOCALS.includes(local)) {
+  console.error(`\nRefusing: "${local}@" is a placeholder, and ${domain} is a real mail host.`)
+  console.error('That address almost certainly belongs to someone else.\n')
   process.exit(1)
 }
 
