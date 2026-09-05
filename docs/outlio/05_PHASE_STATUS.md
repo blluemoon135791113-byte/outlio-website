@@ -555,3 +555,62 @@ shared-database state. Confirmed still failing after 0115.
 I did not delete the 100k-row volume fixture. It is what made this visible, and
 removing it would have turned a real production scaling problem back into an
 invisible one.
+
+
+---
+
+## The integration suite is green (2026-09-05)
+
+**424 passed, 0 failed, 46 skipped.** It was 420/4 this morning. All three
+remaining failures were traced to root cause, and none was what I first assumed.
+
+### `webhook-delivery` (2 tests) — two clocks in one comparison ⚠️ REAL BUG
+
+My first guess was leftover pending deliveries; `webhook_deliveries` was empty
+and `webhook_subscriptions` was zero. My second was the SSRF guard;
+`assertSafeWebhookUrl` reports ALLOWED for the loopback test server, because it
+permits loopback whenever `NODE_ENV` is not production. **Both plausible, both
+wrong.**
+
+`enqueue_webhook_delivery` writes `next_attempt_at` defaulting to `now()` — the
+DATABASE clock. `deliverPendingWebhooks` filtered
+`.lte('next_attempt_at', new Date().toISOString())` — the APPLICATION clock.
+Measured skew against staging: **1914ms, 1836ms, 1887ms**. So a delivery queued
+one moment was invisible to its own worker the next:
+
+```
+queued  = 1
+row     = pending, attempts 0, next_attempt_at 10:40:08.595Z
+outcome = { delivered: 0, retrying: 0, exhausted: 0 }   ← found nothing
+row     = pending, attempts 0, untouched
+```
+
+Mild in production — both sides are NTP-synced and the next tick collects
+whatever was missed, so nothing is lost — but a due-time comparison spanning two
+clocks does not belong in a retry loop, and it fails deterministically on any
+developer machine whose clock has drifted. **0116** adds
+`due_webhook_deliveries()`, which compares on the clock that wrote the value.
+
+### `company-backfill` (1 test) — a test that had never demonstrated its claim
+
+`SMALL_PAGE` was 50 and the fixture seeds **6** rows (3 accounts × 2 leads), so
+the first page was never full, `truncated` was always false, and the truncation
+assertion could not pass. Its sibling "spans multiple pages" test passed while
+paging exactly once, which is not paging.
+
+⚠️ **It used to pass, and that is the interesting part.** The scan is global —
+no user filter — and until Phase 1 this suite ran against `.env.local`, which
+points at PRODUCTION, where `extracted_leads` holds 1,193 rows. Somebody else's
+data filled the page. Moving to staging removed the accident and left both tests
+asserting something they had never actually shown. `SMALL_PAGE` is now below the
+fixture's own row count, so they hold on an empty database and on a busy one.
+
+### The pattern across all four failures
+
+Every one was a test that could not fail for the reason it claimed, or could
+only pass because of data it did not create. Two were fixed by fixing the
+product (0115, 0116); two by making the test self-sufficient. **None was fixed
+by relaxing an assertion.**
+
+⚠️ **0115 and 0116 are applied to STAGING ONLY.** Production is the owner's, per
+§3.7. Staging and production schemas now differ by these two migrations.

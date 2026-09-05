@@ -39,10 +39,27 @@ const ready = await schemaReady()
 const describeIf = hasSupabaseEnv && ready ? describe : describe.skip
 
 /**
- * Small enough to guarantee several pages, large enough that paging the whole
- * table stays a handful of round trips rather than one per row.
+ * Small enough to guarantee several pages ACROSS THIS FIXTURE'S OWN ROWS.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THIS WAS 50, AND THE FIXTURE SEEDS 6 ROWS — 3 accounts × 2 leads.      ║
+ * ║                                                                           ║
+ * ║  So the first page was never full, `listUsersWithUnlinkedLeads` always     ║
+ * ║  returned `truncated: false`, and the truncation test could not pass.      ║
+ * ║  The paging test passed while paging exactly once, which is not paging.   ║
+ * ║                                                                           ║
+ * ║  ⚠️ IT USED TO PASS, AND THAT IS THE INTERESTING PART. The scan is GLOBAL  ║
+ * ║  — no user filter — and until Phase 1 this suite ran against `.env.local`, ║
+ * ║  which points at PRODUCTION, where `extracted_leads` holds 1,193 rows.     ║
+ * ║  Somebody else's data filled the page. Moving to staging removed the       ║
+ * ║  accident and left the test asserting something it had never actually      ║
+ * ║  demonstrated.                                                            ║
+ * ║                                                                           ║
+ * ║  Below the fixture's own row count, so both tests now hold on an empty     ║
+ * ║  database and on a busy one: 6 rows over pages of 2 is three real pages.  ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-const SMALL_PAGE = 50
+const SMALL_PAGE = 2
 
 describeIf('listUsersWithUnlinkedLeads', () => {
   const users: TestAuthUser[] = []

@@ -7944,6 +7944,19 @@ export type Database = {
           workspace_id: string
         }[]
       }
+      due_webhook_deliveries: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          event_id: string
+          event_type: string
+          id: string
+          max_attempts: number
+          payload: Json
+          subscription_id: string
+          workspace_id: string
+        }[]
+      }
       await_provider_request_slot: {
         Args: { p_min_interval_ms: number; p_provider: string }
         Returns: string

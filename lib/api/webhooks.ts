@@ -70,13 +70,25 @@ export async function deliverPendingWebhooks(limit = 20): Promise<DeliveryOutcom
   const db = createAdminClient()
   const outcome: DeliveryOutcome = { delivered: 0, retrying: 0, exhausted: 0 }
 
-  const { data: due } = await db
-    .from('webhook_deliveries')
-    .select('id, workspace_id, subscription_id, event_id, event_type, payload, attempts, max_attempts')
-    .eq('status', 'pending')
-    .lte('next_attempt_at', new Date().toISOString())
-    .order('next_attempt_at')
-    .limit(limit)
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THE DATABASE DECIDES WHAT IS DUE, BECAUSE THE DATABASE WROTE THE TIME. ║
+   * ║                                                                           ║
+   * ║  This used to be `.lte('next_attempt_at', new Date().toISOString())` — the ║
+   * ║  APPLICATION clock — while `next_attempt_at` defaults to `now()` on insert ║
+   * ║  — the DATABASE clock. Whenever the database is ahead, a delivery that was ║
+   * ║  just queued is invisible to its own worker until the gap elapses.        ║
+   * ║                                                                           ║
+   * ║  Measured against staging: skew of 1914ms / 1836ms / 1887ms, and a queue- ║
+   * ║  then-deliver returning `{ delivered: 0 }` against a row sitting `pending` ║
+   * ║  with `attempts: 0`, untouched.                                          ║
+   * ║                                                                           ║
+   * ║  Mild in production — both sides are NTP-synced and the next tick collects ║
+   * ║  whatever was missed, so nothing is lost — but a due-time comparison that  ║
+   * ║  spans two clocks does not belong in a retry loop. See 0116.             ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const { data: due } = await db.rpc('due_webhook_deliveries', { p_limit: limit })
 
   for (const delivery of due ?? []) {
     const { data: subscription } = await db
