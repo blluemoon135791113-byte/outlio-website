@@ -10229,8 +10229,13 @@ holds 1,193 rows. Somebody else's data filled the page.
 
 ### ⚠️ Waiting on the owner
 
-- **0114, 0115, 0116 are unapplied to production.** Staging and production
-  schemas now differ by three migrations.
+- ~~**0114, 0115, 0116 are unapplied to production.**~~ **Applied 2026-09-05**
+  by the owner and verified: 0114 cited exactly the 12 emails and 7 phones it
+  predicted, both new functions exist, anon reads still refused with 42501, row
+  counts identical. ⚠️ The AUTHENTICATED read path was not re-verified in
+  production — proven on staging (24 of 24) against the identical migration, and
+  I declined to create a 44th `outlio-test-*` account in production to re-prove
+  it.
 - The `agency` allowance is a pricing decision.
 - Six `:write` API scopes exist with no endpoint; the key form no longer offers
   them, and a guard fails in both directions the day one ships.

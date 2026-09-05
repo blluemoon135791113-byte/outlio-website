@@ -538,9 +538,12 @@ both run green afterwards — 24 of 24 — including the test that was failing,
 which now passes because the query COMPLETES rather than because it returned
 nothing.
 
-### ⚠️ Status: STAGING ONLY
+### Status: APPLIED TO PRODUCTION 2026-09-05
 
-Applied to staging and verified there. **Not applied to production** — schema
+Applied to staging first and verified there; applied to production by the owner
+on 2026-09-05 and verified below. The paragraph that follows described the state
+before that and is kept for the reasoning, not the status. **Not applied to
+production** — schema
 changes are the owner's, per §3.7. The migration is self-verifying and will
 raise rather than half-apply.
 
@@ -612,8 +615,9 @@ only pass because of data it did not create. Two were fixed by fixing the
 product (0115, 0116); two by making the test self-sufficient. **None was fixed
 by relaxing an assertion.**
 
-⚠️ **0115 and 0116 are applied to STAGING ONLY.** Production is the owner's, per
-§3.7. Staging and production schemas now differ by these two migrations.
+⚠️ **0115 and 0116 were STAGING ONLY when this was written.** Both, with 0114,
+were applied to production on 2026-09-05 — see the verification section at the
+end of this file. Staging and production schemas now differ by these two migrations.
 
 
 ### 0115 — the two policies it deliberately did not touch
@@ -744,3 +748,62 @@ Each names a specific id or a small table, where an error is unlikely and a leak
 still fails the assertion. Changing 23 security tests to chase a low-probability
 drift case is churn with its own risk. Recorded so the next person knows the
 shape exists and where it was judged not to matter.
+
+
+---
+
+## 0114, 0115, 0116 applied to production (2026-09-05)
+
+Applied by the owner — my `supabase db push --linked` was refused by the
+permission layer, which is the layer doing its job on a production schema write.
+Verified afterwards through the service-role API, the only production access this
+session has.
+
+### 0114 — and the number it predicted
+
+```
+                     before          after
+crm_contact_emails   0 cited / 64    12 cited / 52 uncited
+crm_contact_phones   0 cited / 22     7 cited / 15 uncited
+```
+
+⚠️ **12 is exactly what the migration argued for**: 8 emails with one matching
+evidence row, plus the 4 it defended as safe because their several matches all
+observed the SAME address for the SAME lead. The 52 left uncited are the ones
+whose contact has no `source_lead_id` — never from research, so "entered" or
+"unknown" is the true answer and a citation would be the fabrication. Sampled
+rows point at real evidence ids.
+
+### 0115 and 0116
+
+Both functions exist. `my_workspace_ids()` returns 0 rows for the service role,
+which is **correct rather than a failure** — `auth.uid()` is null there, so it
+belongs to no workspace.
+
+⚠️ **What I can and cannot show about the 56 policies.** `pg_policies` is not
+reachable through PostgREST and my psql/CLI access to production is blocked, so I
+have no direct read of the catalog. The inference is from the migration's own
+shape: it is one transaction, and its DO block raises if it matches zero policies
+or leaves an old-shape one behind. `my_workspace_ids()` exists, so the
+transaction committed and those guards passed. That is design evidence, not a
+catalog read, and it is stated that way deliberately.
+
+### Nothing lost, RLS still enforcing
+
+```
+anon crm_contacts / crm_companies / workspaces  → 42501 permission denied
+workspaces 67 · crm_contacts 90 live · crm_contact_emails 64   (identical to pre-apply)
+```
+
+### ⚠️ The gap that remains open
+
+The **authenticated** read path was not re-verified in production — that a real
+member still sees their own workspace and only their own, with 56 policies
+rewritten underneath them. On staging that is proven: `tenant-isolation` and
+`companies-rls`, 24 of 24, against the identical migration.
+
+I did not create a production account to close it. This project already carries
+43 legacy `outlio-test-*` accounts in production from precisely that habit, and a
+44th to re-prove a staging-proven property is a bad trade. **The owner signing in
+and seeing their contact list is the check** — that is the one behaviour the
+rewrite could plausibly have altered.
