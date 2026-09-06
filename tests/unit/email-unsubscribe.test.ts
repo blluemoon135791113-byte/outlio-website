@@ -8,6 +8,9 @@
  * the most widely distributed secret-derived value in the product. A forgeable
  * token would let anyone unsubscribe anyone.
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -124,5 +127,53 @@ describe('RFC 8058 headers', () => {
     // base64url only: anything else would break inside a header or a href.
     const token = createUnsubscribeToken(SUBJECT)
     expect(token).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
+  })
+})
+
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THE SUPPRESSION GATE IS COVERED ONLY BY A TEST THAT NEEDS DOCKER.       ║
+ * ║                                                                           ║
+ * ║  Found by mutation testing: deleting the suppression check from           ║
+ * ║  `enqueueEmail` leaves all 3,019 UNIT tests green. The behavioural proof  ║
+ * ║  lives in `email-send-worker.test.ts`, which needs GreenMail and is       ║
+ * ║  skipped wherever Docker is absent — so `npm test`, the fast loop people  ║
+ * ║  actually run before committing, says nothing about it.                   ║
+ * ║                                                                           ║
+ * ║  What that guard prevents is mailing someone who unsubscribed or hard-    ║
+ * ║  bounced: a CAN-SPAM violation and the quickest way to burn a sending     ║
+ * ║  domain. Structural, in the same spirit as the `isOwnOutbound` check in   ║
+ * ║  `email-auto-reply.test.ts`, and for the same reason.                    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('the suppression gate is wired into enqueueEmail', () => {
+  const source = readFileSync(join(__dirname, '..', '..', 'lib/email/send.ts'), 'utf8')
+
+  it('refuses a suppressed recipient at enqueue', () => {
+    expect(
+      /if \(suppressed\)\s*return \{ queued: false, reason: 'suppressed' \}/.test(source),
+      'enqueueEmail no longer refuses suppressed recipients, so an unsubscribed or ' +
+        'hard-bounced address can be mailed again.',
+    ).toBe(true)
+  })
+
+  it('reads the suppression list before queueing anything', () => {
+    /*
+     * Order is the guarantee. Checked after the insert, the message is already
+     * in the queue and the claim-time check becomes the only thing standing
+     * between a suppressed address and a send.
+     */
+    /*
+     * ⚠️ ANCHORED ON THE STATEMENT, NOT THE STRING. `reason: 'suppressed'`
+     * also appears in the return-type union near the top of the file, so
+     * searching for it found the TYPE and reported the guard as running before
+     * the lookup. The same mistake shape as taking the first `{` of a function
+     * and calling it the body.
+     */
+    const lookup = source.indexOf("from('email_suppressions')")
+    const gate = source.indexOf('if (suppressed) return')
+    expect(lookup).toBeGreaterThan(-1)
+    expect(gate).toBeGreaterThan(-1)
+    expect(gate).toBeGreaterThan(lookup)
   })
 })
