@@ -123,17 +123,6 @@ const KNOWN_UNREACHABLE = new Set<string>([
   'lib/admin/extension-actions.ts:adminRevokeDeviceAction',
   'lib/admin/extension-actions.ts:getExtensionUsage',
   'lib/admin/extension-actions.ts:setExtensionAccessAction',
-  /*
-   * ⚠️ FOUND BY THIS GUARD ON ITS FIRST RUN, WHILE WIRING UP `enrolContacts`.
-   * `BulkAssign.tsx` renders one bulk toolbar — assign, and now enrol — and no
-   * `BulkTag.tsx`, `BulkAddToList.tsx` or bulk-delete control exists anywhere.
-   * These three are written, gated on `crm.contact.edit`/`crm.contact.delete`,
-   * and reachable by nobody. Building three bulk-UI features was not in scope
-   * for this change; recorded rather than left silently passing.
-   */
-  'lib/crm/contact-actions.ts:bulkTagAction',
-  'lib/crm/contact-actions.ts:bulkAddToListAction',
-  'lib/crm/contact-actions.ts:bulkDeleteAction',
 ])
 
 describe('the exception list cannot rot', () => {

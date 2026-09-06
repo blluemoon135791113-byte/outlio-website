@@ -166,6 +166,39 @@ export default async function ContactsPage({
       })()
     : []
 
+  /*
+   * ⚠️ SEPARATE FROM `canAssign`, AND THAT IS THE POINT. `crm.contact.edit` is
+   * setter-and-above while assign and delete are manager-and-above, so a setter
+   * gets the selection bar with tagging and list-adding and nothing else.
+   */
+  const canEditContacts = can({ role: ctx.role, modules: ctx.modules }, 'crm.contact.edit')
+  const canDeleteContacts = can({ role: ctx.role, modules: ctx.modules }, 'crm.contact.delete')
+
+  const [tags, lists] = canEditContacts
+    ? await Promise.all([
+        (async () => {
+          // Scoped in code: the service role bypasses RLS.
+          const { data } = await createAdminClient()
+            .from('crm_tags')
+            .select('id, name')
+            .eq('workspace_id', ctx.workspace.id)
+            .order('name')
+            .limit(200)
+          return data ?? []
+        })(),
+        (async () => {
+          const { data } = await createAdminClient()
+            .from('crm_lists')
+            .select('id, name')
+            .eq('workspace_id', ctx.workspace.id)
+            .is('deleted_at', null)
+            .order('name')
+            .limit(200)
+          return data ?? []
+        })(),
+      ])
+    : [[], []]
+
   const assignees = canAssign
     ? await (async () => {
         const db = createAdminClient()
@@ -345,7 +378,15 @@ export default async function ContactsPage({
           </p>
         </div>
       ) : (
-        <BulkAssign assignees={assignees} campaigns={campaigns} canAssign={canAssign}>
+        <BulkAssign
+          assignees={assignees}
+          campaigns={campaigns}
+          tags={tags}
+          lists={lists}
+          canAssign={canAssign}
+          canEdit={canEditContacts}
+          canDelete={canDeleteContacts}
+        >
           <ContactsTable
             rows={result.rows}
             query={query}
