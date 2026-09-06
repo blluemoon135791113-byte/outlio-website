@@ -158,22 +158,41 @@ describe('every background worker has a trigger', () => {
   })
 
   it('a cron schedule actually exists', () => {
-    // A route with no schedule is the same defect one level up.
-    const vercel = JSON.parse(readFileSync('vercel.json', 'utf8')) as {
-      crons?: { path: string; schedule: string }[]
-    }
+    /*
+     * A route with no schedule is the same defect one level up.
+     *
+     * ⚠️ THIS USED TO READ `vercel.json`, AND THAT WENT STALE RATHER THAN
+     * WRONG. The Vercel cron was the only schedule when this was written; the
+     * real one has been pg_cron since 0118, and the daily Vercel entry was
+     * removed once three schedulers were pointed at one endpoint. The test
+     * failed on that removal — correctly, because it was still asserting the
+     * old location — so it now checks where the schedule actually lives.
+     */
+    const migration = readFileSync(
+      'supabase/migrations/0118_pg_cron_tick.sql',
+      'utf8',
+    )
 
-    expect(vercel.crons ?? []).not.toHaveLength(0)
-    expect(vercel.crons!.some((c) => c.path === '/api/cron')).toBe(true)
+    expect(migration).toContain('cron.schedule(')
+    expect(migration).toContain('/api/cron')
+    // Every five minutes, not the once-a-day the Hobby plan allowed.
+    expect(migration).toMatch(/'\*\/5 \* \* \* \*'/)
+    /*
+     * The secret travels in a header and is read from Vault at call time — a
+     * schedule that hardcoded it would put a credential in a migration file.
+     */
+    expect(migration).toContain('Authorization')
+    expect(migration).toContain('vault.decrypted_secrets')
+    expect(migration).not.toMatch(/api\/cron\?[^"']*secret/i)
   })
 
-  it('the REAL scheduler exists, because Vercel Hobby allows one run per day', () => {
+  it('the backstop scheduler exists too, because one scheduler is none', () => {
     /*
-     * ⚠️ THE vercel.json ENTRY ABOVE IS A FLOOR, NOT THE SCHEDULE. On the
-     * Hobby plan it can only fire once a day, which for a paced email sender
-     * means a campaign takes weeks and a reply is noticed tomorrow. The
-     * GitHub Action drives the real 5-minute cadence, so its absence is the
-     * same "nothing runs" defect wearing a different hat.
+     * ⚠️ pg_cron IS THE SCHEDULE; THIS IS THE FALLBACK. Measured over 19
+     * consecutive runs, GitHub delivered a five-minute cron every 193 minutes on
+     * average — useless as a primary, worth keeping as a second path that
+     * still delivers something if pg_cron stops. The /admin staleness panel
+     * reports whichever is actually arriving.
      */
     const workflow = readFileSync('.github/workflows/cron.yml', 'utf8')
 
