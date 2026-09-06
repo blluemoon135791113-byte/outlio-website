@@ -163,10 +163,22 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          echo "--- whoami ---"
-          npx vercel@latest whoami --token="$VERCEL_TOKEN" || true
-          echo "--- projects visible in scope $VERCEL_ORG_ID ---"
-          npx vercel@latest project ls --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID" || true
+          # ⚠️ EMITTED AS AN ANNOTATION, NOT ONLY TO THE LOG.
+          #
+          # Job logs need an authenticated API call to read, so a diagnostic
+          # that only prints is readable in a browser and nowhere else — which
+          # is the constraint that made the first two failures cost a human a
+          # copy-paste each. Annotations come back from the public API, so this
+          # line can be read by whoever is debugging, including a tool.
+          #
+          # Neither command returns a secret: `whoami` gives a username and
+          # `project ls` gives project names. The token itself is never echoed.
+          WHO="$(npx vercel@latest whoami --token="$VERCEL_TOKEN" 2>&1 | tail -3 | tr '\n' ' ')"
+          PROJECTS="$(npx vercel@latest project ls --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID" 2>&1 | tail -6 | tr '\n' ' ')"
+
+          echo "whoami: $WHO"
+          echo "projects: $PROJECTS"
+          echo "::notice title=Vercel token identity::whoami=[$WHO] projects=[$PROJECTS]" 
 
       # ⚠️ NO PLACEHOLDER ENV HERE, UNLIKE `verify`. `vercel pull` fetches the
       # project's real production environment, so the build sees the same values
