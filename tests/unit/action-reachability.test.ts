@@ -94,6 +94,25 @@ function callSites(): Map<string, string> {
  * says of its own. Each entry is a built, gated, audited capability that no
  * human can reach — a decision to leave it that way, not permission to add more.
  */
+/**
+ * ⚠️ THIS IS A DEAD-CODE LIST, NOT A SECURITY BACKLOG. Verified rather than
+ * assumed, against `.next/server/server-reference-manifest.json` after a build:
+ * every one of these has NO action id, so Next never emits an endpoint for it
+ * and none is callable over HTTP. 0 of 10.
+ *
+ * The check is not vacuous — the same manifest lookup finds `enrolContacts`,
+ * `updateSenderPostalAddress` and `runWorkersNow`, which are wired.
+ *
+ * CLAUDE.md's rule that "a server action is a public HTTP endpoint" is about
+ * actions something imports. An action nothing imports is tree-shaken out of
+ * the build entirely. So the cost of these is unfinished features and code
+ * that reads as live, not exposure — which changes how urgently they want
+ * fixing, and is worth knowing before someone deletes working code to close a
+ * hole that is not open.
+ *
+ * ⚠️ THE LIST MAY ONLY SHRINK. An entry means someone wrote and gated an
+ * action and never gave it a caller.
+ */
 const KNOWN_UNREACHABLE = new Set<string>([
   /*
    * Pipeline management. `crm.pipeline.manage` exists, the actions are written
