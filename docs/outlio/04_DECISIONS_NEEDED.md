@@ -380,6 +380,40 @@ makes the change visible.
 
 ---
 
+## DECISION-14 — Does Phase 5 proceed, or defer like Phase 4? · `OPEN`
+
+Raised 2026-09-06 while writing `PHASE_5.md`.
+
+**The fact:** production holds 3 pipelines and **0 opportunities**, 0 stage
+history rows, 0 custom field definitions and 0 values. Phase 5 adds contact
+roles, custom fields, conditional fields, files and followers to a record type
+nobody has created once.
+
+**Why it is not obviously the Phase 4 situation:** Phase 4 proposed changing
+behaviour on a misread ratio. Phase 5 adds capability, and usage cannot precede
+capability. That objection fails on a verified fact — the capability exists.
+`createOpportunity` is reachable from the board via `NewOpportunityButton`
+today. Nobody has used it.
+
+**Options, with the cost of being wrong:**
+
+1. **Defer, trigger at 20 opportunities created after 2026-09-06** (mirrors
+   Phase 4's standard). Wrong if a missing field is the reason nobody creates
+   one — nothing suggests that, and nothing rules it out.
+2. **Smallest slice: custom fields only.** Gives the two written validators
+   (`lib/crm/custom-fields.ts:166,265`, currently zero callers) a caller. Wrong
+   if adoption does not follow, leaving five empty tables instead of four.
+3. **Reorder to Phase 6 first.** Wrong on the same numbers — forecasting zero
+   opportunities is equally hollow.
+
+**Recommendation: 1.** The blocker is not a missing feature; opportunities are
+not part of anyone's workflow yet, and schema does not fix that.
+
+⚠️ **Flagged for the owner rather than acted on.** Deferring two consecutive
+phases on the same argument is how a plan quietly stops moving, and "there is
+no data" can become a reason never to build anything. Whether the pipeline is a
+priority at all is a product question — §11 says stop rather than guess it.
+
 ## Not blocking, but worth knowing
 
 - **`docs/SYSTEM_HANDOFF.md`** (written 2026-09-04) already covers much of what

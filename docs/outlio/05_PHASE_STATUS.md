@@ -1026,3 +1026,45 @@ rather than a script.
 first tick that can claim it is **Tuesday 06:00 UTC**. The scheduler and the
 cron are both behaving correctly; they just compose into a longer wait than
 "Monday morning" implies.
+
+## Phase 7 result (2026-09-06) — COMPLETE, recorded after the fact
+
+Email end-to-end with an authorized mailbox. Real Zoho account connected,
+message sent, reply fetched over IMAP, attributed to a contact, sequence
+stopped with `stop_reason: replied`. Every step verified against production;
+raw output in `phases/PHASE_7_EVIDENCE.md`.
+
+⚠️ **Executed before its brief existed**, which is a §10 violation and is
+recorded rather than tidied. The owner attached a mailbox mid-session and asked
+for a live send; the work followed the opportunity rather than the order.
+
+⚠️ **Two Definition-of-Done criteria are NOT met** and the phase is recorded
+that way rather than rounded up: there is no feature flag for the email module
+(it is gated by plan module instead), and RBAC/tenant isolation were covered by
+the existing suites rather than a phase-specific matrix.
+
+What the phase found, none of which a brief would have predicted:
+
+- **No sequence sender existed.** `launchCampaign` said "the first emails go
+  out now" while nothing enqueued due steps.
+- **`enrolContacts` had no caller** — a campaign could be launched containing
+  nobody.
+- **The tick ran once per ~193 minutes**, never the 5 it asked for.
+- **A quarter of ticks died at the 60s wall**, no per-job timeout.
+- **`reply-sync` read the product's own outbound as a prospect reply.**
+- **7 of 8 replies were attributed to nobody** — visible in the phase's own
+  evidence, fixed 2026-09-06, historical rows deliberately not backfilled
+  because inferring which contact each belonged to would be inventing an
+  observation (rule 4).
+
+## Phase 5 brief (2026-09-06) — BLOCKED ON DECISION-14
+
+`crm_opportunities` holds **0 rows**. Phase 5 expands a record type nobody has
+created once. Brief written, recommendation is to defer with an explicit
+trigger (20 opportunities after 2026-09-06), but two consecutive deferrals on
+the same argument is a product call rather than an engineering one — see
+`04_DECISIONS_NEEDED.md`.
+
+Phase 4 remains correctly deferred: it needs ~20 extraction jobs completed
+after the CRM existed, and production still shows one workspace with 44
+contacts.
