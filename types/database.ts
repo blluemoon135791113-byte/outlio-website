@@ -8670,6 +8670,10 @@ export type Database = {
         }
         Returns: string
       }
+      scheduler_diagnostics: {
+        Args: Record<string, never>
+        Returns: Json
+      }
       set_user_suspension: {
         Args: { p_admin_id: string; p_suspend: boolean; p_user_id: string }
         Returns: undefined

@@ -2,8 +2,13 @@ import type { Metadata } from 'next'
 
 import { CompanyBackfill } from '@/components/admin/CompanyBackfill'
 import { RunWorkers } from '@/components/admin/RunWorkers'
+import { SchedulerInternals } from '@/components/admin/SchedulerInternals'
 import { SchedulerStatus } from '@/components/admin/SchedulerStatus'
 import { UserRow, type AdminUser } from '@/components/admin/UserRow'
+import {
+  EMPTY_DIAGNOSTICS,
+  parseSchedulerDiagnostics,
+} from '@/lib/admin/scheduler-diagnostics'
 import { schedulerHealth } from '@/lib/admin/scheduler-health'
 import { requireAdmin } from '@/lib/auth/access'
 import { listActivePlans } from '@/lib/limits/plans'
@@ -56,6 +61,17 @@ export default async function AdminPage() {
     ])
 
   const health = schedulerHealth(lastRun?.started_at ?? null)
+
+  /*
+   * ⚠️ FAILURE HERE MUST NOT TAKE THE PAGE DOWN. This is the panel somebody
+   * opens when the scheduler is already broken; if a missing function or a
+   * permission change made it throw, it would remove the only screen that can
+   * diagnose the problem, at the exact moment it is needed.
+   */
+  const { data: rawDiagnostics } = await supabase.rpc('scheduler_diagnostics')
+  const diagnostics = rawDiagnostics
+    ? parseSchedulerDiagnostics(rawDiagnostics)
+    : EMPTY_DIAGNOSTICS
 
   /*
    * TickResult's `jobs` is a Record<string, {ok, detail}>, but it arrives from
@@ -170,6 +186,8 @@ export default async function AdminPage() {
       <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
         <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Background workers</h2>
         <SchedulerStatus health={health} lastJobs={lastJobs} />
+
+        <SchedulerInternals diagnostics={diagnostics} />
 
         <hr className="border-border" />
 
