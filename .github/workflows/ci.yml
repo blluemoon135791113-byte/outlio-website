@@ -173,29 +173,41 @@ jobs:
           #
           # Neither command returns a secret: `whoami` gives a username and
           # `project ls` gives project names. The token itself is never echoed.
-          # ⚠️ SHAPE, NEVER VALUE. Two different tokens failed `whoami` with
-          # the same "User not found", which points at what is STORED rather
-          # than at either token. Length and character class distinguish the
-          # three ways that happens — truncated on copy, a trailing newline, or
-          # something else pasted entirely — and neither reveals the secret.
-          # A Vercel token is 24 characters, alphanumeric.
-          echo "token length: ${#VERCEL_TOKEN}"
-          case "$VERCEL_TOKEN" in
-            *[!A-Za-z0-9]*) echo "token charset: CONTAINS non-alphanumeric (whitespace, newline or punctuation)" ;;
-            *)              echo "token charset: alphanumeric only" ;;
-          esac
+          # ⚠️ SHAPE, NEVER VALUE — AND THE FIRST VERSION OF THIS GAVE THE
+          # WRONG ANSWER CONFIDENTLY.
+          #
+          # It tested against the LEGACY token format (24 chars, alphanumeric)
+          # and reported a perfectly valid modern token as "not a token",
+          # sending someone off to recreate one that was already correct.
+          # Current tokens are `vcp_` followed by 56 characters. A measurement
+          # read against a stale assumption is worse than no measurement,
+          # because it is believed.
+          #
+          # What is still true: this prints length and a prefix test. It never
+          # prints the token, a prefix of its VALUE, or a hash.
           SHAPE="len=${#VERCEL_TOKEN}"
           case "$VERCEL_TOKEN" in
-            *[!A-Za-z0-9]*) SHAPE="$SHAPE charset=HAS_NON_ALNUM" ;;
-            *)              SHAPE="$SHAPE charset=alnum" ;;
+            vcp_*)          SHAPE="$SHAPE form=modern(vcp_)" ;;
+            *[!A-Za-z0-9]*) SHAPE="$SHAPE form=UNRECOGNISED_has_punctuation" ;;
+            *)              SHAPE="$SHAPE form=legacy(alnum)" ;;
           esac
+          case "$VERCEL_TOKEN" in
+            *[[:space:]]*) SHAPE="$SHAPE whitespace=YES_this_is_a_bug" ;;
+            *)             SHAPE="$SHAPE whitespace=none" ;;
+          esac
+          echo "token shape: $SHAPE"
 
-          WHO="$(npx vercel@latest whoami --token="$VERCEL_TOKEN" 2>&1 | tail -3 | tr '\n' ' ')"
+          # ⚠️ SCOPED. An unscoped `whoami` resolves a USER, and a token bound
+          # to a team need not have one — which produces exactly the "User not
+          # found" seen here while scoped commands work fine. Both are printed
+          # so the difference between them is the diagnosis.
+          WHO="$(npx vercel@latest whoami --token="$VERCEL_TOKEN" 2>&1 | tail -2 | tr '\n' ' ')"
+          WHO_SCOPED="$(npx vercel@latest whoami --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN" 2>&1 | tail -2 | tr '\n' ' ')"
           PROJECTS="$(npx vercel@latest project ls --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID" 2>&1 | tail -6 | tr '\n' ' ')"
 
           echo "whoami: $WHO"
           echo "projects: $PROJECTS"
-          echo "::notice title=Vercel token identity::shape=[$SHAPE] whoami=[$WHO] projects=[$PROJECTS]" 
+          echo "::notice title=Vercel token identity::shape=[$SHAPE] whoami=[$WHO] whoami_scoped=[$WHO_SCOPED] projects=[$PROJECTS]" 
 
       # ⚠️ NO PLACEHOLDER ENV HERE, UNLIKE `verify`. `vercel pull` fetches the
       # project's real production environment, so the build sees the same values
