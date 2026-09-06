@@ -114,15 +114,6 @@ function callSites(): Map<string, string> {
  * action and never gave it a caller.
  */
 const KNOWN_UNREACHABLE = new Set<string>([
-  /*
-   * The whole extension admin surface. Access can be granted and revoked, and
-   * devices revoked individually or all at once, with an `admin_audit_logs` row
-   * for each — from nowhere. `/admin` renders none of it.
-   */
-  'lib/admin/extension-actions.ts:adminRevokeAllDevicesAction',
-  'lib/admin/extension-actions.ts:adminRevokeDeviceAction',
-  'lib/admin/extension-actions.ts:getExtensionUsage',
-  'lib/admin/extension-actions.ts:setExtensionAccessAction',
 ])
 
 describe('the exception list cannot rot', () => {

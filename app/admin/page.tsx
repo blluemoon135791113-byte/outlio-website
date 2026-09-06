@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 
 import { CompanyBackfill } from '@/components/admin/CompanyBackfill'
 import { RunWorkers } from '@/components/admin/RunWorkers'
@@ -181,6 +182,22 @@ export default async function AdminPage() {
           already have a company are skipped.
         </p>
         <CompanyBackfill />
+      </section>
+
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Browser extension</h2>
+        <p className="text-sm text-muted">
+          Turn extension access on or off per account, and disconnect a browser
+          that has been lost or shared. On its own page because loading device
+          history for every account here would be hundreds of queries to answer a
+          question about a handful of people.
+        </p>
+        <Link
+          href="/admin/extension"
+          className="inline-flex w-fit rounded-[var(--radius-md)] border border-border px-3 py-1.5 text-sm font-medium text-ink transition-colors duration-150 hover:border-border-strong"
+        >
+          Manage extension access
+        </Link>
       </section>
 
       <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
