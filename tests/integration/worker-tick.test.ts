@@ -30,6 +30,15 @@ const describeIf = hasSupabaseEnv ? describe : describe.skip
  */
 const EXPECTED_JOBS = [
   'reap_email_claims',
+  /*
+   * ⚠️ ADDED WHEN THE SEQUENCE SENDER WAS. `advance_sequences` enqueues the
+   * steps that are due, and it did not exist when this list was written — a
+   * launched campaign said "the first emails go out now" and nothing sent.
+   *
+   * It is listed BEFORE `send_email` for the same reason the tick runs it
+   * first: enqueue then send, or every due step waits a full tick.
+   */
+  'advance_sequences',
   'send_email',
   'sync_replies',
   'advance_flows',
