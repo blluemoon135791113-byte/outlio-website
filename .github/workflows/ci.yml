@@ -95,3 +95,65 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # THE GATE. Production deploys only after `verify` passes.
+  #
+  # Vercel's Git integration deploys on push and does NOT wait for GitHub
+  # Actions — measured: on 2026-09-06 the production deploy was created at
+  # 14:56:46 and CI finished at 14:59:47. CI was a report on production, not a
+  # gate in front of it, and a red run would have said so three minutes late.
+  #
+  # `needs: verify` is what makes it a gate. Nothing else here does.
+  #
+  # ⚠️ THIS DOES NOTHING UNTIL VERCEL'S OWN AUTO-DEPLOY IS TURNED OFF. Until
+  # then both fire and the last one wins. The switch is `git.deploymentEnabled`
+  # in vercel.json — deliberately NOT flipped in the same commit, because
+  # disabling auto-deploy before this job has ever run successfully would leave
+  # no way to deploy at all.
+  # ═══════════════════════════════════════════════════════════════════════════
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # ⚠️ IDENTIFIERS, NOT CREDENTIALS. These name the project; they authorise
+      # nothing without VERCEL_TOKEN, so keeping them inline costs one secret
+      # instead of three and makes the target visible in review.
+      VERCEL_ORG_ID: team_twthvAJPnRFSCg5fNYJ8gW6e
+      VERCEL_PROJECT_ID: prj_armCGAcDXXBKuuYEfrR6JN7sifYE
+
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::VERCEL_TOKEN is not set. Vercel's own Git integration is still deploying this push."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/checkout@v7
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      # ⚠️ NO PLACEHOLDER ENV HERE, UNLIKE `verify`. `vercel pull` fetches the
+      # project's real production environment, so the build sees the same values
+      # the running app does. That is the point of building through Vercel
+      # rather than running `next build` and uploading the output.
+      - if: steps.check.outputs.ready == 'true'
+        run: |
+          npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx vercel@latest build --prod --token="$VERCEL_TOKEN"
+          npx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
