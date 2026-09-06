@@ -10248,7 +10248,59 @@ session, then removed them. Restored to HEAD; the edits between HEAD and what wa
 there are unrecoverable. I had verified their state once and then reused that
 conclusion instead of re-checking before a destructive command.
 
+## R11 — the scheduler was never actually running
+
+Everything below was measured on production, not reasoned about.
+
+**The tick had no pulse.** `runTick()` reported into an HTTP response and the
+platform logs and nothing survived, so "ran, nothing to do" and "has not run
+since Tuesday" were the same picture from outside. `worker_runs` (0117) now
+takes one row per tick and `/admin` reports staleness. It earned its keep
+within seven minutes by revealing the next two items.
+
+**GitHub Actions was delivering one tick per ~193 minutes, not per 5.** Gaps
+across 19 consecutive runs ranged 100–279 minutes. It had never once run near
+the interval it asked for. At `emailsPerTick` of 25 that capped the platform
+at ~185 emails/day across all workspaces. Moved to pg_cron (0118), verified at
+300, 300, 300, 299 seconds across five consecutive fires. Ceiling is now
+~7,200/day and reply lag ≤5 minutes. `cron.yml` stays as a backstop.
+
+**A quarter of ticks were dying at the 60s wall.** 5 of the last 20 failed;
+every failure took 61–62s and every success 6–13. Not flaky — no job had a
+timeout, so one unreachable IMAP host consumed the whole minute and every job
+ordered after it silently did not run. 45s tick budget, 20s per job; a hung
+job is abandoned and recorded, starved ones say so. Zero failures since.
+
+**`scheduler_diagnostics()` (0119)** exposes `cron.job` and
+`net._http_response`, which PostgREST cannot reach — the reason "why is the
+scheduler quiet" was previously answerable only by a human with SQL access.
+⚠️ Its first draft failed OPEN: `not (is_admin() or auth.role() = 'service_role')`
+is NULL for a caller with no JWT claims, and `if NULL then` does not fire. Both
+branches coalesced; all five caller shapes exercised.
+
+### More numbers that could not change
+
+- `sync_contact_evidence` reported "+12 emails, +7 phones" every tick for two
+  days while both tables sat unchanged at 64 and 22 rows. Attaching is
+  idempotent, both attach functions returned `void`, so the caller counted what
+  it OFFERED. They now return rows inserted. First tick after the fix: `+0/+0`.
+- The CAN-SPAM §7704(a)(5) postal-address guard was live and **entirely
+  untested** — every case passed a valid address, so deleting the whole check
+  left all 20 tests green. Five negative cases added, verified non-vacuous by
+  removing the guard again (3 fail) and restoring it (25 pass).
+- `bulkLaunchBlockedBecause` encoded that same legal rule a second time and was
+  called by nothing but its own tests. Removed. Two sources of truth for one
+  legal requirement, one unreachable, free to diverge unnoticed.
+
+### ⚠️ Waiting on the owner (R11)
+
+- All 71 workspaces have `sender_postal_address` NULL. No campaign can launch
+  until one is set — correctly blocked, not broken.
+- DMARC is still `p=none`.
+- Replies to `completed` enrollments are attributed to nobody: `reply-sync`
+  matches only `active`/`paused`. Still a design call, asked twice, unanswered.
+
 ### Verified
 
-2,962 unit tests across 162 files; 424 integration; 8 E2E; typecheck 0; lint 0
-errors; build clean.
+3,007 unit tests across 166 files; typecheck 0; lint 0 errors; build clean.
+Scheduler cadence confirmed from `worker_runs` timestamps, not assumed.

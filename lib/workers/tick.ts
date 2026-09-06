@@ -170,9 +170,13 @@ export async function runTick(): Promise<TickResult> {
 
   /*
    * ⚠️ BEFORE `send_email`, DELIBERATELY. This enqueues the steps that are due;
-   * running it after would leave every one of them waiting a full tick — a
-   * daily cron, so a full DAY — before anything went out. Ordering the two
-   * jobs the other way round is a silent 24-hour delay on every sequence.
+   * running it after would leave every one of them waiting a full tick before
+   * anything went out. Ordering the two jobs the other way round is a silent
+   * one-tick delay on every sequence.
+   *
+   * That is 5 minutes today (pg_cron, migration 0118) and was a full DAY when
+   * this comment was written against Vercel Hobby's one-cron-per-day limit.
+   * The ordering matters either way; only the size of the mistake changed.
    */
   await runJob(result, 'advance_sequences', async () => {
     const outcome = await advanceSequences(LIMITS.emailsPerTick)

@@ -99,7 +99,8 @@ It is a **file processor**, not a crawler.
 | Edge guard file | **`proxy.ts`** — Next 16 renamed `middleware`. Function must be `proxy`. |
 | Rate limiting | **Postgres**, not Upstash/Redis. Fails **open** by design. |
 | Access decision | Pure function in **`lib/auth/decide.ts`**; `access.ts` only gathers inputs. |
-| Worker trigger | **`after()` on Vercel** for now — no container, no cost. Queue semantics unchanged. Swap to a long-running loop when scale demands. |
+| Worker trigger | **pg_cron → `/api/cron` every 5 minutes** (migration 0118). `after()` still nudges the tick after a launch so the first send is immediate. GitHub Actions (`.github/workflows/cron.yml`) is a backstop only — measured at one run per ~193 minutes, never the 5 it asks for. |
+| Scheduler health | `worker_runs` (0117) takes one row per tick; `/admin` reports staleness. `scheduler_diagnostics()` (0119) exposes `cron.job` / `net._http_response`, which PostgREST cannot reach. |
 
 **Worker deployment (revised 2026-08-07, at ~5 users):** the processor is a plain
 library (`lib/worker/`). It is triggered by `after()` from the upload action
@@ -223,16 +224,26 @@ lead whose name is `=cmd|'/c calc'!A1`.
 ## Commands
 
 ```bash
-npm run dev          # Next.js app
-npm run lint
-npm run build
+npm run dev              # Next.js app
+npm run lint             # eslint
+npm run build            # next build
+npm run typecheck        # tsc --noEmit
+npm test                 # vitest, unit project only — fast, no network
 ```
 
-**Missing and required before Phase 3 gates can pass:**
+Slower, and not part of the default loop:
 
 ```bash
-npm run typecheck    # "tsc --noEmit"  — NOT YET ADDED
-npm test             # Vitest          — NOT YET INSTALLED
+npm run test:integration # hits the real Supabase project — serial
+npm run test:e2e         # Playwright, staging only
+npm run db:types         # regenerate types/database.ts after a migration
+```
+
+Migrations are applied **by hand in the Supabase SQL editor**, never by an
+agent. Validate one first against a throwaway Postgres:
+
+```bash
+scripts/check-migration.sh supabase/migrations/0117_worker_runs.sql
 ```
 
 ---
