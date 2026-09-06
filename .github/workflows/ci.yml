@@ -53,6 +53,13 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-anon-key
       SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+      # ⚠️ NOT A SECRET, AND NOT OPTIONAL. `tests/setup.ts` loads `.env.local`
+      # deliberately, so unit tests see the real environment on a developer
+      # machine. There is no `.env.local` here, and `applyCompliance` throws
+      # without a signing secret — 7 tests fail for a reason unrelated to the
+      # code. Any non-empty value satisfies them; no link signed with this ever
+      # leaves CI.
+      UNSUBSCRIBE_TOKEN_SECRET: ci-placeholder-not-a-real-secret
 
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +75,19 @@ jobs:
       # `ci`, not `install`: the lockfile decides, and a drifting transitive
       # dependency should fail rather than be silently resolved.
       - run: npm ci
+
+      # ⚠️ BEFORE TYPECHECK, AND THIS IS WHY CI FAILED ON ITS FIRST RUN.
+      #
+      # `next-env.d.ts` is gitignored (.gitignore:43) and is what declares
+      # `*.png` and friends via `next/image-types/global`; it also pulls in
+      # `.next/types/routes.d.ts`. Both are generated. Locally they exist
+      # because `next dev` made them, so `tsc --noEmit` passes — on a clean
+      # clone it cannot resolve a single image import.
+      #
+      # `next typegen` produces them without a full build, so the cheap checks
+      # stay cheap. This means a fresh clone could never typecheck either; CI
+      # found that on run #1, which is the entire point of having it.
+      - run: npx next typegen
 
       # Ordered cheapest-first so an obvious break reports in seconds rather
       # than after a four-minute build.

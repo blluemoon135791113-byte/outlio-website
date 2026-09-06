@@ -212,6 +212,7 @@ describe('the live registry', () => {
   const original = process.env.INTELLIGENCE_PROVIDER_ORDER
   const originalPaid = process.env.OUTLIO_ALLOW_PAID_PROVIDERS
   const originalSearxngUrl = process.env.SEARXNG_URL
+  const originalTavily = process.env.TAVILY_API_KEY
 
   /*
    * These assert WATERFALL ORDER, which is only observable when every provider
@@ -225,6 +226,17 @@ describe('the live registry', () => {
     // directly to buildLiveRegistry below.
     delete process.env.INTELLIGENCE_PROVIDER_ORDER
     process.env.OUTLIO_ALLOW_PAID_PROVIDERS = 'true'
+
+    /*
+     * ⚠️ SET, NOT INHERITED. The default waterfall filters by `isConfigured()`,
+     * so a provider whose key is absent silently drops out of the order these
+     * tests assert. On a developer machine `.env.local` supplies it and the
+     * test passes for a reason that has nothing to do with the code; in CI,
+     * with no `.env.local`, `tavily-funding` vanished and the assertion failed.
+     *
+     * The test must supply what it asserts on.
+     */
+    process.env.TAVILY_API_KEY = 'test-tavily-key'
   })
 
   afterEach(() => {
@@ -236,6 +248,9 @@ describe('the live registry', () => {
 
     if (originalSearxngUrl === undefined) delete process.env.SEARXNG_URL
     else process.env.SEARXNG_URL = originalSearxngUrl
+
+    if (originalTavily === undefined) delete process.env.TAVILY_API_KEY
+    else process.env.TAVILY_API_KEY = originalTavily
   })
 
   it('paid providers are OFF by default', () => {
