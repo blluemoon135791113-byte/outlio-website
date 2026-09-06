@@ -47,7 +47,15 @@ export function SchedulerStatus({
           {lastJobs.map((job) => (
             <li key={job.name} className="flex flex-wrap items-baseline gap-x-3 px-3 py-2">
               <code className="text-sm font-medium text-ink">{job.name}</code>
-              <span className="min-w-0 flex-1 text-sm text-muted">{job.detail}</span>
+              {/*
+                `break-words` because this is provider error text, not our copy:
+                a rejected SMTP command or an endpoint URL arrives as one long
+                unbroken token, and `min-w-0` alone lets the box shrink without
+                letting the string break.
+              */}
+              <span className="min-w-0 flex-1 break-words text-sm text-muted">
+                {job.detail}
+              </span>
               {/*
                 Only failures are labelled. Marking every success "ok" turns the
                 list into a wall of green that hides the one red line in it.
