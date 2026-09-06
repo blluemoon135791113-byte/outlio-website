@@ -11,11 +11,28 @@
 # already here. All it does is make one authenticated request; every decision
 # and all the work stays in the app.
 #
-# ⚠️ GITHUB DELAYS SCHEDULED RUNS UNDER LOAD, sometimes by several minutes,
-# and skips them entirely during incidents. That is acceptable BECAUSE the tick
-# is idempotent and claim-based: a late tick does the same work, and a missed
-# one leaves the queue for the next. It would not be acceptable for anything
-# that had to happen exactly on time.
+# ⚠️ THIS IS NO LONGER THE PRIMARY SCHEDULER. It is a backstop.
+#
+# The paragraph above was written expecting GitHub to be late "by several
+# minutes". It was wrong by two orders of magnitude. Measured over 19
+# consecutive scheduled runs in September 2026, the gaps were:
+#
+#   130, 170, 203, 242, 274, 113, 100, 134, 148, 208,
+#   258, 265, 271, 108, 146, 152, 221, 252, 279   (minutes)
+#
+# An average of 193 minutes for a job that asks for 5. Not once did it run at
+# anything close to the requested interval -- GitHub deprioritises scheduled
+# workflows on free tiers and drops them under load. At ~7 ticks a day and 25
+# emails a tick, that capped the platform at ~185 emails a day in total.
+#
+# The real schedule now lives in the database: supabase/migrations/
+# 0118_pg_cron_tick.sql, pg_cron every 5 minutes. This file is kept because
+# redundancy in a scheduler is worth having and these runs are free -- if
+# pg_cron stops, GitHub still delivers something, and the admin panel's
+# staleness check reports whichever one is actually arriving.
+#
+# The tick is idempotent and claim-based, so two schedulers overlapping is
+# safe: the second one finds the work already claimed.
 name: Background tick
 
 on:
