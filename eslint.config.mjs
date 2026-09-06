@@ -32,6 +32,20 @@ const eslintConfig = defineConfig([
     "build/**",
     "services/web-research-mcp/dist/**",
     "next-env.d.ts",
+
+    // ⚠️ AGENT TOOLING, NOT THIS PROJECT'S SOURCE.
+    //
+    // `npx impeccable install` vendors its own bundled JS (live-browser.js,
+    // modern-screenshot.umd.js) into one directory per detected harness.
+    // Linting them produced 279 warnings against 99 real ones — a signal that
+    // has to be searched is not a signal, and the next genuine warning would
+    // have been read as more of the same.
+    //
+    // Gitignored too; this keeps them out of the local `npm run lint` a
+    // developer actually reads.
+    ".claude/skills/**",
+    ".agents/skills/**",
+    ".github/skills/**",
   ]),
 ]);
 

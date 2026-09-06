@@ -556,6 +556,14 @@ export async function renamePipeline(
  * real sales history or fail on a foreign key. Archiving hides it from the
  * picker and leaves every closed deal explicable.
  */
+/**
+ * Thrown when archiving would leave a workspace with no pipeline at all.
+ *
+ * A named type rather than a string match, so the action can tell this apart
+ * from a genuine failure and show the reason instead of "could not archive".
+ */
+export class LastPipelineError extends Error {}
+
 export async function archivePipeline(
   workspaceId: string,
   pipelineId: string,
@@ -569,6 +577,28 @@ export async function archivePipeline(
    * default — an error whose cause is invisible from the screen where it
    * appears.
    */
+  /*
+   * ⚠️ NEVER ARCHIVE THE LAST ONE. A workspace with zero pipelines has no
+   * board, and every deal in it becomes unreachable from the UI — recoverable
+   * only by a manager creating a new pipeline, and not at all by a setter, who
+   * is told to "ask a manager" on an empty screen.
+   *
+   * Enforced HERE rather than by hiding the control: this ran unreachable
+   * until the management UI existed, and the moment a caller appears is the
+   * moment the missing guard becomes a real way to break a workspace.
+   */
+  const { count } = await db
+    .from('crm_pipelines')
+    .select('id', { count: 'exact', head: true })
+    .eq('workspace_id', workspaceId)
+    .is('archived_at', null)
+
+  if ((count ?? 0) <= 1) {
+    throw new LastPipelineError(
+      'This is the only pipeline. Create another before archiving this one.',
+    )
+  }
+
   const { error } = await db
     .from('crm_pipelines')
     .update({ archived_at: new Date().toISOString(), is_default: false })

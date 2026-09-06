@@ -115,14 +115,6 @@ function callSites(): Map<string, string> {
  */
 const KNOWN_UNREACHABLE = new Set<string>([
   /*
-   * Pipeline management. `crm.pipeline.manage` exists, the actions are written
-   * and gated, and the pipeline board offers no way to rename, archive or
-   * change the default — so a workspace is stuck with whatever it first made.
-   */
-  'app/(product)/crm/pipeline/actions.ts:archivePipelineAction',
-  'app/(product)/crm/pipeline/actions.ts:renamePipelineAction',
-  'app/(product)/crm/pipeline/actions.ts:setDefaultPipelineAction',
-  /*
    * The whole extension admin surface. Access can be granted and revoked, and
    * devices revoked individually or all at once, with an `admin_audit_logs` row
    * for each — from nowhere. `/admin` renders none of it.
@@ -143,6 +135,36 @@ const KNOWN_UNREACHABLE = new Set<string>([
   'lib/crm/contact-actions.ts:bulkAddToListAction',
   'lib/crm/contact-actions.ts:bulkDeleteAction',
 ])
+
+describe('the exception list cannot rot', () => {
+  /*
+   * ⚠️ THE LIST MUST SHRINK WHEN AN ACTION IS WIRED, AND NOTHING MADE IT.
+   *
+   * The guard above only stops a NEW unreachable action. An entry that has
+   * since been given a caller stays listed forever, silently exempting a
+   * live action from the check it is now capable of passing — and the next
+   * person reads the comment beside it as current fact.
+   *
+   * Found when the three pipeline actions were wired: the suite stayed green
+   * with the entries still in place. The same rot the INNER_HTML_ALLOWED
+   * check in `hard-rules.test.ts` was written to prevent.
+   */
+  it('lists nothing that now has a caller', () => {
+    const sites = callSites()
+    const stale = [...KNOWN_UNREACHABLE].filter((entry) => {
+      const [file, name] = entry.split(':')
+      return [...sites].some(
+        ([path, src]) => path !== file && new RegExp(`\\b${name}\\b`).test(src),
+      )
+    })
+
+    expect(
+      stale,
+      'these are in KNOWN_UNREACHABLE but something calls them now — remove them, ' +
+        'the list may only shrink.',
+    ).toEqual([])
+  })
+})
 
 describe('the scanner itself', () => {
   it('finds the server actions', () => {

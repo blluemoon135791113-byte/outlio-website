@@ -16,6 +16,7 @@ import { revalidatePath } from 'next/cache'
 import {
   archivePipeline,
   createPipeline,
+  LastPipelineError,
   renamePipeline,
   setDefaultPipeline,
   type StageInput,
@@ -158,7 +159,14 @@ export async function archivePipelineAction(
     // Says plainly that nothing was destroyed — the fear about archiving is
     // that the deals go with it.
     return { ok: true, message: 'Archived. Its deals and their history are kept.' }
-  } catch {
+  } catch (error) {
+    /*
+     * ⚠️ THE REASON, NOT A GENERIC FAILURE. "Could not archive that pipeline"
+     * for the last one sends someone looking for a bug in a rule that is
+     * working. Only this one case is surfaced; everything else stays opaque,
+     * because a raw database message is not for a customer.
+     */
+    if (error instanceof LastPipelineError) return { ok: false, error: error.message }
     return { ok: false, error: 'Could not archive that pipeline.' }
   }
 }

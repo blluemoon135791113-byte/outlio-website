@@ -2,8 +2,9 @@ import type { Metadata } from 'next'
 
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
 import { NewOpportunityButton } from '@/components/crm/NewOpportunity'
+import { PipelineManager } from '@/components/crm/PipelineManager'
 import { NewPipelineButton, PipelineSetup } from '@/components/crm/PipelineSetup'
-import { getBoard, getPipeline } from '@/lib/crm/opportunities'
+import { getBoard, getPipeline, listPipelines } from '@/lib/crm/opportunities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
@@ -111,6 +112,21 @@ export default async function PipelinePage({
               colour, weight and size — they invited exactly the misclick that
               leaves someone with an accidental second pipeline.
             */}
+            {/*
+              ⚠️ THE THREE MANAGEMENT ACTIONS WERE UNREACHABLE UNTIL NOW.
+              Rename, archive and set-default were written and gated on
+              `crm.pipeline.manage`, and nothing rendered a way to call any of
+              them — so a workspace kept the first pipeline it made, under the
+              first name it used, forever. `listPipelines` was written for this
+              picker and had no caller either.
+            */}
+            {canManage ? (
+              <PipelineManager
+                pipelines={await listPipelines(ctx.workspace.id)}
+                currentId={pipelineId}
+              />
+            ) : null}
+
             {canManage ? <NewPipelineButton /> : null}
           </div>
         </div>
