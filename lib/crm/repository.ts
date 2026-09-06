@@ -287,9 +287,17 @@ export async function attachContactEmails(
    */
   emails: { address: string; identityKey: string; evidenceId?: string | null }[],
   source: RecordSource = 'manual',
-): Promise<void> {
-  if (emails.length === 0) return
+  /*
+   * ⚠️ RETURNS ROWS INSERTED, NOT ROWS OFFERED, and the difference is the
+   * point. This is idempotent by design — a duplicate is swallowed below — so
+   * callers that reported `emails.length` were reporting the same number on
+   * every re-run forever. The evidence bridge claimed "+12 emails" on every
+   * tick for two days while inserting nothing.
+   */
+): Promise<number> {
+  if (emails.length === 0) return 0
   const db = createAdminClient()
+  let inserted = 0
 
   const { count } = await db
     .from('crm_contact_emails')
@@ -317,8 +325,11 @@ export async function attachContactEmails(
       if (error.code === UNIQUE_VIOLATION) continue
       throw new Error(`attachContactEmails failed: ${error.message}`)
     }
+    inserted += 1
     hasPrimary = true
   }
+
+  return inserted
 }
 
 /**
@@ -333,9 +344,11 @@ export async function attachContactPhones(
   // See the note on attachContactEmails: absent citation means absent.
   phones: { raw: string; e164: string | null; evidenceId?: string | null }[],
   source: RecordSource = 'manual',
-): Promise<void> {
-  if (phones.length === 0) return
+  // Rows inserted, not rows offered — see the note on attachContactEmails.
+): Promise<number> {
+  if (phones.length === 0) return 0
   const db = createAdminClient()
+  let inserted = 0
 
   const { data: existing, error: readError } = await db
     .from('crm_contact_phones')
@@ -370,8 +383,11 @@ export async function attachContactPhones(
       throw new Error(`attachContactPhones failed: ${error.message}`)
     }
     held.push({ raw: phone.raw, e164: phone.e164 })
+    inserted += 1
     hasPrimary = true
   }
+
+  return inserted
 }
 
 // ---------------------------------------------------------------------------

@@ -105,8 +105,30 @@ describe('the workspace boundary', () => {
   })
 
   it('writes with the workspace id it was given', () => {
-    expect(BRIDGE).toContain('attachContactEmails(workspaceId, contactId, emails')
-    expect(BRIDGE).toContain('attachContactPhones(workspaceId, contactId, phones')
+    /*
+     * Whitespace-insensitive: the assertion is about the ARGUMENT ORDER, which
+     * is the tenant-scoping guarantee, not about the call fitting on one line.
+     * Matching the literal single-line text made a reformat look like a
+     * scoping regression.
+     */
+    const call = (fn: string) =>
+      new RegExp(`${fn}\\(\\s*workspaceId,\\s*contactId,\\s*${fn.includes('Emails') ? 'emails' : 'phones'}`)
+
+    expect(BRIDGE).toMatch(call('attachContactEmails'))
+    expect(BRIDGE).toMatch(call('attachContactPhones'))
+  })
+
+  it('counts rows inserted, not rows offered', () => {
+    /*
+     * Attaching is idempotent, so `emails.length` is the same number on every
+     * tick forever. This job reported "+12 emails, +7 phones" every run for two
+     * days while the tables did not grow by one row — a readout that cannot
+     * change is indistinguishable from one nobody computed.
+     */
+    expect(BRIDGE).toMatch(/emailsAdded \+= await attachContactEmails/)
+    expect(BRIDGE).toMatch(/phonesAdded \+= await attachContactPhones/)
+    expect(BRIDGE).not.toContain('emailsAdded += emails.length')
+    expect(BRIDGE).not.toContain('phonesAdded += phones.length')
   })
 })
 

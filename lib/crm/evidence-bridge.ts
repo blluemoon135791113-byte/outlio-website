@@ -237,13 +237,28 @@ export async function syncContactEvidenceToCrm(
   for (const [contactId, emails] of emailsFor) {
     // `lead_engine` because that is where the research runs. The enum has no
     // `enrichment` member and inventing one is a migration, not a default.
-    await attachContactEmails(workspaceId, contactId, emails, 'lead_engine')
-    result.emailsAdded += emails.length
+    /*
+     * ⚠️ THE RETURN VALUE, NOT `emails.length`. Attaching is idempotent, so the
+     * offered count is the same on every tick forever — this job reported
+     * "+12 emails, +7 phones" on every run for two days while the tables did
+     * not grow by a single row. A number that never changes is indistinguishable
+     * from a number nobody computed.
+     */
+    result.emailsAdded += await attachContactEmails(
+      workspaceId,
+      contactId,
+      emails,
+      'lead_engine',
+    )
   }
 
   for (const [contactId, phones] of phonesFor) {
-    await attachContactPhones(workspaceId, contactId, phones, 'lead_engine')
-    result.phonesAdded += phones.length
+    result.phonesAdded += await attachContactPhones(
+      workspaceId,
+      contactId,
+      phones,
+      'lead_engine',
+    )
   }
 
   return result
