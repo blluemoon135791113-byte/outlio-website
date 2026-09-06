@@ -383,3 +383,104 @@ describeIf('CRITERION 1 — a reply stops the sequence, an OOO does not', () => 
     expect(salesId).toBeTruthy()
   }, 120_000)
 })
+
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  A REPLY AFTER THE SEQUENCE ENDED BELONGED TO NOBODY.                     ║
+ * ║                                                                           ║
+ * ║  `reply-sync` selected only `active`/`paused` enrollments and used the     ║
+ * ║  one list to answer two different questions: WHO replied, and WHICH        ║
+ * ║  sequences to stop. A reply arriving after the last step went out — the    ║
+ * ║  likeliest moment for a prospect to answer — was attributed to nobody.     ║
+ * ║                                                                           ║
+ * ║  The fix widens attribution to terminal enrollments while leaving stopping ║
+ * ║  untouched. Both halves are asserted here: the second one is what keeps a  ║
+ * ║  finished enrollment from being rewritten as "they replied".              ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describeIf('a reply that arrives after the sequence finished', () => {
+  it('is attributed to the contact, and does not rewrite the finished enrollment', async ({
+    skip,
+  }) => {
+    if (!ready()) return skip()
+
+    const { salesId, broadcastId, email } = await enroll()
+    const db = adminClient()
+
+    const { data: before } = await db
+      .from('email_enrollments')
+      .select('contact_id')
+      .eq('id', salesId)
+      .single()
+    const contactId = before!.contact_id
+
+    /*
+     * Drive both enrollments to terminal states — the two the old lookup
+     * excluded. `completed` is a sequence that ran every step; `stopped` is
+     * the state the only enrollment in production is actually in.
+     */
+    const finishedAt = new Date(Date.now() - 3_600_000).toISOString()
+    await db
+      .from('email_enrollments')
+      .update({ status: 'completed', completed_at: finishedAt })
+      .eq('id', salesId)
+    await db
+      .from('email_enrollments')
+      .update({ status: 'stopped', stop_reason: 'unsubscribed', stopped_at: finishedAt })
+      .eq('id', broadcastId)
+
+    await deliverInbound({
+      from: email,
+      subject: `Re: Late reply ${RUN}`,
+      text: 'Sorry for the slow response — still interested.',
+    })
+
+    const outcome = await syncMailbox(workspaceId, accountId)
+
+    // The heart of it: not a stranger, and not an orphan.
+    expect(outcome.unmatched).toBe(0)
+    expect(outcome.replies).toBeGreaterThanOrEqual(1)
+
+    const { data: events } = await db
+      .from('email_events')
+      .select('contact_id, enrollment_id')
+      .eq('workspace_id', workspaceId)
+      .eq('email', email)
+      .eq('type', 'replied')
+
+    expect(events!.length).toBe(1)
+    expect(events![0].contact_id).toBe(contactId)
+    expect(events![0].enrollment_id).not.toBeNull()
+
+    /*
+     * ⚠️ THE CONSERVATIVE HALF. A completed enrollment must stay completed:
+     * re-stopping it would overwrite `stop_reason` and `stopped_at` and lose
+     * the fact that every step was actually delivered.
+     */
+    const { data: sales } = await db
+      .from('email_enrollments')
+      .select('status, stop_reason, completed_at')
+      .eq('id', salesId)
+      .single()
+    expect(sales!.status).toBe('completed')
+    expect(sales!.stop_reason).toBeNull()
+    /*
+     * Compared as an INSTANT, not a string. Postgres renders the same moment
+     * as `…25.88+00:00` where JavaScript writes `…25.880Z`, so a string
+     * equality here fails on formatting while the value is untouched.
+     */
+    expect(new Date(sales!.completed_at!).getTime()).toBe(new Date(finishedAt).getTime())
+
+    // Likewise the already-stopped one keeps the reason it stopped for.
+    const { data: broadcast } = await db
+      .from('email_enrollments')
+      .select('status, stop_reason')
+      .eq('id', broadcastId)
+      .single()
+    expect(broadcast!.status).toBe('stopped')
+    expect(broadcast!.stop_reason).toBe('unsubscribed')
+
+    // Nothing was stopped, because there was nothing live to stop.
+    expect(outcome.sequencesStopped).toBe(0)
+  }, 120_000)
+})

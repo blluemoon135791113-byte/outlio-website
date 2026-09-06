@@ -150,21 +150,58 @@ async function processInbound(
   })
 
   /*
-   * Match to live enrollments. A person may be in several sequences; all of
-   * them are relevant, because a reply to one is a reply from that person.
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ ATTRIBUTION AND STOPPING ARE TWO DIFFERENT QUESTIONS.                 ║
+   * ║                                                                           ║
+   * ║  This used to select only `active`/`paused`, and used that one list for   ║
+   * ║  both. So a reply arriving after the sequence finished — the single most  ║
+   * ║  likely moment for a prospect to answer, since the last step just went    ║
+   * ║  out — was attributed to NOBODY: `contact_id` null on the thread, no CRM  ║
+   * ║  timeline entry, and an `email_replied` flow trigger carrying no contact. ║
+   * ║  The message landed in the inbox belonging to no one.                     ║
+   * ║                                                                           ║
+   * ║  Not hypothetical: the only enrollment in production is `stopped`, so     ║
+   * ║  every further reply from that person would have been orphaned.           ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   *
+   * A person may be in several sequences; all of them are relevant, because a
+   * reply to one is a reply from that person.
    */
   const { data: enrollments } = await db
     .from('email_enrollments')
-    .select('id, campaign_id, contact_id, email_campaigns(type)')
+    .select('id, campaign_id, contact_id, status, email_campaigns(type)')
     .eq('workspace_id', workspaceId)
     .eq('to_email', from)
-    .in('status', ['active', 'paused'])
+    .in('status', ['active', 'paused', 'completed', 'stopped'])
 
-  const matched = enrollments ?? []
-  if (matched.length === 0) outcome.unmatched += 1
+  const everMailed = enrollments ?? []
 
-  const contactId = matched[0]?.contact_id ?? null
-  const campaignId = matched[0]?.campaign_id ?? null
+  /*
+   * ⚠️ ONLY THESE MAY BE STOPPED. A `completed` or `stopped` enrollment is
+   * finished, and re-stopping it would rewrite `stop_reason` and
+   * `stopped_at` — turning "this sequence ran to the end" into "they replied",
+   * losing the fact that every step was actually delivered.
+   */
+  const matched = everMailed.filter((e) => e.status === 'active' || e.status === 'paused')
+
+  /*
+   * Unmatched now means "we have never mailed this address", which is what the
+   * word was always meant to convey. Previously a reply from a finished
+   * sequence counted as a stranger.
+   */
+  if (everMailed.length === 0) outcome.unmatched += 1
+
+  /*
+   * ⚠️ A LIVE ENROLLMENT WINS. Where someone is both mid-sequence and has an
+   * older finished one, the reply belongs to the campaign still running — that
+   * is the one whose next step must not go out. The terminal row is only a
+   * fallback, so behaviour is byte-for-byte unchanged whenever a live
+   * enrollment exists.
+   */
+  const attribution = matched[0] ?? everMailed[0] ?? null
+
+  const contactId = attribution?.contact_id ?? null
+  const campaignId = attribution?.campaign_id ?? null
 
   /*
    * ⚠️ STORED BEFORE THE DEDUPE GATE BELOW, and deliberately so. The message
@@ -214,7 +251,9 @@ async function processInbound(
     p_workspace_id: workspaceId,
     p_type: eventType,
     p_email: from,
-    p_enrollment_id: matched[0]?.id ?? null,
+    // The same row the contact and campaign came from, so the event's three
+    // foreign keys always describe one enrollment rather than two.
+    p_enrollment_id: attribution?.id ?? null,
     p_campaign_id: campaignId,
     p_contact_id: contactId,
     p_provider_event_id: reply.providerMessageId,

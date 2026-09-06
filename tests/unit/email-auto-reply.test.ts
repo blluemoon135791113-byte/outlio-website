@@ -268,3 +268,57 @@ describe('the self-send guard is actually wired into reply-sync', () => {
     expect(guard, 'the self-send check runs after the enrollment match').toBeLessThan(match)
   })
 })
+
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  A REPLY AFTER THE SEQUENCE ENDED BELONGED TO NOBODY.                     ║
+ * ║                                                                           ║
+ * ║  `reply-sync` selected only `active`/`paused` enrollments and used that    ║
+ * ║  one list for two unrelated jobs: deciding WHO replied, and deciding WHICH ║
+ * ║  sequences to stop. So a reply arriving after the last step went out — the ║
+ * ║  most likely moment for a prospect to answer — got `contact_id` null on    ║
+ * ║  the thread, no CRM timeline entry, and an `email_replied` flow trigger    ║
+ * ║  carrying no contact.                                                     ║
+ * ║                                                                           ║
+ * ║  Structural, for the same reason as the block above: the behavioural path  ║
+ * ║  lives in `email-reply-sync.test.ts`, which needs GreenMail and is skipped ║
+ * ║  wherever Docker is absent.                                              ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('replies are attributed after a sequence finishes', () => {
+  const source = readFileSync(join(__dirname, '..', '..', 'lib/email/reply-sync.ts'), 'utf8')
+
+  it('looks up terminal enrollments too, not only live ones', () => {
+    expect(
+      /\.in\(\s*'status',\s*\[\s*'active',\s*'paused',\s*'completed',\s*'stopped'\s*\]/.test(source),
+      'reply-sync is back to matching only live enrollments, so a reply arriving ' +
+        'after the sequence completed is attributed to nobody.',
+    ).toBe(true)
+  })
+
+  it('still stops only live enrollments', () => {
+    /*
+     * ⚠️ THE CONSERVATIVE HALF, AND THE ONE THAT MATTERS. Widening the lookup
+     * without narrowing what gets stopped would let a reply re-stop a finished
+     * enrollment — rewriting `stop_reason` and `stopped_at`, turning "this ran
+     * to the end" into "they replied" and losing the fact that every step was
+     * delivered.
+     */
+    expect(source).toMatch(
+      /const matched = everMailed\.filter\(\s*\(e\) => e\.status === 'active' \|\| e\.status === 'paused'\s*\)/,
+    )
+    // The stop loop must iterate the filtered list, never the full one.
+    expect(source).toContain('for (const enrollment of matched)')
+    expect(source).not.toContain('for (const enrollment of everMailed)')
+  })
+
+  it('prefers a live enrollment when the person is in both', () => {
+    // Behaviour must be unchanged whenever a live enrollment exists: the reply
+    // belongs to the campaign still running, whose next step must not go out.
+    expect(source).toContain('const attribution = matched[0] ?? everMailed[0] ?? null')
+  })
+
+  it('counts unmatched only when the address was never mailed', () => {
+    expect(source).toContain('if (everMailed.length === 0) outcome.unmatched += 1')
+  })
+})
