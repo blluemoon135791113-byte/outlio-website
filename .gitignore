@@ -99,3 +99,25 @@ playwright-report/
 .staging-db-url
 .env.staging
 .env.*.local
+
+# Impeccable — installed by `npx impeccable install`, not committed.
+#
+# It writes THREE copies of itself, one per detected harness, each ~14MB and
+# each containing a platform-specific native executable:
+#
+#   .claude/skills/impeccable/scripts/bin/darwin-arm64/impeccable  (Mach-O arm64)
+#
+# That is ~42MB of binary in a source repo, for a machine architecture the
+# Ubuntu CI runners do not have. It is regenerable in seconds with
+# `npx impeccable install`, so it is a tool, not a dependency.
+#
+# ⚠️ THE HOOKS IN .claude/settings.local.json ARE WRITTEN TO TOLERATE THIS.
+# Each is guarded `[ ! -f <binary> ] || <binary> hook`, so on a clone without
+# the binary they no-op instead of failing. Ignoring the payload is safe
+# BECAUSE of that guard — remove the guard and this becomes a broken checkout.
+.claude/skills/impeccable/
+.agents/skills/impeccable/
+.github/skills/impeccable/
+.claude/agents/impeccable-*.md
+.github/agents/
+.github/hooks/
