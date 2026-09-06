@@ -1,0 +1,77 @@
+# The suite, run by something other than memory.
+#
+# WHY THIS EXISTS
+#
+# Until now nothing ran the tests automatically. No CI, no git hook, no
+# pre-commit. 3,047 tests and 21 guards — including every one written to stop a
+# specific defect from returning — fired only when somebody remembered to type
+# `npm test`.
+#
+# That is the same shape as most of the bugs those guards exist to catch: a
+# control that is present, correct, and connected to nothing.
+#
+# ⚠️ THIS DELIBERATELY DOES NOT RUN THE INTEGRATION OR E2E SUITES.
+#
+# `npm run test:integration` needs real Supabase credentials, `test:email`
+# needs Docker for GreenMail, and `test:e2e` needs staging. Putting service-role
+# credentials into CI secrets is a decision with a real blast radius — that key
+# bypasses RLS on every table — and it is the owner's to make, not a default to
+# slip in.
+#
+# Until it is made, three guards remain invisible here, each confirmed by
+# mutation testing and recorded in docs/PROGRESS.md R12:
+#
+#   * enqueueEmail's suppression list      (email-send-worker.test.ts)
+#   * the webhook Outlio-Signature header  (webhook-delivery.test.ts)
+#   * the flows at-most-once claim         (flow-engine.test.ts)
+#
+# A green run here does not mean those are exercised. It means the other 3,047
+# are.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# A second push supersedes the first. Nobody needs the older answer, and the
+# repository is private now, so these minutes are billed.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # ⚠️ PLACEHOLDERS, AND THEY ARE ENOUGH. `next build` was verified to
+    # complete with exactly these values and no .env.local present, which is
+    # why this job needs no secrets at all. If the build ever starts requiring
+    # a real credential, it fails here rather than in production.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Local development runs Node 25; 24 is the LTS line and satisfies
+          # Next 16 (>=20.9) and Vitest 4 (>=20). A divergence between the two
+          # is exactly the kind of thing CI should be the first to notice.
+          node-version: '24'
+          cache: npm
+
+      # `ci`, not `install`: the lockfile decides, and a drifting transitive
+      # dependency should fail rather than be silently resolved.
+      - run: npm ci
+
+      # Ordered cheapest-first so an obvious break reports in seconds rather
+      # than after a four-minute build.
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
