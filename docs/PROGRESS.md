@@ -10368,8 +10368,80 @@ stand-ins for it.
   number. Re-run with `Date.now() < 0`, which is runtime-false but opaque to
   the compiler.
 
+## R13 — the guards now run without being asked
+
+Every guard written in R12 fired only when somebody typed `npm test`. There was
+no CI, no git hook, no pre-commit — `.github/workflows/` held the cron backstop
+and nothing else. Writing more guards while none of them ran automatically
+would have been the least useful thing available.
+
+**`ci.yml`** — every push and PR: `next typegen`, typecheck, lint, 3,052 unit
+tests, build. ~130s, no secrets.
+
+**`integration.yml`** — nightly 03:00 UTC and on demand: the suites `npm test`
+cannot see. ~270s.
+
+### What CI found on its first two runs
+
+1. **A fresh clone could never typecheck.** `next-env.d.ts` is gitignored and
+   is what declares `*.png` through `next/image-types/global`; it also pulls in
+   `.next/types/routes.d.ts`. Both are generated, both existed locally because
+   `next dev` made them months ago. On a clean checkout `tsc --noEmit` cannot
+   resolve a single image import. Fixed with `npx next typegen` before the
+   cheap checks. Nobody had noticed because nobody starts fresh.
+
+2. **`worker-tick.test.ts` asserted a stale job list.** `advance_sequences` was
+   added to `runTick` in this same session — the sequence sender that did not
+   exist while `launchCampaign` claimed "the first emails go out now" — and the
+   EXPECTED_JOBS list beside it was never updated. The unit suite passed
+   throughout, because it does not run the tick. Third instance of that shape
+   in one session, and the first found by something other than a human.
+
+Two more environment leaks surfaced the same way: 7 `email-compliance` tests
+need a signing secret, and `provider-registry` asserted a waterfall containing
+`tavily-funding`, which only appears when TAVILY_API_KEY is set — it had been
+passing on whatever happened to be in one developer's `.env.local`. The first
+is a CI placeholder; the second was fixed in the test, which now sets the key
+it asserts on.
+
+### ⚠️ Integration targets staging, and the job checks it
+
+`tests/setup.integration.ts` prefers `.env.staging` and only falls back to
+production when that file is absent, so the workflow writes staging
+credentials to that path and the PRODUCTION service-role key never has to
+exist in GitHub. The job then greps the file it wrote for the production
+project ref and refuses to run if it finds it — a safety property nothing
+verifies is one that quietly stops being true.
+
+It also skips rather than fails when the secrets are absent, so committing it
+before they existed did not produce a red tick to learn to ignore.
+
+### Compliance moved out of the way of the user
+
+The CAN-SPAM postal address was enforced at LAUNCH, so the first time anyone
+met the requirement was a red error after writing every step of a sequence and
+choosing an audience. It is now a first-run checklist step, gated on the same
+`email.account.manage` permission the save action asserts.
+
+Writing it introduced a second copy of the 10-character threshold. That is the
+duplicated-legal-rule shape removed from `bulkLaunchBlockedBecause` two days
+earlier, so `hasUsablePostalAddress` is now the single definition imported by
+both, with a test driving it and `assertLaunchable` over the same inputs to
+prove they agree.
+
+### Two operational items, done by the owner
+
+- **DMARC** moved from `p=none` to `p=quarantine; pct=25` after Cloudflare
+  reports showed 21 passes and 0 failures over 7 days. Full enforcement in ~2
+  weeks if it stays clean. SPF, DKIM and MX were verified unchanged
+  afterwards — the Cloudflare Email Routing page was one click from replacing
+  all three and breaking both inbound mail and outbound authentication.
+- **`sender_postal_address`** set, so campaigns can launch.
+
 ### Verified
 
-3,047 unit tests across 170 files; 24 email integration tests against real
-SMTP/IMAP; typecheck 0; lint 0 errors; build clean. Scheduler cadence confirmed
-from `worker_runs` timestamps at 300/300/300/299s, not assumed.
+3,052 unit tests across 171 files; 471 integration tests (446 passed, 24
+skipped by design) against real Supabase and real SMTP/IMAP; typecheck 0;
+lint 0 errors; build clean. Scheduler cadence confirmed from `worker_runs`
+timestamps at 300/300/300/299s, not assumed. Both workflows green on
+`actions/checkout@v7` and `actions/setup-node@v7`.
