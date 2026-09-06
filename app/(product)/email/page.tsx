@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 
 import { ConnectMailbox } from '@/components/email/ConnectMailbox'
 import { MailboxCard } from '@/components/email/MailboxCard'
+import { SuppressionList } from '@/components/email/SuppressionList'
+import { listSuppressions } from '@/lib/email/suppressions'
 import { SenderAddress } from '@/components/email/SenderAddress'
 import { listEmailAccounts } from '@/lib/email/accounts'
 import { getDomainHealth } from '@/lib/email/readiness-runner'
@@ -29,6 +31,12 @@ export default async function MailboxesPage() {
   // serialising its result into the RSC payload.
   if (!ctx) return null
   const canConnect = can({ role: ctx.role, modules: ctx.modules }, 'email.account.connect')
+  /*
+   * ⚠️ `manage`, NOT `connect`. Connecting a mailbox is a setter-level act;
+   * deciding who the workspace may never contact again is not. Same gate the
+   * two suppression actions assert server-side.
+   */
+  const canManage = can({ role: ctx.role, modules: ctx.modules }, 'email.account.manage')
 
   const [accounts, domains, { data: workspace }] = await Promise.all([
     listEmailAccounts(ctx.workspace.id),
@@ -74,6 +82,27 @@ export default async function MailboxesPage() {
       </div>
 
       <SenderAddress address={workspace?.sender_postal_address ?? null} />
+
+      {/*
+        ⚠️ THE READ PATH THAT DID NOT EXIST. Suppressions were written on
+        unsubscribe and on hard bounce and enforced at enqueue, and no screen
+        could show them — so a customer asking "did you remove me?" got no
+        answer, and an entry added in error could not be undone without SQL.
+      */}
+      {canManage ? (
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold tracking-[-0.02em] text-ink">
+              Suppressed addresses
+            </h3>
+            <p className="mt-0.5 max-w-xl text-xs leading-relaxed text-muted">
+              Nothing is ever queued to these. Unsubscribes and hard bounces land
+              here on their own; removing one lets you email that address again.
+            </p>
+          </div>
+          <SuppressionList suppressions={await listSuppressions(ctx.workspace.id)} />
+        </section>
+      ) : null}
 
       {accounts.length === 0 ? (
         <div className="clay p-8 text-center">
