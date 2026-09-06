@@ -62,9 +62,9 @@ jobs:
       UNSUBSCRIBE_TOKEN_SECRET: ci-placeholder-not-a-real-secret
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # Local development runs Node 25; 24 is the LTS line and satisfies
           # Next 16 (>=20.9) and Vitest 4 (>=20). A divergence between the two
