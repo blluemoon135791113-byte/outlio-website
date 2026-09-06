@@ -1,167 +1,64 @@
-'use client'
-
 import Link from 'next/link'
 
+import { SingularityHeroScene } from '@/components/ui/singularity-hero-scene'
+
 /**
- * Lead Engine hero.
- *
- * Matches the main outlio.io hero deliberately: paper background with the dotted
- * grid, heavy black uppercase headline with one accent word, muted subtitle,
- * black pill + outlined pill CTAs, and floating product cards at the edges.
- *
- * NOTE ON THE VOLUMETRIC VERSION: an earlier build used a dark 3D spotlight
- * room. It was replaced because volumetric beams are only visible against
- * darkness — the effect physically cannot work on a paper-white background, so
- * it could never sit alongside the main hero's palette. Removing it also drops
- * ~30 MB of three.js dependencies and a 908 KB chunk.
+ * Lead Engine's first impression: product copy laid over the supplied hand and
+ * singularity artwork, animated as a responsive interactive scene.
  */
-
-const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
-
 export function LeadEngineHero() {
   return (
-    /*
-     * Sized so the three cards are ABOVE THE FOLD on a laptop.
-     *
-     * The first build used a 5.2rem headline with 24px section padding and the
-     * cards landed ~200px below the viewport — the before/after contrast is the
-     * whole pitch, so burying it defeated the section. Padding, headline clamp
-     * and inter-block gaps are all tightened to fit within ~800px.
-     */
-    <section className="relative overflow-hidden bg-paper px-4 pb-12 pt-10 sm:pb-16 sm:pt-12">
-      {/* Dotted grid, matching the main hero's texture. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage: 'radial-gradient(circle, rgba(22,21,15,0.09) 1px, transparent 1px)',
-          backgroundSize: '22px 22px',
-        }}
-      />
-      {/* Soft accent bloom, same treatment as the landing page aurora. */}
-      <div
-        aria-hidden
-        className="hero-aurora pointer-events-none absolute inset-0"
-      />
+    <section className="min-h-[100svh] bg-black text-white">
+      <div className="relative min-h-[100svh] w-full">
+        <SingularityHeroScene className="min-h-[100svh]">
+          <div className="mx-auto flex min-h-[100svh] w-full max-w-[1800px] items-start px-6 pb-16 pt-28 sm:px-10 sm:pt-32 md:items-center md:py-20 lg:px-[121px]">
+            <div className="max-w-[35rem]">
+              <p className="font-sans text-[11px] font-semibold uppercase tracking-[0.2em] text-white/72">
+                Lead Engine
+              </p>
 
-      <div className="relative mx-auto max-w-5xl">
-        <div className="text-center">
-          <p
-            className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent"
-            style={{ animation: `fade-in 0.6s ${EASE} both` }}
-          >
-            Outlio · Lead Engine
-          </p>
+              <h1 className="mt-5 text-balance font-heading text-[clamp(2.75rem,5.6vw,5.25rem)] [font-weight:var(--leadengine-heading-weight)] leading-[0.98] tracking-[-0.045em] text-white">
+                Further and Beyond
+              </h1>
 
-          <h1
-            className="mx-auto mt-4 max-w-4xl text-[clamp(2rem,5vw,3.9rem)] font-bold uppercase leading-[0.98] tracking-tight text-ink"
-            style={{ animation: `fade-in 0.7s ${EASE} 0.05s both` }}
-          >
-            Turn Sales Navigator
-            <br />
-            results into a <span className="text-accent">clean CSV.</span>
-          </h1>
+              <p className="mt-7 max-w-[34rem] text-pretty font-body text-[var(--leadengine-copy-size)] font-normal leading-[var(--leadengine-copy-leading)] tracking-[-0.012em] text-white/84">
+                The lead engine channels a database of 1.3 billion people across
+                the globe - in to your systems, enriched with our intelligence
+                and clear of noise.
+              </p>
 
-          <p
-            className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg"
-            style={{ animation: `fade-in 0.7s ${EASE} 0.12s both` }}
-          >
-            Save the results page already open in your browser. Outlio extracts
-            the names, titles, companies and profile links, removes duplicates,
-            and gives you a CSV ready for your workflow.
-          </p>
+              <div className="mt-9 flex flex-wrap items-center gap-3">
+                <Link
+                  href="/sign-up"
+                  className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-6 font-heading text-sm font-semibold text-black transition-[transform,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/90 active:scale-[0.97]"
+                >
+                  Start free trial
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="size-4"
+                  >
+                    <path d="M7 17 17 7" />
+                    <path d="M8 7h9v9" />
+                  </svg>
+                </Link>
 
-          <div
-            className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row"
-            style={{ animation: `fade-in 0.7s ${EASE} 0.18s both` }}
-          >
-            <Link
-              href="/sign-up"
-              className="rounded-full bg-ink px-7 py-3.5 text-base font-semibold text-cream transition-colors duration-150 hover:bg-accent"
-            >
-              Convert your first list free
-            </Link>
-            <Link
-              href="#how-it-works"
-              className="rounded-full border border-ink px-7 py-3.5 text-base font-semibold text-ink transition-colors duration-150 hover:bg-cream"
-            >
-              See how it works
-            </Link>
+                <Link
+                  href="/how-it-works"
+                  className="inline-flex h-12 items-center rounded-full border border-white/25 px-6 font-heading text-sm font-medium text-white/85 transition-[transform,border-color,color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:border-white/50 hover:text-white active:scale-[0.97]"
+                >
+                  See how it works
+                </Link>
+              </div>
+            </div>
           </div>
-
-          <p
-            className="mt-4 text-sm text-muted"
-            style={{ animation: `fade-in 0.7s ${EASE} 0.24s both` }}
-          >
-            3-day free trial · 10 credits · No card required
-          </p>
-        </div>
-
-        {/* Floating product cards, echoing the main hero's pinboard treatment. */}
-        <div className="pointer-events-none mt-10 grid gap-4 sm:grid-cols-3">
-          <FloatCard delay="0.28s" tilt="-1.2deg">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-              Before
-            </p>
-            <p className="mt-2 text-sm leading-relaxed text-ink">
-              Copy each name, title and company into a spreadsheet. Discover the
-              duplicates only after outreach starts.
-            </p>
-          </FloatCard>
-
-          <FloatCard delay="0.34s" tilt="0.6deg" accent>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">
-              After
-            </p>
-            <p className="mt-2 text-sm leading-relaxed text-ink">
-              <span className="font-semibold">Cmd+S</span> on the results page.
-              Upload the saved file. Download a clean CSV.
-            </p>
-            <p className="mt-3 text-2xl font-black tracking-tight text-ink">
-              Ready in seconds
-            </p>
-          </FloatCard>
-
-          <FloatCard delay="0.4s" tilt="1.1deg">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-              Every row
-            </p>
-            <ul className="mt-2 space-y-1 text-sm text-ink">
-              <li>Name · Profile link</li>
-              <li>Title · Company</li>
-              <li>Location · Tenure</li>
-            </ul>
-          </FloatCard>
-        </div>
+        </SingularityHeroScene>
       </div>
     </section>
-  )
-}
-
-function FloatCard({
-  children,
-  delay,
-  tilt,
-  accent = false,
-}: {
-  children: React.ReactNode
-  delay: string
-  tilt: string
-  accent?: boolean
-}) {
-  return (
-    <div
-      className={
-        accent
-          ? 'rounded-[var(--radius-lg)] border-2 border-accent bg-panel p-5 shadow-[var(--shadow-md)]'
-          : 'rounded-[var(--radius-lg)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]'
-      }
-      style={{
-        transform: `rotate(${tilt})`,
-        animation: `fade-in 0.7s ${EASE} ${delay} both`,
-      }}
-    >
-      {children}
-    </div>
   )
 }

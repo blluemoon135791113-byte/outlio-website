@@ -16,7 +16,7 @@ export default async function MfaPage({ searchParams }: { searchParams: Promise<
   const next = safeRedirectPath((await searchParams).next)
   if (assurance?.currentLevel === 'aal2') redirect(next)
   if (assurance?.nextLevel !== 'aal2') {
-    redirect('/dashboard/settings?required_mfa=1#security')
+    redirect('/dashboard/settings/security?required_mfa=1')
   }
 
   return <AuthShell title="Verify it’s you" subtitle="Enter the code from your authenticator app to finish signing in."><MfaChallengeForm next={next} /></AuthShell>

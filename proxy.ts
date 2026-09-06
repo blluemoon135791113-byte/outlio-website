@@ -30,12 +30,16 @@ import {
   SESSION_ABSOLUTE_SECONDS,
   SESSION_GUARD_COOKIE,
 } from '@/lib/auth/session-guard'
+import { isAppHost } from '@/lib/site'
 
-const PROTECTED_PREFIXES = ['/dashboard', '/admin']
+/*
+ * `/join` is protected so the proxy redirects with `?next=/join/<token>`,
+ * carrying the invitee back to the invitation after they sign in. Letting the
+ * page redirect instead would drop the token and strand them on the dashboard.
+ */
+const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/join', '/crm', '/email', '/flows']
 
 /**
- * The product subdomain. `app.outlio.io/` serves the dashboard.
- *
  * ⚠️ AUTH COOKIES ARE PER-HOST, DELIBERATELY.
  *
  * Supabase sets the session cookie for the host that issued it, so a session
@@ -43,15 +47,75 @@ const PROTECTED_PREFIXES = ['/dashboard', '/admin']
  * arrangement: widening the cookie to `.outlio.io` would send session tokens to
  * the marketing site and every future subdomain along with it.
  *
- * The consequence is that users sign in ON the app subdomain. `/leadengine`
- * links to `/sign-up`, which resolves on whichever host they are already on.
+ * The consequence is that users sign in ON the app subdomain. The Lead Engine
+ * surface links to `/sign-up`, which resolves on whichever host they are on.
  */
-const APP_HOST = process.env.NEXT_PUBLIC_APP_HOST ?? 'app.outlio.io'
 
-/** Paths the app subdomain serves. Everything else there redirects to the app. */
+/**
+ * `app.outlio.io` IS the Lead Engine product, and its supporting pages sit
+ * directly beneath it. Two of those paths — `/` and `/terms` — are already
+ * taken on this deployment by the agency site, which cannot be moved. The
+ * proxy therefore serves them from internal-only routes.
+ *
+ * ⚠️ These are REWRITES, not redirects. The address bar keeps the public URL.
+ * A direct request for an internal path is 308'd to the public one below, so
+ * `/app-home` and `/app-terms` never appear in a link, a sitemap or a crawl.
+ */
+const APP_HOST_REWRITES: Record<string, string> = {
+  '/': '/app-home',
+  '/terms': '/app-terms',
+}
+
+/** Reverse of APP_HOST_REWRITES: internal path → the URL visitors should use. */
+const INTERNAL_PATHS: Record<string, string> = Object.fromEntries(
+  Object.entries(APP_HOST_REWRITES).map(([publicPath, internal]) => [internal, publicPath]),
+)
+
+/**
+ * Marks the server-side request created by one of the rewrites above.
+ *
+ * Next 16 runs Proxy again for the rewrite destination. Without this marker,
+ * that second pass looks exactly like a visitor requesting `/app-home` and the
+ * canonical redirect below sends it back to `/`, creating an infinite loop.
+ * This header is forwarded only to the rewritten route; it is not emitted as a
+ * response header or added to the visitor-facing URL.
+ */
+const INTERNAL_REWRITE_HEADER = 'x-outlio-internal-rewrite'
+
+/**
+ * The complete surface of the software domain.
+ *
+ * ⚠️ ANYTHING ELSE ON THIS HOST IS A 404, NOT A REDIRECT TO outlio.io.
+ *
+ * Bouncing a visitor from app.outlio.io to the agency domain is exactly what a
+ * card-payment reviewer must never see — the software domain has to stand on
+ * its own. Keeping agency marketing off it still matters, so unknown paths are
+ * refused rather than forwarded.
+ */
 const APP_SUBDOMAIN_PATHS = [
+  '/',
+  '/pricing',
+  '/how-it-works',
+  '/product',
+  '/terms',
+  '/privacy-policy',
+  '/refund-policy',
   '/dashboard',
   '/admin',
+  '/welcome',
+  // Workspace invitation links. Omitting this would 404 every invitation on
+  // the software domain, which is the only host they are ever issued for.
+  '/join',
+  '/crm',
+  /*
+   * ⚠️ EVERY PRODUCT SURFACE MUST BE LISTED HERE OR IT 404s ON THIS HOST.
+   * `/email` and `/flows` shipped in M5-M7 and were never added, so the whole
+   * Email and Flows product was unreachable in production while every test,
+   * typecheck and build passed -- none of them go through the edge guard.
+   */
+  '/email',
+  '/flows',
+  '/extension',
   '/sign-in',
   '/sign-up',
   '/verify-email',
@@ -65,6 +129,10 @@ const APP_SUBDOMAIN_PATHS = [
 export async function proxy(request: NextRequest) {
   const host = request.headers.get('host')?.split(':')[0]?.toLowerCase() ?? ''
   const { pathname: rawPath } = request.nextUrl
+  const isInternalRewrite = request.headers.get(INTERNAL_REWRITE_HEADER) === '1'
+  const shouldClearRedirectCache =
+    process.env.NODE_ENV === 'development' &&
+    request.nextUrl.searchParams.has('__clear_redirect_cache')
 
   let trialDeviceCookie: string | null = null
   if (rawPath === '/sign-up') {
@@ -80,6 +148,21 @@ export async function proxy(request: NextRequest) {
   }
 
   const finish = (result: NextResponse): NextResponse => {
+    // Preserve content negotiation without a second deprecated middleware
+    // file. One Next 16 Proxy is the only supported project-level boundary.
+    result.headers.set('Vary', 'Accept, Accept-Encoding')
+
+    // A Proxy bug must not leave localhost permanently unusable after it is
+    // fixed. Chrome caches 308 responses aggressively, including the old
+    // self-redirect that caused this incident. Keep canonical redirects
+    // permanent in production, but make every development response explicitly
+    // non-cacheable so a normal refresh always reaches the current dev server.
+    if (process.env.NODE_ENV === 'development') {
+      result.headers.set('Cache-Control', 'no-store, max-age=0')
+    }
+    if (shouldClearRedirectCache) {
+      result.headers.set('Clear-Site-Data', '"cache"')
+    }
     if (!trialDeviceCookie) return result
     result.cookies.set({
       name: TRIAL_DEVICE_COOKIE,
@@ -96,27 +179,68 @@ export async function proxy(request: NextRequest) {
     return result
   }
 
-  if (host === APP_HOST) {
-    // Bare subdomain root goes straight to the product.
-    if (rawPath === '/') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
+  const isAsset = rawPath.startsWith('/_next') || rawPath.includes('.')
+
+  /*
+   * The internal rewrite targets are never a public address. Anyone who types
+   * one — on either host — is sent to the URL it is served under, permanently,
+   * so search engines and crawlers only ever record the clean path.
+   */
+  const publicPathForInternal = INTERNAL_PATHS[rawPath]
+  if (publicPathForInternal && !isInternalRewrite) {
+    const url = request.nextUrl.clone()
+    url.pathname = publicPathForInternal
+    return finish(
+      NextResponse.redirect(url, process.env.NODE_ENV === 'development' ? 307 : 308),
+    )
+  }
+
+  /** Set when the app host serves a public path from an internal route. */
+  let rewriteTo: URL | null = null
+
+  if (isAppHost(host)) {
+    if (rawPath === '/privacy') {
+      const privacy = request.nextUrl.clone()
+      privacy.pathname = '/privacy-policy'
+      return finish(NextResponse.redirect(privacy, 308))
     }
 
-    // Marketing routes do not belong on the app host — send them to the
-    // canonical site rather than serving duplicate content on two domains.
-    const isAppPath = APP_SUBDOMAIN_PATHS.some(
-      (p) => rawPath === p || rawPath.startsWith(`${p}/`),
-    )
-    const isAsset = rawPath.startsWith('/_next') || rawPath.includes('.')
+    // The bare app domain IS the software storefront. It explains the product,
+    // pricing and legal terms before asking anyone to sign in.
+    const internal = APP_HOST_REWRITES[rawPath]
+    if (internal) {
+      rewriteTo = request.nextUrl.clone()
+      rewriteTo.pathname = internal
+    } else {
+      // '/' must match exactly; as a prefix it would swallow every path.
+      const isAppPath = APP_SUBDOMAIN_PATHS.some(
+        (p) => rawPath === p || (p !== '/' && rawPath.startsWith(`${p}/`)),
+      )
 
-    if (!isAppPath && !isAsset) {
-      return NextResponse.redirect(new URL(rawPath, 'https://outlio.io'))
+      // Agency marketing does not belong on the software domain. Refuse it
+      // here rather than forwarding to outlio.io — see APP_SUBDOMAIN_PATHS.
+      if (!isAppPath && !isAsset) {
+        rewriteTo = request.nextUrl.clone()
+        rewriteTo.pathname = '/not-found'
+      }
     }
   }
 
-  let response = NextResponse.next({ request })
+  /*
+   * Every response below must carry the pending rewrite. Building it in one
+   * place is what keeps the session-refresh path from silently dropping it and
+   * serving the agency homepage on app.outlio.io.
+   */
+  const baseResponse = () =>
+    rewriteTo
+      ? (() => {
+          const headers = new Headers(request.headers)
+          headers.set(INTERNAL_REWRITE_HEADER, '1')
+          return NextResponse.rewrite(rewriteTo, { request: { headers } })
+        })()
+      : NextResponse.next({ request })
+
+  let response = baseResponse()
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
@@ -138,7 +262,7 @@ export async function proxy(request: NextRequest) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value)
         }
-        response = NextResponse.next({ request })
+        response = baseResponse()
         for (const { name, value, options } of cookiesToSet) {
           response.cookies.set(name, value, options)
         }
@@ -183,7 +307,7 @@ export async function proxy(request: NextRequest) {
 
     const refreshedGuard = createSessionGuard(
       Math.floor(Date.now() / 1000),
-      guard?.issuedAt,
+      guard ?? undefined,
     )
     if (refreshedGuard) {
       response.cookies.set({

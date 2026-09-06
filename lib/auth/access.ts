@@ -12,6 +12,7 @@ import 'server-only'
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 import { redirect } from 'next/navigation'
+import { cache } from 'react'
 
 import {
   NEEDS_LIMITS,
@@ -66,7 +67,7 @@ const UNAUTHENTICATED: AccessContext = {
  * `canUseScraper: false` and a specific `reason`. Callers that need to block
  * should use `requireAccess` / `requireAdmin`.
  */
-export async function getAccessContext(): Promise<AccessContext> {
+export const getAccessContext = cache(async function getAccessContext(): Promise<AccessContext> {
   const supabase = await createClient()
 
   const {
@@ -76,18 +77,43 @@ export async function getAccessContext(): Promise<AccessContext> {
   if (!user) return UNAUTHENTICATED
 
   const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-  const mfaCurrentLevel = assurance?.currentLevel ?? null
-  const mfaNextLevel = assurance?.nextLevel ?? null
 
-  // Supabase marks this when the verification link is followed.
-  const emailVerified = Boolean(user.email_confirmed_at)
+  return resolveAccessFor({
+    userId: user.id,
+    email: user.email ?? null,
+    emailVerified: Boolean(user.email_confirmed_at),
+    mfaCurrentLevel: assurance?.currentLevel ?? null,
+    mfaNextLevel: assurance?.nextLevel ?? null,
+  })
+})
+
+/**
+ * The identity-agnostic half of the access decision.
+ *
+ * Split out so a caller that authenticated by something OTHER than a session
+ * cookie — currently the browser extension's bearer token — reaches the exact
+ * same verdict through the exact same code. Duplicating this logic for a
+ * second transport is how the two drift apart and one of them gets it wrong.
+ *
+ * ⚠️ `userId` must come from a VERIFIED credential. Never from a request body.
+ */
+export async function resolveAccessFor(identity: {
+  userId: string
+  email: string | null
+  emailVerified: boolean
+  mfaCurrentLevel?: string | null
+  mfaNextLevel?: string | null
+}): Promise<AccessContext> {
+  const { userId, email, emailVerified } = identity
+  const mfaCurrentLevel = identity.mfaCurrentLevel ?? null
+  const mfaNextLevel = identity.mfaNextLevel ?? null
 
   // Service role: RLS is bypassed, so scoping by id here is mandatory.
   const admin = createAdminClient()
   const { data: profileRow, error } = await admin
     .from('profiles')
     .select('*')
-    .eq('id', user.id)
+    .eq('id', userId)
     .maybeSingle()
 
   if (error) {
@@ -99,8 +125,8 @@ export async function getAccessContext(): Promise<AccessContext> {
   if (!profile || profile.deleted_at) {
     return {
       ...UNAUTHENTICATED,
-      userId: user.id,
-      email: user.email ?? null,
+      userId,
+      email,
       mfaCurrentLevel,
       mfaNextLevel,
     }
@@ -112,8 +138,8 @@ export async function getAccessContext(): Promise<AccessContext> {
     plan: Plan | null,
     usage: UsageSnapshot | null,
   ): Omit<AccessContext, 'canUseScraper' | 'reason'> => ({
-    userId: user.id,
-    email: user.email ?? null,
+    userId,
+    email,
     role: profile.role,
     isAdmin,
     plan,
@@ -137,7 +163,7 @@ export async function getAccessContext(): Promise<AccessContext> {
   }
 
   const plan = profile.plan_id ? await getPlanById(profile.plan_id) : null
-  const usage = await getUsageSnapshot(user.id)
+  const usage = await getUsageSnapshot(userId)
 
   return { ...base(plan, usage), ...decideLimits(plan?.limits ?? null, usage) }
 }
@@ -197,6 +223,34 @@ export async function requireUser(): Promise<AccessContext> {
   return ctx
 }
 
+async function hasHubbleEntitlement(ctx: AccessContext): Promise<boolean> {
+  if (ctx.isAdmin || ctx.plan?.key === 'custom') return true
+  if (!ctx.userId) return false
+
+  // A Pro + Hubble trial intentionally uses the generic 10-credit trial plan,
+  // so the originating FastSpring tier remains the source for feature access.
+  // `active` is the access flag — a canceled subscription is still paid through
+  // its current period. See `fastSpringSubscriptionGrantsAccess`.
+  const { data, error } = await createAdminClient()
+    .from('fastspring_subscriptions')
+    .select('subscription_id')
+    .eq('user_id', ctx.userId)
+    .eq('plan_key', 'custom')
+    .eq('active', true)
+    .in('state', ['active', 'trial', 'canceled'])
+    .limit(1)
+
+  if (error) throw new Error(`Hubble entitlement lookup failed: ${error.message}`)
+  return Boolean(data?.length)
+}
+
+/** Page guard for the Pro + Hubble feature boundary. */
+export async function requireHubbleAccess(): Promise<AccessContext> {
+  const ctx = await requireAccess()
+  if (await hasHubbleEntitlement(ctx)) return ctx
+  redirect('/pricing?upgrade=hubble')
+}
+
 /** For admin pages. Admin status comes from `profiles.role`, never a claim. */
 export async function requireAdmin(): Promise<AccessContext> {
   const ctx = await getAccessContext()
@@ -225,6 +279,13 @@ export async function assertUser(): Promise<AccessContext> {
     throw new AppError('ERR_FORBIDDEN', 'Action requires an AAL2 session')
   }
   return ctx
+}
+
+/** Route/action guard for the Pro + Hubble feature boundary. */
+export async function assertHubbleAccess(): Promise<AccessContext> {
+  const ctx = await assertAccess()
+  if (await hasHubbleEntitlement(ctx)) return ctx
+  throw new AppError('ERR_FORBIDDEN', 'Hubble is available on the Pro + Hubble plan')
 }
 
 export async function assertAdmin(): Promise<AccessContext> {

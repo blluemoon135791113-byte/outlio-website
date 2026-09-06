@@ -19,13 +19,15 @@ export default function ServiceWordCycle() {
     return () => window.clearInterval(timer);
   }, []);
 
+  /*
+   * Width is reserved by `.service-word-slot::before` in globals.css, NOT by a
+   * hidden span. A hidden span keeps its text in the DOM, so it is copied,
+   * crawled and shown in search snippets — the same defect that had the hero
+   * reading "tech startups.tech startups.". Only one word may exist here.
+   */
   return (
-    <span className="relative inline-block whitespace-nowrap text-left align-baseline">
-      {/* width reserved by the longest word so the loop never causes layout shift */}
-      <span aria-hidden className="invisible">
-        OUTBOUND.
-      </span>
-      <span key={index} className="absolute inset-y-0 left-0 text-accent hero-word-fade">
+    <span className="service-word-slot whitespace-nowrap text-left">
+      <span key={index} className="text-accent hero-word-fade">
         {WORDS[index]}.
       </span>
     </span>

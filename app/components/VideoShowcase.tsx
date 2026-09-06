@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 
 interface Video {
   id: string;
@@ -14,12 +13,6 @@ interface VideoShowcaseProps {
 }
 
 export default function VideoShowcase({ videos }: VideoShowcaseProps) {
-  const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
-
-  const handlePlay = (id: string) => {
-    setPlayingVideos((prev) => new Set(prev).add(id));
-  };
-
   const portraitVideos = videos.filter((v) => v.aspectRatio === "portrait");
   const landscapeVideos = videos.filter((v) => v.aspectRatio === "landscape");
 
@@ -68,7 +61,7 @@ export default function VideoShowcase({ videos }: VideoShowcaseProps) {
 
       {/* Right side - Portrait videos in grid */}
       <div className="grid grid-cols-3 gap-4">
-        {portraitVideos.map((video, index) => (
+        {portraitVideos.map((video) => (
           <div key={video.id} className="group relative">
             {/* Label badge */}
             <div className="absolute -top-3 left-2 z-20 pointer-events-none">

@@ -1,6 +1,16 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 
+import { CompanyBackfill } from '@/components/admin/CompanyBackfill'
+import { RunWorkers } from '@/components/admin/RunWorkers'
+import { SchedulerInternals } from '@/components/admin/SchedulerInternals'
+import { SchedulerStatus } from '@/components/admin/SchedulerStatus'
 import { UserRow, type AdminUser } from '@/components/admin/UserRow'
+import {
+  EMPTY_DIAGNOSTICS,
+  parseSchedulerDiagnostics,
+} from '@/lib/admin/scheduler-diagnostics'
+import { schedulerHealth } from '@/lib/admin/scheduler-health'
 import { requireAdmin } from '@/lib/auth/access'
 import { listActivePlans } from '@/lib/limits/plans'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -18,7 +28,8 @@ export default async function AdminPage() {
   const ctx = await requireAdmin()
   const supabase = createAdminClient()
 
-  const [{ data: profiles }, { data: requests }, { data: audit }, plans] = await Promise.all([
+  const [{ data: profiles }, { data: requests }, { data: audit }, plans, { data: lastRun }] =
+    await Promise.all([
     supabase
       .from('profiles')
       .select(
@@ -36,8 +47,45 @@ export default async function AdminPage() {
       .select('id, action, reason, created_at')
       .order('created_at', { ascending: false })
       .limit(15),
-    listActivePlans(),
-  ])
+      listActivePlans(),
+      /*
+       * The scheduler heartbeat. `maybeSingle` because an empty table is the
+       * expected state before the first tick, not an error — and it is exactly
+       * the state the panel needs to report.
+       */
+      supabase
+        .from('worker_runs')
+        .select('started_at, jobs, ok')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ])
+
+  const health = schedulerHealth(lastRun?.started_at ?? null)
+
+  /*
+   * ⚠️ FAILURE HERE MUST NOT TAKE THE PAGE DOWN. This is the panel somebody
+   * opens when the scheduler is already broken; if a missing function or a
+   * permission change made it throw, it would remove the only screen that can
+   * diagnose the problem, at the exact moment it is needed.
+   */
+  const { data: rawDiagnostics } = await supabase.rpc('scheduler_diagnostics')
+  const diagnostics = rawDiagnostics
+    ? parseSchedulerDiagnostics(rawDiagnostics)
+    : EMPTY_DIAGNOSTICS
+
+  /*
+   * TickResult's `jobs` is a Record<string, {ok, detail}>, but it arrives from
+   * Postgres as unvalidated `Json`. Narrowed defensively rather than cast: a
+   * malformed row must not take out the admin page that exists to diagnose it.
+   */
+  const lastJobs = Object.entries(
+    (lastRun?.jobs ?? {}) as Record<string, { ok?: unknown; detail?: unknown }>,
+  ).map(([name, value]) => ({
+    name,
+    ok: value?.ok !== false,
+    detail: typeof value?.detail === 'string' ? value.detail : '',
+  }))
 
   const planNames = new Map(plans.map((p) => [p.id, p.name]))
   const pendingByUser = new Map(
@@ -127,6 +175,50 @@ export default async function AdminPage() {
       </section>
 
       <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Maintenance</h2>
+        <p className="text-sm text-muted">
+          Resolve leads to companies so company-level research runs once per
+          company instead of once per lead. Safe to run repeatedly — leads that
+          already have a company are skipped.
+        </p>
+        <CompanyBackfill />
+      </section>
+
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Browser extension</h2>
+        <p className="text-sm text-muted">
+          Turn extension access on or off per account, and disconnect a browser
+          that has been lost or shared. On its own page because loading device
+          history for every account here would be hundreds of queries to answer a
+          question about a handful of people.
+        </p>
+        <Link
+          href="/admin/extension"
+          className="inline-flex w-fit rounded-[var(--radius-md)] border border-border px-3 py-1.5 text-sm font-medium text-ink transition-colors duration-150 hover:border-border-strong"
+        >
+          Manage extension access
+        </Link>
+      </section>
+
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Background workers</h2>
+        <SchedulerStatus health={health} lastJobs={lastJobs} />
+
+        <SchedulerInternals diagnostics={diagnostics} />
+
+        <hr className="border-border" />
+
+        <p className="text-sm text-muted">
+          Runs the same pass the scheduled job runs every five minutes — due
+          email, reply sync, flows, webhooks and the evidence bridge. It changes
+          no schedule: a message that is not yet due stays queued, and send
+          windows, sending days and ramp limits are enforced where they always
+          were.
+        </p>
+        <RunWorkers />
+      </section>
+
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
         <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Recent activity</h2>
         <p className="text-sm text-muted">
           Audit log entries are append-only and cannot be edited or deleted.
@@ -161,7 +253,7 @@ export default async function AdminPage() {
 function AdminMetric({ label, value, featured = false }: { label: string; value: number; featured?: boolean }) {
   return (
     <article className={featured ? 'rounded-[var(--radius-lg)] border border-accent bg-accent p-4 text-white shadow-[var(--shadow-md)]' : 'rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)]'}>
-      <p className={featured ? 'text-xs font-medium text-white/75' : 'text-xs font-medium text-muted'}>{label}</p>
+      <p className={featured ? 'text-xs font-medium text-white/84' : 'text-xs font-medium text-muted'}>{label}</p>
       <p className="mt-3 font-heading text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums">
         {value.toLocaleString()}
       </p>

@@ -10,16 +10,81 @@
   --panel: #ffffff;
   --app: #faf9ff;
   --surface-muted: #f5f2fb;
-  --cream: #f2eee3;
+  /* ── The logo pair ────────────────────────────────────────────────────────
+     The mark is two colours and nothing else: an ivory disc on a jet field.
+     Both existed in the CSS only by accident — ivory as `--cream`, jet not at
+     all — so the product sat on pure white next to a logo that never uses it.
+     Named here so the brand's own neutrals are the ones the UI reaches for. */
+  --jet: #262625;
+  --ivory: #f2eee3;
+
+  /* ⚠️ TRUE BLACK, AND DELIBERATELY NOT `--jet`.
+     Jet is the brand's darkest NEUTRAL and reads as a warm near-black beside
+     ivory. The Lead Engine hero sits on starfield artwork whose background is
+     actual black, so jet behind it shows as a grey plate around the image
+     while it loads and wherever a scrim thins out. This token exists for
+     surfaces that must disappear into dark imagery — nothing else. */
+  --void: #000000;
+
+  /* Its counterpart. `--ivory` is the brand's warm off-white and is right on
+     paper; against a black frame it reads as beige. A plate that has to look
+     WHITE on artwork needs actual white, and it needs to be a token so the
+     next one does not arrive as a literal. */
+  --pure: #ffffff;
+
+  /* ⚠️ FOCUS IS ITS OWN TOKEN, AND IT IS NOT THE ACCENT.
+     The ring used `--accent`, so making the accent coral turned every focused
+     control orange — a brand colour doing a job that is not branding. Focus
+     means "the keyboard is here"; it should read as system chrome, not as an
+     action. Jet on cream is about 14:1, so this is MORE visible than the coral
+     it replaces. The ring is never removed — only recoloured. */
+  --focus: var(--jet);
+
+  --cream: var(--ivory);
   --ink: #171715;
-  --muted: #696962;
-  --accent: #7c5ce7;
-  --accent-deep: #6548c5;
-  --accent-soft: #f0ebff;
+  /* Supporting copy needs to stay visibly secondary without becoming faint.
+     This warm graphite keeps the hierarchy while remaining readable at the
+     small sizes used across marketing, pricing, and product surfaces. */
+  --muted: #565650;
+  /* ── Brand palette ────────────────────────────────────────────────────────
+     The four colours the product is actually designed in. They existed only as
+     rgb triples inside the Hubble block, where three of them were unreachable
+     from the rest of the app and Dusty Lilac had no token at all.
+
+     ⚠️ `--coral-deep` EXISTS BECAUSE THE BRAND CORAL IS NOT AA ON CREAM.
+     #D95A3B measures about 3.6:1 — correct for buttons, borders and large
+     type, and BELOW AA for body text. Prose links must use the deep variant.
+     Shipping the brand hex everywhere is the obvious way this palette breaks
+     accessibility, so the two are separated at the token. */
+  --coral: #d95a3b;
+  --coral-deep: #a83d22;
+  --coral-soft: #fbeae4;
+  --sage: #778f84;
+  --sage-deep: #4f6459;
+  --sage-soft: #e7edea;
+  --lilac: #e4c3e0;
+  --lilac-soft: #f7ecf5;
+  --charcoal: #363938;
+
+  /* Action. Was #7c5ce7, a violet that is not in the palette.
+     ⚠️ POINTS AT THE DEEP VARIANT, NOT THE BRAND HEX. `--accent` is consumed
+     as `text-accent` for prose links in dozens of files, and measured on this
+     background the raw brand coral is 3.8:1 — below AA — while the deep
+     variant is 6.3:1. The vivid #D95A3B stays available as `bg-coral` for
+     buttons, bars and chips, where it sits under white text or beside an icon
+     rather than under body copy. */
+  --accent: var(--coral-deep);
+  --accent-deep: #8d3119;
+  --accent-soft: var(--coral-soft);
 
   /* GRADIENT SYSTEM — clean white background */
-  /* deep, minimal band: near-ink indigo easing into the vivid accent at the far edge */
-  --grad-band: linear-gradient(140deg, #34265f 0%, #5e42ad 48%, #8c6bea 92%, #b9a6ff 120%);
+  /* ⚠️ THE ONLY GRADIENT IN THE SYSTEM, AND IT IS ONE CONTRAST.
+     Every gradient here used to be violet — #34265f through #b9a6ff — a hue
+     the brand does not contain. A gradient is now reserved for exactly one
+     thing: sage green meeting burnt coral. Everywhere else, colour is flat,
+     because a surface that carries data should be one colour and a gradient
+     should mean something. */
+  --grad-band: linear-gradient(140deg, var(--sage-deep) 0%, var(--sage) 38%, var(--coral) 82%, var(--coral-deep) 110%);
   --grad-halo: transparent;
   --grad-glass: linear-gradient(
     160deg,
@@ -32,8 +97,11 @@
     rgba(255, 255, 255, 0.35) 100%
   );
 
-  --font-display: var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
-  --font-body: var(--font-dm-sans), "Helvetica Neue", Arial, sans-serif;
+  /* Use Apple's native SF Pro optical cuts where the OS provides them.
+     The bundled font files may not be redistributed on the web, so Geist and
+     DM Sans remain the metrically stable fallbacks for other platforms. */
+  --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-body: "SF Pro Text", -apple-system, BlinkMacSystemFont, var(--font-dm-sans), "Helvetica Neue", Arial, sans-serif;
   --font-code: var(--font-geist-mono), ui-monospace, monospace;
   --font-handwriting: var(--font-caveat), "Comic Sans MS", cursive;
 
@@ -60,17 +128,104 @@
 
   /* Status colors — required for job states (completed / partially_completed /
      failed) and validation feedback. The landing page has no status palette. */
-  --success: #16794a;
-  --success-soft: #e6f4ed;
+  /* Sage carries "good". `--success` text uses the deep variant so it stays
+     readable at body size; the raw brand sage is a surface colour. */
+  --success: var(--sage-deep);
+  --success-soft: var(--sage-soft);
   --warning: #8a5a00;
   --warning-soft: #fdf3e0;
   --danger: #b3261e;
   --danger-soft: #fdecea;
-  --info: #1f5fa8;
-  --info-soft: #e8f1fb;
+  /* ⚠️ INFO IS LILAC, NOT A GENERIC BLUE.
+     `#1f5fa8` belonged to no palette and was the last unbranded status colour.
+     Dusty Lilac is the palette's informational register: present enough to
+     mark a notice, quiet enough not to read as an error. The deep variant
+     carries the text, because the brand lilac on cream is nowhere near AA. */
+  --lilac-deep: #6d4a68;
+  --info: var(--lilac-deep);
+  --info-soft: var(--lilac-soft);
+
+  /* Hubble is cream and jet. Repeated surfaces share the canvas instead of
+     becoming bright cards; only the prompt gets the fuller clay treatment. */
+  --clay-bg: #fffaf0;
+  --clay-surface: #fff8ea;
+  --clay-raised: #fffaf2;
+  --clay-sunken: #f4eadb;
+  /* Palette-accurate burnt coral: vivid enough to lead an interaction while
+     cream mixing keeps hover surfaces integrated with the canvas. */
+  /* Kept as rgb triples because the neumorphic shadows need rgba(). Values
+     are the palette's, stated once above. */
+  --hubble-coral: 217, 90, 59;
+  --hubble-charcoal: 54, 57, 56;
+  --hubble-sage: 119, 143, 132;
+
+  /* Neumorphic surfaces use paired OUTER shadows. There is no clay-like inner
+     pressure on a raised widget; inset depth appears only when it is recessed
+     or actively pressed. The legacy clay-shadow aliases below keep existing
+     utility classes stable while their material is now unambiguously neo. */
+  /* ⚠️ ONE LIGHT SOURCE, SO THE OFFSETS MUST MIRROR.
+     These were 9px/10px dark against -8px/-8px light, with blurs of 22 and 20.
+     Unequal offsets describe two different lamps, which is why the surfaces
+     read as "soft card" rather than as material pushed up out of the page —
+     the eye cannot locate the light. Every pair below is now an exact mirror:
+     same offset, same blur, opposite direction. */
+  --neo-shadow:
+    9px 9px 20px rgba(var(--hubble-charcoal), 0.13),
+    -9px -9px 20px rgba(255, 255, 255, 0.74);
+  --neo-shadow-lg:
+    14px 14px 30px rgba(var(--hubble-charcoal), 0.14),
+    -14px -14px 30px rgba(255, 255, 255, 0.78);
+  --neo-shadow-inset:
+    inset 3px 3px 8px rgba(var(--hubble-charcoal), 0.11),
+    inset -3px -3px 8px rgba(255, 255, 255, 0.76);
+  --neo-shadow-focus:
+    0 0 0 2px rgba(var(--hubble-charcoal), 0.14),
+    9px 9px 20px rgba(var(--hubble-charcoal), 0.14),
+    -9px -9px 20px rgba(255, 255, 255, 0.8);
+  --neo-shadow-chip:
+    4px 4px 10px rgba(var(--hubble-charcoal), 0.12),
+    -4px -4px 10px rgba(255, 255, 255, 0.72);
+
+  /* ⚠️ BUTTONS DO NOT GET THE PAIRED NEUMORPHIC LIGHT.
+     `--neo-shadow-chip` carries `-4px -4px 10px rgba(255,255,255,0.72)` — the
+     upper-left highlight that makes a cream panel look extruded. On a FILLED
+     control it is not a highlight, it is a halo: the button appears to glow,
+     and on a dark card the white bleeds around the label.
+
+     A filled button is a solid object sitting ON the surface, not a piece of
+     the surface pushed up out of it, so it takes an ordinary drop shadow.
+     Panels keep the paired light; that distinction is what makes the
+     neumorphism read as material rather than as an effect applied everywhere. */
+  --shadow-button: 0 2px 6px -1px rgba(var(--hubble-charcoal), 0.24);
+
+  --clay-shadow: var(--neo-shadow);
+  --clay-shadow-lg: var(--neo-shadow-lg);
+  --clay-shadow-inset: var(--neo-shadow-inset);
+  --clay-shadow-focus: var(--neo-shadow-focus);
+  --clay-shadow-chip: var(--neo-shadow-chip);
+
+  /* The one claymorphic object: a soft outer lift and broad inner pressure.
+     Shape comes from shaded insets, without a bright highlight. */
+  --clay-shadow-prompt:
+    0 18px 38px rgba(var(--hubble-charcoal), 0.15),
+    inset 7px 8px 17px rgba(var(--hubble-charcoal), 0.045),
+    inset -8px -10px 21px rgba(var(--hubble-charcoal), 0.1),
+    inset 8px 0 18px rgba(var(--hubble-sage), 0.085);
+  --clay-shadow-prompt-focus:
+    0 15px 32px rgba(var(--hubble-charcoal), 0.16),
+    inset 8px 9px 19px rgba(var(--hubble-charcoal), 0.06),
+    inset -9px -11px 23px rgba(var(--hubble-charcoal), 0.12),
+    inset 9px 0 20px rgba(var(--hubble-sage), 0.1);
+  --radius-clay: 1rem;
+  --radius-clay-lg: 1.75rem;
+
+  /* Legacy Hubble status tokens used outside the cream/jet console. */
+  --teal: #0f8a8a;
+  --teal-soft: #ddf1f0;
+  --teal-glow: rgba(15, 138, 138, 0.28);
+
 }
 
-/* FONT PLACEHOLDER — final display/body fonts TBD; swap the two vars below in one place */
 @theme inline {
   --color-paper: var(--paper);
   --color-panel: var(--panel);
@@ -82,10 +237,52 @@
   --color-accent: var(--accent);
   --color-accent-deep: var(--accent-deep);
   --color-accent-soft: var(--accent-soft);
+  /* Brand palette, addressable directly where a colour means the BRAND rather
+     than a role — e.g. a sage success tick, a lilac empty-state wash. */
+  --color-coral: var(--coral);
+  --color-coral-deep: var(--coral-deep);
+  --color-coral-soft: var(--coral-soft);
+  --color-sage: var(--sage);
+  --color-sage-deep: var(--sage-deep);
+  --color-sage-soft: var(--sage-soft);
+  --color-lilac: var(--lilac);
+  --color-lilac-soft: var(--lilac-soft);
+  --color-lilac-deep: var(--lilac-deep);
+  --color-jet: var(--jet);
+  --color-ivory: var(--ivory);
+  --color-void: var(--void);
+  --color-pure: var(--pure);
+  --color-charcoal: var(--charcoal);
 
   /* Product tokens — see :root above */
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+
+  /* ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  ⚠️ THESE TWO WERE MISSING, AND 190 CLASS USAGES DEPENDED ON THEM.    ║
+     ║                                                                       ║
+     ║  `bg-surface` (108), `border-line` (49), `hover:bg-surface` (28) and   ║
+     ║  `divide-line` (5) are written across 54 files — including every       ║
+     ║  input in the "New deal" and "New pipeline" forms. None of them        ║
+     ║  existed in `@theme`, so Tailwind emitted NOTHING for them.            ║
+     ║                                                                       ║
+     ║  This does not error. `bg-surface` silently left the background        ║
+     ║  transparent; `border-line` left `border` at its `currentColor`        ║
+     ║  default, so a "subtle divider" rendered in the element's TEXT colour; ║
+     ║  `divide-y divide-line` drew dividers the same way. Every one of them  ║
+     ║  looked deliberate in the source and produced the wrong pixel.         ║
+     ║                                                                       ║
+     ║  A missing Tailwind token is invisible to tsc, to ESLint and to the    ║
+     ║  build. Naming them here is the fix; the alternative — rewriting 190   ║
+     ║  usages to `bg-panel` / `border-border` — is a large diff that lands   ║
+     ║  in exactly the same place.                                           ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ */
+  --color-surface: var(--panel);
+  --color-line: var(--border);
+  /* Exposed so `border-focus` resolves. The focus ring is deliberately its own
+     token and not the accent (see `--focus`), so it needs its own colour
+     utility rather than borrowing `border-accent` and re-branding the ring. */
+  --color-focus: var(--focus);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
@@ -94,6 +291,14 @@
   --color-danger-soft: var(--danger-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+
+  /* Clay — see :root above */
+  --color-clay-bg: var(--clay-bg);
+  --color-clay-surface: var(--clay-surface);
+  --color-clay-raised: var(--clay-raised);
+  --color-clay-sunken: var(--clay-sunken);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
 
   --font-sans: var(--font-body);
   --font-heading: var(--font-display);
@@ -104,6 +309,7 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
+  overflow-x: clip;
   text-rendering: optimizeLegibility;
 }
 
@@ -125,16 +331,91 @@ h6 {
 .app-shell {
   --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
   font-family: var(--font-body);
+
+  /* ==========================================================================
+     THE PRODUCT PALETTE — warm, no violet.
+     ==========================================================================
+     ⚠️ SCOPED TO `.app-shell`, NOT `:root`. The landing page uses the same
+     token names and is read-only under CLAUDE.md rule 5, so overriding here
+     changes every authenticated surface and nothing else.
+
+     The accent is a warm graphite rather than a hue: on ivory, a coloured
+     active state competes with the data, and TEAL is already spoken for — it
+     means "Hubble is working" and must not also mean "this nav item is
+     selected". A colour that means one thing is a colour users can read. */
+  /* ⚠️ REVISED. This scope used to force the accent to a warm graphite so a
+     coloured state would not compete with the data. The reasoning was sound
+     but it made `text-accent` mean violet on marketing and brown in-product —
+     one class, two colours, and the brand stopping at the sign-in door.
+
+     Action is now coral everywhere. The original concern is answered by a
+     separate token: SELECTION stays neutral graphite, so a chosen nav item or
+     dropdown row still does not shout over the numbers next to it. */
+  --accent: var(--coral-deep);
+  --accent-soft: var(--coral-soft);
+  --selected: #3f382d;
+  --selected-soft: #efeade;
+
+  /* ⚠️ SLIGHTLY DARKER THAN THE MARKETING MUTED, DELIBERATELY.
+     Product surfaces carry counts and labels at 11-12px, so their supporting
+     copy gets the strongest warm graphite in the system. #55554d is about 7:1.
+
+     Overridden at the SCOPE, not per page, so every authenticated surface
+     moves together and the analytics screen cannot drift into its own grey. */
+  --muted: #55554d;
+
+  /* Page and surfaces: ivory, a shade lighter than the first pass. */
+  --app: #fbfaf5;
+  --surface-muted: #f4f1e8;
+  --border: #e8e3d5;
+  --border-strong: #d8d1be;
+}
+
+.route-progress {
+  opacity: 0;
+  transform: scaleX(0.08);
+  transition: opacity 100ms var(--ease-out-ui), transform 180ms var(--ease-out-ui);
+}
+
+.route-progress[data-phase="loading"] {
+  opacity: 1;
+  animation: route-progress-loading 1.4s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+.route-progress[data-phase="finishing"] {
+  opacity: 0;
+  transform: scaleX(1);
+}
+
+@keyframes route-progress-loading {
+  from { transform: scaleX(0.08); }
+  to { transform: scaleX(0.82); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-progress[data-phase="loading"] {
+    animation: none;
+    opacity: 1;
+    transform: scaleX(1);
+  }
 }
 
 .auth-glass-card {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(249, 246, 255, 0.58));
+  background: color-mix(in srgb, var(--ivory) 72%, transparent);
   -webkit-backdrop-filter: blur(22px) saturate(130%);
   backdrop-filter: blur(22px) saturate(130%);
 }
 
+/* ⚠️ WAS A HARDCODED PURPLE GRADIENT (#694bc9 → #aa95f5): both a leftover of
+   the retired violet accent and a hardcoded colour CLAUDE.md forbids. It is
+   now the logo's own jet, so the product's darkest surface is the same dark
+   the mark is drawn on. */
 .product-gradient {
-  background: linear-gradient(135deg, #694bc9 0%, #8669e7 52%, #aa95f5 100%);
+  /* ⚠️ A COLOUR, NOT A GRADIENT. This card carries a number someone reads;
+     a ramp behind digits adds nothing and makes the value sit on two
+     different backgrounds. Flat jet, the logo's own dark. */
+  background: var(--jet);
+  color: var(--ivory);
 }
 
 /*
@@ -142,7 +423,7 @@ h6 {
   Built from tokens, so a change to --accent-soft carries through.
 */
 .credits-gradient {
-  background: linear-gradient(158deg, var(--accent-soft) 0%, var(--panel) 68%);
+  background: var(--accent-soft);
 }
 
 .app-shell :is(button, summary, a) {
@@ -154,13 +435,270 @@ h6 {
   touch-action: manipulation;
 }
 
+/* ==========================================================================
+   AUTHENTICATED PRODUCT — flat surface system
+   ==========================================================================
+
+   ╔═══════════════════════════════════════════════════════════════════════════╗
+   ║  ⚠️ THE PRODUCT IS FLAT AND WHITE. THE MARKETING SITE IS NOT.            ║
+   ║                                                                           ║
+   ║  Neumorphism spends its contrast budget on describing a light source.     ║
+   ║  Every panel carried a paired shadow — dark lower-right, white upper-left ║
+   ║  — which is charming on a landing page with six elements and actively     ║
+   ║  costly on a table with 25 rows: the surface competes with the data for   ║
+   ║  the reader's attention, and there is no contrast left to mark the one    ║
+   ║  row that matters.                                                        ║
+   ║                                                                           ║
+   ║  So inside the product, hierarchy is carried by BORDERS AND SPACE rather  ║
+   ║  than by material. Panels are white on white, separated by a hairline.    ║
+   ║  Shadow is reserved for things that genuinely float above the page —      ║
+   ║  menus, dialogs, popovers — where it means "this is temporary" instead of ║
+   ║  "this is a surface".                                                     ║
+   ║                                                                           ║
+   ║  ⚠️ SCOPED TO `.product-clay` / `.auth-clay` ON PURPOSE. CLAUDE.md rule 5 ║
+   ║  makes the landing page read-only, and `/product` shares its material.    ║
+   ║  Redefining `.clay` globally would have restyled both. These overrides    ║
+   ║  win on specificity (0,2,0 over 0,1,0) without editing the base rules,    ║
+   ║  so the marketing site is bit-for-bit unchanged.                          ║
+   ║                                                                           ║
+   ║  The class NAMES stay `clay`. Renaming them across 62 files would be a    ║
+   ║  large diff that changes no pixel; they now mean "the product's surface". ║
+   ╚═══════════════════════════════════════════════════════════════════════════╝ */
+.product-clay,
+.auth-clay {
+  /* White, not cream. The one instruction that drove all of this. */
+  --app: #ffffff;
+  --paper: #ffffff;
+  --panel: #ffffff;
+  /* The only non-white neutral: row hovers, inset wells, disabled fills.
+     Warm-grey rather than pure grey so it stays kin to the brand's cream. */
+  --surface-muted: #f6f6f7;
+
+  /* ⚠️ REAL BORDERS, BECAUSE NOTHING ELSE SEPARATES SURFACES NOW.
+     The clay borders were `color-mix(cream 84%, ink 16%)` — barely visible,
+     because the shadow was doing the separating. With the shadow gone a
+     weak border means a card with no edge at all. */
+  --border: #e6e6ea;
+  --border-strong: #d2d2d9;
+
+  /* Panels get NO shadow — see below. These remain for genuinely floating
+     things, and are neutral drop shadows rather than paired neumorphic light. */
+  --shadow-sm: 0 1px 2px rgba(23, 23, 21, 0.05);
+  --shadow-md: 0 4px 12px -2px rgba(23, 23, 21, 0.08);
+  /* ⚠️ A HAIRLINE RING IS PART OF THE SHADOW. Popovers and menus are white on
+     white; a blur alone leaves the top edge of a dropdown undetectable against
+     the panel beneath it. Baking the ring in means every floating surface gets
+     an edge without each one remembering to ask for a border. */
+  --shadow-lg:
+    0 0 0 1px var(--border),
+    0 12px 32px -8px rgba(23, 23, 21, 0.16);
+
+  /* A filled button is a solid object, so it keeps a hint of lift. */
+  --shadow-button: 0 1px 2px rgba(23, 23, 21, 0.12);
+
+  /* ⚠️ THE `--clay-*` TOKENS ARE REPOINTED, NOT DELETED. They are consumed
+     directly in component markup (`bg-clay-bg`, `bg-clay-sunken`), so leaving
+     them cream would have left cream patches on a white page. */
+  --clay-bg: #ffffff;
+  --clay-surface: #ffffff;
+  --clay-raised: #ffffff;
+  --clay-sunken: #f6f6f7;
+
+  /* Tighter than the 16px clay radius. A large radius reads as "soft object";
+     a small one reads as "region of a page", which is what these now are. */
+  --radius-clay: 0.625rem;
+  --radius-clay-lg: 0.75rem;
+
+  /* Every neumorphic shadow, neutralised at the source. Anything still
+     referencing them — including rules further down this file and any
+     `shadow-[var(--neo-shadow)]` left in markup — flattens with them. */
+  --neo-shadow: none;
+  --neo-shadow-inset: none;
+  --neo-shadow-chip: none;
+  --clay-shadow: none;
+  --clay-shadow-inset: none;
+  --clay-shadow-chip: none;
+  --clay-shadow-prompt: none;
+
+  /* ⚠️ THE `-lg` PAIR IS NOT FLATTENED, AND THAT IS THE WHOLE DISTINCTION.
+     `shadow-[var(--clay-shadow-lg)]` is what the batch filter and the date
+     picker use to float their dropdowns. Setting it to `none` with the rest
+     left those menus as white rectangles on a white page with no edge and no
+     elevation — invisible, and only findable by clicking where they used to
+     be. `-lg` means "this floats", so it maps to a real drop shadow. */
+  --neo-shadow-lg: var(--shadow-lg);
+  --clay-shadow-lg: var(--shadow-lg);
+
+  /* ⚠️ FOCUS IS THE ONE SHADOW THAT MUST SURVIVE. Setting it to `none` with
+     the others would have silently removed the focus ring from every input in
+     the product — an accessibility regression disguised as a visual cleanup.
+     A crisp 2px ring replaces the diffuse neumorphic glow. */
+  --neo-shadow-focus: 0 0 0 2px var(--focus);
+  --clay-shadow-focus: 0 0 0 2px var(--focus);
+  --clay-shadow-prompt-focus: 0 0 0 2px var(--focus);
+}
+
+/* Cards, wells and raised panels: one white surface, one hairline. */
+.product-clay :is(.clay, .clay-raised, .hubble-prompt-surface, .hubble-filter-control),
+.auth-clay :is(.clay, .clay-raised, .hubble-prompt-surface, .hubble-filter-control) {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-clay);
+  box-shadow: none;
+}
+
+/* A well is the same shape, filled instead of outlined — the inset shadow that
+   used to say "recessed" no longer exists to say it. */
+.product-clay .clay-sunken,
+.auth-clay .clay-sunken {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-clay);
+  box-shadow: none;
+}
+
+/* Pressing something moves it nowhere and tints it instead. `scale(0.98)` plus
+   an inset shadow was the clay idiom for depressing a soft object; on a flat
+   surface it reads as the layout twitching. */
+.product-clay .clay-interactive:active:not(:disabled),
+.auth-clay .clay-interactive:active:not(:disabled) {
+  background-color: var(--surface-muted);
+  box-shadow: none;
+  transform: none;
+}
+
+/* ⚠️ THE SIDEBAR NEEDED ITS OWN RULE, NOT JUST THE TOKENS.
+   `.hubble-nav-panel` painted a cream gradient plus `inset -3px 0 0
+   rgba(charcoal, 0.22)` and an 18px smoky inner shadow. Repointing `--clay-bg`
+   to white left the gradient flat but kept the shadows — a hard 3px dark bar
+   and a smear of grey down the right edge of an otherwise white page, which
+   reads as a rendering artefact rather than as a divider. One hairline does
+   the same job. */
+.product-clay .hubble-nav-panel {
+  background: var(--panel);
+  background-image: none;
+  border-right: 1px solid var(--border);
+  box-shadow: none;
+}
+
+/* The selected nav item was a 16% charcoal tint carrying a drop shadow AND an
+   inset ring — three treatments saying one thing. A flat fill says it once.
+   Kept as a neutral rather than the accent: the sidebar marks WHERE YOU ARE,
+   which is not an action, and a coral block in the nav competes with the one
+   real call to action on every screen. */
+.product-clay .hubble-shell nav a[aria-current='page'],
+.hubble-shell.product-clay nav a[aria-current='page'] {
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* `.field` and the `.skeuo*` family are the other material vocabulary in this
+   file — bevelled gradients, inset highlights, a raised "key" treatment. Inside
+   the product they become the same outlined control as everything else, so
+   there is one idea of what an input looks like rather than three. */
+.product-clay :is(.field, .skeuo, .skeuo-inset, .skeuo-key, .skeuo-prompt),
+.auth-clay :is(.field, .skeuo, .skeuo-inset, .skeuo-key, .skeuo-prompt) {
+  background: var(--panel);
+  background-image: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.product-clay :is(.field, .skeuo-prompt):hover:not(:disabled),
+.auth-clay :is(.field, .skeuo-prompt):hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+/* ⚠️ `:focus-within` AS WELL AS `:focus`. `.field` is applied to WRAPPERS as
+   often as to inputs — the phone field is a div containing a select and an
+   input — so a focus style on `:focus` alone leaves those compound controls
+   with no visible focus at all. */
+.product-clay :is(.field, .skeuo-prompt):is(:focus, :focus-within),
+.auth-clay :is(.field, .skeuo-prompt):is(:focus, :focus-within) {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+  outline: none;
+}
+
+/* Overlays are the one place shadow still earns its keep: it is what says
+   "this is above the page and will go away". No backdrop-filter — CLAUDE.md
+   forbids it on dashboard surfaces, and it is expensive over scrolling tables. */
+.product-clay :is(.glass-overlay, .glass-popover),
+.auth-clay :is(.glass-overlay, .glass-popover) {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-clay);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: none;
+}
+
+.auth-clay-field:focus-visible {
+  box-shadow: var(--neo-shadow-focus);
+}
+
+.auth-clay a {
+  text-underline-offset: 0.2em;
+}
+
+/* Inside the product this surface is the ACTION colour rather than the logo's
+   jet — the featured card is a call to act on, and it sits among cream panels
+   where jet would read as a hole. Flat either way; neither is a gradient. */
+.product-clay .product-gradient {
+  background: var(--accent);
+  box-shadow: var(--shadow-button);
+}
+
+/* ⚠️ INPUTS ARE OUTLINED, NOT RECESSED. They were a cream fill plus an inset
+   shadow — a hole punched in the surface. On white that fill is the only thing
+   marking the field, and it is nearly invisible; a border states the edit
+   target unambiguously and at any zoom level. */
+.product-clay :is(input, select, textarea) {
+  background-color: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.product-clay :is(input, select, textarea):hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.product-clay :is(input, select, textarea):focus-visible {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+  outline: none;
+}
+
+/* A checkbox is not a text field and must not inherit the border-radius or the
+   padding that comes with one. */
+.product-clay input[type='checkbox'],
+.product-clay input[type='radio'] {
+  accent-color: var(--accent);
+}
+
+.product-clay .hubble-bar :is(input, select, textarea) {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.product-clay :is(button, a, summary):focus-visible {
+  outline-color: var(--accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-clay nav a:hover {
+    box-shadow: var(--neo-shadow-chip);
+  }
+}
+
 ::selection {
   background: var(--accent);
   color: var(--cream);
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 
@@ -181,7 +719,7 @@ h6 {
   );
 }
 .team-beam {
-  background: linear-gradient(180deg, transparent, rgba(79, 75, 255, 0.75), transparent);
+  background: linear-gradient(180deg, transparent, var(--sage), var(--coral), transparent);
 }
 
 /* Hide scrollbar on the swipeable offer row (scroll snap keeps it usable) */
@@ -216,6 +754,50 @@ h6 {
 
 .hero-word-fade {
   animation: word-fade-in 0.8s ease-in-out both;
+}
+
+/*
+ * Rotating hero word.
+ *
+ * Width is reserved by a PSEUDO-ELEMENT, not a hidden span. A hidden span
+ * reserves width correctly but its text still lives in the DOM, so it is still
+ * copied, still crawled, and still shown in search snippets. That is how the
+ * headline shipped reading "…for tech startups.tech startups." — correct on
+ * screen, duplicated everywhere text is extracted.
+ *
+ * inline-grid stacks the pseudo-element and the live word in one cell, so the
+ * slot is always as wide as the longest word and the loop causes no layout
+ * shift. `content` is reserved for the widest string, not the first one.
+ */
+.hero-word-slot {
+  display: inline-grid;
+  vertical-align: baseline;
+}
+
+.hero-word-slot > *,
+.hero-word-slot::before {
+  grid-area: 1 / 1;
+}
+
+.hero-word-slot::before {
+  content: "SaaS startups.";
+  visibility: hidden;
+}
+
+/* Same pattern, same reason — see `.hero-word-slot`. */
+.service-word-slot {
+  display: inline-grid;
+  vertical-align: baseline;
+}
+
+.service-word-slot > *,
+.service-word-slot::before {
+  grid-area: 1 / 1;
+}
+
+.service-word-slot::before {
+  content: "OUTBOUND.";
+  visibility: hidden;
 }
 
 @keyframes fade-in {
@@ -279,8 +861,8 @@ h6 {
 /* Hero aurora — two soft gradient pools drifting very slowly behind the headline */
 .hero-aurora {
   background:
-    radial-gradient(42% 55% at 78% 12%, rgba(147, 111, 238, 0.2), transparent 70%),
-    radial-gradient(36% 48% at 12% 80%, rgba(199, 178, 255, 0.2), transparent 70%);
+    radial-gradient(42% 55% at 78% 12%, color-mix(in srgb, var(--sage) 34%, transparent), transparent 70%),
+    radial-gradient(36% 48% at 12% 80%, color-mix(in srgb, var(--coral) 26%, transparent), transparent 70%);
   animation: aurora-drift 16s ease-in-out infinite alternate;
 }
 @keyframes aurora-drift {
@@ -372,14 +954,28 @@ h6 {
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px 0 rgba(79, 75, 255, 0.08);
+  box-shadow: 0 8px 32px 0 color-mix(in srgb, var(--charcoal) 10%, transparent);
 }
 
 .glass-card:hover {
-  border-color: rgba(79, 75, 255, 0.4);
-  box-shadow: 0 16px 48px 0 rgba(79, 75, 255, 0.12);
+  border-color: color-mix(in srgb, var(--coral) 32%, transparent);
+  box-shadow: 0 16px 48px 0 color-mix(in srgb, var(--charcoal) 14%, transparent);
   transform: translateY(-3px);
   transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Outbound offer cards stay transparent and quiet against the white section. */
+.offer-card {
+  transition:
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 240ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .offer-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(124, 92, 231, 0.42);
+  }
 }
 
 /* Dark glassmorphism for team cards */
@@ -392,8 +988,8 @@ h6 {
 }
 
 .glass-card-dark:hover {
-  border-color: rgba(79, 75, 255, 0.4);
-  box-shadow: 0 16px 48px 0 rgba(79, 75, 255, 0.2);
+  border-color: color-mix(in srgb, var(--coral) 32%, transparent);
+  box-shadow: 0 16px 48px 0 color-mix(in srgb, var(--charcoal) 18%, transparent);
   transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -498,6 +1094,32 @@ details[open] .faq-mark {
   transform: rotateY(180deg);
 }
 
+@media (max-width: 1023px) {
+  .reveal {
+    transform: translateY(14px);
+    transition-duration: 600ms;
+    transition-delay: 0ms !important;
+  }
+
+  .hero-main,
+  .hero-text-slide {
+    animation: none;
+  }
+
+  .glass-card:hover,
+  .glass-card-dark:hover,
+  .offer-card:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .hero-word-slot {
+    display: grid;
+    width: 100%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -507,15 +1129,1005 @@ details[open] .faq-mark {
     transform: none;
     transition: none;
   }
-  .hero-word,
-  .hero-land,
+  .hero-main,
+  .hero-text-slide,
+  .hero-word-fade,
   .marquee-track,
   .modal-backdrop,
   .modal-panel,
-  .pinboard-gentle-sway {
+  .pinboard-gentle-sway,
+  .float-animation,
+  .shimmer,
+  .animate-gradient {
     animation: none;
   }
   details .faq-mark {
     transition: none;
+  }
+}
+
+
+/* ==========================================================================
+   HUBBLE — the intelligence surface
+   ==========================================================================
+   A cream canvas with restrained depth, scoped to this one screen. */
+
+/* Legacy class names; all non-prompt instances now render as neumorphic
+   surfaces. Keeping the selectors avoids a risky component-wide rename. */
+.clay {
+  background: var(--clay-surface);
+  border: 0;
+  border-radius: var(--radius-clay);
+  box-shadow: var(--neo-shadow);
+}
+
+.clay-raised {
+  background: var(--clay-raised);
+  border: 0;
+  border-radius: var(--radius-clay);
+  box-shadow: var(--neo-shadow-lg);
+}
+
+/* Inputs read as pressed INTO the surface, which is what tells a user the
+   thing is for typing without needing a border to say so. */
+.clay-sunken {
+  background: var(--clay-sunken);
+  border: 0;
+  border-radius: var(--radius-clay);
+  box-shadow: var(--neo-shadow-inset);
+}
+
+/* --------------------------------------------------------------------------
+   Generating — Claude-style.
+
+   No colour wash across the bar. A gradient sweeping a mostly-empty cream
+   surface read as a stain, and it said nothing about what was happening.
+
+   Instead the STATUS TEXT shimmers: a light travels along the words, the way
+   Claude's own thinking line does. It is quieter, it sits where the eye already
+   is, and it scales — a long status reads as one moving line rather than a
+   whole panel changing colour.
+   -------------------------------------------------------------------------- */
+@keyframes hubble-shimmer {
+  0% {
+    background-position: -120% 0;
+  }
+  100% {
+    background-position: 220% 0;
+  }
+}
+
+.hubble-shimmer {
+  background: linear-gradient(
+    100deg,
+    var(--muted) 0%,
+    var(--muted) 36%,
+    var(--ink) 50%,
+    var(--muted) 64%,
+    var(--muted) 100%
+  );
+  background-size: 250% 100%;
+  /* Paints the gradient through the glyphs rather than behind them. */
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: hubble-shimmer 1.7s linear infinite;
+}
+
+/* The breathing dot beside it. Slow, so it reads as alive rather than urgent. */
+@keyframes hubble-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.82);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.hubble-pulse {
+  animation: hubble-pulse 1.6s ease-in-out infinite;
+}
+
+/* Motion is decoration; the words carry the state on their own. */
+@media (prefers-reduced-motion: reduce) {
+  .hubble-shimmer {
+    animation: none;
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+    color: var(--muted);
+  }
+  .hubble-pulse {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The prompt bar as ONE object.
+
+   ⚠️ THE FOCUS RING MOVES; IT IS NOT REMOVED. The global `:focus-visible` rule
+   drew a 2px outline around the INPUT, which rendered as a search field
+   boxed inside the bar — two objects where there is one. Deleting the ring
+   would fix the look and break keyboard navigation, so it is relocated to the
+   bar instead: same colour, same width, same offset, drawn around the whole
+   surface the user is actually typing into.
+   -------------------------------------------------------------------------- */
+/*
+ * ⚠️ NO OUTLINE — THE BAR ITSELF IS THE INDICATOR.
+ *
+ * A ring around the bar reads as a box drawn on top of it, which is the
+ * opposite of the bar responding to you. Focus is expressed as the clay
+ * deepening and a fine inset edge appearing, so the surface reacts
+ * rather than acquiring a border.
+ *
+ * This is still a visible, non-colour-only focus indicator: the shadow
+ * geometry changes and a new inner glow appears, so keyboard users are not
+ * left guessing. Deleting the indicator outright would have been an
+ * accessibility regression, not a style choice.
+ */
+.hubble-bar,
+.hubble-bar * {
+  outline: none !important;
+}
+
+.hubble-prompt-surface:focus-within {
+  box-shadow: var(--clay-shadow-prompt-focus);
+}
+
+.hubble-prompt-surface {
+  background: var(--clay-surface);
+  border: 0;
+  border-radius: var(--radius-clay-lg);
+  box-shadow: var(--clay-shadow-prompt);
+  contain: paint;
+  transition: box-shadow 180ms var(--ease-out-ui, ease-out);
+}
+
+/* Repeated controls stay quiet until the pointer reaches them. No gradients,
+   white glare, ripple, or long-lived animation. */
+/* ══════════════════════════════════════════════════════════════════════════
+   THE FIVE MATERIALS, AND WHERE EACH ONE IS ALLOWED
+   ══════════════════════════════════════════════════════════════════════════
+   Five visual languages in one product is normally a warning sign. It only
+   works if each has exactly ONE job and never appears outside it, so a user
+   learns the material as a signal rather than reading it as decoration.
+
+   MINIMALISM   — the default, and the majority of every screen. Data, tables,
+                  lists, body copy. No material at all.
+   NEUMORPHISM  — panels and cards. Surfaces that HOLD things (`.clay`).
+   SKEUOMORPHISM— controls. Things you PRESS (`.skeuo-key`).
+   GLASS        — overlay layers only. Things that float ABOVE content.
+   MAXIMALISM   — one moment per screen, at most. Empty states and heroes,
+                  where there is no data to compete with.
+
+   ⚠️ THE RULE THAT KEEPS THIS USABLE: material follows FUNCTION, never
+   importance. A thing is glass because it overlays, not because it matters. */
+
+/* ── Glass ───────────────────────────────────────────────────────────────────
+   ⚠️ OVERLAYS ONLY, AND THAT IS A CLAUDE.md CONSTRAINT, NOT A PREFERENCE.
+   The design rules forbid `backdrop-filter` on dashboard surfaces, because
+   blurring the layer a user is reading costs legibility for decoration. An
+   overlay is the one case where the blur does work: it separates the thing on
+   top from the thing beneath, which is exactly what a scrim is for.
+
+   Never apply to a panel, card, table or list. */
+.glass-overlay {
+  background: color-mix(in srgb, var(--charcoal) 22%, transparent);
+  backdrop-filter: blur(6px) saturate(115%);
+}
+
+.glass-popover {
+  background: color-mix(in srgb, var(--clay-raised) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--charcoal) 10%, transparent);
+  border-radius: var(--radius-clay);
+  box-shadow: var(--neo-shadow-lg);
+}
+
+/* A floating layer must survive a browser that will not blur it, so the
+   fallback is opaque rather than a transparent panel over live text. */
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-popover {
+    background: var(--clay-raised);
+  }
+  .glass-overlay {
+    background: color-mix(in srgb, var(--charcoal) 42%, transparent);
+  }
+}
+
+/* ── Maximalism ──────────────────────────────────────────────────────────────
+   The full palette, once, where nothing is being read. Empty states and
+   heroes: no data to drown, and the one place the brand can be loud.
+   Deliberately NOT available to any surface carrying numbers. */
+.brand-wash {
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--sage) 26%, transparent) 0%, transparent 55%),
+    radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--lilac) 46%, transparent) 0%, transparent 55%),
+    radial-gradient(140% 140% at 70% 100%, color-mix(in srgb, var(--coral) 22%, transparent) 0%, transparent 60%),
+    var(--clay-bg);
+}
+
+/* ── Skeuomorphic surfaces ───────────────────────────────────────────────────
+   Claymorphism above is soft, matte and weightless: one puffy shadow, no edge.
+   Skeuomorphism models a REAL MATERIAL — a lit top bevel, a shaded bottom
+   edge, a faint vertical gradient because light falls from above, and a
+   contact shadow where the object meets the surface beneath it.
+
+   ⚠️ EVERY COLOUR IS DERIVED FROM AN EXISTING TOKEN via color-mix. CLAUDE.md
+   forbids a hex or rgb() in a colour position, and a bevel is a colour
+   position. Mixing against --clay-* keeps the material on-palette when the
+   theme moves.
+
+   No backdrop-filter: forbidden on product surfaces. */
+
+.skeuo {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--clay-raised) 94%, white) 0%,
+      var(--clay-raised) 46%,
+      color-mix(in srgb, var(--clay-raised) 92%, var(--clay-sunken)) 100%
+    );
+  border: 1px solid color-mix(in srgb, var(--clay-sunken) 78%, var(--ink) 6%);
+  border-radius: var(--radius-clay);
+  /* Top inset = the lit bevel. Bottom inset = the shaded underside.
+     The two outer shadows are the drop and the tight contact shadow. */
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 82%, var(--clay-raised)),
+    inset 0 -1px 0 color-mix(in srgb, var(--clay-sunken) 88%, var(--ink) 8%),
+    0 10px 24px -8px color-mix(in srgb, var(--ink) 22%, transparent),
+    0 2px 4px -1px color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+/* A trough: the same light, inverted. Used for grouped rows and the prompt. */
+.skeuo-inset {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--clay-sunken) 96%, var(--ink) 3%) 0%,
+      color-mix(in srgb, var(--clay-sunken) 88%, white) 100%
+    );
+  border: 1px solid color-mix(in srgb, var(--clay-sunken) 70%, var(--ink) 8%);
+  border-radius: var(--radius-clay);
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, var(--ink) 13%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, white 70%, transparent);
+}
+
+/* A key/chip that reads as physically pressable. */
+.skeuo-key {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--clay-raised) 90%, white) 0%,
+      color-mix(in srgb, var(--clay-raised) 96%, var(--clay-sunken)) 100%
+    );
+  border: 1px solid color-mix(in srgb, var(--clay-sunken) 74%, var(--ink) 7%);
+  border-radius: var(--radius-md);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 88%, transparent),
+    0 2px 3px -1px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+/* ── Form fields ─────────────────────────────────────────────────────────────
+   ⚠️ FOCUS BY LIGHT, NOT BY LINE.
+
+   Fields signalled focus by swapping their border colour. That is the weakest
+   possible cue on a bordered control — the box was already outlined, so the
+   only thing that changed was a hue, and it read as the field having gone
+   wrong rather than having been selected.
+
+   Same treatment the micro-analysis prompt uses: the surface DEEPENS and lifts
+   on focus. The field visibly becomes the active thing rather than repainting
+   an edge. The global `:focus-visible` outline still applies on top for
+   keyboard users, so nothing is lost for anyone navigating without a mouse. */
+
+.field {
+  background: var(--clay-sunken);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, var(--clay-sunken));
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 2px 4px color-mix(in srgb, var(--ink) 10%, transparent);
+  transition: box-shadow 150ms ease-out, border-color 150ms ease-out;
+}
+
+.field:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ink) 20%, var(--clay-sunken));
+}
+
+.field:focus,
+.field:focus-within {
+  border-color: color-mix(in srgb, var(--ink) 30%, var(--clay-sunken));
+  box-shadow:
+    inset 0 2px 5px color-mix(in srgb, var(--ink) 14%, transparent),
+    0 4px 16px -4px color-mix(in srgb, var(--ink) 26%, transparent);
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field {
+    transition: none;
+  }
+}
+
+/* ── The micro-analysis prompt ───────────────────────────────────────────────
+   ⚠️ DISTINCT WITHOUT A NEW HUE.
+
+   Teal was tried and rejected: it is already the product's word for "Hubble is
+   working", and borrowing it for a static control gives one colour two
+   meanings. Tinting with `--accent` fails the opposite way — on authenticated
+   surfaces the accent IS the warm graphite of everything else, so it reads as
+   more neutral, not less.
+
+   So this stays on the house palette and gets its presence from DEPTH: a
+   deeper warm trough than any neighbouring surface, a firmer edge, and a
+   near-black send key. On a panel of pale cream, the darkest thing on screen
+   is the thing the eye goes to. */
+
+.skeuo-prompt {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--clay-sunken) 82%, var(--ink) 9%) 0%,
+      color-mix(in srgb, var(--clay-sunken) 94%, var(--ink) 3%) 100%
+    );
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, var(--clay-sunken));
+  border-radius: var(--radius-clay);
+  box-shadow:
+    inset 0 2px 5px color-mix(in srgb, var(--ink) 17%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, white 62%, transparent),
+    0 4px 16px -6px color-mix(in srgb, var(--ink) 30%, transparent);
+  transition: box-shadow 150ms ease-out, border-color 150ms ease-out;
+}
+
+/* Focus-within, not hover: the bar matters most while it is being used. */
+.skeuo-prompt:focus-within {
+  border-color: color-mix(in srgb, var(--ink) 42%, var(--clay-sunken));
+  box-shadow:
+    inset 0 2px 5px color-mix(in srgb, var(--ink) 17%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, white 62%, transparent),
+    0 6px 22px -6px color-mix(in srgb, var(--ink) 40%, transparent);
+}
+
+/* The send key is the darkest element in the modal: the terminal action. */
+.skeuo-send {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ink) 88%, white) 0%, var(--ink) 100%);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-md);
+  color: var(--cream);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 30%, transparent),
+    0 2px 6px -1px color-mix(in srgb, var(--ink) 44%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeuo-prompt {
+    transition: none;
+  }
+}
+
+/* Travel, not just colour: a real key moves when pressed. Motion stays
+   within the 150ms product budget. */
+.skeuo-key-interactive {
+  transition:
+    transform 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+
+.skeuo-key-interactive:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, var(--ink) 20%, transparent),
+    0 0 0 color-mix(in srgb, var(--ink) 0%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeuo-key-interactive,
+  .skeuo-key-interactive:active:not(:disabled) {
+    transition: none;
+    transform: none;
+  }
+}
+
+.clay-interactive {
+  position: relative;
+  isolation: isolate;
+  transition:
+    background-color 140ms var(--ease-out-ui, ease-out),
+    transform 140ms var(--ease-out-ui, ease-out),
+    color 140ms ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hubble-page .clay-interactive:hover:not(:disabled):not(.hubble-lead-row) {
+    background-color: color-mix(
+      in srgb,
+      var(--clay-surface) 88%,
+      rgb(var(--hubble-coral)) 12%
+    );
+    color: var(--ink) !important;
+  }
+
+  .hubble-page .clay-interactive:hover:not(:disabled) span {
+    color: inherit !important;
+  }
+}
+
+.clay-interactive:active:not(:disabled) {
+  box-shadow: var(--clay-shadow-inset);
+  transform: scale(0.98);
+}
+
+/* ⚠️ THE SURFACE MUST MATCH THE PAGE, OR IT IS NOT NEUMORPHISM.
+   These carried `--clay-surface` (#fff8ea) on a `--clay-bg` (#fffaf0) page.
+   A different colour makes an object sitting ON a background — the one thing
+   neumorphism is not. Sharing the page's own colour is what makes the shadow
+   pair read as material pushed UP OUT OF it. */
+.hubble-filter-control {
+  border: 0;
+  background: var(--clay-bg);
+  border-radius: var(--radius-clay);
+  box-shadow: var(--neo-shadow);
+  transition: box-shadow 150ms ease-out;
+}
+
+.hubble-filter-control:focus-visible {
+  box-shadow: var(--neo-shadow-focus);
+}
+
+/* ⚠️ USER-OPTIMISED: PRESSING MUST DEPRESS.
+   Pure neumorphism is criticised for hiding affordance — borderless, low
+   contrast, nothing says "this is a control". The honest answer is not to add
+   a border back but to make the material behave: pressed and open states sink
+   into the page, which is the one motion a raised surface can make. */
+.hubble-filter-control:active:not(:disabled),
+.hubble-filter-control[aria-expanded='true'] {
+  box-shadow: var(--neo-shadow-inset);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hubble-filter-control {
+    transition: none;
+  }
+}
+
+.hubble-empty-state {
+  background: var(--clay-sunken);
+  box-shadow: var(--neo-shadow-inset);
+}
+
+/* ⚠️ A TINT, NOT A FILL.
+   Solid coral behind text was the heaviest thing on a page that is otherwise
+   cream, so a dropdown row and a calendar cell shouted louder than the data.
+   It also put ink on #D95A3B at about 4.7:1 — legal, and muddy to read.
+
+   A light wash of the same coral keeps the selection unmistakable, carries the
+   identity through the ring rather than the fill, and lifts text contrast to
+   roughly 12:1. Mixed against the surface so it stays on-palette. */
+.hubble-selected-option {
+  background: color-mix(in srgb, rgb(var(--hubble-coral)) 16%, var(--clay-raised));
+  color: var(--ink);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, rgb(var(--hubble-coral)) 46%, transparent),
+    var(--neo-shadow-inset);
+}
+
+.hubble-selected-option span {
+  color: inherit;
+}
+
+/* The canvas stays bright and quiet. Color belongs to interaction, not a wash
+   behind every component. */
+.hubble-page {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--clay-bg);
+}
+
+/* The answer strip is the second intentionally neumorphic surface. It appears
+   only once a run starts, so the added depth communicates a new workspace. */
+.hubble-result-panel {
+  border: 0;
+  background: var(--clay-surface);
+  box-shadow: var(--neo-shadow-lg);
+}
+
+/* One narrow technical rule adds a trace of brutalism without turning the
+   lead ledger into a boxed grid. */
+.hubble-lead-ledger {
+  border: 0;
+  border-left: 2px solid rgba(var(--hubble-charcoal), 0.24);
+  border-radius: 0.55rem var(--radius-clay) var(--radius-clay) 0.55rem;
+  box-shadow: var(--neo-shadow-lg);
+}
+
+.hubble-primary-action {
+  background: rgb(var(--hubble-coral));
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgba(var(--hubble-charcoal), 0.12);
+}
+
+/* Both scope controls stay neutral. Coral belongs to deliberate actions, not
+   the calendar bar.
+
+   ⚠️ THESE TWO WERE SILENTLY UNDOING THE NEUMORPHISM. They re-declared
+   `--clay-surface` after `.hubble-filter-control` had been set to the page
+   colour, and being later in the file they won — so the controls kept reading
+   as cards on a background. They now inherit the control's surface and only
+   state that they carry no accent. */
+.hubble-filter-scope,
+.hubble-filter-date {
+  background: var(--clay-bg);
+}
+
+.hubble-send-action {
+  background: rgb(var(--hubble-coral));
+  color: #fff;
+}
+
+.hubble-shell nav a[aria-current='page'] {
+  background: rgba(var(--hubble-charcoal), 0.16);
+  box-shadow:
+    0 5px 12px rgba(var(--hubble-charcoal), 0.08),
+    inset 0 0 0 1px rgba(var(--hubble-charcoal), 0.06);
+}
+
+.hubble-nav-panel {
+  background: linear-gradient(
+    90deg,
+    var(--clay-bg) 0%,
+    var(--clay-bg) 74%,
+    color-mix(in srgb, var(--clay-bg) 91%, rgb(var(--hubble-charcoal)) 9%) 100%
+  );
+  box-shadow:
+    inset -3px 0 0 rgba(var(--hubble-charcoal), 0.22),
+    inset -18px 0 34px rgba(var(--hubble-charcoal), 0.055);
+}
+
+/* A cheap opacity fade supplies the coral/cream hover without animating paint
+   or layout. Text stays on its own layer above the color field. */
+.hubble-lead-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgb(var(--hubble-coral)) 0%,
+    color-mix(in srgb, rgb(var(--hubble-coral)) 58%, var(--clay-surface) 42%) 42%,
+    var(--clay-surface) 100%
+  );
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out-ui, ease-out);
+}
+
+.hubble-lead-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hubble-page
+    .clay-interactive.hubble-filter-control:hover:not(:disabled):not(:active) {
+    background-color: color-mix(
+      in srgb,
+      var(--clay-surface) 90%,
+      rgb(var(--hubble-coral)) 10%
+    );
+    box-shadow: var(--neo-shadow-focus);
+  }
+
+  .hubble-nav-panel nav a:hover {
+    background-color: rgba(var(--hubble-charcoal), 0.12);
+    color: var(--ink);
+  }
+
+  .hubble-lead-row:hover::before {
+    opacity: 0.28;
+  }
+
+  .hubble-page .hubble-send-action:hover:not(:disabled),
+  .hubble-page .hubble-primary-action:hover:not(:disabled) {
+    background-color: rgb(var(--hubble-coral));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clay-interactive {
+    transition: background-color 100ms linear;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Lead Engine hero — entrance
+   ═══════════════════════════════════════════════════════════════════════════
+
+   ⚠️ THIS PASSES THE FREQUENCY GATE, AND ALMOST NOTHING ELSE ON THE SITE DOES.
+   A staged entrance is only earned at the rare / first-view tier. This is the
+   first thing a visitor sees, once per visit, and it is the one place on the
+   product where a sequence communicates hierarchy — motto, then the sentence
+   that explains it, then the way in. The same treatment on a dashboard the
+   user opens forty times a day would be a defect.
+
+   ⚠️ OPT-IN, NOT OPT-OUT. Wrapped in `no-preference` so motion is something a
+   user opts into by not having asked for less. Under reduced motion the
+   elements are simply present — no fallback fade, because the fade IS the
+   thing being removed.
+
+   Only `opacity`, `transform` and `filter` animate: all three composite on the
+   GPU. Nothing here touches layout.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes hero-rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+      filter: blur(5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+  }
+
+  .hero-enter {
+    /* `backwards` holds the from-state during the delay. Without it each item
+       paints at full opacity first, then blinks out to start — the stagger
+       reads as a flicker. */
+    animation: hero-rise 620ms var(--ease-out-ui, ease-out) backwards;
+  }
+
+  /* ~100ms apart. Longer reads as three separate events rather than one
+     sequence; shorter and the hierarchy stops being legible. */
+  .hero-enter-1 { animation-delay: 60ms; }
+  .hero-enter-2 { animation-delay: 160ms; }
+  .hero-enter-3 { animation-delay: 260ms; }
+
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Lead Engine — dune orange
+   ═══════════════════════════════════════════════════════════════════════════
+
+   ⚠️ SCOPED TO THIS SURFACE, NOT SWAPPED GLOBALLY.
+
+   `--coral` is the brand accent for the whole of Outlio — the agency site, the
+   product shell, the dashboard. Repointing it at :root to warm the Lead Engine
+   landing page would recolour every button in the app. So the page declares
+   its own values and every widget under it inherits them through the tokens
+   they already consume: nothing downstream needs editing, and nothing outside
+   this class changes.
+
+   The hue is the same one the hero plate was graded to (26.5°), so the artwork
+   and the buttons under it are the same orange rather than two near-misses.
+
+   ⚠️ `--dune-deep` IS THE ONE THAT CARRIES TEXT, AND IT WAS CHOSEN BY
+   MEASUREMENT. The brand dune sits at 2.63:1 on cream — fine for a fill or a
+   border, nowhere near AA for a label. `#8f4f1a` reads 5.49:1, which is what
+   `--coral-deep` (5.40:1) was already delivering, so swapping the palette
+   moves no text across the AA line in either direction. */
+.leadengine-surface {
+  /* ⚠️ THE EASING TOKEN IS DECLARED HERE ON PURPOSE.
+     `--ease-out-ui` is scoped to `.app-shell` — the authenticated product —
+     so it does NOT resolve on the marketing pages. A `var()` that fails to
+     substitute makes the whole declaration invalid at computed-value time, so
+     `animation: … var(--ease-out-ui) …` silently became `animation: none` and
+     the hero's transition shorthand died with it. Nothing errors; the motion
+     just never happens. Other landing-page rules dodge this with a fallback
+     (`var(--ease-out-ui, ease-out)`); declaring it once for this surface fixes
+     the whole page instead of one rule at a time. */
+  --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* Post-hero type roles share one optical weight across every section. The
+     hero intentionally keeps its lighter cinematic treatment. */
+  --leadengine-heading-weight: 560;
+  --leadengine-copy-weight: 400;
+  --leadengine-copy-size: clamp(1.0625rem, 1.35vw, 1.2rem);
+  --leadengine-copy-leading: 1.5;
+
+  --coral: #d2803f;
+  --coral-deep: #8f4f1a;
+  --coral-soft: #fbf0e4;
+
+  --accent: var(--coral-deep);
+  --accent-deep: #77400f;
+  --accent-soft: var(--coral-soft);
+
+  /* The gradient rule allows sage↔coral only; this keeps that shape and just
+     moves the warm end onto the new hue. */
+  --grad-band: linear-gradient(
+    140deg,
+    var(--sage-deep) 0%,
+    var(--sage) 38%,
+    var(--coral) 82%,
+    var(--coral-deep) 110%
+  );
+}
+
+/* Clay-inspired editorial rhythm: one interactive proof stage at a time.
+   The widgets themselves remain intact; these frames only establish a shared
+   page cadence, contained canvases, and consistent depth between sections. */
+.leadengine-story {
+  overflow: clip;
+  background: #f7eee2;
+}
+
+.leadengine-story-flow {
+  position: relative;
+  padding: clamp(1rem, 2.4vw, 2.5rem) 0 clamp(3rem, 7vw, 7rem);
+  background:
+    radial-gradient(circle at 14% 18%, rgba(224, 112, 2, 0.08), transparent 24rem),
+    radial-gradient(circle at 86% 64%, rgba(119, 143, 132, 0.1), transparent 28rem),
+    #f7eee2;
+}
+
+.leadengine-story-panel {
+  position: relative;
+  width: min(calc(100% - clamp(1rem, 3vw, 3.5rem)), 112rem);
+  margin: clamp(1rem, 2.5vw, 2.75rem) auto;
+  overflow: clip;
+  border: 1px solid rgba(81, 6, 0, 0.1);
+  border-radius: clamp(1.6rem, 3vw, 3rem);
+  background: var(--paper);
+  box-shadow:
+    0 2.25rem 5.5rem rgba(81, 6, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.84);
+  isolation: isolate;
+}
+
+.leadengine-story-panel > section {
+  border-radius: inherit;
+}
+
+.leadengine-story-panel-inner-only {
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.leadengine-story-panel-extraction {
+  border-color: rgba(151, 72, 47, 0.065);
+  border-radius: clamp(2.75rem, 5vw, 5.25rem);
+  background: #fffdf9;
+  box-shadow:
+    0 2.25rem 5.5rem rgba(129, 58, 38, 0.055),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+}
+
+.leadengine-story-panel-immersive {
+  background: #000100;
+}
+
+.leadengine-story-panel-dark {
+  border-color: rgba(255, 247, 235, 0.14);
+  background: #000100;
+  box-shadow: 0 2.5rem 6.5rem rgba(20, 1, 4, 0.2);
+}
+
+.leadengine-story-note {
+  display: grid;
+  width: min(calc(100% - clamp(2rem, 8vw, 10rem)), 84rem);
+  grid-template-columns: minmax(10rem, 0.34fr) minmax(0, 1fr);
+  gap: clamp(2rem, 7vw, 8rem);
+  align-items: start;
+  margin: clamp(5rem, 9vw, 9rem) auto;
+  padding: clamp(2rem, 4vw, 4rem) 0;
+  border-top: 1px solid rgba(81, 6, 0, 0.16);
+  border-bottom: 1px solid rgba(81, 6, 0, 0.16);
+}
+
+.leadengine-story-kicker {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 760;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.leadengine-story-note-title {
+  max-width: 48rem;
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(2rem, 4.5vw, 4.75rem);
+  font-weight: var(--leadengine-heading-weight);
+  letter-spacing: -0.052em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.leadengine-story-note-copy {
+  max-width: 48rem;
+  margin-top: 1.5rem;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: var(--leadengine-copy-size);
+  font-weight: var(--leadengine-copy-weight);
+  letter-spacing: -0.012em;
+  line-height: var(--leadengine-copy-leading);
+  text-wrap: pretty;
+}
+
+@media (max-width: 48rem) {
+  .leadengine-story-panel {
+    width: calc(100% - 0.75rem);
+    border-radius: 1.5rem;
+  }
+
+  .leadengine-story-panel-extraction {
+    border-radius: 2.25rem;
+  }
+
+  .leadengine-story-note {
+    width: calc(100% - 2rem);
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-block: 3.5rem;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Lead Engine hero — artwork surface
+   ═══════════════════════════════════════════════════════════════════════════
+
+   The hero is a two-column row: copy on the left, a plate of starfield art on
+   the right. It was previously a full-bleed background with the type over it,
+   and most of what lived here — three gradient scrim pools, their media
+   queries, per-breakpoint crop anchors and an edge mask — existed only to keep
+   white text legible on top of the picture. None of it is needed now that the
+   text sits on the section's own black, and all of it has gone. What remains
+   is the plate's drift and its fade-in.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ⚠️ TRANSLATION ONLY — NO OVERSCAN.
+   The plate is `object-contain` inside its column now, so it already fits
+   exactly. Scaling it up would push its edges past the box and crop the very
+   pixels `contain` is there to preserve. The drift has nothing to cover
+   because the artwork's background and the section behind it are the same
+   black: where the plate moves off, black meets black.
+
+   This is still what puts the sphere on a circular path — it is painted into
+   the artwork, so the plate carrying it is what has to move. */
+@keyframes hero-orbit {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(9px, 6px); }
+  50%  { transform: translate(0, 12px); }
+  75%  { transform: translate(-9px, 6px); }
+  100% { transform: translate(0, 0); }
+}
+
+.hero-art {
+  /* Slow enough to read as drift rather than movement. A hero that visibly
+     animates competes with the copy beside it. */
+  animation: hero-orbit 32s ease-in-out infinite;
+  will-change: transform;
+
+  /* ⚠️ NO MASK. Earlier versions needed one — first to disguise a wrist the
+     crop had severed, then to soften a contained plate's rectangular edge.
+     Neither applies: the plate is shown whole, and its own background is the
+     same black as the section, so the box has no visible boundary to dissolve.
+     A fade here would only remove artwork. */
+}
+
+@keyframes hero-art-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ⚠️ BOTH ANIMATIONS IN ONE DECLARATION, AND DELIBERATELY PLACED AFTER
+   `.hero-art`.
+   `animation` is a shorthand: a second rule setting it REPLACES the first
+   rather than adding to it. Declaring the fade on its own class silently
+   cancelled the orbit — or lost to it, depending on source order. Listing both
+   here, below the rule they would otherwise fight, is what makes the plate
+   fade in on load AND keep drifting afterwards.
+
+   The plate fades without the rise the copy gets: it is the subject of its own
+   column rather than a step in the reading sequence, and sliding a full column
+   of artwork is a lot of motion carrying no information. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-art-enter {
+    animation:
+      hero-art-fade 900ms var(--ease-out-ui, ease-out) backwards,
+      hero-orbit 32s ease-in-out infinite;
+  }
+}
+
+/* ⚠️ THE SCRIM CHANGES DIRECTION WITH THE LAYOUT, BECAUSE THE LAYOUT DOES.
+   Above, the composition is side by side — art right, words left — so the
+   gradient runs left to right. On a phone it stacks: the plate shows its full
+   height, the hand sits in the top half and the copy runs the full width
+   underneath, straight across the bright dust trail. A horizontal ramp cannot
+   help there; its dark end is only ~150px wide while the text is ~330px.
+   Measured with the left ramp still in place, the headline came out at 1.26:1.
+   Running the ramp bottom-to-top instead puts the darkness where the words
+   actually are and leaves the hand and the sphere at full strength. */
+/* The call to action, inverted from the dark reference: ivory plate, jet text.
+   Square corners on purpose — a pill would read as the product's own button
+   language, and this one belongs to the poster. */
+.hero-cta {
+  /* ⚠️ PURE WHITE, NOT IVORY.
+     Ivory is the brand's warm off-white and is correct on paper. Sat on a
+     black starfield it reads as beige — the plate looked dimmed rather than
+     bright. Nothing else on this surface is white, so there is no consistency
+     argument for keeping it warm here. */
+  background: var(--pure);
+  color: var(--jet);
+  transition:
+    transform 160ms var(--ease-out-ui, ease-out),
+    box-shadow 160ms var(--ease-out-ui, ease-out);
+}
+
+/* ⚠️ GATED. Touch devices fire :hover on tap, so an ungated hover state
+   sticks to the button after the finger lifts. */
+@media (hover: hover) and (pointer: fine) {
+  .hero-cta:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--void) 55%, transparent);
+  }
+}
+
+/* The press. Without it the button is the one element on the page that does
+   not answer back — and this is the only thing on the hero you can click. */
+.hero-cta:active {
+  transform: scale(0.96);
+  transition-duration: 100ms;
+}
+
+/* ⚠️ THE FOCUS RING IS DRAWN INSIDE THE BUTTON, ON PURPOSE.
+   Two constraints meet here. The global `:focus-visible` puts a jet ring at
+   `outline-offset: 3px` — outside the button, on the hero's black field, where
+   it measured 1.39:1 and was invisible to keyboard users. And the button must
+   carry no external border at all: anything drawn outside its edge reads as a
+   frame around a plate that is meant to sit flush on the artwork.
+
+   A NEGATIVE offset satisfies both. The ring is inset into the button's own
+   white, where jet-on-white is 15.15:1 — well past the 3:1 an indicator needs
+   — and nothing is painted beyond the button's edge. Removing it is not an
+   option; moving it inward is. */
+.hero-cta:focus-visible {
+  outline: 2px solid var(--jet);
+  outline-offset: -4px;
+}
+
+/* The arrow leaves in the direction it points. A 2px nudge is the whole
+   effect — enough to register as a response, not enough to be a movement. */
+.hero-cta-arrow {
+  transition: transform 150ms ease;
+}
+
+.hero-cta:hover .hero-cta-arrow {
+  transform: translate(2px, -2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-art {
+    animation: none;
+    /* ⚠️ NO TRANSFORM. This used to hold `scale(1.06)`, the overscan the drift
+       needed back when the plate was cropped with `cover`. Under `contain` the
+       plate already fits exactly, so scaling it up pushes its edges out of the
+       box — reduced-motion users would have been the only ones served a
+       CROPPED image, which is the opposite of gentler. */
+    transform: none;
+  }
+
+  /* Reduced motion means gentler, not none: the press feedback is the only
+     signal that the click registered, so it stays. Movement goes. */
+  .hero-cta-arrow {
+    transition: none;
+  }
+
+  .hero-cta:hover {
+    transform: none;
+  }
+
+  .hero-cta:hover .hero-cta-arrow {
+    transform: none;
   }
 }

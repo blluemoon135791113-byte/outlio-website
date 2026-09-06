@@ -25,7 +25,16 @@ describe('parseSearchResults — valid page', () => {
     expect(skippedRows).toBe(0)
   })
 
-  it('extracts the member URN and builds a public /in/ profile URL', () => {
+  it('builds the public profile URL from the extracted member URN', () => {
+    /*
+     * CONSTRUCTION, NOT INFERENCE. The member URN is read from the saved page;
+     * LinkedIn accepts it in the `/in/` path, so the URL is assembled from data
+     * we already hold. Nothing is guessed and no request is made to
+     * linkedin.com — CLAUDE.md rule 1 and rule 4 both hold.
+     *
+     * This reverses the Phase 8 rollback, which nulled these URLs while it was
+     * unconfirmed whether they resolve. Confirmed by the user 2026-08-15.
+     */
     expect(leads[0]?.memberUrn).toBe('ACwAAFAKE0001AAAAAAAAAAAAAAAAAAAAAAAAAAA')
     expect(leads[0]?.linkedinUrl).toBe(
       'https://www.linkedin.com/in/ACwAAFAKE0001AAAAAAAAAAAAAAAAAAAAAAAAAAA',
@@ -60,6 +69,16 @@ describe('parseSearchResults — valid page', () => {
     expect(leads[0]?.companyUrl).toBe(
       'https://www.linkedin.com/sales/company/1000001?_ntb=FAKE',
     )
+  })
+
+  it('keeps an externally rendered company website separate from its LinkedIn page', () => {
+    const html = read('valid-search-results.html').replace(
+      'data-anonymize="company-name"',
+      'data-anonymize="company-name" data-outlio-company-website="https://northwind.example/"',
+    )
+    const result = parseSearchResults(html)
+    expect(result.leads[0]?.companyUrl).toContain('linkedin.com/sales/company/')
+    expect(result.leads[0]?.companyWebsiteUrl).toBe('https://northwind.example/')
   })
 
   it('THE FALLBACK: recovers company name when there is no company page', () => {
@@ -104,6 +123,24 @@ describe('parseSearchResults — current table layout', () => {
       memberUrn: 'ACwAATABLE0001AAAAAAAAAAAAAAAAAAAAAAAAAA',
     })
     expect(leads[1]?.companyUrl).toBe('https://www.linkedin.com/sales/company/2000002')
+  })
+
+  it('never mistakes a person profile anchor for a company URL', () => {
+    const html = `
+      <table><tr data-x--people-list--row>
+        <td>
+          <a href="/sales/lead/ACwAAWRAPPED0001,NAME_SEARCH,FAKE">
+            <span data-anonymize="person-name">Wrapped Fabricated</span>
+            <span data-anonymize="company-name">Wrapped Example Ltd</span>
+          </a>
+        </td>
+        <td><div data-anonymize="job-title">Founder</div></td>
+      </tr></table>`
+
+    const { leads } = parseSearchResults(html)
+    expect(leads[0]?.companyName).toBe('Wrapped Example Ltd')
+    expect(leads[0]?.companyUrl).toBeNull()
+    expect(leads[0]?.salesNavUrl).toContain('/sales/lead/')
   })
 })
 

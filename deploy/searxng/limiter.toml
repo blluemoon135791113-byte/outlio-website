@@ -1,0 +1,12 @@
+# ⚠️ THE LIMITER IS WHAT STOPS THIS BECOMING SOMEONE ELSE'S FREE SEARCH API.
+#
+# A public SearXNG with no limits will be found and abused within days, and the
+# upstream engines will block the instance's IP — at which point Hubble's
+# searches silently return nothing.
+[botdetection.ip_limit]
+# Hubble is a well-behaved client with a fixed User-Agent, not a browser, so
+# the link-token check that assumes a browser session must be off.
+link_token = false
+
+[botdetection.ip_lists]
+pass_searxng_org = false

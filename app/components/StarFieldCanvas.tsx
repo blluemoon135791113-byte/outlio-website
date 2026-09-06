@@ -13,10 +13,12 @@ export default function StarFieldCanvas() {
     const ctx = cvs.getContext("2d");
     if (!ctx) return;
 
-    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const compactViewport = window.innerWidth < 768;
+    const starCount = compactViewport ? 220 : window.innerWidth < 1024 ? 350 : STAR_COUNT;
+    const DPR = Math.min(window.devicePixelRatio || 1, compactViewport ? 1.5 : 2);
     let W: number, H: number;
 
-    const stars = Array.from({ length: STAR_COUNT }, () => ({
+    const stars = Array.from({ length: starCount }, () => ({
       x: Math.random(),
       y: Math.random(),
       r: 0.5 + Math.random() * 0.7,

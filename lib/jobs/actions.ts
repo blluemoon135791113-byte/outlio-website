@@ -22,6 +22,8 @@ const uuid = z.string().uuid()
 
 /** Exports live in their own private bucket — see lib/worker/process-job.ts. */
 const EXPORT_BUCKET = process.env.SUPABASE_EXPORT_BUCKET ?? 'exports'
+/** Raw saved pages live in the uploads bucket. */
+const STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'uploads'
 
 export type JobActionState =
   | { status: 'idle' }
@@ -94,12 +96,71 @@ export async function getDownloadUrlAction(
 }
 
 /**
- * Purges a job's lead rows once the user has their CSV.
+ * Soft-deletes a job: it leaves the history list and parks in the Trash box.
  *
- * The dedupe keys survive in `lead_keys`, so duplicate detection across future
- * uploads still works while the personal data genuinely disappears.
+ * ⚠️ NOTHING IS ERASED HERE. Leads, files and the CSV all survive; restore
+ * brings the run straight back. Erasure is `deleteJobAction`, deliberately
+ * separate and deliberately confirmed twice in the UI.
  */
-export async function purgeJobAction(
+export async function trashJobAction(
+  _prev: JobActionState,
+  formData: FormData,
+): Promise<JobActionState> {
+  const ctx = await assertUser()
+  const limit = await consume(ACTION_LIMITS.export, `user:${ctx.userId}`)
+  if (!limit.allowed) return { status: 'error', message: 'Too many requests. Please wait and try again.' }
+  const jobId = uuid.safeParse(formData.get('job_id'))
+  if (!jobId.success) return { status: 'error', message: 'Missing job.' }
+
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('extraction_jobs')
+    .update({ trashed_at: new Date().toISOString() })
+    .eq('id', jobId.data)
+    .eq('user_id', ctx.userId!)
+
+  if (error) return { status: 'error', message: 'Could not move that run to trash.' }
+
+  revalidatePath('/dashboard/jobs')
+  return { status: 'purged', deleted: 0 }
+}
+
+/** Restores a trashed run to the history list. Nothing was erased on trash. */
+export async function restoreJobAction(
+  _prev: JobActionState,
+  formData: FormData,
+): Promise<JobActionState> {
+  const ctx = await assertUser()
+  const limit = await consume(ACTION_LIMITS.export, `user:${ctx.userId}`)
+  if (!limit.allowed) return { status: 'error', message: 'Too many requests. Please wait and try again.' }
+  const jobId = uuid.safeParse(formData.get('job_id'))
+  if (!jobId.success) return { status: 'error', message: 'Missing job.' }
+
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('extraction_jobs')
+    .update({ trashed_at: null })
+    .eq('id', jobId.data)
+    .eq('user_id', ctx.userId!)
+
+  if (error) return { status: 'error', message: 'Could not restore that run.' }
+
+  revalidatePath('/dashboard/jobs')
+  return { status: 'purged', deleted: 0 }
+}
+
+const STORAGE_REMOVE_BATCH = 50
+
+/**
+ * PERMANENTLY deletes a job: lead rows, uploaded file records, the stored
+ * page files, the export CSV, and the job row itself.
+ *
+ * This is the only path in the workspace that erases — and it exists because
+ * "free up workspace" must be available without asking support. Ownership is
+ * re-verified on every step; storage paths are checked to sit inside the
+ * caller's prefix before a single object is removed.
+ */
+export async function deleteJobAction(
   _prev: JobActionState,
   formData: FormData,
 ): Promise<JobActionState> {
@@ -111,15 +172,56 @@ export async function purgeJobAction(
 
   const supabase = createAdminClient()
 
-  const { data, error } = await supabase.rpc('purge_job_leads', {
+  // Lead data first — the workspace-freeing part — through the same RPC the
+  // purge used, so dedupe keys survive even a permanent delete.
+  const { error: purgeError } = await supabase.rpc('purge_job_leads', {
     p_job_id: jobId.data,
     p_user_id: ctx.userId!,
   })
+  if (purgeError) return { status: 'error', message: 'Could not clear that data. Please try again.' }
 
-  if (error) {
-    return { status: 'error', message: "We couldn't clear that data. Please try again." }
+  const { data: files, error: filesError } = await supabase
+    .from('uploaded_files')
+    .select('storage_path')
+    .eq('user_id', ctx.userId!)
+    .eq('extraction_job_id', jobId.data)
+  if (filesError) return { status: 'error', message: 'Could not resolve that run. Please try again.' }
+
+  const uploadPaths = (files ?? [])
+    .map((row) => row.storage_path as string)
+    .filter((path) => keyBelongsToUser(path, ctx.userId!))
+
+  const { data: job } = await supabase
+    .from('extraction_jobs')
+    .select('export_storage_path')
+    .eq('id', jobId.data)
+    .eq('user_id', ctx.userId!)
+    .maybeSingle()
+
+  const exportPath = job?.export_storage_path ?? null
+  if (exportPath && !keyBelongsToUser(exportPath, ctx.userId!)) {
+    return { status: 'error', message: 'That export is not available.' }
   }
 
+  // Storage objects, batched. Best effort: a storage hiccup must not strand
+  // the database rows in a half-deleted state the user cannot see.
+  for (let i = 0; i < uploadPaths.length; i += STORAGE_REMOVE_BATCH) {
+    await supabase.storage.from(STORAGE_BUCKET).remove(uploadPaths.slice(i, i + STORAGE_REMOVE_BATCH))
+  }
+  if (exportPath) {
+    await supabase.storage.from(EXPORT_BUCKET).remove([exportPath])
+  }
+
+  await supabase.from('uploaded_files').delete().eq('user_id', ctx.userId!).eq('extraction_job_id', jobId.data)
+  await supabase.from('job_queue').delete().eq('job_id', jobId.data)
+
+  const { error: deleteError } = await supabase
+    .from('extraction_jobs')
+    .delete()
+    .eq('id', jobId.data)
+    .eq('user_id', ctx.userId!)
+  if (deleteError) return { status: 'error', message: 'Could not delete that run. Please try again.' }
+
   revalidatePath('/dashboard/jobs')
-  return { status: 'purged', deleted: typeof data === 'number' ? data : 0 }
+  return { status: 'purged', deleted: uploadPaths.length }
 }

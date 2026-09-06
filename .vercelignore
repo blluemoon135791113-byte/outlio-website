@@ -6,6 +6,7 @@
 /docs/
 /tests/
 /supabase/
+/services/
 /Linkedin Sales Navigator Scraper SaaS/
 *.md
 *.log

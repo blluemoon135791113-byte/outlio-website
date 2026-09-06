@@ -3,97 +3,237 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { CALENDLY_URL } from "../lib/constants";
+import { CALENDLY_URL, CHROME_EXTENSION_URL } from "../lib/constants";
+import { APP_ORIGIN } from "@/lib/site";
 
-const LINKS = [
-  { label: "How it works", anchor: "#how" },
-  { label: "Results", anchor: "#results" },
-];
+/**
+ * Surface-aware navigation.
+ *
+ * Outlio runs three products with three different buyers. One shared nav meant
+ * a visitor on the Lead Engine page was offered "Motion Graphic Ads" and had no
+ * link to the pricing sitting further down the page they were already reading.
+ *
+ * Each surface therefore declares its own links and CTAs below. The logo always
+ * returns to the main site, so a product page is never a dead end.
+ *
+ * Anchors are REAL ids on each page — see the `id=` attributes in
+ * app/page.tsx, app/app-home/page.tsx and app/explainers/page.tsx. A link
+ * here that points at a missing anchor silently does nothing, so check the
+ * target exists before adding one.
+ *
+ * The Lead Engine links are all root-relative because that surface only ever
+ * renders on app.outlio.io, where the product lives at `/`. The agency surface
+ * reaches it with one absolute link to APP_ORIGIN and nothing else — visitors
+ * are never bounced back and forth between the two domains.
+ */
+export type NavSurface = "agency" | "leadengine" | "motion";
 
-const SERVICES = [
-  { name: "Outbound", tagline: "Multi-channel client acquisition" },
-  { name: "Growth Accelerator", tagline: "Custom growth strategy" },
-];
+type NavLink = { label: string; href: string; external?: boolean };
+
+type NavCta = {
+  label: string;
+  href: string;
+  /** Accent-filled. One per surface at most. */
+  primary?: boolean;
+  external?: boolean;
+};
+
+type SurfaceConfig = {
+  links: NavLink[];
+  /** The agency surface alone has enough services to warrant a dropdown. */
+  ctas: NavCta[];
+};
+
+const SURFACES: Record<NavSurface, SurfaceConfig> = {
+  /* The hub. Keeps cross-links to both products. */
+  agency: {
+    links: [
+      { label: "How it works", href: "/#how" },
+      { label: "Results", href: "/#results" },
+      { label: "Offers", href: "/#offers" },
+      { label: "Motion Graphic Ads", href: "/explainers" },
+    ],
+    ctas: [
+      { label: "Try Outlio's Lead Engine", href: APP_ORIGIN, primary: true },
+      { label: "Book a call", href: CALENDLY_URL, external: true },
+    ],
+  },
+
+  /* Self-serve SaaS. Its buyer wants price and proof, not agency services. */
+  leadengine: {
+    links: [
+      { label: "How it works", href: "/how-it-works" },
+      { label: "Product", href: "/product" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Download the extension", href: CHROME_EXTENSION_URL, external: true },
+    ],
+    ctas: [
+      { label: "Get started", href: "/sign-up", primary: true },
+      { label: "Sign In", href: "/sign-in" },
+    ],
+  },
+
+  /* Project work. One page, so one link plus a route back to outbound. */
+  motion: {
+    links: [
+      { label: "Our work", href: "/explainers#work" },
+    ],
+    ctas: [{ label: "Book a call", href: CALENDLY_URL, external: true, primary: true }],
+  },
+};
 
 interface NavProps {
-  homePrefix?: string;
-  finalCta?: "book-call" | "sign-in";
+  /** Which product's navigation to render. */
+  surface?: NavSurface;
 }
 
-export default function Nav({ homePrefix = "", finalCta = "book-call" }: NavProps) {
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+export default function Nav({ surface = "agency" }: NavProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const finalCtaHref = finalCta === "sign-in"
-    ? "/sign-in"
-    : CALENDLY_URL;
-  const finalCtaLabel = finalCta === "sign-in" ? "Sign In" : "Book a call";
+
+  const config = SURFACES[surface];
+  const closeMobile = () => setIsMobileMenuOpen(false);
+
+  const externalProps = (item: { external?: boolean }) =>
+    item.external ? { target: "_blank", rel: "noopener noreferrer" } : {};
+
+  if (surface === "leadengine") {
+    const glassLinks: NavLink[] = [
+      { label: "Platform", href: "/product" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Get Extension", href: CHROME_EXTENSION_URL, external: true },
+    ];
+
+    return (
+      <header className="pointer-events-none fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 sm:pt-4">
+        <div className="pointer-events-auto relative mx-auto flex min-h-16 w-full max-w-[1800px] items-center rounded-[2rem] border border-white/[0.14] bg-black/70 px-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_55px_rgba(0,0,0,0.38)] backdrop-blur-2xl supports-[backdrop-filter]:bg-black/55 sm:px-3">
+          <Link
+            href="/"
+            className="flex shrink-0 items-center rounded-[1.35rem] p-1 transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97]"
+            aria-label="Outlio home"
+          >
+            <span className="relative flex size-12">
+              <Image
+                src="/outlio logo.png"
+                alt="Outlio"
+                width={48}
+                height={48}
+                preload
+                className="object-cover [clip-path:circle(32.8%_at_50%_50%)]"
+              />
+            </span>
+          </Link>
+
+          <nav
+            aria-label="Lead Engine navigation"
+            className="ml-2 hidden items-center gap-1 md:flex lg:ml-4 lg:gap-2"
+          >
+            {glassLinks.map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                {...externalProps(link)}
+                className="rounded-full border border-transparent px-4 py-2.5 text-sm font-semibold text-white transition-[transform,background-color,border-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:border-white/[0.14] hover:bg-white/[0.07] active:scale-[0.97] lg:px-5"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          <Link
+            href={CALENDLY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto inline-flex min-h-11 items-center rounded-full border border-white/20 bg-white/[0.08] px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] transition-[transform,background-color,border-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:border-white/35 hover:bg-white/[0.14] active:scale-[0.97] sm:px-5"
+          >
+            Book a Demo
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen((open) => !open)}
+            className="ml-1 flex size-11 shrink-0 items-center justify-center rounded-full text-white transition-[transform,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/[0.08] active:scale-[0.97] md:hidden"
+            aria-label="Toggle navigation"
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="lead-engine-mobile-navigation"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              className="size-5"
+            >
+              {isMobileMenuOpen ? (
+                <>
+                  <path d="m6 6 12 12" />
+                  <path d="M18 6 6 18" />
+                </>
+              ) : (
+                <>
+                  <path d="M5 8h14" />
+                  <path d="M5 16h14" />
+                </>
+              )}
+            </svg>
+          </button>
+
+          {isMobileMenuOpen && (
+            <nav
+              id="lead-engine-mobile-navigation"
+              aria-label="Lead Engine mobile navigation"
+              className="absolute inset-x-0 top-[calc(100%+0.5rem)] rounded-[1.65rem] border border-white/[0.14] bg-black/85 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_20px_55px_rgba(0,0,0,0.45)] backdrop-blur-2xl md:hidden"
+            >
+              {glassLinks.map((link) => (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  {...externalProps(link)}
+                  onClick={closeMobile}
+                  className="block rounded-full px-5 py-3 text-sm font-semibold text-white transition-[transform,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/[0.08] active:scale-[0.98]"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-50 bg-paper/90 backdrop-blur-md">
       <div className="relative flex items-stretch border-b border-ink">
         <Link
-          href={homePrefix === "" ? "/" : homePrefix}
+          href="/"
           className="relative flex items-center border-r border-ink px-5 py-3.5"
           aria-label="Outlio home"
         >
-          <Image src="/outlio logo.png" alt="Outlio" width={50} height={20} priority className="object-contain rounded-lg" />
+          <Image
+            src="/outlio logo.png"
+            alt="Outlio"
+            width={48}
+            height={48}
+            preload
+            className="size-10 rounded-lg object-contain sm:size-12"
+          />
         </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-8 px-8 text-[15px] font-medium md:flex">
-          {LINKS.map((l) => (
-            <Link key={l.label} href={`${homePrefix}${l.anchor}`} className="transition-colors hover:text-accent">
+          {config.links.map((l) => (
+            <Link
+              key={l.label}
+              href={l.href}
+              {...externalProps(l)}
+              className="transition-colors hover:text-accent"
+            >
               {l.label}
             </Link>
           ))}
 
-          {/* Services Dropdown */}
-          <div
-            className="relative group"
-            onMouseEnter={() => setIsDropdownOpen(true)}
-            onMouseLeave={() => setIsDropdownOpen(false)}
-          >
-            <Link
-              href={`${homePrefix}#services`}
-              className="flex items-center gap-1 transition-colors hover:text-accent"
-            >
-              Services
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </Link>
-
-            {isDropdownOpen && (
-              <div className="absolute left-0 top-full pt-2">
-                <div
-                  className="w-72 rounded-2xl border border-white/30 shadow-xl backdrop-blur-xl"
-                  style={{
-                    background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.65) 100%)',
-                    backdropFilter: 'blur(24px) saturate(180%)',
-                    WebkitBackdropFilter: 'blur(24px) saturate(180%)'
-                  }}
-                >
-                  <div className="p-2">
-                    {SERVICES.map((service) => (
-                      <Link
-                        key={service.name}
-                        href={`${homePrefix}#${service.name.toLowerCase().replace(/\s+/g, '-')}`}
-                        onClick={() => setIsDropdownOpen(false)}
-                        className="block w-full text-left rounded-xl p-4 transition-all hover:bg-white/40"
-                      >
-                        <div className="font-semibold text-ink">{service.name}</div>
-                        <div className="mt-1 text-xs text-muted">{service.tagline}</div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <Link href="/explainers" className="transition-colors hover:text-accent">
-            Motion Graphic Ads
-          </Link>
         </nav>
 
         {/* Desktop CTAs */}
@@ -102,35 +242,38 @@ export default function Nav({ homePrefix = "", finalCta = "book-call" }: NavProp
             aria-hidden
             className="absolute -bottom-[6px] -left-[6px] z-10 size-[10px] rotate-45 bg-ink"
           />
-          {/* Product entry point. Accent-filled so it reads as the newer,
-              self-serve path next to the sales-led "Book a call". */}
-          <Link
-            href="/leadengine"
-            className="flex items-center gap-2 border-r border-ink bg-accent px-6 text-[15px] font-semibold text-cream transition-colors hover:bg-accent-deep"
-          >
-            Try Outlio&apos;s Lead Engine
-            <svg
-              aria-hidden
-              viewBox="0 0 20 20"
-              className="size-3.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          {config.ctas.map((cta, i) => (
+            <Link
+              key={cta.label}
+              href={cta.href}
+              {...externalProps(cta)}
+              className={
+                cta.primary
+                  ? "flex items-center gap-2 border-r border-ink bg-accent px-6 text-[15px] font-semibold text-cream transition-colors hover:bg-accent-deep"
+                  : "flex items-center px-6 text-[15px] font-semibold transition-colors hover:bg-ink hover:text-cream"
+              }
+              style={
+                // The last CTA never needs a right border; the header edge is it.
+                cta.primary && i === config.ctas.length - 1 ? { borderRight: 0 } : undefined
+              }
             >
-              <path d="M4 10h11M11 5l5 5-5 5" />
-            </svg>
-          </Link>
-          <Link
-            href={finalCtaHref}
-            {...(finalCta === "book-call"
-              ? { target: "_blank", rel: "noopener noreferrer" }
-              : {})}
-            className="flex items-center px-6 text-[15px] font-semibold transition-colors hover:bg-ink hover:text-cream"
-          >
-            {finalCtaLabel}
-          </Link>
+              {cta.label}
+              {cta.primary && (
+                <svg
+                  aria-hidden
+                  viewBox="0 0 20 20"
+                  className="size-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4 10h11M11 5l5 5-5 5" />
+                </svg>
+              )}
+            </Link>
+          ))}
         </div>
 
         {/* Mobile Hamburger Button */}
@@ -152,58 +295,34 @@ export default function Nav({ homePrefix = "", finalCta = "book-call" }: NavProp
         <div className="border-b border-ink bg-paper md:hidden">
           <nav className="mx-auto max-w-7xl px-6 py-6">
             <div className="space-y-4">
-              {LINKS.map((l) => (
+              {config.links.map((l) => (
                 <Link
                   key={l.label}
-                  href={`${homePrefix}${l.anchor}`}
+                  href={l.href}
+                  {...externalProps(l)}
                   className="block text-base font-medium transition-colors hover:text-accent"
-                  onClick={() => setIsMobileMenuOpen(false)}
+                  onClick={closeMobile}
                 >
                   {l.label}
                 </Link>
               ))}
 
-              {/* Mobile Services */}
-              <div className="border-t border-ink/10 pt-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted">Services</p>
-                {SERVICES.map((service) => (
-                  <Link
-                    key={service.name}
-                    href={`${homePrefix}#${service.name.toLowerCase().replace(/\s+/g, '-')}`}
-                    className="block py-2 text-base font-medium transition-colors hover:text-accent"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    {service.name}
-                  </Link>
-                ))}
-              </div>
 
-              <Link
-                href="/explainers"
-                className="block text-base font-medium transition-colors hover:text-accent"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Motion Graphic Ads
-              </Link>
-
-              {/* Mobile CTAs */}
-              <Link
-                href="/leadengine"
-                className="mt-4 block rounded-full bg-accent px-6 py-3 text-center text-base font-semibold text-cream transition-colors hover:bg-accent-deep"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Try Outlio&apos;s Lead Engine
-              </Link>
-              <Link
-                href={finalCtaHref}
-                {...(finalCta === "book-call"
-                  ? { target: "_blank", rel: "noopener noreferrer" }
-                  : {})}
-                className="mt-3 block rounded-full bg-ink px-6 py-3 text-center text-base font-semibold text-cream transition-colors hover:bg-accent"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                {finalCtaLabel}
-              </Link>
+              {config.ctas.map((cta) => (
+                <Link
+                  key={cta.label}
+                  href={cta.href}
+                  {...externalProps(cta)}
+                  className={
+                    cta.primary
+                      ? "mt-4 block rounded-full bg-accent px-6 py-3 text-center text-base font-semibold text-cream transition-colors hover:bg-accent-deep"
+                      : "mt-3 block rounded-full bg-ink px-6 py-3 text-center text-base font-semibold text-cream transition-colors hover:bg-accent"
+                  }
+                  onClick={closeMobile}
+                >
+                  {cta.label}
+                </Link>
+              ))}
             </div>
           </nav>
         </div>

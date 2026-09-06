@@ -1,0 +1,57 @@
+import { z } from "zod";
+
+const optionalSecret = (schema: z.ZodString) => z.preprocess(
+  (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+  schema.optional(),
+);
+
+const EnvSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  PORT: z.coerce.number().int().min(1).max(65535).default(8787),
+  WORKER_MODE: z.enum(["background", "request"]).default("background"),
+  MCP_BEARER_TOKEN: optionalSecret(z.string().min(24)), DATABASE_URL: optionalSecret(z.string().url()),
+  DATABASE_SSL_MODE: z.enum(["disable", "require", "verify-full"]).default("require"),
+  SUPABASE_URL: optionalSecret(z.string().url()), SUPABASE_SERVICE_ROLE_KEY: optionalSecret(z.string().min(20)),
+  SEARXNG_URL: optionalSecret(z.string().url()),
+  // Explicit general-web engines avoid SearXNG's instance-dependent default
+  // category, which can be healthy while every default engine is unavailable.
+  SEARXNG_ENGINES: z.string().default("yandex,bing,yep"),
+  OLLAMA_URL: optionalSecret(z.string().url()), OLLAMA_MODEL: z.string().default("qwen3:4b"),
+  GEMINI_API_KEY: optionalSecret(z.string().min(10)), GEMINI_MODEL: z.string().default("gemini-3.6-flash"),
+  MAX_QUERIES: z.coerce.number().int().min(1).max(30).default(10),
+  RESULTS_PER_QUERY: z.coerce.number().int().min(1).max(20).default(8),
+  MAX_URLS: z.coerce.number().int().min(1).max(100).default(25),
+  CONCURRENT_REQUESTS: z.coerce.number().int().min(1).max(20).default(6),
+  PER_DOMAIN_CONCURRENCY: z.coerce.number().int().min(1).max(5).default(2),
+  REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(12000),
+  MAX_PAGE_BYTES: z.coerce.number().int().min(10000).max(10_000_000).default(2_000_000),
+  RELEVANCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.42),
+  MAX_GEMINI_CALLS: z.coerce.number().int().min(0).max(50).default(8),
+  CACHE_TTL_SECONDS: z.coerce.number().int().min(60).default(86400),
+  DDG_MIN_INTERVAL_MS: z.coerce.number().int().min(250).default(1500),
+});
+export type Config = z.infer<typeof EnvSchema>;
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const config = EnvSchema.parse(env);
+  const hasSupabaseStorage = Boolean(config.SUPABASE_URL && config.SUPABASE_SERVICE_ROLE_KEY);
+  if (Boolean(config.SUPABASE_URL) !== Boolean(config.SUPABASE_SERVICE_ROLE_KEY)) {
+    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured together");
+  }
+  if (config.NODE_ENV === "production" && (!config.MCP_BEARER_TOKEN || (!config.DATABASE_URL && !hasSupabaseStorage))) {
+    throw new Error("Production requires MCP_BEARER_TOKEN and either DATABASE_URL or Supabase REST storage");
+  }
+  if (hasSupabaseStorage && config.WORKER_MODE === "background") {
+    throw new Error("Supabase REST storage requires WORKER_MODE=request");
+  }
+  return config;
+}
+
+export function clampLimits(config: Config, requested?: Record<string, number | undefined>) {
+  return {
+    maxQueries: Math.min(config.MAX_QUERIES, requested?.max_queries ?? config.MAX_QUERIES),
+    resultsPerQuery: Math.min(config.RESULTS_PER_QUERY, requested?.results_per_query ?? config.RESULTS_PER_QUERY),
+    maxUrls: Math.min(config.MAX_URLS, requested?.max_urls ?? config.MAX_URLS),
+    maxGeminiCalls: Math.min(config.MAX_GEMINI_CALLS, requested?.max_gemini_calls ?? config.MAX_GEMINI_CALLS),
+  };
+}

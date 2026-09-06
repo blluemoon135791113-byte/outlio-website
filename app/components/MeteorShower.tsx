@@ -44,7 +44,10 @@ export default function MeteorShower() {
     const ctx = cvs.getContext("2d");
     if (!ctx) return;
 
-    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const compactViewport = window.innerWidth < 768;
+    const tabletViewport = window.innerWidth < 1024;
+    const meteorCount = compactViewport ? 8 : tabletViewport ? 14 : CFG.count;
+    const DPR = Math.min(window.devicePixelRatio || 1, compactViewport ? 1.5 : 2);
     let W: number, H: number;
     let animId: number;
 
@@ -74,7 +77,7 @@ export default function MeteorShower() {
       };
     }
 
-    const meteors: Meteor[] = Array.from({ length: CFG.count }, () => spawn(true));
+    const meteors: Meteor[] = Array.from({ length: meteorCount }, () => spawn(true));
     const dx = Math.cos(CFG.angle);
     const dy = -Math.sin(CFG.angle);
 

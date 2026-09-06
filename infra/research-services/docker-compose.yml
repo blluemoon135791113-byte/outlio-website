@@ -1,0 +1,40 @@
+services:
+  solr:
+    image: solr:10.0.0
+    container_name: outlio-solr
+    restart: unless-stopped
+    command: ["solr-precreate", "hubble"]
+    ports:
+      - "127.0.0.1:8983:8983"
+    volumes:
+      - solr-data:/var/solr
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8983/solr/admin/info/system"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  crawl4ai:
+    image: unclecode/crawl4ai:0.9.2
+    container_name: outlio-crawl4ai
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11235:11235"
+    environment:
+      CRAWL4AI_API_TOKEN: outlio-local-crawl4ai
+    shm_size: "1gb"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:11235/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
+volumes:
+  solr-data:

@@ -162,7 +162,7 @@ export function UserRow({
                 name="plan_id"
                 required
                 defaultValue=""
-                className="rounded-[var(--radius-md)] border border-border bg-paper px-2.5 py-1.5 text-sm text-ink"
+                className="rounded-[var(--radius-md)] border border-border bg-paper px-2.5 py-1.5 text-sm text-ink [color-scheme:light]"
               >
                 <option value="" disabled>
                   Plan…

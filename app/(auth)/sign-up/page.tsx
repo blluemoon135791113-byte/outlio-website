@@ -25,7 +25,7 @@ export default async function SignUpPage({
 
   return (
     <AuthShell
-      title="Create an account"
+      title="Create your workspace"
       subtitle={
         referralCode
           ? `You were invited by an Outlio customer. You'll both get ${REFERRAL_REWARD_CREDITS} bonus credits once your access is approved.`
@@ -34,7 +34,7 @@ export default async function SignUpPage({
       footer={
         <>
           Already have an account?{' '}
-          <Link href="/sign-in" className="font-medium text-accent hover:underline">
+          <Link href="/sign-in" className="font-semibold text-accent hover:underline">
             Sign in
           </Link>
         </>

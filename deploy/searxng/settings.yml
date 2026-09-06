@@ -1,0 +1,48 @@
+# ⚠️ SECRET_KEY MUST COME FROM THE ENVIRONMENT. A checked-in key on a public
+# instance lets anyone forge requests. There is deliberately no default here.
+use_default_settings: true
+
+general:
+  instance_name: "outlio-search"
+  # Nothing about this instance needs to be discoverable.
+  enable_metrics: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  # ⚠️ json IS THE WHOLE POINT — SearXNG disables it by default, and Hubble
+  # cannot read HTML. `html` stays enabled only so health checks work.
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: !!str "PLACEHOLDER_REPLACED_BY_ENV"
+  limiter: true
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+
+ui:
+  static_use_hash: true
+
+# Only engines that answer reliably without an API key. Brave, DuckDuckGo and
+# Startpage were all rate-limiting or serving CAPTCHAs on the local instance,
+# so they are omitted rather than left to fail on every query.
+engines:
+  - name: google
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: wikipedia
+    disabled: false
+  - name: wikidata
+    disabled: false
+
+outgoing:
+  request_timeout: 6.0
+  max_request_timeout: 12.0
+  pool_connections: 50
+  pool_maxsize: 20

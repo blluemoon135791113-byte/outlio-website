@@ -27,7 +27,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function PrivacyPolicy() {
   return (
     <>
-      <Nav homePrefix="/" />
+      <Nav />
       <Breadcrumbs />
       <main className="mx-auto w-full max-w-3xl px-6 py-20 sm:py-28">
         <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">

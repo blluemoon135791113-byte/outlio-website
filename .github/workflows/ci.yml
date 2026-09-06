@@ -1,0 +1,229 @@
+# The suite, run by something other than memory.
+#
+# WHY THIS EXISTS
+#
+# Until now nothing ran the tests automatically. No CI, no git hook, no
+# pre-commit. 3,047 tests and 21 guards — including every one written to stop a
+# specific defect from returning — fired only when somebody remembered to type
+# `npm test`.
+#
+# That is the same shape as most of the bugs those guards exist to catch: a
+# control that is present, correct, and connected to nothing.
+#
+# ⚠️ THIS DELIBERATELY DOES NOT RUN THE INTEGRATION OR E2E SUITES.
+#
+# `npm run test:integration` needs real Supabase credentials, `test:email`
+# needs Docker for GreenMail, and `test:e2e` needs staging. Putting service-role
+# credentials into CI secrets is a decision with a real blast radius — that key
+# bypasses RLS on every table — and it is the owner's to make, not a default to
+# slip in.
+#
+# Until it is made, three guards remain invisible here, each confirmed by
+# mutation testing and recorded in docs/PROGRESS.md R12:
+#
+#   * enqueueEmail's suppression list      (email-send-worker.test.ts)
+#   * the webhook Outlio-Signature header  (webhook-delivery.test.ts)
+#   * the flows at-most-once claim         (flow-engine.test.ts)
+#
+# A green run here does not mean those are exercised. It means the other 3,047
+# are.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  # Re-running CI otherwise means pushing something, which means inventing a
+  # commit to say "try again".
+  workflow_dispatch:
+
+# A second push supersedes the first. Nobody needs the older answer, and the
+# repository is private now, so these minutes are billed.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # ⚠️ PLACEHOLDERS, AND THEY ARE ENOUGH. `next build` was verified to
+    # complete with exactly these values and no .env.local present, which is
+    # why this job needs no secrets at all. If the build ever starts requiring
+    # a real credential, it fails here rather than in production.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+      # ⚠️ NOT A SECRET, AND NOT OPTIONAL. `tests/setup.ts` loads `.env.local`
+      # deliberately, so unit tests see the real environment on a developer
+      # machine. There is no `.env.local` here, and `applyCompliance` throws
+      # without a signing secret — 7 tests fail for a reason unrelated to the
+      # code. Any non-empty value satisfies them; no link signed with this ever
+      # leaves CI.
+      UNSUBSCRIBE_TOKEN_SECRET: ci-placeholder-not-a-real-secret
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Local development runs Node 25; 24 is the LTS line and satisfies
+          # Next 16 (>=20.9) and Vitest 4 (>=20). A divergence between the two
+          # is exactly the kind of thing CI should be the first to notice.
+          node-version: '24'
+          cache: npm
+
+      # `ci`, not `install`: the lockfile decides, and a drifting transitive
+      # dependency should fail rather than be silently resolved.
+      - run: npm ci
+
+      # ⚠️ BEFORE TYPECHECK, AND THIS IS WHY CI FAILED ON ITS FIRST RUN.
+      #
+      # `next-env.d.ts` is gitignored (.gitignore:43) and is what declares
+      # `*.png` and friends via `next/image-types/global`; it also pulls in
+      # `.next/types/routes.d.ts`. Both are generated. Locally they exist
+      # because `next dev` made them, so `tsc --noEmit` passes — on a clean
+      # clone it cannot resolve a single image import.
+      #
+      # `next typegen` produces them without a full build, so the cheap checks
+      # stay cheap. This means a fresh clone could never typecheck either; CI
+      # found that on run #1, which is the entire point of having it.
+      - run: npx next typegen
+
+      # Ordered cheapest-first so an obvious break reports in seconds rather
+      # than after a four-minute build.
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # THE GATE. Production deploys only after `verify` passes.
+  #
+  # Vercel's Git integration deploys on push and does NOT wait for GitHub
+  # Actions — measured: on 2026-09-06 the production deploy was created at
+  # 14:56:46 and CI finished at 14:59:47. CI was a report on production, not a
+  # gate in front of it, and a red run would have said so three minutes late.
+  #
+  # `needs: verify` is what makes it a gate. Nothing else here does.
+  #
+  # ⚠️ THIS DOES NOTHING UNTIL VERCEL'S OWN AUTO-DEPLOY IS TURNED OFF. Until
+  # then both fire and the last one wins. The switch is `git.deploymentEnabled`
+  # in vercel.json — deliberately NOT flipped in the same commit, because
+  # disabling auto-deploy before this job has ever run successfully would leave
+  # no way to deploy at all.
+  # ═══════════════════════════════════════════════════════════════════════════
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # ⚠️ IDENTIFIERS, NOT CREDENTIALS. These name the project; they authorise
+      # nothing without VERCEL_TOKEN, so keeping them inline costs one secret
+      # instead of three and makes the target visible in review.
+      VERCEL_ORG_ID: team_twthvAJPnRFSCg5fNYJ8gW6e
+      VERCEL_PROJECT_ID: prj_armCGAcDXXBKuuYEfrR6JN7sifYE
+
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::VERCEL_TOKEN is not set. Vercel's own Git integration is still deploying this push."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/checkout@v7
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      # ⚠️ SAYS WHAT THE TOKEN CAN SEE, BEFORE USING IT.
+      #
+      # The first run failed inside `vercel pull` with an error nobody outside
+      # the repo could read — GitHub's log API needs auth, so diagnosing it
+      # meant asking a human to copy text out of a browser. These two commands
+      # cost seconds and turn the usual cause into a readable line: a token
+      # scoped to a personal account instead of the team lists no projects
+      # here, which is the difference between "it broke" and "it is pointed at
+      # the wrong account".
+      - if: steps.check.outputs.ready == 'true'
+        name: Who is this token, and what can it reach
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          # ⚠️ EMITTED AS AN ANNOTATION, NOT ONLY TO THE LOG.
+          #
+          # Job logs need an authenticated API call to read, so a diagnostic
+          # that only prints is readable in a browser and nowhere else — which
+          # is the constraint that made the first two failures cost a human a
+          # copy-paste each. Annotations come back from the public API, so this
+          # line can be read by whoever is debugging, including a tool.
+          #
+          # Neither command returns a secret: `whoami` gives a username and
+          # `project ls` gives project names. The token itself is never echoed.
+          # ⚠️ SHAPE, NEVER VALUE — AND THE FIRST VERSION OF THIS GAVE THE
+          # WRONG ANSWER CONFIDENTLY.
+          #
+          # It tested against the LEGACY token format (24 chars, alphanumeric)
+          # and reported a perfectly valid modern token as "not a token",
+          # sending someone off to recreate one that was already correct.
+          # Current tokens are `vcp_` followed by 56 characters. A measurement
+          # read against a stale assumption is worse than no measurement,
+          # because it is believed.
+          #
+          # What is still true: this prints length and a prefix test. It never
+          # prints the token, a prefix of its VALUE, or a hash.
+          SHAPE="len=${#VERCEL_TOKEN}"
+          case "$VERCEL_TOKEN" in
+            vcp_*)          SHAPE="$SHAPE form=modern(vcp_)" ;;
+            *[!A-Za-z0-9]*) SHAPE="$SHAPE form=UNRECOGNISED_has_punctuation" ;;
+            *)              SHAPE="$SHAPE form=legacy(alnum)" ;;
+          esac
+          case "$VERCEL_TOKEN" in
+            *[[:space:]]*) SHAPE="$SHAPE whitespace=YES_this_is_a_bug" ;;
+            *)             SHAPE="$SHAPE whitespace=none" ;;
+          esac
+          echo "token shape: $SHAPE"
+
+          # ⚠️ SCOPED. An unscoped `whoami` resolves a USER, and a token bound
+          # to a team need not have one — which produces exactly the "User not
+          # found" seen here while scoped commands work fine. Both are printed
+          # so the difference between them is the diagnosis.
+          WHO="$(npx vercel@latest whoami --token="$VERCEL_TOKEN" 2>&1 | tail -2 | tr '\n' ' ')"
+          WHO_SCOPED="$(npx vercel@latest whoami --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN" 2>&1 | tail -2 | tr '\n' ' ')"
+          PROJECTS="$(npx vercel@latest project ls --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID" 2>&1 | tail -6 | tr '\n' ' ')"
+
+          echo "whoami: $WHO"
+          echo "projects: $PROJECTS"
+          echo "::notice title=Vercel token identity::shape=[$SHAPE] whoami=[$WHO] whoami_scoped=[$WHO_SCOPED] projects=[$PROJECTS]" 
+
+      # ⚠️ NO PLACEHOLDER ENV HERE, UNLIKE `verify`. `vercel pull` fetches the
+      # project's real production environment, so the build sees the same values
+      # the running app does. That is the point of building through Vercel
+      # rather than running `next build` and uploading the output.
+      #
+      # ⚠️ `--scope` IS EXPLICIT. `--yes` means "set up using the DEFAULT
+      # scope", and a token whose default is a personal account will look for
+      # this project somewhere it does not exist. Naming the team removes the
+      # ambiguity rather than relying on how the token was created.
+      - if: steps.check.outputs.ready == 'true'
+        run: |
+          npx vercel@latest pull --yes --environment=production \
+            --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN"
+          npx vercel@latest build --prod --token="$VERCEL_TOKEN"
+          npx vercel@latest deploy --prebuilt --prod \
+            --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

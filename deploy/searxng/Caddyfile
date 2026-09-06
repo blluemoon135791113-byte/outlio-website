@@ -1,0 +1,26 @@
+# ⚠️ THE FRONT DOOR. SearXNG has no authentication of its own.
+#
+# Without this, a public instance is a free search API for whoever finds it.
+# The practical damage is not the bandwidth: abuse gets the instance's IP
+# blocked by Google and Bing, and Hubble's searches then return nothing at all,
+# silently, because a search provider that fails returns an empty list by
+# design.
+:{$PORT:8080} {
+	@authorised header Authorization "Bearer {$SEARXNG_AUTH_TOKEN}"
+
+	handle @authorised {
+		reverse_proxy 127.0.0.1:8888
+	}
+
+	# Unauthenticated health probe, so the platform can check liveness without
+	# holding the token. Returns nothing about the instance.
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Deliberately 404 rather than 401: an unauthenticated visitor should not
+	# learn that there is a search engine here worth attacking.
+	handle {
+		respond "not found" 404
+	}
+}

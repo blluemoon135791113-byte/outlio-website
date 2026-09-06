@@ -55,7 +55,7 @@ const secondaryButtonClass =
   'inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-4 text-sm font-semibold text-ink transition-[border-color,background-color,transform] duration-150 ease-out hover:border-accent/35 hover:bg-accent-soft/40 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60'
 
 const inputClass =
-  'w-full rounded-[var(--radius-md)] border border-border bg-panel px-3 py-2.5 text-sm text-ink transition-colors duration-150 placeholder:text-muted/70 hover:border-border-strong focus:border-accent'
+  'w-full field px-3 py-2.5 text-sm text-ink transition-colors duration-150 placeholder:text-muted/70'
 
 export function RequestOptions({
   plans,

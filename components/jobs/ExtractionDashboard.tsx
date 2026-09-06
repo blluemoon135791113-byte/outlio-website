@@ -1,17 +1,22 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-
-import { JobActions } from '@/components/jobs/JobActions'
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DeleteRunButton, RowExportMenu } from '@/components/jobs/RowActions'
+import {
+  deleteJobAction,
+  getDownloadUrlAction,
+  restoreJobAction,
+  trashJobAction,
+  type JobActionState,
+} from '@/lib/jobs/actions'
+import { SendToCrmButton } from '@/components/crm/SendToCrmButton'
 import {
   DASHBOARD_FILE_SELECT,
   DASHBOARD_JOB_SELECT,
-  DASHBOARD_LEAD_SELECT,
   type CreditSnapshot,
   type DashboardFile,
   type DashboardJob,
-  type DashboardLead,
 } from '@/lib/jobs/dashboard-types'
 import {
   currentStage,
@@ -19,6 +24,7 @@ import {
   isActiveJob,
   runProgress,
 } from '@/lib/jobs/progress'
+import { jobLabel, jobYield } from '@/lib/jobs/label'
 import { createClient } from '@/lib/supabase/client'
 import type { JobStatus } from '@/types/database'
 
@@ -37,57 +43,48 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function missing(value: string | null) {
-  return value?.trim() || 'Not available'
-}
-
-function safeProfileUrl(value: string | null) {
-  if (!value) return null
-
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' ? url.href : null
-  } catch {
-    return null
-  }
-}
-
-function jobLabel(job: DashboardJob) {
-  return `Run ${job.id.slice(0, 8).toUpperCase()}`
-}
 
 export function ExtractionDashboard({
   userId,
   initialJobs,
   initialFiles,
-  initialLeads,
   credits,
-  planName,
+  clayConnected,
+  googleConnected,
+  ghlConnected,
 }: {
   userId: string
   initialJobs: DashboardJob[]
   initialFiles: DashboardFile[]
-  initialLeads: DashboardLead[]
   credits: CreditSnapshot | null
-  planName: string | null
+  clayConnected: boolean
+  googleConnected: boolean
+  ghlConnected: boolean
 }) {
   const supabase = useMemo(() => createClient(), [])
   const [jobs, setJobs] = useState(initialJobs)
   const [files, setFiles] = useState(initialFiles)
-  const [leads, setLeads] = useState(initialLeads)
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const [refreshError, setRefreshError] = useState<string | null>(null)
-  const [selectedJobId, setSelectedJobId] = useState(
-    initialJobs.find(isActiveJob)?.id ?? initialJobs[0]?.id ?? null,
-  )
-  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
-  const [leadSearch, setLeadSearch] = useState('')
+  /*
+   * ⚠️ ONE FILTER PER BOARD, NOT ONE SHARED FILTER.
+   *
+   * The two boards each render their own chip row. Backed by a single state,
+   * narrowing Accounts to "Needs attention" would silently empty half the
+   * Leads board the user was not looking at — a control appearing to act
+   * locally while acting globally.
+   */
+  const [leadFilter, setLeadFilter] = useState<HistoryFilter>('all')
+  const [accountFilter, setAccountFilter] = useState<HistoryFilter>('all')
+  /*
+   * ⚠️ SELECTED LEAD RECORDS, NOT JUST IDS.
+   *
+   * Paging happens in Postgres, so leads chosen on page 1 are no longer in
+   * `leads` once the user reaches page 2 — and the export menu builds its
+   * payload from `leads`. Keeping the rows means a selection spanning pages
+   * exports every row the user ticked, instead of silently dropping the ones
+   * that scrolled out of the query.
+   */
   const refreshing = useRef(false)
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -98,7 +95,7 @@ export function ExtractionDashboard({
     refreshing.current = true
 
     try {
-      const [jobResult, fileResult, leadResult] = await Promise.all([
+      const [jobResult, fileResult] = await Promise.all([
         supabase
           .from('extraction_jobs')
           .select(DASHBOARD_JOB_SELECT)
@@ -112,21 +109,14 @@ export function ExtractionDashboard({
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(500),
-        supabase
-          .from('extracted_leads')
-          .select(DASHBOARD_LEAD_SELECT)
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(100),
       ])
 
-      if (jobResult.error || fileResult.error || leadResult.error) {
+      if (jobResult.error || fileResult.error) {
         throw new Error('Dashboard refresh failed')
       }
 
       setJobs((jobResult.data ?? []) as DashboardJob[])
       setFiles((fileResult.data ?? []) as DashboardFile[])
-      setLeads((leadResult.data ?? []) as DashboardLead[])
       setRefreshError(null)
     } catch {
       setRefreshError('Live data paused. We will keep retrying automatically.')
@@ -192,47 +182,71 @@ export function ExtractionDashboard({
   }, [hasActiveJobs, refresh])
 
   const activeJob = jobs.find(isActiveJob) ?? null
-  const selectedJob =
-    jobs.find((job) => job.id === selectedJobId) ?? activeJob ?? jobs[0] ?? null
-  const selectedFiles = selectedJob
-    ? files
-        .filter((file) => file.extraction_job_id === selectedJob.id)
-        .sort((a, b) => a.created_at.localeCompare(b.created_at))
-    : []
+  /*
+   * ⚠️ THE ONLY THING A ROW'S FILES ARE STILL READ FOR IS FAILURE.
+   *
+   * The per-file board that showed every file's size and status is gone. The
+   * one fact it held that lives nowhere else is WHICH file failed — recorded
+   * on `uploaded_files`, and otherwise invisible on a run that completed with
+   * errors. So it moves onto the row, and only when there is something to say.
+   */
+  const failedFilesFor = (jobId: string) =>
+    files
+      .filter((file) => file.extraction_job_id === jobId && file.status === 'failed')
+      .map((file) => file.original_filename)
 
-  const filesById = useMemo(
-    () => new Map(files.map((file) => [file.id, file.original_filename])),
-    [files],
-  )
+  const isTrashed = (job: DashboardJob) => job.trashed_at !== null
 
-  const filteredJobs = jobs.filter((job) => {
-    if (historyFilter === 'active') return isActiveJob(job)
-    if (historyFilter === 'completed') return FINISHED_JOB_STATUSES.has(job.status)
-    if (historyFilter === 'attention') {
+  /*
+   * Trashed runs leave the history the moment they are deleted — that is what
+   * "free up workspace" means. They live in the trash box instead.
+   */
+  const matchesFilter = (job: DashboardJob, filter: HistoryFilter) => {
+    if (filter === 'active') return isActiveJob(job)
+    if (filter === 'completed') return FINISHED_JOB_STATUSES.has(job.status)
+    if (filter === 'attention') {
       return job.status === 'failed' || job.status === 'cancelled' || job.status === 'partially_completed'
     }
     return true
-  })
+  }
 
-  const normalizedSearch = leadSearch.trim().toLowerCase()
-  const filteredLeads = leads.filter((lead) => {
-    if (!normalizedSearch) return true
-    return [lead.full_name, lead.job_title, lead.company_name, lead.location].some((value) =>
-      value?.toLowerCase().includes(normalizedSearch),
-    )
-  })
+  const visibleJobs = jobs.filter((job) => !isTrashed(job))
 
-  const totals = jobs.reduce(
+  /*
+   * ⚠️ ONE BOARD PER KIND, BECAUSE THE TWO ARE NOT COMPARABLE.
+   *
+   * A lead run yields people and exports person rows; an account run yields
+   * companies and has no person at all. Interleaving them in one list forces
+   * every row to explain which kind it is, and forces the reader to hold both
+   * unit systems at once. Splitting the board means each side can state its
+   * own counts plainly.
+   */
+  const leadJobs = visibleJobs.filter(
+    (job) => job.kind !== 'account_list' && matchesFilter(job, leadFilter),
+  )
+  const accountJobs = visibleJobs.filter(
+    (job) => job.kind === 'account_list' && matchesFilter(job, accountFilter),
+  )
+
+  const trashedJobs = jobs.filter(isTrashed)
+
+   const totals = jobs.reduce(
     (acc, job) => {
       acc.files += FINISHED_JOB_STATUSES.has(job.status)
         ? job.file_count
         : Math.min(job.progress_current, job.file_count)
-      acc.leads += job.leads_kept
+      /*
+       * The two yields are counted separately and never summed. "40 records"
+       * over 25 companies and 15 people is a number with no unit — nobody can
+       * act on it.
+       */
+      if (job.kind === 'account_list') acc.companies += job.accounts_created + job.accounts_matched
+      else acc.leads += job.leads_kept
       acc.duplicates += job.duplicates_removed
       if (FINISHED_JOB_STATUSES.has(job.status)) acc.completed += 1
       return acc
     },
-    { files: 0, leads: 0, duplicates: 0, completed: 0 },
+    { files: 0, leads: 0, companies: 0, duplicates: 0, completed: 0 },
   )
 
   return (
@@ -249,7 +263,7 @@ export function ExtractionDashboard({
             Extraction workspace
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
-            Follow every file, review the leads kept, and download clean CSV files.
+            Every run, its files, and the leads kept.
           </p>
         </div>
 
@@ -282,56 +296,71 @@ export function ExtractionDashboard({
 
       {activeJob ? <ActiveRun job={activeJob} /> : <CaughtUp latestJob={jobs[0] ?? null} />}
 
-      <section aria-label="Workspace totals" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard featured label="Credits remaining" value={credits?.remaining ?? 0} detail={credits ? `${credits.used} used of ${credits.allowance}` : planName ?? 'Current plan'} />
-        <MetricCard label="Completed runs" value={totals.completed} detail={`${jobs.length} total in history`} />
+      <section aria-label="Workspace totals" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {/* ⚠️ null is "unknown", 0 is "none left". `?? 0` conflated them. */}
+        <MetricCard
+          featured
+          label="Credits remaining"
+          value={credits?.remaining ?? null}
+          detail={
+            credits
+              ? `${credits.used} used of ${credits.allowance}`
+              : 'Balance unavailable — refresh to retry'
+          }
+        />
+        <MetricCard label="Completed extractions" value={totals.completed} detail={`${jobs.length} total in history`} />
         <MetricCard label="Files processed" value={totals.files} detail="Across extraction history" />
         <MetricCard label="Leads extracted" value={totals.leads} detail="Unique leads kept" />
+        <MetricCard label="Companies added" value={totals.companies} detail="From saved account lists" />
         <MetricCard label="Duplicates removed" value={totals.duplicates} detail="Automatically cleaned" />
       </section>
 
       {jobs.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-          <section className="min-w-0 self-start overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
-              <div>
-                <h2 className="text-base font-semibold text-ink">Extraction history</h2>
-                <p className="mt-0.5 text-sm text-muted">Every run and its final outcome.</p>
-              </div>
-              <HistoryFilters value={historyFilter} onChange={setHistoryFilter} />
-            </div>
+        <div className="space-y-6">
+          {/*
+           * ⚠️ TWO BOARDS, EACH HALF THE WIDTH — not one list with a "kind"
+           * column. A lead run and an account run share a queue but nothing
+           * else: one is measured in people and exports person rows, the other
+           * is measured in companies. Side by side, each board states its own
+           * counts in its own units and neither has to caveat itself.
+           */}
+          <div className="grid gap-6 xl:grid-cols-2">
+            <HistoryBoard
+              title="Leads"
+              subtitle="Saved lead search-results pages."
+              emptyLabel="No lead extractions yet."
+              jobs={leadJobs}
+              failedFilesFor={failedFilesFor}
+              onChanged={refresh}
+              labelFor={jobLabel}
+              clayConnected={clayConnected}
+              googleConnected={googleConnected}
+              ghlConnected={ghlConnected}
+              filter={leadFilter}
+              onFilterChange={setLeadFilter}
+            />
 
-            {filteredJobs.length > 0 ? (
-              <ul className="divide-y divide-border">
-                {filteredJobs.map((job) => (
-                  <JobHistoryRow
-                    key={job.id}
-                    job={job}
-                    selected={selectedJob?.id === job.id}
-                    onSelect={() => setSelectedJobId(job.id)}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <p className="px-5 py-10 text-center text-sm text-muted">
-                No runs match this filter.
-              </p>
-            )}
-          </section>
+            <HistoryBoard
+              title="Accounts"
+              subtitle="Saved Sales Navigator account lists."
+              emptyLabel="No account lists yet."
+              jobs={accountJobs}
+              failedFilesFor={failedFilesFor}
+              onChanged={refresh}
+              labelFor={jobLabel}
+              clayConnected={clayConnected}
+              googleConnected={googleConnected}
+              ghlConnected={ghlConnected}
+              filter={accountFilter}
+              onFilterChange={setAccountFilter}
+            />
+          </div>
 
-          <FilePipeline job={selectedJob} files={selectedFiles} />
+          <TrashBox jobs={trashedJobs} labelFor={jobLabel} onRestore={refresh} />
         </div>
       )}
-
-      <LeadPreview
-        leads={filteredLeads}
-        totalVisible={leads.length}
-        search={leadSearch}
-        onSearch={setLeadSearch}
-        filesById={filesById}
-      />
     </div>
   )
 }
@@ -442,19 +471,27 @@ function RunStat({ label, value, suffix }: { label: string; value: number; suffi
   )
 }
 
+/*
+ * ⚠️ SAGE, BECAUSE THIS IS THE "ALL CLEAR" CARD.
+ *
+ * Sage was defined but invisible — only `--success-soft` referenced it, and at
+ * that tint it reads as off-white. A settled, positive state is the one thing
+ * sage should mean, so this card wears it properly. It is the ONLY sage
+ * surface on the page; that restraint is what keeps it a signal.
+ */
 function CaughtUp({ latestJob }: { latestJob: DashboardJob | null }) {
   return (
-    <section className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)] sm:p-6">
+    <section className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-clay)] bg-sage-soft p-5 shadow-[var(--neo-shadow)] ring-1 ring-sage/30 sm:p-6">
       <div>
         <div className="flex items-center gap-2">
-          <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-full bg-success-soft text-success">
+          <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-full bg-sage text-ivory">
             ✓
           </span>
           <h2 className="text-lg font-semibold text-ink">Your workspace is caught up</h2>
         </div>
         <p className="mt-2 text-sm text-muted">
           {latestJob
-            ? `Latest run: ${latestJob.leads_kept.toLocaleString()} leads from ${latestJob.file_count.toLocaleString()} files.`
+            ? `Last extraction: ${latestJob.leads_kept.toLocaleString()} leads from ${latestJob.file_count.toLocaleString()} file${latestJob.file_count === 1 ? '' : 's'}`
             : 'Start an extraction to build your first clean lead list.'}
         </p>
       </div>
@@ -462,19 +499,107 @@ function CaughtUp({ latestJob }: { latestJob: DashboardJob | null }) {
         href="/dashboard/extract/new"
         className="rounded-[var(--radius-md)] border border-border px-4 py-2 text-sm font-semibold text-ink transition-[border-color,transform] duration-150 hover:border-border-strong active:scale-[0.97]"
       >
-        Start another run
+        Start another extraction
       </Link>
     </section>
   )
 }
 
-function MetricCard({ label, value, detail, featured = false }: { label: string; value: number; detail: string; featured?: boolean }) {
+function MetricCard({ label, value, detail, featured = false }: { label: string; value: number | null; detail: string; featured?: boolean }) {
   return (
-    <div className={featured ? 'min-h-32 rounded-[var(--radius-lg)] border border-accent bg-accent p-4 text-white shadow-[var(--shadow-md)]' : 'min-h-32 rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)]'}>
-      <p className={featured ? 'text-xs font-medium text-white/75' : 'text-xs font-medium text-muted'}>{label}</p>
-      <p className="mt-4 font-heading text-[28px] font-semibold leading-none tabular-nums tracking-[-0.04em]">{value.toLocaleString()}</p>
-      <p className={featured ? 'mt-3 text-xs text-white/70' : 'mt-3 text-xs text-muted'}>{detail}</p>
+    <div className={featured ? 'min-h-32 rounded-[var(--radius-clay)] bg-accent p-4 text-white shadow-[var(--neo-shadow)]' : 'clay min-h-32 p-4'}>
+      <p className={featured ? 'text-xs font-medium text-white/84' : 'text-xs font-medium text-muted'}>{label}</p>
+      <p className="mt-4 font-heading text-[28px] font-semibold leading-none tabular-nums tracking-[-0.04em]">{value === null ? '—' : value.toLocaleString()}</p>
+      <p className={featured ? 'mt-3 text-xs text-white/80' : 'mt-3 text-xs text-muted'}>{detail}</p>
     </div>
+  )
+}
+
+/**
+ * One extraction board.
+ *
+ * ⚠️ RENDERED TWICE — once for leads, once for accounts — rather than once
+ * with a "kind" column. The two runs share a queue and nothing else: a lead
+ * run is measured in people and exports person rows, an account run is
+ * measured in companies. A single list would force every row to declare which
+ * unit it is speaking in, and force the reader to hold both at once.
+ *
+ * Selection is shared: whichever board a run is picked in, the same detail
+ * panel below shows its files. One selected run, one detail view.
+ */
+function HistoryBoard({
+  title,
+  subtitle,
+  emptyLabel,
+  jobs,
+  failedFilesFor,
+  onChanged,
+  labelFor,
+  clayConnected,
+  googleConnected,
+  ghlConnected,
+  filter,
+  onFilterChange,
+}: {
+  title: string
+  subtitle: string
+  emptyLabel: string
+  jobs: DashboardJob[]
+  failedFilesFor: (jobId: string) => string[]
+  onChanged: () => void
+  labelFor: (job: DashboardJob) => string
+  clayConnected: boolean
+  googleConnected: boolean
+  ghlConnected: boolean
+  filter: HistoryFilter
+  onFilterChange: (value: HistoryFilter) => void
+}) {
+  // Counted from the rows on screen, so the line always describes what is shown.
+  const activeCount = jobs.filter(isActiveJob).length
+
+  return (
+    <section className="relative z-20 flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          <p className="mt-0.5 text-sm text-muted">
+            {jobs.length.toLocaleString()} run{jobs.length === 1 ? '' : 's'}
+            {activeCount > 0 ? ` · ${activeCount} processing` : ''}
+          </p>
+        </div>
+        <HistoryFilters value={filter} onChange={onFilterChange} />
+      </div>
+
+      <div className="max-h-[52vh] min-h-0 overflow-y-auto">
+        {jobs.length > 0 ? (
+          <ul className="divide-y divide-border">
+            {jobs.map((job) => (
+              <JobHistoryRow
+                key={job.id}
+                job={job}
+                failedFiles={failedFilesFor(job.id)}
+                onPurged={onChanged}
+                onDeleted={onChanged}
+                label={labelFor(job)}
+                clayConnected={clayConnected}
+                googleConnected={googleConnected}
+                ghlConnected={ghlConnected}
+              />
+            ))}
+          </ul>
+        ) : (
+          /*
+           * The empty state names the page type this board accepts. "No runs"
+           * would leave a user who has only ever uploaded leads wondering
+           * whether the Accounts board is broken or simply unused.
+           */
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm text-muted">{emptyLabel}</p>
+            <p className="mt-1 text-xs text-muted">{subtitle}</p>
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -515,233 +640,97 @@ function HistoryFilters({
 
 function JobHistoryRow({
   job,
-  selected,
-  onSelect,
+  label,
+  failedFiles,
+  onPurged,
+  onDeleted,
+  clayConnected,
+  googleConnected,
+  ghlConnected,
 }: {
   job: DashboardJob
-  selected: boolean
-  onSelect: () => void
+  label: string
+  failedFiles: readonly string[]
+  onPurged: () => void
+  onDeleted: () => void
+  clayConnected: boolean
+  googleConnected: boolean
+  ghlConnected: boolean
 }) {
   const percent = runProgress(job)
-  const purged = (job.progress_step ?? '').toLowerCase().includes('data purged')
 
   return (
-    <li className={selected ? 'bg-accent-soft/55 px-5 py-4' : 'px-5 py-4 transition-colors duration-150 hover:bg-surface-muted/70'}>
+    /*
+     * ⚠️ THE ROW IS NOT A CONTROL. It used to be a button that selected the
+     * run for the file board beside it; that board is gone, so a click would
+     * highlight and do nothing. A control with no effect is worse than plain
+     * text.
+     */
+    <li className="px-5 py-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={job.status} />
-            <span className="text-sm font-semibold text-ink">{jobLabel(job)}</span>
+            <span className="text-sm font-semibold text-ink">{label}</span>
             <time dateTime={job.created_at} className="text-xs text-muted">
               {formatDate(job.created_at)}
             </time>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
-            <span>{job.file_count.toLocaleString()} files</span>
-            <span>
-              {job.status === 'processing'
-                ? `${job.leads_parsed.toLocaleString()} leads found`
-                : `${job.leads_kept.toLocaleString()} leads kept`}
-            </span>
-            <span>{job.duplicates_removed.toLocaleString()} duplicates removed</span>
+            {/* The finished yield is in the title now, so only the live
+                count — which the title deliberately omits — is repeated. */}
+            {isActiveJob(job) ? (
+              <span>
+                {job.kind === 'account_list'
+                  ? `${job.accounts_parsed.toLocaleString()} companies found`
+                  : `${job.leads_parsed.toLocaleString()} leads found`}
+              </span>
+            ) : (
+              <span>{job.file_count.toLocaleString()} file{job.file_count === 1 ? '' : 's'}</span>
+            )}
+            {job.kind === 'account_list' ? (
+              // "Already known" is the account equivalent, and it is a
+              // different fact from a duplicate row removed from an export.
+              <span>{job.accounts_matched.toLocaleString()} already known</span>
+            ) : (
+              <span>{job.duplicates_removed.toLocaleString()} duplicates removed</span>
+            )}
             {isActiveJob(job) ? <span className="font-medium text-accent">{percent}% complete</span> : null}
           </div>
           {job.error_message ? <p className="mt-2 text-sm text-danger">{job.error_message}</p> : null}
-        </button>
+          {failedFiles.length > 0 ? (
+            <p className="mt-1 text-xs text-danger">
+              Failed: {failedFiles.join(', ')}
+            </p>
+          ) : null}
+        </div>
 
         {!isActiveJob(job) ? (
-          <JobActions
-            jobId={job.id}
-            hasExport={Boolean(job.export_storage_path)}
-            leadsRemaining={purged ? 0 : job.leads_kept}
-          />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <RowExportMenu
+              jobId={job.id}
+              hasExport={Boolean(job.export_storage_path)}
+              recordCount={job.kind === 'account_list' ? job.accounts_parsed : job.leads_kept}
+              clayConnected={clayConnected}
+              googleConnected={googleConnected}
+              ghlConnected={ghlConnected}
+            />
+            {/*
+              ⚠️ THE BRIDGE BETWEEN THE TWO PRODUCTS. Until R1 the Lead Engine
+              and the CRM were disconnected: `ingestExtractionJob` existed,
+              was tested, and had no caller, so extracted leads could never
+              reach the CRM. Deliberately explicit — nothing moves until
+              someone asks.
+            */}
+            {job.kind !== 'account_list' ? (
+              <SendToCrmButton jobId={job.id} recordCount={job.leads_kept} />
+            ) : null}
+            <TrashButton jobId={job.id} onTrashed={onPurged} />
+            <DeleteRunButton jobId={job.id} onDeleted={onDeleted} />
+          </div>
         ) : null}
       </div>
     </li>
-  )
-}
-
-function FilePipeline({ job, files }: { job: DashboardJob | null; files: DashboardFile[] }) {
-  const processed = files.filter((file) => file.status === 'processed').length
-  const failed = files.filter((file) => file.status === 'failed').length
-
-  return (
-    <section className="min-w-0 self-start rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)] xl:sticky xl:top-6">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="text-base font-semibold text-ink">File pipeline</h2>
-        <p className="mt-0.5 text-sm text-muted">
-          {job ? jobLabel(job) : 'Select a run'}
-        </p>
-      </div>
-
-      {job ? (
-        <>
-          <div className="grid grid-cols-3 border-b border-border">
-            <PipelineTotal label="Total" value={files.length || job.file_count} />
-            <PipelineTotal label="Processed" value={processed} />
-            <PipelineTotal label="Failed" value={failed} danger={failed > 0} />
-          </div>
-          {files.length > 0 ? (
-            <ul className="max-h-[30rem] divide-y divide-border overflow-y-auto" data-lenis-prevent>
-              {files.map((file, index) => (
-                <li key={file.id} className="flex items-start gap-3 px-5 py-3">
-                  <FileStatusDot status={file.status} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink" title={file.original_filename}>
-                      {file.original_filename}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      File {index + 1} · {formatBytes(file.byte_size)}
-                      {file.leads_found > 0 ? ` · ${file.leads_found.toLocaleString()} leads` : ''}
-                    </p>
-                    {file.error_message ? <p className="mt-1 text-xs text-danger">{file.error_message}</p> : null}
-                  </div>
-                  <span className="text-xs font-medium capitalize text-muted">{file.status}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-5 py-8 text-center text-sm text-muted">
-              File details will appear when processing begins.
-            </p>
-          )}
-        </>
-      ) : (
-        <p className="px-5 py-8 text-center text-sm text-muted">
-          Select an extraction to inspect its files.
-        </p>
-      )}
-    </section>
-  )
-}
-
-function PipelineTotal({
-  label,
-  value,
-  danger = false,
-}: {
-  label: string
-  value: number
-  danger?: boolean
-}) {
-  return (
-    <div className="px-4 py-3 text-center">
-      <p className={`font-heading text-lg font-semibold tabular-nums ${danger ? 'text-danger' : 'text-ink'}`}>
-        {value.toLocaleString()}
-      </p>
-      <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted">{label}</p>
-    </div>
-  )
-}
-
-function FileStatusDot({ status }: { status: DashboardFile['status'] }) {
-  const className =
-    status === 'processed'
-      ? 'bg-success'
-      : status === 'failed'
-        ? 'bg-danger'
-        : status === 'processing'
-          ? 'bg-accent motion-safe:animate-pulse'
-          : 'bg-border-strong'
-
-  return <span aria-hidden className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${className}`} />
-}
-
-function LeadPreview({
-  leads,
-  totalVisible,
-  search,
-  onSearch,
-  filesById,
-}: {
-  leads: DashboardLead[]
-  totalVisible: number
-  search: string
-  onSearch: (value: string) => void
-  filesById: Map<string, string>
-}) {
-  return (
-    <section className="rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 py-4">
-        <div>
-          <h2 className="text-base font-semibold text-ink">Latest extracted leads</h2>
-          <p className="mt-0.5 text-sm text-muted">
-            Showing the newest {totalVisible.toLocaleString()} retained lead rows.
-          </p>
-        </div>
-        <label className="w-full sm:w-72">
-          <span className="sr-only">Search latest leads</span>
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => onSearch(event.target.value)}
-            placeholder="Search name, title, company…"
-            className="w-full rounded-[var(--radius-md)] border border-border bg-paper px-3 py-2 text-sm text-ink transition-colors duration-150 placeholder:text-muted hover:border-border-strong"
-          />
-        </label>
-      </div>
-
-      {leads.length > 0 ? (
-        <div className="overflow-x-auto" data-lenis-prevent-horizontal>
-          <table className="w-full min-w-[860px] border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b border-border bg-surface-muted/70 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-                <th className="px-5 py-3">Lead</th>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Company</th>
-                <th className="px-4 py-3">Location</th>
-                <th className="px-4 py-3">Source</th>
-                <th className="px-5 py-3 text-right">Profile</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {leads.map((lead) => (
-                <tr key={lead.id} className="transition-colors duration-150 hover:bg-surface-muted/80">
-                  <td className="px-5 py-3 font-medium text-ink">{missing(lead.full_name)}</td>
-                  <td className="max-w-56 truncate px-4 py-3 text-muted" title={lead.job_title ?? undefined}>
-                    {missing(lead.job_title)}
-                  </td>
-                  <td className="max-w-48 truncate px-4 py-3 text-ink" title={lead.company_name ?? undefined}>
-                    {missing(lead.company_name)}
-                  </td>
-                  <td className="max-w-44 truncate px-4 py-3 text-muted" title={lead.location ?? undefined}>
-                    {missing(lead.location)}
-                  </td>
-                  <td className="max-w-48 truncate px-4 py-3 text-xs text-muted" title={lead.uploaded_file_id ? filesById.get(lead.uploaded_file_id) : undefined}>
-                    {lead.uploaded_file_id ? filesById.get(lead.uploaded_file_id) ?? 'Saved page' : 'Saved page'}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    {safeProfileUrl(lead.linkedin_url) ? (
-                      <a
-                        href={safeProfileUrl(lead.linkedin_url) ?? undefined}
-                        target="_blank"
-                        rel="noopener noreferrer nofollow"
-                        className="font-semibold text-accent underline-offset-2 hover:underline"
-                      >
-                        Open
-                      </a>
-                    ) : (
-                      <span className="text-muted">Not available</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="px-5 py-12 text-center">
-          <h3 className="text-sm font-semibold text-ink">
-            {search ? 'No leads match your search' : 'No retained leads yet'}
-          </h3>
-          <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-muted">
-            {search
-              ? 'Try a different name, title, company, or location.'
-              : 'Lead rows appear here after an extraction finishes. Downloaded CSV files remain available even after you clear lead data.'}
-          </p>
-        </div>
-      )}
-    </section>
   )
 }
 
@@ -782,5 +771,213 @@ function EmptyState() {
         Start your first extraction
       </Link>
     </section>
+  )
+}
+
+/**
+ * The trash box — where trashed extractions go instead of haunting history.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ *  MINIMAL BY INTENT. Muted surfaces, small type, no heavy borders: this box
+ *  holds deletions, and quiet is the point. The CSV survives a purge, so each
+ *  row keeps a small download affordance — data the user paid for never
+ *  disappears behind a cleanup.
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function TrashBox({
+  jobs,
+  labelFor,
+  onRestore,
+}: {
+  jobs: DashboardJob[]
+  labelFor: (job: DashboardJob) => string
+  onRestore: () => void
+}) {
+  if (jobs.length === 0) return null
+
+  return (
+    <section
+      aria-label="Trash"
+      className="rounded-[var(--radius-xl)] border border-border/60 bg-paper/70 p-4 shadow-[var(--shadow-sm)]"
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-medium text-muted">Trash</h2>
+        <span className="text-[11px] tabular-nums text-muted">{jobs.length.toLocaleString()}</span>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-muted">
+        Restorable. Deleting for good also erases the lead data.
+      </p>
+
+      {/*
+       * ⚠️ THE LIST SCROLLS INSIDE THE BOX, same contract as the history
+       * panel: a growing trash pile must never stretch the page.
+       */}
+      <div className="mt-3 max-h-[40vh] min-h-0 overflow-y-auto pr-1">
+        <ul className="space-y-2">
+          {jobs.map((job) => (
+            <TrashRow key={job.id} job={job} label={labelFor(job)} onRestore={onRestore} />
+          ))}
+        </ul>
+      </div>
+    </section>
+  )
+}
+
+function TrashRow({
+  job,
+  label,
+  onRestore,
+}: {
+  job: DashboardJob
+  label: string
+  onRestore: () => void
+}) {
+  const [download, downloadAction] = useActionState(getDownloadUrlAction, { status: 'idle' } as JobActionState)
+  const [restore, restoreAction] = useActionState(restoreJobAction, { status: 'idle' } as JobActionState)
+  const [del, deleteAction] = useActionState(deleteJobAction, { status: 'idle' } as JobActionState)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+
+  useEffect(() => {
+    if (download.status === 'ready') window.location.href = download.url
+  }, [download])
+
+  useEffect(() => {
+    if (restore.status === 'purged' || del.status === 'purged') onRestore()
+  }, [restore, del, onRestore])
+
+  const busy = restore.status === 'purged' || del.status !== 'idle' && del.status !== 'error'
+
+  return (
+    <li className="rounded-[var(--radius-lg)] border border-border/50 bg-panel/80 px-3 py-2.5">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-xs font-medium text-ink/75">{label}</span>
+        <time dateTime={job.created_at} className="shrink-0 text-[11px] text-muted">
+          {formatDate(job.created_at)}
+        </time>
+      </div>
+
+      {confirmingDelete ? (
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-medium text-danger">Delete this extraction and its lead data?</span>
+          <div className="flex items-center gap-1.5">
+            <form action={deleteAction}>
+              <input type="hidden" name="job_id" value={job.id} />
+              <button
+                type="submit"
+                className="rounded-[var(--radius-md)] bg-danger/10 px-2 py-1 text-[11px] font-semibold text-danger transition-colors duration-150 hover:bg-danger/20"
+              >
+                {del.status === 'purged' ? 'Deleted' : 'Delete'}
+              </button>
+            </form>
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              className="rounded-[var(--radius-md)] border border-border px-2 py-1 text-[11px] text-muted transition-colors duration-150 hover:text-ink"
+            >
+              Keep
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          <span className="text-[11px] text-muted">
+            {jobYield(job)} · {job.file_count.toLocaleString()} file{job.file_count === 1 ? '' : 's'}
+          </span>
+          <div className="flex items-center gap-2.5">
+            {job.export_storage_path ? (
+              <form action={downloadAction}>
+                <input type="hidden" name="job_id" value={job.id} />
+                <button
+                  type="submit"
+                  className="text-[11px] font-medium text-muted underline decoration-border underline-offset-2 transition-colors duration-150 hover:text-ink"
+                >
+                  {download.status === 'idle' ? 'Download CSV' : 'Preparing…'}
+                </button>
+              </form>
+            ) : null}
+            <form action={restoreAction}>
+              <input type="hidden" name="job_id" value={job.id} />
+              <button
+                type="submit"
+                className="text-[11px] font-semibold text-accent transition-colors duration-150 hover:text-accent-deep"
+              >
+                {busy && restore.status !== 'purged' ? 'Restoring…' : 'Restore'}
+              </button>
+            </form>
+            <button
+              type="button"
+              aria-label="Permanently delete this extraction"
+              onClick={() => setConfirmingDelete(true)}
+              className="text-[11px] font-medium text-muted transition-colors duration-150 hover:text-danger"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(() => {
+        const firstError = [download, restore, del].find((state) => state.status === 'error')
+        return firstError && firstError.status === 'error' ? (
+          <p role="alert" className="mt-1 text-[11px] text-danger">{firstError.message}</p>
+        ) : null
+      })()}
+    </li>
+  )
+}
+
+/** Soft-delete: the run leaves history and parks in the Trash box. */
+function TrashButton({ jobId, onTrashed }: { jobId: string; onTrashed: () => void }) {
+  const [trashed, trashAction] = useActionState(trashJobAction, { status: 'idle' } as JobActionState)
+  const [confirming, setConfirming] = useState(false)
+
+  useEffect(() => {
+    if (trashed.status === 'purged') onTrashed()
+  }, [trashed, onTrashed])
+
+  if (trashed.status === 'purged') {
+    return <span className="text-[11px] text-muted">In trash</span>
+  }
+
+  return confirming ? (
+    <div className="flex items-center gap-1.5" role="group" aria-label="Confirm moving to trash">
+      <span className="text-xs font-medium text-danger">Move to trash?</span>
+      <form action={trashAction}>
+        <input type="hidden" name="job_id" value={jobId} />
+        <button
+          type="submit"
+          aria-label="Confirm: move to trash"
+          className="inline-flex size-9 items-center justify-center rounded-[var(--radius-md)] bg-danger/10 text-danger transition-colors duration-150 hover:bg-danger/20 active:scale-[0.95]"
+        >
+          <TrashIcon />
+        </button>
+      </form>
+      <button
+        type="button"
+        aria-label="Cancel"
+        onClick={() => setConfirming(false)}
+        className="inline-flex size-9 items-center justify-center rounded-[var(--radius-md)] border border-border text-muted transition-colors duration-150 hover:text-ink"
+      >
+        <svg aria-hidden viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="m5 5 10 10M15 5 5 15" /></svg>
+      </button>
+    </div>
+  ) : (
+    <button
+      type="button"
+      aria-label="Move this extraction to trash"
+      title="Move to trash (restorable)"
+      onClick={() => setConfirming(true)}
+      className="inline-flex size-10 items-center justify-center rounded-[var(--radius-md)] border border-border text-muted transition-colors duration-150 hover:border-danger/40 hover:text-danger active:scale-[0.97]"
+    >
+      <TrashIcon />
+    </button>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+      <path d="M3.5 5.5h13M8 5V3.8c0-.44.36-.8.8-.8h2.4c.44 0 .8.36.8.8V5M5 5.5l.7 10.2c.04.72.64 1.3 1.36 1.3h5.88c.72 0 1.32-.58 1.36-1.3L15 5.5M8.2 8.8v4.9M11.8 8.8v4.9" />
+    </svg>
   )
 }

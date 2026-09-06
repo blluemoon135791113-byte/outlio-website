@@ -267,7 +267,7 @@ export async function cancelSubscriptionAction(
       return {
         status: 'error',
         message:
-          'We could not reach the billing provider, so nothing was changed. Email husnain@outlio.io and we will cancel it for you.',
+          'We could not reach the billing provider, so nothing was changed. Please try again later or use the contact channel in your transaction correspondence.',
       }
     }
   }
@@ -283,7 +283,7 @@ export async function cancelSubscriptionAction(
   if (row?.status === 'no_subscription' || row?.status === 'not_active') {
     return {
       status: 'error',
-      message: 'There is no active plan on this account. Email husnain@outlio.io if that looks wrong.',
+      message: 'There is no active plan on this account. If that looks wrong, use the contact channel in your transaction correspondence.',
     }
   }
 
