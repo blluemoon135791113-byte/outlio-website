@@ -128,6 +128,24 @@ export function stepStopsOnReply(type: CampaignType, stepOverride: boolean | nul
  * whether a campaign may LAUNCH without one; this is about what we actually
  * send, and the answer is always yes.
  */
+/**
+ * Whether a postal address is usable in a compliance footer.
+ *
+ * ⚠️ ONE DEFINITION, TWO CALLERS, DELIBERATELY. `assertLaunchable` refuses a
+ * launch without this, and the first-run checklist ticks a box when it is
+ * satisfied. If those two ever disagreed, the checklist would say "done" on a
+ * value the launch gate then rejected — the user ticks the box and still hits
+ * the wall, which is worse than never having asked.
+ *
+ * The 10-character floor mirrors the CHECK constraint on
+ * `workspaces.sender_postal_address` (migration 0111). It is not a validation
+ * of the address, only a refusal of the obviously empty: no rule can tell a
+ * real street from a plausible one, which is exactly why a human is asked.
+ */
+export function hasUsablePostalAddress(value: string | null | undefined): boolean {
+  return (value ?? '').trim().length >= 10
+}
+
 export function shouldIncludeUnsubscribe(type: CampaignType): boolean {
   return type !== 'manual'
 }
@@ -197,7 +215,7 @@ export function assertLaunchable(input: LaunchInput): void {
    */
   if (
     shouldIncludeUnsubscribe(input.type) &&
-    (input.senderPostalAddress ?? '').trim().length < 10
+    !hasUsablePostalAddress(input.senderPostalAddress)
   ) {
     throw new CampaignPolicyError(
       'Add your business postal address in workspace settings before launching. ' +

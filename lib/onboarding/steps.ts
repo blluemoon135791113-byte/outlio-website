@@ -18,6 +18,7 @@ import 'server-only'
  * ║  dismissal is the only stored state (migration 0102).                     ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
+import { hasUsablePostalAddress } from '@/lib/email/campaign-policy'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { can, type PolicyInput } from '@/lib/workspaces/permissions'
 
@@ -74,7 +75,7 @@ export async function loadFirstRun(
     return n ?? 0
   }
 
-  const [contacts, pipelines, members, mailboxes, campaigns, readyMailbox, state] =
+  const [contacts, pipelines, members, mailboxes, campaigns, readyMailbox, state, workspace] =
     await Promise.all([
       count('crm_contacts'),
       count('crm_pipelines'),
@@ -93,9 +94,26 @@ export async function loadFirstRun(
         .select('dismissed_at')
         .eq('workspace_id', workspaceId)
         .maybeSingle(),
+      /*
+       * Migration 0111. Derived like everything else here — the column IS the
+       * progress, so this step cannot disagree with reality the way a stored
+       * `completed_steps` flag would.
+       */
+      db
+        .from('workspaces')
+        .select('sender_postal_address')
+        .eq('id', workspaceId)
+        .maybeSingle(),
     ])
 
   const hasMailbox = mailboxes > 0
+
+  /*
+   * ⚠️ THE LAUNCH GATE'S OWN PREDICATE, IMPORTED RATHER THAN RESTATED. A second
+   * copy of "what counts as an address" would let the checklist tick a box the
+   * launch gate then refuses.
+   */
+  const hasPostalAddress = hasUsablePostalAddress(workspace.data?.sender_postal_address)
   const steps: FirstRunStep[] = []
 
   if (can(policy, 'crm.contact.view')) {
@@ -149,6 +167,33 @@ export async function loadFirstRun(
       cta: 'Run the checks',
       done: Boolean(readyMailbox.data),
       lockedBy: hasMailbox ? null : 'mailbox',
+    })
+  }
+
+  if (can(policy, 'email.account.manage')) {
+    /*
+     * ⚠️ ASKED HERE RATHER THAN AT LAUNCH, WHICH IS WHERE IT USED TO BITE.
+     *
+     * `assertLaunchable` refuses a campaign whose workspace has no postal
+     * address, so the first time anyone met this requirement was a red error
+     * AFTER writing every step of a sequence and picking an audience. The
+     * requirement is right; the moment was wrong.
+     *
+     * Gated on `email.account.manage` — the same permission
+     * `updateSenderPostalAddress` asserts — so nobody is handed a task the
+     * server will refuse.
+     */
+    steps.push({
+      id: 'sender_address',
+      title: 'Add your business address',
+      body:
+        'Commercial email has to carry a real postal address by law, and mail ' +
+        'without one is far more likely to be filed as spam. It appears in small ' +
+        'print under your signature, next to the unsubscribe link.',
+      href: '/email',
+      cta: 'Add your address',
+      done: hasPostalAddress,
+      lockedBy: null,
     })
   }
 

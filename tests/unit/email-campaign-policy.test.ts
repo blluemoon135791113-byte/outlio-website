@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   assertLaunchable,
+  hasUsablePostalAddress,
   CampaignPolicyError,
   policyFor,
   shouldIncludeUnsubscribe,
@@ -243,5 +244,72 @@ describe('a campaign that carries an unsubscribe footer needs a postal address',
         senderPostalAddress: '9 Example Street, Springfield, IL 62704',
       }),
     ).not.toThrow()
+  })
+})
+
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ONE DEFINITION OF "HAS AN ADDRESS", SHARED BY TWO CALLERS.              ║
+ * ║                                                                           ║
+ * ║  `assertLaunchable` refuses a launch without one; the first-run checklist ║
+ * ║  ticks a box when one exists. Two copies of the rule would eventually     ║
+ * ║  disagree, and the failure is nasty: the checklist says done, the user    ║
+ * ║  builds a whole campaign, and the launch gate refuses anyway.            ║
+ * ║                                                                           ║
+ * ║  That is the same two-sources-of-truth shape as the duplicate CAN-SPAM    ║
+ * ║  rule removed in `bulkLaunchBlockedBecause`.                             ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('hasUsablePostalAddress', () => {
+  it('refuses absent, empty and whitespace', () => {
+    expect(hasUsablePostalAddress(null)).toBe(false)
+    expect(hasUsablePostalAddress(undefined)).toBe(false)
+    expect(hasUsablePostalAddress('')).toBe(false)
+    expect(hasUsablePostalAddress('         ')).toBe(false)
+  })
+
+  it('refuses anything under the column CHECK of 10 characters', () => {
+    // Mirrors migration 0111 so a value this accepts can always be stored.
+    expect(hasUsablePostalAddress('Box 1')).toBe(false)
+    expect(hasUsablePostalAddress('123456789')).toBe(false)
+    expect(hasUsablePostalAddress('1234567890')).toBe(true)
+  })
+
+  it('measures the trimmed value, not the padding', () => {
+    expect(hasUsablePostalAddress('   short   ')).toBe(false)
+  })
+
+  it('accepts a real address', () => {
+    expect(hasUsablePostalAddress('9 Example Street, Springfield, IL 62704')).toBe(true)
+  })
+
+  it('agrees with assertLaunchable, which is the whole point', () => {
+    /*
+     * Ties the predicate to the gate behaviourally rather than trusting that
+     * both were updated together.
+     */
+    const base = {
+      type: 'sales_sequence' as const,
+      stepCount: 2,
+      hasAccount: true,
+      hasUnsubscribeSupport: true,
+      enrollmentCount: 5,
+    }
+
+    for (const address of [null, '', '   ', 'Box 1', '9 Example Street, Springfield, IL 62704']) {
+      const launches = (() => {
+        try {
+          assertLaunchable({ ...base, senderPostalAddress: address })
+          return true
+        } catch {
+          return false
+        }
+      })()
+
+      expect(
+        launches,
+        `hasUsablePostalAddress(${JSON.stringify(address)}) and assertLaunchable disagree`,
+      ).toBe(hasUsablePostalAddress(address))
+    }
   })
 })
