@@ -149,14 +149,40 @@ jobs:
           node-version: '24'
           cache: npm
 
+      # ⚠️ SAYS WHAT THE TOKEN CAN SEE, BEFORE USING IT.
+      #
+      # The first run failed inside `vercel pull` with an error nobody outside
+      # the repo could read — GitHub's log API needs auth, so diagnosing it
+      # meant asking a human to copy text out of a browser. These two commands
+      # cost seconds and turn the usual cause into a readable line: a token
+      # scoped to a personal account instead of the team lists no projects
+      # here, which is the difference between "it broke" and "it is pointed at
+      # the wrong account".
+      - if: steps.check.outputs.ready == 'true'
+        name: Who is this token, and what can it reach
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          echo "--- whoami ---"
+          npx vercel@latest whoami --token="$VERCEL_TOKEN" || true
+          echo "--- projects visible in scope $VERCEL_ORG_ID ---"
+          npx vercel@latest project ls --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID" || true
+
       # ⚠️ NO PLACEHOLDER ENV HERE, UNLIKE `verify`. `vercel pull` fetches the
       # project's real production environment, so the build sees the same values
       # the running app does. That is the point of building through Vercel
       # rather than running `next build` and uploading the output.
+      #
+      # ⚠️ `--scope` IS EXPLICIT. `--yes` means "set up using the DEFAULT
+      # scope", and a token whose default is a personal account will look for
+      # this project somewhere it does not exist. Naming the team removes the
+      # ambiguity rather than relying on how the token was created.
       - if: steps.check.outputs.ready == 'true'
         run: |
-          npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx vercel@latest pull --yes --environment=production \
+            --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN"
           npx vercel@latest build --prod --token="$VERCEL_TOKEN"
-          npx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          npx vercel@latest deploy --prebuilt --prod \
+            --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
