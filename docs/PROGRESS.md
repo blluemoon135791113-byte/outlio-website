@@ -10438,10 +10438,76 @@ prove they agree.
   all three and breaking both inbound mail and outbound authentication.
 - **`sender_postal_address`** set, so campaigns can launch.
 
+## R14 — ten actions nobody could reach, and a gate in front of production
+
+`KNOWN_UNREACHABLE` is empty. Ten server actions existed, enforced their
+permissions, wrote their audit rows, and could not be called by any human.
+Measured in the build rather than asserted: the server reference manifest went
+from **101 callable actions to 111**.
+
+- **Pipeline management** — switch, rename, set default, archive. A workspace
+  was stuck with the first pipeline it made, under the first name it used.
+  `listPipelines` was written for a picker that never existed.
+- **Bulk contacts** — tag, add-to-list, delete, joining the existing toolbar.
+- **Extension admin** — access on/off, disconnect one browser or all, usage.
+  Disconnecting a lost laptop previously meant hand-written SQL.
+
+### Each one exposed a bug that only existed once it was reachable
+
+- `archivePipeline` had no guard against archiving the LAST pipeline. Latent
+  while unreachable; with a caller it is a way to leave a workspace with no
+  board and every deal unreachable from the UI. Guarded in the library with a
+  typed `LastPipelineError`, not in the component.
+- The bulk toolbar was gated entirely on `crm.contact.assign` (manager), but
+  `crm.contact.edit` is SETTER. Adding setter-level tagging to a manager-gated
+  bar would have shipped it unreachable for the role most likely to use it —
+  the same defect being fixed, one layer up.
+- `/admin/extension` lists accounts with a browser **plus accounts whose access
+  is disabled**. Without the second set, disabling someone removes them from
+  the only screen that could enable them again.
+
+### ⚠️ The reachability guard could not see its own list rot
+
+It stops a NEW unreachable action and says nothing when a listed one gains a
+caller, so entries stayed valid-looking after being wired and the suite stayed
+green. The rot check already written for `INNER_HTML_ALLOWED` was added here
+too — and was itself vacuous on first write, passing a mutation that had not
+applied because the list is indented two spaces and the patch matched four.
+
+## R15 — CI became a gate instead of a report
+
+Vercel's Git integration deploys on push and does not wait for checks.
+Measured: production created 14:56:46, CI finished 14:59:47. It shipped
+`a0ffc02` — a commit with a failing test — while CI was red on it.
+
+**The gate is branch protection, not a deploy job.** `main` requires a pull
+request and a passing `verify`, so Vercel only ever deploys code that passed.
+No token to expire, leak or mis-scope.
+
+Proven by attempting a push rather than by reading configuration:
+
+    remote: - Changes must be made through a pull request.
+    remote: - Required status check "verify" is expected.
+
+⚠️ The FIRST attempt at that proof was rejected for being non-fast-forward — a
+pass for entirely the wrong reason. Rebuilding the test commit directly on
+`origin/main` removed the confound so only the ruleset could refuse.
+
+### What the abandoned deploy-job route cost, and taught
+
+Three Vercel tokens, three identical `whoami -> User not found` failures with a
+well-formed modern token. The job was removed rather than left disabled: one
+that has never succeeded, sitting behind a secret nobody can make work, is a
+mechanism that LOOKS like a gate.
+
+⚠️ The token-shape diagnostic built to settle it reported a valid token as
+invalid, because it tested the LEGACY 24-character format. A measurement read
+against a stale constant is worse than no measurement, because it is believed —
+and it sent the owner to recreate a token that was already correct.
+
 ### Verified
 
-3,052 unit tests across 171 files; 471 integration tests (446 passed, 24
-skipped by design) against real Supabase and real SMTP/IMAP; typecheck 0;
-lint 0 errors; build clean. Scheduler cadence confirmed from `worker_runs`
-timestamps at 300/300/300/299s, not assumed. Both workflows green on
-`actions/checkout@v7` and `actions/setup-node@v7`.
+3,054 unit tests across 172 files; 471 integration tests green against real
+Supabase and real SMTP/IMAP; typecheck 0; lint 0 errors; build clean.
+Scheduler holding at 299-301s across 11 consecutive gaps, read from
+`worker_runs` rather than assumed. `main` refuses a direct push.
