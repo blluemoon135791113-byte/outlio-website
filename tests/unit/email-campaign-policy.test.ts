@@ -163,3 +163,85 @@ describe('launch validation catches misconfiguration before anyone is mailed', (
     expect(() => assertLaunchable({ ...valid, enrollmentCount: 0 })).toThrow(/No contacts/)
   })
 })
+
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THIS GUARD WAS LIVE AND ENTIRELY UNTESTED.                              ║
+ * ║                                                                           ║
+ * ║  Every existing case above passes a VALID `senderPostalAddress`, so the   ║
+ * ║  branch that refuses a missing one was never taken. Deleting the whole    ║
+ * ║  §7704(a)(5) check left all 20 tests passing — measured, not assumed.     ║
+ * ║                                                                           ║
+ * ║  A legal requirement enforced only by code nobody exercises is one        ║
+ * ║  careless refactor away from not being enforced at all.                   ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('a campaign that carries an unsubscribe footer needs a postal address', () => {
+  const base = {
+    type: 'sales_sequence' as const,
+    stepCount: 2,
+    hasAccount: true,
+    hasUnsubscribeSupport: true,
+    enrollmentCount: 5,
+  }
+
+  it('refuses when the address is null', () => {
+    expect(() =>
+      assertLaunchable({ ...base, senderPostalAddress: null }),
+    ).toThrow(/postal address/i)
+  })
+
+  it('refuses whitespace and a too-short address', () => {
+    // The column's own CHECK requires 10-500 characters. A blank string is the
+    // realistic case: a text input submitted empty arrives as '', not null.
+    expect(() => assertLaunchable({ ...base, senderPostalAddress: '' })).toThrow(
+      CampaignPolicyError,
+    )
+    expect(() =>
+      assertLaunchable({ ...base, senderPostalAddress: '          ' }),
+    ).toThrow(CampaignPolicyError)
+    expect(() => assertLaunchable({ ...base, senderPostalAddress: 'Box 1' })).toThrow(
+      CampaignPolicyError,
+    )
+  })
+
+  it('applies to every type that sends a footer, not only marketing_broadcast', () => {
+    /*
+     * The trap this exists to catch: tying the check to `requiresUnsubscribe`
+     * (broadcast-only) instead of `shouldIncludeUnsubscribe` (everything except
+     * manual) would leave every sales sequence sending a footer with no postal
+     * address, while looking correct.
+     */
+    for (const type of ['sales_sequence', 'marketing_broadcast', 'flow_driven'] as const) {
+      expect(() =>
+        assertLaunchable({
+          ...base,
+          type,
+          stepCount: type === 'marketing_broadcast' ? 1 : 2,
+          senderPostalAddress: null,
+        }),
+      ).toThrow(/postal address/i)
+    }
+  })
+
+  it('exempts manual sends, which carry no footer', () => {
+    // A one-to-one reply with an unsubscribe link is both wrong and insulting.
+    expect(() =>
+      assertLaunchable({
+        ...base,
+        type: 'manual',
+        stepCount: 1,
+        senderPostalAddress: null,
+      }),
+    ).not.toThrow()
+  })
+
+  it('accepts a real address', () => {
+    expect(() =>
+      assertLaunchable({
+        ...base,
+        senderPostalAddress: '9 Example Street, Springfield, IL 62704',
+      }),
+    ).not.toThrow()
+  })
+})

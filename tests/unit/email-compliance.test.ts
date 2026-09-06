@@ -24,7 +24,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { applyCompliance, bulkLaunchBlockedBecause } from '@/lib/email/compliance'
+import { applyCompliance } from '@/lib/email/compliance'
 
 const ROOT = join(__dirname, '..', '..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
@@ -110,32 +110,6 @@ describe('applyCompliance', () => {
   })
 })
 
-describe('bulkLaunchBlockedBecause', () => {
-  it('blocks a bulk campaign with no postal address', () => {
-    expect(bulkLaunchBlockedBecause({ campaignType: 'sales_sequence', postalAddress: null })).toMatch(
-      /postal address/i,
-    )
-  })
-
-  it('blocks a whitespace-only address', () => {
-    expect(
-      bulkLaunchBlockedBecause({ campaignType: 'sales_sequence', postalAddress: '   ' }),
-    ).not.toBeNull()
-  })
-
-  it('allows a bulk campaign once one is set', () => {
-    expect(
-      bulkLaunchBlockedBecause({
-        campaignType: 'sales_sequence',
-        postalAddress: '9 Example Street, Springfield, IL 62704',
-      }),
-    ).toBeNull()
-  })
-
-  it('never blocks manual mail', () => {
-    expect(bulkLaunchBlockedBecause({ campaignType: 'manual', postalAddress: null })).toBeNull()
-  })
-})
 
 /**
  * The three links in the chain, asserted separately.

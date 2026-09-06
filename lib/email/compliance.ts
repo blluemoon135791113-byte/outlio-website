@@ -96,27 +96,3 @@ export function applyCompliance(input: ComplianceInput): ComplianceResult {
     bodyHtml: input.bodyHtml ? input.bodyHtml + footerHtml : null,
   }
 }
-
-/**
- * Why a bulk campaign may not launch yet, or null when it may.
- *
- * ⚠️ THIS IS ENFORCED AT LAUNCH, NOT IN THE DATABASE, AND THAT IS DELIBERATE.
- * `workspaces.sender_postal_address` is nullable because the honest alternative
- * — backfilling every existing workspace — means inventing an address, and a
- * WRONG postal address in a commercial email is its own §7704(a)(5) violation
- * that would pass every check we could write. Ask a human at the one moment
- * there is a human to ask. See migration 0111.
- */
-export function bulkLaunchBlockedBecause(input: {
-  campaignType: CampaignType
-  postalAddress: string | null
-}): string | null {
-  if (!shouldIncludeUnsubscribe(input.campaignType)) return null
-  if (input.postalAddress && input.postalAddress.trim().length >= 10) return null
-
-  return (
-    'Add your business postal address in workspace settings before launching. ' +
-    'Commercial email is required by law to include one, and campaigns without ' +
-    'it are far more likely to be marked as spam.'
-  )
-}
