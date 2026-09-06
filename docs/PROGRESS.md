@@ -10300,7 +10300,76 @@ branches coalesced; all five caller shapes exercised.
 - Replies to `completed` enrollments are attributed to nobody: `reply-sync`
   matches only `active`/`paused`. Still a design call, asked twice, unanswered.
 
+## R12 — mutation testing the guards
+
+"This guard has tests" and "these tests would notice if it vanished" are
+different claims, and R0–R11 kept finding the second false where the first was
+true. So each critical guard was deliberately broken and the suite re-run.
+
+**21 guards attacked over four rounds. 16 held. 5 had gaps, all now closed.**
+
+Held under direct attack: `sanitizeCell` (formula injection and control
+chars), CSV RFC-4180 quoting, reply-sync's self-send skip, the tick's per-job
+budget, `assertAdmin` on `runWorkersNow`, the unsubscribe token signature, a
+`workspace_id` filter, the parser's zero-row `ERR_FILE_FORMAT`, the export row
+cap, extension token comparison, webhook payload signing, and the plan-limit
+hardcode check.
+
+### The five gaps
+
+1. **`app/admin/page.tsx` stopped checking who was asking** and nothing failed.
+   The layout also calls `requireAdmin()`, and because that redirects a full
+   page load is safe — but the layout's own comment says why that is not
+   enough: Next can render a route without re-running a parent layout, and the
+   page then runs alone. Guard added over every page and route under `app/admin`.
+2. **Rule 3 (no `dangerouslySetInnerHTML`)** was prose the build could not see.
+   Now an allowlist of the four legitimate first-party uses; it may only shrink,
+   and an entry that stops injecting fails too.
+3. **Rule 6 (`NEXT_PUBLIC_` on a secret)** likewise. `NEXT_PUBLIC_` is not a
+   naming convention, it is how Next decides what to inline into the client
+   bundle. Checks `.env.example` too.
+4. **Zero-hardcoded-colours** was unenforced. Scoped to the five authenticated
+   surfaces, each measured at zero first — repo-wide it would have failed on
+   arrival (`components/leadengine` alone holds 266) and been deleted.
+5. **A revoked extension device kept working**, covered by nothing at all — not
+   unit, not integration, not E2E. Thirteen structural assertions added over
+   the seven documented checks. Structural is a stated compromise: the function
+   makes sequential service-role queries, so behaviour needs a live database.
+
+### ⚠️ Three guards are invisible to `npm test`
+
+Covered by integration tests only, which need Docker or real Supabase and are
+skipped without them. `npm test` is the loop people run before committing, so
+it reports green on all three:
+
+| Guard | Caught by |
+|---|---|
+| `enqueueEmail` suppression list | `email-send-worker.test.ts` (5 fail) |
+| Webhook delivery signature header | `webhook-delivery.test.ts` |
+| Flows at-most-once claim | `flow-engine.test.ts` (1 fail) |
+
+The suppression one now also has a structural unit test. The other two are
+genuinely covered and were left alone — **the decision worth making is whether
+CI runs the integration suite**, not whether to keep writing structural
+stand-ins for it.
+
+### Mistakes this round, kept because the pattern repeats
+
+- A tenant-scope assertion **I wrote** was vacuous: it sliced from the first
+  `extension_devices` to end of file, swallowing the heartbeat update, which
+  carries its own `.eq('user_id', claims.sub)`. It passed on the heartbeat's
+  scope while the lookup had none. The mutation exposed it.
+- The first-occurrence bug, three more times: `indexOf` finding a return-type
+  union instead of a guard, a `createAdminClient()` in a different function,
+  and a comment instead of code. Comments are now stripped in four guard files.
+- One flows mutation was discarded rather than reported: `if (false)` made TS
+  treat the block as unreachable, changing narrowing, and the test count fell
+  3,047 → 2,958. A number that moved for the wrong reason is worth less than no
+  number. Re-run with `Date.now() < 0`, which is runtime-false but opaque to
+  the compiler.
+
 ### Verified
 
-3,007 unit tests across 166 files; typecheck 0; lint 0 errors; build clean.
-Scheduler cadence confirmed from `worker_runs` timestamps, not assumed.
+3,047 unit tests across 170 files; 24 email integration tests against real
+SMTP/IMAP; typecheck 0; lint 0 errors; build clean. Scheduler cadence confirmed
+from `worker_runs` timestamps at 300/300/300/299s, not assumed.
