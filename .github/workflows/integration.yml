@@ -1,0 +1,122 @@
+# The suites `npm test` cannot see.
+#
+# WHY THIS IS SEPARATE FROM ci.yml
+#
+# ci.yml runs on every push and needs no secrets. This one talks to a real
+# Supabase project and a real SMTP/IMAP server, takes minutes rather than
+# seconds, and runs serially by design — `vitest.config.mts` sets
+# `fileParallelism: false` because these tests create and delete real users,
+# and two files racing produce failures that look like the code misbehaving.
+#
+# Three guards are invisible to `npm test` and live only here. Each was
+# confirmed by deliberately breaking it (docs/PROGRESS.md, R12):
+#
+#   * enqueueEmail's suppression list      — 5 tests fail without it
+#   * the webhook Outlio-Signature header  — the test server reads the real
+#                                            header off the wire
+#   * the flows at-most-once claim         — "does not repeat a side effect
+#                                            the first worker already performed"
+#
+# ⚠️ IT TARGETS STAGING, NOT PRODUCTION, AND THAT IS THE WHOLE SAFETY STORY.
+# `tests/setup.integration.ts` loads `.env.staging` whenever that file exists,
+# and only falls back to `.env.local` (production) when it does not. This job
+# writes `.env.staging` from repository secrets, so the production service-role
+# key never needs to exist in GitHub at all.
+name: Integration
+
+on:
+  schedule:
+    # Nightly, 03:00 UTC. Not on every push: these are slow and they write to a
+    # shared database, so two pushes at once would fight over the same rows.
+    - cron: '0 3 * * *'
+  # So it can be run by hand after touching email, webhooks or flows.
+  workflow_dispatch:
+
+concurrency:
+  group: integration
+  cancel-in-progress: false
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ⚠️ SKIPS RATHER THAN FAILS WHEN UNCONFIGURED.
+      #
+      # A workflow that goes red the moment it is committed, before anyone has
+      # added the secrets, teaches people to ignore a red tick. This reports a
+      # notice and succeeds until STAGING_SUPABASE_URL exists.
+      - id: check
+        env:
+          URL: ${{ secrets.STAGING_SUPABASE_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Integration skipped::STAGING_* secrets are not configured yet. See .github/workflows/integration.yml for the six names."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - if: steps.check.outputs.ready == 'true'
+        run: npm ci
+
+      # ⚠️ WRITTEN, NOT COMMITTED. `.env.staging` is gitignored; the suite reads
+      # it from disk, so it has to exist as a file rather than as environment
+      # variables. It lives only on this runner, for this run.
+      - if: steps.check.outputs.ready == 'true'
+        name: Write .env.staging from secrets
+        env:
+          URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          ANON: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          SERVICE: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          ENCRYPTION: ${{ secrets.STAGING_INTEGRATION_ENCRYPTION_KEY }}
+          UNSUB: ${{ secrets.STAGING_UNSUBSCRIBE_TOKEN_SECRET }}
+          TRIAL: ${{ secrets.STAGING_TRIAL_IP_HASH_SECRET }}
+        run: |
+          umask 077
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$URL"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE"
+            echo "INTEGRATION_ENCRYPTION_KEY=$ENCRYPTION"
+            echo "UNSUBSCRIBE_TOKEN_SECRET=$UNSUB"
+            echo "TRIAL_IP_HASH_SECRET=$TRIAL"
+          } > .env.staging
+
+          # ⚠️ REFUSE TO CONTINUE IF THIS POINTS AT PRODUCTION. The whole
+          # safety argument is that this job cannot touch the live database,
+          # and that argument is worth checking rather than asserting.
+          if grep -q 'ptewhpmxzenbmxlizxhu' .env.staging; then
+            echo "::error::STAGING_SUPABASE_URL points at the PRODUCTION project. Refusing to run."
+            exit 1
+          fi
+
+      # Ports match the ones the specs hardcode (SMTP 2525, IMAP 993). Without
+      # this the email specs skip themselves rather than fail.
+      - if: steps.check.outputs.ready == 'true'
+        name: Start GreenMail
+        run: |
+          docker run -d --name outlio-greenmail \
+            -p 2525:3025 -p 993:3993 \
+            -e GREENMAIL_OPTS='-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=sender:senderpw@acme.example,prospect:prospectpw@buyer.example' \
+            greenmail/standalone:2.1.4
+          # The image is slow to open its listeners; the specs' own runner waits
+          # 20s for exactly this reason.
+          sleep 20
+
+      - if: steps.check.outputs.ready == 'true'
+        run: npm run test:integration
+
+      - if: always() && steps.check.outputs.ready == 'true'
+        name: Remove the credentials file
+        run: rm -f .env.staging
