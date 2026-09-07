@@ -1068,3 +1068,56 @@ the same argument is a product call rather than an engineering one — see
 Phase 4 remains correctly deferred: it needs ~20 extraction jobs completed
 after the CRM existed, and production still shows one workspace with 44
 contacts.
+
+## Phase 8 result (2026-09-07) — DELIVERED, narrowed on evidence
+
+Suppression had every write path and no read path. `suppressEmail` is called on
+unsubscribe and hard bounce, `enqueueEmail` refuses a suppressed address
+(proven by mutation), and `grep -rl "email_suppressions" app components`
+returned nothing. The product honoured opt-outs and could not demonstrate it —
+a customer asking "did you remove me?" got no answer, and a wrong entry needed
+SQL to undo.
+
+Now listed and manageable at `/email`, gated on `email.account.manage` (admin),
+with removal copy that differs per reason: un-suppressing a bounce is a
+delivery decision that recurs, un-suppressing an unsubscribe overrides a stated
+wish.
+
+⚠️ **Rotation and variants deferred.** One mailbox exists and
+`email_sequence_steps` is empty; both would design against a population of zero.
+
+## Phase 9 result (2026-09-07) — PARTIAL: one real defect found and fixed
+
+**254 `replied` events against 2 messages ever sent.** 261 threads, 260 with no
+contact. The sync reads the whole mailbox, and nothing asked whether an
+arriving message answered anything we sent — so ordinary correspondence was
+recorded as prospect replies and fired `email_replied` flow triggers. A bounce
+for mail we never sent would have suppressed an unrelated address.
+
+Fixed: a message counts as a reply only if this workspace has mailed that
+address. Unrelated mail is still stored for the inbox and counted, but produces
+no event, suppression or trigger.
+
+⚠️ **The rest of Phase 9 is deferred with Phases 5 and 6.** "Unified"
+conversations need a second channel; LinkedIn is Phases 15–20 and not started.
+
+⚠️ **Integration tests unrun for the Phase 9 change** — Docker on the dev
+machine will not start. The nightly workflow is what settles it.
+
+### Where the phase map stands
+
+| Phase | State |
+|---|---|
+| 0, 0.5, 1, 2, 3 | complete |
+| 4 Lead Engine → CRM | deferred — needs ~20 post-CRM extraction jobs |
+| 5 Opportunity expansion | deferred — `crm_opportunities` is 0 rows (DECISION-14) |
+| 6 Pipeline productization | deferred — forecasting zero opportunities |
+| 7 Email E2E | complete, recorded 2026-09-06 |
+| 8 Campaign compliance | delivered, narrowed |
+| 9 Conversations | partial — defect fixed, model deferred |
+| 10+ | not started |
+
+⚠️ **Four consecutive phases now rest on the same fact:** this product has one
+active workspace, 44 contacts, 2 sent messages and 0 opportunities. The
+engineering is ahead of the usage, and further phases keep meeting the same
+wall. That is a product question, not an engineering one.
