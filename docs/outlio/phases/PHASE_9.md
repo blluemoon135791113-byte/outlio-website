@@ -70,12 +70,22 @@ Deferred with them, on the same standard: revisit when a second channel exists.
 
 ## LIMITATIONS — mandatory per §10
 
-- **Integration tests were not run for this change.** Docker on the
-  development machine is wedged: `com.docker.backend` starts, the engine VM
-  never does, and neither socket responds. The reasoning says the fixtures
-  still pass — `enroll()` inserts both an enrollment and an `email_messages`
-  row, which is exactly what the new check looks for — but that is reasoning,
-  not evidence. The nightly Integration workflow settles it.
+- **Integration ran, and the one test that matters skipped.** A run started
+  2026-09-07 10:01:08 — 43 minutes after the fix landed at 09:17:56, so it
+  included the change — and reported **424 passed, 47 skipped, 0 failed**
+  against real Supabase. That is genuine evidence the change breaks nothing
+  elsewhere.
+
+  ⚠️ **It is not evidence the change is correct.** CI skips 24 with GreenMail
+  running; this run skipped 47. The 23 extra are the GreenMail-dependent files,
+  and one of them is `email-reply-sync.test.ts` — the only test that exercises
+  the code path this phase changed. Docker would not start, so the mail server
+  never came up.
+
+  Reading "424 passed" as verification of a reply-sync change would be exactly
+  the vacuity this project keeps finding: a green number that is not about the
+  thing it appears to be about. The nightly Integration workflow, which has its
+  own Docker, is what settles it.
 - **The 254 historical events remain miscategorised.** Anything reading
   reply-rate over that period is still wrong, and correcting it would mean
   inferring which of them were genuine.

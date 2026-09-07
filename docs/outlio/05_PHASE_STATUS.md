@@ -1101,8 +1101,12 @@ no event, suppression or trigger.
 ⚠️ **The rest of Phase 9 is deferred with Phases 5 and 6.** "Unified"
 conversations need a second channel; LinkedIn is Phases 15–20 and not started.
 
-⚠️ **Integration tests unrun for the Phase 9 change** — Docker on the dev
-machine will not start. The nightly workflow is what settles it.
+⚠️ **Integration ran; the one test that matters skipped.** 424 passed, 0
+failed against real Supabase, on a run that did include the fix. But it skipped
+47 where CI skips 24, and the extra 23 are the GreenMail-dependent files —
+including `email-reply-sync.test.ts`, the only test covering the changed path.
+Reading "424 passed" as verification would be a green number that is not about
+the thing it appears to be about.
 
 ### Where the phase map stands
 
