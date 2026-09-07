@@ -69,17 +69,30 @@ function declaredTriggers(): string[] {
  * Every trigger name passed to something that actually starts or dispatches a
  * run, anywhere outside the flow module's own plumbing.
  *
- * ⚠️ `lib/flows/dispatch.ts` and `engine.ts` are EXCLUDED as producers. They
- * are the machinery that receives a trigger, not a source of one; counting them
- * would make every trigger look wired the moment the dispatcher mentioned it.
+ * ⚠️ `lib/flows/dispatch.ts`, `engine.ts` and `lib/events/emit.ts` are EXCLUDED
+ * as producers. They are the machinery that receives a trigger, not a source of
+ * one; counting them would make every trigger look wired the moment the
+ * dispatcher mentioned it.
+ *
+ * ⚠️ `emitDomainEvent` IS A PRODUCER MARKER, AND THIS LINE IS WHY THE GUARD
+ * FAILED IN PHASE 23. Producers stopped calling `dispatchFlowTrigger` directly
+ * and now go through one door that fans out to the flow engine AND the customer's
+ * webhooks. The scan reported six live triggers as dead — correctly, on its old
+ * definition of a producer — which is the "guard that cries wolf" its own comment
+ * below warns about. Widening the marker is the fix; loosening the assertion
+ * would not have been.
  */
 function firedTriggers(): Map<string, string[]> {
   const fired = new Map<string, string[]>()
-  const plumbing = [join('lib', 'flows', 'dispatch.ts'), join('lib', 'flows', 'engine.ts')]
+  const plumbing = [
+    join('lib', 'flows', 'dispatch.ts'),
+    join('lib', 'flows', 'engine.ts'),
+    join('lib', 'events', 'emit.ts'),
+  ]
 
   for (const [file, code] of CODE) {
     if (plumbing.includes(file)) continue
-    if (!/dispatchFlowTrigger\s*\(|startRun\s*\(/.test(code)) continue
+    if (!/emitDomainEvent\s*\(|dispatchFlowTrigger\s*\(|startRun\s*\(/.test(code)) continue
 
     for (const match of code.matchAll(/trigger(?:Type)?\s*:\s*'([a-z_]+)'/g)) {
       const name = match[1]!

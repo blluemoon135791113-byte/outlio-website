@@ -10,7 +10,7 @@ import 'server-only'
  *
  * ⚠️ THE SERVICE ROLE BYPASSES RLS. Every query is scoped by `workspace_id`.
  */
-import { dispatchFlowTrigger } from '@/lib/flows/dispatch'
+import { emitDomainEvent } from '@/lib/events/emit'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database'
 
@@ -350,19 +350,21 @@ export async function moveStage(
    * increments it on every move, so moving A → B → A fires twice, as it
    * should, while a retry of the same move fires once.
    */
-  await dispatchFlowTrigger({
+  await emitDomainEvent({
     workspaceId,
     triggerType: 'stage_changed',
     contactId,
     idempotencyKey: `stage_changed:${opportunityId}:${result.version}`,
+    payload: { opportunityId, contactId: contactId ?? null, stage: result.status },
   })
 
   if (result.status === 'won') {
-    await dispatchFlowTrigger({
+    await emitDomainEvent({
       workspaceId,
       triggerType: 'opportunity_won',
       contactId,
       idempotencyKey: `opportunity_won:${opportunityId}:${result.version}`,
+      payload: { opportunityId, contactId: contactId ?? null },
     })
   }
 

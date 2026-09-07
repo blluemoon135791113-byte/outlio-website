@@ -22,7 +22,7 @@ import { recordActivity } from '@/lib/crm/activities'
 import { getEmailAccount } from '@/lib/email/accounts'
 import { providerFor } from '@/lib/email/providers/registry'
 import { suppressEmail } from '@/lib/email/send'
-import { dispatchFlowTrigger } from '@/lib/flows/dispatch'
+import { emitDomainEvent } from '@/lib/events/emit'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { NormalizedReply, SyncCursor } from '@/lib/email/provider'
 
@@ -350,13 +350,14 @@ async function processInbound(
       p_reason: 'bounced',
     })
 
-    await dispatchFlowTrigger({
+    await emitDomainEvent({
       workspaceId,
       triggerType: 'email_bounced',
       contactId,
       // The provider's message id IS the occurrence — a re-sync of the same
       // mailbox must not fire twice for one bounce.
       idempotencyKey: `email_bounced:${reply.providerMessageId}`,
+      payload: { contactId: contactId ?? null, fromEmail: reply.fromEmail },
     })
     return
   }
@@ -380,11 +381,12 @@ async function processInbound(
    * ignore the tasks.
    */
   if (countsAsReply(classification)) {
-    await dispatchFlowTrigger({
+    await emitDomainEvent({
       workspaceId,
       triggerType: 'email_replied',
       contactId,
       idempotencyKey: `email_replied:${reply.providerMessageId}`,
+      payload: { contactId: contactId ?? null, fromEmail: reply.fromEmail },
     })
   }
 

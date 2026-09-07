@@ -32,7 +32,7 @@ import {
   normalizePhoneNumber,
 } from '@/lib/crm/normalize'
 import { upsertCrmCompany, type ContactInput } from '@/lib/crm/repository'
-import { dispatchFlowTrigger } from '@/lib/flows/dispatch'
+import { emitDomainEvent } from '@/lib/events/emit'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database, Json } from '@/types/database'
 
@@ -692,7 +692,7 @@ export async function createContactManually(
    * and re-task a person who has been worked for months.
    */
   if (outcome.created > 0) {
-    await dispatchFlowTrigger({
+    await emitDomainEvent({
       workspaceId,
       triggerType: 'contact_created',
       contactId,
