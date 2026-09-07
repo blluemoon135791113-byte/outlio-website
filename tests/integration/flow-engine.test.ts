@@ -17,6 +17,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+import { createContactManually } from '@/lib/crm/ingest'
+
 import {
   advanceRun,
   registerAction,
@@ -353,4 +355,79 @@ describeIf('CRITERION 5 — the execution log', () => {
     // Email actions arrive in Phase 21; until then the failure is explicit.
     expect(result.error?.code).toBe('ACTION_NOT_AVAILABLE')
   }, 90_000)
+})
+
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THE LINK NOTHING COVERED: CREATING A CONTACT → A RUN.                   ║
+ * ║                                                                           ║
+ * ║  Every test above calls `startRun` DIRECTLY, so the engine is well        ║
+ * ║  covered and the path a user actually takes is not. Production shows the  ║
+ * ║  difference: one published flow on `contact_created`, live since          ║
+ * ║  2026-09-03, three contacts created by hand in that workspace since —     ║
+ * ║  and `flow_runs` is ZERO.                                                 ║
+ * ║                                                                           ║
+ * ║  `startRun` writes a row even when it HALTS, so zero rows means nothing   ║
+ * ║  reached the insert. Either the chain from `createContactManually` →      ║
+ * ║  `dispatchFlowTrigger` → `startRun` is broken, or production's history is ║
+ * ║  explained by something outside the code. This test decides which.        ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describeIf('creating a contact starts a flow — the chain, not the engine', () => {
+  it('produces a flow run for a published contact_created flow', async () => {
+    const key = `manual-create-${RUN}`
+    const flowId = await makeFlow({
+      trigger: { type: 'contact_created', config: {} },
+      entryStepId: 'tag',
+      steps: [{ id: 'tag', type: 'ACTION', action: 'ADD_TAG', config: { key }, next: null }],
+    })
+
+    const db = adminClient()
+    const before = await db
+      .from('flow_runs')
+      .select('id', { count: 'exact', head: true })
+      .eq('flow_id', flowId)
+    expect(before.error, before.error?.message).toBeNull()
+    expect(before.count).toBe(0)
+
+    /*
+     * ⚠️ THE REAL ENTRY POINT, not `startRun`. `createContactAction` is a thin
+     * permission wrapper over this; calling it here exercises the dispatch the
+     * engine tests skip.
+     */
+    const created = await createContactManually(
+      workspaceId,
+      {
+        fullName: `Flow Trigger ${RUN}`,
+        emails: [`flow-trigger-${RUN}@buyer.example`],
+        ownerUserId: user!.id,
+        source: 'manual',
+      },
+      user!.id,
+    )
+
+    expect(created.created, 'the contact was matched, not created — no trigger is correct then').toBe(true)
+
+    const after = await db
+      .from('flow_runs')
+      .select('id, status, halt_reason, trigger_type')
+      .eq('flow_id', flowId)
+
+    expect(after.error, after.error?.message).toBeNull()
+
+    /*
+     * ⚠️ A HALTED RUN COUNTS AS PASSING HERE. The claim under test is that the
+     * chain REACHES the engine, not that the flow was allowed to proceed — a
+     * halt is a decision, and it leaves a row saying so. Zero rows is the
+     * failure, because it means nothing arrived.
+     */
+    expect(
+      after.data!.length,
+      'creating a contact produced no flow run at all — the chain from ' +
+        'createContactManually through dispatchFlowTrigger to startRun does not ' +
+        'reach the engine. A halt would still have written a row.',
+    ).toBeGreaterThan(0)
+
+    expect(after.data![0]!.trigger_type).toBe('contact_created')
+  }, 60_000)
 })

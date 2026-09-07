@@ -46,13 +46,31 @@ has to act on the ones it has — and it never has, once.
 **even when it halts**, with `status = 'halted'` and a reason. So this is not a
 flow being refused. Nothing reached the insert at all.
 
+## ⚠️ THE CHAIN WORKS — PROVEN ON STAGING
+
+A new integration test builds the exact scenario against staging: publish a
+flow triggering on `contact_created`, then call `createContactManually` —
+**not** `startRun`, which is what every existing flow test calls. A run appears.
+
+That matters because it inverts the question. The code is not broken; the nine
+existing engine tests all call `startRun` directly, so the chain a user
+actually travels had never been covered, and now is. The test stays as a
+regression guard.
+
+So production's zero is **not** explained by the current code.
+
 ## WHAT IS NOT ESTABLISHED
 
 **Why.** The remaining candidates cannot be told apart from outside:
 
-- the deployed code at the time differed from `HEAD`
 - an exception between the dispatch call and the insert, swallowed upstream
 - those contacts reached the database by a path not yet traced
+- something environmental in production that staging does not reproduce
+
+Ruled out since the first draft: workspace mismatch between `flows` and
+`flow_versions` (they match), an invalid definition (validates), a broken
+dispatch query (returns the flow), and the deploy timing — the dispatch landed
+on `main` 2026-09-01, two days before the earliest qualifying contact.
 
 ⚠️ **No fix is proposed, deliberately.** Mid-investigation I concluded that the
 manual path never dispatched and began patching `createContactAction` to add
