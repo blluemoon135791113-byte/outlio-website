@@ -171,3 +171,41 @@ describe('design — the product uses tokens, not literal colours', () => {
     })
   }
 })
+
+/**
+ * The E2E harness must never adopt a server it did not start.
+ *
+ * ⚠️ THIS PINS AN INCIDENT, NOT A PREFERENCE. On 2026-09-07 a plain
+ * `npm run dev` — which reads `.env.local`, i.e. PRODUCTION — was left
+ * listening on port 3000. Playwright reused it, so E2E fixtures were written to
+ * staging while the browser signed in against production. Five specs failed and
+ * looked like five product bugs.
+ *
+ * The dangerous variant is the one that does NOT fail: a spec that signs up
+ * would have created real accounts in the live database and reported green.
+ *
+ * `reuseExistingServer: !process.env.CI` reads like a safe optimisation, which
+ * is exactly why it will be reintroduced by someone speeding up local runs.
+ */
+describe('e2e harness — no cross-environment server reuse', () => {
+  const config = code(join(ROOT, 'playwright.config.ts'))
+
+  it('playwright.config.ts never reuses an existing server', () => {
+    const setting = config.match(/reuseExistingServer:\s*([^,\n]+)/)
+
+    expect(setting, 'reuseExistingServer disappeared — Playwright defaults it to TRUE off CI').not.toBeNull()
+    expect(
+      setting![1].trim(),
+      'A reused server may point at ANY environment, including production. ' +
+        'Playwright cannot tell `dev:staging` from `dev`. Starting our own ' +
+        'server costs one boot; reusing costs silent production writes.',
+    ).toBe('false')
+  })
+
+  it('the harness still starts the staging server itself', () => {
+    expect(
+      config,
+      'Without dev:staging the suite runs against .env.local — production.',
+    ).toContain("command: 'npm run dev:staging'")
+  })
+})

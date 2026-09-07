@@ -64,7 +64,30 @@ export default defineConfig({
      */
     command: 'npm run dev:staging',
     url: 'http://127.0.0.1:3000/sign-in',
-    reuseExistingServer: !process.env.CI,
+    /*
+     * ⚠️ NEVER REUSE. `reuseExistingServer: !CI` DEFEATS THE LINE ABOVE, and it
+     * is not a theoretical risk — it happened on 2026-09-07.
+     *
+     * Playwright reuses ANY listener on the port. It cannot tell `dev:staging`
+     * from a plain `npm run dev` left running in another terminal, and a plain
+     * `next dev` reads `.env.local` — PRODUCTION. So the fixtures were created
+     * in staging while the browser signed in against production, and five specs
+     * failed with "email and password did not work": one environment fault
+     * wearing the costume of five product bugs.
+     *
+     * That was the LUCKY shape. The fixtures were simply absent, so it failed
+     * loudly. A spec that SIGNS UP rather than reading a fixture would instead
+     * have succeeded — against production — creating real accounts in the live
+     * database and reporting green. Forty-two `outlio-test-*` accounts had to be
+     * deleted from production earlier in this project, and this is the most
+     * plausible way they got there.
+     *
+     * Cost of not reusing: one `next dev` boot per run, against a 2-minute
+     * suite. Cost of reusing: silent cross-environment writes. Not close.
+     *
+     * With this false, a busy port is a hard startup error — loud, and correct.
+     */
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 })
