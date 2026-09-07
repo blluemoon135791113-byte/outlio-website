@@ -414,6 +414,34 @@ phases on the same argument is how a plan quietly stops moving, and "there is
 no data" can become a reason never to build anything. Whether the pipeline is a
 priority at all is a product question — §11 says stop rather than guess it.
 
+## DECISION-15 — Chase the flow engine's missing first run before Phase 10? · `OPEN`
+
+Raised 2026-09-07 while surveying Phase 10.
+
+**The fact:** one published flow, trigger `contact_created`, live since
+2026-09-03. Three contacts created in that workspace since, all `manual`. The
+manual path does dispatch `contact_created`, the dispatch query returns the
+flow, the definition validates, and `flow_runs` is **0** — verified with the
+error checked.
+
+`startRun` writes a row even when it HALTS. Zero rows means nothing reached the
+insert, so this is not a flow being refused; it is a chain that stops somewhere
+between the dispatch call and the first write.
+
+**Why it is a decision and not just a bug:** Phase 10 adds company,
+opportunity, activity, task and conversation facts to the flow engine. Adding
+facts to an engine that has never executed is the same mistake as building
+features for a population of zero — but chasing the defect needs a production
+action (create a contact, then read `flow_runs` and the Vercel logs), which is
+the owner's to take.
+
+**Recommendation:** settle the defect first. It is one contact and one query.
+
+⚠️ **No fix proposed.** Mid-investigation I concluded the manual path never
+dispatched and started patching it — the dispatch was already there, one call
+deeper. Nearly adding a duplicate trigger while hunting a missing one is why
+this stops at evidence.
+
 ## Not blocking, but worth knowing
 
 - **`docs/SYSTEM_HANDOFF.md`** (written 2026-09-04) already covers much of what
