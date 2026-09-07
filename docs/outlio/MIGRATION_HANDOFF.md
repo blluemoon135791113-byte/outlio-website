@@ -90,7 +90,8 @@ than designing from scratch. Two install facts that are easy to lose:
 | **DECISION-16** | Decide what `/api/hubble/ask` and the two intelligence routes cost. | Pricing. Recommendation: *meter but do not charge* (record spend, price 0) — the only option that does not require guessing a number nobody has. |
 | **DECISION-14** | Confirm Phase 5 stays deferred. | Delegated to the agent 2026-09-06 and answered *defer*; owner can override. |
 | **Open PR** | `main` is branch-protected and gated on CI. 12 commits sit ahead of `origin/main` on `platform-m1-workspaces`; 4 are unpushed. | Pushing to a remote needs to be asked for in-session. |
-| **Provider bill** | Read the LLM provider console. | Only place the real cost of the unmetered routes exists. |
+| **Provider bill** | Read the LLM provider console. | Only place the real cost of the unmetered routes exists. ⚠️ `hubble_calls` is **0** — the metered path has never executed, so every model call this product has ever made was unmetered. |
+| **DECISION-17** | Decide whether Outlio enters the LinkedIn channel. | Gates Phases 16–20. One of five access methods is ToS-compliant and we do not have it; the failure mode is the customer losing their account. See `RISK_REGISTER.md`. |
 | **DMARC** | Drop `pct=25` after ~2 weeks of clean reports (set 2026-09-06). | Live DNS. |
 
 ### 3.2 Other decisions still open
@@ -113,8 +114,12 @@ ingest mode). Full text in `04_DECISIONS_NEEDED.md`.
 | 9 | **PARTIAL** | reply-attribution defect fixed; the conversation model deferred until a second channel exists |
 | 10 | **BLOCKED** | DECISION-15 |
 | 11 | **DEFERRED** | Flow builder UX, blocked behind 10 — the engine has never run |
-| 12 | **BRIEF WRITTEN** | capability registry + entitlement checks; needs DECISION-16 for item 4 only. Items 1–3 can start now |
-| 13–25 | NOT STARTED | see §9 of the build contract |
+| 12 | **PARTIAL** | items 1–3 delivered 2026-09-08: registry, guarded entry point, structural boundary guard. Item 4 needs DECISION-16 |
+| 13 | **DEFERRED** | Flow Copilot — generates definitions for an engine with 0 runs |
+| 14 | **DEFERRED** | Reporting — every metric source is 0–2 rows, and the one table with volume holds 254 known-wrong rows |
+| 15 | **COMPLETE** | LinkedIn capability matrix + `RISK_REGISTER.md` — the gate §6.3 requires before any LinkedIn code |
+| 16–20 | **GATED** | LinkedIn channel, blocked on DECISION-17 |
+| 21–25 | NOT STARTED | see §9 of the build contract |
 
 ⚠️ **Four consecutive phases rest on the same fact:** one active workspace, 44
 contacts, 2 sent messages, 0 opportunities. The engineering is ahead of the
@@ -122,7 +127,7 @@ usage. That is a product question, not an engineering one.
 
 ### 3.4 Ready to start with no approval
 
-- **Phase 12 items 1–3**: one capability registry file (`id`, `is_ai`,
+- ~~**Phase 12 items 1–3**~~ — **done 2026-09-08.** What remains unstarted with no approval needed is genuinely little; see the phase table. The next substantive step is item 4, and it is blocked on pricing. Originally: one capability registry file (`id`, `is_ai`,
   `credits`, required permission), a single guarded entry point for model calls
   that fails closed without a credit context, and a **structural guard** that no
   module may import an LLM provider except that entry point. Item 3 is the real
