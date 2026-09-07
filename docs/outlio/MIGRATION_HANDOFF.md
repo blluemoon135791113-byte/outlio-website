@@ -89,7 +89,7 @@ than designing from scratch. Two install facts that are easy to lose:
 | **DECISION-15** | Create one contact by hand in production, read `flow_runs`. If still 0, pull Vercel logs. | Needs a production write. The flow engine has **never produced a run** — `flow_runs` and `flow_step_runs` are both 0 against one published flow and three qualifying contacts. The chain is proven working on staging, so production's zero is unexplained. Phase 10 and Phase 11 are both blocked behind it. |
 | **DECISION-16** | Decide what `/api/hubble/ask` and the two intelligence routes cost. | Pricing. Recommendation: *meter but do not charge* (record spend, price 0) — the only option that does not require guessing a number nobody has. |
 | **DECISION-14** | Confirm Phase 5 stays deferred. | Delegated to the agent 2026-09-06 and answered *defer*; owner can override. |
-| **Open PR** | `main` is branch-protected and gated on CI. 12 commits sit ahead of `origin/main` on `platform-m1-workspaces`; 4 are unpushed. | Pushing to a remote needs to be asked for in-session. |
+| **Open PR** | `main` is branch-protected and gated on CI. **18 commits** sit ahead of `origin/main` on `platform-m1-workspaces`. | Pushing to a remote needs to be asked for in-session. |
 | **Provider bill** | Read the LLM provider console. | Only place the real cost of the unmetered routes exists. ⚠️ `hubble_calls` is **0** — the metered path has never executed, so every model call this product has ever made was unmetered. |
 | **DECISION-17** | Decide whether Outlio enters the LinkedIn channel. | Gates Phases 16–20. One of five access methods is ToS-compliant and we do not have it; the failure mode is the customer losing their account. See `RISK_REGISTER.md`. |
 | **DMARC** | Drop `pct=25` after ~2 weeks of clean reports (set 2026-09-06). | Live DNS. |
@@ -121,9 +121,12 @@ ingest mode). Full text in `04_DECISIONS_NEEDED.md`.
 | 16–20 | **GATED** | LinkedIn channel, blocked on DECISION-17 |
 | 21–25 | NOT STARTED | see §9 of the build contract |
 
-⚠️ **Four consecutive phases rest on the same fact:** one active workspace, 44
-contacts, 2 sent messages, 0 opportunities. The engineering is ahead of the
-usage. That is a product question, not an engineering one.
+⚠️ **Seven phases now rest on the same fact** — 4, 5, 6, 11, 13, 14 and the
+recommendation in 15. Production, 2026-09-08: 28 workspaces, 50 contacts, 2
+emails ever sent, 1 enrolment, 0 opportunities, 0 flow runs, 0 metered AI calls.
+The engineering is a long way ahead of the usage, and no further phase changes
+that. **That is a product question, not an engineering one, and it is now the
+main one.**
 
 ### 3.4 Ready to start with no approval
 
