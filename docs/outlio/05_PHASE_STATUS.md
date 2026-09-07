@@ -20,7 +20,11 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 10 | Flow fact expansion | **BLOCKED** | — | [`PHASE_10.md`](phases/PHASE_10.md) |
 | 11 | Manual Flow builder UX | **DEFERRED** | — | blocked behind Phase 10 — the engine has never run |
 | 12 | Capability registry + entitlement checks | **PARTIAL** (items 1–3) | `platform-m1-workspaces` | [`PHASE_12.md`](phases/PHASE_12.md) — item 4 needs DECISION-16 |
-| 13–25 | see §9 | NOT_STARTED | — | — |
+| 13 | Gemini Flow Copilot | **DEFERRED** | `platform-m1-workspaces` | [`PHASE_13.md`](phases/PHASE_13.md) — generates for an engine with 0 runs |
+| 14 | Reporting foundation | **DEFERRED** | `platform-m1-workspaces` | [`PHASE_14.md`](phases/PHASE_14.md) — every metric source is empty or known-wrong |
+| 15 | LinkedIn capability matrix + RISK_REGISTER | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_15.md`](phases/PHASE_15.md) · [`RISK_REGISTER.md`](RISK_REGISTER.md) |
+| 16–20 | LinkedIn channel | **GATED** | — | blocked on DECISION-17 |
+| 21–25 | see §9 | NOT_STARTED | — | — |
 
 ## Phase 0 result (2026-09-04)
 

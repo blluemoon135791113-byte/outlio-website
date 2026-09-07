@@ -533,3 +533,47 @@ pricing rather than after.
 **What answering it now costs:** item 4 only — moving the three modules inside
 the boundary and setting a number. The exemption list in the boundary test is
 the checklist; shrinking it to empty completes the phase.
+
+---
+
+## DECISION-17 — Does Outlio enter the LinkedIn channel at all? · `OPEN`
+
+Raised 2026-09-08 on completing Phase 15. Blocks Phases 16–20.
+
+**The fact:** Outlio holds no LinkedIn account, has never sent a LinkedIn
+message, holds no credentials or cookies, and integrates no automation vendor.
+Its entire LinkedIn surface is an extension with `storage` and `activeTab` that
+parses pages the user opened themselves. **Today it is an observer. Phase 16
+changes that.**
+
+**Why it is a decision and not a plan:** of five access methods, exactly one is
+compliant with LinkedIn's User Agreement — the official partner APIs — and
+Outlio does not have that access. Every other route means the customer's account
+carries a restriction risk that we cannot reverse and did not bear. §6.3 requires
+that risk be named rather than managed away; `RISK_REGISTER.md` names it.
+
+**Options, with the cost of being wrong:**
+
+1. **Do not enter the channel.** Wrong if LinkedIn is the reason customers would
+   buy — but nothing measured says that yet, and the email channel that already
+   exists has sent 2 messages.
+2. **Apply for official partner access first**, and decide afterwards. Slowest;
+   the only route where the customer bears no ToS risk. Wrong only in that
+   approval may never come, and the wait is unbounded.
+3. **Proceed on a non-compliant access method with the §6.3 controls.** Fastest
+   to a demo. Wrong in the one way that cannot be undone: the first restricted
+   account is a customer's, not ours, and no refund restores it.
+
+**My recommendation: option 1, revisited when the email channel is actually in
+use.** Not on squeamishness — on the same evidence six other phases were
+deferred for. This is the most expensive phase in the plan, the only one whose
+failure mode is irreversible for someone who is not us, and the population it
+would serve is a product with 2 sent emails and 0 flow runs.
+
+If the owner chooses 3, the order is not negotiable: 16 connection → **17
+dry-run and safety engine, complete and `VERIFIED` by breaking each control** →
+18 campaigns. Live mode must not exist before 17 passes.
+
+⚠️ **What it does not settle:** the legal reading. This register states the
+widely-documented position, not advice. If the answer is 2 or 3, it is the brief
+to hand a lawyer.
