@@ -22,7 +22,7 @@ import 'server-only'
  * narrate absence — the exact padding this replaces. The count of what was
  * dropped is kept, so the panel can state coverage honestly in one line.
  */
-import { resolveHubbleLlm } from '@/lib/hubble/reason'
+import { createHubbleLlm } from '@/lib/hubble/providers/ollama-llm'
 import type { ResultRow } from '@/lib/intelligence/results'
 
 export type RunSummary = {
@@ -223,7 +223,7 @@ export async function summarizeRun(
   // summarise nothing will produce an apology, which helps no one.
   if (withData.length === 0) return null
 
-  const llm = resolveHubbleLlm()
+  const llm = createHubbleLlm()
   const fallback = {
     text: coverageFinding(withData.length, rows.length, columns),
     withData: withData.length,

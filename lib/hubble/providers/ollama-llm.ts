@@ -22,12 +22,13 @@ import 'server-only'
  * The schema validation and the source-tier confidence ceiling are what keep a
  * weaker model honest, and they matter MORE here, not less.
  */
-import type {
-  LlmAttempt,
-  LlmRequest,
-  LlmResult,
-  LLMProvider,
-  LlmVendor,
+import {
+  resolveLlmProvider,
+  type LlmAttempt,
+  type LlmRequest,
+  type LlmResult,
+  type LLMProvider,
+  type LlmVendor,
 } from '@/lib/intelligence/llm/provider'
 import { ollamaConfig } from '@/lib/hubble/providers/ollama-config'
 
@@ -317,4 +318,22 @@ export class LlmWaterfall implements LLMProvider {
       attempts: [...localAttempts, ...hostedAttempts],
     }
   }
+}
+
+/**
+ * The model Hubble reasons with: local Ollama first, hosted second.
+ *
+ * ⚠️ ONLY HUBBLE'S PATH CHANGES. `resolveLlmProvider` still serves the batch
+ * pipeline unchanged — swapping the model under an already-working system for
+ * a weaker local one would be a regression nobody asked for.
+ *
+ * ⚠️ DEFINED IN A PROVIDER MODULE, ON PURPOSE. It used to live in
+ * `lib/hubble/reason.ts`, which meant any module importing `reason.ts` could
+ * obtain a model without ever importing a provider — invisible to a guard that
+ * watches provider imports. Here, every importer of this function is an
+ * importer of a provider module, and `tests/unit/model-call-boundary.test.ts`
+ * sees it.
+ */
+export function createHubbleLlm(): LLMProvider {
+  return new LlmWaterfall(new OllamaLlmProvider(), resolveLlmProvider())
 }

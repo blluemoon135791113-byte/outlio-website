@@ -10,16 +10,20 @@
  * ║  steps will charge them. `creditBearingSteps()` answers that from a       ║
  * ║  definition alone, with no run required.                                  ║
  * ║                                                                           ║
- * ║  ⚠️ `costsCredits` IS STATED ON EVERY ACTION TYPE, not just the AI ones.  ║
- * ║  Writing `false` explicitly means anyone adding an action has to answer   ║
- * ║  the question, rather than inheriting `undefined` and quietly becoming    ║
- * ║  free.                                                                    ║
+ * ║  ⚠️ `costsCredits` IS READ FROM THE CAPABILITY REGISTRY, for every action.║
+ * ║  It used to be written here as a literal on each entry; Phase 12 moved    ║
+ * ║  the flag to `lib/capabilities/registry.ts` so that one file decides what ║
+ * ║  calls a model (§5.11). An action added here without a registry entry     ║
+ * ║  throws at module load rather than inheriting "free".                     ║
  * ║                                                                           ║
  * ║  ⚠️ EVERY `HUBBLE_*` ACTION GOES THROUGH `hubbleExecute`. None may call a ║
- * ║  model directly — that is the constitution's "never scatter LLM calls".   ║
+ * ║  model directly — that is the constitution's "never scatter LLM calls",   ║
+ * ║  and `tests/unit/model-call-boundary.test.ts` now enforces it.            ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 import { z } from 'zod'
+
+import { capabilityForFlowAction } from '@/lib/capabilities/registry'
 
 /** Everything that can start a flow. */
 export const TRIGGER_TYPES = [
@@ -53,51 +57,59 @@ export type TriggerType = (typeof TRIGGER_TYPES)[number]
  * suppressed, limit available, provider healthy, user authorized) before it
  * may run.
  */
-export const ACTION_TYPES = {
-  ASSIGN_OWNER: { costsCredits: false, reversible: true },
-  ROUND_ROBIN: { costsCredits: false, reversible: true },
-  CREATE_TASK: { costsCredits: false, reversible: true },
-  MOVE_STAGE: { costsCredits: false, reversible: true },
-  UPDATE_FIELD: { costsCredits: false, reversible: true },
-  ADD_TAG: { costsCredits: false, reversible: true },
-  REMOVE_TAG: { costsCredits: false, reversible: true },
-  ADD_TO_LIST: { costsCredits: false, reversible: true },
-  REMOVE_FROM_LIST: { costsCredits: false, reversible: true },
-  CREATE_OPPORTUNITY: { costsCredits: false, reversible: true },
-  CREATE_ACTIVITY: { costsCredits: false, reversible: true },
-  NOTIFY: { costsCredits: false, reversible: false },
-  DEDUPE_CHECK: { costsCredits: false, reversible: true },
-  DATE_CALC: { costsCredits: false, reversible: true },
-  TEXT_TRANSFORM: { costsCredits: false, reversible: true },
-  WEBHOOK: { costsCredits: false, reversible: false },
+const ACTION_CATALOGUE = {
+  ASSIGN_OWNER: { reversible: true },
+  ROUND_ROBIN: { reversible: true },
+  CREATE_TASK: { reversible: true },
+  MOVE_STAGE: { reversible: true },
+  UPDATE_FIELD: { reversible: true },
+  ADD_TAG: { reversible: true },
+  REMOVE_TAG: { reversible: true },
+  ADD_TO_LIST: { reversible: true },
+  REMOVE_FROM_LIST: { reversible: true },
+  CREATE_OPPORTUNITY: { reversible: true },
+  CREATE_ACTIVITY: { reversible: true },
+  NOTIFY: { reversible: false },
+  DEDUPE_CHECK: { reversible: true },
+  DATE_CALC: { reversible: true },
+  TEXT_TRANSFORM: { reversible: true },
+  WEBHOOK: { reversible: false },
   // Sequence controls.
-  ENROLL_SEQUENCE: { costsCredits: false, reversible: true },
-  REMOVE_SEQUENCE: { costsCredits: false, reversible: true },
-  PAUSE_SEQUENCE: { costsCredits: false, reversible: true },
-  RESUME_SEQUENCE: { costsCredits: false, reversible: true },
-  CREATE_EMAIL_TASK: { costsCredits: false, reversible: true },
+  ENROLL_SEQUENCE: { reversible: true },
+  REMOVE_SEQUENCE: { reversible: true },
+  PAUSE_SEQUENCE: { reversible: true },
+  RESUME_SEQUENCE: { reversible: true },
+  CREATE_EMAIL_TASK: { reversible: true },
   /** ⚠️ Irreversible: an email cannot be unsent. Guarded in Phase 21. */
-  SEND_EMAIL: { costsCredits: false, reversible: false },
+  SEND_EMAIL: { reversible: false },
 
   /*
-   * ⚠️ EVERYTHING BELOW COSTS THE CUSTOMER MONEY. These are the only actions
-   * with `costsCredits: true`, and the split is what lets the editor badge an
-   * AI step differently from a free one — the brief requires exactly that
-   * distinction to be visible before a flow is published.
+   * ⚠️ EVERYTHING BELOW COSTS THE CUSTOMER MONEY — the registry says so with
+   * `isAi: true`, and the split is what lets the editor badge an AI step
+   * differently from a free one; the brief requires exactly that distinction
+   * to be visible before a flow is published.
    *
    * All of them go through the single `hubbleExecute` boundary. None may call
    * a model directly.
    */
-  HUBBLE_ICP_SCORE: { costsCredits: true, reversible: true },
-  HUBBLE_RESEARCH: { costsCredits: true, reversible: true },
-  HUBBLE_CLASSIFY: { costsCredits: true, reversible: true },
-  HUBBLE_PERSONALIZE: { costsCredits: true, reversible: true },
-  HUBBLE_REPLY_DRAFT: { costsCredits: true, reversible: true },
-  HUBBLE_CLASSIFY_REPLY: { costsCredits: true, reversible: true },
-  HUBBLE_ACCOUNT_SUMMARY: { costsCredits: true, reversible: true },
+  HUBBLE_ICP_SCORE: { reversible: true },
+  HUBBLE_RESEARCH: { reversible: true },
+  HUBBLE_CLASSIFY: { reversible: true },
+  HUBBLE_PERSONALIZE: { reversible: true },
+  HUBBLE_REPLY_DRAFT: { reversible: true },
+  HUBBLE_CLASSIFY_REPLY: { reversible: true },
+  HUBBLE_ACCOUNT_SUMMARY: { reversible: true },
 } as const
 
-export type ActionType = keyof typeof ACTION_TYPES
+export type ActionType = keyof typeof ACTION_CATALOGUE
+
+export const ACTION_TYPES: Readonly<Record<ActionType, { costsCredits: boolean; reversible: boolean }>> =
+  Object.fromEntries(
+    (Object.keys(ACTION_CATALOGUE) as ActionType[]).map((type) => [
+      type,
+      { costsCredits: capabilityForFlowAction(type).isAi, reversible: ACTION_CATALOGUE[type].reversible },
+    ]),
+  ) as Record<ActionType, { costsCredits: boolean; reversible: boolean }>
 
 /**
  * Actions that have a handler behind them.

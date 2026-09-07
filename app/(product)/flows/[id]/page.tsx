@@ -11,7 +11,8 @@ import { listAssignableMembers } from '@/lib/crm/contacts-list'
 import { listSelectableCampaigns } from '@/lib/email/campaign-list'
 import { listEmailAccounts } from '@/lib/email/accounts'
 import { creditBearingSteps, validateFlowDefinition } from '@/lib/flows/definition'
-import { quoteCredits, type HubbleTask } from '@/lib/hubble/pricing'
+import { quoteCredits } from '@/lib/hubble/pricing'
+import { hubbleTaskForAction } from '@/lib/capabilities/registry'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
@@ -21,16 +22,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-/** Which Hubble task each AI action performs, for pricing the flow. */
-const TASK_FOR: Record<string, HubbleTask> = {
-  HUBBLE_ICP_SCORE: 'icp_score',
-  HUBBLE_RESEARCH: 'research',
-  HUBBLE_CLASSIFY: 'classification',
-  HUBBLE_PERSONALIZE: 'personalization',
-  HUBBLE_REPLY_DRAFT: 'reply_draft',
-  HUBBLE_CLASSIFY_REPLY: 'response_classification',
-  HUBBLE_ACCOUNT_SUMMARY: 'account_summary',
-}
 
 /**
  * One flow.
@@ -104,8 +95,9 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
       parsedDefinition = definition
       creditSteps = creditBearingSteps(definition)
       for (const step of definition.steps) {
-        if (step.type === 'ACTION' && TASK_FOR[step.action]) {
-          creditsPerContact += quoteCredits(TASK_FOR[step.action]!)
+        const task = step.type === 'ACTION' ? hubbleTaskForAction(step.action) : null
+        if (task) {
+          creditsPerContact += quoteCredits(task)
         }
       }
     }

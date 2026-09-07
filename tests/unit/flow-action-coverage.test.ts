@@ -21,6 +21,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { CAPABILITIES, aiCapabilityIds } from '@/lib/capabilities/registry'
 import {
   ACTION_TYPES,
   UNIMPLEMENTED_ACTIONS,
@@ -36,7 +37,15 @@ const ACTIONS_DIR = join(ROOT, 'lib', 'flows', 'actions')
  *
  * ⚠️ THE HUBBLE ACTIONS ARE REGISTERED IN A LOOP, not by literal name — an
  * earlier version of this scan grepped for `registerAction('NAME'` and reported
- * all seven as missing. They come from `TASK_FOR` in `hubble.ts` instead.
+ * all seven as missing.
+ *
+ * ⚠️ THE LOOP'S SOURCE CHANGED IN PHASE 12 AND THIS SCAN HAD TO CHANGE WITH IT.
+ * It used to text-scrape a `TASK_FOR` table out of `hubble.ts`; that table was
+ * one of three hand-written copies the capability registry replaced. Scraping a
+ * literal that no longer exists returned an empty set and the guard failed
+ * loudly — which is the correct outcome, and the reason the vacuity assertions
+ * below exist. It now reads the registry, the same source of truth the loop
+ * itself reads, so the two cannot disagree.
  */
 function registeredActions(): Set<string> {
   const found = new Set<string>()
@@ -49,10 +58,16 @@ function registeredActions(): Set<string> {
       found.add(match[1]!)
     }
 
-    // `registerHubbleActions` loops `Object.keys(TASK_FOR)`.
+    /*
+     * `registerHubbleActions` loops `AI_FLOW_ACTIONS`, derived from the
+     * registry. The source check is still what makes this honest: delete the
+     * loop and nothing is added here, so every Hubble action reads as unbacked.
+     */
     if (file === 'hubble.ts' && /registerAction\(action as ActionType/.test(source)) {
-      const table = source.slice(source.indexOf('TASK_FOR'), source.indexOf('}', source.indexOf('TASK_FOR')))
-      for (const match of table.matchAll(/([A-Z_]+):\s*'/g)) found.add(match[1]!)
+      for (const id of aiCapabilityIds()) {
+        const entry = CAPABILITIES[id]
+        if ('flowAction' in entry && entry.flowAction) found.add(entry.flowAction)
+      }
     }
   }
 

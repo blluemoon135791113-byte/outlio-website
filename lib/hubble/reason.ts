@@ -24,19 +24,13 @@ import 'server-only'
 import type { AnswerSource, AnswerStatus } from '@/lib/hubble/providers/types'
 import type { ScoredChunk } from '@/lib/hubble/retrieve'
 import { canCorroborate, confidenceCeiling } from '@/lib/hubble/source-quality'
-import { LlmWaterfall, OllamaLlmProvider } from '@/lib/hubble/providers/ollama-llm'
-import { resolveLlmProvider } from '@/lib/intelligence/llm/provider'
-
-/**
- * The model Hubble reasons with: local Ollama first, hosted second.
- *
- * ⚠️ ONLY HUBBLE'S PATH CHANGES. `resolveLlmProvider` still serves the batch
- * pipeline unchanged — swapping the model under an already-working system for
- * a weaker local one would be a regression nobody asked for.
+/*
+ * ⚠️ UNMETERED, AND ON THE BOUNDARY GUARD'S ALLOWLIST BECAUSE OF IT. This
+ * module calls a model without a credit context; what `/api/hubble/ask`
+ * should cost is DECISION-16. When it is answered, `planResearch` and
+ * `answerFromEvidence` move inside `hubbleExecute` and this import goes.
  */
-export function resolveHubbleLlm() {
-  return new LlmWaterfall(new OllamaLlmProvider(), resolveLlmProvider())
-}
+import { createHubbleLlm, OllamaLlmProvider } from '@/lib/hubble/providers/ollama-llm'
 
 /**
  * How much evidence the answering model can actually digest.
@@ -130,7 +124,7 @@ export async function planResearch(
   deadlineAt?: number,
   llmAllowed = true,
 ): Promise<{ plan: ResearchPlan; llmCalls: number }> {
-  const llm = resolveHubbleLlm()
+  const llm = createHubbleLlm()
 
   const fallback: ResearchPlan = {
     intent: question,
@@ -372,7 +366,7 @@ export async function answerFromEvidence(
   deadlineAt?: number,
   maxLlmCalls = 2,
 ): Promise<{ answer: HubbleAnswer; llmCalls: number }> {
-  const llm = resolveHubbleLlm()
+  const llm = createHubbleLlm()
 
   if (chunks.length === 0) {
     return {
@@ -418,6 +412,14 @@ export async function answerFromEvidence(
    * ⚠️ TRIMMED TO WHAT THIS MODEL CAN ACTUALLY DIGEST. A local model is given
    * fewer, shorter passages; a hosted one gets the full set, because trimming
    * it would discard corroboration for no benefit. See `evidenceBudgetFor`.
+   */
+  /*
+   * ⚠️ THE LOCAL PROVIDER, NOT `llm`. `evidenceBudgetFor` asks one question —
+   * "will a local model answer this?" — by probing `isUsable`. `LlmWaterfall`
+   * does not expose `isUsable` of its own; it probes the local provider it
+   * wraps. Passing the waterfall here would take the `undefined` branch, read
+   * as "not local", and hand a local model the full hosted passage set: the
+   * exact opposite of what the note above requires, silently.
    */
   const budget = await evidenceBudgetFor(new OllamaLlmProvider())
   const shown = chunks.slice(0, budget.maxPassages)

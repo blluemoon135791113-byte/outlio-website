@@ -23,17 +23,9 @@ import {
   type ActionType,
   type FlowDefinition,
 } from '@/lib/flows/definition'
-import { HUBBLE_TASKS, quoteCredits, type HubbleTask } from '@/lib/hubble/pricing'
+import { HUBBLE_TASKS, quoteCredits } from '@/lib/hubble/pricing'
+import { hubbleTaskForAction } from '@/lib/capabilities/registry'
 
-const TASK_FOR: Partial<Record<ActionType, HubbleTask>> = {
-  HUBBLE_ICP_SCORE: 'icp_score',
-  HUBBLE_RESEARCH: 'research',
-  HUBBLE_CLASSIFY: 'classification',
-  HUBBLE_PERSONALIZE: 'personalization',
-  HUBBLE_REPLY_DRAFT: 'reply_draft',
-  HUBBLE_CLASSIFY_REPLY: 'response_classification',
-  HUBBLE_ACCOUNT_SUMMARY: 'account_summary',
-}
 
 /*
  * ⚠️ ONLY ACTIONS THAT HAVE A HANDLER ARE OFFERED. Seven entries in
@@ -110,7 +102,7 @@ export function FlowBuilder({
     let credits = 0
     for (const step of definition.steps) {
       if (step.type === 'ACTION') {
-        const task = TASK_FOR[step.action]
+        const task = hubbleTaskForAction(step.action)
         if (task) credits += quoteCredits(task)
       }
     }
@@ -219,7 +211,7 @@ export function FlowBuilder({
                   */}
                   {row.costsCredits && row.step.type === 'ACTION' ? (
                     <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
-                      {quoteCredits(TASK_FOR[row.step.action]!)} credits
+                      {quoteCredits(hubbleTaskForAction(row.step.action)!)} credits
                     </span>
                   ) : null}
                   {orphans.has(row.step.id) ? (
@@ -405,7 +397,7 @@ function AddHere({
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {AI_ACTIONS.map((action) => {
-            const task = TASK_FOR[action]
+            const task = hubbleTaskForAction(action)
             return (
               <button
                 key={action}
@@ -1277,7 +1269,7 @@ function HubbleStepEditor({
   config: Record<string, unknown>
   onChange: (config: Record<string, unknown>) => void
 }) {
-  const task = TASK_FOR[action]
+  const task = hubbleTaskForAction(action)
   const credits = task ? quoteCredits(task) : 0
   const failOnEmpty = config.onNoCredits === 'fail'
   const storeAs = typeof config.storeAs === 'string' ? config.storeAs : ''

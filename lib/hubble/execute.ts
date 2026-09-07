@@ -1,7 +1,7 @@
 import 'server-only'
 
 /**
- * The single AI boundary — M7 Phase 22.
+ * The single AI boundary — M7 Phase 22, made the guarded entry point in Phase 12.
  *
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║  EVERY AI CALL IN THE PRODUCT GOES THROUGH `hubbleExecute`. NO EXCEPTIONS.║
@@ -19,12 +19,22 @@ import 'server-only'
  * ║  alternative — run first, charge after — means a crash mid-call gives     ║
  * ║  away work for free, and a customer at their limit can exceed it by       ║
  * ║  however many calls are in flight.                                        ║
+ * ║                                                                           ║
+ * ║  ⚠️ IT FAILS CLOSED (build contract §5.11). Three refusals happen before  ║
+ * ║  anything is spent or run: a capability the registry does not list as AI,║
+ * ║  a capability the registry lists without a price, and a call with no      ║
+ * ║  credit context. Each is recorded so a silence can be explained.          ║
+ * ║                                                                           ║
+ * ║  ⚠️ THE MODEL IS HANDED TO THE RUNNER, NOT FETCHED BY IT. This module is  ║
+ * ║  the only non-provider file allowed to import a provider — enforced by    ║
+ * ║  `tests/unit/model-call-boundary.test.ts` — so the only way for product   ║
+ * ║  code to reach a model is from inside a metered runner.                   ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 import { createAdminClient } from '@/lib/supabase/admin'
-// Pricing is pure and lives apart, so a quote can be rendered in the flow
-// editor without a database round trip.
-import { quoteCredits, type HubbleTask } from '@/lib/hubble/pricing'
+import { CAPABILITIES, isCapabilityId, type AiCapabilityId } from '@/lib/capabilities/registry'
+import { createHubbleLlm } from '@/lib/hubble/providers/ollama-llm'
+import type { LLMProvider } from '@/lib/intelligence/llm/provider'
 
 export { HUBBLE_TASKS, quoteCredits, quoteFlow, type HubbleTask } from '@/lib/hubble/pricing'
 
@@ -48,24 +58,37 @@ export type HubbleOutcome<T> =
   | { ok: false; reason: 'no_credits'; message: string; remaining: number }
   | { ok: false; reason: 'failed'; code: string; message: string }
 
-/** The work itself. Receives nothing but its own input. */
-export type HubbleRunner<T> = () => Promise<T>
+/** What a metered runner may use. Constructed lazily; a runner that never asks pays nothing. */
+export type HubbleTools = {
+  /** The model Hubble reasons with. Only reachable from inside a metered call. */
+  readonly llm: LLMProvider
+}
+
+/** The work itself. Receives the tools and nothing else. */
+export type HubbleRunner<T> = (tools: HubbleTools) => Promise<T>
 
 /**
- * Runs one AI task, metered.
+ * Runs one AI capability, metered.
  *
  * @param runner the actual model call. Kept as a callback so this function
  *   owns the credit lifecycle and the caller owns only the work — which is
  *   what stops the two drifting apart.
  */
 export async function hubbleExecute<T>(
-  task: HubbleTask,
+  capability: AiCapabilityId,
   context: HubbleContext,
   runner: HubbleRunner<T>,
 ): Promise<HubbleOutcome<T>> {
   const db = createAdminClient()
-  const quoted = quoteCredits(task)
   const startedAt = Date.now()
+
+  /*
+   * ⚠️ RESOLVED AT RUNTIME, NOT TRUSTED FROM THE TYPE. The id may have arrived
+   * from a stored flow definition, and a definition compiled against a later
+   * registry can name something this build does not know.
+   */
+  const entry = isCapabilityId(capability) ? CAPABILITIES[capability] : null
+  const quoted = entry?.isAi && entry.credits !== null ? entry.credits : 0
 
   const record = async (
     outcome: 'ok' | 'refused_no_credits' | 'failed',
@@ -73,19 +96,45 @@ export async function hubbleExecute<T>(
     error?: { code: string; message: string },
   ) => {
     await db.from('hubble_calls').insert({
-      workspace_id: context.workspaceId,
-      user_id: context.userId,
-      task,
+      // A refused call may have no attributable tenant; `null` is the truth there.
+      workspace_id: context?.workspaceId || null,
+      user_id: context?.userId || null,
+      task: capability,
       outcome,
       credits_quoted: quoted,
       credits_spent: spent,
-      source: context.source ?? null,
-      flow_run_id: context.flowRunId ?? null,
+      source: context?.source ?? null,
+      flow_run_id: context?.flowRunId ?? null,
       duration_ms: Date.now() - startedAt,
       error_code: error?.code ?? null,
       // Never a model response or a customer's data — just the failure.
       error_message: error?.message ?? null,
     })
+  }
+
+  const refuse = async (code: string, message: string): Promise<HubbleOutcome<T>> => {
+    await record('failed', 0, { code, message })
+    return { ok: false, reason: 'failed', code, message }
+  }
+
+  // --- 0. REFUSE, before anything is spent or run. ---
+  if (!entry || !entry.isAi) {
+    return refuse(
+      'NOT_AN_AI_CAPABILITY',
+      `"${capability}" is not an AI capability in the registry, so nothing may call a model for it.`,
+    )
+  }
+
+  if (entry.credits === null) {
+    return refuse(
+      'UNPRICED_CAPABILITY',
+      `"${capability}" has no price yet (${entry.pricingDecision}). It cannot run until one is decided.`,
+    )
+  }
+
+  if (!context || typeof context.userId !== 'string' || context.userId === '' ||
+      typeof context.workspaceId !== 'string' || context.workspaceId === '') {
+    return refuse('NO_CREDIT_CONTEXT', 'This AI call has nobody to bill, so it was not made.')
   }
 
   // --- 1. SPEND, before the model runs. ---
@@ -121,7 +170,14 @@ export async function hubbleExecute<T>(
 
   // --- 2. RUN. ---
   try {
-    const result = await runner()
+    let llm: LLMProvider | null = null
+    const tools: HubbleTools = {
+      get llm() {
+        llm ??= createHubbleLlm()
+        return llm
+      },
+    }
+    const result = await runner(tools)
     await record('ok', spent)
     return { ok: true, result, creditsSpent: spent, remaining: outcome.remaining ?? null }
   } catch (error) {
@@ -141,7 +197,7 @@ export async function hubbleExecute<T>(
         // nothing, and only this line will ever say so.
         console.error('[hubble] REFUND FAILED — customer charged for a failed call', {
           userId: context.userId,
-          task,
+          capability,
           credits: spent,
           message: refundError.message,
         })
