@@ -18,7 +18,9 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 8 | Email campaign productization + compliance | **COMPLETE** (narrowed) | `platform-m1-workspaces` | [`PHASE_8.md`](phases/PHASE_8.md) |
 | 9 | Unified Conversations foundation | **PARTIAL** | `platform-m1-workspaces` | [`PHASE_9.md`](phases/PHASE_9.md) |
 | 10 | Flow fact expansion | **BLOCKED** | — | [`PHASE_10.md`](phases/PHASE_10.md) |
-| 11–25 | see §9 | NOT_STARTED | — | — |
+| 11 | Manual Flow builder UX | **DEFERRED** | — | blocked behind Phase 10 — the engine has never run |
+| 12 | Capability registry + entitlement checks | **BRIEF** | `platform-m1-workspaces` | [`PHASE_12.md`](phases/PHASE_12.md) — needs DECISION-16 |
+| 13–25 | see §9 | NOT_STARTED | — | — |
 
 ## Phase 0 result (2026-09-04)
 

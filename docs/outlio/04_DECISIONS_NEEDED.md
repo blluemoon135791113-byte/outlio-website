@@ -460,3 +460,51 @@ this stops at evidence.
   queues with `FOR UPDATE SKIP LOCKED`), 5.4 (hybrid custom fields — the repo
   has both `crm_custom_field_definitions` and `crm_custom_field_values`), and
   5.8 (`Message-ID`/`In-Reply-To` threading, migration 0104). No conflict.
+
+---
+
+## DECISION-16 — What do the three AI HTTP routes cost? · `OPEN`
+
+Raised 2026-09-07 while surveying Phase 12.
+
+**The fact:** `hubble_spend_credits` is the only credit-spending call in the
+codebase, and it is reached from exactly one module, `lib/hubble/execute.ts`,
+which only the flows path imports. Import-closure analysis of
+`/api/hubble/ask` (49 modules), `/api/intelligence/query` (76) and
+`/api/intelligence/clarify` (74) finds no metering module in any of them, while
+the same scan finds it on the flows path — so the scan works.
+
+All three call a model. `research` costs **3 credits** through a flow and **0**
+through the route, and the route does more work: search, crawl, embed, then the
+model call. The only limit is the rate limiter, 20 per 10 minutes per user —
+about 2,880 model calls per user per day, charged to the provider account and to
+no plan.
+
+**Why it is a decision and not a bug:** the fix is mechanical, but item 4 of
+Phase 12 turns a feature customers use for free today into a charged one. That
+is pricing, and pricing is not mine to change. Items 1–3 of the brief (registry,
+one guarded entry point, structural guard) do not depend on the answer.
+
+**Options, with the cost of being wrong:**
+
+1. **Charge the routes at flow parity** (`ask` = 3, `clarify` = 1). Consistent,
+   and the pool already exists. Wrong if Hubble's value is that asking is free —
+   metering the exploratory path could suppress the usage this product is short
+   of, and it is short of usage in four separate phases already.
+2. **Meter but do not charge** — pass a credit context, record the spend, set
+   the price to 0 for now. Nothing changes for customers today; the number
+   needed to price it correctly starts accumulating; the structural guard still
+   lands. Wrong only in that it defers revenue.
+3. **Leave the routes unmetered, document the exemption.** Cheapest. Wrong if
+   one user with a script discovers the ratio between a rate limit and a
+   provider bill.
+
+**My recommendation: option 2.** It is the only one that does not require
+guessing. The disagreement between options 1 and 3 is entirely about a number
+nobody has — what these routes actually cost per month — and option 2 produces
+that number within a billing cycle while closing the structural hole
+immediately. Charging can then be a decision with evidence behind it, which is
+the standard every other phase in this project has been held to.
+
+⚠️ **What it does not settle:** the provider bill to date. That is in the
+provider's console, and reading it is an owner action.
