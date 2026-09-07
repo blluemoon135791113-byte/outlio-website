@@ -322,3 +322,72 @@ describe('replies are attributed after a sequence finishes', () => {
     expect(source).toContain('if (everMailed.length === 0) outcome.unmatched += 1')
   })
 })
+
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  254 "REPLIES" AGAINST TWO MESSAGES EVER SENT.                           ║
+ * ║                                                                           ║
+ * ║  Measured on production 2026-09-07: 261 threads, 254 `replied` events, 2  ║
+ * ║  messages sent in the product's lifetime. The sync reads the WHOLE        ║
+ * ║  mailbox, so every newsletter, receipt and notification in the owner's    ║
+ * ║  inbox was recorded as a prospect reply and fired an `email_replied` flow ║
+ * ║  trigger.                                                                 ║
+ * ║                                                                           ║
+ * ║  Every consequence is silent: reply-rate metrics become meaningless,      ║
+ * ║  automation fires at unrelated mail, and a bounce for something we never  ║
+ * ║  sent would suppress an address we have no relationship with.             ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('inbound mail is not a reply unless we mailed them', () => {
+  const source = readFileSync(join(__dirname, '..', '..', 'lib/email/reply-sync.ts'), 'utf8')
+
+  it('establishes that we mailed the address before treating it as a reply', () => {
+    expect(source).toMatch(/const weMailedThem\s*=/)
+    expect(source).toContain('hasEverMailed(db, workspaceId, from)')
+  })
+
+  it('checks sent messages, not only enrollments', () => {
+    /*
+     * A one-off manual send creates no enrollment, and a genuine reply to one
+     * is still a reply. Checking enrollments alone trades one wrong answer for
+     * another.
+     */
+    const helper = source.slice(source.indexOf('async function hasEverMailed'))
+    expect(helper).toContain("from('email_messages')")
+    expect(helper).toContain("eq('to_email', toEmail)")
+    expect(helper).toContain("eq('workspace_id', workspaceId)")
+  })
+
+  it('drops unrelated mail BEFORE any event, suppression or trigger', () => {
+    /*
+     * ⚠️ ORDER IS THE GUARANTEE. Placed after the bounce branch, a bounce for
+     * mail we never sent would still suppress the address; placed after the
+     * reply branch, a newsletter would still fire automation.
+     */
+    /*
+     * ⚠️ ANCHORED ON THE STATEMENTS. `classification.kind === 'bounce'` also
+     * appears earlier in the `p_classification` ternary passed to
+     * `email_record_inbound`, so a bare indexOf finds the ARGUMENT and reports
+     * the gate as too late. Fourth time this shape has bitten in this codebase.
+     */
+    const gate = source.indexOf('if (!weMailedThem)')
+    const bounceBranch = source.indexOf("if (classification.kind === 'bounce') {")
+    const replyTrigger = source.indexOf("triggerType: 'email_replied'")
+    expect(gate).toBeGreaterThan(-1)
+    expect(bounceBranch).toBeGreaterThan(-1)
+    expect(replyTrigger).toBeGreaterThan(-1)
+    expect(gate).toBeLessThan(bounceBranch)
+    expect(gate).toBeLessThan(replyTrigger)
+  })
+
+  it('still stores the message, because the inbox is meant to show the mailbox', () => {
+    // The thread is recorded above the gate; only the interpretation is dropped.
+    expect(source.indexOf("rpc('email_record_inbound'")).toBeLessThan(
+      source.indexOf('if (!weMailedThem)'),
+    )
+  })
+
+  it('counts what it dropped rather than discarding it silently', () => {
+    expect(source).toContain('outcome.unrelated += 1')
+  })
+})
