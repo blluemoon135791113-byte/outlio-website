@@ -1,7 +1,17 @@
 # Phase 12 — Capability registry + validator + permission/entitlement checks
 
-Per §9. Status: **BRIEF — contains an open question (pricing), so it needs
-approval before implementation (§10).**
+Per §9. Status: **ITEMS 1–3 DELIVERED 2026-09-08. Item 4 blocked on
+DECISION-16 (pricing), which is the owner's.**
+
+⚠️ **CORRECTION, AND IT IS THE HEADLINE'S NUMBER.** This brief said three
+unmetered routes. There are **four**. `/api/intelligence/runs/[id]/summary`
+reaches a model through `lib/hubble/summarize.ts`; its 25-module closure
+reaches `hubbleExecute` zero times.
+
+The first scan missed it by grepping for the identifier `hubbleExecute` and
+counting a hit in `lib/hubble/reason.ts` — which only names it in a *comment*.
+That is the comment-matching trap this project's own memory warns about, for
+the sixth time. The guard shipped in item 3 reads imports, not text.
 
 ---
 
@@ -22,19 +32,25 @@ been charged for a failed call". Its own header states the rule:
 
 > anything outside this function is a charge nobody metered
 
-**Three HTTP routes are outside that function.**
+**Four HTTP routes are outside that function.**
 
 | Route | Reaches a metering module? | Calls a model? |
 |---|---|---|
 | `app/api/hubble/ask` | **no** (49-module closure) | yes — `reason.ts` → `llm.generateJson` |
 | `app/api/intelligence/query` | **no** (76-module closure) | yes |
 | `app/api/intelligence/clarify` | **no** (74-module closure) | yes |
+| `app/api/intelligence/runs/[id]/summary` | **no** (25-module closure) | yes — via `summarize.ts` |
 | `lib/flows/actions/hubble.ts` *(control)* | **yes** → `lib/hubble/execute.ts` | yes |
 
 The control matters. A scan that finds "no metering" everywhere is a broken
 scan; this one finds it exactly where it should, on the flows path, and the only
-hit inside the three route closures is `types/database.ts`, which merely *names*
-the RPC in generated types.
+hit inside the route closures is `types/database.ts`, which merely *names* the
+RPC in generated types.
+
+⚠️ **The fourth row was added 2026-09-08 and the first three were written on
+2026-09-07 — the correction at the top of this file explains why.** It is left
+visible rather than back-dated: a brief that quietly grew a row would hide that
+the original method could miss one.
 
 ### The same task, two prices
 
@@ -55,7 +71,7 @@ call plus fetches, charged to the owner's provider account and to no plan.
 ⚠️ **There is no second metering mechanism.** `consume_credit`, `credit_balance`
 and `grant_fastspring_period_credits` all read one pool —
 `plans.limits.credits_per_month`. AI reached through a flow draws on it. AI
-reached through the three routes draws on nothing.
+reached through the four routes draws on nothing.
 
 ## WHY THIS IS PHASE 12 AND NOT A BUG FIX
 
@@ -80,9 +96,9 @@ acting on.
 3. **A structural guard**, in the style of the existing ones: no module may
    import an LLM provider except the guarded entry point. This is the part that
    survives contact with future code, and the reason to do 1 and 2 at all.
-4. **Retrofit the three routes** onto it.
+4. **Retrofit the four routes** onto it.
 
-⚠️ Item 3 is the deliverable. Items 1, 2 and 4 without it produce a fourth
+⚠️ Item 3 is the deliverable. Items 1, 2 and 4 without it produce a fifth
 unmetered route the first time someone adds one in a hurry.
 
 ## WHAT IS NOT IN SCOPE
@@ -101,7 +117,7 @@ turns a currently free feature into a charged one.
 
 ## OPEN QUESTION → `04_DECISIONS_NEEDED.md`
 
-**DECISION-16: what do `/api/hubble/ask` and the two intelligence routes cost?**
+**DECISION-16: what do `/api/hubble/ask` and the three intelligence routes cost?**
 Recommendation in the decision entry. Items 1–3 do not depend on the answer and
 can proceed; item 4 cannot.
 
@@ -124,3 +140,86 @@ can proceed; item 4 cannot.
 - **`assertHubbleAccess` does gate the ask route.** This is an entitlement gap,
   not an authentication one — the caller is a signed-in, permitted user. The
   exposure is cost, not access.
+
+---
+
+## WHAT WAS DELIVERED — 2026-09-08
+
+| Item | State | Where |
+|---|---|---|
+| 1. Capability registry | **DONE** | `lib/capabilities/registry.ts` |
+| 2. One guarded entry point, failing closed | **DONE** | `lib/hubble/execute.ts` |
+| 3. Structural guard on provider imports | **DONE** | `tests/unit/model-call-boundary.test.ts` |
+| 4. Retrofit the four routes | **BLOCKED** | DECISION-16 |
+
+**The registry** is one closed set of 32 capabilities, each carrying `isAi`, a
+price and a permission. It is pure — no `server-only`, no database — because the
+flow editor renders prices from it in the browser while a step is being edited.
+
+**The entry point** now refuses three ways *before* anything is spent or run: a
+capability the registry does not list as AI, one it lists with no price, and a
+call with no credit context. Each refusal is recorded, so a silence can be
+explained. The model is handed to the runner as `tools.llm` rather than fetched
+by it, so reaching a model requires already being inside a metered call.
+
+**The guard is the deliverable.** `hubbleExecute` was correct the entire time
+and four routes called a model anyway, because being metered depended on a
+caller remembering to import it. Only the provider layer and the one metered
+door may now obtain a model at runtime. Type-only imports are excluded — a type
+cannot call anything, and a guard that flags signatures earns an allowlist entry
+instead of a fix.
+
+⚠️ **The exemption list is asserted in both directions.** Three modules serve
+the four unmetered routes and are listed with the route each serves. A module
+that stops importing a provider must lose its exemption, or a dead entry
+silently re-authorises the next import into that file. Shrinking the list to
+empty is what item 4 looks like.
+
+### Three duplicate tables became one
+
+`TASK_FOR` existed three times — in `lib/flows/actions/hubble.ts`, the flow page
+and `FlowBuilder.tsx`. All three now read the registry. This mattered
+immediately: the mid-refactor state deleted one copy and left two, and
+`flow-action-coverage.test.ts` failed because it text-scraped the literal that
+had gone. That failure was correct, and its own vacuity assertions are what
+produced it rather than a silent empty set.
+
+### A behaviour change that would have been invisible
+
+`reason.ts` lost its `OllamaLlmProvider` import while still constructing one.
+Routing that call through `createHubbleLlm()` typechecks — and silently changes
+behaviour, because `LlmWaterfall` exposes no `isUsable` of its own, so
+`evidenceBudgetFor` would read "not local" and hand a **local** model the full
+hosted passage set. The comment three lines above forbids exactly that. Fixed by
+re-importing the local provider, with the reason written at the call site.
+
+## EVIDENCE
+
+`tsc` 0 errors · `lint` 0 errors / 99 warnings · **3,086 unit tests, 173 files**
+· `next build` clean.
+
+Every new assertion proven able to fail:
+
+| Mutation | Result |
+|---|---|
+| Provider import smuggled into `lib/crm` | boundary test fails |
+| Type-only import of the same module | still passes — no false positive |
+| An exemption made stale | stale-exemption test fails |
+| Provider modules renamed | all three vacuity guards fail |
+| `flow.add_tag` deleted | deletion test fails |
+| A deterministic action priced at 4 | zero-price test fails |
+| `hubble.ask` quietly priced | unpriced-count test fails |
+| `registerAction` loop removed | 3 of 8 flow-coverage tests fail |
+
+## LIMITATIONS — mandatory per §10
+
+- **The guard is static.** It reads import statements. A provider obtained
+  through a dynamic `import()` or a runtime string would not be seen. The
+  combined closure was checked for dynamic imports and holds four, three
+  type-only and one `cheerio`; none reaches a provider.
+- **Item 3 does not meter anything.** It prevents a *fifth* unmetered path. The
+  four that exist stay unmetered until DECISION-16.
+- **No production spend figure.** What these routes have actually cost is in the
+  provider's billing console, which is an owner action.
+- **The registry declares permissions; it does not enforce them.** Enforcement
+  stays where the call enters. A future item could assert the two agree.

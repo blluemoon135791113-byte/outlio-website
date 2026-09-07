@@ -463,7 +463,7 @@ this stops at evidence.
 
 ---
 
-## DECISION-16 — What do the three AI HTTP routes cost? · `OPEN`
+## DECISION-16 — What do the four AI HTTP routes cost? · `OPEN`
 
 Raised 2026-09-07 while surveying Phase 12.
 
@@ -508,3 +508,28 @@ the standard every other phase in this project has been held to.
 
 ⚠️ **What it does not settle:** the provider bill to date. That is in the
 provider's console, and reading it is an owner action.
+
+### Update 2026-09-08 — the count was wrong, and the rest of the phase shipped
+
+⚠️ **There are FOUR unmetered routes, not three.**
+`/api/intelligence/runs/[id]/summary` reaches a model through
+`lib/hubble/summarize.ts`; its 25-module closure reaches `hubbleExecute` zero
+times. The first scan missed it because it grepped for the identifier and
+counted a hit in `lib/hubble/reason.ts`, which only names it in a **comment**.
+Three modules serve the four routes — `planner.ts` serves both `/query` and
+`/clarify`.
+
+Phase 12 items 1–3 are delivered and do not depend on this decision. The
+registry now carries the three unpriced entries explicitly (`hubble.ask`,
+`intelligence.plan`, `intelligence.summarize`), each naming DECISION-16, and
+`hubbleExecute` **refuses** an unpriced capability rather than running it free.
+`tests/unit/model-call-boundary.test.ts` prevents a fifth route appearing.
+
+**This does not change the recommendation** — still option 2, *meter but do not
+charge*. It strengthens it: the count of unmetered paths was itself uncertain
+until a structural guard existed, which is the argument for measuring before
+pricing rather than after.
+
+**What answering it now costs:** item 4 only — moving the three modules inside
+the boundary and setting a number. The exemption list in the boundary test is
+the checklist; shrinking it to empty completes the phase.
