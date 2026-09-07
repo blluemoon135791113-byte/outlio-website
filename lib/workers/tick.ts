@@ -215,12 +215,25 @@ export async function runTick(): Promise<TickResult> {
 
     const workspaces = [...new Set((accounts ?? []).map((a) => a.workspace_id))]
     let replies = 0
+    let bounces = 0
+    /*
+     * ⚠️ REPORTED, BECAUSE IT IS THE NUMBER THAT SHOWS THE FIX WORKING.
+     *
+     * Before 2026-09-07 every message in the mailbox counted as a reply:
+     * production held 254 `replied` events against two messages ever sent.
+     * Mail from an address this workspace never emailed is now stored for the
+     * inbox and otherwise ignored, and `unrelated` is how anyone sees that
+     * happening. A counter nobody can read is the same defect as no counter.
+     */
+    let unrelated = 0
     let failures = 0
 
     for (const workspaceId of workspaces) {
       try {
         const outcome = await syncWorkspaceReplies(workspaceId)
         replies += outcome.replies
+        bounces += outcome.bounces
+        unrelated += outcome.unrelated
       } catch {
         // ⚠️ ONE BROKEN MAILBOX MUST NOT STOP THE REST. A wrong IMAP password
         // in one workspace would otherwise block replies for everyone.
@@ -228,7 +241,10 @@ export async function runTick(): Promise<TickResult> {
       }
     }
 
-    return `${workspaces.length} workspace(s), ${replies} replies, ${failures} failed`
+    return (
+      `${workspaces.length} workspace(s), ${replies} replies, ${bounces} bounces, ` +
+      `${unrelated} unrelated, ${failures} failed`
+    )
   }, began)
 
   await runJob(result, 'advance_flows', async () => {
