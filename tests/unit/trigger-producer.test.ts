@@ -118,12 +118,9 @@ function firedTriggers(): Map<string, string[]> {
  * assertion below instead, against the actual defect.
  */
 const KNOWN_UNWIRED = new Set([
-  'contact_assigned',
   'list_added',
   'batch_added',
   'campaign_enrolled',
-  'email_sent',
-  'email_unsubscribed',
   'no_activity',
   'webhook',
   'scheduled',

@@ -353,21 +353,25 @@ Six domain moments now go through `lib/events/emit.ts`, which fans out to the
 flow engine **and** webhooks: `contact_created`, `stage_changed`,
 `opportunity_won`, `task_completed`, `email_replied`, `email_bounced`.
 
-### 5.3 What is left
+### 5.3 What is left — **three of twelve, by decision (updated 2026-09-09)**
 
-**Six of twelve events still have no source and must not be claimed as working:**
+**Nine of twelve events now have sources.** The first six landed with the
+audit commit (2026-09-08); three more on 2026-09-09:
 
-| Event | Where its source belongs |
+| Event | Source now |
 |---|---|
-| `crm.contact.assigned` | the assignment path (`ASSIGN_OWNER` and manual reassign) |
-| `email.message.sent` | the send path, after a successful provider hand-off |
-| `email.contact.unsubscribed` | the suppression path, on unsubscribe only — not on bounce |
-| `meeting.booked` / `.cancelled` / `.rescheduled` | Calendly ingest — **needs a payload contract first** |
+| `crm.contact.assigned` | `assignContact` (shared manual path) + `ASSIGN_OWNER` + `ROUND_ROBIN` |
+| `email.message.sent` | the send worker, after the provider accepts |
+| `email.contact.unsubscribed` | `recordUnsubscribe` — unsubscribe only, never bounce |
 
-⚠️ Do not invent the `meeting.*` payload shape to close the gap. Publishing an
-event whose body nobody specified is fabricating an API.
+The three that remain have **no source because they have no payload
+contract** — raised as **DECISION-18**, which is where the shape gets decided:
 
-**Also outstanding:**
+| Event | Blocked on |
+|---|---|
+| `meeting.booked` / `.cancelled` / `.rescheduled` | DECISION-18 (payload contract) — do not invent the shape; `NormalizedMeetingEvent` is internal |
+
+**Still outstanding:**
 
 - **Publish-side idempotency.** `enqueue_webhook_delivery(workspace, event_type,
   payload)` takes **no idempotency key**, so a retried business operation

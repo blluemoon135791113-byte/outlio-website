@@ -113,17 +113,24 @@ describe('nothing fires half a domain event', () => {
 
 describe('the mapping covers every trigger that has a source', () => {
   /*
-   * ⚠️ THE SIX THAT ARE WIRED, PINNED. Each corresponds to a real dispatch
+   * ⚠️ THE NINE THAT ARE WIRED, PINNED. Each corresponds to a real dispatch
    * point in the product. If one loses its mapping the webhook silently stops
    * while the flow keeps running — the exact asymmetry this phase found.
+   * The last three joined 2026-09-09 when their sources landed: assignment
+   * (manual path + both flow actions), the send worker's post-hand-off moment,
+   * and the one-click unsubscribe. Behavior tests live in
+   * `domain-event-sources.test.ts`.
    */
   const WIRED = [
     ['contact_created', 'crm.contact.created'],
+    ['contact_assigned', 'crm.contact.assigned'],
     ['stage_changed', 'crm.opportunity.stage_changed'],
     ['opportunity_won', 'crm.opportunity.won'],
     ['task_completed', 'crm.task.completed'],
+    ['email_sent', 'email.message.sent'],
     ['email_replied', 'email.message.replied'],
     ['email_bounced', 'email.message.bounced'],
+    ['email_unsubscribed', 'email.contact.unsubscribed'],
   ] as const
 
   for (const [trigger, event] of WIRED) {

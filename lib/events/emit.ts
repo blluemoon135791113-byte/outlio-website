@@ -36,19 +36,25 @@ import { dispatchFlowTrigger, type DispatchResult } from '@/lib/flows/dispatch'
  * concern, and inventing `meeting.booked` here would publish an event whose
  * payload shape nobody has specified.
  *
- * The reverse gap is the honest one: `crm.contact.assigned`,
- * `email.message.sent`, `email.contact.unsubscribed` and the three `meeting.*`
- * events are in the catalogue with no dispatch point anywhere in the product.
- * They are still offered in Settings and still never fire. Wiring them needs a
- * source, not a line here.
+ * ⚠️ EVERY ENTRY NEEDS THREE THINGS, AND AN ENTRY IS THE LAST OF THEM: a
+ * moment in the product, an idempotency key that names the occurrence, and a
+ * payload that is a contract — not a guess. `contact_assigned`, `email_sent`
+ * and `email_unsubscribed` joined 2026-09-09 when all three existed.
+ *
+ * The remaining gap is the honest one: the three `meeting.*` events are in
+ * the catalogue with no payload contract anywhere. They stay out until one
+ * is decided — publishing a body nobody specified is fabricating an API.
  */
 const WEBHOOK_FOR_TRIGGER: Partial<Record<TriggerType, WebhookEvent>> = {
   contact_created: 'crm.contact.created',
+  contact_assigned: 'crm.contact.assigned',
   stage_changed: 'crm.opportunity.stage_changed',
   opportunity_won: 'crm.opportunity.won',
   task_completed: 'crm.task.completed',
+  email_sent: 'email.message.sent',
   email_replied: 'email.message.replied',
   email_bounced: 'email.message.bounced',
+  email_unsubscribed: 'email.contact.unsubscribed',
 }
 
 export type EmitResult = {

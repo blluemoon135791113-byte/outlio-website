@@ -634,3 +634,53 @@ dry-run and safety engine, complete and `VERIFIED` by breaking each control** �
 ⚠️ **What it does not settle:** the legal reading. This register states the
 widely-documented position, not advice. If the answer is 2 or 3, it is the brief
 to hand a lawyer.
+
+---
+
+## DECISION-18 — What is the payload contract for the three `meeting.*` webhook events? · `OPEN`
+
+Raised 2026-09-09 while sourcing the last webhook events (Phase 23, second
+half).
+
+**The fact:** `meeting.booked`, `meeting.cancelled` and `meeting.rescheduled`
+are offered in Settings → Developers and have never fired, because no product
+moment publishes them. The natural source exists — `lib/meetings/ingest.ts`
+processes Calendly events at exactly those moments. What does not exist is a
+payload contract: §5.13 specifies the transport (signature, replay window,
+retries, circuit breaker) and nothing about bodies. The only shape in the
+codebase is `NormalizedMeetingEvent`, a Calendly-normalised internal type.
+
+**Why it is a decision and not a gap to fill:** publishing that type verbatim
+freezes an internal representation as a public API nobody agreed to — and a
+webhook body IS the API; once a subscriber parses it, changing it is a breaking
+release. Inventing a body to close a checkbox is the webhook equivalent of
+rule 4's fabricated contact detail: it looks right, and when it is wrong
+nobody can tell.
+
+**Options, with the cost of being wrong:**
+
+1. **Publish `NormalizedMeetingEvent` as-is.** Fastest. Wrong if the shape is
+   missing what subscribers need (invitee timezone? which calendar?) or carries
+   what they must not see (cancellation reason is personal correspondence) —
+   and every gap becomes a v2 later.
+2. **Specify a minimal contract deliberately** — e.g.
+   `{ meetingId, inviteeEmail, contactId?, scheduledAt, endsAt?, type }` —
+   documented in `docs/EXTENSION.md` or the developer settings page, then
+   wired through `emit.ts`'s mapping. Wrong only in the time it takes to
+   decide; the three events stay dark until then.
+3. **Withdraw the three events from the catalogue.** Honest: don't offer what
+   doesn't exist. Wrong if meeting webhooks are a near-term promise — the
+   catalogue is also the product's face.
+
+**My recommendation: option 2, whenever meeting notifications matter to a
+customer.** It is the same standard the wired nine now meet: a source, a key
+that names the occurrence, and a payload that is a contract. There is no
+evidence anyone needs these events today (the production census shows zero
+webhook subscribers), so deciding the shape under no pressure beats guessing
+under one.
+
+⚠️ **What it does not settle:** whether the flow trigger `call_booked` should
+fan out to webhooks at all — it is currently exempted in
+`domain-event-boundary.test.ts` on the same no-contract grounds, and its
+`ingestMeetingEvent` call site is behind an option (`triggerFlowId`) no caller
+passes. That is a separate, already-recorded defect.

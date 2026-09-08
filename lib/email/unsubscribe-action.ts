@@ -18,6 +18,7 @@ import 'server-only'
  */
 import { createAdminClient } from '@/lib/supabase/admin'
 import { suppressEmail } from '@/lib/email/send'
+import { emitDomainEvent } from '@/lib/events/emit'
 import type { UnsubscribeSubject } from '@/lib/email/unsubscribe'
 
 export async function recordUnsubscribe(subject: UnsubscribeSubject): Promise<void> {
@@ -62,5 +63,28 @@ export async function recordUnsubscribe(subject: UnsubscribeSubject): Promise<vo
     // and passing an explicit null is a different thing to omitting it.
     p_campaign_id: subject.campaignId ?? undefined,
     p_metadata: { source: 'one_click', rfc: '8058' },
+  })
+
+  /*
+   * `email.contact.unsubscribed` — on the UNSUBSCRIBE path only. A hard bounce
+   * suppresses an address too, but a bounced recipient never asked to stop
+   * being mailed, and telling subscribers "unsubscribed" for a dead address is
+   * a claim about consent that was never made. (Bounces emit
+   * `email.message.bounced` from reply-sync.)
+   *
+   * ⚠️ IDEMPOTENCY ON THE TOKEN, NOT THE CLICK. A recipient may press the
+   * button twice or a mail client may retry the POST — and this function is
+   * also idempotent by design, so it runs again happily. The unsubscribe token
+   * is deterministic per (workspace, address, campaign scope): the flow side
+   * de-duplicates on it, so one link, however many times followed, is one
+   * occurrence. The webhook side has no key (see `emit.ts`) and publishes per
+   * call — recorded in PHASE_23.md as the publish-side idempotency gap.
+   */
+  await emitDomainEvent({
+    workspaceId: subject.workspaceId,
+    triggerType: 'email_unsubscribed',
+    contactId: null,
+    idempotencyKey: `email_unsubscribed:${subject.workspaceId}:${email}:${subject.campaignId ?? 'all'}`,
+    payload: { email, campaignId: subject.campaignId ?? null },
   })
 }
