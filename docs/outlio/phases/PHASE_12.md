@@ -1,7 +1,8 @@
 # Phase 12 — Capability registry + validator + permission/entitlement checks
 
-Per §9. Status: **ITEMS 1–3 DELIVERED 2026-09-08. Item 4 blocked on
-DECISION-16 (pricing), which is the owner's.**
+Per §9. Status: **ALL FOUR ITEMS DELIVERED. Items 1–3 on 2026-09-08 (below);
+item 4 on 2026-09-08 under DECISION-16's starting answer — meter at 0 —
+recorded at the end of this file.**
 
 ⚠️ **CORRECTION, AND IT IS THE HEADLINE'S NUMBER.** This brief said three
 unmetered routes. There are **four**. `/api/intelligence/runs/[id]/summary`
@@ -150,7 +151,7 @@ can proceed; item 4 cannot.
 | 1. Capability registry | **DONE** | `lib/capabilities/registry.ts` |
 | 2. One guarded entry point, failing closed | **DONE** | `lib/hubble/execute.ts` |
 | 3. Structural guard on provider imports | **DONE** | `tests/unit/model-call-boundary.test.ts` |
-| 4. Retrofit the four routes | **BLOCKED** | DECISION-16 |
+| 4. Retrofit the four routes | **DONE 2026-09-08** | metered at 0 (DECISION-16), see below |
 
 **The registry** is one closed set of 32 capabilities, each carrying `isAi`, a
 price and a permission. It is pure — no `server-only`, no database — because the
@@ -223,3 +224,89 @@ Every new assertion proven able to fail:
   provider's billing console, which is an owner action.
 - **The registry declares permissions; it does not enforce them.** Enforcement
   stays where the call enters. A future item could assert the two agree.
+
+---
+
+## ITEM 4 — DELIVERED 2026-09-08: the four routes entered the door
+
+DECISION-16 was answered with its recommended starting point, **option 2 —
+meter but do not charge**: the three HTTP entries (`hubble.ask`,
+`intelligence.plan`, `intelligence.summarize`) are priced at **0**, so
+`hubble_calls` fills with real rows before a real price is chosen. Registry
+version bumped 1 → 2; deprecated entries are never deleted, so version 1
+definitions stay readable. Raising a price is a one-line registry change with
+this file's history as its audit trail.
+
+### What changed
+
+| Route | How it reaches a model now |
+|---|---|
+| `/api/hubble/ask` | `askHubble` wraps its whole pipeline (cache check aside) in one `hubbleExecute('hubble.ask')` runner; `planResearch` and `answerFromEvidence` take the model as a parameter |
+| `/api/intelligence/query` | `hubbleExecute('intelligence.plan')` around `planQuery` |
+| `/api/intelligence/clarify` | reaches no model directly — its plan was already fixed by `/query`; `applyClarifications` is deterministic |
+| `/api/intelligence/runs/[id]/summary` | `hubbleExecute('intelligence.summarize')` around `summarizeRun` |
+
+`reason.ts`, `summarize.ts` and `planner.ts` no longer construct a model. Their
+provider imports are type-only, and `LlmWaterfall.isUsable()` (new) delegates
+the local-health probe so `evidenceBudgetFor` no longer needs a bare
+`OllamaLlmProvider` built outside the door — the very thing the boundary test
+refuses.
+
+The exemption list `UNMETERED_PENDING_DECISION_16` is **empty** and asserted to
+stay empty in both directions. The live test
+(`tests/integration/hubble-llm-live.test.ts`) now enters the door too, so the
+live path exercises the same boundary as production.
+
+### Two defects found in the in-flight work, both fixed before shipping
+
+1. **The guard's own regex failed for the wrong reason.** The scanner's lazy
+   `([\s\S]*?)` matched from `import 'server-only'` (a side-effect import with
+   no `from` of its own) across to the NEXT import's `from` clause, so
+   `summarize.ts`'s `import type { LLMProvider }` was read as a runtime
+   import. The work-in-progress had already emptied the exemption list, so the
+   guard cried wolf on a file that was clean. This is the mirror image of the
+   project's signature defect — a check that *passes* for a reason that is
+   wrong — and either colour proves nothing. Fixed with a negative lookahead
+   that keeps one match per import statement; a dynamic-import scan was added
+   at the same time, closing the bypass item 3's LIMITATIONS honestly recorded.
+2. **A refused runner produced fabricated copy.** `askHubble` mapped a
+   `no_credits` refusal to the `budget_exhausted` message — *"Hubble found
+   relevant sources, but research used the available time"* — for a refusal
+   that happens BEFORE any page is read. Sources-were-found is a claim about
+   the world the refusal never made; that is rule-4 fabrication in
+   customer-facing copy. The refusal now surfaces the door's own message,
+   which states what is true: the allowance is gone, nothing ran.
+
+### Evidence
+
+`tsc` 0 errors · `lint` 0 errors (7 warnings) · **3,101 unit tests, 175 files**
+· `next build` clean. New `tests/unit/ai-route-metering.test.ts` drives the
+real routes (only auth, workspace, the admin client and the model-adjacent
+helpers mocked) and asserts the spend RPC, the `hubble_calls` row, and that
+the runner receives `tools.llm` — including the out-of-credits refusal, which
+0094's zero-spend branch still refuses once the allowance is spent, so even a
+free capability degrades gracefully (M7 criterion 4).
+
+Every new assertion proven able to fail:
+
+| Mutation | Result |
+|---|---|
+| `hubbleExecute` wrapper removed from the query route | 2 metering tests fail |
+| `hubbleExecute` wrapper removed from the summary route | 1 metering test fails |
+| `workspaceId` threading dropped from the ask route | ask metering test fails (NO_CREDIT_CONTEXT) |
+| A value import of `createHubbleLlm` added outside the door | boundary test fails |
+| A dynamic `import()` of a provider module added outside the door | boundary test fails |
+| Scanner regex reverted to the bridging form | boundary test fails (the false positive returns) |
+| A price other than 0 on one of the three entries | zero-price pin fails |
+| An unpriced AI entry added | unpriced-set test fails |
+
+### Limitations — item 4
+
+- **Still no production spend figure.** `hubble_calls` starts filling on the
+  next deployed call; what these routes cost to date remains in the provider's
+  billing console (an owner action).
+- **Metering at 0 is a placeholder by decision, not an oversight.** DECISION-16's
+  real price is still to be chosen, now with evidence accumulating under it.
+- **The rate limiter remains the only live control** against volume (20 per 10
+  minutes per user), which at price 0 is the correct state — the registry exists
+  so a future price is one reviewed line, not a new mechanism.

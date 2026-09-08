@@ -46,26 +46,23 @@ const INSIDE_THE_BOUNDARY = [
 ] as const
 
 /**
- * Modules that call a model WITHOUT a credit context, permitted only until
- * DECISION-16 prices them.
+ * Modules permitted to import a provider WITHOUT being the door: none.
  *
- * ⚠️ THIS LIST IS THE DEFECT, WRITTEN DOWN. It is not a design. Each entry is
- * an unmetered path a customer can reach; the reason it is here rather than
- * fixed is that pricing is the owner's decision, not an engineering one.
+ * ⚠️ THIS LIST WAS THE DEFECT, WRITTEN DOWN — AND EMPTIED 2026-09-08. It
+ * held the three modules behind the four unmetered HTTP routes Phase 12
+ * found (`reason.ts` → /api/hubble/ask, `summarize.ts` → the run-summary
+ * route, `planner.ts` → /query and /clarify). DECISION-16's starting answer
+ * (meter at 0) let all three move inside `hubbleExecute` as runners that
+ * receive `tools.llm`, which is why none of them imports a provider at
+ * runtime any more.
  *
- * ⚠️ ASSERTED IN BOTH DIRECTIONS BELOW. An entry that stops importing a
- * provider must be REMOVED, or the exemption outlives the problem and quietly
- * re-authorises a future import. Shrinking this list to empty is what finishing
- * Phase 12 item 4 looks like.
+ * It stays DECLARED and EMPTY rather than being deleted, for the same reason
+ * a vacuous-looking guard is kept: the next person to add an HTTP AI route
+ * will reach for a provider import, and this list is where that reflex goes
+ * to be either justified in review (an entry, with the route it serves) or
+ * rejected by the assertions below.
  */
-const UNMETERED_PENDING_DECISION_16 = [
-  // → /api/hubble/ask
-  'lib/hubble/reason.ts',
-  // → /api/intelligence/runs/[id]/summary  (the fourth route; the brief named three)
-  'lib/hubble/summarize.ts',
-  // → /api/intelligence/query and /api/intelligence/clarify
-  'lib/intelligence/planner.ts',
-] as const
+const UNMETERED_PENDING_DECISION_16 = [] as const
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = []
@@ -94,6 +91,22 @@ function sourceFiles(dir: string): string[] {
  * call anything; it disappears at compile time. Counting it would flag files
  * that merely describe a provider in a signature, and a guard that cries wolf
  * gets an allowlist entry rather than a fix.
+ *
+ * ⚠️ THE MATCH MUST NOT CROSS AN IMPORT BOUNDARY — found the hard way while
+ * closing Phase 12 item 4. A bare side-effect import (`import 'server-only'`)
+ * has no `from` clause of its own, and the lazy `([\s\S]*?)` first used here
+ * happily matched from it all the way to the NEXT import's `from`, so
+ * `import type { LLMProvider }` two lines down was read as that side-effect
+ * import's bindings — a runtime import that did not exist. The guard then
+ * failed for a reason that was wrong, which is the mirror image of this
+ * project's signature defect (a check that passes for a reason that is
+ * wrong): either way the colour of the test says nothing about the code.
+ * One import's bindings can never contain the `import` keyword, so a negative
+ * lookahead on it keeps each match inside one statement.
+ *
+ * ⚠️ DYNAMIC IMPORTS ARE SCANNED TOO. `await import('…/ollama-llm')` bypasses
+ * the static scanner above entirely, and the boundary is only as good as its
+ * least convenient path.
  */
 function importsProviderAtRuntime(source: string): boolean {
   const withoutComments = source
@@ -101,7 +114,7 @@ function importsProviderAtRuntime(source: string): boolean {
     .replace(/\/\/[^\n]*/g, '')
 
   for (const match of withoutComments.matchAll(
-    /import\s+(type\s+)?([\s\S]*?)\s*from\s*['"]([^'"]+)['"]/g,
+    /import\s+(type\s+)?((?:(?!import\b)[^;])*?)\s*from\s*['"]([^'";]+)['"]/g,
   )) {
     const [, typeKeyword, bindings, spec] = match
     const resolved = spec!.replace(/^@\//, '').replace(/^\.\.?\//, '')
@@ -121,6 +134,21 @@ function importsProviderAtRuntime(source: string): boolean {
     }
 
     return true
+  }
+
+  /*
+   * `await import('…')` hands you the same module without a `from` clause.
+   * The spec is matched directly; there are no bindings to inspect because a
+   * dynamic import with no runtime use would be a lint error, not a pattern
+   * anyone writes.
+   */
+  for (const match of withoutComments.matchAll(
+    /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+  )) {
+    const resolved = match[1]!.replace(/^@\//, '').replace(/^\.\.?\//, '')
+    if (PROVIDER_MODULES.some((m) => match[1]!.includes(m) || m.endsWith(resolved))) {
+      return true
+    }
   }
 
   return false
@@ -157,8 +185,28 @@ describe('the scan can actually see the thing it polices', () => {
     ).toContain('lib/hubble/execute.ts')
   })
 
-  it('sees at least one known unmetered module', () => {
-    expect(OFFENDERS.importers).toContain('lib/hubble/reason.ts')
+  it('still sees the door, and the door alone, as a non-provider importer', () => {
+    /*
+     * Phase 12 item 4 closed 2026-09-08: the three exemption entries moved
+     * inside `hubbleExecute` and no longer import a provider. The scan must
+     * not have gone blind with them — `execute.ts` is still visible — and
+     * the closed set is pinned so a NEW importer appears as a length change,
+     * not a silent member.
+     *
+     * The provider layer itself (`lib/intelligence/llm/`, including the
+     * `catalog.ts` picker, and `lib/hubble/providers/`) is excluded before
+     * pinning: those files construct models BECAUSE they are the provider
+     * layer — counting them here would make this test about listing the
+     * provider directory rather than about who reaches AROUND it.
+     */
+    const nonProviderImporters = OFFENDERS.importers.filter(
+      (f) => !INSIDE_THE_BOUNDARY.some((p) => f !== 'lib/hubble/execute.ts' && (f === p || f.startsWith(p))),
+    )
+    expect(nonProviderImporters).toContain('lib/hubble/execute.ts')
+    expect(
+      nonProviderImporters,
+      'the non-provider importer set changed; a new file is reaching a provider',
+    ).toEqual(['lib/hubble/execute.ts'])
   })
 })
 
@@ -196,13 +244,12 @@ describe('no module reaches a model except through the boundary', () => {
     ).toEqual([])
   })
 
-  it('the exception list is the count Phase 12 recorded', () => {
+  it('the exception list is the count Phase 12 closed at', () => {
     /*
-     * Four routes, three modules — `planner.ts` serves both /query and
-     * /clarify. The number is pinned so shrinking it is a visible act: when
-     * DECISION-16 is answered and these move inside `hubbleExecute`, this
-     * assertion is what fails and asks for the brief to be updated.
+     * Zero since 2026-09-08 — the four unmetered routes entered the door.
+     * Pinned at zero so an entry REAPPEARING is a visible act that fails this
+     * test, rather than a quiet re-authorisation of the next unmetered import.
      */
-    expect(UNMETERED_PENDING_DECISION_16).toHaveLength(3)
+    expect(UNMETERED_PENDING_DECISION_16).toHaveLength(0)
   })
 })

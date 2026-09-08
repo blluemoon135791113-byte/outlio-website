@@ -508,7 +508,19 @@ engine that demonstrably runs.
 
 ---
 
-## DECISION-16 — What do the four AI HTTP routes cost? · `OPEN`
+## DECISION-16 — What do the four AI HTTP routes cost? · `STARTING ANSWER ADOPTED 2026-09-08`
+
+**Resolved to its recommended option 2 — meter but do not charge — as the
+starting point, not the final answer.** The three HTTP entries
+(`hubble.ask`, `intelligence.plan`, `intelligence.summarize`) are priced at 0
+in registry version 2, the four routes run inside `hubbleExecute`, and
+`hubble_calls` now records every call. **The real price remains OPEN**: when
+the ledger holds a month of real rows, the owner picks the number with
+evidence under it, and raising it is a one-line registry change with a
+test pinning the current 0. Delivery detail in `phases/PHASE_12.md`, item 4.
+
+What this does NOT settle, unchanged: the provider bill to date (owner's
+console), and the eventual non-zero price.
 
 Raised 2026-09-07 while surveying Phase 12.
 

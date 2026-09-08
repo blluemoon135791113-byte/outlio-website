@@ -139,21 +139,35 @@ describe('every entry is answerable', () => {
     }
   })
 
-  it('makes an unpriced capability name the decision that would price it', () => {
+  it('prices every AI capability — an unpriced entry is a refusal, and there is nothing left to refuse', () => {
+    /*
+     * Phase 12 item 4, closed 2026-09-08: the four HTTP routes entered
+     * `hubbleExecute` and their entries were priced (at 0 — metered, free
+     * while the number is chosen). An unpriced capability reappearing means
+     * someone added an AI entry and skipped the price, which `hubbleExecute`
+     * would turn into a hard refusal in production. Fail here, in a unit
+     * test, instead.
+     */
     const unpriced = aiCapabilityIds().filter((id) => {
       const entry = CAPABILITIES[id] as Capability & { credits: number | null }
       return entry.credits === null
     })
 
-    // Four routes, three modules, three entries — see model-call-boundary.test.ts.
-    expect(unpriced.length, 'the unpriced set changed without a decision').toBe(3)
+    expect(
+      unpriced,
+      'Every AI capability must carry a price (0 is a price). Add one, or the call refuses in production.',
+    ).toEqual([])
+  })
 
-    for (const id of unpriced) {
-      const entry = CAPABILITIES[id] as Capability & { pricingDecision?: string }
-      expect(
-        entry.pricingDecision,
-        `${id} has no price and does not say whose decision that is`,
-      ).toMatch(/^DECISION-\d+$/)
+  it('keeps the three HTTP AI capabilities metered at exactly zero while their real price is chosen', () => {
+    /*
+     * The DECISION-16 starting point: record the spend, charge nothing. The
+     * number exists so the ledger fills before a real price is picked; pinned
+     * here so a casual edit changes a test, not a customer's bill silently.
+     */
+    for (const id of ['hubble.ask', 'intelligence.plan', 'intelligence.summarize'] as const) {
+      const entry = CAPABILITIES[id] as Capability & { credits: number | null }
+      expect(entry.credits, `${id} must stay at the agreed 0-credit starting price`).toBe(0)
     }
   })
 })
@@ -186,8 +200,10 @@ describe('the flow catalogue and the registry cannot drift', () => {
   it('keeps the HTTP capabilities out of the flow builder', () => {
     /*
      * `hubble.ask` and the intelligence entries have no `flowAction` on
-     * purpose: they are unpriced, and offering an unpriced step would let a
-     * customer publish a flow whose cost cannot be quoted.
+     * purpose: they are interactive HTTP capabilities with no flow-run
+     * context, and a flow step quoting 0 credits today would be quoting a
+     * placeholder the owner has not confirmed. They stay out until a flow
+     * meaning for them exists.
      */
     for (const id of ['hubble.ask', 'intelligence.plan', 'intelligence.summarize'] as const) {
       const entry = CAPABILITIES[id] as Capability & { flowAction?: string }

@@ -39,7 +39,13 @@ import {
   type ResearchUsage,
   type SearchHit,
 } from '@/lib/hubble/providers/types'
-import { answerFromEvidence, planResearch } from '@/lib/hubble/reason'
+import {
+  answerFromEvidence,
+  planResearch,
+  type SynthesisState,
+} from '@/lib/hubble/reason'
+import { hubbleExecute, type HubbleTools } from '@/lib/hubble/execute'
+import type { LLMProvider } from '@/lib/intelligence/llm/provider'
 import {
   chunkText,
   diversify,
@@ -101,7 +107,7 @@ export type AskResult = {
   /** True when served entirely from a previous answer. */
   fromCache: boolean
   intent: string
-  synthesis: import('@/lib/hubble/reason').SynthesisState
+  synthesis: SynthesisState
 }
 
 /** Hosts that never yield readable evidence, so fetching them wastes budget. */
@@ -153,6 +159,14 @@ export async function askHubble(
   question: string,
   budget: ResearchBudget = DEFAULT_BUDGET,
   onProgress: AskProgress = () => {},
+  /**
+   * ⚠️ METERING CONTEXT, Phase 12 item 4. This call enters `hubbleExecute`
+   * before any model is reached; the workspace is whose metering record the
+   * call lands against. It is threaded separately rather than derived inside
+   * so the route — which already resolved the workspace for its lead
+   * scoping — stays the single authority for which tenant is acting.
+   */
+  workspaceId: string,
 ): Promise<AskResult> {
   const started = Date.now()
   const usage = emptyUsage()
@@ -184,307 +198,365 @@ export async function askHubble(
   const embedder = resolveEmbeddingProvider()
   const vectorsUsable = await embedder.isUsable({ deadlineAt: researchDeadline })
 
-  /* ---- 2. What we already hold: previously fetched pages for this company. */
-  const [pageChunks, typedEvidenceChunks, alreadyFetched] = await Promise.all([
-    loadCachedChunks(userId, subject.companyId),
-    loadResearchEvidenceChunks(userId, subject.leadId, subject.companyId),
-    knownUrls(userId, subject.companyId),
-  ])
-  const chunks: Chunk[] = [...pageChunks, ...typedEvidenceChunks]
-
   /*
-   * ⚠️ THE DOMAIN, BEFORE PLANNING — it is what makes the queries precise.
+   * ---- 2–6, inside the metered door (Phase 12 item 4). ------------------
    *
-   * Without it a question about "Atlas AI Solutions" returned atlasai.uk and
-   * atlasaisolutions.org, which are different companies. Read from
-   * `companies.domain` when stored, discovered and saved when not, so this
-   * cost is paid once per company rather than once per question.
-   */
-  const resolved = subject.domain
-    ? { domain: subject.domain, origin: 'stored' as const }
-    : await resolveCompanyDomain(userId, subject.companyId, subject.companyName, researchDeadline)
-
-  let domain = resolved?.domain ?? null
-
-  /*
-   * Repair a stale stored alias from evidence already in the cache.
+   * ⚠️ EVERY MODEL CALL THIS QUESTION MAKES NOW HAPPENS INSIDE ONE
+   * `hubbleExecute` RUNNER. The planner and the answerer both receive the
+   * model as `tools.llm`, so a model call cannot be reached from this
+   * function without a credit context having been established first — the
+   * boundary guard in `tests/unit/model-call-boundary.test.ts` holds the
+   * line structurally, and `hubble_calls` gains a row per question.
    *
-   * The first Caddie run had `hirecaddie.ai` stored but cached primary pages
-   * on `caddie.app`. Reusable evidence meant the search/fetch block was skipped,
-   * so redirect learning there could never run. A single guarded homepage read
-   * proves the relationship before changing identity; after the compare-and-
-   * swap succeeds, later questions skip this path because the hosts agree.
+   * Degraded modes stay degraded: a refused runner (no credits, no configured
+   * model after the price is raised) surfaces Hubble's own failure shape
+   * rather than throwing into the route. The search/fetch work below does
+   * not use the model, but it runs inside the runner anyway so the ledger
+   * row records the true duration and outcome of the whole operation.
    */
-  let checkedStoredHomepage = false
-  if (domain && resolved?.origin === 'stored') {
-    const hasMatchingAlias = chunks.some((chunk) => {
-      try {
-        const host = new URL(chunk.url).hostname.toLowerCase().replace(/^www\./, '')
-        return host !== domain && looksLikeOwnDomain(host, subject.companyName)
-      } catch {
-        return false
-      }
-    })
+  const metered = await hubbleExecute(
+    'hubble.ask',
+    { workspaceId, userId, source: 'http:ask' },
+    async (tools: HubbleTools) => {
+      const llm = tools.llm
+      return researchAndAnswer(llm)
+    },
+  )
 
-    if (hasMatchingAlias && Date.now() < researchDeadline) {
-      const requestedUrl = `https://${domain}/`
-      const homepage = await httpPageFetcher.fetchPage(requestedUrl, {
-        deadlineAt: researchDeadline,
-      })
-      checkedStoredHomepage = true
-      if (!isFetchFailure(homepage)) {
-        const canonical = await learnDomainFromRedirect(
-          userId,
-          subject.companyId,
-          subject.companyName,
-          domain,
-          requestedUrl,
-          homepage.url,
-        )
-        if (canonical) domain = canonical
-      }
+  if (!metered.ok) {
+    /*
+     * ⚠️ THE COPY MUST MATCH WHAT ACTUALLY HAPPENED. A pre-flight refusal
+     * (`no_credits`, and every `failed` code) stopped before a single page
+     * was read — claiming "Hubble found relevant sources" would be the exact
+     * fabrication rule 4 forbids, rendered as customer-facing copy. The
+     * refusal's own message states what is true: nothing was researched.
+     *
+     * `budget_exhausted` copy is reserved for a research that RAN and hit
+     * its time budget; `not_configured` for a door that refused because the
+     * registry knows of no model for the task. Neither of those applies to
+     * a spend that never happened, so neither is reused here.
+     */
+    return {
+      answer: metered.message,
+      status: 'unknown',
+      confidence: 0,
+      sources: [],
+      usage,
+      fromCache: false,
+      intent: question,
+      synthesis: 'provider_unavailable',
     }
   }
 
-  /* ---- 3. Plan. ------------------------------------------------------- */
-  onProgress({ phase: 'planning' })
-  const { plan, llmCalls } = await planResearch(
-    question,
-    {
-      companyName: subject.companyName,
-      domain,
-      personName: subject.personName,
-      known: subject.known,
-    },
-    budget.maxQueriesPerRound,
-    researchDeadline,
-    budget.maxLlmCalls > 0,
-  )
-  usage.llmCalls += llmCalls
+  return metered.result
 
-  /*
-   * ⚠️ A CACHED CORPUS IS NOT A CACHED ANSWER.
-   *
-   * Even when the planner says existing data suffices, retrieval still runs
-   * over the stored chunks — the answer is produced from evidence, never from
-   * the planner's opinion that evidence exists.
-   */
-  const shouldSearch =
-    !plan.sufficient &&
-    !hasReusableEvidence(question, chunks, domain, subject.companyName) &&
-    budget.maxSearchRounds > 0 &&
-    Date.now() < researchDeadline
+  /* Everything below runs inside the metered runner above. */
+  async function researchAndAnswer(llm: LLMProvider): Promise<AskResult> {
 
-  /* ---- 4. Search, then fetch. ----------------------------------------- */
-  if (shouldSearch) {
-    const search = resolveSearchProvider()
-    const candidates: SearchHit[] = []
+    /* ---- 2. What we already hold: previously fetched pages for this company. */
+    const [pageChunks, typedEvidenceChunks, alreadyFetched] = await Promise.all([
+      loadCachedChunks(userId, subject.companyId),
+      loadResearchEvidenceChunks(userId, subject.leadId, subject.companyId),
+      knownUrls(userId, subject.companyId),
+    ])
+    const chunks: Chunk[] = [...pageChunks, ...typedEvidenceChunks]
 
     /*
-     * One site-scoped query alongside the planner's, when a domain is known.
-     * It finds what the company says about itself — authoritative for
-     * products, pricing and people, useless for funding or news, which is why
-     * it supplements the unscoped queries rather than replacing them.
+     * ⚠️ THE DOMAIN, BEFORE PLANNING — it is what makes the queries precise.
+     *
+     * Without it a question about "Atlas AI Solutions" returned atlasai.uk and
+     * atlasaisolutions.org, which are different companies. Read from
+     * `companies.domain` when stored, discovered and saved when not, so this
+     * cost is paid once per company rather than once per question.
      */
-    const queries = domain
-      ? [siteScopedQuery(question, domain), ...plan.queries].slice(0, budget.maxQueriesPerRound + 1)
-      : plan.queries
+    const resolved = subject.domain
+      ? { domain: subject.domain, origin: 'stored' as const }
+      : await resolveCompanyDomain(userId, subject.companyId, subject.companyName, researchDeadline)
 
-    for (const [index, query] of queries.entries()) {
-      if (Date.now() > researchDeadline) break
-      onProgress({ phase: 'searching', query, index: index + 1, total: queries.length })
-      const hits = await search.search(query, 6, { deadlineAt: researchDeadline })
-      usage.searches += 1
-      candidates.push(...hits)
-    }
+    let domain = resolved?.domain ?? null
 
-    // Dedup by URL, drop what we already have and what is not worth reading.
-    const seen = new Set<string>(alreadyFetched)
-    const toFetch: string[] = []
-
-    // Read the stored official homepage once. Besides providing primary
-    // evidence, this deterministically discovers canonical-domain redirects
-    // such as hirecaddie.ai -> caddie.app.
-    if (domain && !checkedStoredHomepage) {
-      const homepage = `https://${domain}/`
-      if (!seen.has(homepage)) {
-        seen.add(homepage)
-        toFetch.push(homepage)
-      }
-    }
-
-    for (const hit of candidates) {
-      if (seen.has(hit.url) || !worthFetching(hit.url)) continue
-      seen.add(hit.url)
-      toFetch.push(hit.url)
-      if (toFetch.length >= budget.maxPagesFetched) break
-    }
-
-    if (toFetch.length > 0) onProgress({ phase: 'reading', count: toFetch.length })
-
-    const fetched = await pooled(toFetch, budget.concurrency, async (url) => {
-      if (Date.now() > researchDeadline) return null
-      const direct = await httpPageFetcher.fetchPage(url, { deadlineAt: researchDeadline })
-      if (!isFetchFailure(direct)) return { requestedUrl: url, page: direct }
-
-      // Browser rendering is reserved for pages plain HTTP could not read and
-      // is bounded across the whole question, regardless of fetch concurrency.
-      if (
-        usage.browserFetches >= budget.maxBrowserFetches ||
-        (direct.code !== 'empty' && direct.code !== 'http_error')
-      ) return null
-
-      usage.browserFetches += 1
-      const rendered = await crawl4AiPageFetcher.fetchPage(url, { deadlineAt: researchDeadline })
-      return isFetchFailure(rendered) ? null : { requestedUrl: url, page: rendered }
-    })
-
-    for (const fetchedPage of fetched) {
-      if (!fetchedPage) continue
-      const { requestedUrl, page } = fetchedPage
-      usage.pagesFetched += 1
-
-      if (domain) {
-        const canonical = await learnDomainFromRedirect(
-          userId,
-          subject.companyId,
-          subject.companyName,
-          domain,
-          requestedUrl,
-          page.url,
-        )
-        if (canonical) domain = canonical
-      }
-
-      // Solr is an acceleration layer, never the source of truth. Indexing is
-      // best-effort and cannot block saving the evidence in Hubble's database.
-      await indexPageInSolr(page, { deadlineAt: researchDeadline })
-
-      const pieces = chunkText(page.content)
-      if (pieces.length === 0) continue
-
-      /*
-       * Embeddings when available, null when not. `savePage` stores null
-       * happily and retrieval falls back to lexical scoring.
-       */
-      const embeddings = vectorsUsable
-        ? await embedder.embed(pieces, { deadlineAt: researchDeadline })
-        : null
-
-      const pageId = await savePage({
-        userId,
-        companyId: subject.companyId,
-        url: page.url,
-        title: page.title,
-        content: page.content,
-        structured: page.structured,
-        method: page.method,
-        status: page.status,
-        chunks: pieces,
-        embeddings,
-        embedModel: embeddings ? embedder.model : null,
+    /*
+     * Repair a stale stored alias from evidence already in the cache.
+     *
+     * The first Caddie run had `hirecaddie.ai` stored but cached primary pages
+     * on `caddie.app`. Reusable evidence meant the search/fetch block was skipped,
+     * so redirect learning there could never run. A single guarded homepage read
+     * proves the relationship before changing identity; after the compare-and-
+     * swap succeeds, later questions skip this path because the hosts agree.
+     */
+    let checkedStoredHomepage = false
+    if (domain && resolved?.origin === 'stored') {
+      const hasMatchingAlias = chunks.some((chunk) => {
+        try {
+          const host = new URL(chunk.url).hostname.toLowerCase().replace(/^www\./, '')
+          return host !== domain && looksLikeOwnDomain(host, subject.companyName)
+        } catch {
+          return false
+        }
       })
 
-      chunks.push(
-        ...pieces.map((content, index) => ({
-          pageId: pageId ?? page.url,
+      if (hasMatchingAlias && Date.now() < researchDeadline) {
+        const requestedUrl = `https://${domain}/`
+        const homepage = await httpPageFetcher.fetchPage(requestedUrl, {
+          deadlineAt: researchDeadline,
+        })
+        checkedStoredHomepage = true
+        if (!isFetchFailure(homepage)) {
+          const canonical = await learnDomainFromRedirect(
+            userId,
+            subject.companyId,
+            subject.companyName,
+            domain,
+            requestedUrl,
+            homepage.url,
+          )
+          if (canonical) domain = canonical
+        }
+      }
+    }
+
+    /* ---- 3. Plan. ------------------------------------------------------- */
+    onProgress({ phase: 'planning' })
+    const { plan, llmCalls } = await planResearch(
+      llm,
+      question,
+      {
+        companyName: subject.companyName,
+        domain,
+        personName: subject.personName,
+        known: subject.known,
+      },
+      budget.maxQueriesPerRound,
+      researchDeadline,
+      budget.maxLlmCalls > 0,
+    )
+    usage.llmCalls += llmCalls
+
+    /*
+     * ⚠️ A CACHED CORPUS IS NOT A CACHED ANSWER.
+     *
+     * Even when the planner says existing data suffices, retrieval still runs
+     * over the stored chunks — the answer is produced from evidence, never from
+     * the planner's opinion that evidence exists.
+     */
+    const shouldSearch =
+      !plan.sufficient &&
+      !hasReusableEvidence(question, chunks, domain, subject.companyName) &&
+      budget.maxSearchRounds > 0 &&
+      Date.now() < researchDeadline
+
+    /* ---- 4. Search, then fetch. ----------------------------------------- */
+    if (shouldSearch) {
+      const search = resolveSearchProvider()
+      const candidates: SearchHit[] = []
+
+      /*
+       * One site-scoped query alongside the planner's, when a domain is known.
+       * It finds what the company says about itself — authoritative for
+       * products, pricing and people, useless for funding or news, which is why
+       * it supplements the unscoped queries rather than replacing them.
+       */
+      const queries = domain
+        ? [siteScopedQuery(question, domain), ...plan.queries].slice(0, budget.maxQueriesPerRound + 1)
+        : plan.queries
+
+      for (const [index, query] of queries.entries()) {
+        if (Date.now() > researchDeadline) break
+        onProgress({ phase: 'searching', query, index: index + 1, total: queries.length })
+        const hits = await search.search(query, 6, { deadlineAt: researchDeadline })
+        usage.searches += 1
+        candidates.push(...hits)
+      }
+
+      // Dedup by URL, drop what we already have and what is not worth reading.
+      const seen = new Set<string>(alreadyFetched)
+      const toFetch: string[] = []
+
+      // Read the stored official homepage once. Besides providing primary
+      // evidence, this deterministically discovers canonical-domain redirects
+      // such as hirecaddie.ai -> caddie.app.
+      if (domain && !checkedStoredHomepage) {
+        const homepage = `https://${domain}/`
+        if (!seen.has(homepage)) {
+          seen.add(homepage)
+          toFetch.push(homepage)
+        }
+      }
+
+      for (const hit of candidates) {
+        if (seen.has(hit.url) || !worthFetching(hit.url)) continue
+        seen.add(hit.url)
+        toFetch.push(hit.url)
+        if (toFetch.length >= budget.maxPagesFetched) break
+      }
+
+      if (toFetch.length > 0) onProgress({ phase: 'reading', count: toFetch.length })
+
+      const fetched = await pooled(toFetch, budget.concurrency, async (url) => {
+        if (Date.now() > researchDeadline) return null
+        const direct = await httpPageFetcher.fetchPage(url, { deadlineAt: researchDeadline })
+        if (!isFetchFailure(direct)) return { requestedUrl: url, page: direct }
+
+        // Browser rendering is reserved for pages plain HTTP could not read and
+        // is bounded across the whole question, regardless of fetch concurrency.
+        if (
+          usage.browserFetches >= budget.maxBrowserFetches ||
+          (direct.code !== 'empty' && direct.code !== 'http_error')
+        ) return null
+
+        usage.browserFetches += 1
+        const rendered = await crawl4AiPageFetcher.fetchPage(url, { deadlineAt: researchDeadline })
+        return isFetchFailure(rendered) ? null : { requestedUrl: url, page: rendered }
+      })
+
+      for (const fetchedPage of fetched) {
+        if (!fetchedPage) continue
+        const { requestedUrl, page } = fetchedPage
+        usage.pagesFetched += 1
+
+        if (domain) {
+          const canonical = await learnDomainFromRedirect(
+            userId,
+            subject.companyId,
+            subject.companyName,
+            domain,
+            requestedUrl,
+            page.url,
+          )
+          if (canonical) domain = canonical
+        }
+
+        // Solr is an acceleration layer, never the source of truth. Indexing is
+        // best-effort and cannot block saving the evidence in Hubble's database.
+        await indexPageInSolr(page, { deadlineAt: researchDeadline })
+
+        const pieces = chunkText(page.content)
+        if (pieces.length === 0) continue
+
+        /*
+         * Embeddings when available, null when not. `savePage` stores null
+         * happily and retrieval falls back to lexical scoring.
+         */
+        const embeddings = vectorsUsable
+          ? await embedder.embed(pieces, { deadlineAt: researchDeadline })
+          : null
+
+        const pageId = await savePage({
+          userId,
+          companyId: subject.companyId,
           url: page.url,
           title: page.title,
-          ordinal: index,
-          embedding: embeddings?.[index] ?? null,
-          content,
-        })),
+          content: page.content,
+          structured: page.structured,
+          method: page.method,
+          status: page.status,
+          chunks: pieces,
+          embeddings,
+          embedModel: embeddings ? embedder.model : null,
+        })
+
+        chunks.push(
+          ...pieces.map((content, index) => ({
+            pageId: pageId ?? page.url,
+            url: page.url,
+            title: page.title,
+            ordinal: index,
+            embedding: embeddings?.[index] ?? null,
+            content,
+          })),
+        )
+      }
+    }
+
+    /* ---- 5. Retrieve. --------------------------------------------------- */
+    const queryEmbedding = vectorsUsable
+      ? Date.now() < researchDeadline
+        ? (await embedder.embed([question], { deadlineAt: researchDeadline }))?.[0] ?? null
+        : null
+      : null
+
+    const ranked = retrieve(
+      question,
+      chunks,
+      queryEmbedding,
+      budget.maxChunksToModel * 3,
+      domain,
+      subject.companyName,
+    )
+    // At most 3 passages from any one page, so a single verbose site cannot
+    // fill the evidence set and make corroboration impossible.
+    const evidence = diversify(ranked, 3, budget.maxChunksToModel)
+
+    /* ---- 6. Answer. ----------------------------------------------------- */
+    onProgress({ phase: 'thinking', passages: evidence.length })
+    const { answer, llmCalls: answerCalls } = await answerFromEvidence(
+      llm,
+      question,
+      evidence,
+      subject.known,
+      domain,
+      subject.companyName,
+      deadline,
+      Math.max(0, budget.maxLlmCalls - usage.llmCalls),
+    )
+    usage.llmCalls += answerCalls
+    usage.elapsedMs = Date.now() - started
+
+    /*
+     * ⚠️ LEARN THE DOMAIN FROM WHAT WAS ACTUALLY CITED.
+     *
+     * Being cited is better evidence of ownership than ranking first in a
+     * search. Only fills a gap — never overwrites a known domain — and makes
+     * every future question about this company site-scoped and precise.
+     */
+    if (!domain) {
+      await learnDomainFromSources(
+        userId,
+        subject.companyId,
+        subject.companyName,
+        answer.sources.map((source) => source.url),
       )
     }
-  }
 
-  /* ---- 5. Retrieve. --------------------------------------------------- */
-  const queryEmbedding = vectorsUsable
-    ? Date.now() < researchDeadline
-      ? (await embedder.embed([question], { deadlineAt: researchDeadline }))?.[0] ?? null
-      : null
-    : null
+    /* ---- 7. Save, so the next question reuses it. ------------------------ */
+    // Deterministic contacts found in the exact cited passages become typed
+    // lead evidence. The model's answer text is never parsed or trusted here.
+    // Persistence is best-effort: a card write cannot erase a completed answer.
+    try {
+      await writeEvidence(userId, null, citedContactEvidence({
+        leadId: subject.leadId,
+        companyId: subject.companyId,
+        personName: subject.personName,
+        personTitle: subject.personTitle,
+        personLocation: subject.personLocation,
+        companyName: subject.companyName,
+        domain,
+      }, answer.status, answer.sources))
+    } catch {
+      // The page/chunk and answer stores still retain the cited result.
+    }
 
-  const ranked = retrieve(
-    question,
-    chunks,
-    queryEmbedding,
-    budget.maxChunksToModel * 3,
-    domain,
-    subject.companyName,
-  )
-  // At most 3 passages from any one page, so a single verbose site cannot
-  // fill the evidence set and make corroboration impossible.
-  const evidence = diversify(ranked, 3, budget.maxChunksToModel)
-
-  /* ---- 6. Answer. ----------------------------------------------------- */
-  onProgress({ phase: 'thinking', passages: evidence.length })
-  const { answer, llmCalls: answerCalls } = await answerFromEvidence(
-    question,
-    evidence,
-    subject.known,
-    domain,
-    subject.companyName,
-    deadline,
-    Math.max(0, budget.maxLlmCalls - usage.llmCalls),
-  )
-  usage.llmCalls += answerCalls
-  usage.elapsedMs = Date.now() - started
-
-  /*
-   * ⚠️ LEARN THE DOMAIN FROM WHAT WAS ACTUALLY CITED.
-   *
-   * Being cited is better evidence of ownership than ranking first in a
-   * search. Only fills a gap — never overwrites a known domain — and makes
-   * every future question about this company site-scoped and precise.
-   */
-  if (!domain) {
-    await learnDomainFromSources(
+    await saveAnswer({
       userId,
-      subject.companyId,
-      subject.companyName,
-      answer.sources.map((source) => source.url),
-    )
-  }
-
-  /* ---- 7. Save, so the next question reuses it. ------------------------ */
-  // Deterministic contacts found in the exact cited passages become typed
-  // lead evidence. The model's answer text is never parsed or trusted here.
-  // Persistence is best-effort: a card write cannot erase a completed answer.
-  try {
-    await writeEvidence(userId, null, citedContactEvidence({
       leadId: subject.leadId,
       companyId: subject.companyId,
-      personName: subject.personName,
-      personTitle: subject.personTitle,
-      personLocation: subject.personLocation,
-      companyName: subject.companyName,
-      domain,
-    }, answer.status, answer.sources))
-  } catch {
-    // The page/chunk and answer stores still retain the cited result.
-  }
+      question,
+      answer: answer.answer,
+      status: answer.status,
+      confidence: answer.confidence,
+      sources: answer.sources,
+      usage,
+    })
 
-  await saveAnswer({
-    userId,
-    leadId: subject.leadId,
-    companyId: subject.companyId,
-    question,
-    answer: answer.answer,
-    status: answer.status,
-    confidence: answer.confidence,
-    sources: answer.sources,
-    usage,
-  })
-
-  return {
-    answer: answer.answer,
-    status: answer.status,
-    confidence: answer.confidence,
-    sources: answer.sources,
-    usage,
-    fromCache: false,
-    intent: plan.intent,
-    synthesis: answer.synthesis,
+    return {
+      answer: answer.answer,
+      status: answer.status,
+      confidence: answer.confidence,
+      sources: answer.sources,
+      usage,
+      fromCache: false,
+      intent: plan.intent,
+      synthesis: answer.synthesis,
+    }
   }
 }

@@ -26,7 +26,7 @@
 import type { Permission } from '@/lib/workspaces/permissions'
 
 /** Bumped when an entry is added or deprecated. Never when one is edited in place. */
-export const CAPABILITY_REGISTRY_VERSION = 1
+export const CAPABILITY_REGISTRY_VERSION = 2
 
 export type CapabilityStatus = 'active' | 'deprecated'
 
@@ -104,17 +104,21 @@ export const CAPABILITIES = {
   'hubble.account_summary': { isAi: true, credits: 2, label: 'Summarise this account', permission: 'hubble.use', status: 'active', since: 1, flowAction: 'HUBBLE_ACCOUNT_SUMMARY' },
 
   /*
-   * --- AI reached over HTTP. Unpriced, deliberately. -------------------------
+   * --- AI reached over HTTP. Priced 2026-09-08 (DECISION-16, first half). -----
    *
-   * ⚠️ THESE ARE THE ROUTES PHASE 12 FOUND UNMETERED. Each calls a model today
-   * without passing through `hubbleExecute`. What they should cost is
-   * DECISION-16, which is the owner's; until it is answered the entries carry
-   * no number, and `hubbleExecute` refuses them. Item 4 of the phase sets the
-   * price and moves the routes onto the boundary.
+   * ⚠️ METER AT 0: RECORD THE SPEND, CHARGE NOTHING. These three served the
+   * four routes Phase 12 found calling a model with no credit context. The
+   * number is deliberately zero so `hubble_calls` fills with real rows before
+   * a real price is chosen — a price picked over an empty ledger is a guess.
+   * Flow parity for reference: `ask` would be 3, `clarify` 1.
+   *
+   * The routes now enter through `hubbleExecute`, so the boundary test's
+   * exemption list is empty and stays empty. Raising a price here is a
+   * one-line change with an audit trail in this file's history.
    */
-  'hubble.ask': { isAi: true, credits: null, pricingDecision: 'DECISION-16', label: 'Ask Hubble', permission: 'hubble.use', status: 'active', since: 1 },
-  'intelligence.plan': { isAi: true, credits: null, pricingDecision: 'DECISION-16', label: 'Plan a research query', permission: 'hubble.use', status: 'active', since: 1 },
-  'intelligence.summarize': { isAi: true, credits: null, pricingDecision: 'DECISION-16', label: 'Summarise a research run', permission: 'hubble.use', status: 'active', since: 1 },
+  'hubble.ask': { isAi: true, credits: 0, label: 'Ask Hubble', permission: 'hubble.use', status: 'active', since: 2 },
+  'intelligence.plan': { isAi: true, credits: 0, label: 'Plan a research query', permission: 'hubble.use', status: 'active', since: 2 },
+  'intelligence.summarize': { isAi: true, credits: 0, label: 'Summarise a research run', permission: 'hubble.use', status: 'active', since: 2 },
 } as const satisfies Record<string, Capability>
 
 export type CapabilityId = keyof typeof CAPABILITIES

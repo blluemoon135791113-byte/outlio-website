@@ -128,7 +128,7 @@ export async function hubbleExecute<T>(
   if (entry.credits === null) {
     return refuse(
       'UNPRICED_CAPABILITY',
-      `"${capability}" has no price yet (${entry.pricingDecision}). It cannot run until one is decided.`,
+      `"${capability}" has no price yet, so it cannot run.`,
     )
   }
 

@@ -240,6 +240,25 @@ export class LlmWaterfall implements LLMProvider {
     return this.local.isConfigured() ? this.local.vendor : this.hosted.vendor
   }
 
+  /**
+   * Whether the LOCAL half of the waterfall will actually answer — Phase 12
+   * item 4. `evidenceBudgetFor` sizes the evidence set by this: a local model
+   * gets fewer, shorter passages or it times out (see the latency table in
+   * `lib/hubble/reason.ts`). Before this method the waterfall could not be
+   * probed at all, so callers constructed a bare `OllamaLlmProvider` just to
+   * ask "is Ollama up?" — which put a provider import outside the boundary
+   * the model-call guard polices. Delegating the probe keeps the question
+   * and the answer in the same object.
+   *
+   * A health check, never a prompt: `isUsable` reads the `/api/tags` endpoint.
+   */
+  async isUsable(): Promise<boolean> {
+    const probe = this.local as unknown as { isUsable?: () => Promise<boolean> }
+    return this.local.isConfigured() && typeof probe.isUsable === 'function'
+      ? await probe.isUsable()
+      : false
+  }
+
   get model(): string {
     return this.local.isConfigured() ? this.local.model : this.hosted.model
   }

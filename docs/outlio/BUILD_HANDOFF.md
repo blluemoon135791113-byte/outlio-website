@@ -297,7 +297,7 @@ NL generation, conversational patch editing, dry run, credit preview.
 
 ---
 
-## §4 — Finish AI metering (Phase 12 item 4)
+## §4 — Finish AI metering (Phase 12 item 4) — **DELIVERED 2026-09-08**
 
 ### 4.1 What exists
 
@@ -307,39 +307,31 @@ NL generation, conversational patch editing, dry run, credit preview.
   unpriced capability, missing credit context. Hands the model to the runner as
   `tools.llm`.
 - `tests/unit/model-call-boundary.test.ts` — only the provider layer and that
-  one door may obtain a model at runtime.
+  one door may obtain a model at runtime. **The exemption list is empty and
+  pinned in both directions; the scanner also reads dynamic `import()` now.**
 
-### 4.2 What is left
+### 4.2 What shipped
 
-**Four routes call a model with no credit context** (the brief said three; the
-fourth was found by import-closure analysis after the first scan matched a
-comment):
+All four routes run inside `hubbleExecute`; the three model-touching modules
+(`reason.ts`, `planner.ts`, `summarize.ts`) take the model as a parameter and
+import providers type-only. The three HTTP entries are priced at **0**
+(DECISION-16's starting answer: record the spend, charge nothing); raising a
+price is a one-line registry change pinned by `capability-registry.test.ts`.
+`tests/unit/ai-route-metering.test.ts` drives the real routes and asserts the
+spend RPC, the `hubble_calls` row, and the runner receiving `tools.llm` —
+proven to fail by unwrapping each route (see `phases/PHASE_12.md`, item 4).
 
-| Route | Reaches a model via |
-|---|---|
-| `/api/hubble/ask` | `lib/hubble/reason.ts` |
-| `/api/intelligence/query` | `lib/intelligence/planner.ts` |
-| `/api/intelligence/clarify` | `lib/intelligence/planner.ts` |
-| `/api/intelligence/runs/[id]/summary` | `lib/hubble/summarize.ts` |
+Two defects in the in-flight work were found and fixed before shipping: the
+boundary scanner's lazy regex bridged `import 'server-only'` into the next
+statement (a false positive on `summarize.ts` — a guard failing for the wrong
+reason), and a refused runner surfaced `budget_exhausted` copy claiming
+sources were found on a pre-flight refusal (rule-4 fabrication in
+customer-facing copy).
 
-⚠️ **`hubble_calls` = 0.** The metered path has never executed, because flows are
-its only caller and flows have never run. **Every model call this product has
-ever made went through the four routes above.**
-
-**Build:**
-
-1. Price the three unpriced registry entries (`hubble.ask`,
-   `intelligence.plan`, `intelligence.summarize`). Recommended starting point:
-   **meter at 0** — record the spend, charge nothing — so the number exists
-   before the price is chosen. Flow parity would be `ask` = 3, `clarify` = 1.
-2. Move each module inside `hubbleExecute`, taking the model from `tools.llm`.
-3. **Delete its entry from `UNMETERED_PENDING_DECISION_16`** in the boundary
-   test. That list is the checklist; emptying it completes the phase. The test
-   asserts both directions, so a stale exemption fails.
-4. Rate limits stay as a second layer: `research` is 20 per 10 minutes, roughly
-   2,880 model calls per user per day if metering is the only control.
-
----
+What remains of §4.2: nothing structural. The real price stays a future
+owner decision, now with `hubble_calls` accumulating evidence under it; the
+rate limiter (20 per 10 minutes) remains the live volume control while the
+price is 0.
 
 ## §5 — Finish integrations (Phase 23) and the public surface
 
