@@ -17,8 +17,8 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 7 | Email real end-to-end validation | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_7_EVIDENCE.md`](phases/PHASE_7_EVIDENCE.md) |
 | 8 | Email campaign productization + compliance | **COMPLETE** (narrowed) | `platform-m1-workspaces` | [`PHASE_8.md`](phases/PHASE_8.md) |
 | 9 | Unified Conversations foundation | **PARTIAL** | `platform-m1-workspaces` | [`PHASE_9.md`](phases/PHASE_9.md) |
-| 10 | Flow fact expansion | **BLOCKED** | — | [`PHASE_10.md`](phases/PHASE_10.md) |
-| 11 | Manual Flow builder UX | **DEFERRED** | — | blocked behind Phase 10 — the engine has never run |
+| 10 | Flow fact expansion | **UNBLOCKED 2026-09-08** | — | [`PHASE_10.md`](phases/PHASE_10.md) — DECISION-15 resolved: the engine HAS run (activity-evidenced runs `59f87a48`, `9b965940`); `flow_runs`=0 is deleted rows, not a dead engine |
+| 11 | Manual Flow builder UX | **UNBLOCKED** | — | was blocked behind Phase 10 — premise disproved 2026-09-08 (DECISION-15) |
 | 12 | Capability registry + entitlement checks | **PARTIAL** (items 1–3) | `platform-m1-workspaces` | [`PHASE_12.md`](phases/PHASE_12.md) — item 4 needs DECISION-16 |
 | 13 | Gemini Flow Copilot | **DEFERRED** | `platform-m1-workspaces` | [`PHASE_13.md`](phases/PHASE_13.md) — generates for an engine with 0 runs |
 | 14 | Reporting foundation | **DEFERRED** | `platform-m1-workspaces` | [`PHASE_14.md`](phases/PHASE_14.md) — every metric source is empty or known-wrong |

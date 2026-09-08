@@ -414,9 +414,11 @@ phases on the same argument is how a plan quietly stops moving, and "there is
 no data" can become a reason never to build anything. Whether the pipeline is a
 priority at all is a product question — §11 says stop rather than guess it.
 
-## DECISION-15 — Chase the flow engine's missing first run before Phase 10? · `OPEN`
+## DECISION-15 — Chase the flow engine's missing first run before Phase 10? · `RESOLVED 2026-09-08`
 
-Raised 2026-09-07 while surveying Phase 10.
+Raised 2026-09-07 while surveying Phase 10. **Resolved 2026-09-08: the engine
+works; the zero was an accounting artifact.** Full evidence below — every step
+was run against production, not inferred.
 
 **The fact:** one published flow, trigger `contact_created`, live since
 2026-09-03. Three contacts created in that workspace since, all `manual`. The
@@ -441,6 +443,49 @@ the owner's to take.
 dispatched and started patching it — the dispatch was already there, one call
 deeper. Nearly adding a duplicate trigger while hunting a missing one is why
 this stops at evidence.
+
+### Resolution (2026-09-08, verified against production)
+
+**The premise "the engine has never executed" was false.** It executed twice —
+once per qualifying contact — and the `OWNER_ASSIGNED` activities the runs
+wrote are still in `crm_activities`:
+
+| Contact | Created (UTC) | Flow action executed | run_id (from activity metadata) |
+|---|---|---|---|
+| "Flow Verify Three" `91dcac4f` | 2026-09-03 17:38:20 | OWNER_ASSIGNED 17:40:35, `by: flow` | `59f87a48-421f…` |
+| "Vars Proof Contact" `7d8c864a` | 2026-09-03 23:49:08 | OWNER_ASSIGNED 23:51:47, `by: flow` | `9b965940-d6e2…` |
+
+`by: flow` + `run_id` in metadata is written by **exactly one** code path —
+`lib/flows/actions/crm.ts` ASSIGN_OWNER — so these are genuine engine
+executions, not manual reassignments (the manual path writes
+`{from, to}` metadata). Both fired ~2 min after creation, consistent with the
+pg_cron worker tick advancing runs.
+
+**Why `flow_runs` shows zero:** the two run rows and the two step rows were
+removed after the fact. No code path in the repo deletes from `flow_runs`
+(checked `lib/`, `app/`, `scripts/`, every migration); `crm_undo_batch`
+soft-deletes contacts only. Both test contacts were also soft-deleted minutes
+after the test, and both runs are absent — consistent with manual cleanup in
+the Supabase SQL editor after the owner's verification sessions. The third
+contact ("Reply Test Prospect") was created by `scripts/seed-reply-test.mjs`
+via **raw insert** into `crm_contacts`, deliberately bypassing the manual
+path, so it never dispatched anything — correct behaviour, not a defect.
+
+**Live re-verification of every link, against production, 2026-09-08:**
+`crm_ingest_contacts` RPC → created=true; the exact FK-hint dispatch query →
+returns the published flow; `flow_check_loop_protection` → null;
+`flow_runs` insert → row created. Probe rows removed afterward;
+`flow_runs` back to zero, as expected.
+
+**Live-code caveat:** the re-verification travelled the DB path a request
+travels, but not through the deployed Next.js action. The strongest remaining
+proof is one contact added via the production UI at outlio.io — an owner
+action, 30 seconds, zero risk (the run can be soft-deleted with the contact).
+Until then, treat the engine as **working with production evidence**, not
+"never executed".
+
+**Phase 10 is unblocked.** The fact expansion should proceed against an
+engine that demonstrably runs.
 
 ## Not blocking, but worth knowing
 
