@@ -10,7 +10,12 @@ import { FlowEditor } from '@/components/flows/FlowEditor'
 import { listAssignableMembers } from '@/lib/crm/contacts-list'
 import { listSelectableCampaigns } from '@/lib/email/campaign-list'
 import { listEmailAccounts } from '@/lib/email/accounts'
-import { creditBearingSteps, validateFlowDefinition } from '@/lib/flows/definition'
+import {
+  creditBearingSteps,
+  flowDefinitionWarnings,
+  validateFlowDefinition,
+  type FlowWarning,
+} from '@/lib/flows/definition'
 import { quoteCredits } from '@/lib/hubble/pricing'
 import { hubbleTaskForAction } from '@/lib/capabilities/registry'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -89,10 +94,18 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
   let creditSteps: string[] = []
   let creditsPerContact = 0
   let parsedDefinition: ReturnType<typeof validateFlowDefinition> | null = null
+  /*
+   * §5.10's "deprecation raises a validator warning and requires a migration
+   * path". Warnings are computed, not thrown: a deprecated capability must
+   * leave the flow openable and repairable, or deprecating one registry entry
+   * would strand every flow using it.
+   */
+  let warnings: FlowWarning[] = []
   try {
     if (current?.definition) {
       const definition = validateFlowDefinition(current.definition)
       parsedDefinition = definition
+      warnings = flowDefinitionWarnings(definition)
       creditSteps = creditBearingSteps(definition)
       for (const step of definition.steps) {
         const task = step.type === 'ACTION' ? hubbleTaskForAction(step.action) : null
@@ -166,6 +179,32 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
             Running this over 1,000 contacts would use about {creditsPerContact * 1000} credits.
             Every other step is free.
           </p>
+        </div>
+      ) : null}
+
+      {/*
+        §5.10's migration path: the customer has to be TOLD a step is stale,
+        or "deprecated, never deleted" just means the flow quietly ages.
+
+        ⚠️ A WARNING, STYLED AS ONE. Not `danger` — the flow still runs, and a
+        notice that reads like a failure gets acted on as one, or ignored as
+        alarmism. Neither is what a migration prompt should produce.
+      */}
+      {warnings.length > 0 ? (
+        <div className="clay space-y-2 border border-warning/30 bg-warning-soft/40 p-4">
+          <p className="text-sm font-semibold text-ink">
+            {warnings.length === 1 ? 'One step needs attention' : `${warnings.length} steps need attention`}
+          </p>
+          <ul className="space-y-1">
+            {warnings.map((warning, index) => (
+              <li key={`${warning.kind}-${warning.stepId ?? 'flow'}-${index}`} className="text-xs leading-relaxed text-muted">
+                {warning.stepId ? (
+                  <span className="font-semibold text-ink">{warning.stepId}: </span>
+                ) : null}
+                {warning.message}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

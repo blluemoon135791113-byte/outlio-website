@@ -23,7 +23,10 @@
  */
 import { z } from 'zod'
 
-import { capabilityForFlowAction } from '@/lib/capabilities/registry'
+import {
+  CAPABILITY_REGISTRY_VERSION,
+  capabilityForFlowAction,
+} from '@/lib/capabilities/registry'
 
 /** Everything that can start a flow. */
 export const TRIGGER_TYPES = [
@@ -229,6 +232,22 @@ export const flowDefinitionSchema = z.object({
    * mistake mails someone the same sequence twice. Opt in, never out.
    */
   allowReEnrollment: z.boolean().default(false),
+  /**
+   * The capability-registry version this definition was compiled against —
+   * §5.10: "A published flow pins the registry version it compiled against".
+   *
+   * ⚠️ OPTIONAL, AND THAT IS BACK-COMPATIBILITY RATHER THAN LAXITY. Five
+   * `flow_versions` rows already exist in production, written before the
+   * registry had a version to pin. Making this required would make them fail to
+   * PARSE — turning flows a customer can currently open and repair into flows
+   * that cannot be read at all, which is the trade migration 0075's erasure
+   * notes call out in a different context.
+   *
+   * Absent therefore means "compiled before versions were recorded" and raises
+   * no warning. A guard that fires on every legacy row is a guard people
+   * silence.
+   */
+  registryVersion: z.number().int().positive().optional(),
 })
 
 export type FlowDefinition = z.infer<typeof flowDefinitionSchema>
@@ -534,4 +553,85 @@ export function creditBearingSteps(definition: FlowDefinition): string[] {
   return definition.steps
     .filter((s) => s.type === 'ACTION' && actionCostsCredits(s.action))
     .map((s) => s.id)
+}
+
+// ---------------------------------------------------------------------------
+// Registry drift — §5.10's deprecation warning
+// ---------------------------------------------------------------------------
+
+export type FlowWarning = {
+  /** `deprecated_capability` or `registry_drift`. */
+  kind: 'deprecated_capability' | 'registry_drift'
+  message: string
+  /** The step this concerns, or null for a definition-wide warning. */
+  stepId: string | null
+}
+
+/**
+ * What is stale about a definition, without refusing to read it.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  §5.10: "deprecation raises a validator WARNING and requires a migration  ║
+ * ║  path." A warning, emphatically not an error.                             ║
+ * ║                                                                           ║
+ * ║  `validateFlowDefinition` throws, and everything that reads a stored       ║
+ * ║  definition calls it. If a deprecated capability threw, deprecating one    ║
+ * ║  entry would make every flow using it unopenable and unrepairable — the    ║
+ * ║  customer could neither run it nor fix it. That is why the registry        ║
+ * ║  deprecates and never deletes, and it would be undone by validating too    ║
+ * ║  strictly.                                                                ║
+ * ║                                                                           ║
+ * ║  ⚠️ THE LOOKUP IS INJECTABLE BECAUSE NOTHING IS DEPRECATED YET. Every      ║
+ * ║  registry entry is `active`, so a test using the real registry could only  ║
+ * ║  ever assert the empty case — it would pass whether or not the deprecation ║
+ * ║  branch worked. The parameter is how that branch is actually exercised.    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export function flowDefinitionWarnings(
+  definition: FlowDefinition,
+  options: {
+    lookup?: (action: string) => { id: string; status: 'active' | 'deprecated' }
+    currentRegistryVersion?: number
+  } = {},
+): FlowWarning[] {
+  const lookup = options.lookup ?? ((action: string) => {
+    const entry = capabilityForFlowAction(action)
+    return { id: entry.id, status: entry.status }
+  })
+
+  const warnings: FlowWarning[] = []
+
+  for (const step of definition.steps) {
+    if (step.type !== 'ACTION') continue
+    /*
+     * An action absent from the registry cannot happen — `ACTION_TYPES` is
+     * derived from it and `capabilityForFlowAction` throws at module load. A
+     * throw here would therefore be a real inconsistency, not stale data, so it
+     * is not caught and turned into a warning.
+     */
+    const entry = lookup(step.action)
+    if (entry.status === 'deprecated') {
+      warnings.push({
+        kind: 'deprecated_capability',
+        stepId: step.id,
+        message: `"${step.action}" is deprecated. It still runs, but it will not be offered for new flows — replace this step when convenient.`,
+      })
+    }
+  }
+
+  /*
+   * ⚠️ ABSENT IS NOT STALE. A definition with no `registryVersion` predates the
+   * field; warning about it would fire on every flow written before today and
+   * teach people that these warnings are noise.
+   */
+  const current = options.currentRegistryVersion ?? CAPABILITY_REGISTRY_VERSION
+  if (definition.registryVersion !== undefined && definition.registryVersion < current) {
+    warnings.push({
+      kind: 'registry_drift',
+      stepId: null,
+      message: `Compiled against capability registry v${definition.registryVersion}; the current version is v${current}. Re-check the steps before publishing again.`,
+    })
+  }
+
+  return warnings
 }
