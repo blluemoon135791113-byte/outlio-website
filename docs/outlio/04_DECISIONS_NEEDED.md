@@ -684,3 +684,53 @@ fan out to webhooks at all — it is currently exempted in
 `domain-event-boundary.test.ts` on the same no-contract grounds, and its
 `ingestMeetingEvent` call site is behind an option (`triggerFlowId`) no caller
 passes. That is a separate, already-recorded defect.
+
+---
+
+## DECISION-19 — Does Outlio need multi-currency deals? · `OPEN`
+
+Raised 2026-09-12 while auditing §5.6.
+
+**The fact:** every opportunity in the product is USD. `crm_opportunities.currency`
+defaults to `'USD'`, `createOpportunity` accepts an optional `currency`, and **no
+caller passes one** — not the server action, not the flow action — and there is no
+update path for it. So the column is a promise of multi-currency that nothing
+fulfils.
+
+⚠️ **And it is primed to break silently.** §5.6 requires
+`fx_rate_to_workspace_currency` and `fx_rate_date` snapshotted at create and at
+close, with rollups using the snapshot. Neither column exists. Migration 0082
+rolls up won deals as `coalesce(sum(o.value_amount), 0)` with **no grouping by
+currency**, so the day a currency picker is wired, a €10,000 deal and a $10,000
+deal sum to 20,000 — a number that is not money in any currency — and nothing
+errors. Reporting is simply wrong.
+
+`tests/unit/money-single-currency.test.ts` now fails the moment any caller
+supplies a currency, and says what to implement first. So the bug cannot ship by
+accident; the question is whether you want the feature.
+
+**Why it is a decision and not a task:** implementing §5.6 needs a **rate
+source**. That is a vendor and a cost (a daily fx feed), plus a policy call on
+which rate applies — the contract says snapshot at create *and* at close, which
+means a deal's reported value changes when it closes and never again.
+
+**Options:**
+
+1. **Stay single-currency.** Free. Correct today. Wrong if you sell outside the
+   US and a prospect wants to see their own currency — which is a sales
+   objection, not a bug.
+2. **Implement §5.6 with a daily fx feed.** Correct and auditable. Costs a
+   vendor, a migration with a backfill on a money column, and a rollup rewrite.
+3. **Multi-currency display only** — store USD, render a converted figure marked
+   as indicative. Cheapest middle. Wrong if anyone treats the displayed number
+   as the contract value.
+
+**My recommendation: option 1 until a real prospect asks.** Nothing measured says
+they will, the guard makes the silent version impossible, and options 2 and 3
+both need a rate source you do not have. Revisit when a non-USD deal is actually
+requested.
+
+⚠️ **Recorded deviation, not a gap:** §5.6 asks for `amount_minor BIGINT`; the
+column is `numeric(14, 2)`. Both avoid binary floating point, which is what the
+spec protects against, and §2's authority order puts running code above the
+contract. Pinned by the same test so it cannot drift to a float.
