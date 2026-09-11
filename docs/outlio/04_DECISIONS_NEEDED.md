@@ -734,3 +734,58 @@ requested.
 column is `numeric(14, 2)`. Both avoid binary floating point, which is what the
 spec protects against, and §2's authority order puts running code above the
 contract. Pinned by the same test so it cannot drift to a float.
+
+---
+
+## DECISION-20 — Should sends respect the recipient's timezone and holidays? · `OPEN`
+
+Raised 2026-09-12 while auditing §5.7.
+
+**What §5.7 asks for:** "Sending windows evaluate in `contact.timezone` when
+known, else campaign timezone, else workspace timezone. Business-day math uses
+one workspace calendar (working weekdays + holiday list) via a single utility."
+
+**What exists, and it is mostly good.** `lib/email/schedule.ts` is that single
+utility and it is careful work: it walks days in the account's own calendar
+rather than adding 24h to a UTC instant, with the reasoning written down —
+across a DST change a "day" is 23 or 25 hours, and adding 24 would drift the
+send an hour off the window every spring. `email-schedule.test.ts` covers DST in
+both directions plus Asia/Kolkata's half-hour offset. Working weekdays exist as
+`sendDays`. Nothing here needs fixing.
+
+**Three divergences, all in the same direction:**
+
+1. ⚠️ **Sends use the MAILBOX's timezone, not the recipient's.** And this is
+   *unmodelled*, not unwired — `crm_contacts` has **no `timezone` column at
+   all**, so the first link of the fallback chain has nowhere to read from.
+2. **No holiday list.** `sendDays` is weekday-of-week only, so a campaign sends
+   on Christmas Day.
+3. **The calendar is per-mailbox, not per-workspace.** Two mailboxes can hold
+   contradictory windows with nothing reconciling them.
+
+**Why it is a decision:** both fixes need data the product does not have.
+Recipient-local sending needs a timezone per contact, and the only free way to
+get one is to infer it from a free-text location — a guess that decides when a
+stranger's phone lights up, and close enough to CLAUDE.md rule 4 that it should
+be a deliberate choice rather than a default. A holiday list needs a source per
+country, which is a vendor.
+
+**Options:**
+
+1. **Leave it; say so in the UI.** Done as of this commit — the sending-window
+   panel now states the times are in the mailbox's timezone, not each
+   recipient's, and suggests picking a window that lands in their working day.
+   Cheapest, and removes the false belief, which was the actual risk.
+2. **Add `crm_contacts.timezone`, populated only when a human or a provider
+   supplies it**, and use it when present. Honest — no inference — but mostly
+   null, so most sends keep the current behaviour anyway.
+3. **Infer the timezone from location.** Highest coverage, and the one I would
+   argue against: a wrong guess emails someone at 4am, which is the exact
+   pattern that trains a mailbox provider to treat the domain as spam. Outlio
+   sells deliverability.
+
+**My recommendation: option 1 now, option 2 if a customer asks.** The
+deliverability risk was never the scheduler; it was a user believing the
+scheduler did something it does not. That is fixed. Holidays can wait for
+someone to complain about a send on a public holiday — a real complaint is
+better evidence than a guess about which country's calendar matters.
