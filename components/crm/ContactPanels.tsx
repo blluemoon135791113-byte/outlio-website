@@ -5,6 +5,7 @@ import { useActionState, useState } from 'react'
 import {
   addNoteAction,
   assignContactAction,
+  eraseContactAction,
   requestReassignmentAction,
   type ContactActionState,
 } from '@/lib/crm/contact-actions'
@@ -204,5 +205,102 @@ export function AddNote({ contactId }: { contactId: string }) {
         Add note
       </button>
     </form>
+  )
+}
+
+/**
+ * The right to erasure — §6.4.
+ *
+ * ⚠️ THE ONLY IRREVERSIBLE CONTROL IN THE CRM, and it is styled to say so.
+ * Everything else in this product soft-deletes; `crm_erase_contact` hard-deletes
+ * the person and scrubs the merge snapshots that mention them, leaving only an
+ * audit row proving the erasure happened.
+ *
+ * ⚠️ A TYPED WORD, NOT A `confirm()`. A browser dialog is dismissed by reflex
+ * and carries no record of what was agreed to. The word is also re-checked on
+ * the server, because this form is an HTTP endpoint and the client check is a
+ * courtesy to the person typing rather than a control.
+ *
+ * ⚠️ COLLAPSED BY DEFAULT. A destroy button sitting open next to "Add note" is
+ * an accident waiting for a mis-click; the disclosure is the first of the two
+ * deliberate steps.
+ */
+export function EraseContact({ contactId, name }: { contactId: string; name: string }) {
+  const [state, action] = useActionState(eraseContactAction, INITIAL)
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState('')
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-sm font-semibold text-danger underline decoration-danger/40 underline-offset-4 transition-opacity duration-150 hover:opacity-80"
+      >
+        Erase this contact…
+      </button>
+    )
+  }
+
+  return (
+    <div className="space-y-3 rounded-[var(--radius-lg)] border border-danger/30 bg-danger-soft/40 p-4">
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold text-danger">Erase under the right to erasure</h3>
+        <p className="text-sm text-muted">
+          This permanently destroys {name}&apos;s record, notes, tasks and activity
+          history, and removes their details from merge history. It cannot be
+          undone and it is not the same as deleting. An audit entry proving the
+          erasure remains, carrying nothing about the person.
+        </p>
+      </div>
+
+      <form action={action} className="space-y-2">
+        <input type="hidden" name="contact_id" value={contactId} />
+
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Reason (optional, kept in the audit entry)
+          </span>
+          <input
+            name="reason"
+            maxLength={500}
+            placeholder="Erasure request received by email"
+            className={inputClass}
+          />
+        </label>
+
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Type ERASE to confirm
+          </span>
+          <input
+            name="confirm"
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            autoComplete="off"
+            className={inputClass}
+          />
+        </label>
+
+        <Feedback state={state} />
+
+        <div className="flex items-center gap-2">
+          <button
+            type="submit"
+            /*
+             * Disabled until the word matches — and the server checks it again.
+             * Never `disabled` as the only gate on a destructive action.
+             */
+            disabled={typed.trim().toUpperCase() !== 'ERASE'}
+            className="rounded-[var(--radius-md)] bg-danger px-3 py-2 text-sm font-semibold text-cream shadow-[var(--shadow-button)] transition-[background-color,transform] duration-150 hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Erase permanently
+          </button>
+          <button type="button" onClick={() => setOpen(false)} className={ghostClass}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
   )
 }

@@ -25,7 +25,8 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 15 | LinkedIn capability matrix + RISK_REGISTER | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_15.md`](phases/PHASE_15.md) · [`RISK_REGISTER.md`](RISK_REGISTER.md) |
 | 16–20 | LinkedIn channel | **GATED** | — | blocked on DECISION-17 |
 | 23 | Integrations + webhooks | **MOSTLY COMPLETE** | `platform-m1-workspaces` | [`PHASE_23.md`](phases/PHASE_23.md) — 9 of 12 webhook events sourced (6 on 2026-09-08, 3 on 2026-09-09); 3 `meeting.*` blocked on DECISION-18 (payload contract); Slack/Teams delivery unverified |
-| 21–22, 24–25 | see §9 | NOT_STARTED | — | — |
+| 21–22, 24–25 | see §9 | NOT_STARTED | — | ⚠️ Phase 22's substance exists in `/crm/reports` (`dataScope(ctx.role)`, leaderboard behind `report.team.view`) |
+| §6.4 | Data subject rights | **DELIVERED** | `platform-m1-workspaces` | Erasure was built in `0075` and **unreachable its whole life** — no action, no UI, only its own integration test called it. Now gated + reachable, and the missing half (per-contact access export) built. Invariant: the export covers what the erasure destroys, exclusions asserted both ways. `tests/unit/data-subject-rights.test.ts` |
 
 ## Phase 0 result (2026-09-04)
 

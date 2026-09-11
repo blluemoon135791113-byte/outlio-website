@@ -11,7 +11,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
-import { addNote, assignContact } from '@/lib/crm/activities'
+import { addNote, assignContact, eraseContact } from '@/lib/crm/activities'
 import { createContactManually } from '@/lib/crm/ingest'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
@@ -518,4 +518,103 @@ export async function bulkDeleteAction(
   const removed = data?.length ?? 0
   revalidatePath('/crm/contacts')
   return { ok: true, message: `Deleted ${removed} contact${removed === 1 ? '' : 's'}.` }
+}
+
+// ---------------------------------------------------------------------------
+// The right to erasure — §6.4
+// ---------------------------------------------------------------------------
+
+/**
+ * Erases a contact under the GDPR right to erasure.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THE ERASURE PATH WAS BUILT AND UNREACHABLE FOR THE WHOLE OF ITS LIFE.    ║
+ * ║                                                                           ║
+ * ║  `crm_erase_contact` landed in migration 0075 and was revised twice (0091, ║
+ * ║  0109) to work with the append-only guard. `eraseContact` wraps it.        ║
+ * ║  Integration tests exercise it. And its only callers were those tests —    ║
+ * ║  no server action, no UI. A data subject could not have their data erased  ║
+ * ║  because nothing in the product could ask.                                 ║
+ * ║                                                                           ║
+ * ║  This is the seventh instance of one defect in this codebase, and the      ║
+ * ║  first with a statutory deadline attached: Art. 17 gives one month.        ║
+ * ║                                                                           ║
+ * ║  ⚠️ NEITHER EXISTING GUARD COULD SEE IT. `orphan-module.test.ts` works at  ║
+ * ║  MODULE granularity and `lib/crm/activities.ts` has many other importers;  ║
+ * ║  `action-reachability.test.ts` checks that server actions are called, and  ║
+ * ║  there was no action to check. `tests/unit/test-only-export.test.ts` is    ║
+ * ║  the guard for this shape.                                                ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ GATED ON `crm.contact.delete`, WHICH IS THE STRONGEST CONTACT PERMISSION
+ * THAT EXISTS — and erasure is stronger than deletion. A dedicated
+ * `crm.contact.erase` would mean changing the permission matrix and every
+ * role's grants, which is an owner decision rather than a detail of this
+ * change. Recorded so it is a choice rather than an oversight.
+ *
+ * ⚠️ TYPED CONFIRMATION, NOT A `confirm()`. This is the only hard delete in the
+ * CRM and it cannot be undone, so the person has to type the word. A dialog
+ * someone dismisses by reflex is not consent to destroy a record.
+ */
+export async function eraseContactAction(
+  _prev: ContactActionState,
+  formData: FormData,
+): Promise<ContactActionState> {
+  try {
+    const ctx = await assertWorkspacePermission('crm.contact.delete')
+
+    const contactId = uuid.safeParse(formData.get('contact_id'))
+    if (!contactId.success) return fail('That contact could not be read.')
+
+    /*
+     * The word is checked server-side. A client-side check is a courtesy to
+     * the person typing; it is not a control, because the form is an HTTP
+     * endpoint anybody can post to.
+     */
+    const confirmation = String(formData.get('confirm') ?? '').trim().toUpperCase()
+    if (confirmation !== 'ERASE') {
+      return fail('Type ERASE to confirm. This cannot be undone.')
+    }
+
+    const reason = String(formData.get('reason') ?? '').trim()
+    if (reason.length > 500) return fail('That reason is too long.')
+
+    /*
+     * ⚠️ THE CONTACT MUST BE IN THIS WORKSPACE, CHECKED BEFORE THE RPC. The RPC
+     * scopes by workspace itself, but a wrong id would otherwise report a
+     * successful erasure of nothing — indistinguishable, to the person who
+     * asked, from their request having been honoured.
+     */
+    const { data: contact } = await createAdminClient()
+      .from('crm_contacts')
+      .select('id')
+      .eq('workspace_id', ctx.workspace.id)
+      .eq('id', contactId.data)
+      .maybeSingle()
+
+    if (!contact) return fail('That contact is not in this workspace.')
+
+    const removed = await eraseContact(
+      ctx.workspace.id,
+      contactId.data,
+      ctx.userId,
+      reason || 'Right to erasure request',
+    )
+
+    const rows = Object.values(removed).reduce((sum, n) => sum + (Number(n) || 0), 0)
+
+    /*
+     * The contact page itself is gone, so the list is what the person returns
+     * to. Revalidating the detail path as well keeps a cached copy of a
+     * now-erased person from being served.
+     */
+    revalidatePath('/crm/contacts')
+    revalidatePath(`/crm/contacts/${contactId.data}`)
+
+    return ok(
+      `Erased. ${rows} record${rows === 1 ? '' : 's'} destroyed; an audit entry proving the erasure remains.`,
+    )
+  } catch (error) {
+    return toState(error)
+  }
 }

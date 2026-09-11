@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { AddNote, AssignOwner } from '@/components/crm/ContactPanels'
+import { AddNote, AssignOwner, EraseContact } from '@/components/crm/ContactPanels'
 import { NewTaskButton } from '@/components/crm/NewTask'
 import { LocalTime, RelativeTime } from '@/components/ui/LocalTime'
 import { Monogram } from '@/components/ui/Monogram'
@@ -430,6 +430,44 @@ export default async function ContactDetailPage({
               <p className="mt-1 text-sm text-muted">{contact.ownerName ?? 'Unassigned'}</p>
             </section>
           )}
+
+          {/*
+            ⚠️ HIDDEN FROM PEOPLE WHO CANNOT USE IT, WHICH IS NOT THE CONTROL.
+            `eraseContactAction` asserts `crm.contact.delete` itself, because a
+            server action is a public HTTP endpoint and this one destroys a
+            person's record irreversibly. This check only keeps a button nobody
+            can use off the page.
+          */}
+          {/*
+            §6.4 data subject rights, kept together on purpose: the two halves
+            answer the same letter. An access request and an erasure request
+            from one person should not live on different screens.
+          */}
+          <section className="clay space-y-3 p-4">
+            <h3 className="text-sm font-semibold text-ink">Data subject requests</h3>
+
+            {/*
+              ⚠️ A PLAIN LINK TO A GATED ROUTE. The handler asserts
+              `crm.contact.view` and re-applies the setter's data scope, so the
+              link is a convenience rather than the control (CLAUDE.md rule 8).
+            */}
+            <a
+              href={`/crm/contacts/${contact.id}/subject-export`}
+              className="block text-sm font-semibold text-accent underline decoration-accent/40 underline-offset-4 transition-opacity duration-150 hover:opacity-80"
+            >
+              Download everything held about this person
+            </a>
+            <p className="text-sm text-muted">
+              Their contact record, notes, activity and tasks as JSON — what an
+              access request is entitled to.
+            </p>
+
+            {can(policy, 'crm.contact.delete') ? (
+              <div className="border-t border-border pt-3">
+                <EraseContact contactId={contact.id} name={contact.fullName ?? 'this contact'} />
+              </div>
+            ) : null}
+          </section>
         </div>
       </div>
     </div>
