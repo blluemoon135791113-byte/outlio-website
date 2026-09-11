@@ -121,3 +121,9 @@ playwright-report/
 .claude/agents/impeccable-*.md
 .github/agents/
 .github/hooks/
+
+# Generated design-preview scratch (one-off harnesses written while iterating
+# on UI). Not product source, and a `require()` in one of them made
+# `npm run lint` exit non-zero — which gates CI. Also in eslint.config.mjs.
+.codex-previews/
+.codex/

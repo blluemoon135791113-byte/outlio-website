@@ -6,11 +6,15 @@
  * in a way they will blame on themselves — so the verifier lives beside the
  * signer and both are tested together.
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import {
   API_KEY_PREFIX,
   backoffSeconds,
+  backoffSecondsWithJitter,
   extractApiKey,
   generateApiKey,
   hashApiKey,
@@ -224,5 +228,67 @@ describe('the event catalogue', () => {
   it('covers the CRM, email and meeting domains', () => {
     const domains = new Set(WEBHOOK_EVENTS.map((e) => e.split('.')[0]))
     expect(domains).toEqual(new Set(['crm', 'email', 'meeting']))
+  })
+})
+
+/**
+ * Jitter — §5.13's "exponential backoff + jitter", which was half-implemented.
+ *
+ * ⚠️ THE FAILURE MODE IS A THUNDERING HERD, NOT AN AESTHETIC ONE. `publishEvent`
+ * fans one event out to every subscriber in the same instant, and a bulk import
+ * emits many events in one tick, so a batch of deliveries shares
+ * `next_attempt_at` to the second. Without jitter they all retry together
+ * against a consumer that is already struggling.
+ */
+describe('backoff jitter', () => {
+  it('stays within [half, base] of the documented schedule', () => {
+    for (const attempt of [1, 2, 3, 4, 5]) {
+      const base = backoffSeconds(attempt)
+      for (const r of [0, 0.25, 0.5, 0.75, 0.999]) {
+        const value = backoffSecondsWithJitter(attempt, () => r)
+        expect(value).toBeGreaterThanOrEqual(base / 2)
+        expect(value).toBeLessThanOrEqual(base)
+      }
+    }
+  })
+
+  it('never retries earlier than half the delay — equal jitter, not full', () => {
+    /*
+     * Full jitter (`random() * base`) would return ~0 here, discarding the
+     * "do not hammer a consumer that is badly down" property the exponential
+     * schedule exists for.
+     */
+    expect(backoffSecondsWithJitter(1, () => 0)).toBe(15)
+    expect(backoffSecondsWithJitter(3, () => 0)).toBe(240)
+  })
+
+  it('spreads two deliveries that failed in the same instant', () => {
+    // The whole point: same attempt, different result.
+    const a = backoffSecondsWithJitter(3, () => 0.1)
+    const b = backoffSecondsWithJitter(3, () => 0.9)
+    expect(a).not.toBe(b)
+  })
+
+  it('is still monotonic across attempts', () => {
+    // A later attempt must never be able to land sooner than an earlier one.
+    for (const attempt of [1, 2, 3, 4]) {
+      const latestEarlier = backoffSecondsWithJitter(attempt, () => 0.999)
+      const earliestLater = backoffSecondsWithJitter(attempt + 1, () => 0)
+      expect(earliestLater).toBeGreaterThanOrEqual(latestEarlier)
+    }
+  })
+
+  it('the delivery worker uses the jittered form, not the bare schedule', () => {
+    /*
+     * Structural, comment-stripped: the exported `backoffSeconds` is still
+     * re-exported for consumers and named in prose, so matching the raw text
+     * would pass while the scheduler used the unjittered value.
+     */
+    const code = readFileSync(join(__dirname, '..', '..', 'lib/api/webhooks.ts'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
+
+    expect(code).toContain('backoffSecondsWithJitter(attempt)')
+    expect(code).not.toMatch(/next_attempt_at[\s\S]{0,80}backoffSeconds\(attempt\)/)
   })
 })

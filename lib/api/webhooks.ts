@@ -16,7 +16,11 @@ import 'server-only'
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 import { createAdminClient } from '@/lib/supabase/admin'
-import { backoffSeconds, signWebhookPayload, type WebhookEvent } from '@/lib/api/signing'
+import {
+  backoffSecondsWithJitter,
+  signWebhookPayload,
+  type WebhookEvent,
+} from '@/lib/api/signing'
 import { assertSafeWebhookUrl, UnsafeWebhookUrlError } from '@/lib/api/webhook-url'
 
 export { backoffSeconds, signWebhookPayload, WEBHOOK_EVENTS } from '@/lib/api/signing'
@@ -143,7 +147,9 @@ export async function deliverPendingWebhooks(limit = 20): Promise<DeliveryOutcom
       .from('webhook_deliveries')
       .update({
         attempts: attempt,
-        next_attempt_at: new Date(Date.now() + backoffSeconds(attempt) * 1000).toISOString(),
+        next_attempt_at: new Date(
+          Date.now() + backoffSecondsWithJitter(attempt) * 1000,
+        ).toISOString(),
       })
       .eq('id', delivery.id)
 
