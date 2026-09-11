@@ -5,8 +5,10 @@ import { ExtensionCard } from '@/components/extension/ExtensionCard'
 import { FirstRun } from '@/components/onboarding/FirstRun'
 import { LiveCapture } from '@/components/extension/LiveCapture'
 import { CreditsSummary } from '@/components/product/CreditsSummary'
+import { PerformanceRow } from '@/components/product/PerformanceRow'
 import { ReferralCard } from '@/components/product/ReferralCard'
 import { requireAccess } from '@/lib/auth/access'
+import { getOverviewPerformance, hasRealActivity } from '@/lib/crm/overview'
 import { getActiveSession } from '@/lib/extension/capture'
 import { countDevices } from '@/lib/extension/devices'
 import { appOrigin } from '@/lib/auth/redirects'
@@ -54,12 +56,28 @@ export default async function DashboardPage() {
    * no checklist.
    */
   const workspace = await getWorkspaceContext()
-  const firstRun = workspace
-    ? await loadFirstRun(workspace.workspace.id, {
-        role: workspace.role,
-        modules: workspace.modules,
-      })
-    : null
+  const policy = workspace ? { role: workspace.role, modules: workspace.modules } : null
+
+  /*
+   * ⚠️ THE PERFORMANCE ROW IS GATED AND FAILS SOFT, for the two separate
+   * reasons above it. Gated because these are CRM figures and a member without
+   * `crm.contact.view` has no business reading them; soft because a Lead Engine
+   * account has no workspace at all, and neither that nor a reporting outage
+   * may take the upload path down with it.
+   */
+  const [firstRun, performance] = await Promise.all([
+    workspace && policy ? loadFirstRun(workspace.workspace.id, policy) : null,
+    workspace && policy && can(policy, 'crm.contact.view')
+      ? getOverviewPerformance(workspace.workspace.id, ctx.userId!)
+      : null,
+  ])
+
+  const checklist =
+    firstRun && shouldShowFirstRun(firstRun) && workspace && policy ? (
+      <FirstRun data={firstRun} canDismiss={can(policy, 'workspace.settings.manage')} />
+    ) : null
+  // A first day has nothing to read; a working week does.
+  const checklistFirst = !performance || !hasRealActivity(performance)
 
   const referral = Array.isArray(referralRows) ? referralRows[0] : null
   const balance = Array.isArray(balanceRows) ? balanceRows[0] : null
@@ -113,7 +131,7 @@ export default async function DashboardPage() {
             Overview
           </h1>
           <p className="mt-1 text-sm text-muted">
-            Usage this billing period.
+            What your outreach did, and what it used.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -139,20 +157,32 @@ export default async function DashboardPage() {
         worse first screen than a list of what to do next. It disappears on its
         own once every step is done -- see `shouldShowFirstRun`.
       */}
-      {firstRun && shouldShowFirstRun(firstRun) && workspace ? (
-        <FirstRun
-          data={firstRun}
-          canDismiss={can(
-            { role: workspace.role, modules: workspace.modules },
-            'workspace.settings.manage',
-          )}
-        />
-      ) : null}
+      {/*
+        ⚠️ OUTCOMES ABOVE CONSUMPTION, which is the whole point of the change.
+        Every number on this screen used to be about what the customer had
+        spent — credits, searches, exports — and none about whether any of it
+        worked. A setter opens the product to find out whether anyone replied.
 
-      <section aria-label="Usage this period" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {metrics.map((metric) => (
-          <UsageCard key={metric.label} {...metric} />
-        ))}
+        ⚠️ AND THE CHECKLIST'S OWN REASON DECIDES WHICH OF THE TWO LEADS. It
+        was placed above the numbers because a first-day row of zeroes is a
+        worse first screen than a list of what to do next — so it keeps that
+        place until there are real figures, and yields it once there are.
+        Seven items fill the entire first viewport; whichever is up there is
+        the only thing most people will see.
+      */}
+      {checklistFirst ? checklist : null}
+      {performance ? <PerformanceRow data={performance} /> : null}
+      {checklistFirst ? null : checklist}
+
+      <section aria-label="Usage this period" className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+          Usage this period
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {metrics.map((metric) => (
+            <UsageCard key={metric.label} {...metric} />
+          ))}
+        </div>
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
