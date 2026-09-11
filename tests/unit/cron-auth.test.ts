@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { isAuthorizedCronRequest } from '@/app/api/cron/route'
+import { isAuthorizedCronRequest } from '@/lib/workers/cron-auth'
 
 const SECRET = 'a-real-cron-secret-value'
 

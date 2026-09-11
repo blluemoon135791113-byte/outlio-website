@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { EditorialRowVariant } from './EditorialRowVariant'
 import { SoftGalleryVariant } from './SoftGalleryVariant'
 import { SystemLedgerVariant } from './SystemLedgerVariant'
+import styles from './prototype.module.css'
 
 const VARIANTS = [
   { name: 'Gallery Balance', render: EditorialRowVariant },
@@ -70,11 +71,11 @@ export function PrototypeHarness({ initialIndex }: { initialIndex: number }) {
   return (
     <>
       <Variant key={current} />
-      <nav className="proto-picker" aria-label="Prototype variants" ref={pickerRef} data-ready={ready ? '' : undefined}>
-        <span className="proto-picker-highlight" aria-hidden="true" ref={highlightRef} />
+      <nav className={styles.protoPicker} aria-label="Prototype variants" ref={pickerRef} data-ready={ready ? '' : undefined}>
+        <span className={styles.protoPickerHighlight} aria-hidden="true" ref={highlightRef} />
         {VARIANTS.map((variant, index) => (
           <button
-            className="proto-picker-item"
+            className={styles.protoPickerItem}
             data-active={index === current ? '' : undefined}
             aria-current={index === current ? 'true' : undefined}
             onClick={() => select(index)}

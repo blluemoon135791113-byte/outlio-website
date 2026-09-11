@@ -124,6 +124,7 @@ export function OutreachAutomation() {
             <i />
             <span>Score B–A+ · launch</span>
             <b />
+            <strong className={styles.launchAction}>Personalized email sequence</strong>
           </div>
 
           <article className={styles.scoreTable} aria-hidden="true">
@@ -147,12 +148,12 @@ export function OutreachAutomation() {
 
           <div className={styles.outcomes} aria-hidden="true">
             <article className={styles.outcomeItem}>
-              <span className={styles.outcomeIcon}><WorkflowIcon name="mail" /></span>
-              <strong>Personalized<br />email sequence</strong>
+              <span className={styles.outcomeIcon}><WorkflowIcon name="watch" /></span>
+              <strong>Monitor<br />new signals</strong>
             </article>
             <article className={styles.outcomeItem}>
-              <span className={styles.outcomeIcon}><WorkflowIcon name="watch" /></span>
-              <strong>Monitor signals<br />and re-score</strong>
+              <span className={styles.outcomeIcon}><WorkflowIcon name="sync" /></span>
+              <strong>Re-score<br />account fit</strong>
             </article>
           </div>
         </div>

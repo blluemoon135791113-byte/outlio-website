@@ -431,3 +431,179 @@ describeIf('creating a contact starts a flow — the chain, not the engine', () 
     expect(after.data![0]!.trigger_type).toBe('contact_created')
   }, 60_000)
 })
+
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THE NULL STORY, END TO END — M7 PHASE 10.                               ║
+ * ║                                                                          ║
+ * ║  `flow-fact-coverage` proves the builder's null story in isolation. It   ║
+ * ║  cannot prove the QUERIES return those shapes: a select list naming a    ║
+ * ║  column that does not exist turns its whole domain into could-not-       ║
+ * ║  observe, every key vanishes, and no unit test ever knows. These three   ║
+ * ║  runs go the whole way — a contact created by hand, a run started by     ║
+ * ║  the `contact_created` trigger, a branch only the real database answers. ║
+ * ║                                                                          ║
+ * ║  ⚠️ WHICH PATH TAKEN IS THE CLAIM. "The run completed" cannot tell a TRUE ║
+ * ║  path from a FALSE one, and a HALTED run still passes "the run exists" — ║
+ * ║  the incident one banner up. Every test asserts completed AND both       ║
+ * ║  terminal side effects: the taken path fires exactly once, the other    ║
+ * ║  never. Test C is the one a broken query cannot pass: a facts query that ║
+ * ║  errors or reads the wrong tenant's rows leaves open_count absent or    ║
+ * ║  zero, and the FALSE path fires.                                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+
+describeIf('a branch on the new fact domains — the null story, end to end', () => {
+  /*
+   * Shared shape: entry ADD_TAG → BRANCH → two terminal ADD_TAGs, one per path.
+   * Each test mints its own keys and its own contact, because `sideEffects`
+   * and `RUN` are module-level and shared by every describe in this file.
+   */
+  const branchFlow = (
+    key: string,
+    field: string,
+    operator: string,
+    value?: unknown,
+  ) =>
+    makeFlow({
+      trigger: { type: 'contact_created', config: {} },
+      entryStepId: 'entry',
+      steps: [
+        {
+          id: 'entry', type: 'ACTION', action: 'ADD_TAG',
+          config: { key: `${key}-entry` }, next: 'check',
+        },
+        {
+          id: 'check', type: 'BRANCH', match: 'all',
+          conditions: [{ field, operator, ...(value === undefined ? {} : { value }) }],
+          onTrue: `${key}-true`, onFalse: `${key}-false`,
+        },
+        {
+          id: `${key}-true`, type: 'ACTION', action: 'ADD_TAG',
+          config: { key: `${key}-true` }, next: null,
+        },
+        {
+          id: `${key}-false`, type: 'ACTION', action: 'ADD_TAG',
+          config: { key: `${key}-false` }, next: null,
+        },
+      ],
+    })
+
+  /** Fresh contact per test — the trigger fires only on creation, not match. */
+  const freshContact = (slug: string) =>
+    createContactManually(
+      workspaceId,
+      {
+        fullName: `Null Story ${slug} ${RUN}`,
+        emails: [`${slug}-${RUN}@buyer.example`],
+        ownerUserId: user!.id,
+        source: 'manual',
+      },
+      user!.id,
+    )
+
+  /** The dispatch-started run for one flow and one contact — its only one. */
+  const runFor = async (flowId: string, contact: string) => {
+    const { data: runs, error } = await adminClient()
+      .from('flow_runs')
+      .select('id, status')
+      .eq('flow_id', flowId)
+      .eq('contact_id', contact)
+    if (error) throw new Error(`flow_runs lookup failed: ${error.message}`)
+    expect(runs!.length, 'the trigger produced no run for this contact').toBe(1)
+    return runs![0]!
+  }
+
+  /** Completed, one side fired, the other never — the full claim. */
+  const assertPath = (result: Awaited<ReturnType<typeof advanceRun>>, taken: string, other: string) => {
+    expect(result.status, 'the run did not complete').toBe('completed')
+    expect(sideEffects[taken], `the taken path (${taken}) did not fire exactly once`).toBe(1)
+    expect(sideEffects[other], `the other path (${other}) fired — the branch routed wrong`).toBeUndefined()
+  }
+
+  it('OBSERVED ABSENT: no company → company.name is_empty takes the TRUE path', async () => {
+    const key = `null-story-${RUN}`
+    const flowId = await branchFlow(key, 'company.name', 'is_empty')
+
+    const created = await freshContact('absent')
+    expect(created.created, 'the contact was matched, not created — no trigger is correct then').toBe(true)
+
+    const run = await runFor(flowId, created.contactId)
+    const result = await advanceRun(workspaceId, run.id)
+    assertPath(result, `${key}-true`, `${key}-false`)
+  }, 90_000)
+
+  it('OBSERVED ZERO: opportunity.count 0 is a value — greater_than 0 takes the FALSE path', async () => {
+    const key = `zero-story-${RUN}`
+    const flowId = await branchFlow(key, 'opportunity.count', 'greater_than', 0)
+
+    const created = await freshContact('zero')
+    expect(created.created, 'the contact was matched, not created — no trigger is correct then').toBe(true)
+
+    const run = await runFor(flowId, created.contactId)
+    const result = await advanceRun(workspaceId, run.id)
+    /*
+     * 0 is not an absence. A branch reading "more than zero deals" must go
+     * FALSE here, exactly like a contact with deals that all closed — the
+     * number is the fact, not the row count behind it.
+     */
+    assertPath(result, `${key}-false`, `${key}-true`)
+  }, 90_000)
+
+  it('OBSERVED ROWS: an open opportunity → opportunity.open_count > 0 takes the TRUE path', async () => {
+    const key = `open-story-${RUN}`
+    const flowId = await branchFlow(key, 'opportunity.open_count', 'greater_than', 0)
+
+    /*
+     * gatherFacts reads at ADVANCE time, so the deal is created after the
+     * contact (so it triggers the run) and before the branch runs. A test that
+     * seeded the deal first could never prove the run was reading this
+     * workspace's own rows.
+     */
+    const created = await freshContact('rows')
+    expect(created.created, 'the contact was matched, not created — no trigger is correct then').toBe(true)
+
+    const db = adminClient()
+    const { data: pipeline, error: pipelineError } = await db
+      .from('crm_pipelines')
+      .insert({ workspace_id: workspaceId, name: `Null Story ${RUN}` })
+      .select('id')
+      .single()
+    if (pipelineError) throw new Error(`pipeline insert failed: ${pipelineError.message}`)
+
+    const { data: stage, error: stageError } = await db
+      .from('crm_pipeline_stages')
+      .insert({
+        workspace_id: workspaceId,
+        pipeline_id: pipeline!.id,
+        name: `Null Story Open ${RUN}`,
+        kind: 'open',
+        sort_order: 1,
+        default_probability: 25,
+      })
+      .select('id')
+      .single()
+    if (stageError) throw new Error(`stage insert failed: ${stageError.message}`)
+
+    const { error: dealError } = await db.from('crm_opportunities').insert({
+      workspace_id: workspaceId,
+      title: `Deal for ${created.contactId.slice(0, 8)}`,
+      pipeline_id: pipeline!.id,
+      stage_id: stage!.id,
+      contact_id: created.contactId,
+      status: 'open',
+      // The closed_consistent constraint requires closed_at only when won.
+      closed_at: null,
+    })
+    if (dealError) throw new Error(`opportunity insert failed: ${dealError.message}`)
+
+    const run = await runFor(flowId, created.contactId)
+    const result = await advanceRun(workspaceId, run.id)
+    /*
+     * The one a broken query cannot pass. A facts select that errors or reads
+     * another workspace's rows leaves open_count absent or 0 — and the FALSE
+     * path fires, loudly.
+     */
+    assertPath(result, `${key}-true`, `${key}-false`)
+  }, 90_000)
+})

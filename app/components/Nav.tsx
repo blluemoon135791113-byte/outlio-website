@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CALENDLY_URL, CHROME_EXTENSION_URL } from "../lib/constants";
 import { APP_ORIGIN } from "@/lib/site";
+import styles from "./AgencySplitNav.module.css";
 
 /**
  * Surface-aware navigation.
@@ -89,12 +90,110 @@ interface NavProps {
 
 export default function Nav({ surface = "agency" }: NavProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [agencyNavAppearance, setAgencyNavAppearance] = useState<"top" | "compact">("top");
+  const [isAgencyNavHidden, setIsAgencyNavHidden] = useState(false);
+  const agencyHeaderRef = useRef<HTMLElement>(null);
+  const agencyMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const isMobileMenuOpenRef = useRef(isMobileMenuOpen);
 
   const config = SURFACES[surface];
-  const closeMobile = () => setIsMobileMenuOpen(false);
+  const closeMobile = () => {
+    isMobileMenuOpenRef.current = false;
+    setIsMobileMenuOpen(false);
+  };
 
   const externalProps = (item: { external?: boolean }) =>
     item.external ? { target: "_blank", rel: "noopener noreferrer" } : {};
+
+  useEffect(() => {
+    if (surface !== "agency") return;
+
+    const topThreshold = 40;
+    const hideThreshold = 100;
+    const movementThreshold = 14;
+    let lastScrollY = Math.max(0, window.scrollY);
+    let direction: "up" | "down" | null = null;
+    let accumulatedMovement = 0;
+    let frameId: number | null = null;
+    const initializationFrameId = window.requestAnimationFrame(() => {
+      setAgencyNavAppearance(lastScrollY <= topThreshold ? "top" : "compact");
+      setIsAgencyNavHidden(false);
+    });
+
+    const updateNavigation = () => {
+      frameId = null;
+      const scrollY = Math.max(0, window.scrollY);
+      const delta = scrollY - lastScrollY;
+      lastScrollY = scrollY;
+
+      if (scrollY <= topThreshold) {
+        direction = null;
+        accumulatedMovement = 0;
+        setAgencyNavAppearance("top");
+        setIsAgencyNavHidden(false);
+        return;
+      }
+
+      const hasProtectedInteraction =
+        isMobileMenuOpenRef.current ||
+        agencyHeaderRef.current?.contains(document.activeElement) === true;
+
+      if (hasProtectedInteraction) {
+        direction = null;
+        accumulatedMovement = 0;
+        setAgencyNavAppearance("compact");
+        setIsAgencyNavHidden(false);
+        return;
+      }
+
+      if (Math.abs(delta) < 1) return;
+
+      const nextDirection = delta > 0 ? "down" : "up";
+      if (direction !== nextDirection) {
+        direction = nextDirection;
+        accumulatedMovement = Math.abs(delta);
+      } else {
+        accumulatedMovement += Math.abs(delta);
+      }
+
+      if (accumulatedMovement < movementThreshold) return;
+
+      if (nextDirection === "down" && scrollY > hideThreshold) {
+        setIsAgencyNavHidden(true);
+        accumulatedMovement = 0;
+      } else if (nextDirection === "up") {
+        setAgencyNavAppearance("compact");
+        setIsAgencyNavHidden(false);
+        accumulatedMovement = 0;
+      }
+    };
+
+    const scheduleUpdate = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(updateNavigation);
+    };
+
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.cancelAnimationFrame(initializationFrameId);
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
+  }, [surface]);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      isMobileMenuOpenRef.current = false;
+      setIsMobileMenuOpen(false);
+      agencyMenuButtonRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isMobileMenuOpen]);
 
   if (surface === "leadengine") {
     const glassLinks: NavLink[] = [
@@ -196,6 +295,138 @@ export default function Nav({ surface = "agency" }: NavProps) {
                   {link.label}
                 </Link>
               ))}
+            </nav>
+          )}
+        </div>
+      </header>
+    );
+  }
+
+  if (surface === "agency") {
+    const agencyHeaderClassName = [
+      styles.header,
+      agencyNavAppearance === "top" ? styles.topState : styles.compactState,
+      isAgencyNavHidden ? styles.hiddenState : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return (
+      <header
+        ref={agencyHeaderRef}
+        className={agencyHeaderClassName}
+        onFocusCapture={() => {
+          const scrollY = Math.max(0, window.scrollY);
+          setAgencyNavAppearance(scrollY <= 40 ? "top" : "compact");
+          setIsAgencyNavHidden(false);
+        }}
+      >
+        <div className={styles.container}>
+          <Link href="/" className={styles.logoLink} aria-label="Outlio home">
+            <Image
+              src="/outlio logo.png"
+              alt=""
+              width={44}
+              height={44}
+              preload
+              className={styles.logo}
+            />
+          </Link>
+
+          <nav className={styles.desktopNav} aria-label="Primary navigation">
+            {config.links.map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                {...externalProps(link)}
+                className={styles.navLink}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className={styles.desktopActions}>
+            <Link
+              href={config.ctas[0].href}
+              {...externalProps(config.ctas[0])}
+              className={`${styles.action} ${styles.leadEngineAction}`}
+            >
+              <span>{config.ctas[0].label}</span>
+              <span aria-hidden>→</span>
+            </Link>
+            <Link
+              href={config.ctas[1].href}
+              {...externalProps(config.ctas[1])}
+              className={`${styles.action} ${styles.bookAction}`}
+            >
+              {config.ctas[1].label}
+            </Link>
+          </div>
+
+          <button
+            ref={agencyMenuButtonRef}
+            type="button"
+            className={styles.menuButton}
+            onClick={() => {
+              const nextOpen = !isMobileMenuOpen;
+              isMobileMenuOpenRef.current = nextOpen;
+              if (nextOpen) {
+                const scrollY = Math.max(0, window.scrollY);
+                setAgencyNavAppearance(scrollY <= 40 ? "top" : "compact");
+                setIsAgencyNavHidden(false);
+              }
+              setIsMobileMenuOpen(nextOpen);
+            }}
+            aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="agency-mobile-navigation"
+          >
+            <span className={styles.menuIcon} aria-hidden>
+              <span className={isMobileMenuOpen ? styles.menuLineOpenFirst : styles.menuLine} />
+              <span className={isMobileMenuOpen ? styles.menuLineOpenSecond : styles.menuLine} />
+            </span>
+          </button>
+
+          {isMobileMenuOpen && (
+            <nav
+              id="agency-mobile-navigation"
+              className={styles.mobileMenu}
+              aria-label="Mobile navigation"
+            >
+              <div className={styles.mobileLinks}>
+                {config.links.map((link) => (
+                  <Link
+                    key={link.label}
+                    href={link.href}
+                    {...externalProps(link)}
+                    className={styles.mobileLink}
+                    onClick={closeMobile}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+
+              <div className={styles.mobileActions}>
+                <Link
+                  href={config.ctas[0].href}
+                  {...externalProps(config.ctas[0])}
+                  className={`${styles.mobileAction} ${styles.leadEngineAction}`}
+                  onClick={closeMobile}
+                >
+                  <span>{config.ctas[0].label}</span>
+                  <span aria-hidden>→</span>
+                </Link>
+                <Link
+                  href={config.ctas[1].href}
+                  {...externalProps(config.ctas[1])}
+                  className={`${styles.mobileAction} ${styles.bookAction}`}
+                  onClick={closeMobile}
+                >
+                  {config.ctas[1].label}
+                </Link>
+              </div>
             </nav>
           )}
         </div>

@@ -3,17 +3,15 @@ import Link from "next/link";
 import Nav from "./components/Nav";
 import Footer from "./components/Footer";
 import Reveal from "./components/Reveal";
-import HeroHeadline from "./components/HeroHeadline";
 import TestimonialFlipCard from "./components/TestimonialFlipCard";
-import HeroScrollFade from "./components/HeroScrollFade";
 import InteractiveWorldMap from "./components/InteractiveWorldMap";
 import AnimatedArrow from "./components/AnimatedArrow";
-import HeroWidgets from "./components/HeroWidgets";
 import OrbitalCaseStudies from "./components/OrbitalCaseStudies";
 import Starfield from "./components/Starfield";
 import MeteorShower from "./components/MeteorShower";
 import StarFieldCanvas from "./components/StarFieldCanvas";
 import FAQSchema from "./components/FAQSchema";
+import InteractiveGtmHero from "./components/InteractiveGtmHero";
 import { CALENDLY_URL } from "./lib/constants";
 
 const OUTBOUND_OFFERS = [
@@ -221,94 +219,7 @@ export default function Home() {
       <Nav />
       <main>
         {/* ========== 1. HERO ========== */}
-        <section className="relative px-4 py-6 sm:px-6 lg:px-8">
-          {/* Contained Hero Card */}
-          <div className="relative mx-auto max-w-[1600px] overflow-hidden rounded-3xl border border-gray-200/60 bg-gradient-to-br from-gray-50 to-white shadow-xl shadow-black/5">
-            {/* Subtle dot pattern texture */}
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.10) 1.2px, transparent 1.2px)',
-                backgroundSize: '14px 14px',
-              }}
-            />
-
-            {/* Corner Widgets with 3D depth */}
-            <HeroWidgets />
-
-            {/* Main Content - CENTERED */}
-            <div className="relative z-20 flex min-h-[590px] items-center justify-center px-5 py-20 sm:min-h-[660px] sm:px-10 sm:py-24 lg:min-h-[760px] lg:px-16 lg:py-28 xl:min-h-[800px] xl:py-32">
-              <div className="mx-auto max-w-5xl text-center">
-                {/*
-                  ⚠️ A SECOND <h1> USED TO SIT HERE, above `HeroHeadline` —
-                  which renders its own. Two competing headings, and the
-                  paragraph beneath it restated the concise one further down
-                  almost word for word. `HeroHeadline` is the hero; this block
-                  was crowding it.
-                */}
-                <h1 className="text-4xl font-bold uppercase tracking-tight text-ink sm:text-5xl">
-                  Hands-on growth accelerator for tech startups and SaaS
-                </h1>
-                <p className="mt-3 text-base leading-relaxed text-muted/80 sm:text-lg">
-                  Outlio isn't a consultancy. We research your market, identify your ideal customers, write every message by hand, and run your outbound ourselves, then show you all of it live in a shared CRM. Our approach is research-first, human-led, and built to scale with you — from the intro call through launch and beyond. We help tech startups and SaaS companies fill the pipeline so you can focus on building your product.
-                </p>
-                <HeroHeadline />
-                <HeroScrollFade>
-                  <p className="mx-auto mt-6 max-w-3xl text-base leading-relaxed text-muted sm:text-lg">
-                    Outlio isn't a consultancy. We research your market, write every message by hand, and
-                    run your outbound ourselves, then show you all of it, live, in a shared CRM.
-                  </p>
-                </HeroScrollFade>
-                <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-                  <Link
-                    href={CALENDLY_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-full bg-ink px-8 py-4 text-base font-semibold text-cream transition-colors hover:bg-accent"
-                  >
-                    Book a call
-                  </Link>
-                  <Link
-                    href="#results"
-                    className="rounded-full border border-ink px-8 py-4 text-base font-semibold transition-colors hover:bg-ink hover:text-cream"
-                  >
-                    See the results
-                  </Link>
-                </div>
-                <p className="mx-auto mt-4 max-w-xl text-sm text-muted">
-                  Choose a contained, research-led, or custom outbound operation—and watch every
-                  message and KPI in a shared CRM.
-                </p>
-              </div>
-            </div>
-
-            {/* Marquee strip at bottom */}
-            <div className="relative hidden overflow-hidden border-t border-gray-200/60 bg-purple-50/50 py-6 sm:block" aria-hidden="true">
-              <div className="relative overflow-hidden">
-                <div className="marquee-track flex w-max items-center gap-12 px-12 text-sm font-semibold uppercase tracking-[0.18em]">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <span key={i} className="flex items-center gap-12">
-                      {[
-                        "Research-first outbound",
-                        "Every message written by hand",
-                        "Live shared CRM",
-                        "Three ways to scale",
-                        "No autopilot",
-                      ].map((t) => (
-                        <span key={t} className="flex items-center gap-12">
-                          <span className="text-gray-800">{t}</span>
-                          <span className="relative">
-                            <span className="block size-1.5 rounded-full bg-accent/60" />
-                          </span>
-                        </span>
-                      ))}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <InteractiveGtmHero />
 
 
         {/* ========== 7. RESULTS — full dark galaxy background ========== */}

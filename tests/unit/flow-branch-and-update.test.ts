@@ -74,21 +74,48 @@ describe('the list operators need a real array', () => {
 })
 
 describe('the branch editor offers only facts that exist', () => {
+  const FACTS = read('lib/flows/facts.ts')
+  const DOMAIN_KEY = /\{ key: '((?:contact|company|opportunity|activity|task|email|conversation)\.[a-z_]+)', label:/g
+
   it('every offered field is one gatherFacts produces', () => {
     /*
      * ⚠️ `facts[condition.field]` IS A PLAIN LOOKUP. A field the fact set does
      * not contain reads as `undefined`, which makes most operators false — so
      * every contact takes the same path and the branch looks configured while
-     * branching nothing.
+     * branching nothing. Phase 10 widened the picker from 8 contact keys to
+     * 33 across seven domains; the floor moves with the catalogue, so a
+     * dropped entry fails here instead of silently disappearing from the UI.
      */
-    const offered = [...BUILDER.matchAll(/\{ key: '(contact\.[a-z_]+)', label:/g)].map(
-      (m) => m[1]!,
-    )
-    expect(offered.length).toBeGreaterThanOrEqual(8)
+    const offered = [...BUILDER.matchAll(DOMAIN_KEY)].map((m) => m[1]!)
+    expect(offered.length).toBeGreaterThanOrEqual(33)
 
     for (const key of offered) {
-      expect(ENGINE, `${key} is not produced by gatherFacts`).toContain(`'${key}':`)
+      expect(FACTS, `${key} is not produced by gatherFacts`).toContain(`'${key}':`)
     }
+  })
+
+  it('every fact gatherFacts produces is offered', () => {
+    /*
+     * The other direction, and the one Phase 10 actually broke: keys produced
+     * by the fact set but missing from the picker are invisible to everyone —
+     * shipped and unreachable, which is this codebase's signature failure.
+     */
+    const produced = [...FACTS.matchAll(/'((?:contact|company|opportunity|activity|task|email|conversation)\.[a-z_]+)':/g)].map(
+      (m) => m[1]!,
+    )
+    expect(produced.length).toBeGreaterThanOrEqual(33)
+
+    for (const key of produced) {
+      expect(BUILDER, `${key} is produced but never offered in the picker`).toContain(
+        `{ key: '${key}',`,
+      )
+    }
+  })
+
+  it('the engine re-exports the moved gatherer', () => {
+    // Phase 10 moved gatherFacts to lib/flows/facts.ts; simulate.ts still
+    // imports it from the engine, so the re-export is load-bearing.
+    expect(ENGINE).toContain("export { gatherFacts } from '@/lib/flows/facts'")
   })
 
   it('offers every operator the evaluator implements', () => {
