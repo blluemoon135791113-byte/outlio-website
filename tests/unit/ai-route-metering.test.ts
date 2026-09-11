@@ -132,6 +132,86 @@ vi.mock('@/lib/hubble/providers/embedding', () => ({
   }),
 }))
 
+/*
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THE NETWORK EDGES, AND THIS IS NOT OPTIONAL TIDYING.                  ║
+ * ║                                                                           ║
+ * ║  The ask route runs the REAL `askHubble`, which is the point — but         ║
+ * ║  `askHubble` searches, crawls and indexes. `tests/setup.ts` loads          ║
+ * ║  `.env.local`, which holds live Tavily / Serper / Google CSE / Firecrawl   ║
+ * ║  keys. So this file was making real, paid third-party calls on every       ║
+ * ║  `npm test`, and timing out at 30s whenever the network was slow —         ║
+ * ║  32s wall against 2.3s CPU, 9% utilisation. Measured, not guessed.        ║
+ * ║                                                                           ║
+ * ║  `tests/setup.ts` still says "unit tests open no sockets". That was true   ║
+ * ║  when it was written and stopped being true here. An assumption in a       ║
+ * ║  comment that quietly expired is this project's signature defect.         ║
+ * ║                                                                           ║
+ * ║  ⚠️ ONLY THE EDGES ARE STUBBED. The route, `hubbleExecute`, the registry   ║
+ * ║  and the spend RPC all stay real — they are what is under test. Stubbing   ║
+ * ║  the door would test the mock.                                            ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+vi.mock('@/lib/hubble/providers/search', () => ({
+  resolveSearchProvider: () => ({
+    name: 'fixture-search',
+    isConfigured: () => false,
+    // Contract: empty array when unavailable, never a throw.
+    search: async () => [],
+  }),
+}))
+
+/*
+ * ⚠️ INLINED, NOT SHARED. `vi.mock` factories are hoisted above every top-level
+ * binding, so a shared `fixtureFetcher` helper throws "Cannot access before
+ * initialization" at import time.
+ *
+ * Contract in both: a page that cannot be read is a failure VALUE, not an error.
+ */
+vi.mock('@/lib/hubble/fetch/crawl4ai', () => ({
+  crawl4AiPageFetcher: {
+    name: 'fixture-crawl4ai',
+    fetchPage: async (url: string) => ({
+      url,
+      code: 'blocked' as const,
+      detail: 'fixture: no network in unit tests',
+    }),
+  },
+}))
+
+vi.mock('@/lib/hubble/fetch/fetcher', () => ({
+  httpPageFetcher: {
+    name: 'fixture-http',
+    fetchPage: async (url: string) => ({
+      url,
+      code: 'blocked' as const,
+      detail: 'fixture: no network in unit tests',
+    }),
+  },
+}))
+
+vi.mock('@/lib/hubble/providers/solr', () => ({
+  indexPageInSolr: async () => undefined,
+  solrConfig: () => null,
+}))
+
+/*
+ * ⚠️ THE MODEL IS STUBBED AT THE FACTORY, NOT AT THE DOOR. `hubbleExecute`
+ * still constructs `tools.llm` and still hands it to the runner — that
+ * hand-off is exactly what Phase 12 item 4 delivered and what the query route's
+ * `gotModel` assertion checks. What is removed is the socket underneath it:
+ * `.env.local` carries live Gemini/Groq keys, so an unmocked model call in a
+ * unit test spends real money.
+ */
+vi.mock('@/lib/hubble/providers/ollama-llm', () => ({
+  createHubbleLlm: () => ({
+    vendor: 'gemini' as const,
+    model: 'fixture-model',
+    isConfigured: () => false,
+    generateJson: async () => ({ ok: false as const, reason: 'not_configured' as const }),
+  }),
+}))
+
 vi.mock('@/lib/intelligence/results', () => ({
   getRunResults: vi.fn(async () => mocks.runResults),
   /*
