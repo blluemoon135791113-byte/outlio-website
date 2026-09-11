@@ -789,3 +789,51 @@ deliverability risk was never the scheduler; it was a user believing the
 scheduler did something it does not. That is fixed. Holidays can wait for
 someone to complain about a send on a public holiday — a real complaint is
 better evidence than a guess about which country's calendar matters.
+
+---
+
+## DECISION-21 — Encrypt the webhook signing secret at rest? · `OPEN`
+
+Raised 2026-09-12 while auditing §5.12.
+
+**What holds.** Provider tokens *are* encrypted at rest: `integration_connections`
+stores a `secret_reference` and `lib/integrations/crypto.ts` does the work, so
+the machinery and the key (`INTEGRATION_ENCRYPTION_KEY`) already exist. Nothing
+leaks a secret to a client — verified and now guarded by
+`tests/unit/secret-rotation.test.ts`. API keys are SHA-256 hashed at rest.
+
+**The exception.** `webhook_subscriptions.signing_secret` is stored **plaintext**.
+It cannot be hashed — HMAC has to reproduce it to sign — but it could be
+encrypted with the key that already exists.
+
+**The exposure:** anyone who can read the table (a backup, a leaked service-role
+key, a SQL-injection path) can forge signed events to every customer endpoint.
+Their systems would accept them as genuine Outlio events. That is an integrity
+attack on the customer, not on us — the same asymmetry as the LinkedIn risk.
+
+**Why it is a decision:** encrypting it means a migration plus a decrypt step on
+the delivery path, and migrations are applied by hand by the owner.
+
+⚠️ **It is cheapest right now, and that will stop being true.** `publishEvent`
+had no callers until 2026-09-08, so this table has likely never held a row — an
+expand → backfill → contract sequence with nothing to backfill. Every
+subscription created from here on makes the migration more expensive.
+
+**Options:**
+
+1. **Encrypt now, while the table is probably empty.** Cheapest it will ever be.
+   Needs one migration and a decrypt on the send path.
+2. **Leave it and accept the exposure**, on the grounds that a database read is
+   already a full compromise. Defensible, and it is what many products do.
+3. **Encrypt later.** Same work plus a backfill, and the window where a leak
+   matters is exactly the window where you have customers.
+
+**My recommendation: option 1**, and soon, purely on cost. The security argument
+is real but arguable; the timing argument is not. **I have not written the
+migration** — confirming the table's row count needs a production read, which
+needs your authorisation, and a backfill written against an unknown row count is
+a guess.
+
+**Shipped in the meantime:** §5.12's "rotatable" now holds. A leaked secret can
+be replaced without deleting the subscription — see the commit for why that
+matters more than it sounds.

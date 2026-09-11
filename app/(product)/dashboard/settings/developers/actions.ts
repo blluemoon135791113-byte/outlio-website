@@ -204,3 +204,68 @@ export async function deleteWebhook(
     return { ok: false, error: 'Could not remove that webhook.' }
   }
 }
+
+/**
+ * Issues a new signing secret for an existing webhook, keeping everything else.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  §5.12 REQUIRES CREDENTIALS TO BE ROTATABLE. THIS ONE WAS NOT.            ║
+ * ║                                                                           ║
+ * ║  A customer whose signing secret leaked had exactly one option: delete the ║
+ * ║  subscription and create another. That loses its id, its event selection   ║
+ * ║  and its failure history, and means reconfiguring their endpoint from      ║
+ * ║  scratch — so the cheap response to a leak was expensive, which is how a   ║
+ * ║  leaked secret ends up living in production.                              ║
+ * ║                                                                           ║
+ * ║  ⚠️ IT TAKES EFFECT FOR EVERY UNSENT DELIVERY, and that is a property of    ║
+ * ║  the worker rather than a promise made here: `deliverPendingWebhooks`      ║
+ * ║  re-reads `signing_secret` per delivery at send time. So a queue that has  ║
+ * ║  built up is signed with the new secret, not the old one. Only a request   ║
+ * ║  already in flight carries the old signature.                             ║
+ * ║                                                                           ║
+ * ║  ⚠️ FAILURE STATE IS LEFT ALONE, DELIBERATELY. Rotating a secret does not   ║
+ * ║  fix a broken endpoint, and silently re-enabling a subscription that the   ║
+ * ║  circuit breaker disabled would resume hammering a dead URL. Re-enabling   ║
+ * ║  stays a separate, deliberate act.                                        ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function rotateWebhookSecret(
+  _previous: DeveloperActionState,
+  formData: FormData,
+): Promise<DeveloperActionState> {
+  try {
+    const ctx = await assertWorkspacePermission(PERMISSION)
+    const id = String(formData.get('subscriptionId') ?? '')
+    if (!id) return { ok: false, error: 'That webhook could not be read.' }
+
+    const secret = `whsec_${randomBytes(24).toString('base64url')}`
+
+    /*
+     * ⚠️ SCOPED BY WORKSPACE AS WELL AS ID. The service role bypasses RLS, so
+     * an id from another workspace must match nothing rather than re-key
+     * someone else's webhook. `.select()` is what tells us it matched.
+     */
+    const { data, error } = await createAdminClient()
+      .from('webhook_subscriptions')
+      .update({ signing_secret: secret })
+      .eq('workspace_id', ctx.workspace.id)
+      .eq('id', id)
+      .select('id')
+
+    if (error) return { ok: false, error: 'Could not rotate that secret.' }
+    if (!data || data.length === 0) {
+      return { ok: false, error: 'That webhook is not in this workspace.' }
+    }
+
+    revalidatePath('/dashboard/settings/developers')
+
+    return {
+      ok: true,
+      message: 'New signing secret issued. Update your endpoint before the next event.',
+      // Shown once, like the original: it is what the customer verifies with.
+      secret,
+    }
+  } catch {
+    return { ok: false, error: 'Could not rotate that secret.' }
+  }
+}
