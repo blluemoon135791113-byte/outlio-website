@@ -27,7 +27,7 @@ import 'server-only'
  * other customer on the same tick. Each step is isolated and its error is
  * recorded, not thrown.
  */
-import { deliverPendingWebhooks } from '@/lib/api/webhooks'
+import { deliverPendingWebhooks, pruneDeliveryLog } from '@/lib/api/webhooks'
 import { advanceRun, claimWaitingRuns } from '@/lib/flows/engine'
 import { registerAllActions } from '@/lib/flows/actions'
 import { reapExpiredClaims, runSendWorker } from '@/lib/email/send'
@@ -270,7 +270,22 @@ export async function runTick(): Promise<TickResult> {
 
   await runJob(result, 'deliver_webhooks', async () => {
     const outcome = await deliverPendingWebhooks(LIMITS.webhooksPerTick)
-    return `${outcome.delivered} delivered, ${outcome.retrying} retrying, ${outcome.exhausted} exhausted`
+
+    /*
+     * ⚠️ PRUNED IN THE SAME JOB THAT CREATES THE ROWS, following `recordRun`'s
+     * reasoning: this is the one place guaranteed to run whenever deliveries
+     * exist, so it needs no schedule of its own. An indexed range delete that
+     * usually removes nothing.
+     *
+     * After delivery, never before: pruning first would spend the tick's budget
+     * on housekeeping while a consumer waits.
+     */
+    const pruned = await pruneDeliveryLog()
+
+    return (
+      `${outcome.delivered} delivered, ${outcome.retrying} retrying, ` +
+      `${outcome.exhausted} exhausted, ${pruned} pruned`
+    )
   }, began)
 
   /*

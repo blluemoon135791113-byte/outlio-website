@@ -292,3 +292,72 @@ describe('backoff jitter', () => {
     expect(code).not.toMatch(/next_attempt_at[\s\S]{0,80}backoffSeconds\(attempt\)/)
   })
 })
+
+/**
+ * §5.13's "30-day delivery log" — the retention half, which did not exist.
+ *
+ * ⚠️ THE VISIBILITY HALF WAS BUILT AND THE BOUND WAS NOT. Settings → Developers
+ * queries `webhook_deliveries`; nothing ever deleted a row. Outside the
+ * delivery worker, the table's only other mention in the repo was a GRANT.
+ *
+ * ⚠️ AND IT IS A RETENTION PROBLEM, NOT A DISK ONE. Every row carries the event
+ * payload — contact ids, and for reply and bounce events the person's email
+ * address. An unbounded log of personal data is what storage limitation
+ * forbids, and it sat behind a page that reads it.
+ */
+describe('the delivery log is bounded', () => {
+  const WEBHOOKS = readFileSync(join(__dirname, '..', '..', 'lib/api/webhooks.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '')
+  const TICK = readFileSync(join(__dirname, '..', '..', 'lib/workers/tick.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '')
+
+  it('retains for the 30 days §5.13 names', () => {
+    /*
+     * Read from source rather than imported: `lib/api/webhooks.ts` is
+     * `server-only`, so importing it here would fail at module load — the same
+     * boundary that broke a Client Component earlier in this project and is
+     * only ever caught by `next build`.
+     */
+    expect(WEBHOOKS).toMatch(/DELIVERY_RETENTION_DAYS = 30/)
+  })
+
+  it('a prune exists and deletes by age', () => {
+    expect(WEBHOOKS).toContain('export async function pruneDeliveryLog')
+    expect(WEBHOOKS).toMatch(/\.lt\('created_at', cutoff\)/)
+  })
+
+  it('prunes ONLY terminal rows — never an undelivered event', () => {
+    /*
+     * Deleting a `pending` or `retrying` row would silently drop a delivery the
+     * product still owes, and hide whatever stranded it. This is the assertion
+     * that matters most in this file.
+     */
+    expect(WEBHOOKS).toMatch(/\.in\('status', \['delivered', 'exhausted'\]\)/)
+    expect(WEBHOOKS).not.toMatch(/pruneDeliveryLog[\s\S]{0,400}'pending'/)
+    expect(WEBHOOKS).not.toMatch(/pruneDeliveryLog[\s\S]{0,400}'retrying'/)
+  })
+
+  it('the tick actually calls it — a prune nobody runs is not a bound', () => {
+    /*
+     * The defect class this project keeps finding: correct code with no caller.
+     * Comment-stripped, because the rationale above names the function too.
+     */
+    expect(TICK).toContain('pruneDeliveryLog()')
+    expect(TICK).toContain('pruneDeliveryLog')
+  })
+
+  it('prunes after delivering, not before', () => {
+    // Housekeeping must not spend the tick's budget while a consumer waits.
+    const deliverAt = TICK.indexOf('deliverPendingWebhooks(LIMITS.webhooksPerTick)')
+    const pruneAt = TICK.indexOf('pruneDeliveryLog()')
+    expect(deliverAt).toBeGreaterThan(-1)
+    expect(pruneAt).toBeGreaterThan(deliverAt)
+  })
+
+  it('never throws into the tick', () => {
+    // Failing to prune is housekeeping; failing the tick stops delivery.
+    expect(WEBHOOKS).toMatch(/pruneDeliveryLog[\s\S]{0,700}console\.error/)
+  })
+})
