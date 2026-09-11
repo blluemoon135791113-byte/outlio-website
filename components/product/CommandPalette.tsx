@@ -33,6 +33,20 @@ type State =
   | { kind: 'ready'; results: Result[] }
   | { kind: 'error' }
 
+/**
+ * The last answer received, tagged with the query it answers.
+ *
+ * ⚠️ TAGGED, NOT BARE. `idle` and `loading` are derived from the query below
+ * rather than written into state, because setting state synchronously inside
+ * the search effect is a cascading render. Carrying the query on the outcome
+ * falls out of that for free, and it makes a stale response impossible to
+ * DISPLAY rather than merely unlikely to arrive — belt as well as braces on
+ * the abort.
+ */
+type Outcome =
+  | { query: string; kind: 'results'; results: Result[] }
+  | { query: string; kind: 'error' }
+
 const MIN_QUERY = 2
 /* Long enough that a typed word is one request, short enough to feel live. */
 const DEBOUNCE_MS = 220
@@ -41,7 +55,7 @@ export function CommandPalette() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [state, setState] = useState<State>({ kind: 'idle' })
+  const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [active, setActive] = useState(0)
 
   const inputRef = useRef<HTMLInputElement>(null)
@@ -52,7 +66,7 @@ export function CommandPalette() {
   const close = useCallback(() => {
     setOpen(false)
     setQuery('')
-    setState({ kind: 'idle' })
+    setOutcome(null)
     setActive(0)
     abortRef.current?.abort()
     openerRef.current?.focus()
@@ -87,14 +101,12 @@ export function CommandPalette() {
 
     if (term.length < MIN_QUERY) {
       abortRef.current?.abort()
-      setState({ kind: 'idle' })
       return
     }
 
     const controller = new AbortController()
     abortRef.current?.abort()
     abortRef.current = controller
-    setState({ kind: 'loading' })
 
     const timer = setTimeout(() => {
       fetch(`/api/crm/quick-search?q=${encodeURIComponent(term)}`, {
@@ -102,13 +114,13 @@ export function CommandPalette() {
       })
         .then((response) => (response.ok ? response.json() : Promise.reject(new Error('failed'))))
         .then((body: { results?: Result[] }) => {
-          setState({ kind: 'ready', results: body.results ?? [] })
+          setOutcome({ query: term, kind: 'results', results: body.results ?? [] })
           setActive(0)
         })
         .catch((error: unknown) => {
           // An abort is the expected path, not a failure to report.
           if (error instanceof DOMException && error.name === 'AbortError') return
-          setState({ kind: 'error' })
+          setOutcome({ query: term, kind: 'error' })
         })
     }, DEBOUNCE_MS)
 
@@ -117,6 +129,21 @@ export function CommandPalette() {
       controller.abort()
     }
   }, [query, open])
+
+  const term = query.trim()
+  /*
+   * The four states, derived rather than stored. `loading` is "the query is
+   * long enough but the answer on hand is not for this query" — which covers
+   * the first request and every subsequent keystroke with one expression.
+   */
+  const state: State =
+    term.length < MIN_QUERY
+      ? { kind: 'idle' }
+      : outcome === null || outcome.query !== term
+        ? { kind: 'loading' }
+        : outcome.kind === 'error'
+          ? { kind: 'error' }
+          : { kind: 'ready', results: outcome.results }
 
   if (!open) return null
 
