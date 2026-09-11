@@ -220,3 +220,53 @@ describe('every notifiable event has a source', () => {
     expect(stale, 'These now have a source — delete them from KNOWN_UNSOURCED').toEqual([])
   })
 })
+
+/**
+ * Notifications go out only for events the customer was offered.
+ *
+ * ⚠️ THE MIRROR OF THE GUARD ABOVE, AND IT CATCHES THE OPPOSITE MISTAKE. That
+ * one refuses an offered event with no source. This one refuses a source with
+ * no offer.
+ *
+ * `emitDomainEvent` can produce nine event names; Settings lists eight; six
+ * overlap. `notifyChannels` treats an empty `events` array as "everything", so
+ * emitting the other three would have made every channel with nothing ticked
+ * start receiving `crm.contact.created` — one Slack message per imported lead,
+ * for an event the UI offers no way to switch off. Nearly shipped 2026-09-09.
+ */
+describe('notifications never fire for an event nobody was offered', () => {
+  /*
+   * ⚠️ `Set<string>`, AND THE REASON IS THE FINDING ITSELF. Typed from
+   * NOTIFIABLE_EVENTS' literal union, `.has()` rejects a webhook event name
+   * that is not offered — tsc refused `crm.contact.created` here. That is the
+   * compiler agreeing the two sets differ, which is exactly what this test is
+   * about, so the comparison is widened rather than the sets reconciled.
+   */
+  const offered = new Set<string>(NOTIFIABLE_EVENTS.map((e) => e.value))
+
+  const emittable = (['contact_created', 'contact_assigned', 'stage_changed',
+    'opportunity_won', 'task_completed', 'email_sent', 'email_replied',
+    'email_bounced', 'email_unsubscribed'] as const)
+    .map((t) => webhookEventForTrigger(t))
+    .filter((e): e is NonNullable<typeof e> => e !== null)
+
+  it('the emittable set really is wider than the offered set', () => {
+    /*
+     * Vacuity: if these ever coincide the filter is untested, and this test
+     * should be deleted rather than left passing for the wrong reason.
+     */
+    const notOffered = emittable.filter((e) => !offered.has(e))
+    expect(notOffered.length).toBeGreaterThan(0)
+    expect(notOffered).toContain('crm.contact.created')
+  })
+
+  it('domain.ts filters on the offered list before doing any work', () => {
+    const source = readFileSync(join(ROOT, 'lib/notifications/domain.ts'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
+
+    // Built from NOTIFIABLE_EVENTS, not a second hand-written copy of it.
+    expect(source).toContain('NOTIFIABLE_EVENTS.map')
+    expect(source).toMatch(/if \(!OFFERED\.has\(event\)\) return/)
+  })
+})

@@ -29,11 +29,27 @@ import 'server-only'
  * ║  event out to flows and webhooks, rather than off eight new call sites.   ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-import { describeEvent } from '@/lib/notifications/format'
+import { describeEvent, NOTIFIABLE_EVENTS } from '@/lib/notifications/format'
 import { notifyChannels, type NotifyResult } from '@/lib/notifications/send'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const NOTHING: NotifyResult = { sent: 0, failed: 0, skipped: 0 }
+
+/**
+ * The events a customer was actually offered.
+ *
+ * ⚠️ THIS FILTER EXISTS BECAUSE OF A BUG I ALMOST SHIPPED. `emitDomainEvent`
+ * can produce nine event names; Settings offers eight, and only six overlap.
+ * `notifyChannels` treats an EMPTY `events` array as "everything" — a
+ * reasonable default for a first channel — so without this filter, every
+ * existing channel with nothing ticked would suddenly receive
+ * `crm.contact.created`, `crm.task.completed` and `email.message.sent`.
+ *
+ * A 25-lead import would have fired 25 Slack messages for an event the UI
+ * never listed and therefore offers no way to turn off individually. Making a
+ * dead feature live is not licence to broaden what it does.
+ */
+const OFFERED = new Set<string>(NOTIFIABLE_EVENTS.map((e) => e.value))
 
 /**
  * Tells the workspace's channels that something happened.
@@ -51,6 +67,12 @@ export async function notifyDomainEvent(
   event: string,
   contactId: string | null,
 ): Promise<NotifyResult> {
+  /*
+   * Refused before any query: an event nobody was offered cannot be
+   * unsubscribed from, so sending it is worse than not having the feature.
+   */
+  if (!OFFERED.has(event)) return NOTHING
+
   try {
     let contactName: string | null = null
 
