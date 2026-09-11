@@ -843,6 +843,75 @@ h6 {
   outline: none;
 }
 
+/* ---------------------------------------------------------------------------
+ * The two parts of a field we did not draw — Phase 24.
+ *
+ * `.product-clay :is(input, select, textarea)` above already gives a select the
+ * same panel, border, radius, hover and focus as a text input, so selects were
+ * never unstyled. What they kept was the OS CHEVRON: on the contacts filter row
+ * three "Any" selects sat beside a themed text input, each ending in the
+ * platform's own arrow at the platform's own colour. Date fields did the same
+ * with the browser's calendar glyph. craft-floor's point exactly — the parts you
+ * did not draw still carry the design, and leaving them is the cheapest signal
+ * that a page was assembled rather than built.
+ *
+ * ⚠️ DRAWN FROM TOKENS, NOT AN SVG DATA URI. A `background-image: url(data:...)`
+ * chevron needs a literal colour inside the SVG, and `currentColor` does not
+ * resolve there — so the arrow would be the one hardcoded colour in the product.
+ * Two 45-degree gradients draw the same mark out of `--muted`, which means it
+ * also follows the palette and can respond to hover and disabled.
+ * ------------------------------------------------------------------------- */
+.product-clay select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  /* Room for the mark, plus the same optical gap the text side gets. */
+  padding-right: 2rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.05rem) calc(50% - 1px),
+    calc(100% - 0.75rem) calc(50% - 1px);
+  background-size: 0.3125rem 0.3125rem;
+  background-repeat: no-repeat;
+}
+
+/* The mark tracks the control: it darkens with the border on hover, takes the
+   focus colour, and greys out when the select cannot be used. */
+.product-clay select:not([multiple]):not([size]):hover:not(:disabled) {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+    linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+}
+
+.product-clay select:not([multiple]):not([size]):focus-visible {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--focus) 50%),
+    linear-gradient(135deg, var(--focus) 50%, transparent 50%);
+}
+
+.product-clay select:disabled {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--border-strong) 50%),
+    linear-gradient(135deg, var(--border-strong) 50%, transparent 50%);
+}
+
+/*
+ * The date picker's glyph is drawn by the browser and cannot be recoloured
+ * without a filter, so it is set back instead of shouted down — full strength
+ * only when the pointer is on it. A native control that sits quietly reads as
+ * part of the field; at full contrast it competes with the value.
+ */
+.product-clay ::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 150ms ease-out;
+}
+
+.product-clay ::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
 /* A checkbox is not a text field and must not inherit the border-radius or the
    padding that comes with one. */
 .product-clay input[type='checkbox'],
