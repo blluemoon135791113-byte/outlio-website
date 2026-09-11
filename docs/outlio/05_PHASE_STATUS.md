@@ -17,10 +17,10 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 7 | Email real end-to-end validation | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_7_EVIDENCE.md`](phases/PHASE_7_EVIDENCE.md) |
 | 8 | Email campaign productization + compliance | **COMPLETE** (narrowed) | `platform-m1-workspaces` | [`PHASE_8.md`](phases/PHASE_8.md) |
 | 9 | Unified Conversations foundation | **PARTIAL** | `platform-m1-workspaces` | [`PHASE_9.md`](phases/PHASE_9.md) |
-| 10 | Flow fact expansion | **UNBLOCKED 2026-09-08** | — | [`PHASE_10.md`](phases/PHASE_10.md) — DECISION-15 resolved: the engine HAS run (activity-evidenced runs `59f87a48`, `9b965940`); `flow_runs`=0 is deleted rows, not a dead engine |
-| 11 | Manual Flow builder UX | **UNBLOCKED** | — | was blocked behind Phase 10 — premise disproved 2026-09-08 (DECISION-15) |
+| 10 | Flow fact expansion | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_10.md`](phases/PHASE_10.md) — already built as "M7 Phase 10"; 33 fact keys across 7 domains, picker and builder pinned key-for-key by `flow-fact-coverage.test.ts` (20 tests, mutation-proven 2026-09-09) |
+| 11 | Manual Flow builder UX | **COMPLETE** | `platform-m1-workspaces` | `components/flows/FlowBuilder.tsx` (1,879 lines) — both pickers filter on `actionIsImplemented`, credit quote shown before publish, fact keys read from the registry. Guarded by `flow-action-coverage.test.ts` + `flow-fact-coverage.test.ts` |
 | 12 | Capability registry + entitlement checks | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_12.md`](phases/PHASE_12.md) — item 4 delivered 2026-09-08; DECISION-16 answered with its starting point (meter at 0) |
-| 13 | Gemini Flow Copilot | **DEFERRED** | `platform-m1-workspaces` | [`PHASE_13.md`](phases/PHASE_13.md) — generates for an engine with 0 runs |
+| 13 | Gemini Flow Copilot | **NOT_STARTED** | `platform-m1-workspaces` | [`PHASE_13.md`](phases/PHASE_13.md) — ⚠️ its deferral reason ("an engine with 0 runs") was disproved by DECISION-15 on 2026-09-08. The engine has run. Re-assess before building; the §5.10 registry prerequisite already exists |
 | 14 | Reporting foundation | **DEFERRED** | `platform-m1-workspaces` | [`PHASE_14.md`](phases/PHASE_14.md) — every metric source is empty or known-wrong |
 | 15 | LinkedIn capability matrix + RISK_REGISTER | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_15.md`](phases/PHASE_15.md) · [`RISK_REGISTER.md`](RISK_REGISTER.md) |
 | 16–20 | LinkedIn channel | **GATED** | — | blocked on DECISION-17 |
