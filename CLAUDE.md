@@ -160,15 +160,34 @@ closing the browser.
 
 Source of truth: `docs/DESIGN_TOKENS.md`.
 
-- **Inherit unchanged:** the 8 color tokens, font variables, focus ring.
+- **Inherit unchanged:** font variables, focus ring.
+- **⚠️ REVISED 2026-09-12 — ACTION IS BLUE IN-PRODUCT, CORAL ON MARKETING.**
+  `--accent` / `--accent-deep` / `--accent-soft` are repointed to
+  `#2563eb` / `#1d4ed8` / `#eff6ff` inside `.product-clay, .auth-clay`, against
+  two reference dashboards the owner supplied. The landing page keeps coral and
+  is untouched (rule 5).
+
+  This **reverses** the earlier unification, which existed so one class would
+  not mean two colours either side of the sign-in door. That cost was stated and
+  accepted. Every value was contrast-measured on `--panel` before landing
+  (5.17 / 6.70 / 4.75 / 5.17 — all AA); `--accent` is read as `text-accent` in 66
+  places, so **re-measure, never eyeball, if these change**.
 - **Must add (missing today):** radius scale, shadow scale, **status colors**
   (success/warning/danger/info), border token. Add once to `@theme`.
-- **Adapt:** type scale down one step, 8px spacing rhythm, flat backgrounds on
-  authenticated surfaces (gradient/aurora only on sign-in/sign-up/access),
-  motion ≤150ms.
+- **Adapt:** type scale down one step, 8px spacing rhythm, motion ≤150ms.
+- **⚠️ REVISED 2026-09-12 — GRADIENT AND GLASS ARE PERMITTED ON THE DASHBOARD.**
+  Previously: flat backgrounds on authenticated surfaces, gradient/aurora only
+  on sign-in/sign-up/access, and no `backdrop-filter` on dashboard surfaces.
+  The owner lifted both for the dashboard revamp.
+
+  The original reasons have not stopped being true, so they are the conditions:
+  gradients over a **scrolling table** and `backdrop-filter` on a **large or
+  frequently repainted** surface are what the rule was written for. Use them on
+  discrete, bounded cards — a feature or upsell panel, a floating popover — and
+  re-measure scroll performance on the contacts and leads tables after any use
+  near them. "Permitted" is not "free".
 - **No entrance animations** on upload, jobs table, or leads table. Never use
   `Reveal.tsx` inside the product.
-- **No `backdrop-filter`** on dashboard surfaces.
 - **Zero hardcoded colors.** No `#hex`, `rgb()`, `hsl()` in a color position.
 - Every screen ships designed **loading**, **empty**, and **error** states.
 - No dark mode exists. Do not add one without a decision.

@@ -639,6 +639,39 @@ h6 {
    ╚═══════════════════════════════════════════════════════════════════════════╝ */
 .product-clay,
 .auth-clay {
+  /* ┌───────────────────────────────────────────────────────────────────────┐
+     │  ACTION IS BLUE IN-PRODUCT — owner direction, 2026-09-12.            │
+     └───────────────────────────────────────────────────────────────────────┘
+     Chosen against two reference dashboards the owner supplied. Scoped here
+     rather than at `:root` for the reason the product palette exists at all:
+     the landing page shares these token names and is read-only under
+     CLAUDE.md rule 5, so overriding here changes every authenticated surface
+     and nothing else.
+
+     ⚠️ THIS REVERSES A RECORDED DECISION, AND THE COST IS REAL. The scope above
+     unified action to coral precisely so `text-accent` would not "mean violet
+     on marketing and brown in-product — one class, two colours, and the brand
+     stopping at the sign-in door". That door is now blue and the marketing site
+     is still coral. The owner was shown this and chose blue; it is written down
+     so the next person finds a decision rather than a contradiction.
+
+     ⚠️ MEASURED, NOT PICKED FROM A SCREENSHOT. `--accent` is consumed as
+     `text-accent` in 66 places, and the raw brand coral was once rejected here
+     for being 3.8:1. On `--panel` (#ffffff):
+       accent       #2563eb   5.17:1   body text ✓
+       accent-deep  #1d4ed8   6.70:1   hover ✓
+       accent on accent-soft  4.75:1   chips ✓
+       white on accent        5.17:1   button labels ✓
+     All clear AA. Any future change to these three must be re-measured, not
+     eyeballed — the whole point of the note above.
+
+     Nothing reaches past these tokens: `bg-coral`, `text-coral` and the
+     `coral-*` family have ZERO uses on product surfaces, so all 288 accent
+     consumers move together with no stragglers. */
+  --accent: #2563eb;
+  --accent-deep: #1d4ed8;
+  --accent-soft: #eff6ff;
+
   /* White, not cream. The one instruction that drove all of this. */
   --app: #ffffff;
   --paper: #ffffff;
