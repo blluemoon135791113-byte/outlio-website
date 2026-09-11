@@ -1,7 +1,73 @@
 # Phase 14 — Reporting foundation
 
-Per §9. Status: **DEFERRED — the inputs it would aggregate are empty. This is
-the phase the contract already predicted would be too early.**
+Per §9. Status: **MOSTLY ALREADY BUILT. Audited 2026-09-09 — this brief was
+written without measuring the code, and two of its central claims were wrong.**
+
+---
+
+## ⚠️ CORRECTION 1: THE PHASE IS LARGELY IMPLEMENTED
+
+This brief said "nothing implemented". Present in the source today:
+
+| §5.14 element | State |
+|---|---|
+| Day-grain rollup table | built — `crm_reporting_daily` (migration `0082`) |
+| Rollup run ledger | built — `crm_reporting_runs` |
+| Rollup function | built — `crm_rollup_activity_metrics()` |
+| Reconciliation | built — `crm_reconcile_reporting()`, surfaced as `reconcileReporting()` |
+| Metric reads | built — `getMetricTotals`, `replyRate`, `SetterDashboard` in `lib/crm/metrics.ts` |
+| **Reachable?** | **yes** — `lib/crm/reports.ts`, `lib/crm/report-export.ts`, `app/(product)/crm/reports/page.tsx`, and an export route |
+
+⚠️ **This is the FOURTH phase the map was wrong about**, after 10, 12 and 23, and
+for the same reason every time: the §9 numbering was laid over a codebase with
+its own milestones. **Measure the code, not the plan.**
+
+What §5.14 still asks for and this does *not* have: a **metric registry** with a
+formula AST and whitelist grammar. Today the metric set is fixed in SQL
+(`'emails_sent'`, `'contacts_emailed'`, `'replies'`, `'openers_sent'`, …) rather
+than composed from a registry. That is the genuine remaining scope.
+
+## ⚠️ CORRECTION 2: THE 12,700% WARNING BELOW WAS WRONG ABOUT THE MECHANISM
+
+The version of this brief written 2026-09-08 claimed a reply-rate metric "built
+today computes 254/2 and renders 12,700%". **That described a system that does
+not exist.**
+
+`replyRate()` does not read `email_events`. It divides two rollup metrics, and
+migration `0082` sources both from **`crm_activities`**:
+
+```sql
+('contacts_emailed', a.activity_type = 'EMAIL_SENT'    and a.contact_id is not null)
+('replies',          a.activity_type = 'EMAIL_REPLIED' and a.contact_id is not null)
+```
+
+Two things follow. The 254 false `replied` rows live in `email_events`, which
+this path never touches. And the `contact_id is not null` filter excludes
+exactly the shape those false replies had — Phase 9 measured **260 of 261
+threads with no contact attached**.
+
+So the denominator is contacts emailed, not messages sent, which the code
+comments already argue for on its own merits: counting events would quarter the
+rate of a team that follows up four times.
+
+⚠️ **What is still unverified, and it is the only live question:** whether any
+`crm_activities` row of type `EMAIL_REPLIED` *with* a `contact_id` was created
+from a false reply before the Phase 9 fix. That is one production count. It was
+attempted 2026-09-09 and refused — production reads need explicit owner
+authorisation in the session. **Until it is run, treat the historical accuracy
+of `replies` as unknown rather than either safe or broken.**
+
+I am recording the correction rather than quietly editing the old text, because
+the wrong version was confident, specific, and would have sent the next person
+to fix a bug in the wrong file.
+
+---
+
+## THE ORIGINAL BRIEF, KEPT FOR ITS EVIDENCE
+
+Status as written 2026-09-08: **DEFERRED — the inputs it would aggregate are
+empty.** The row counts below are still accurate and still the reason the
+*registry* half is not worth building yet.
 
 ---
 
