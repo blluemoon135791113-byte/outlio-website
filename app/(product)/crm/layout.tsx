@@ -62,12 +62,9 @@ export default async function CrmLayout({ children }: { children: ReactNode }) {
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-          {ctx.workspace.name}
-        </p>
         {/* Named for what the sidebar calls it. "CRM" here while the nav said
             Pipeline was the same feature answering to two names. */}
-        <h1 className="mt-1.5 text-[30px] font-semibold tracking-[-0.035em] text-ink">
+        <h1 className="text-[30px] font-semibold tracking-[-0.035em] text-ink">
           Pipeline
         </h1>
       </header>

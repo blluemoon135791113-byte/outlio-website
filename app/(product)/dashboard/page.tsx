@@ -109,10 +109,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-            Lead Engine
-          </p>
-          <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
+          <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
             Overview
           </h1>
           <p className="mt-1 text-sm text-muted">

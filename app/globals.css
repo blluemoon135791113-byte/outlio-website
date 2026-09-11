@@ -1,5 +1,178 @@
 @import "tailwindcss";
 
+@keyframes fdc-floating-points {
+  0% {
+    transform: translateY(0) scale(0.75);
+    opacity: 0;
+  }
+
+  14% {
+    opacity: 0.8;
+  }
+
+  85% {
+    opacity: 0;
+  }
+
+  100% {
+    transform: translateY(-55px) scale(1.15);
+    opacity: 0;
+  }
+}
+
+@keyframes fdc-dash {
+  0% {
+    stroke-dasharray: 0, 20;
+    stroke-dashoffset: 0;
+  }
+
+  50% {
+    stroke-dasharray: 10, 10;
+    stroke-dashoffset: -5;
+  }
+
+  100% {
+    stroke-dasharray: 20, 0;
+    stroke-dashoffset: -10;
+  }
+}
+
+.fdc-button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  min-height: 2.75rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #5f8cff;
+  border-radius: 0.55rem;
+  background: #2c66e8;
+  padding: 0;
+  color: #fff;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.38) inset,
+    0 0 0 1px rgb(35 70 183 / 0.35) inset,
+    0 14px 28px rgb(33 91 213 / 0.22);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.fdc-button::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 34%),
+    url("/hero/hero-sand-texture.png"),
+    linear-gradient(180deg, #2f58e3 0%, #2d70ea 52%, #20b9e5 100%);
+  background-position: center;
+  background-size: auto, 13rem auto, auto;
+  background-blend-mode: screen, soft-light, normal;
+  content: "";
+}
+
+.fdc-inner {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.75rem 0.6rem 0.85rem;
+}
+
+.fdc-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  transition: transform 180ms ease;
+}
+
+.fdc-points_wrapper {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+}
+
+.fdc-point {
+  position: absolute;
+  bottom: 12%;
+  left: 50%;
+  width: 0.22rem;
+  height: 0.22rem;
+  border-radius: 999px;
+  background: #c9edff;
+  opacity: 0;
+  animation: fdc-floating-points 2.4s ease-out infinite;
+}
+
+.fdc-point:nth-child(1) { left: 8%; animation-delay: -0.2s; }
+.fdc-point:nth-child(2) { left: 18%; width: 0.16rem; height: 0.16rem; animation-delay: -1.35s; }
+.fdc-point:nth-child(3) { left: 29%; background: #e2f6ff; animation-delay: -0.75s; }
+.fdc-point:nth-child(4) { left: 40%; width: 0.18rem; height: 0.18rem; animation-delay: -1.9s; }
+.fdc-point:nth-child(5) { left: 50%; background: #a7e4fa; animation-delay: -0.4s; }
+.fdc-point:nth-child(6) { left: 59%; width: 0.17rem; height: 0.17rem; animation-delay: -1.55s; }
+.fdc-point:nth-child(7) { left: 68%; background: #e2f6ff; animation-delay: -0.95s; }
+.fdc-point:nth-child(8) { left: 78%; width: 0.18rem; height: 0.18rem; animation-delay: -2.15s; }
+.fdc-point:nth-child(9) { left: 88%; background: #a7e4fa; animation-delay: -0.55s; }
+.fdc-point:nth-child(10) { left: 95%; width: 0.16rem; height: 0.16rem; animation-delay: -1.75s; }
+
+.fdc-button:hover,
+.fdc-button:focus-visible {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.44) inset,
+    0 0 0 1px rgb(35 70 183 / 0.3) inset,
+    0 18px 32px rgb(33 91 213 / 0.28);
+}
+
+.fdc-button:hover .fdc-icon path,
+.fdc-button:focus-visible .fdc-icon path {
+  animation: fdc-dash 550ms ease-out both;
+}
+
+.fdc-button:hover .fdc-icon,
+.fdc-button:focus-visible .fdc-icon {
+  transform: translateX(0.16rem);
+}
+
+.fdc-button:focus-visible {
+  outline: 3px solid rgb(17 17 17 / 0.3);
+  outline-offset: 4px;
+}
+
+@media (max-width: 640px) {
+  .fdc-button,
+  .fdc-inner {
+    min-height: 2.75rem;
+  }
+
+  .fdc-button {
+    border-radius: 0.55rem;
+    font-size: 0.82rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fdc-button,
+  .fdc-icon {
+    transition: none;
+  }
+
+  .fdc-point,
+  .fdc-button:hover .fdc-icon path,
+  .fdc-button:focus-visible .fdc-icon path {
+    animation: none;
+  }
+}
+
 /*
   OUTLIO — DESIGN TOKENS
   Base: warm butter-paper cream (matches the logo's cream). Ink: near-black (matches logo square).
@@ -695,6 +868,36 @@ h6 {
 ::selection {
   background: var(--accent);
   color: var(--cream);
+}
+
+/* ---------------------------------------------------------------------------
+ * Numerals in data — Phase 24.
+ *
+ * Proportional digits are correct for prose and wrong for a column. A "1" is
+ * narrower than a "7" in this face, so `8 contacts` beside `11 contacts` beside
+ * `147 credits` sat on a ragged right edge with nothing aligning to anything —
+ * the clearest tell in a data-dense product that a table was assembled rather
+ * than set. Measured before this: 40 table cells on /crm/contacts, zero with
+ * tabular figures.
+ *
+ * Scoped to tabular and measured contexts, NOT the body. Tabular figures in a
+ * sentence are an error in the other direction: they widen the "1" and make
+ * running text look mechanically spaced.
+ * ------------------------------------------------------------------------- */
+table,
+.numeric,
+[data-numeric] {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/*
+ * `<time>` and money/percentage readouts sit outside tables often enough to
+ * name here rather than remember at each call site.
+ */
+time,
+output,
+data {
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 :focus-visible {
@@ -1969,6 +2172,287 @@ details[open] .faq-mark {
     grid-template-columns: 1fr;
     gap: 1.25rem;
     margin-block: 3.5rem;
+  }
+}
+
+/* Clay scale only.
+   This scope deliberately changes geometry and type scale without touching
+   any module's original color, artwork, gradient, texture, or shadow. */
+.leadengine-clay-scale {
+  --clay-module-width: 80rem;
+  --clay-module-gap: 4rem;
+  --clay-module-padding: 1.5rem;
+  --clay-module-heading: 2.75rem;
+  --clay-module-radius: 1.875rem;
+  --clay-button-radius: 1.125rem;
+}
+
+.leadengine-clay-scale .leadengine-story-flow {
+  display: grid;
+  gap: var(--clay-module-gap);
+  padding: 2.5rem 2rem 4rem;
+}
+
+.leadengine-clay-scale .leadengine-story-panel,
+.leadengine-clay-scale .leadengine-story-flow > [data-clay-module='library'] {
+  width: min(100%, var(--clay-module-width));
+  margin: 0 auto;
+}
+
+.leadengine-clay-scale [data-clay-module] > section {
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: var(--clay-module-padding);
+}
+
+.leadengine-clay-scale [data-clay-module] h2 {
+  font-size: var(--clay-module-heading);
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+}
+
+.leadengine-clay-scale [data-clay-module] [class*='description'] {
+  margin-top: 1.25rem;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.leadengine-clay-scale [data-clay-module] [class*='eyebrow'] {
+  margin-bottom: 1.125rem;
+  font-size: 0.6875rem;
+}
+
+.leadengine-clay-scale [data-clay-module] :is([class*='cta'], [class*='checkoutCta']) {
+  min-height: 2.75rem;
+  height: auto;
+  gap: 0.75rem;
+  padding: 0.625rem 1.125rem;
+  border-radius: var(--clay-button-radius);
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+}
+
+.leadengine-clay-scale :is(
+  [data-clay-module='extraction'],
+  [data-clay-module='hubble'],
+  [data-clay-module='outbound']
+) [class*='layout'] {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2rem;
+}
+
+.leadengine-clay-scale :is(
+  [data-clay-module='extraction'],
+  [data-clay-module='hubble'],
+  [data-clay-module='outbound']
+) [class*='copy'] {
+  max-width: none;
+  padding: 1rem;
+}
+
+.leadengine-clay-scale :is(
+  [data-clay-module='extraction'],
+  [data-clay-module='hubble']
+) [class*='animationBox'],
+.leadengine-clay-scale [data-clay-module='outbound'] [class*='workflow'] {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  justify-self: stretch;
+  border-radius: var(--clay-module-radius);
+}
+
+.leadengine-clay-scale :is(
+  [data-clay-module='extraction'],
+  [data-clay-module='hubble'],
+  [data-clay-module='outbound']
+) [class*='cta'] {
+  margin-top: 1.5rem;
+}
+
+.leadengine-clay-scale [data-clay-module='overview'] > section {
+  padding: 2.5rem 1.5rem 1.5rem;
+}
+
+.leadengine-clay-scale [data-clay-module='overview'] header {
+  max-width: 66.25rem;
+}
+
+.leadengine-clay-scale [data-clay-module='overview'] header p {
+  margin-top: 1.125rem;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.leadengine-clay-scale [data-clay-module='overview'] [class*='cards'] {
+  gap: 1rem;
+  margin-top: 1.75rem;
+}
+
+.leadengine-clay-scale [data-clay-module='overview'] article {
+  min-height: 0;
+  padding: 1.5rem;
+  border-radius: var(--clay-module-radius);
+}
+
+.leadengine-clay-scale [data-clay-module='overview'] h3 {
+  font-size: 1.5rem;
+  letter-spacing: -0.04em;
+  line-height: 1.18;
+}
+
+.leadengine-clay-scale [data-clay-module='overview'] article p {
+  margin-top: 1rem;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.leadengine-clay-scale [data-clay-module='overview'] [class*='objectStage'] {
+  width: auto;
+  max-width: 4.25rem;
+  height: 3rem;
+  margin-bottom: 1rem;
+}
+
+.leadengine-clay-scale [data-clay-module='overview'] [class*='objectImage'] {
+  width: auto;
+  max-width: 4.25rem;
+  max-height: 3rem;
+}
+
+.leadengine-clay-scale [data-clay-module='pricing'] > section {
+  padding: 2.5rem 1.5rem;
+}
+
+.leadengine-clay-scale [data-clay-module='pricing'] [class*='heading'] {
+  max-width: 50rem;
+  margin-inline: auto;
+}
+
+.leadengine-clay-scale [data-clay-module='pricing'] [class*='plansTrack'] {
+  min-height: 24rem;
+}
+
+.leadengine-clay-scale [data-clay-module='pricing'] [class*='planIntro'] {
+  min-height: 21.25rem;
+  padding: 1.375rem;
+}
+
+.leadengine-clay-scale [data-clay-module='pricing'] [class*='planIntro'] > header {
+  min-height: 4.75rem;
+}
+
+.leadengine-clay-scale [data-clay-module='pricing'] [class*='planName'] {
+  font-size: 1.625rem;
+}
+
+.leadengine-clay-scale [data-clay-module='library'] > section {
+  padding: 2.5rem 1.5rem 1.75rem;
+}
+
+.leadengine-clay-scale [data-clay-module='library'] [class*='headingWrap'] {
+  margin-bottom: 1.5rem;
+}
+
+.leadengine-clay-scale [data-clay-module='library'] [class*='libraryLayout'] {
+  width: min(100%, 37.5rem);
+}
+
+.leadengine-clay-scale [data-clay-module='library'] [class*='libraryStage'] {
+  min-height: 0;
+  height: 26.25rem;
+}
+
+.leadengine-clay-scale [data-clay-module='library'] [class*='instruction'] {
+  margin-top: 1rem;
+  font-size: 0.9375rem;
+}
+
+@media (max-width: 50rem) {
+  .leadengine-clay-scale {
+    --clay-module-gap: 2rem;
+    --clay-module-padding: 1.25rem;
+    --clay-module-heading: 2rem;
+    --clay-module-radius: 1.5rem;
+  }
+
+  .leadengine-clay-scale .leadengine-story-flow {
+    padding: 1rem 1rem 3rem;
+  }
+
+  .leadengine-clay-scale :is(
+    [data-clay-module='extraction'],
+    [data-clay-module='hubble'],
+    [data-clay-module='outbound']
+  ) [class*='layout'] {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .leadengine-clay-scale :is(
+    [data-clay-module='extraction'],
+    [data-clay-module='hubble'],
+    [data-clay-module='outbound']
+  ) [class*='copy'] {
+    order: 0;
+    padding: 0.25rem;
+  }
+
+  .leadengine-clay-scale :is(
+    [data-clay-module='extraction'],
+    [data-clay-module='hubble']
+  ) [class*='animationBox'],
+  .leadengine-clay-scale [data-clay-module='outbound'] [class*='workflow'] {
+    order: 1;
+    width: min(100%, 27.5rem);
+    justify-self: center;
+  }
+
+  .leadengine-clay-scale :is(
+    [data-clay-module='overview'],
+    [data-clay-module='pricing'],
+    [data-clay-module='library']
+  ) > section {
+    padding: 1.75rem 1.25rem;
+  }
+
+  .leadengine-clay-scale [data-clay-module='overview'] [class*='cards'] {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .leadengine-clay-scale [data-clay-module='overview'] article {
+    padding: 1.25rem;
+    border-radius: 1.375rem;
+  }
+
+  .leadengine-clay-scale [data-clay-module='overview'] article p {
+    font-size: 0.9375rem;
+  }
+
+  .leadengine-clay-scale [data-clay-module='pricing'] [class*='plansTrack'],
+  .leadengine-clay-scale [data-clay-module='pricing'] [class*='planIntro'] {
+    min-height: 0;
+  }
+
+  .leadengine-clay-scale [data-clay-module='pricing'] [class*='planIntro'] {
+    padding: 1.125rem;
+  }
+
+  .leadengine-clay-scale [data-clay-module='pricing'] [class*='planIncludes'] {
+    padding: 1.125rem;
+    font-size: 0.8125rem;
+  }
+
+  .leadengine-clay-scale [data-clay-module='pricing'] [class*='planIncludes'] li {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .leadengine-clay-scale [data-clay-module='library'] [class*='libraryStage'] {
+    height: clamp(15rem, 72vw, 23.75rem);
   }
 }
 

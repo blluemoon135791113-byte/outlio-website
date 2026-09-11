@@ -157,7 +157,7 @@ export function SavedViews({
           <button
             type="submit"
             disabled={saving}
-            className="rounded-clay bg-ink px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+            className="rounded-clay bg-accent px-3 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
           >
             {saving ? 'Saving…' : 'Save view'}
           </button>

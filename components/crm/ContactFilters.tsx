@@ -153,7 +153,7 @@ export function ContactFilters({
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           type="submit"
-          className="rounded-clay bg-ink px-3 py-2 text-sm font-medium text-white"
+          className="rounded-clay bg-accent px-3 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
         >
           Apply filters
         </button>
