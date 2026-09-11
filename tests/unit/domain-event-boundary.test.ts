@@ -20,11 +20,12 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { webhookEventForTrigger } from '@/lib/events/emit'
+import { NOTIFIABLE_EVENTS } from '@/lib/notifications/format'
 
 const ROOT = join(__dirname, '..', '..')
 
-/** Calling either of these directly wires one system and silently skips the other. */
-const FANOUT_FUNCTIONS = ['dispatchFlowTrigger', 'publishEvent'] as const
+/** Calling any of these directly wires one system and silently skips the others. */
+const FANOUT_FUNCTIONS = ['dispatchFlowTrigger', 'publishEvent', 'notifyDomainEvent'] as const
 
 /**
  * The one door, plus the two modules that define the halves.
@@ -36,6 +37,10 @@ const ALLOWED = [
   'lib/events/emit.ts',
   'lib/flows/dispatch.ts',
   'lib/api/webhooks.ts',
+  // Defines notifyDomainEvent. `notifyChannels` itself is NOT policed here: it
+  // has two legitimate non-domain callers, the settings test button and the
+  // NOTIFY flow step, where the event is the author's own choice.
+  'lib/notifications/domain.ts',
 ] as const
 
 function sourceFiles(dir: string): string[] {
@@ -93,8 +98,12 @@ describe('the scan can see what it polices', () => {
      * assertion below passes against a set that means nothing.
      */
     const door = SCAN.callers.find((c) => c.file === 'lib/events/emit.ts')
-    expect(door, 'lib/events/emit.ts must call both halves').toBeDefined()
-    expect([...door!.fns].sort()).toEqual(['dispatchFlowTrigger', 'publishEvent'])
+    expect(door, 'lib/events/emit.ts must call every listener').toBeDefined()
+    expect([...door!.fns].sort()).toEqual([
+      'dispatchFlowTrigger',
+      'notifyDomainEvent',
+      'publishEvent',
+    ])
   })
 })
 
@@ -146,5 +155,68 @@ describe('the mapping covers every trigger that has a source', () => {
      * specified — fabricating an API rather than filling a gap.
      */
     expect(webhookEventForTrigger('call_booked')).toBeNull()
+  })
+})
+
+/**
+ * Every event Settings offers must be able to arrive.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THIS IS THE CHECK THAT WAS MISSING, AND ITS ABSENCE COST EIGHT EVENTS.   ║
+ * ║                                                                           ║
+ * ║  `NOTIFIABLE_EVENTS` is a promise rendered as checkboxes: "Someone         ║
+ * ║  replies", "A deal is won". Until 2026-09-09 nothing in the product ever  ║
+ * ║  sent one — `notifyChannels` had two callers, the settings test button    ║
+ * ║  and a flow step's typed-in string.                                      ║
+ * ║                                                                           ║
+ * ║  ⚠️ AND THE TEST BUTTON MADE IT LOOK WIRED. "Send test" passes            ║
+ * ║  `onlyChannelId`, which bypasses the event filter on purpose, so it       ║
+ * ║  always delivers. The customer sees Slack light up and concludes the      ║
+ * ║  subscription works. A green signal about the wrong thing.               ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('every notifiable event has a source', () => {
+  /*
+   * ⚠️ MAY ONLY SHRINK. Both remain unsourced for the payload-contract reason
+   * in PHASE_23.md — Calendly's normalized shape is not a published API, and
+   * inventing a body is fabricating one. Sourcing them means deleting the
+   * entry, which is what makes this list a backlog rather than an excuse.
+   */
+  const KNOWN_UNSOURCED = ['meeting.booked', 'meeting.cancelled'] as const
+
+  /** The webhook event names `emitDomainEvent` can actually produce. */
+  const emittable = new Set(
+    (['contact_created', 'contact_assigned', 'stage_changed', 'opportunity_won',
+      'task_completed', 'email_sent', 'email_replied', 'email_bounced',
+      'email_unsubscribed'] as const)
+      .map((t) => webhookEventForTrigger(t))
+      .filter((e): e is NonNullable<typeof e> => e !== null),
+  )
+
+  it('the emittable set is not empty', () => {
+    // Vacuity: a rename in the mapping would otherwise pass everything below.
+    expect(emittable.size).toBeGreaterThanOrEqual(9)
+  })
+
+  it('every offered event is either emittable or a written-down gap', () => {
+    const unreachable = NOTIFIABLE_EVENTS.map((e) => e.value).filter(
+      (value) =>
+        !emittable.has(value as never) &&
+        !(KNOWN_UNSOURCED as readonly string[]).includes(value),
+    )
+
+    expect(
+      unreachable,
+      'Settings offers these as "notify me when…" and no moment in the product ' +
+        'emits them, so ticking the box does nothing forever:\n' +
+        unreachable.map((v) => `  ${v}`).join('\n'),
+    ).toEqual([])
+  })
+
+  it('every written-down gap is still a gap', () => {
+    // The other direction: a sourced event must lose its exemption, or the
+    // list rots into a permanent excuse.
+    const stale = KNOWN_UNSOURCED.filter((value) => emittable.has(value as never))
+    expect(stale, 'These now have a source — delete them from KNOWN_UNSOURCED').toEqual([])
   })
 })

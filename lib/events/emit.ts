@@ -27,6 +27,7 @@ import { publishEvent } from '@/lib/api/webhooks'
 import type { WebhookEvent } from '@/lib/api/signing'
 import type { TriggerType } from '@/lib/flows/definition'
 import { dispatchFlowTrigger, type DispatchResult } from '@/lib/flows/dispatch'
+import { notifyDomainEvent } from '@/lib/notifications/domain'
 
 /**
  * Which webhook event a flow trigger corresponds to.
@@ -61,6 +62,8 @@ export type EmitResult = {
   flow: DispatchResult
   /** Deliveries queued — 0 when nobody subscribes, which is not a failure. */
   webhooksQueued: number
+  /** Channel messages delivered — 0 when no channel wants this event. */
+  notificationsSent: number
 }
 
 /**
@@ -99,7 +102,7 @@ export async function emitDomainEvent(input: {
   })
 
   const event = WEBHOOK_FOR_TRIGGER[input.triggerType]
-  if (!event) return { flow, webhooksQueued: 0 }
+  if (!event) return { flow, webhooksQueued: 0, notificationsSent: 0 }
 
   /*
    * ⚠️ NOT IDEMPOTENT, AND THAT IS A PROPERTY OF THE RPC, NOT A CHOICE MADE
@@ -128,7 +131,21 @@ export async function emitDomainEvent(input: {
     })
   }
 
-  return { flow, webhooksQueued }
+  /*
+   * ⚠️ THE THIRD LISTENER, AND IT WAS UNREACHABLE UNTIL 2026-09-09.
+   * `NOTIFIABLE_EVENTS` offers eight of these same event names in Settings →
+   * Notifications, and nothing in the product ever sent one: `notifyChannels`
+   * had two callers, the test button and a flow step's typed-in string. Six of
+   * the eight become live here — the two `meeting.*` still have no source, for
+   * the payload-contract reason above.
+   *
+   * Deliberately after the webhook: a notification is a nudge, a webhook is a
+   * contract. If one of them is going to be delayed by the other, it should be
+   * the one a human reads, not the one a consumer is entitled to.
+   */
+  const notified = await notifyDomainEvent(input.workspaceId, event, input.contactId ?? null)
+
+  return { flow, webhooksQueued, notificationsSent: notified.sent }
 }
 
 /** The mapping, for tests and for the settings screen that documents it. */
