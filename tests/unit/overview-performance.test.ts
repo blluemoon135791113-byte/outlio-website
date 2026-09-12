@@ -248,6 +248,17 @@ describe('direction is declared per metric', () => {
 describe('the row is reachable and obeys the product design rules', () => {
   const PAGE = read('app/(product)/dashboard/page.tsx')
   const ROW = read('components/product/PerformanceRow.tsx')
+  /*
+   * ⚠️ THE CARD IS A SEPARATE FILE AND THIS GUARD FOLLOWED IT THERE.
+   *
+   * These assertions were written against `PerformanceRow` when it drew its own
+   * card, and they failed the moment that moved into the shared `StatCard` —
+   * correctly, because a source-text check is a claim about where the behaviour
+   * lives. Repointing them is the fix; deleting them because "it still works"
+   * would leave the reports page, which now renders through the same card,
+   * unguarded.
+   */
+  const CARD = read('components/product/StatCard.tsx')
 
   it('is rendered by the dashboard, not merely written', () => {
     // The defect class this repo keeps finding: correct code nothing renders.
@@ -275,19 +286,29 @@ describe('the row is reachable and obeys the product design rules', () => {
 
   it('never animates in and never uses Reveal', () => {
     // CLAUDE.md: no entrance animations on product surfaces.
-    expect(ROW).not.toContain('Reveal')
-    expect(ROW).not.toMatch(/animate-(in|fade|slide)/)
+    for (const source of [ROW, CARD]) {
+      expect(source).not.toContain('Reveal')
+      expect(source).not.toMatch(/animate-(in|fade|slide)/)
+    }
   })
 
   it('does not blur, per the condition on the relaxed gradient rule', () => {
-    expect(ROW).not.toContain('backdrop-')
+    for (const source of [ROW, CARD]) expect(source).not.toContain('backdrop-')
   })
 
   it('carries direction without relying on colour', () => {
     // A triangle and a printed sign, so the change survives greyscale and a
-    // screen reader identically.
-    expect(ROW).toContain('<path')
-    expect(ROW).toContain('sr-only')
+    // screen reader identically. The ▲/▼ glyphs this replaced are announced by
+    // some screen readers as "black up-pointing triangle".
+    expect(CARD).toContain('<path')
+    expect(CARD).toContain('sr-only')
+    expect(CARD, 'a decorative triangle glyph is back').not.toMatch(/[▲▼]/)
+  })
+
+  it('states the baseline as well as the percentage', () => {
+    // A percentage with no visible baseline is a number the reader cannot
+    // judge; the reports grid shows "was N" and the badge carries it too.
+    expect(CARD).toMatch(/previous\.toLocaleString\(\)/)
   })
 
   it('hardcodes no colour', () => {
@@ -295,7 +316,25 @@ describe('the row is reachable and obeys the product design rules', () => {
      * The project rule, enforced globally by hard-rules; asserted here too
      * because a stat card is exactly where a "just this once" hex lands.
      */
-    expect(ROW).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
-    expect(ROW).not.toMatch(/\b(rgb|hsl)a?\(/)
+    for (const source of [ROW, CARD]) {
+      expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+      expect(source).not.toMatch(/\b(rgb|hsl)a?\(/)
+    }
+  })
+
+  it('is the only place a delta is rendered', () => {
+    /*
+     * ⚠️ THE POINT OF EXTRACTING IT. The reports page and the overview each
+     * had their own change badge, both correct and subtly different. Two right
+     * answers to one question is how `TASK_FOR` came to exist three times and
+     * diverge (see lib/crm/metrics.ts), and a divergence here means a figure
+     * that reads differently on two screens of the same product.
+     */
+    const REPORTS = read('app/(product)/crm/reports/page.tsx')
+    expect(REPORTS).toContain('StatCard')
+    expect(REPORTS, 'the reports page draws its own change badge again').not.toMatch(
+      /[▲▼]/,
+    )
+    expect(REPORTS).not.toMatch(/text-success.*text-danger|change >= 0 \?/)
   })
 })

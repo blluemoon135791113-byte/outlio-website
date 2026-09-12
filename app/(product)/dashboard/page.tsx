@@ -6,6 +6,7 @@ import { FirstRun } from '@/components/onboarding/FirstRun'
 import { LiveCapture } from '@/components/extension/LiveCapture'
 import { CreditsSummary } from '@/components/product/CreditsSummary'
 import { PerformanceRow } from '@/components/product/PerformanceRow'
+import { LocalTime } from '@/components/ui/LocalTime'
 import { ReferralCard } from '@/components/product/ReferralCard'
 import { requireAccess } from '@/lib/auth/access'
 import { getOverviewPerformance, hasRealActivity } from '@/lib/crm/overview'
@@ -152,12 +153,6 @@ export default async function DashboardPage() {
       </header>
 
       {/*
-        ⚠️ ABOVE THE USAGE NUMBERS ON PURPOSE, and only until it is finished.
-        Someone on their first day has no usage to read; a row of zeroes is a
-        worse first screen than a list of what to do next. It disappears on its
-        own once every step is done -- see `shouldShowFirstRun`.
-      */}
-      {/*
         ⚠️ OUTCOMES ABOVE CONSUMPTION, which is the whole point of the change.
         Every number on this screen used to be about what the customer had
         spent — credits, searches, exports — and none about whether any of it
@@ -168,7 +163,8 @@ export default async function DashboardPage() {
         worse first screen than a list of what to do next — so it keeps that
         place until there are real figures, and yields it once there are.
         Seven items fill the entire first viewport; whichever is up there is
-        the only thing most people will see.
+        the only thing most people will see. It still disappears entirely once
+        every step is done — see `shouldShowFirstRun`.
       */}
       {checklistFirst ? checklist : null}
       {performance ? <PerformanceRow data={performance} /> : null}
@@ -242,18 +238,20 @@ export default async function DashboardPage() {
           <dl className="mt-5 divide-y divide-border">
             <AccountRow label="Plan" value={ctx.plan?.name ?? 'Current plan'} />
             <AccountRow label="Account" value={ctx.email ?? ''} />
-            <AccountRow
-              label="Access until"
-              value={
-                ctx.accessExpiresAt
-                  ? new Date(ctx.accessExpiresAt).toLocaleDateString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })
-                  : 'No expiry'
-              }
-            />
+            {/*
+              ⚠️ THE ONE ROW HERE WHERE A DAY MATTERS. This formatted in the
+              server's timezone — UTC on Vercel — so an expiry stored at
+              midnight UTC rendered a day EARLY for every reader west of it.
+              Telling somebody their access ends on the 11th when it ends on
+              the 12th is the kind of wrong that generates a support ticket.
+            */}
+            <AccountRow label="Access until">
+              {ctx.accessExpiresAt ? (
+                <LocalTime iso={ctx.accessExpiresAt} dateOnly />
+              ) : (
+                'No expiry'
+              )}
+            </AccountRow>
           </dl>
         </section>
         <section className="credits-gradient relative overflow-hidden rounded-[var(--radius-xl)] border border-accent/15 p-5 shadow-[var(--shadow-sm)]">
@@ -353,12 +351,26 @@ function UsageCard({
   )
 }
 
-function AccountRow({ label, value }: { label: string; value: string }) {
+/**
+ * `value` for plain text, `children` for anything that has to render itself —
+ * a date needs the reader's timezone, and only a Client Component knows it.
+ * `title` is set only in the string case, because a full-text tooltip for a
+ * truncated value is the one thing children cannot provide.
+ */
+function AccountRow({
+  label,
+  value,
+  children,
+}: {
+  label: string
+  value?: string
+  children?: React.ReactNode
+}) {
   return (
     <div className="grid gap-1 py-3 first:pt-0 last:pb-0">
       <dt className="text-[11px] font-medium text-muted">{label}</dt>
       <dd className="truncate text-sm font-semibold text-ink" title={value}>
-        {value}
+        {children ?? value}
       </dd>
     </div>
   )

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 import { RunManually } from '@/components/flows/RunManually'
 import { TestFlow } from '@/components/flows/TestFlow'
@@ -296,7 +297,13 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
                   <span className="font-semibold text-ink">{run.trigger_type}</span>
                   <span className="text-xs text-muted">
                     v{versionNumber.get(run.version_id) ?? '?'} ·{' '}
-                    {new Date(run.started_at).toLocaleString()}
+                    {/*
+                      ⚠️ WAS THE SERVER'S CLOCK. `toLocaleString()` in a Server
+                      Component formats in UTC on Vercel, so a run that started
+                      at 4pm in Karachi read as 11am — and "when did this run"
+                      is the only question this line answers.
+                    */}
+                    <LocalTime iso={run.started_at} />
                   </span>
                   {run.chain_depth > 0 ? (
                     <span className="text-xs text-muted">· depth {run.chain_depth}</span>

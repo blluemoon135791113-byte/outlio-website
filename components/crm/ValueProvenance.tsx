@@ -1,4 +1,5 @@
 import type { Provenance } from '@/lib/crm/provenance'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 /**
  * Where a value came from, shown next to the value.
@@ -73,9 +74,12 @@ export function ValueProvenance({ provenance }: { provenance: Provenance }) {
       )}
 
       <span aria-hidden="true">·</span>
-      <time dateTime={provenance.retrievedAt} title={retrieved.toISOString()}>
-        {retrieved.toLocaleDateString()}
-      </time>
+      {/*
+        ⚠️ THE READER'S DATE, NOT THE SERVER'S. This formatted in UTC, so a fact
+        retrieved on the 12th showed as the 11th to anyone west of it — and the
+        retrieval date is what a provenance line exists to certify.
+      */}
+      <LocalTime iso={provenance.retrievedAt} dateOnly />
 
       {/*
         ⚠️ CONFIDENCE IS SHOWN, NOT HIDDEN BEHIND A THRESHOLD.
