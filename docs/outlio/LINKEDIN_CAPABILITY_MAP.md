@@ -220,6 +220,46 @@ are dropped rather than filtered.
 
 ---
 
+### Update — phase 5 state core, 2026-09-12
+
+`lib/linkedin/enrollment.ts` and `lib/linkedin/preflight.ts`. The tables are
+not built — that is another migration and two are already unapplied — but the
+semantics are, and they are the part a schema cannot enforce on its own.
+
+**Durable cancellation is a VERSION check, not a message.** §4.7: *"Pending
+outreach steps must fail their preflight once that version changes. Lost UI
+notifications must not restore action permission."* A cancellation delivered as
+a notification can be missed — a dropped socket, a closed laptop, a stale tab —
+and if missing it leaves the task clickable then the guarantee is "usually".
+Comparing the version an approval was granted at against the contact's version
+now inverts that: permission is re-earned at the moment of use, so anything
+that failed to arrive fails closed by construction.
+
+The comparison is `!==`, not `>`. A counter that wrapped, was reset, or came
+back from a backup would otherwise read as "nothing changed".
+
+**Refusals are ordered by who is harmed.** Contact stopped, then stale
+approval, then sender restricted, then out of budget, then no recent thread
+check — so an operator sees the most consequential true reason rather than
+whichever check ran first.
+
+**No thread check is stale, not fresh.** `null` means nobody looked, and the
+tempting reading is exactly backwards. A check timestamped in the future is
+refused too: a wrong clock must not become permission.
+
+**Only `GOAL_MET` is success.** `REPLIED` ends the sequence and leaves the
+commercial goal unmet, which is why §4.18 wants qualified conversations and
+held meetings as separate denominators — a wall of "replied" is not the channel
+working.
+
+**Terminal means terminal.** A late acceptance after `NOT_ACCEPTED` is recorded
+against contact history and offered for a new owner review; it never replays
+the expired invitation route, because the prospect would receive a message
+about a request they answered weeks ago. It is never discarded either — a late
+acceptance is still an acceptance.
+
+---
+
 ## 5. Conversations (§4.11) — `MISSING` as a channel-agnostic concept
 
 `email_threads` and `email_inbound_messages` exist; there is no

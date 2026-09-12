@@ -160,16 +160,20 @@ const KNOWN_ORPHANS = new Set(
      * exactly that basis.
      *
      * ⚠️ THE EXIT CONDITION IS NAMED, because an entry with no way out is how
-     * this list stops shrinking. All three leave when the Action Inbox renders
-     * a draft and its result form — `components/linkedin/ActionInboxCard` or
-     * its equivalent. If the Action Inbox ships without calling them, that is
-     * a defect this list is supposed to surface rather than excuse: it would
-     * mean the card built its own renderer, its own outcome vocabulary, or its
-     * own idea of a safe profile link.
+     * this list stops shrinking. Every entry below leaves when the Action Inbox
+     * renders a draft and its result form — `components/linkedin/ActionInboxCard`
+     * or its equivalent — and `preflight.ts` additionally when the release job
+     * calls it. If the Action Inbox ships without calling them, that is a defect
+     * this list is supposed to surface rather than excuse: it would mean the
+     * card built its own renderer, its own outcome vocabulary, its own idea of
+     * a safe profile link, or — worst — its own idea of when an approval is
+     * still valid.
      */
     'lib/linkedin/render.ts',
     'lib/linkedin/outcomes.ts',
     'lib/linkedin/profile-reference.ts',
+    'lib/linkedin/preflight.ts',
+    'lib/linkedin/enrollment.ts',
   ].map((p) => p.replace(/\//g, sep)),
 )
 
