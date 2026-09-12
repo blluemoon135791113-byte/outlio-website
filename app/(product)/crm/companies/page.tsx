@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { emptyReason } from '@/lib/crm/empty-reason'
+
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
@@ -82,6 +84,14 @@ export default async function CompaniesPage({
     }
   }
 
+  /*
+   * ⚠️ `total: null` — THIS LIST DELIBERATELY RUNS NO COUNT QUERY. The pager
+   * infers "probably another page" from a full page instead, which is cheaper
+   * than counting, so `page > 1` is the only signal available. It is enough:
+   * page 1 with nothing really is empty.
+   */
+  const reason = emptyReason({ search: '', filterCount: 0, page, total: null })
+
   return (
     <div className="space-y-4">
       <div>
@@ -94,16 +104,32 @@ export default async function CompaniesPage({
       </div>
 
       {rows.length === 0 ? (
+        /*
+         * ⚠️ PAGE 1 AND PAGE 9 ARE DIFFERENT QUESTIONS. `page` is not clamped,
+         * so `?page=9` renders zero rows on a workspace full of companies —
+         * and "No companies yet" is then a false statement about their data,
+         * with a button that takes them somewhere unrelated.
+         *
+         * This list deliberately runs no count query (see the note above the
+         * pager: a full page implies another, which is cheaper than counting).
+         * So the total is unavailable and `page > 1` is the signal instead —
+         * page 1 with nothing really is empty; page 9 means they walked past
+         * the end.
+         */
         <div className="clay p-10 text-center">
-          <p className="text-sm font-medium text-ink">No companies yet</p>
+          <p className="text-sm font-medium text-ink">
+            {reason === 'past_end' ? `Nothing on page ${page}` : 'No companies yet'}
+          </p>
           <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted">
-            A company appears here as soon as a contact arrives with one — nothing to set up.
+            {reason === 'past_end'
+              ? 'The companies are on earlier pages.'
+              : 'A company appears here as soon as a contact arrives with one — nothing to set up.'}
           </p>
           <Link
-            href="/crm/contacts"
+            href={reason === 'past_end' ? '/crm/companies' : '/crm/contacts'}
             className="mt-3 inline-block rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
           >
-            Go to contacts
+            {reason === 'past_end' ? 'Back to the first page' : 'Go to contacts'}
           </Link>
         </div>
       ) : (

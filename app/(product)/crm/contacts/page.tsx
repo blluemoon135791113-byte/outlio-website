@@ -12,6 +12,7 @@ import {
 } from '@/components/crm/ContactsTable'
 import { NewContactButton } from '@/components/crm/NewContact'
 import { isContactSort, isContactSource, listContacts } from '@/lib/crm/contacts-list'
+import { emptyReason, otherFilterCount } from '@/lib/crm/empty-reason'
 import { listSavedViews } from '@/lib/crm/saved-views'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
@@ -382,7 +383,13 @@ export default async function ContactsPage({
          * sort and direction, because those change the order and not the
          * membership.
          */
-        <EmptyContacts search={search} filterCount={activeFilterCount(query)} />
+        <EmptyContacts
+          search={search}
+          filterCount={activeFilterCount(query)}
+          page={page}
+          total={result.total}
+          query={query}
+        />
       ) : (
         <BulkAssign
           assignees={assignees}
@@ -448,12 +455,60 @@ export default async function ContactsPage({
  * arrive and gave nothing to click — a dead end on the screen setters spend
  * their day in.
  */
-function EmptyContacts({ search, filterCount }: { search: string; filterCount: number }) {
-  // `search` is itself one of the counted filters, so anything beyond it is a
-  // narrowing the search box cannot explain.
-  const otherFilters = filterCount - (search ? 1 : 0)
+function EmptyContacts({
+  search,
+  filterCount,
+  page,
+  total,
+  query,
+}: {
+  search: string
+  filterCount: number
+  page: number
+  /** The FILTERED total — rows matching, across all pages. */
+  total: number
+  query: ContactsTableQuery
+}) {
+  const reason = emptyReason({ search, filterCount, page, total })
+  const otherFilters = otherFilterCount(search, filterCount)
 
-  const { title, body, action } = search
+  /*
+   * ⚠️ A FOURTH REASON, AND IT HAS TO BE CHECKED FIRST. `page` is not clamped
+   * to the last page, so `?page=99` on a workspace with five thousand contacts
+   * renders zero rows — and every branch below would then explain the absence
+   * with something about filters or an empty workspace, all of it wrong.
+   *
+   * `total` is the FILTERED total, which is what makes this distinguishable: a
+   * positive total with no rows on this page means the rows exist and you have
+   * walked past them. A zero total means the question really is about filters.
+   *
+   * This was missed when the other three branches were written, and it is the
+   * same mistake in miniature — reading one signal and explaining an absence
+   * it does not account for.
+   */
+  if (reason === 'past_end') {
+    return (
+      <div className="clay p-10 text-center">
+        <h3 className="text-base font-semibold text-ink">Nothing on page {page}</h3>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
+          There {total === 1 ? 'is 1 contact' : `are ${total.toLocaleString()} contacts`} matching
+          this view, on earlier pages.
+        </p>
+        <div className="mt-5 flex justify-center">
+          <Link
+            // Keeps their filters and only resets the page — going back to an
+            // unfiltered first page would throw away the view they built.
+            href={contactsHref(query, { page: 1 })}
+            className="inline-flex h-9 items-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-3.5 text-sm font-semibold text-ink transition-colors duration-150 hover:bg-surface-muted"
+          >
+            Back to the first page
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const { title, body, action } = reason === 'no_match_search'
     ? {
         title: `Nothing matched “${search}”`,
         body:
@@ -462,7 +517,7 @@ function EmptyContacts({ search, filterCount }: { search: string; filterCount: n
             : 'Try part of a name or an email address.',
         action: { href: '/crm/contacts', label: 'Clear search and filters' },
       }
-    : otherFilters > 0
+    : reason === 'no_match_filters'
       ? {
           title: 'No contacts match these filters',
           /*
@@ -490,14 +545,14 @@ function EmptyContacts({ search, filterCount }: { search: string; filterCount: n
         >
           {action.label}
         </Link>
-        {search || otherFilters > 0 ? null : (
+        {reason === 'none_yet' ? (
           <Link
             href="/dashboard/extract/new"
             className="product-gradient inline-flex h-9 items-center rounded-[var(--radius-md)] px-3.5 text-sm font-semibold text-white transition-[filter] duration-150 hover:brightness-95"
           >
             Find leads
           </Link>
-        )}
+        ) : null}
       </div>
     </div>
   )
