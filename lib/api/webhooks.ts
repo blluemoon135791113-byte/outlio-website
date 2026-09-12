@@ -15,6 +15,7 @@ import 'server-only'
  * ║  doing the right thing would still double-process.                        ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
+import { openWebhookSecret } from '@/lib/api/webhook-secret'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   backoffSecondsWithJitter,
@@ -147,7 +148,34 @@ export async function deliverPendingWebhooks(limit = 20): Promise<DeliveryOutcom
       created_at: new Date().toISOString(),
       data: delivery.payload,
     })
-    const { signature } = signWebhookPayload(body, subscription.signing_secret)
+    /*
+     * ⚠️ DECRYPTED HERE, PER DELIVERY. The secret is stored as an AES-256-GCM
+     * envelope; a plaintext row predating that is accepted and logged rather
+     * than failed, because a webhook that silently stops verifying is worse for
+     * the subscriber than one signed with a secret we have not yet re-sealed.
+     */
+    let secret: string
+    try {
+      secret = openWebhookSecret(subscription.signing_secret, delivery.subscription_id)
+    } catch {
+      /*
+       * The envelope is present but will not open — a rotated or wrong
+       * INTEGRATION_ENCRYPTION_KEY. Signing with a wrong secret would deliver
+       * events the subscriber rejects, forever, while the delivery log claimed
+       * success. Exhaust it loudly instead.
+       */
+      await db
+        .from('webhook_deliveries')
+        .update({
+          status: 'exhausted',
+          last_error: 'The signing secret could not be read. Rotate the secret to restore delivery.',
+        })
+        .eq('id', delivery.id)
+      outcome.exhausted += 1
+      continue
+    }
+
+    const { signature } = signWebhookPayload(body, secret)
 
     // Claim the attempt BEFORE sending.
     await db

@@ -15,6 +15,7 @@ import { revalidatePath } from 'next/cache'
 import { generateApiKey } from '@/lib/api/signing'
 import { assertSafeWebhookUrl, UnsafeWebhookUrlError } from '@/lib/api/webhook-url'
 import { WEBHOOK_EVENTS } from '@/lib/api/signing'
+import { sealWebhookSecret } from '@/lib/api/webhook-secret'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
@@ -141,7 +142,12 @@ export async function createWebhook(
     url,
     // Empty means everything, which is what a first subscription usually wants.
     events,
-    signing_secret: secret,
+    /*
+     * ⚠️ SEALED BEFORE IT IS STORED. The plaintext leaves the server exactly
+     * once — in the response below, so the customer can configure their
+     * endpoint — and is never at rest in the table. See `webhook-secret.ts`.
+     */
+    signing_secret: sealWebhookSecret(secret),
     created_by: ctx.userId,
   })
 
@@ -247,7 +253,8 @@ export async function rotateWebhookSecret(
      */
     const { data, error } = await createAdminClient()
       .from('webhook_subscriptions')
-      .update({ signing_secret: secret })
+      // Sealed on rotation exactly as on creation; see `webhook-secret.ts`.
+      .update({ signing_secret: sealWebhookSecret(secret) })
       .eq('workspace_id', ctx.workspace.id)
       .eq('id', id)
       .select('id')
