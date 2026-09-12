@@ -593,7 +593,23 @@ the checklist; shrinking it to empty completes the phase.
 
 ---
 
-## DECISION-17 — Does Outlio enter the LinkedIn channel at all? · `OPEN`
+## DECISION-17 — Does Outlio enter the LinkedIn channel at all? · `ANSWERED 2026-09-12`
+
+**Owner: build it.** Against the recommendation above, and the recommendation
+was answering a different question.
+
+⚠️ **THIS DID NOT REVISE RULES 1 OR 2.** The register's option 3 — "proceed on a
+non-compliant access method" — is not what was chosen. The owner supplied
+`Outlio_LinkedIn_Workflow_Master.md`, which specifies **manual execution**:
+Outlio drafts, schedules, tracks and reports, and the account owner performs
+every action in LinkedIn's own interface. Its §4.6 preserves every prohibition
+verbatim, including "'the user approved it' does not transform an unauthorized
+execution route into an authorized one".
+
+So the objection recorded above stands and was never overridden — it applied to
+automation, and this is orchestration around human action. Progress in
+[`05_PHASE_STATUS.md`](05_PHASE_STATUS.md).
+
 
 Raised 2026-09-08 on completing Phase 15. Blocks Phases 16–20.
 
@@ -637,7 +653,21 @@ to hand a lawyer.
 
 ---
 
-## DECISION-18 — What is the payload contract for the three `meeting.*` webhook events? · `OPEN`
+## DECISION-18 — What is the payload contract for the three `meeting.*` webhook events? · `NEEDS CLARIFICATION`
+
+**Owner answered "no" on 2026-09-12, and that is genuinely ambiguous between two
+of the options** — so nothing has been done and this is recorded rather than
+guessed at.
+
+- Read as option 3, it means **withdraw** the three events from Settings →
+  Developers: do not offer what does not exist.
+- Read as "not now", it means leave them listed and dark, which is option 2
+  deferred.
+
+Those differ in what a customer sees. The register's own standard applies —
+inventing a body to close a checkbox is the webhook equivalent of rule 4 — and
+the same reasoning says not to invent an interpretation of the answer either.
+
 
 Raised 2026-09-09 while sourcing the last webhook events (Phase 23, second
 half).
@@ -687,7 +717,25 @@ passes. That is a separate, already-recorded defect.
 
 ---
 
-## DECISION-19 — Does Outlio need multi-currency deals? · `OPEN`
+## DECISION-19 — Does Outlio need multi-currency deals? · `ANSWERED 2026-09-12, NOT STARTED`
+
+**Owner: yes — GBP, USD, PKR, INR and other widely used currencies.** Against
+the recommendation above.
+
+⚠️ **IT NEEDS A RATE SOURCE BEFORE ANY OF IT CAN BE BUILT.** §5.6 requires
+`fx_rate_to_workspace_currency` and `fx_rate_date` snapshotted at create AND at
+close, so a deal's reported value changes when it closes and never again. That
+is a vendor and a recurring cost, plus a policy call on which rate applies.
+
+Until one exists, `tests/unit/money-single-currency.test.ts` keeps the silent
+version impossible: migration 0082 rolls up won deals with no grouping by
+currency, so a €10,000 and a $10,000 deal would sum to 20,000 — a number that is
+not money in any currency, with nothing erroring.
+
+**What can be built without the vendor:** the schema, the snapshot columns and
+the currency-grouped rollups, with the rate provider left pluggable. Then the
+only thing waiting on the owner is which feed to buy.
+
 
 Raised 2026-09-12 while auditing §5.6.
 
@@ -737,7 +785,21 @@ contract. Pinned by the same test so it cannot drift to a float.
 
 ---
 
-## DECISION-20 — Should sends respect the recipient's timezone and holidays? · `OPEN`
+## DECISION-20 — Should sends respect the recipient's timezone and holidays? · `ANSWERED 2026-09-12, PARTIALLY UNBLOCKED`
+
+**Owner: yes, with the user choosing among the options.**
+
+The first link of §5.7's fallback chain now exists: `crm_contacts.timezone`
+landed in migration `0121` and is applied. It is nullable, and null means
+**unknown** rather than UTC — §4.8 requires the campaign fallback to be shown
+explicitly when the recipient's zone is not known, and defaulting would make an
+assumption look like an observation.
+
+`lib/email/schedule.ts` already does the hard part correctly — IANA-aware,
+DST-correct, walking days in the account's own calendar rather than adding 24h
+to a UTC instant. What remains is reading the contact's zone ahead of the
+mailbox's, and the per-campaign policy control the owner asked for.
+
 
 Raised 2026-09-12 while auditing §5.7.
 
@@ -792,7 +854,23 @@ better evidence than a guess about which country's calendar matters.
 
 ---
 
-## DECISION-21 — Encrypt the webhook signing secret at rest? · `OPEN`
+## DECISION-21 — Encrypt the webhook signing secret at rest? · `DONE 2026-09-12`
+
+**Owner: yes.** Confirmed `select count(*) from webhook_subscriptions` returns
+0, so this was the expand-backfill-contract with nothing to backfill.
+
+⚠️ **AND THIS RECORD'S OWN PREMISE WAS WRONG.** It said encrypting "means a
+migration plus a decrypt step ... and migrations are applied by hand by the
+owner" — which is why it had been deferred. `signing_secret` is `text not null`
+(0097), so an envelope is simply a longer string in the same column. The whole
+change was application code and shipped the same day.
+
+Reuses `INTEGRATION_ENCRYPTION_KEY` rather than a new variable production does
+not have, which would have broken every webhook on the next deploy. The reader
+tolerates a plaintext row and logs it; an envelope that will not OPEN throws,
+because signing with a wrong secret would deliver events every subscriber
+rejects while the log recorded success.
+
 
 Raised 2026-09-12 while auditing §5.12.
 

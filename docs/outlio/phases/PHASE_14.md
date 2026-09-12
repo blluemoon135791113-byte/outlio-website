@@ -27,6 +27,26 @@ formula AST and whitelist grammar. Today the metric set is fixed in SQL
 (`'emails_sent'`, `'contacts_emailed'`, `'replies'`, `'openers_sent'`, …) rather
 than composed from a registry. That is the genuine remaining scope.
 
+### ✅ CLOSED 2026-09-12 — `lib/reporting/registry.ts`
+
+The paragraph above is now history, kept because the reasoning that identified
+the gap is still worth reading.
+
+13 base metrics, and a `Formula` AST that is **structured data, never a parsed
+string** — no `eval`, no expression parser, no user-supplied text reaching a
+evaluator. Division returns `null` rather than `0`, `Infinity` or `NaN`, because
+a rate with an empty denominator does not exist and every one of those three
+renders as a number somebody would act on.
+
+⚠️ **The registry immediately caught a second copy of itself.** `replyRate` in
+`lib/crm/metrics.ts` and `DERIVED_METRICS.reply_rate` were the same formula
+written twice; `replyRate` now delegates. Two agreeing copies is how `TASK_FOR`
+came to exist three times and diverge.
+
+⚠️ **And a name that disagrees is a silent zero, not an error** —
+`getMetricTotals` returns `{}` for a metric nobody rolled up, so the registry
+pins the ids rather than trusting them to match.
+
 ## ⚠️ CORRECTION 2: THE 12,700% WARNING BELOW WAS WRONG ABOUT THE MECHANISM
 
 The version of this brief written 2026-09-08 claimed a reply-rate metric "built

@@ -21,12 +21,67 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 11 | Manual Flow builder UX | **COMPLETE** | `platform-m1-workspaces` | `components/flows/FlowBuilder.tsx` (1,879 lines) — both pickers filter on `actionIsImplemented`, credit quote shown before publish, fact keys read from the registry. Guarded by `flow-action-coverage.test.ts` + `flow-fact-coverage.test.ts` |
 | 12 | Capability registry + entitlement checks | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_12.md`](phases/PHASE_12.md) — item 4 delivered 2026-09-08; DECISION-16 answered with its starting point (meter at 0) |
 | 13 | Gemini Flow Copilot | **NOT_STARTED** | `platform-m1-workspaces` | [`PHASE_13.md`](phases/PHASE_13.md) — ⚠️ its deferral reason ("an engine with 0 runs") was disproved by DECISION-15 on 2026-09-08. The engine has run. Re-assess before building; the §5.10 registry prerequisite already exists |
-| 14 | Reporting foundation | **MOSTLY COMPLETE** | `platform-m1-workspaces` | [`PHASE_14.md`](phases/PHASE_14.md) — rollup table, rollup + reconcile functions and a live `/crm/reports` page all exist (migration `0082`). Remaining scope: §5.14's metric registry + formula AST. ⚠️ The brief's "12,700% reply rate" warning was wrong about the mechanism — corrected in place |
+| 14 | Reporting foundation | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_14.md`](phases/PHASE_14.md) — rollup table, rollup + reconcile functions and a live `/crm/reports` page all exist (migration `0082`). §5.14's metric registry + formula AST closed 2026-09-12 (`lib/reporting/registry.ts`). ⚠️ And the rollup had NO TRIGGER until 2026-09-12 — `rollupWorkspace` was called only by its integration test, so `crm_reporting_daily` was never written in production and every report read zero. Wired into `runTick`. ⚠️ The brief's "12,700% reply rate" warning was wrong about the mechanism — corrected in place |
 | 15 | LinkedIn capability matrix + RISK_REGISTER | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_15.md`](phases/PHASE_15.md) · [`RISK_REGISTER.md`](RISK_REGISTER.md) |
-| 16–20 | LinkedIn channel | **GATED** | — | blocked on DECISION-17 |
+| 16–20 | LinkedIn channel | **IN PROGRESS** | `platform-m1-workspaces` | DECISION-17 answered 2026-09-12: **build it, manual execution only.** See [`LINKEDIN_CAPABILITY_MAP.md`](LINKEDIN_CAPABILITY_MAP.md) and the table below |
 | 23 | Integrations + webhooks | **MOSTLY COMPLETE** | `platform-m1-workspaces` | [`PHASE_23.md`](phases/PHASE_23.md) — 9 of 12 webhook events sourced (6 on 2026-09-08, 3 on 2026-09-09); 3 `meeting.*` blocked on DECISION-18 (payload contract); Slack/Teams delivery unverified |
 | 21–22, 24–25 | see §9 | NOT_STARTED | — | ⚠️ Phase 22's substance exists in `/crm/reports` (`dataScope(ctx.role)`, leaderboard behind `report.team.view`) |
 | §6.4 | Data subject rights | **DELIVERED** | `platform-m1-workspaces` | Erasure was built in `0075` and **unreachable its whole life** — no action, no UI, only its own integration test called it. Now gated + reachable, and the missing half (per-contact access export) built. Invariant: the export covers what the erasure destroys, exclusions asserted both ways. `tests/unit/data-subject-rights.test.ts` |
+
+## Things the migration history does not know (2026-09-13)
+
+⚠️ **`supabase migration list` IS NOT A RECORD OF WHAT IS DEPLOYED.** Migrations
+here are applied by hand in the SQL editor, which does not write to
+`supabase_migrations.schema_migrations`. On 2026-09-12 the history listed 0117,
+0118 and 0119 as missing while `worker_runs` and `scheduler_diagnostics` were
+demonstrably live in production. Anything that trusts the table — including
+`supabase db push`, which would replay everything it believes is pending — acts
+on a false picture.
+
+**Verify against the schema instead.** `npx supabase gen types typescript
+--linked` reads the real thing; a table or column either appears or does not.
+That is how `0121` was confirmed rather than assumed.
+
+⚠️ **It cannot verify a FUNCTION body.** `0120` replaces `claim_email_messages`,
+which `gen types` cannot see, so it remains unverified from this side. The only
+direct check would be calling it, which claims real production messages.
+
+**Standing:** `0120` — owner says applied, not independently verified. `0121` —
+verified applied. `0122` — written, smoke-tested locally, **not applied**.
+
+## LinkedIn channel — phase state (2026-09-13)
+
+⚠️ **DECISION-17 was answered "build it", and that did NOT revise rules 1 or 2.**
+The owner's brief (`Outlio_LinkedIn_Workflow_Master.md`) specifies **manual
+execution**: Outlio drafts, schedules, tracks and reports; the account owner
+performs every action in LinkedIn's own interface. §4.6 preserves every
+prohibition verbatim — no password, no cookie, no session, no automation
+browser, and "'the user approved it' does not transform an unauthorized
+execution route into an authorized one".
+
+Its own phase numbering, not §9's:
+
+| # | Phase | State |
+|---|---|---|
+| 1 | Capability audit | **COMPLETE** — [`LINKEDIN_CAPABILITY_MAP.md`](LINKEDIN_CAPABILITY_MAP.md) |
+| 2 | Contact-level stop at email dispatch | **COMPLETE** — found a live defect; `enqueueEmail` matched suppression on address alone |
+| 3 | Contact DNC + `crm_contacts.timezone` | **COMPLETE** — migration `0121`, **applied** |
+| 4 | Sender identity and account policy | **PARTIAL** — schema `0122` **not applied**; stage ladder and budget arithmetic built |
+| 5 | Enrollment / task / conversation state split | **COMPLETE** (logic) — tables deferred |
+| 6 | LinkedIn action types | **DEFERRED** — they land with their handlers, not before |
+| 7 | Action Inbox decision layer | **PARTIAL** — outcome vocabulary and profile-link safety built; the card needs 4 and 5 |
+| 8 | Message set (§4.9) | **COMPLETE** — `lib/linkedin/{templates,variables,render}.ts` |
+| 9 | Metrics (§4.18) | **COMPLETE** — `lib/linkedin/metrics.ts` |
+
+⚠️ **Six `lib/linkedin/*` modules are in `KNOWN_ORPHANS`** with named exit
+conditions. They leave when the Action Inbox renders a draft and its result
+form. If it ever ships while they remain, the card built its own renderer,
+outcome vocabulary, profile-link check or idea of a valid approval — which is
+what that list exists to surface.
+
+**Blocked on the owner:** apply `0122`, then `npm run db:types`; and two of the
+four questions in [`LINKEDIN_PHASE_4_SENDER_DESIGN.md`](LINKEDIN_PHASE_4_SENDER_DESIGN.md)
+(`linkedin_enabled` tiers, sender cap per workspace) before any UI ships.
 
 ## Phase 0 result (2026-09-04)
 
