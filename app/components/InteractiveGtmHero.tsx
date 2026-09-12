@@ -20,7 +20,7 @@ export default function InteractiveGtmHero() {
         <div className={styles.imageFrame}>
           <Image
             className={styles.image}
-            src="/hero/reference-watercolor-original-cutout.png"
+            src="/hero/reference-watercolor-hero.png"
             alt="A watercolor-painted hand holding a blue sphere beneath a faceted blue object"
             width={1187}
             height={625}
