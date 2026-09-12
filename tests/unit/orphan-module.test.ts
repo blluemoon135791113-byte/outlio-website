@@ -166,11 +166,15 @@ const KNOWN_ORPHANS = new Set(
      * The list shrinks because the code changes, not because somebody
      * remembers to tidy it.
      *
-     * `senders.ts` replaced `budget.ts` here rather than joining it: it is the
-     * new frontier of the same chain, and it leaves when a route or component
-     * links a sender. Until then it is the ONLY way into a table with no RLS
-     * select policy, which is why `schema-without-code` released that table the
-     * moment this file appeared.
+     * ⚠️ `senders.ts` HAS SINCE LEFT TOO, and with it the whole chain
+     * `senders → budget → outcomes` is now reachable from a real screen:
+     * `/dashboard/settings/linkedin` links accounts and reads budgets through
+     * it. Three entries removed by the code changing, none by anyone tidying.
+     *
+     * What remains below is the half with no surface yet — the message set, the
+     * preflight, the enrollment state machine, the metrics and the profile-link
+     * check. They leave when the Action Inbox renders a draft and its result
+     * form, which needs the task tables §4.7 describes.
      *
      * ⚠️ THE EXIT CONDITION IS NAMED, because an entry with no way out is how
      * this list stops shrinking. Every entry below leaves when the Action Inbox
@@ -187,7 +191,6 @@ const KNOWN_ORPHANS = new Set(
     'lib/linkedin/preflight.ts',
     'lib/linkedin/enrollment.ts',
     'lib/linkedin/metrics.ts',
-    'lib/linkedin/senders.ts',
   ].map((p) => p.replace(/\//g, sep)),
 )
 

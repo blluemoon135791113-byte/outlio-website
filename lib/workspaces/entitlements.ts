@@ -35,6 +35,7 @@ const ENTITLEMENT_KEY: Record<Module, keyof PlanLimits> = {
   reports: 'reports_enabled',
   integrations: 'integrations_enabled',
   hubble: 'hubble_enabled',
+  linkedin: 'linkedin_enabled',
 }
 
 /** `workspace_feature_flags.flag` value that can switch each module off. */
@@ -45,6 +46,8 @@ export const MODULE_FLAG: Record<Module, string> = {
   reports: 'module.reports',
   integrations: 'module.integrations',
   hubble: 'module.hubble',
+  // A3: every module ships behind a workspace flag that can switch it OFF.
+  linkedin: 'module.linkedin',
 }
 
 export type WorkspaceEntitlements = {
