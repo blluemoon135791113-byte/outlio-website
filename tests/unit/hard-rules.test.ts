@@ -246,6 +246,43 @@ describe('design — the product has loading and error states', () => {
     ).toBe(true)
   })
 
+  it('the product group has its own not-found state', () => {
+    /*
+     * ⚠️ WITHOUT THIS, `notFound()` LANDS ON THE MARKETING 404.
+     *
+     * Six product pages call it — contact, company, campaign, thread, flow and
+     * saved dashboard — and Next walks up to the nearest `not-found.tsx`. The
+     * only one was `app/not-found.tsx`: a full-viewport marketing page with no
+     * product navigation, offering Pricing, Terms and Privacy. A setter who
+     * opened a contact a colleague had just deleted was thrown out of the
+     * product mid-task and handed the pricing page.
+     */
+    expect(
+      existsSync(join(GROUP, 'not-found.tsx')),
+      'Without app/(product)/not-found.tsx a notFound() in the product renders the ' +
+        'MARKETING 404 — no product nav, and links to Pricing and Terms.',
+    ).toBe(true)
+  })
+
+  it('the not-found state does not claim the record was deleted', () => {
+    /*
+     * ⚠️ IT CANNOT KNOW, AND SAYING EITHER THING IS A DEFECT.
+     *
+     * Those six lookups are scoped to the caller's workspace — and a setter's
+     * to their own assigned records — so `notFound()` fires both when the row
+     * is gone and when it exists and is not theirs. "This was deleted" is a
+     * fabricated fact (rule 4); "you do not have access to this record"
+     * confirms the record exists, which is the leak a shared 404 prevents.
+     */
+    const source = code(join(GROUP, 'not-found.tsx'))
+    expect(source, 'the not-found state asserts the record was deleted').not.toMatch(
+      /\b(has been|was) deleted\b/i,
+    )
+    // Both readings are named, neither is chosen.
+    expect(source).toMatch(/may have been deleted/i)
+    expect(source).toMatch(/do not have access/i)
+  })
+
   it('the error state never shows the error message to the user', () => {
     /*
      * ⚠️ THE DIGEST IS SAFE; THE MESSAGE IS NOT. CLAUDE.md: never return a
