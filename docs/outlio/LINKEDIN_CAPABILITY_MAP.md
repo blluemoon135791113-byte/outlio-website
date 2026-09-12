@@ -189,6 +189,35 @@ request sent' cannot mark acceptance"* and *"task created ≠ message sent."* A
 single `status` enum cannot carry that; §4.7's separate enrollment / task /
 conversation / sender states are load-bearing.
 
+### Update — phase 7 decision layer, 2026-09-12
+
+The two pieces of §4.13 that do not depend on the sender model or the task
+state split are built: `lib/linkedin/outcomes.ts` and
+`lib/linkedin/profile-reference.ts`. The card itself still needs phases 4
+and 5.
+
+**Two vocabularies that must not mix.** `TaskOutcome` is what the operator did
+with the task in front of them; `Observation` is what they later saw happen,
+recorded against the contact. A result form offers the first and can never
+offer the second, because an observation is not the outcome of doing anything.
+That is *"'Mark request sent' cannot mark acceptance"* made structural rather
+than remembered — and it matters because acceptance gates the first DM, so
+collapsing the two sends a message into a connection that was never made.
+
+`OUTCOME_UNKNOWN` is distinct from `FAILED` and keeps its quota slot (§4.17),
+because an action we cannot rule out having happened has to keep counting.
+Only `SKIPPED` may be applied in bulk — §4.13's *"manual tasks are never
+bulk-marked sent"*, which is the difference between a decision made inside
+Outlio and a claim that somebody performed N actions in LinkedIn's interface.
+
+**The profile link is an allowlist, not a blocklist.** §4.13: *"Opening a
+reference never performs a LinkedIn action."* LinkedIn has paths that do things
+— invite, message, follow — and the URL on a contact came out of uploaded or
+fetched HTML. A blocklist is a promise to have thought of every path LinkedIn
+will ever add, so only read-only profile paths are permitted, the host check is
+anchored, `javascript:` is refused before anything else, and query and fragment
+are dropped rather than filtered.
+
 ---
 
 ## 5. Conversations (§4.11) — `MISSING` as a channel-agnostic concept
