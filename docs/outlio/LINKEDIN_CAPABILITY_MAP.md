@@ -158,6 +158,10 @@ ramp stages 0–3, sender states (`UNKNOWN`, `OWNER_REVIEWED`, `WARNING`,
 `LIMIT_REACHED`, `PAUSED`, `RESTRICTED`, `DISCONNECTED`), warning capture,
 pinned sender-per-thread assignment.
 
+**Designed 2026-09-12** — see
+[`LINKEDIN_PHASE_4_SENDER_DESIGN.md`](LINKEDIN_PHASE_4_SENDER_DESIGN.md).
+Not built; blocked on 0121 being applied.
+
 ⚠️ **One constraint to carry into the design.** §4.10 requires a sender's budget
 to be shared across *all* workspaces that owner participates in, while no
 workspace may see another's activity. That is a service-only control record with
