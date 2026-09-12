@@ -341,7 +341,7 @@ Deviates from §4.19 in one place, for a stated reason.
 | 6 | LinkedIn action types behind `UNIMPLEMENTED_ACTIONS` | registered only as handlers land |
 | 7 | Action Inbox (§4.13) | needs 4 and 5 |
 | 8 | Templates + fallback registry (§4.9) | pure rendering, testable in isolation |
-| 9 | Metrics (§4.18) | denominators need the event vocabulary from 5 |
+| 9 | Metrics (§4.18) | **done** — `lib/linkedin/metrics.ts` |
 
 **Migrations required** (owner-applied, per CLAUDE.md): phases 3, 4, 5. Phase 2
 needs none — it is a query predicate and an insert field.

@@ -174,6 +174,7 @@ const KNOWN_ORPHANS = new Set(
     'lib/linkedin/profile-reference.ts',
     'lib/linkedin/preflight.ts',
     'lib/linkedin/enrollment.ts',
+    'lib/linkedin/metrics.ts',
   ].map((p) => p.replace(/\//g, sep)),
 )
 
