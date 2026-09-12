@@ -146,6 +146,20 @@ const KNOWN_ORPHANS = new Set(
      * the only check that the SQL rule is what anyone intended.
      */
     'lib/fastspring/access.ts',
+    /*
+     * ⚠️ PHASE 8 OF THE LINKEDIN BUILD, AND THIS GUARD CAUGHT IT IMMEDIATELY —
+     * which is correct. The §4.9 message set is rendering logic with no
+     * surface yet: the Action Inbox that will call it is phase 7 and does not
+     * exist, and the brief is explicit that a live-looking button backed by a
+     * stub is worse than an absent one.
+     *
+     * ⚠️ THE EXIT CONDITION IS NAMED, because an entry with no way out is how
+     * this list stops shrinking. These three leave when the Action Inbox
+     * renders a draft — `components/linkedin/ActionInboxCard` or its
+     * equivalent — and if the Action Inbox ships without calling them, that is
+     * a defect this list is supposed to surface rather than excuse.
+     */
+    'lib/linkedin/render.ts',
   ].map((p) => p.replace(/\//g, sep)),
 )
 
