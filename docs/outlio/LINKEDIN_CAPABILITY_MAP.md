@@ -93,6 +93,31 @@ event stored in CRM "alone does not prove the email worker honors it."
 **Recommended as phase 3 of the build**, before any LinkedIn enrollment exists —
 the shared stop has to be real before two channels can rely on it.
 
+### Update — phase 2, 2026-09-12
+
+Closed in TypeScript, and the fix turned out to have a second half that the
+first half depended on.
+
+Reading `contact_id` in `enqueueEmail` was nearly inert: of the three
+`suppressEmail` call sites, only the bounce path ever passed a contact.
+One-click unsubscribe and the manual add did not — so the column the new check
+reads was almost never written. Resolution now happens inside `suppressEmail`,
+which every suppression passes through, rather than being each caller's job to
+remember.
+
+An address shared by several contacts (`info@`, `sales@`) resolves to **none**,
+never to the first. §4.5 requires it — "shared inbox email addresses and
+ambiguous matches must not cause automatic person merges" — and attributing a
+do-not-contact to whichever colleague sorted first would invent a fact about a
+person. The suppression is still recorded by address, which is what was
+actually observed.
+
+**Still open, and it gates §4.11's `Mark DNC` control:** `email_suppressions.
+email` is `not null`, so a contact with no email address on file cannot be
+suppressed at all. A LinkedIn-only contact is exactly that case. Needs either a
+nullable `email` with a reworked unique index, or a channel-agnostic contact
+DNC — a schema decision, not yet made.
+
 ---
 
 ## 3. Sender identity and account policy (§4.10) — `MISSING`

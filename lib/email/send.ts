@@ -597,6 +597,45 @@ export async function reapExpiredClaims(): Promise<number> {
 }
 
 /** Adds an address to the do-not-contact list. Idempotent by design. */
+/**
+ * Which contact, if any, an address unambiguously belongs to.
+ *
+ * ⚠️ EXACTLY ONE, OR NONE. A shared inbox — `info@`, `sales@`, `hello@` — is
+ * routinely attached to several contacts, and §4.5 of the LinkedIn brief is
+ * explicit that "shared inbox email addresses and ambiguous matches must not
+ * cause automatic person merges". Attributing a do-not-contact to whichever of
+ * three colleagues happened to sort first would be inventing a fact about a
+ * person, which is the same defect as a fabricated lead field.
+ *
+ * When it is ambiguous the suppression is still recorded — by address, which is
+ * what was actually observed — and simply carries no contact.
+ *
+ * ⚠️ NEVER THROWS. Suppression is the safety-critical half and attribution is
+ * the bonus; a failed lookup must not stop somebody being added to a
+ * do-not-contact list.
+ */
+async function resolveSuppressionContact(
+  workspaceId: string,
+  email: string,
+): Promise<string | null> {
+  try {
+    const { data } = await createAdminClient()
+      .from('crm_contact_emails')
+      .select('contact_id')
+      // Service role bypasses RLS — scoping by workspace here is mandatory.
+      .eq('workspace_id', workspaceId)
+      .eq('address', email)
+      .is('deleted_at', null)
+      // Two is enough to know it is ambiguous; there is no need to count them all.
+      .limit(2)
+
+    const owners = [...new Set((data ?? []).map((row) => row.contact_id))]
+    return owners.length === 1 ? (owners[0] ?? null) : null
+  } catch {
+    return null
+  }
+}
+
 export async function suppressEmail(input: {
   workspaceId: string
   email: string
@@ -605,15 +644,33 @@ export async function suppressEmail(input: {
   contactId?: string | null
   createdBy?: string | null
 }): Promise<void> {
+  const email = input.email.trim().toLowerCase()
+
+  /*
+   * ⚠️ THE CONTACT IS RESOLVED HERE, BECAUSE MOST CALLERS CANNOT SUPPLY IT.
+   *
+   * `contact_id` has been on this table since 0086 and only ONE of the three
+   * call sites ever passed it — the bounce path. One-click unsubscribe and the
+   * manual add did not, which are the two that matter most: an unsubscribe is
+   * a stated wish with legal weight, and it was recorded against an address
+   * with no idea whose it was.
+   *
+   * That made the contact-level check added to `enqueueEmail` nearly inert —
+   * a reader for a column almost nothing wrote. Resolving it in the one place
+   * every suppression passes through fixes all three call sites at once,
+   * rather than asking each to remember.
+   */
+  const contactId = input.contactId ?? (await resolveSuppressionContact(input.workspaceId, email))
+
   const { error } = await createAdminClient()
     .from('email_suppressions')
     .upsert(
       {
         workspace_id: input.workspaceId,
-        email: input.email.trim().toLowerCase(),
+        email,
         reason: input.reason,
         source: input.source ?? null,
-        contact_id: input.contactId ?? null,
+        contact_id: contactId,
         created_by: input.createdBy ?? null,
       },
       // ⚠️ The FIRST reason wins. If someone unsubscribed and later hard

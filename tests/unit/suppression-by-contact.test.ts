@@ -119,3 +119,54 @@ describe('the claim-time check is fixed in the same way', () => {
     expect(MIGRATION).toMatch(/email_suppressions_workspace_contact_idx/)
   })
 })
+
+describe('the contact is recorded when a suppression is written', () => {
+  /*
+   * ⚠️ THE HALF THAT MADE THE OTHER HALF INERT. `contact_id` has been on
+   * `email_suppressions` since 0086, and of the three `suppressEmail` call
+   * sites only the bounce path ever passed it. One-click unsubscribe — a
+   * stated wish with legal weight — and the manual add did not, so the
+   * contact-level check added to `enqueueEmail` was reading a column almost
+   * nothing wrote.
+   */
+  it('resolves the contact inside suppressEmail rather than asking each caller', () => {
+    expect(SEND).toMatch(/resolveSuppressionContact\(input\.workspaceId, email\)/)
+    expect(SEND).toMatch(/input\.contactId \?\?/)
+    expect(SEND).toMatch(/contact_id: contactId/)
+  })
+
+  it('refuses to attribute an address shared by several contacts', () => {
+    /*
+     * ⚠️ NOT A STYLE POINT. `info@`, `sales@` and `hello@` routinely sit on
+     * several contacts. Attributing a do-not-contact to whichever colleague
+     * sorted first would invent a fact about a person — the same defect as a
+     * fabricated lead field — and would suppress the wrong two.
+     */
+    expect(SEND).toMatch(/owners\.length === 1/)
+    expect(SEND).toMatch(/new Set\(/)
+    // Two rows is enough to know it is ambiguous.
+    expect(SEND).toMatch(/\.limit\(2\)/)
+  })
+
+  it('scopes the lookup by workspace and ignores deleted addresses', () => {
+    const block = SEND.slice(
+      SEND.indexOf('async function resolveSuppressionContact'),
+      SEND.indexOf('export async function suppressEmail'),
+    )
+    expect(block).toMatch(/\.eq\('workspace_id', workspaceId\)/)
+    expect(block).toMatch(/\.is\('deleted_at', null\)/)
+  })
+
+  it('never lets a failed lookup stop a suppression being recorded', () => {
+    /*
+     * Suppression is the safety-critical half; attribution is the bonus. A
+     * lookup that throws must not prevent somebody being added to a
+     * do-not-contact list.
+     */
+    const block = SEND.slice(
+      SEND.indexOf('async function resolveSuppressionContact'),
+      SEND.indexOf('export async function suppressEmail'),
+    )
+    expect(block).toMatch(/catch \{\s*return null/)
+  })
+})
