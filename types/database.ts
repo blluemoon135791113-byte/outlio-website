@@ -1998,7 +1998,6 @@ export type Database = {
           contact_id: string
           created_at: string
           deleted_at: string | null
-          // Migration 0113 — the research_evidence row this value was observed in.
           evidence_id: string | null
           id: string
           identity_key: string
@@ -2042,6 +2041,13 @@ export type Database = {
             referencedColumns: ["id", "workspace_id"]
           },
           {
+            foreignKeyName: "crm_contact_emails_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "research_evidence"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "crm_contact_emails_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
@@ -2055,9 +2061,8 @@ export type Database = {
           contact_id: string
           created_at: string
           deleted_at: string | null
-          // Migration 0113 — the research_evidence row this value was observed in.
-          evidence_id: string | null
           e164: string | null
+          evidence_id: string | null
           id: string
           is_primary: boolean
           kind: string | null
@@ -2070,8 +2075,8 @@ export type Database = {
           contact_id: string
           created_at?: string
           deleted_at?: string | null
-          evidence_id?: string | null
           e164?: string | null
+          evidence_id?: string | null
           id?: string
           is_primary?: boolean
           kind?: string | null
@@ -2084,8 +2089,8 @@ export type Database = {
           contact_id?: string
           created_at?: string
           deleted_at?: string | null
-          evidence_id?: string | null
           e164?: string | null
+          evidence_id?: string | null
           id?: string
           is_primary?: boolean
           kind?: string | null
@@ -2103,6 +2108,13 @@ export type Database = {
             referencedColumns: ["id", "workspace_id"]
           },
           {
+            foreignKeyName: "crm_contact_phones_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "research_evidence"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "crm_contact_phones_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
@@ -2111,9 +2123,6 @@ export type Database = {
           },
         ]
       }
-      // Migration 0121 — do-not-contact recorded against a PERSON. Ahead of the
-      // applied schema until 0121 is run; regenerate with `npm run db:types`
-      // afterwards. `email_suppressions` stays authoritative for addresses.
       crm_contact_suppressions: {
         Row: {
           contact_id: string
@@ -2145,7 +2154,22 @@ export type Database = {
           source?: string | null
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_suppressions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_contact_suppressions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       crm_contact_tags: {
         Row: {
@@ -2212,10 +2236,9 @@ export type Database = {
           primary_company_id: string | null
           source: Database["public"]["Enums"]["crm_record_source"]
           source_lead_id: string | null
+          timezone: string | null
           updated_at: string
           workspace_id: string
-          // Migration 0121 — IANA zone, or null for UNKNOWN. Never defaulted.
-          timezone: string | null
         }
         Insert: {
           created_at?: string
@@ -2235,9 +2258,9 @@ export type Database = {
           primary_company_id?: string | null
           source?: Database["public"]["Enums"]["crm_record_source"]
           source_lead_id?: string | null
+          timezone?: string | null
           updated_at?: string
           workspace_id: string
-          timezone?: string | null
         }
         Update: {
           created_at?: string
@@ -2257,9 +2280,9 @@ export type Database = {
           primary_company_id?: string | null
           source?: Database["public"]["Enums"]["crm_record_source"]
           source_lead_id?: string | null
+          timezone?: string | null
           updated_at?: string
           workspace_id?: string
-          timezone?: string | null
         }
         Relationships: [
           {
@@ -5369,11 +5392,11 @@ export type Database = {
           idempotency_key: string | null
           parent_run_id: string | null
           resume_at: string | null
-          variables: Json
           started_at: string
           status: Database["public"]["Enums"]["flow_run_status"]
           trigger_type: string
           updated_at: string
+          variables: Json
           version_id: string
           workspace_id: string
         }
@@ -5389,11 +5412,11 @@ export type Database = {
           idempotency_key?: string | null
           parent_run_id?: string | null
           resume_at?: string | null
-          variables?: Json
           started_at?: string
           status?: Database["public"]["Enums"]["flow_run_status"]
           trigger_type: string
           updated_at?: string
+          variables?: Json
           version_id: string
           workspace_id: string
         }
@@ -5409,11 +5432,11 @@ export type Database = {
           idempotency_key?: string | null
           parent_run_id?: string | null
           resume_at?: string | null
-          variables?: Json
           started_at?: string
           status?: Database["public"]["Enums"]["flow_run_status"]
           trigger_type?: string
           updated_at?: string
+          variables?: Json
           version_id?: string
           workspace_id?: string
         }
@@ -7970,8 +7993,6 @@ export type Database = {
           member_limit_override: number | null
           name: string
           owner_user_id: string
-          // Migration 0111. Nullable on purpose: enforced at campaign launch,
-          // because backfilling it would mean inventing a postal address.
           sender_postal_address: string | null
           updated_at: string
         }
@@ -8008,19 +8029,6 @@ export type Database = {
           api_key_id: string
           rate_limit_per_minute: number
           scopes: Database["public"]["Enums"]["api_scope"][]
-          workspace_id: string
-        }[]
-      }
-      due_webhook_deliveries: {
-        Args: { p_limit?: number }
-        Returns: {
-          attempts: number
-          event_id: string
-          event_type: string
-          id: string
-          max_attempts: number
-          payload: Json
-          subscription_id: string
           workspace_id: string
         }[]
       }
@@ -8273,6 +8281,19 @@ export type Database = {
         Args: { p_provider: string; p_user_id: string }
         Returns: boolean
       }
+      due_webhook_deliveries: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          event_id: string
+          event_type: string
+          id: string
+          max_attempts: number
+          payload: Json
+          subscription_id: string
+          workspace_id: string
+        }[]
+      }
       email_account_volume: {
         Args: { p_account_id: string; p_since: string }
         Returns: {
@@ -8502,6 +8523,7 @@ export type Database = {
         Args: { p_enrichment: Json; p_lead_ids: string[]; p_user_id: string }
         Returns: number
       }
+      my_workspace_ids: { Args: never; Returns: string[] }
       paddle_subscription_grants_access: {
         Args: { p_status: string }
         Returns: boolean
@@ -8710,10 +8732,7 @@ export type Database = {
         }
         Returns: string
       }
-      scheduler_diagnostics: {
-        Args: Record<string, never>
-        Returns: Json
-      }
+      scheduler_diagnostics: { Args: never; Returns: Json }
       set_user_suspension: {
         Args: { p_admin_id: string; p_suspend: boolean; p_user_id: string }
         Returns: undefined
@@ -8910,15 +8929,6 @@ export type Database = {
       }
     }
     Enums: {
-      // Migration 0121.
-      crm_contact_dnc_scope: "all" | "email" | "linkedin"
-      crm_contact_dnc_reason:
-        | "unsubscribed"
-        | "not_interested"
-        | "explicit_request"
-        | "hostile"
-        | "privacy_request"
-        | "manual"
       access_request_status:
         | "pending"
         | "approved"
@@ -8983,6 +8993,14 @@ export type Database = {
         | "MERGED"
         | "COLLISION_OVERRIDE"
       crm_collision_mode: "off" | "warn" | "require_approval"
+      crm_contact_dnc_reason:
+        | "unsubscribed"
+        | "not_interested"
+        | "explicit_request"
+        | "hostile"
+        | "privacy_request"
+        | "manual"
+      crm_contact_dnc_scope: "all" | "email" | "linkedin"
       crm_custom_field_entity: "contact" | "company" | "opportunity"
       crm_custom_field_type:
         | "text"
@@ -9320,6 +9338,15 @@ export const Constants = {
         "COLLISION_OVERRIDE",
       ],
       crm_collision_mode: ["off", "warn", "require_approval"],
+      crm_contact_dnc_reason: [
+        "unsubscribed",
+        "not_interested",
+        "explicit_request",
+        "hostile",
+        "privacy_request",
+        "manual",
+      ],
+      crm_contact_dnc_scope: ["all", "email", "linkedin"],
       crm_custom_field_entity: ["contact", "company", "opportunity"],
       crm_custom_field_type: [
         "text",
