@@ -2111,6 +2111,42 @@ export type Database = {
           },
         ]
       }
+      // Migration 0121 — do-not-contact recorded against a PERSON. Ahead of the
+      // applied schema until 0121 is run; regenerate with `npm run db:types`
+      // afterwards. `email_suppressions` stays authoritative for addresses.
+      crm_contact_suppressions: {
+        Row: {
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          reason: Database["public"]["Enums"]["crm_contact_dnc_reason"]
+          scope: Database["public"]["Enums"]["crm_contact_dnc_scope"]
+          source: string | null
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason: Database["public"]["Enums"]["crm_contact_dnc_reason"]
+          scope?: Database["public"]["Enums"]["crm_contact_dnc_scope"]
+          source?: string | null
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason?: Database["public"]["Enums"]["crm_contact_dnc_reason"]
+          scope?: Database["public"]["Enums"]["crm_contact_dnc_scope"]
+          source?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       crm_contact_tags: {
         Row: {
           contact_id: string
@@ -2178,6 +2214,8 @@ export type Database = {
           source_lead_id: string | null
           updated_at: string
           workspace_id: string
+          // Migration 0121 — IANA zone, or null for UNKNOWN. Never defaulted.
+          timezone: string | null
         }
         Insert: {
           created_at?: string
@@ -2199,6 +2237,7 @@ export type Database = {
           source_lead_id?: string | null
           updated_at?: string
           workspace_id: string
+          timezone?: string | null
         }
         Update: {
           created_at?: string
@@ -2220,6 +2259,7 @@ export type Database = {
           source_lead_id?: string | null
           updated_at?: string
           workspace_id?: string
+          timezone?: string | null
         }
         Relationships: [
           {
@@ -8870,6 +8910,15 @@ export type Database = {
       }
     }
     Enums: {
+      // Migration 0121.
+      crm_contact_dnc_scope: "all" | "email" | "linkedin"
+      crm_contact_dnc_reason:
+        | "unsubscribed"
+        | "not_interested"
+        | "explicit_request"
+        | "hostile"
+        | "privacy_request"
+        | "manual"
       access_request_status:
         | "pending"
         | "approved"

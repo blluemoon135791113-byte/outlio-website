@@ -159,9 +159,7 @@ describe('the suppression gate is wired into enqueueEmail', () => {
      * code rather than being deleted for going red.
      */
     expect(
-      /if \(byEmail\.data \|\| byContact\.data\)\s*return \{ queued: false, reason: 'suppressed' \}/.test(
-        source,
-      ),
+      /if \(stop\.stopped\) return \{ queued: false, reason: 'suppressed' \}/.test(source),
       'enqueueEmail no longer refuses suppressed recipients, so an unsubscribed or ' +
         'hard-bounced address can be mailed again.',
     ).toBe(true)
@@ -180,8 +178,14 @@ describe('the suppression gate is wired into enqueueEmail', () => {
      * the lookup. The same mistake shape as taking the first `{` of a function
      * and calling it the body.
      */
-    const lookup = source.indexOf("from('email_suppressions')")
-    const gate = source.indexOf('if (byEmail.data || byContact.data) return')
+    /*
+     * ⚠️ THE LOOKUP MOVED OUT. `enqueueEmail` no longer queries suppression
+     * itself — `contactIsStopped` owns that for every channel — so the thing to
+     * order against is the CALL, not the query. The guarantee is unchanged:
+     * asked before anything is queued, never after.
+     */
+    const lookup = source.indexOf('await contactIsStopped({')
+    const gate = source.indexOf('if (stop.stopped) return')
     expect(lookup).toBeGreaterThan(-1)
     expect(gate).toBeGreaterThan(-1)
     expect(gate).toBeGreaterThan(lookup)

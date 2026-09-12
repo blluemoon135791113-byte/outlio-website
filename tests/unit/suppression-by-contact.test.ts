@@ -31,39 +31,85 @@ const strip = (s: string) =>
 const read = (p: string) => strip(readFileSync(join(ROOT, p), 'utf8'))
 
 const SEND = read('lib/email/send.ts')
+/*
+ * ⚠️ THE DECISION MOVED, AND THESE FOLLOWED IT. `enqueueEmail` grew its own
+ * two-table lookup in phase 2; phase 3 gave the same question to the LinkedIn
+ * channel, and two readers of one rule is how a stop ends up honoured on one
+ * channel and not the other. Repointed rather than deleted — what they guard
+ * is unchanged.
+ */
+const STOP = read('lib/crm/contact-stop.ts')
 
-describe('the enqueue check covers the contact, not just the address', () => {
-  it('queries email_suppressions by contact_id as well as email', () => {
-    expect(SEND).toMatch(/\.eq\('contact_id', input\.contactId\)/)
-    expect(SEND).toMatch(/\.eq\('email', toEmail\)/)
+describe('one predicate answers this for every channel', () => {
+  it('enqueueEmail asks it rather than querying suppression itself', () => {
+    expect(SEND).toMatch(/contactIsStopped\(\{/)
+    expect(SEND).toMatch(/channel: 'email'/)
+    expect(SEND).toMatch(/if \(stop\.stopped\) return \{ queued: false, reason: 'suppressed' \}/)
+    // The lookup itself must not have been left behind as a second copy.
+    expect(SEND, 'enqueueEmail still queries suppression directly').not.toContain(
+      "from('email_suppressions')\n      .select('id')",
+    )
   })
 
-  it('refuses when either match hits', () => {
-    // An `&&` here would be worse than the original bug: it would require BOTH
-    // to match, so an address-only suppression would stop working.
-    expect(SEND).toMatch(/byEmail\.data \|\| byContact\.data/)
+  it('consults both the person and the address', () => {
+    expect(STOP).toMatch(/from\('crm_contact_suppressions'\)/)
+    expect(STOP).toMatch(/from\('email_suppressions'\)/)
   })
 
-  it('only looks up the contact when there is one', () => {
-    // A null contactId must not become `.eq('contact_id', null)`, which
-    // PostgREST renders as `contact_id=eq.null` and matches nothing usefully.
-    expect(SEND).toMatch(/input\.contactId\s*\?/)
+  it('fails CLOSED when the lookup errors', () => {
+    /*
+     * ⚠️ THE OPPOSITE OF THE RATE LIMITER, DELIBERATELY. `consume_rate_limit`
+     * fails open because refusing a legitimate action on a blip is worse than
+     * allowing an extra one. Here the asymmetry runs the other way: mailing
+     * somebody who asked not to be mailed cannot be undone. A database that
+     * will not answer is not permission.
+     */
+    expect(STOP).toMatch(/via: 'unknown', reason: 'lookup_failed'/)
+    expect(STOP).toMatch(/byContact\.error \|\| byAddress\.error/)
+    expect(STOP, 'the catch returns permission').not.toMatch(
+      /catch \{[\s\S]{0,120}return \{ stopped: false/,
+    )
+  })
+
+  it('respects the recorded scope exactly', () => {
+    /*
+     * §4.15: "An opt-out's scope is respected exactly." Somebody who said stop
+     * emailing me has not said stop connecting on LinkedIn, and widening it for
+     * convenience invents the scope of their request.
+     */
+    expect(STOP).toMatch(/\.in\('scope', \['all', input\.channel\]\)/)
+  })
+
+  it('does not let an address suppression stop a non-email channel', () => {
+    /*
+     * An address suppression is evidence one mailbox asked to be left alone. It
+     * says nothing about LinkedIn, and treating it as if it did would be
+     * inventing the scope of somebody's request in the other direction.
+     */
+    expect(STOP).toMatch(/byAddress\.data && input\.channel === 'email'/)
+  })
+
+  it('refuses to answer about nobody', () => {
+    // Neither identifier supplied means the answer would be about no one, which
+    // a caller would read as permission.
+    expect(STOP).toMatch(/needs a contactId or an email/)
   })
 
   it('does not build the filter with .or()', () => {
     /*
-     * ⚠️ DELIBERATE. An email local part may legally contain a comma or a
-     * parenthesis, which are PostgREST's own `or` syntax — `lib/crm/
-     * contacts-list.ts` already documents what getting that wrong costs. Two
-     * indexed lookups in parallel are cheaper than an escaping bug in a
-     * do-not-contact check.
+     * An email local part may legally contain a comma or a parenthesis, which
+     * are PostgREST's own `or` syntax — `lib/crm/contacts-list.ts` documents
+     * what that costs. Separate indexed lookups instead.
      */
-    const block = SEND.slice(
-      SEND.indexOf('const [byEmail, byContact]'),
-      SEND.indexOf('if (byEmail.data || byContact.data)'),
-    )
-    expect(block.length).toBeGreaterThan(0)
-    expect(block, 'the suppression filter uses .or()').not.toContain('.or(')
+    expect(STOP, 'the suppression filter uses .or()').not.toContain('.or(')
+  })
+
+  it('scopes every lookup by workspace', () => {
+    // The service role bypasses RLS; workspace scoping in code is the only wall.
+    const lookups = STOP.split("from('").length - 1
+    const scoped = (STOP.match(/\.eq\('workspace_id', input\.workspaceId\)/g) ?? []).length
+    expect(scoped).toBeGreaterThanOrEqual(2)
+    expect(lookups).toBeGreaterThanOrEqual(2)
   })
 })
 

@@ -112,11 +112,39 @@ do-not-contact to whichever colleague sorted first would invent a fact about a
 person. The suppression is still recorded by address, which is what was
 actually observed.
 
-**Still open, and it gates §4.11's `Mark DNC` control:** `email_suppressions.
-email` is `not null`, so a contact with no email address on file cannot be
-suppressed at all. A LinkedIn-only contact is exactly that case. Needs either a
-nullable `email` with a reworked unique index, or a channel-agnostic contact
-DNC — a schema decision, not yet made.
+### Update — phase 3, 2026-09-12
+
+Owner chose the channel-agnostic contact DNC. `crm_contact_suppressions`
+(migration 0121) records a stop against a PERSON, with a scope of `all`,
+`email` or `linkedin` and a reason that keeps §4.11's R06 "not interested"
+distinct from R07 "explicit request" — the first suppresses prospecting, the
+second routes into the privacy process, and collapsing them loses the fact that
+decides which.
+
+`email_suppressions` stays and remains authoritative for ADDRESSES: an
+unsubscribe arrives for an address that may resolve to no contact, or to an
+ambiguous shared inbox, and that has to be storable exactly as observed.
+Neither table can express the other's case.
+
+**What keeps them from diverging is `lib/crm/contact-stop.ts` — the one
+predicate both channels call.** `enqueueEmail` now asks it instead of querying
+suppression itself. It fails **closed**: a lookup that errors returns stopped,
+the opposite of the rate limiter's deliberate fail-open, because mailing
+somebody who asked not to be mailed cannot be undone.
+
+Scope is respected exactly in both directions. A contact DNC scoped to `email`
+does not stop LinkedIn, and an address suppression never stops a non-email
+channel — it is evidence that one mailbox asked to be left alone and says
+nothing about the person.
+
+`crm_contacts.timezone` lands in the same migration, nullable, where null means
+UNKNOWN rather than UTC. It is the first link of §5.7's fallback chain, which
+`lib/email/schedule.ts` already implements correctly against the mailbox's zone
+and had nowhere to read the recipient's from.
+
+**Still open:** 0120 and 0121 are both unapplied. `types/database.ts` carries
+0121's shapes by hand, marked with the migration number, and must be
+regenerated with `npm run db:types` once it is run.
 
 ---
 

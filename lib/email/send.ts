@@ -30,6 +30,7 @@ import { type CampaignType } from '@/lib/email/campaign-policy'
 import { providerFor } from '@/lib/email/providers/registry'
 import { checkRampAllowance } from '@/lib/email/ramp'
 import { isAccountSendable, rampSettingsOf, todayIn } from '@/lib/email/readiness-runner'
+import { contactIsStopped } from '@/lib/crm/contact-stop'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   applyMinimumDelay,
@@ -214,42 +215,23 @@ export async function enqueueEmail(input: EnqueueInput): Promise<EnqueueResult> 
   if (!account) return { queued: false, reason: 'no_account' }
 
   /*
-   * ⚠️ SUPPRESSION IS A FACT ABOUT A PERSON, NOT ABOUT ONE OF THEIR ADDRESSES.
+   * ⚠️ ONE PREDICATE, SHARED WITH EVERY OTHER CHANNEL. This grew its own
+   * two-table lookup, and the LinkedIn channel was about to need the same
+   * question answered — two readers of one rule is how a stop ends up honoured
+   * on one channel and not the other. `contactIsStopped` owns it now.
    *
-   * This matched on `email` alone, and `crm_contact_emails` lets one contact
-   * hold several. So somebody who unsubscribed — or who was marked
-   * do-not-contact after replying — kept receiving mail at their second
-   * address, because the row recording that decision named the first.
-   *
-   * `email_suppressions.contact_id` has existed the whole time and
-   * `suppressEmail` writes it; nothing read it. That also makes this the
-   * predicate the LinkedIn channel needs (§4.15 of the LinkedIn brief): a stop
-   * recorded against a contact has to reach a send addressed by email, and
-   * until now it could not.
-   *
-   * Two queries rather than one `.or()`: an email local part may legally
-   * contain a comma or parenthesis, which are PostgREST's own `or` syntax, and
-   * `lib/crm/contacts-list.ts` already documents what that costs to get wrong.
+   * It fails CLOSED: a lookup that errors returns stopped. Mailing somebody who
+   * asked not to be mailed cannot be undone, which is the opposite asymmetry to
+   * the rate limiter's deliberate fail-open.
    */
-  const [byEmail, byContact] = await Promise.all([
-    db
-      .from('email_suppressions')
-      .select('id')
-      .eq('workspace_id', input.workspaceId)
-      .eq('email', toEmail)
-      .maybeSingle(),
-    input.contactId
-      ? db
-          .from('email_suppressions')
-          .select('id')
-          .eq('workspace_id', input.workspaceId)
-          .eq('contact_id', input.contactId)
-          .limit(1)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-  ])
+  const stop = await contactIsStopped({
+    workspaceId: input.workspaceId,
+    channel: 'email',
+    contactId: input.contactId,
+    email: toEmail,
+  })
 
-  if (byEmail.data || byContact.data) return { queued: false, reason: 'suppressed' }
+  if (stop.stopped) return { queued: false, reason: 'suppressed' }
 
   /*
    * ⚠️ THE SAFETY GATE AND THE RAMP ARE ENFORCED HERE, AT ENQUEUE — M5
