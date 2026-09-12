@@ -558,7 +558,7 @@ function HistoryBoard({
   const activeCount = jobs.filter(isActiveJob).length
 
   return (
-    <section className="relative z-20 flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)]">
+    <section className="clay relative z-20 flex min-w-0 flex-col overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-ink">{title}</h2>

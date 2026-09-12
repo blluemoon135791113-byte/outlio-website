@@ -40,7 +40,7 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+    <section className="clay p-5">
       <h3 className="text-base font-semibold tracking-[-0.015em] text-ink">{title}</h3>
       <p className="mt-1 text-sm leading-relaxed text-muted">{description}</p>
       <div className="mt-4">{children}</div>

@@ -137,24 +137,30 @@ describe('no static product panel carries a drop shadow', () => {
   const files = walkTsx('components').concat(walkTsx('app/(product)'))
 
   /*
-   * ⚠️ A RATCHET, AND IT MAY ONLY SHRINK. These predate the flat pass and were
-   * found by this guard rather than by reading. They are listed instead of
-   * fixed because each is a visible surface I cannot verify without a fixture
-   * and a running app, and changing six screens blind is how a "tidy-up" turns
-   * into a regression nobody attributes.
+   * ⚠️ A RATCHET, AND IT MAY ONLY SHRINK. Four of the five original entries
+   * were fixed and have left: ExtensionCard, RequestOptions,
+   * ExtractionDashboard and ProfileManager. Each was measured in a browser
+   * before and after — the panels rendered at a 16px radius with a drop
+   * shadow, against the product's 10px and none — rather than changed on the
+   * strength of a grep.
+   *
+   * ⚠️ THE ONE THAT REMAINS IS NOT A PANEL, AND FIXING IT WOULD BE WRONG.
+   * `UploadForm`'s entry is a 40x40 icon chip — measured as `SPAN 40x40`, not
+   * a section — and DESIGN_TOKENS' rule is about PANELS: "a panel that sits on
+   * the page gets a border, never a shadow". A small raised chip is a
+   * different object making a different claim, and stripping its shadow to
+   * satisfy a regex would be letting the guard design the interface.
+   *
+   * It stays listed rather than pattern-exempted because a size-based
+   * exemption is exactly the kind of rule that quietly grows to cover things
+   * it should not.
    *
    * `components/leadengine/**` is absent on purpose: that is the MARKETING
    * site, where the neumorphic material is correct and CLAUDE.md rule 5 makes
    * it read-only.
    */
   const KNOWN = new Set(
-    [
-      'components/extension/ExtensionCard.tsx',
-      'components/access/RequestOptions.tsx',
-      'components/jobs/ExtractionDashboard.tsx',
-      'components/qualification/ProfileManager.tsx',
-      'components/upload/UploadForm.tsx',
-    ].map((f) => f.replace(/\//g, sep)),
+    ['components/upload/UploadForm.tsx'].map((f) => f.replace(/\//g, sep)),
   )
 
   it('finds only the known ones', () => {

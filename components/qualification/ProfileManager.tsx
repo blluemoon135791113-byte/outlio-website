@@ -95,7 +95,7 @@ export function ProfileManager({ profiles }: { profiles: ExistingProfile[] }) {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+      <section className="clay p-5">
         <h2 className="text-base font-semibold tracking-[-0.02em] text-ink">New profile</h2>
         <p className="mt-1 text-sm text-muted">
           Criteria are scored deterministically. A company Outlio could not research
