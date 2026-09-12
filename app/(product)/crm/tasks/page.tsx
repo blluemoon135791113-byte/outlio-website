@@ -60,7 +60,8 @@ export default async function TasksPage({
   const db = createAdminClient()
   let query = db
     .from('crm_tasks')
-    .select('id, title, body, due_at, status, contact_id, assigned_to_user_id')
+    // `version` is read so the complete toggle can prove this list is not stale.
+    .select('id, title, body, due_at, status, contact_id, assigned_to_user_id, version')
     .eq('workspace_id', ctx.workspace.id)
     .is('deleted_at', null)
     .order('due_at', { ascending: true, nullsFirst: false })
@@ -146,6 +147,7 @@ export default async function TasksPage({
     done: t.status === 'completed',
     contactId: t.contact_id,
     contactName: t.contact_id ? names.get(t.contact_id) ?? null : null,
+    version: t.version,
   }))
 
   return (

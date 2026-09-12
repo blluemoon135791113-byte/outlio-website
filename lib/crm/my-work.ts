@@ -34,6 +34,11 @@ import 'server-only'
  * available join was through the contact — which is precisely the wrong answer
  * the spec calls out. Coverage here is `crm_tasks.opportunity_id` and nothing
  * else.
+ *
+ * ⚠️ A SNOOZED TASK (0126) IS OUT OF THE QUEUE BUT STILL COVERS ITS DEAL. The
+ * snooze is a review date for the person, not a cancellation: the work is still
+ * booked, so the deal has a next action. Hiding the deal's coverage too would
+ * invite a duplicate task for work that already exists.
  */
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -72,6 +77,14 @@ export type WorkItem = {
    */
   at: string | null
   href: string
+  /**
+   * The task this row is, when it is one — what the row's actions need.
+   *
+   * ⚠️ `version` IS PASSED BACK EXACTLY AS READ. It is 0126's optimistic-lock
+   * token: an action taken from a screen loaded before somebody reassigned or
+   * snoozed the task is refused rather than overwriting their change.
+   */
+  task: { id: string; version: number } | null
 }
 
 /**
@@ -101,6 +114,30 @@ function endOfDay(now: Date): string {
   const end = new Date(now)
   end.setHours(23, 59, 59, 999)
   return end.toISOString()
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * The date-input bounds for a snooze: tomorrow through 364 days out, as
+ * `YYYY-MM-DD` in UTC.
+ *
+ * ⚠️ TAKES `now` RATHER THAN READING THE CLOCK. The page passes the render's
+ * instant in, which keeps `Date.now()` out of render — React's purity lint
+ * refuses it there — and lets a test pin the answer.
+ *
+ * ⚠️ 364, NOT 365. The action reads the chosen day as its START, and 0126
+ * refuses anything later than now + 365 days, so the last selectable day has
+ * to clear that bound with room for a timezone offset. Offering a day the
+ * server will then refuse is the kind of form that teaches people to distrust
+ * the form.
+ */
+export function snoozeBounds(now: Date): { minSnoozeDate: string; maxSnoozeDate: string } {
+  const at = now.getTime()
+  return {
+    minSnoozeDate: new Date(at + DAY_MS).toISOString().slice(0, 10),
+    maxSnoozeDate: new Date(at + 364 * DAY_MS).toISOString().slice(0, 10),
+  }
 }
 
 export async function listMyWork(input: {
@@ -139,8 +176,12 @@ export async function listMyWork(input: {
    * Overdue and today are the same table split at `now`, and both exclude
    * undated tasks: a task with no due date is not overdue and is not due today
    * — it is undated, which is a different thing and belongs in neither tier.
+   *
+   * ⚠️ AND BOTH EXCLUDE A TASK SNOOZED PAST `now`. The value is quoted inside
+   * the `or` because a timestamp carries `:` and `.`, which the filter grammar
+   * would otherwise have to guess about.
    */
-  const taskSelect = 'id, title, due_at, contact_id, opportunity_id'
+  const taskSelect = 'id, title, due_at, contact_id, opportunity_id, version'
   const openTasks = () =>
     db
       .from('crm_tasks')
@@ -150,6 +191,7 @@ export async function listMyWork(input: {
       .eq('status', 'open')
       .is('deleted_at', null)
       .not('due_at', 'is', null)
+      .or(`snoozed_until.is.null,snoozed_until.lte."${nowIso}"`)
 
   const overdueQuery = openTasks()
     .lt('due_at', nowIso)
@@ -212,7 +254,8 @@ export async function listMyWork(input: {
    * ╚═══════════════════════════════════════════════════════════════════════╝
    *
    * Bounded by the deals already fetched, so this stays a small `in (…)`
-   * rather than a scan of every task in the workspace.
+   * rather than a scan of every task in the workspace. Deliberately NOT
+   * filtered on `snoozed_until` — see the header.
    */
   const covered = new Set<string>()
   if (myDeals.length > 0) {
@@ -239,6 +282,7 @@ export async function listMyWork(input: {
       context: null,
       at: t.last_message_at,
       href: `/email/inbox?thread=${t.id}`,
+      task: null,
     })),
     ...(overdue.data ?? []).map((t) => ({
       key: `overdue:${t.id}`,
@@ -247,6 +291,7 @@ export async function listMyWork(input: {
       context: null,
       at: t.due_at,
       href: '/crm/tasks?view=overdue',
+      task: { id: t.id, version: t.version },
     })),
     ...(today.data ?? []).map((t) => ({
       key: `due_today:${t.id}`,
@@ -255,6 +300,7 @@ export async function listMyWork(input: {
       context: null,
       at: t.due_at,
       href: '/crm/tasks?view=today',
+      task: { id: t.id, version: t.version },
     })),
     ...myDeals
       .filter((d) => !covered.has(d.id))
@@ -265,6 +311,7 @@ export async function listMyWork(input: {
         context: null,
         at: null,
         href: '/crm/pipeline',
+        task: null,
       })),
   ]
 
