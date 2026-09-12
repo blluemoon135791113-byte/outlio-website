@@ -221,7 +221,7 @@ export default async function DashboardPage() {
         </div>
 
         <div className="space-y-4">
-        <section className="rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <section className="clay p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
@@ -254,7 +254,7 @@ export default async function DashboardPage() {
             </AccountRow>
           </dl>
         </section>
-        <section className="credits-gradient relative overflow-hidden rounded-[var(--radius-xl)] border border-accent/15 p-5 shadow-[var(--shadow-sm)]">
+        <section className="credits-gradient relative overflow-hidden rounded-[var(--radius-clay)] border border-accent/15 p-5">
           <div className="relative z-10">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">Subscription</p>
             <div className="mt-2 flex items-start justify-between gap-3">
