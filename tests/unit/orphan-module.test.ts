@@ -159,6 +159,12 @@ const KNOWN_ORPHANS = new Set(
      * not orphans — the guard rejected them from this list, correctly, on
      * exactly that basis.
      *
+     * ⚠️ `outcomes.ts` LEFT THIS LIST WITHOUT ANYONE DECIDING TO REMOVE IT.
+     * `budget.ts` imports `TaskKind` from it, so it acquired a production
+     * importer and the both-directions assertion failed until the entry was
+     * deleted. That is the ratchet paying for itself: the list shrank because
+     * the code changed, not because somebody remembered to tidy it.
+     *
      * ⚠️ THE EXIT CONDITION IS NAMED, because an entry with no way out is how
      * this list stops shrinking. Every entry below leaves when the Action Inbox
      * renders a draft and its result form — `components/linkedin/ActionInboxCard`
@@ -170,11 +176,11 @@ const KNOWN_ORPHANS = new Set(
      * still valid.
      */
     'lib/linkedin/render.ts',
-    'lib/linkedin/outcomes.ts',
     'lib/linkedin/profile-reference.ts',
     'lib/linkedin/preflight.ts',
     'lib/linkedin/enrollment.ts',
     'lib/linkedin/metrics.ts',
+    'lib/linkedin/budget.ts',
   ].map((p) => p.replace(/\//g, sep)),
 )
 
