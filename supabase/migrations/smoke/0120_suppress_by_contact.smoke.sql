@@ -8,6 +8,21 @@
 -- contacted gets contacted.
 --
 -- So this exercises the real function against real rows.
+--
+-- ⚠️ AND IT WAS RUN AGAINST 0106 AS A NEGATIVE CONTROL, which is the half that
+-- makes the pass mean anything. Against the shipping function it fails with
+-- "a message to a suppressed CONTACT's second address was sending, not
+-- suppressed" — so the bug was real, and this test can detect it.
+--
+-- Run it with:
+--   scripts/check-migration.sh supabase/migrations/0120_suppress_by_contact.sql \
+--     supabase/migrations/smoke/0120_suppress_by_contact.smoke.sql
+--
+-- If Docker is unavailable, the same thing runs against a throwaway local
+-- cluster: `initdb` a temp PGDATA, start it on a unix socket, replay the same
+-- scaffold and prerequisites, then apply and run these two files. On macOS with
+-- PostgreSQL 16 that needs `LC_ALL` set to a valid locale, or the postmaster
+-- dies at startup with "became multithreaded" — the server log says so itself.
 
 \set ON_ERROR_STOP on
 
@@ -29,11 +44,11 @@ values ('33333333-3333-3333-3333-333333333333',
         '22222222-2222-2222-2222-222222222222', 'Ada Okonkwo');
 
 insert into public.email_accounts
-  (id, workspace_id, owner_user_id, provider, from_email, from_name, status)
+  (id, workspace_id, owner_user_id, provider, display_name, from_email, from_domain, from_name, status)
 values ('44444444-4444-4444-4444-444444444444',
         '22222222-2222-2222-2222-222222222222',
-        '11111111-1111-1111-1111-111111111111', 'smtp',
-        'sender@example.com', 'Sender', 'ready');
+        '11111111-1111-1111-1111-111111111111', 'smtp', 'Smoke sender',
+        'sender@example.com', 'example.com', 'Sender', 'ready');
 
 -- The suppression names address ONE.
 insert into public.email_suppressions (workspace_id, email, reason, contact_id)
