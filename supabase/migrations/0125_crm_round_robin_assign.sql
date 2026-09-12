@@ -125,7 +125,12 @@ begin
     null
   );
 
-  return v_result || jsonb_build_object('assigned_to', v_chosen);
+  /*
+   * `jsonb_set` rather than the `||` operator: this file is pasted into the
+   * Supabase SQL editor by hand, and a paste has already stripped `||` from a
+   * query once — turning it into a syntax error at best.
+   */
+  return jsonb_set(v_result, '{assigned_to}', to_jsonb(v_chosen));
 end;
 $$;
 
