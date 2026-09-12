@@ -104,6 +104,22 @@ function isReferenced(table: string): boolean {
  */
 const KNOWN_UNUSED = new Set([
   /*
+   * ⚠️ PHASE 4 OF THE LINKEDIN BUILD, ONE INCREMENT AHEAD OF ITS CODE. The
+   * schema and its security-definer budget function landed with a smoke test
+   * proving the tenancy boundary; the TypeScript layer that links a sender and
+   * reads the budget is the next increment.
+   *
+   * ⚠️ THE EXIT CONDITION: it leaves this list when `lib/linkedin/senders.ts`
+   * queries it. If the Action Inbox ships while this entry is still here, that
+   * means the UI reached for the table directly instead of going through the
+   * one function that checks membership first — which is the whole tenancy
+   * design, and exactly what this list is for surfacing.
+   *
+   * `linkedin_sender_links` and `linkedin_sender_actions` are absent because
+   * the smoke test queries them; only the service-role table is unreferenced.
+   */
+  'linkedin_senders',
+  /*
    * ⚠️ `crm_saved_views` WAS HERE AND IS NOT ANY MORE. Phase 2 built
    * `lib/crm/saved-views.ts` against it, and this list's both-direction
    * assertion failed the moment it did — which is the entry paying for itself.

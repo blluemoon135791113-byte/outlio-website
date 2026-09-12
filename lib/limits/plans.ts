@@ -81,6 +81,34 @@ export const planLimitsSchema = z.object({
   hubble_enabled: z.boolean().catch(true).default(true),
 
   /*
+   * ⚠️ DEFAULTS FALSE, LIKE EVERY OTHER MODULE THAT IS NOT BUILT YET. The
+   * block above sets crm/email/flows/reports false for exactly this reason —
+   * "Not built. Nothing to grant." — and the LinkedIn channel is manual
+   * orchestration with no surface yet. Granting it by default would put a
+   * capability in front of customers before the Action Inbox exists.
+   *
+   * ⚠️ THE TIER IT SHOULD BE ON IS A PRICING DECISION AND IS NOT MADE HERE.
+   * This only decides the safe starting point.
+   */
+  linkedin_enabled: z.boolean().catch(false).default(false),
+
+  /*
+   * How many real LinkedIn accounts a workspace may link.
+   *
+   * ⚠️ `null` MEANS "THE WORKSPACE'S SEAT COUNT", NOT UNLIMITED — and that
+   * default is principled rather than arbitrary. §4.10 is explicit that a
+   * sender is one real person who performs their own actions in LinkedIn's own
+   * interface, and that "one person using multiple borrowed, purchased, or
+   * shared accounts is not the supported way to scale". More senders than
+   * seats therefore means somebody is operating an account that is not theirs,
+   * which is the thing the brief prohibits.
+   *
+   * So the cap falls out of a number the plan already sets, and a workspace
+   * cannot quietly become a sender farm without someone raising its seats.
+   */
+  linkedin_senders_max: nullableInt.catch(null).default(null),
+
+  /*
    * Seats per workspace, owner included. `null` is unlimited.
    *
    * Defaults to 1 — one person, which is exactly what every plan sells today.

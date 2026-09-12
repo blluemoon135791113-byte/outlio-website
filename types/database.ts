@@ -124,6 +124,13 @@ export type PlanLimits = {
   reports_enabled: boolean
   integrations_enabled: boolean
   hubble_enabled: boolean
+  /** Migration-free: the LinkedIn channel module. Defaults false — not built. */
+  linkedin_enabled?: boolean
+  /**
+   * Senders a workspace may link. `null`/absent falls back to the SEAT count,
+   * never to unlimited — see `resolveSenderLimit`.
+   */
+  linkedin_senders_max?: number | null
 
   /** Seats per workspace, owner included. `null` means unlimited. */
   workspace_member_limit: number | null
