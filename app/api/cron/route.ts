@@ -1,6 +1,6 @@
-import { timingSafeEqual } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { isAuthorizedCronRequest } from '@/lib/workers/cron-auth'
 import { runTick } from '@/lib/workers/tick'
 
 /**
@@ -21,27 +21,6 @@ import { runTick } from '@/lib/workers/tick'
 // The tick does real network work — SMTP, IMAP, customer webhook endpoints.
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
-
-export function isAuthorizedCronRequest(
-  authorizationHeader: string | null,
-  secret: string | undefined,
-): boolean {
-  // ⚠️ NO SECRET MEANS REFUSE, never "allow because it is not configured".
-  if (!secret) return false
-
-  const provided = Buffer.from(authorizationHeader ?? '')
-  const expected = Buffer.from(`Bearer ${secret}`)
-
-  /*
-   * ⚠️ CONSTANT-TIME. A `===` on a secret leaks its length and prefix through
-   * timing, which is enough to recover it given enough attempts — and a cron
-   * endpoint is exactly the kind of thing nobody watches closely enough to
-   * notice those attempts. The length check is unavoidable and leaks only the
-   * length, which `timingSafeEqual` requires to be equal anyway.
-   */
-  if (provided.length !== expected.length) return false
-  return timingSafeEqual(provided, expected)
-}
 
 export async function GET(request: NextRequest) {
   if (!isAuthorizedCronRequest(request.headers.get('authorization'), process.env.CRON_SECRET)) {

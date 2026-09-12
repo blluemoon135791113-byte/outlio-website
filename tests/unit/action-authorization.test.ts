@@ -299,6 +299,15 @@ describe('API route handlers are gated too', () => {
       src.includes('apiRoute(') ||
       // A signed provider callback: the signature IS the authentication.
       /verify\w*Signature|verifyWebhook|timingSafeEqual|constantTimeEqual/.test(src) ||
+      /*
+       * The scheduler's shared secret, checked constant-time in
+       * `lib/workers/cron-auth`. It used to sit inline in the route — matched
+       * by `timingSafeEqual` above — until Next's generated route types forbade
+       * exporting anything but handlers from a route file, so the guard moved
+       * out and is imported back. The scan follows the move: the call is the
+       * gate, wherever the comparison lives.
+       */
+      src.includes('isAuthorizedCronRequest(') ||
       // The extension's own bearer token, issued at pairing.
       /resolveExtensionAuth|requireExtensionAuth/.test(src) ||
       // An OAuth callback carrying signed state.

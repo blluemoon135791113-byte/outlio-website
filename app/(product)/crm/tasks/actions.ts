@@ -11,7 +11,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { recordActivity } from '@/lib/crm/activities'
-import { dispatchFlowTrigger } from '@/lib/flows/dispatch'
+import { emitDomainEvent } from '@/lib/events/emit'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
@@ -77,11 +77,12 @@ export async function setTaskDone(
      * a person and must not run the follow-up flow twice — `startRun`
      * de-duplicates on this key.
      */
-    await dispatchFlowTrigger({
+    await emitDomainEvent({
       workspaceId: ctx.workspace.id,
       triggerType: 'task_completed',
       contactId: task.contact_id,
       idempotencyKey: `task_completed:${task.id}`,
+      payload: { taskId: task.id, contactId: task.contact_id ?? null },
     })
   }
 

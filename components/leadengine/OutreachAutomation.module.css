@@ -1,7 +1,7 @@
 .section {
-  --stone: #cec6b9;
-  --yellow: #f0fb63;
-  --blue: #b8d9f5;
+  --stone: #eee9df;
+  --yellow: #f3df78;
+  --hold: #faf0bc;
   --ink: #171717;
   position: relative;
   overflow: hidden;
@@ -109,7 +109,7 @@
   border-radius: clamp(2.2rem, 3.3vw, 3.35rem);
   background:
     radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.24), transparent 34%),
-    linear-gradient(145deg, #d3ccbf 0%, var(--stone) 48%, #c7bfb2 100%);
+    linear-gradient(145deg, #f8f5ef 0%, var(--stone) 48%, #e7dfd2 100%);
   box-shadow: 0 1.8rem 3.8rem rgba(40, 35, 30, 0.14);
   isolation: isolate;
   container-type: size;
@@ -156,7 +156,7 @@
 .outcomeIcon {
   display: grid;
   border-radius: 50%;
-  background: var(--yellow);
+  background: #fffdf8;
   color: #202020;
   place-items: center;
   aspect-ratio: 1;
@@ -202,7 +202,7 @@
   top: 1.05rem;
   right: 45%;
   left: 0;
-  border-top: 2px dotted #878a00;
+  border-top: 2px dotted #978044;
 }
 
 .highRoute > i::before {
@@ -211,8 +211,8 @@
   left: 0;
   width: 0.55rem;
   height: 0.55rem;
-  border-top: 2px solid #878a00;
-  border-left: 2px solid #878a00;
+  border-top: 2px solid #978044;
+  border-left: 2px solid #978044;
   content: '';
   transform: rotate(45deg);
 }
@@ -234,7 +234,7 @@
 }
 
 .highRoute > span { right: 7%; background: var(--yellow); }
-.highRoute > b { position: absolute; top: clamp(1.55rem, 5.2cqh, 2.1rem); right: 28%; height: calc(100% - clamp(1.55rem, 5.2cqh, 2.1rem)); border-left: 2px dotted #878a00; }
+.highRoute > b { position: absolute; top: clamp(1.55rem, 5.2cqh, 2.1rem); right: 28%; height: calc(100% - clamp(1.55rem, 5.2cqh, 2.1rem)); border-left: 2px dotted #978044; }
 
 .scoreTable {
   position: absolute;
@@ -300,11 +300,11 @@
   font-weight: 620;
 }
 
-.scoreRow[data-score='A+'] > span { background: #eefc62; }
-.scoreRow[data-score='A'] > span { background: #f2f677; }
-.scoreRow[data-score='B'] > span { background: #ebe06c; }
-.scoreRow[data-score='C'] > span { background: #f5e994; }
-.scoreRow[data-score='D'] > span { background: #f7efbd; }
+.scoreRow[data-score='A+'] > span { background: #eed064; }
+.scoreRow[data-score='A'] > span { background: #f3dd80; }
+.scoreRow[data-score='B'] > span { background: #f6e69e; }
+.scoreRow[data-score='C'] > span { background: #f9edb8; }
+.scoreRow[data-score='D'] > span { background: #fcf4d7; }
 
 .lowRoute {
   position: absolute;
@@ -314,9 +314,9 @@
   height: 13%;
 }
 
-.lowRoute > i { position: absolute; top: 1.05rem; right: 0; left: 0; border-top: 2px dotted #4a78ef; }
-.lowRoute > span { left: 10%; background: var(--blue); }
-.lowRoute > b { position: absolute; right: -0.1rem; bottom: 0; color: #3f6ee8; font-size: clamp(1rem, 3cqw, 1.45rem); }
+.lowRoute > i { position: absolute; top: 1.05rem; right: 0; left: 0; border-top: 2px dotted #aa945e; }
+.lowRoute > span { left: 10%; background: var(--hold); }
+.lowRoute > b { position: absolute; right: -0.1rem; bottom: 0; color: #8c7743; font-size: clamp(1rem, 3cqw, 1.45rem); }
 
 .outcomes {
   position: absolute;
@@ -335,7 +335,7 @@
   text-align: left;
 }
 
-.outcomeIcon { width: clamp(2.55rem, 6.7cqw, 3.8rem); background: var(--blue); }
+.outcomeIcon { width: clamp(2.55rem, 6.7cqw, 3.8rem); background: #fffdf8; }
 .outcomeItem strong { font-size: clamp(0.48rem, 1.25cqw, 0.72rem); font-weight: 610; letter-spacing: -0.025em; line-height: 1.08; }
 
 @media (max-width: 70rem) {
@@ -375,4 +375,40 @@
   .inboxRail strong { font-size: max(0.52rem, 1.58cqw); }
   .scoreTable > header { font-size: max(0.47rem, 1.45cqw); }
   .scoreRow strong { font-size: max(0.45rem, 1.28cqw); }
+}
+
+/* Keep the action on the launch branch; held accounts only monitor and re-score. */
+.launchAction {
+  position: absolute;
+  top: 43%;
+  right: -17%;
+  width: 45%;
+  padding: 1.6cqh 1.8cqw;
+  border: 1px solid rgba(92, 77, 46, 0.12);
+  border-radius: 1rem;
+  background: #fffdf8;
+  font-size: clamp(0.52rem, 1.4cqw, 0.78rem);
+  font-weight: 600;
+  text-align: center;
+}
+
+.lowRoute > i::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 8cqh;
+  border-right: 2px dotted #aa945e;
+  content: '';
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta { transition: none; }
+}
+
+.highRoute > b { height: 35%; }
+
+@media (max-width: 42rem) {
+  .workflow { aspect-ratio: 0.85 / 1; }
+  .launchAction { top: 43%; right: -12%; width: 47%; }
+  .lowRoute { top: 49%; }
 }

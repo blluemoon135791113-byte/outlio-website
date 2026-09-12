@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 import { RunManually } from '@/components/flows/RunManually'
 import { TestFlow } from '@/components/flows/TestFlow'
@@ -10,8 +11,14 @@ import { FlowEditor } from '@/components/flows/FlowEditor'
 import { listAssignableMembers } from '@/lib/crm/contacts-list'
 import { listSelectableCampaigns } from '@/lib/email/campaign-list'
 import { listEmailAccounts } from '@/lib/email/accounts'
-import { creditBearingSteps, validateFlowDefinition } from '@/lib/flows/definition'
-import { quoteCredits, type HubbleTask } from '@/lib/hubble/pricing'
+import {
+  creditBearingSteps,
+  flowDefinitionWarnings,
+  validateFlowDefinition,
+  type FlowWarning,
+} from '@/lib/flows/definition'
+import { quoteCredits } from '@/lib/hubble/pricing'
+import { hubbleTaskForAction } from '@/lib/capabilities/registry'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
@@ -21,16 +28,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-/** Which Hubble task each AI action performs, for pricing the flow. */
-const TASK_FOR: Record<string, HubbleTask> = {
-  HUBBLE_ICP_SCORE: 'icp_score',
-  HUBBLE_RESEARCH: 'research',
-  HUBBLE_CLASSIFY: 'classification',
-  HUBBLE_PERSONALIZE: 'personalization',
-  HUBBLE_REPLY_DRAFT: 'reply_draft',
-  HUBBLE_CLASSIFY_REPLY: 'response_classification',
-  HUBBLE_ACCOUNT_SUMMARY: 'account_summary',
-}
 
 /**
  * One flow.
@@ -98,14 +95,23 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
   let creditSteps: string[] = []
   let creditsPerContact = 0
   let parsedDefinition: ReturnType<typeof validateFlowDefinition> | null = null
+  /*
+   * §5.10's "deprecation raises a validator warning and requires a migration
+   * path". Warnings are computed, not thrown: a deprecated capability must
+   * leave the flow openable and repairable, or deprecating one registry entry
+   * would strand every flow using it.
+   */
+  let warnings: FlowWarning[] = []
   try {
     if (current?.definition) {
       const definition = validateFlowDefinition(current.definition)
       parsedDefinition = definition
+      warnings = flowDefinitionWarnings(definition)
       creditSteps = creditBearingSteps(definition)
       for (const step of definition.steps) {
-        if (step.type === 'ACTION' && TASK_FOR[step.action]) {
-          creditsPerContact += quoteCredits(TASK_FOR[step.action]!)
+        const task = step.type === 'ACTION' ? hubbleTaskForAction(step.action) : null
+        if (task) {
+          creditsPerContact += quoteCredits(task)
         }
       }
     }
@@ -174,6 +180,32 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
             Running this over 1,000 contacts would use about {creditsPerContact * 1000} credits.
             Every other step is free.
           </p>
+        </div>
+      ) : null}
+
+      {/*
+        §5.10's migration path: the customer has to be TOLD a step is stale,
+        or "deprecated, never deleted" just means the flow quietly ages.
+
+        ⚠️ A WARNING, STYLED AS ONE. Not `danger` — the flow still runs, and a
+        notice that reads like a failure gets acted on as one, or ignored as
+        alarmism. Neither is what a migration prompt should produce.
+      */}
+      {warnings.length > 0 ? (
+        <div className="clay space-y-2 border border-warning/30 bg-warning-soft/40 p-4">
+          <p className="text-sm font-semibold text-ink">
+            {warnings.length === 1 ? 'One step needs attention' : `${warnings.length} steps need attention`}
+          </p>
+          <ul className="space-y-1">
+            {warnings.map((warning, index) => (
+              <li key={`${warning.kind}-${warning.stepId ?? 'flow'}-${index}`} className="text-xs leading-relaxed text-muted">
+                {warning.stepId ? (
+                  <span className="font-semibold text-ink">{warning.stepId}: </span>
+                ) : null}
+                {warning.message}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 
@@ -265,7 +297,13 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
                   <span className="font-semibold text-ink">{run.trigger_type}</span>
                   <span className="text-xs text-muted">
                     v{versionNumber.get(run.version_id) ?? '?'} ·{' '}
-                    {new Date(run.started_at).toLocaleString()}
+                    {/*
+                      ⚠️ WAS THE SERVER'S CLOCK. `toLocaleString()` in a Server
+                      Component formats in UTC on Vercel, so a run that started
+                      at 4pm in Karachi read as 11am — and "when did this run"
+                      is the only question this line answers.
+                    */}
+                    <LocalTime iso={run.started_at} />
                   </span>
                   {run.chain_depth > 0 ? (
                     <span className="text-xs text-muted">· depth {run.chain_depth}</span>

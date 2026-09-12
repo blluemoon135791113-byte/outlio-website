@@ -23,14 +23,31 @@
 }
 
 .featureLogo {
+  position: relative;
   display: block;
   color: #0d1725;
-  width: clamp(3.4rem, 3.9vw, 4rem);
+  width: clamp(3.45rem, 4.2vw, 4.35rem);
   margin: 0 0 clamp(1.25rem, 1.8vw, 1.65rem) -0.15rem;
   overflow: hidden;
-  filter: drop-shadow(0 0.35rem 0.5rem rgba(73, 47, 20, 0.11));
+  mix-blend-mode: multiply;
   aspect-ratio: 1;
   contain: paint;
+}
+
+/* Frame the approved artwork without its sample caption. */
+.featureLogoImage {
+  /* Neutralize the sample's paper tint; white blends into the module below. */
+  filter: grayscale(1) brightness(1.12) contrast(1.08);
+  position: absolute;
+  width: 145%;
+  max-width: none;
+  height: auto;
+  left: -24.65%;
+  top: -17.45%;
+}
+
+@media (max-width: 30rem) {
+  .featureLogo { width: 3.3rem; }
 }
 
 .featureLogo svg {
@@ -162,17 +179,6 @@
   aspect-ratio: 1.12 / 1;
 }
 
-.animationBox::after {
-  position: absolute;
-  z-index: 3;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(#c97a5d, #c97a5d) top / 100% 10px no-repeat;
-  box-shadow: inset 0 0 0 4px #c97a5d;
-  content: '';
-  pointer-events: none;
-}
-
 .workflowFrame {
   position: absolute;
   inset: 0;
@@ -182,9 +188,9 @@
 
 .workflowFrame::after {
   position: absolute;
-  right: 3.5%;
+  right: 0;
   bottom: 0;
-  left: 7%;
+  left: 0;
   z-index: 1;
   height: 9%;
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 92%);
@@ -194,7 +200,7 @@
 
 .workflowImage {
   position: absolute;
-  top: -3.8%;
+  top: -6%;
   left: -90.1%;
   width: auto;
   max-width: none;

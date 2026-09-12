@@ -286,7 +286,7 @@
   .objectStage { height: 4.5rem; }
 }
 
-:global(.proto-picker) {
+.protoPicker {
   position: fixed;
   bottom: 24px;
   left: 50%;
@@ -312,7 +312,7 @@
   -webkit-user-select: none;
 }
 
-:global(.proto-picker-highlight) {
+.protoPickerHighlight {
   position: absolute;
   top: 4px;
   left: 0;
@@ -322,13 +322,13 @@
   will-change: transform;
 }
 
-:global(.proto-picker[data-ready] .proto-picker-highlight) {
+.protoPicker[data-ready] .protoPickerHighlight {
   transition:
     transform 250ms cubic-bezier(0.23, 1, 0.32, 1),
     width 250ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-:global(.proto-picker-item) {
+.protoPickerItem {
   position: relative;
   display: flex;
   align-items: center;
@@ -343,12 +343,12 @@
   transition: color 150ms ease-out;
 }
 
-:global(.proto-picker-item:hover) { color: rgba(255, 255, 255, 0.85); }
-:global(.proto-picker-item:active) { transform: scale(0.97); }
-:global(.proto-picker-item:focus-visible) { outline: 2px solid rgba(255, 255, 255, 0.4); outline-offset: 2px; }
-:global(.proto-picker-item[data-active]) { color: #fff; }
+.protoPickerItem:hover { color: rgba(255, 255, 255, 0.85); }
+.protoPickerItem:active { transform: scale(0.97); }
+.protoPickerItem:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.4); outline-offset: 2px; }
+.protoPickerItem[data-active] { color: #fff; }
 
 @media (prefers-reduced-motion: reduce) {
-  :global(.proto-picker[data-ready] .proto-picker-highlight) { transition: none; }
+  .protoPicker[data-ready] .protoPickerHighlight { transition: none; }
   .cta { transition: none; }
 }

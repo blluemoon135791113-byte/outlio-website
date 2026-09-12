@@ -27,13 +27,15 @@ import 'server-only'
  * other customer on the same tick. Each step is isolated and its error is
  * recorded, not thrown.
  */
-import { deliverPendingWebhooks } from '@/lib/api/webhooks'
+import { deliverPendingWebhooks, pruneDeliveryLog } from '@/lib/api/webhooks'
 import { advanceRun, claimWaitingRuns } from '@/lib/flows/engine'
 import { registerAllActions } from '@/lib/flows/actions'
 import { reapExpiredClaims, runSendWorker } from '@/lib/email/send'
 import { advanceSequences } from '@/lib/email/sequence-runner'
 import { syncWorkspaceReplies } from '@/lib/email/reply-sync'
 import { syncContactEvidenceToCrm } from '@/lib/crm/evidence-bridge'
+import { rollupWorkspace } from '@/lib/crm/metrics'
+import { claimAndProcessOne } from '@/lib/worker/process-job'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type TickResult = {
@@ -63,6 +65,13 @@ const LIMITS = {
    * picked up on the next.
    */
   evidenceWorkspacesPerTick: 5,
+  /*
+   * Workspaces whose reporting aggregate is recomputed per tick. Each one is a
+   * single `crm_rollup_activity_metrics` call covering a 7-day range, so this
+   * is the most expensive per-workspace job here — but at a 5-minute tick,
+   * five per tick still gives every workspace a turn 1,440 times a day.
+   */
+  reportingWorkspacesPerTick: 5,
 }
 
 /*
@@ -215,12 +224,25 @@ export async function runTick(): Promise<TickResult> {
 
     const workspaces = [...new Set((accounts ?? []).map((a) => a.workspace_id))]
     let replies = 0
+    let bounces = 0
+    /*
+     * ⚠️ REPORTED, BECAUSE IT IS THE NUMBER THAT SHOWS THE FIX WORKING.
+     *
+     * Before 2026-09-07 every message in the mailbox counted as a reply:
+     * production held 254 `replied` events against two messages ever sent.
+     * Mail from an address this workspace never emailed is now stored for the
+     * inbox and otherwise ignored, and `unrelated` is how anyone sees that
+     * happening. A counter nobody can read is the same defect as no counter.
+     */
+    let unrelated = 0
     let failures = 0
 
     for (const workspaceId of workspaces) {
       try {
         const outcome = await syncWorkspaceReplies(workspaceId)
         replies += outcome.replies
+        bounces += outcome.bounces
+        unrelated += outcome.unrelated
       } catch {
         // ⚠️ ONE BROKEN MAILBOX MUST NOT STOP THE REST. A wrong IMAP password
         // in one workspace would otherwise block replies for everyone.
@@ -228,7 +250,10 @@ export async function runTick(): Promise<TickResult> {
       }
     }
 
-    return `${workspaces.length} workspace(s), ${replies} replies, ${failures} failed`
+    return (
+      `${workspaces.length} workspace(s), ${replies} replies, ${bounces} bounces, ` +
+      `${unrelated} unrelated, ${failures} failed`
+    )
   }, began)
 
   await runJob(result, 'advance_flows', async () => {
@@ -254,7 +279,22 @@ export async function runTick(): Promise<TickResult> {
 
   await runJob(result, 'deliver_webhooks', async () => {
     const outcome = await deliverPendingWebhooks(LIMITS.webhooksPerTick)
-    return `${outcome.delivered} delivered, ${outcome.retrying} retrying, ${outcome.exhausted} exhausted`
+
+    /*
+     * ⚠️ PRUNED IN THE SAME JOB THAT CREATES THE ROWS, following `recordRun`'s
+     * reasoning: this is the one place guaranteed to run whenever deliveries
+     * exist, so it needs no schedule of its own. An indexed range delete that
+     * usually removes nothing.
+     *
+     * After delivery, never before: pruning first would spend the tick's budget
+     * on housekeeping while a consumer waits.
+     */
+    const pruned = await pruneDeliveryLog()
+
+    return (
+      `${outcome.delivered} delivered, ${outcome.retrying} retrying, ` +
+      `${outcome.exhausted} exhausted, ${pruned} pruned`
+    )
   }, began)
 
   /*
@@ -307,6 +347,109 @@ export async function runTick(): Promise<TickResult> {
     }
 
     return `${workspaces.length} workspace(s), +${emails} emails, +${phones} phones, ${failures} failed`
+  }, began)
+
+  /*
+   * ⚠️ THE BACKSTOP FOR AN ORPHANED EXTRACTION, which had no backstop at all.
+   *
+   * The primary path is targeted: `claimAndProcessJob` is nudged by `after()`
+   * from the upload action, the extension ingest and the jobs page. That covers
+   * the normal case and nothing covered the abnormal one — if the `after()`
+   * callback never ran, or the function was killed before it claimed, the row
+   * sat `queued` forever with nothing in the product looking for it. Retry and
+   * reaping do not help: both only act on a job someone already claimed.
+   *
+   * `claimAndProcessOne` is the untargeted drain written for exactly this and
+   * called from nowhere until now. One per tick, deliberately: this is a
+   * safety net, not the road, and extraction is the most expensive work here.
+   */
+  await runJob(result, 'drain_extraction_queue', async () => {
+    const outcome = await claimAndProcessOne(`tick-${began}`)
+    if (!outcome) return 'queue empty'
+    return `1 orphaned job ${outcome.status}, ${outcome.leadsKept} lead(s) kept`
+  }, began)
+
+  /*
+   * ⚠️ THE REPORTING AGGREGATE HAD NO TRIGGER EITHER — the same defect this
+   * file's header describes, in the one subsystem the R0 audit missed.
+   *
+   * `rollupWorkspace` is written, tested by `tests/integration/crm-metrics`,
+   * and until now called from nowhere but that test. Nothing wrote
+   * `crm_reporting_daily` in production, so `/crm/reports` read an empty table
+   * and rendered a full screen of zeroes — and a zero there does not say "not
+   * computed", it says "this setter did nothing all week". That is the same
+   * failure shape as the credit balance that rendered `?? 0`: the most
+   * discouraging possible reading of missing data, shown to the person being
+   * measured by it.
+   *
+   * ⚠️ RUNS LAST, AFTER THE JOBS THAT CREATE ACTIVITIES. `send_email` writes
+   * EMAIL_SENT and `sync_replies` writes replies; rolling up before them would
+   * make every number exactly one tick stale, which is the ordering mistake
+   * `advance_sequences` already documents above.
+   */
+  await runJob(result, 'rollup_reporting', async () => {
+    const db = createAdminClient()
+
+    /*
+     * ⚠️ A ROTATION OVER ALL LIVE WORKSPACES, NOT "THE ONES WITH ACTIVITY".
+     *
+     * Selecting by recent activity is the obvious optimisation and it is unsafe
+     * here: PostgREST cannot `select distinct`, so it would mean reading a
+     * bounded page of `crm_activities` and de-duplicating in JS — and whichever
+     * column that page is ordered by, one busy workspace can fill it and
+     * starve everyone else indefinitely. Rolling up a quiet workspace is a
+     * delete and an insert-select over an empty range, which is cheap enough
+     * that fairness is worth more than skipping it.
+     */
+    const { data: live, error } = await db
+      .from('workspaces')
+      .select('id')
+      .is('deleted_at', null)
+      .limit(500)
+    if (error) throw new Error(error.message)
+
+    const candidates = (live ?? []).map((row) => row.id)
+    if (candidates.length === 0) return 'no live workspaces'
+
+    /*
+     * Most recent run per workspace. Ordered newest-first so the first row seen
+     * for an id is its latest run.
+     */
+    const { data: runs } = await db
+      .from('crm_reporting_runs')
+      .select('workspace_id, started_at')
+      .in('workspace_id', candidates)
+      .order('started_at', { ascending: false })
+
+    const lastRun = new Map<string, string>()
+    for (const run of runs ?? []) {
+      if (!lastRun.has(run.workspace_id)) lastRun.set(run.workspace_id, run.started_at)
+    }
+
+    /*
+     * Oldest first, and a workspace that has NEVER been rolled up sorts ahead
+     * of every workspace that has — it is the one whose reports are blank.
+     */
+    const due = candidates
+      .sort((a, b) => (lastRun.get(a) ?? '').localeCompare(lastRun.get(b) ?? ''))
+      .slice(0, LIMITS.reportingWorkspacesPerTick)
+
+    let rows = 0
+    let failures = 0
+
+    for (const workspaceId of due) {
+      try {
+        // The default 7-day lookback: an event can arrive late, and a rollup
+        // that only recomputed today would leave yesterday permanently wrong.
+        const outcome = await rollupWorkspace(workspaceId)
+        rows += outcome.rowsWritten
+      } catch {
+        // One workspace's bad data must not stop the rotation.
+        failures += 1
+      }
+    }
+
+    return `${due.length} of ${candidates.length} workspace(s), ${rows} row(s) written, ${failures} failed`
   }, began)
 
   result.durationMs = Date.now() - began

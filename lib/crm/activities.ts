@@ -20,6 +20,7 @@ import 'server-only'
  */
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database, Json } from '@/types/database'
+import { emitDomainEvent } from '@/lib/events/emit'
 
 export type ActivityType = Database['public']['Enums']['crm_activity_type']
 export type ActivityChannel = Database['public']['Enums']['crm_activity_channel']
@@ -172,7 +173,14 @@ export async function assignContact(
   if (!current) throw new Error('assignContact: no such contact in this workspace')
   if (current.owner_user_id === newOwnerUserId) return
 
-  await recordActivity(workspaceId, {
+  /*
+   * ⚠️ THE ACTIVITY ID IS THE OCCURRENCE. One assignment produces one
+   * OWNER_ASSIGNED row; using its id as the idempotency key means a retried
+   * business operation (this function is called from a server action a browser
+   * may resubmit) cannot fire the assignment twice, while A→B→A fires twice,
+   * as it should — each move is its own activity.
+   */
+  const activityId = await recordActivity(workspaceId, {
     contactId,
     activityType: 'OWNER_ASSIGNED',
     channel: 'system',
@@ -188,6 +196,20 @@ export async function assignContact(
     .eq('id', contactId)
 
   if (error) throw new Error(`assignContact failed: ${error.message}`)
+
+  /*
+   * `crm.contact.assigned` — the one shared manual path (the single-contact
+   * action and collision-approved reassignment both land here). Flow actions
+   * ASSIGN_OWNER and ROUND_ROBIN emit their own; this is not in a flow's
+   * step runner, so the same event cannot feed itself within one run.
+   */
+  await emitDomainEvent({
+    workspaceId,
+    triggerType: 'contact_assigned',
+    contactId,
+    idempotencyKey: `contact_assigned:${activityId}`,
+    payload: { contactId, from: current.owner_user_id, to: newOwnerUserId },
+  })
 }
 
 // ---------------------------------------------------------------------------

@@ -12,8 +12,8 @@ import { HUBBLE_TASKS, quoteCredits, quoteFlow, type HubbleTask } from '@/lib/hu
 describe('every task has a declared price', () => {
   it('prices every task the brief names', () => {
     for (const task of [
-      'icp_score', 'research', 'classification', 'personalization',
-      'reply_draft', 'response_classification', 'account_summary',
+      'hubble.icp_score', 'hubble.research', 'hubble.classification', 'hubble.personalization',
+      'hubble.reply_draft', 'hubble.response_classification', 'hubble.account_summary',
     ] as HubbleTask[]) {
       expect(quoteCredits(task)).toBeGreaterThan(0)
     }
@@ -29,22 +29,22 @@ describe('every task has a declared price', () => {
 
   it('prices research above a simple classification', () => {
     // Research is several model calls and a fetch; classification is one.
-    expect(quoteCredits('research')).toBeGreaterThan(quoteCredits('classification'))
+    expect(quoteCredits('hubble.research')).toBeGreaterThan(quoteCredits('hubble.classification'))
   })
 })
 
 describe('quoting a whole flow', () => {
   it('multiplies per-contact cost by the audience', () => {
-    const quote = quoteFlow(['icp_score', 'personalization'], 10_000)
+    const quote = quoteFlow(['hubble.icp_score', 'hubble.personalization'], 10_000)
     // 1 + 2 per contact.
     expect(quote.perContact).toBe(3)
     expect(quote.total).toBe(30_000)
   })
 
   it('breaks the cost down per step, so the expensive one is visible', () => {
-    const quote = quoteFlow(['research', 'classification'], 100)
+    const quote = quoteFlow(['hubble.research', 'hubble.classification'], 100)
     expect(quote.breakdown).toHaveLength(2)
-    expect(quote.breakdown[0]!.credits).toBe(quoteCredits('research'))
+    expect(quote.breakdown[0]!.credits).toBe(quoteCredits('hubble.research'))
     expect(quote.breakdown[0]!.label).toContain('Research')
   })
 
@@ -56,6 +56,6 @@ describe('quoting a whole flow', () => {
   })
 
   it('never returns a negative total for a nonsense audience size', () => {
-    expect(quoteFlow(['icp_score'], -5).total).toBe(0)
+    expect(quoteFlow(['hubble.icp_score'], -5).total).toBe(0)
   })
 })

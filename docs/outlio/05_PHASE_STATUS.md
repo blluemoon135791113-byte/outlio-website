@@ -11,7 +11,22 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 1 | Wiring sweep + authorization core | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_1.md`](phases/PHASE_1.md) · [`PHASE_1_EVIDENCE.md`](phases/PHASE_1_EVIDENCE.md) |
 | 2 | CRM table: filter/sort/pagination, bulk actions, saved views | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_2.md`](phases/PHASE_2.md) · [`PHASE_2_EVIDENCE.md`](phases/PHASE_2_EVIDENCE.md) |
 | 3 | Contact + Company workspaces; evidence/provenance | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_3.md`](phases/PHASE_3.md) · [`PHASE_3_EVIDENCE.md`](phases/PHASE_3_EVIDENCE.md) |
-| 4–25 | see §9 | NOT_STARTED | — | — |
+| 4 | Lead Engine → CRM control | **WITHDRAWN** | `platform-m1-workspaces` | [`PHASE_4.md`](phases/PHASE_4.md) — brief withdrawn, work deferred |
+| 5 | Opportunity expansion | **DEFERRED** | `platform-m1-workspaces` | [`PHASE_5.md`](phases/PHASE_5.md) |
+| 6 | Pipeline productization | **DEFERRED** | — | deferred with Phase 5, same argument |
+| 7 | Email real end-to-end validation | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_7_EVIDENCE.md`](phases/PHASE_7_EVIDENCE.md) |
+| 8 | Email campaign productization + compliance | **COMPLETE** (narrowed) | `platform-m1-workspaces` | [`PHASE_8.md`](phases/PHASE_8.md) |
+| 9 | Unified Conversations foundation | **PARTIAL** | `platform-m1-workspaces` | [`PHASE_9.md`](phases/PHASE_9.md) |
+| 10 | Flow fact expansion | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_10.md`](phases/PHASE_10.md) — already built as "M7 Phase 10"; 33 fact keys across 7 domains, picker and builder pinned key-for-key by `flow-fact-coverage.test.ts` (20 tests, mutation-proven 2026-09-09) |
+| 11 | Manual Flow builder UX | **COMPLETE** | `platform-m1-workspaces` | `components/flows/FlowBuilder.tsx` (1,879 lines) — both pickers filter on `actionIsImplemented`, credit quote shown before publish, fact keys read from the registry. Guarded by `flow-action-coverage.test.ts` + `flow-fact-coverage.test.ts` |
+| 12 | Capability registry + entitlement checks | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_12.md`](phases/PHASE_12.md) — item 4 delivered 2026-09-08; DECISION-16 answered with its starting point (meter at 0) |
+| 13 | Gemini Flow Copilot | **NOT_STARTED** | `platform-m1-workspaces` | [`PHASE_13.md`](phases/PHASE_13.md) — ⚠️ its deferral reason ("an engine with 0 runs") was disproved by DECISION-15 on 2026-09-08. The engine has run. Re-assess before building; the §5.10 registry prerequisite already exists |
+| 14 | Reporting foundation | **MOSTLY COMPLETE** | `platform-m1-workspaces` | [`PHASE_14.md`](phases/PHASE_14.md) — rollup table, rollup + reconcile functions and a live `/crm/reports` page all exist (migration `0082`). Remaining scope: §5.14's metric registry + formula AST. ⚠️ The brief's "12,700% reply rate" warning was wrong about the mechanism — corrected in place |
+| 15 | LinkedIn capability matrix + RISK_REGISTER | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_15.md`](phases/PHASE_15.md) · [`RISK_REGISTER.md`](RISK_REGISTER.md) |
+| 16–20 | LinkedIn channel | **GATED** | — | blocked on DECISION-17 |
+| 23 | Integrations + webhooks | **MOSTLY COMPLETE** | `platform-m1-workspaces` | [`PHASE_23.md`](phases/PHASE_23.md) — 9 of 12 webhook events sourced (6 on 2026-09-08, 3 on 2026-09-09); 3 `meeting.*` blocked on DECISION-18 (payload contract); Slack/Teams delivery unverified |
+| 21–22, 24–25 | see §9 | NOT_STARTED | — | ⚠️ Phase 22's substance exists in `/crm/reports` (`dataScope(ctx.role)`, leaderboard behind `report.team.view`) |
+| §6.4 | Data subject rights | **DELIVERED** | `platform-m1-workspaces` | Erasure was built in `0075` and **unreachable its whole life** — no action, no UI, only its own integration test called it. Now gated + reachable, and the missing half (per-contact access export) built. Invariant: the export covers what the erasure destroys, exclusions asserted both ways. `tests/unit/data-subject-rights.test.ts` |
 
 ## Phase 0 result (2026-09-04)
 
@@ -1026,3 +1041,160 @@ rather than a script.
 first tick that can claim it is **Tuesday 06:00 UTC**. The scheduler and the
 cron are both behaving correctly; they just compose into a longer wait than
 "Monday morning" implies.
+
+## Phase 7 result (2026-09-06) — COMPLETE, recorded after the fact
+
+Email end-to-end with an authorized mailbox. Real Zoho account connected,
+message sent, reply fetched over IMAP, attributed to a contact, sequence
+stopped with `stop_reason: replied`. Every step verified against production;
+raw output in `phases/PHASE_7_EVIDENCE.md`.
+
+⚠️ **Executed before its brief existed**, which is a §10 violation and is
+recorded rather than tidied. The owner attached a mailbox mid-session and asked
+for a live send; the work followed the opportunity rather than the order.
+
+⚠️ **Two Definition-of-Done criteria are NOT met** and the phase is recorded
+that way rather than rounded up: there is no feature flag for the email module
+(it is gated by plan module instead), and RBAC/tenant isolation were covered by
+the existing suites rather than a phase-specific matrix.
+
+What the phase found, none of which a brief would have predicted:
+
+- **No sequence sender existed.** `launchCampaign` said "the first emails go
+  out now" while nothing enqueued due steps.
+- **`enrolContacts` had no caller** — a campaign could be launched containing
+  nobody.
+- **The tick ran once per ~193 minutes**, never the 5 it asked for.
+- **A quarter of ticks died at the 60s wall**, no per-job timeout.
+- **`reply-sync` read the product's own outbound as a prospect reply.**
+- **7 of 8 replies were attributed to nobody** — visible in the phase's own
+  evidence, fixed 2026-09-06, historical rows deliberately not backfilled
+  because inferring which contact each belonged to would be inventing an
+  observation (rule 4).
+
+## Phase 5 brief (2026-09-06) — BLOCKED ON DECISION-14
+
+`crm_opportunities` holds **0 rows**. Phase 5 expands a record type nobody has
+created once. Brief written, recommendation is to defer with an explicit
+trigger (20 opportunities after 2026-09-06), but two consecutive deferrals on
+the same argument is a product call rather than an engineering one — see
+`04_DECISIONS_NEEDED.md`.
+
+Phase 4 remains correctly deferred: it needs ~20 extraction jobs completed
+after the CRM existed, and production still shows one workspace with 44
+contacts.
+
+## Phase 8 result (2026-09-07) — DELIVERED, narrowed on evidence
+
+Suppression had every write path and no read path. `suppressEmail` is called on
+unsubscribe and hard bounce, `enqueueEmail` refuses a suppressed address
+(proven by mutation), and `grep -rl "email_suppressions" app components`
+returned nothing. The product honoured opt-outs and could not demonstrate it —
+a customer asking "did you remove me?" got no answer, and a wrong entry needed
+SQL to undo.
+
+Now listed and manageable at `/email`, gated on `email.account.manage` (admin),
+with removal copy that differs per reason: un-suppressing a bounce is a
+delivery decision that recurs, un-suppressing an unsubscribe overrides a stated
+wish.
+
+⚠️ **Rotation and variants deferred.** One mailbox exists and
+`email_sequence_steps` is empty; both would design against a population of zero.
+
+## Phase 9 result (2026-09-07) — PARTIAL: one real defect found and fixed
+
+**254 `replied` events against 2 messages ever sent.** 261 threads, 260 with no
+contact. The sync reads the whole mailbox, and nothing asked whether an
+arriving message answered anything we sent — so ordinary correspondence was
+recorded as prospect replies and fired `email_replied` flow triggers. A bounce
+for mail we never sent would have suppressed an unrelated address.
+
+Fixed: a message counts as a reply only if this workspace has mailed that
+address. Unrelated mail is still stored for the inbox and counted, but produces
+no event, suppression or trigger.
+
+⚠️ **The rest of Phase 9 is deferred with Phases 5 and 6.** "Unified"
+conversations need a second channel; LinkedIn is Phases 15–20 and not started.
+
+⚠️ **Integration ran; the one test that matters skipped.** 424 passed, 0
+failed against real Supabase, on a run that did include the fix. But it skipped
+47 where CI skips 24, and the extra 23 are the GreenMail-dependent files —
+including `email-reply-sync.test.ts`, the only test covering the changed path.
+Reading "424 passed" as verification would be a green number that is not about
+the thing it appears to be about.
+
+### Where the phase map stands
+
+| Phase | State |
+|---|---|
+| 0, 0.5, 1, 2, 3 | complete |
+| 4 Lead Engine → CRM | deferred — needs ~20 post-CRM extraction jobs |
+| 5 Opportunity expansion | deferred — `crm_opportunities` is 0 rows (DECISION-14) |
+| 6 Pipeline productization | deferred — forecasting zero opportunities |
+| 7 Email E2E | complete, recorded 2026-09-06 |
+| 8 Campaign compliance | delivered, narrowed |
+| 9 Conversations | partial — defect fixed, model deferred |
+| 10+ | not started |
+
+⚠️ **Four consecutive phases now rest on the same fact:** this product has one
+active workspace, 44 contacts, 2 sent messages and 0 opportunities. The
+engineering is ahead of the usage, and further phases keep meeting the same
+wall. That is a product question, not an engineering one.
+
+## E2E: the first green run, and why there had never been one (2026-09-07)
+
+`npx playwright test` → **22 passed**, `e2e/` × 5 files, against staging.
+
+Before this, a run reported **5 failed / 11 did not run**. The five looked like
+five product defects across tenant isolation, role denial, provenance, contact
+filters and company details. They were **one environment fault**.
+
+`playwright.config.ts` set `reuseExistingServer: !process.env.CI`. Playwright
+reuses ANY listener on port 3000 and cannot tell `npm run dev:staging` from a
+plain `npm run dev` — and `next dev` reads `.env.local`, which is production. A
+stale plain dev server was running, so fixtures were created in **staging**
+while the browser signed in against **production**. The page snapshot said it
+plainly: *"That email and password combination did not work."*
+
+⚠️ **The failure was the lucky shape.** These specs READ a fixture, so an absent
+fixture failed loudly. A spec that SIGNS UP would have succeeded — against
+production — created real accounts in the live database, and reported green.
+Forty-two `outlio-test-*` accounts were deleted from production earlier in this
+project, and this is the most plausible way they got there.
+
+Fixed by setting `reuseExistingServer: false`, so a busy port is a hard startup
+error. Pinned in `tests/unit/hard-rules.test.ts`; both mutations kill it
+(restoring `!process.env.CI` fails the value assertion, deleting the line fails
+the presence assertion). `.claude/launch.json` gained `outlio-dev-staging` for
+the same reason — its only entry ran plain `dev`.
+
+### What this does and does not license
+
+It does **not** promote any gap-matrix row to `VERIFIED` that was not already.
+The suite is the Phase 0.5 tripwire, unchanged in scope: it still omits the
+signup journeys, deliberately.
+
+What it does settle is that the tripwire **works**, which had not been true in
+practice — a suite whose failures cannot be distinguished from product bugs is
+a suite that gets ignored, which is the same failure mode as the 25-minute
+integration suite that hid the signup gate for eleven days.
+
+### Three Phase 8/9 UIs rendered for the first time
+
+Shipped earlier in the session and never once loaded in a browser:
+
+| Component | Route | Result |
+|---|---|---|
+| `SuppressionList` | `/email` | renders, designed empty state |
+| `PipelineManager` | `/crm/pipeline` | renders the stage-setup form |
+| `ExtensionControls` | `/admin/extension` | renders, and its action works |
+
+`ExtensionControls` was exercised, not just observed: "Enable extension" flipped
+`profiles.extension_enabled` false → true, confirmed by reading the row back.
+That matters because these actions were wired precisely because nothing called
+them; rendering the button proves less than pressing it.
+
+Reaching `/admin/extension` first redirected to
+`/dashboard/settings?required_mfa=1#security` — `adminGateRedirect` demanding
+AAL2, working correctly, not a UI fault. A TOTP factor was enrolled on staging
+to get past it; the fixture was deleted afterwards.

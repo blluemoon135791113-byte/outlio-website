@@ -48,10 +48,7 @@ export default async function AccessPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-          Outlio account
-        </p>
-        <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
+        <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
           Access status
         </h1>
         <p className="mt-1 text-sm text-muted">{ctx.email}</p>

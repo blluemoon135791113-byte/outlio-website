@@ -1,3 +1,4 @@
+import { LocalTime } from '@/components/ui/LocalTime'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
@@ -31,14 +32,18 @@ export default async function BillingSettingsPage() {
         <Info label="Current plan" value={ctx.plan?.name ?? 'No active plan'} />
         <Info label="Subscription status" value={subscription?.status ?? 'Manual access'} />
         <Info label="Billing provider" value={subscription?.provider ?? 'Not connected'} />
-        <Info
-          label="Next billing date"
-          value={
-            subscription?.current_period_end
-              ? new Date(subscription.current_period_end).toLocaleDateString('en-GB')
-              : 'Available after checkout setup'
-          }
-        />
+        {/*
+          ⚠️ THE SERVER'S DATE, NOT THE READER'S. A period end stored at
+          midnight UTC rendered a day early for everyone west of it — on the
+          line that tells a customer when they will next be charged.
+        */}
+        <Info label="Next billing date">
+          {subscription?.current_period_end ? (
+            <LocalTime iso={subscription.current_period_end} dateOnly />
+          ) : (
+            'Available after checkout setup'
+          )}
+        </Info>
       </div>
 
       <div className="mt-5 flex flex-wrap gap-2">
@@ -78,11 +83,20 @@ export default async function BillingSettingsPage() {
   )
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({
+  label,
+  value,
+  children,
+}: {
+  label: string
+  value?: string
+  /** For anything that must render itself — a date needs the reader's clock. */
+  children?: React.ReactNode
+}) {
   return (
     <div className="skeuo-inset p-4">
       <p className="text-xs font-medium text-muted">{label}</p>
-      <p className="mt-1.5 text-sm font-semibold capitalize text-ink">{value}</p>
+      <p className="mt-1.5 text-sm font-semibold capitalize text-ink">{children ?? value}</p>
     </div>
   )
 }

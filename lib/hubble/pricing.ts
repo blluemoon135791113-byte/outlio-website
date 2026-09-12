@@ -1,27 +1,33 @@
 /**
- * What AI costs — M7 Phase 22.
+ * What AI costs — M7 Phase 22, re-based on the capability registry in Phase 12.
  *
  * ⚠️ SEPARATE FROM THE BOUNDARY, AND PURE. Pricing is the half a customer must
  * be able to see BEFORE anything runs: the brief requires expected credit usage
  * to be shown, and a quote that needed a database round trip could not be
  * rendered next to a flow step as it is being edited.
  *
- * ⚠️ THE COST IS DECLARED HERE, NOT AT THE CALL SITE. A caller that could pass
- * its own price would eventually pass the wrong one, and the same work would
- * cost different amounts depending on which screen asked for it.
+ * ⚠️ THE COST IS DECLARED IN THE REGISTRY, NOT AT THE CALL SITE. A caller that
+ * could pass its own price would eventually pass the wrong one, and the same
+ * work would cost different amounts depending on which screen asked for it.
+ * This file is a view over `lib/capabilities/registry.ts`, kept so the flow
+ * editor's quote API does not change shape.
  */
+import {
+  CAPABILITIES,
+  CAPABILITY_IDS,
+  type AiFlowCapabilityId,
+} from '@/lib/capabilities/registry'
 
-export const HUBBLE_TASKS = {
-  icp_score: { credits: 1, label: 'Score against your ICP' },
-  research: { credits: 3, label: 'Research this company' },
-  classification: { credits: 1, label: 'Classify' },
-  personalization: { credits: 2, label: 'Personalise this message' },
-  reply_draft: { credits: 2, label: 'Draft a reply' },
-  response_classification: { credits: 1, label: 'Classify this reply' },
-  account_summary: { credits: 2, label: 'Summarise this account' },
-} as const
+export type HubbleTask = AiFlowCapabilityId
 
-export type HubbleTask = keyof typeof HUBBLE_TASKS
+export const HUBBLE_TASKS: Readonly<Record<HubbleTask, { credits: number; label: string }>> =
+  Object.fromEntries(
+    CAPABILITY_IDS.flatMap((id) => {
+      const entry = CAPABILITIES[id]
+      if (!entry.isAi || !('flowAction' in entry) || entry.credits === null) return []
+      return [[id, { credits: entry.credits, label: entry.label }]]
+    }),
+  ) as Record<HubbleTask, { credits: number; label: string }>
 
 /** What one task costs, before anyone commits to it. */
 export function quoteCredits(task: HubbleTask): number {

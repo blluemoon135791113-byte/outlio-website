@@ -37,6 +37,7 @@ import {
   UnusableScheduleError,
   type SendSchedule,
 } from '@/lib/email/schedule'
+import { emitDomainEvent } from '@/lib/events/emit'
 
 /**
  * The public origin, for the unsubscribe link and header.
@@ -58,6 +59,11 @@ type ComplianceContext = {
   campaignId: string | null
   campaignType: CampaignType
   postalAddress: string | null
+  /**
+   * The message's contact, when it has one — present so the sent webhook can
+   * name who was mailed without a second query at emit time.
+   */
+  contactId: string | null
 }
 
 /**
@@ -88,7 +94,7 @@ async function complianceContext(
    */
   const { data: messages, error } = await db
     .from('email_messages')
-    .select('id, workspace_id, campaign_id')
+    .select('id, workspace_id, campaign_id, contact_id')
     .in('id', messageIds)
 
   if (error) throw new Error(`compliance context failed: ${error.message}`)
@@ -132,6 +138,7 @@ async function complianceContext(
       campaignId: row.campaign_id ?? null,
       campaignType: row.campaign_id ? (types.get(row.campaign_id) ?? 'manual') : 'manual',
       postalAddress: addresses.get(row.workspace_id) ?? null,
+      contactId: row.contact_id ?? null,
     })
   }
   return out
@@ -465,6 +472,34 @@ export async function runSendWorker(
           p_sent_at: sentAt,
         })
       }
+
+      /*
+       * `email.message.sent` — AFTER the provider accepted the message, never
+       * at enqueue. A queued row that later fails is not a sent email, and a
+       * subscriber told "sent" for mail that never left would be built on a
+       * false premise. The message row's status transition `sending → sent`
+       * happens exactly once per message (a retryable failure re-queues the
+       * SAME row only while it has never been sent), so the message id is the
+       * occurrence.
+       *
+       * The emit must not be able to fail the send it describes: the message
+       * is out and marked; a webhook or flow that cannot start is recorded,
+       * not thrown into the worker's loop.
+       */
+      await emitDomainEvent({
+        workspaceId: message.workspace_id,
+        triggerType: 'email_sent',
+        contactId: context.get(message.message_id)?.contactId ?? null,
+        idempotencyKey: `email_sent:${message.message_id}`,
+        payload: {
+          messageId: message.message_id,
+          toEmail: message.to_email,
+          contactId: context.get(message.message_id)?.contactId ?? null,
+          campaignId: context.get(message.message_id)?.campaignId ?? null,
+        },
+      }).catch(() => {
+        // The send already succeeded; the fan-out keeps its own ledger row.
+      })
 
       result.sent += 1
       continue

@@ -57,31 +57,11 @@ export function secretsMatch(a: string, b: string): boolean {
   return timingSafeEqual(left, right)
 }
 
-/**
- * The domain events a customer can subscribe to.
- *
- * ⚠️ NAMED `noun.verb-in-past-tense`, consistently. A consumer writing a switch
- * over these should never have to remember whether it is `contact.create` or
- * `contact.created`.
- */
-export const WEBHOOK_EVENTS = [
-  'crm.contact.created',
-  'crm.contact.assigned',
-  'crm.opportunity.stage_changed',
-  'crm.opportunity.won',
-  'crm.task.completed',
-  'email.message.sent',
-  'email.message.replied',
-  'email.message.bounced',
-  /* Unsubscribing is about the PERSON, not a message — hence `contact`, and
-     three parts like every other event. */
-  'email.contact.unsubscribed',
-  'meeting.booked',
-  'meeting.cancelled',
-  'meeting.rescheduled',
-] as const
-
-export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number]
+/* The event catalog lives in `webhook-events.ts` — client-reachable, so it must
+   not carry this file's `node:crypto` imports with it. Re-exported here so the
+   server-side importers keep their existing `@/lib/api/signing` paths. */
+export { WEBHOOK_EVENTS } from './webhook-events'
+export type { WebhookEvent } from './webhook-events'
 
 /**
  * ⚠️ EXPONENTIAL, AND IT STARTS SMALL. A consumer that is briefly down should
@@ -92,6 +72,42 @@ export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number]
  */
 export function backoffSeconds(attempt: number): number {
   return 30 * 4 ** Math.max(attempt - 1, 0)
+}
+
+/**
+ * The same schedule, spread so simultaneous failures do not retry in lockstep.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  §5.13 ASKS FOR "EXPONENTIAL BACKOFF + JITTER" AND THE JITTER WAS MISSING.║
+ * ║                                                                           ║
+ * ║  Not a cosmetic gap. `publishEvent` fans one domain event out to every     ║
+ * ║  subscriber in the same instant, and a bulk import emits many events in    ║
+ * ║  one tick — so a batch of deliveries shares a `next_attempt_at` to the     ║
+ * ║  second. If the consumer is down, every one of them retries together, at   ║
+ * ║  30s, then 2m, then 8m: a thundering herd aimed at the endpoint that is    ║
+ * ║  already struggling, which is how a brief outage becomes a long one.      ║
+ * ║                                                                           ║
+ * ║  ⚠️ EQUAL JITTER, NOT FULL JITTER. Full jitter — `random() * base` — can    ║
+ * ║  retry almost immediately, throwing away the "do not hammer a consumer     ║
+ * ║  that is badly down" property the schedule above exists for. Equal jitter  ║
+ * ║  keeps at least half the delay and spreads the rest, so the herd breaks up ║
+ * ║  without any single retry arriving early.                                  ║
+ * ║                                                                           ║
+ * ║  ⚠️ `backoffSeconds` IS LEFT EXACT ON PURPOSE. It documents the schedule    ║
+ * ║  and is asserted value-for-value by `api-signing.test.ts`; a randomised    ║
+ * ║  function cannot be. This wraps it rather than replacing it.              ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * @param random injectable so a test can pin the result instead of sampling it.
+ */
+export function backoffSecondsWithJitter(
+  attempt: number,
+  random: () => number = Math.random,
+): number {
+  const base = backoffSeconds(attempt)
+  const half = base / 2
+  // [half, base) — never zero, never longer than the documented schedule.
+  return Math.round(half + random() * half)
 }
 
 /**

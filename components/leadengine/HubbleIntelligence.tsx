@@ -6,15 +6,16 @@ import styles from './HubbleIntelligence.module.css'
 
 function SatelliteMark() {
   return (
-    <Image
-      className={styles.satelliteMark}
-      src="/brand/hubble-telescope-mark.png"
-      width={720}
-      height={720}
-      alt=""
-      aria-hidden="true"
-      draggable={false}
-    />
+    <span className={styles.satelliteMark} aria-hidden="true">
+      <Image
+        className={styles.satelliteImage}
+        src="/brand/hubble-sketch-casual.png"
+        width={1254}
+        height={1254}
+        alt=""
+        draggable={false}
+      />
+    </span>
   )
 }
 

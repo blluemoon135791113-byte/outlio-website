@@ -380,6 +380,113 @@ makes the change visible.
 
 ---
 
+## DECISION-14 — Does Phase 5 proceed, or defer like Phase 4? · `OPEN`
+
+Raised 2026-09-06 while writing `PHASE_5.md`.
+
+**The fact:** production holds 3 pipelines and **0 opportunities**, 0 stage
+history rows, 0 custom field definitions and 0 values. Phase 5 adds contact
+roles, custom fields, conditional fields, files and followers to a record type
+nobody has created once.
+
+**Why it is not obviously the Phase 4 situation:** Phase 4 proposed changing
+behaviour on a misread ratio. Phase 5 adds capability, and usage cannot precede
+capability. That objection fails on a verified fact — the capability exists.
+`createOpportunity` is reachable from the board via `NewOpportunityButton`
+today. Nobody has used it.
+
+**Options, with the cost of being wrong:**
+
+1. **Defer, trigger at 20 opportunities created after 2026-09-06** (mirrors
+   Phase 4's standard). Wrong if a missing field is the reason nobody creates
+   one — nothing suggests that, and nothing rules it out.
+2. **Smallest slice: custom fields only.** Gives the two written validators
+   (`lib/crm/custom-fields.ts:166,265`, currently zero callers) a caller. Wrong
+   if adoption does not follow, leaving five empty tables instead of four.
+3. **Reorder to Phase 6 first.** Wrong on the same numbers — forecasting zero
+   opportunities is equally hollow.
+
+**Recommendation: 1.** The blocker is not a missing feature; opportunities are
+not part of anyone's workflow yet, and schema does not fix that.
+
+⚠️ **Flagged for the owner rather than acted on.** Deferring two consecutive
+phases on the same argument is how a plan quietly stops moving, and "there is
+no data" can become a reason never to build anything. Whether the pipeline is a
+priority at all is a product question — §11 says stop rather than guess it.
+
+## DECISION-15 — Chase the flow engine's missing first run before Phase 10? · `RESOLVED 2026-09-08`
+
+Raised 2026-09-07 while surveying Phase 10. **Resolved 2026-09-08: the engine
+works; the zero was an accounting artifact.** Full evidence below — every step
+was run against production, not inferred.
+
+**The fact:** one published flow, trigger `contact_created`, live since
+2026-09-03. Three contacts created in that workspace since, all `manual`. The
+manual path does dispatch `contact_created`, the dispatch query returns the
+flow, the definition validates, and `flow_runs` is **0** — verified with the
+error checked.
+
+`startRun` writes a row even when it HALTS. Zero rows means nothing reached the
+insert, so this is not a flow being refused; it is a chain that stops somewhere
+between the dispatch call and the first write.
+
+**Why it is a decision and not just a bug:** Phase 10 adds company,
+opportunity, activity, task and conversation facts to the flow engine. Adding
+facts to an engine that has never executed is the same mistake as building
+features for a population of zero — but chasing the defect needs a production
+action (create a contact, then read `flow_runs` and the Vercel logs), which is
+the owner's to take.
+
+**Recommendation:** settle the defect first. It is one contact and one query.
+
+⚠️ **No fix proposed.** Mid-investigation I concluded the manual path never
+dispatched and started patching it — the dispatch was already there, one call
+deeper. Nearly adding a duplicate trigger while hunting a missing one is why
+this stops at evidence.
+
+### Resolution (2026-09-08, verified against production)
+
+**The premise "the engine has never executed" was false.** It executed twice —
+once per qualifying contact — and the `OWNER_ASSIGNED` activities the runs
+wrote are still in `crm_activities`:
+
+| Contact | Created (UTC) | Flow action executed | run_id (from activity metadata) |
+|---|---|---|---|
+| "Flow Verify Three" `91dcac4f` | 2026-09-03 17:38:20 | OWNER_ASSIGNED 17:40:35, `by: flow` | `59f87a48-421f…` |
+| "Vars Proof Contact" `7d8c864a` | 2026-09-03 23:49:08 | OWNER_ASSIGNED 23:51:47, `by: flow` | `9b965940-d6e2…` |
+
+`by: flow` + `run_id` in metadata is written by **exactly one** code path —
+`lib/flows/actions/crm.ts` ASSIGN_OWNER — so these are genuine engine
+executions, not manual reassignments (the manual path writes
+`{from, to}` metadata). Both fired ~2 min after creation, consistent with the
+pg_cron worker tick advancing runs.
+
+**Why `flow_runs` shows zero:** the two run rows and the two step rows were
+removed after the fact. No code path in the repo deletes from `flow_runs`
+(checked `lib/`, `app/`, `scripts/`, every migration); `crm_undo_batch`
+soft-deletes contacts only. Both test contacts were also soft-deleted minutes
+after the test, and both runs are absent — consistent with manual cleanup in
+the Supabase SQL editor after the owner's verification sessions. The third
+contact ("Reply Test Prospect") was created by `scripts/seed-reply-test.mjs`
+via **raw insert** into `crm_contacts`, deliberately bypassing the manual
+path, so it never dispatched anything — correct behaviour, not a defect.
+
+**Live re-verification of every link, against production, 2026-09-08:**
+`crm_ingest_contacts` RPC → created=true; the exact FK-hint dispatch query →
+returns the published flow; `flow_check_loop_protection` → null;
+`flow_runs` insert → row created. Probe rows removed afterward;
+`flow_runs` back to zero, as expected.
+
+**Live-code caveat:** the re-verification travelled the DB path a request
+travels, but not through the deployed Next.js action. The strongest remaining
+proof is one contact added via the production UI at outlio.io — an owner
+action, 30 seconds, zero risk (the run can be soft-deleted with the contact).
+Until then, treat the engine as **working with production evidence**, not
+"never executed".
+
+**Phase 10 is unblocked.** The fact expansion should proceed against an
+engine that demonstrably runs.
+
 ## Not blocking, but worth knowing
 
 - **`docs/SYSTEM_HANDOFF.md`** (written 2026-09-04) already covers much of what
@@ -398,3 +505,335 @@ makes the change visible.
   queues with `FOR UPDATE SKIP LOCKED`), 5.4 (hybrid custom fields — the repo
   has both `crm_custom_field_definitions` and `crm_custom_field_values`), and
   5.8 (`Message-ID`/`In-Reply-To` threading, migration 0104). No conflict.
+
+---
+
+## DECISION-16 — What do the four AI HTTP routes cost? · `STARTING ANSWER ADOPTED 2026-09-08`
+
+**Resolved to its recommended option 2 — meter but do not charge — as the
+starting point, not the final answer.** The three HTTP entries
+(`hubble.ask`, `intelligence.plan`, `intelligence.summarize`) are priced at 0
+in registry version 2, the four routes run inside `hubbleExecute`, and
+`hubble_calls` now records every call. **The real price remains OPEN**: when
+the ledger holds a month of real rows, the owner picks the number with
+evidence under it, and raising it is a one-line registry change with a
+test pinning the current 0. Delivery detail in `phases/PHASE_12.md`, item 4.
+
+What this does NOT settle, unchanged: the provider bill to date (owner's
+console), and the eventual non-zero price.
+
+Raised 2026-09-07 while surveying Phase 12.
+
+**The fact:** `hubble_spend_credits` is the only credit-spending call in the
+codebase, and it is reached from exactly one module, `lib/hubble/execute.ts`,
+which only the flows path imports. Import-closure analysis of
+`/api/hubble/ask` (49 modules), `/api/intelligence/query` (76) and
+`/api/intelligence/clarify` (74) finds no metering module in any of them, while
+the same scan finds it on the flows path — so the scan works.
+
+All three call a model. `research` costs **3 credits** through a flow and **0**
+through the route, and the route does more work: search, crawl, embed, then the
+model call. The only limit is the rate limiter, 20 per 10 minutes per user —
+about 2,880 model calls per user per day, charged to the provider account and to
+no plan.
+
+**Why it is a decision and not a bug:** the fix is mechanical, but item 4 of
+Phase 12 turns a feature customers use for free today into a charged one. That
+is pricing, and pricing is not mine to change. Items 1–3 of the brief (registry,
+one guarded entry point, structural guard) do not depend on the answer.
+
+**Options, with the cost of being wrong:**
+
+1. **Charge the routes at flow parity** (`ask` = 3, `clarify` = 1). Consistent,
+   and the pool already exists. Wrong if Hubble's value is that asking is free —
+   metering the exploratory path could suppress the usage this product is short
+   of, and it is short of usage in four separate phases already.
+2. **Meter but do not charge** — pass a credit context, record the spend, set
+   the price to 0 for now. Nothing changes for customers today; the number
+   needed to price it correctly starts accumulating; the structural guard still
+   lands. Wrong only in that it defers revenue.
+3. **Leave the routes unmetered, document the exemption.** Cheapest. Wrong if
+   one user with a script discovers the ratio between a rate limit and a
+   provider bill.
+
+**My recommendation: option 2.** It is the only one that does not require
+guessing. The disagreement between options 1 and 3 is entirely about a number
+nobody has — what these routes actually cost per month — and option 2 produces
+that number within a billing cycle while closing the structural hole
+immediately. Charging can then be a decision with evidence behind it, which is
+the standard every other phase in this project has been held to.
+
+⚠️ **What it does not settle:** the provider bill to date. That is in the
+provider's console, and reading it is an owner action.
+
+### Update 2026-09-08 — the count was wrong, and the rest of the phase shipped
+
+⚠️ **There are FOUR unmetered routes, not three.**
+`/api/intelligence/runs/[id]/summary` reaches a model through
+`lib/hubble/summarize.ts`; its 25-module closure reaches `hubbleExecute` zero
+times. The first scan missed it because it grepped for the identifier and
+counted a hit in `lib/hubble/reason.ts`, which only names it in a **comment**.
+Three modules serve the four routes — `planner.ts` serves both `/query` and
+`/clarify`.
+
+Phase 12 items 1–3 are delivered and do not depend on this decision. The
+registry now carries the three unpriced entries explicitly (`hubble.ask`,
+`intelligence.plan`, `intelligence.summarize`), each naming DECISION-16, and
+`hubbleExecute` **refuses** an unpriced capability rather than running it free.
+`tests/unit/model-call-boundary.test.ts` prevents a fifth route appearing.
+
+**This does not change the recommendation** — still option 2, *meter but do not
+charge*. It strengthens it: the count of unmetered paths was itself uncertain
+until a structural guard existed, which is the argument for measuring before
+pricing rather than after.
+
+**What answering it now costs:** item 4 only — moving the three modules inside
+the boundary and setting a number. The exemption list in the boundary test is
+the checklist; shrinking it to empty completes the phase.
+
+---
+
+## DECISION-17 — Does Outlio enter the LinkedIn channel at all? · `OPEN`
+
+Raised 2026-09-08 on completing Phase 15. Blocks Phases 16–20.
+
+**The fact:** Outlio holds no LinkedIn account, has never sent a LinkedIn
+message, holds no credentials or cookies, and integrates no automation vendor.
+Its entire LinkedIn surface is an extension with `storage` and `activeTab` that
+parses pages the user opened themselves. **Today it is an observer. Phase 16
+changes that.**
+
+**Why it is a decision and not a plan:** of five access methods, exactly one is
+compliant with LinkedIn's User Agreement — the official partner APIs — and
+Outlio does not have that access. Every other route means the customer's account
+carries a restriction risk that we cannot reverse and did not bear. §6.3 requires
+that risk be named rather than managed away; `RISK_REGISTER.md` names it.
+
+**Options, with the cost of being wrong:**
+
+1. **Do not enter the channel.** Wrong if LinkedIn is the reason customers would
+   buy — but nothing measured says that yet, and the email channel that already
+   exists has sent 2 messages.
+2. **Apply for official partner access first**, and decide afterwards. Slowest;
+   the only route where the customer bears no ToS risk. Wrong only in that
+   approval may never come, and the wait is unbounded.
+3. **Proceed on a non-compliant access method with the §6.3 controls.** Fastest
+   to a demo. Wrong in the one way that cannot be undone: the first restricted
+   account is a customer's, not ours, and no refund restores it.
+
+**My recommendation: option 1, revisited when the email channel is actually in
+use.** Not on squeamishness — on the same evidence six other phases were
+deferred for. This is the most expensive phase in the plan, the only one whose
+failure mode is irreversible for someone who is not us, and the population it
+would serve is a product with 2 sent emails and 0 flow runs.
+
+If the owner chooses 3, the order is not negotiable: 16 connection → **17
+dry-run and safety engine, complete and `VERIFIED` by breaking each control** →
+18 campaigns. Live mode must not exist before 17 passes.
+
+⚠️ **What it does not settle:** the legal reading. This register states the
+widely-documented position, not advice. If the answer is 2 or 3, it is the brief
+to hand a lawyer.
+
+---
+
+## DECISION-18 — What is the payload contract for the three `meeting.*` webhook events? · `OPEN`
+
+Raised 2026-09-09 while sourcing the last webhook events (Phase 23, second
+half).
+
+**The fact:** `meeting.booked`, `meeting.cancelled` and `meeting.rescheduled`
+are offered in Settings → Developers and have never fired, because no product
+moment publishes them. The natural source exists — `lib/meetings/ingest.ts`
+processes Calendly events at exactly those moments. What does not exist is a
+payload contract: §5.13 specifies the transport (signature, replay window,
+retries, circuit breaker) and nothing about bodies. The only shape in the
+codebase is `NormalizedMeetingEvent`, a Calendly-normalised internal type.
+
+**Why it is a decision and not a gap to fill:** publishing that type verbatim
+freezes an internal representation as a public API nobody agreed to — and a
+webhook body IS the API; once a subscriber parses it, changing it is a breaking
+release. Inventing a body to close a checkbox is the webhook equivalent of
+rule 4's fabricated contact detail: it looks right, and when it is wrong
+nobody can tell.
+
+**Options, with the cost of being wrong:**
+
+1. **Publish `NormalizedMeetingEvent` as-is.** Fastest. Wrong if the shape is
+   missing what subscribers need (invitee timezone? which calendar?) or carries
+   what they must not see (cancellation reason is personal correspondence) —
+   and every gap becomes a v2 later.
+2. **Specify a minimal contract deliberately** — e.g.
+   `{ meetingId, inviteeEmail, contactId?, scheduledAt, endsAt?, type }` —
+   documented in `docs/EXTENSION.md` or the developer settings page, then
+   wired through `emit.ts`'s mapping. Wrong only in the time it takes to
+   decide; the three events stay dark until then.
+3. **Withdraw the three events from the catalogue.** Honest: don't offer what
+   doesn't exist. Wrong if meeting webhooks are a near-term promise — the
+   catalogue is also the product's face.
+
+**My recommendation: option 2, whenever meeting notifications matter to a
+customer.** It is the same standard the wired nine now meet: a source, a key
+that names the occurrence, and a payload that is a contract. There is no
+evidence anyone needs these events today (the production census shows zero
+webhook subscribers), so deciding the shape under no pressure beats guessing
+under one.
+
+⚠️ **What it does not settle:** whether the flow trigger `call_booked` should
+fan out to webhooks at all — it is currently exempted in
+`domain-event-boundary.test.ts` on the same no-contract grounds, and its
+`ingestMeetingEvent` call site is behind an option (`triggerFlowId`) no caller
+passes. That is a separate, already-recorded defect.
+
+---
+
+## DECISION-19 — Does Outlio need multi-currency deals? · `OPEN`
+
+Raised 2026-09-12 while auditing §5.6.
+
+**The fact:** every opportunity in the product is USD. `crm_opportunities.currency`
+defaults to `'USD'`, `createOpportunity` accepts an optional `currency`, and **no
+caller passes one** — not the server action, not the flow action — and there is no
+update path for it. So the column is a promise of multi-currency that nothing
+fulfils.
+
+⚠️ **And it is primed to break silently.** §5.6 requires
+`fx_rate_to_workspace_currency` and `fx_rate_date` snapshotted at create and at
+close, with rollups using the snapshot. Neither column exists. Migration 0082
+rolls up won deals as `coalesce(sum(o.value_amount), 0)` with **no grouping by
+currency**, so the day a currency picker is wired, a €10,000 deal and a $10,000
+deal sum to 20,000 — a number that is not money in any currency — and nothing
+errors. Reporting is simply wrong.
+
+`tests/unit/money-single-currency.test.ts` now fails the moment any caller
+supplies a currency, and says what to implement first. So the bug cannot ship by
+accident; the question is whether you want the feature.
+
+**Why it is a decision and not a task:** implementing §5.6 needs a **rate
+source**. That is a vendor and a cost (a daily fx feed), plus a policy call on
+which rate applies — the contract says snapshot at create *and* at close, which
+means a deal's reported value changes when it closes and never again.
+
+**Options:**
+
+1. **Stay single-currency.** Free. Correct today. Wrong if you sell outside the
+   US and a prospect wants to see their own currency — which is a sales
+   objection, not a bug.
+2. **Implement §5.6 with a daily fx feed.** Correct and auditable. Costs a
+   vendor, a migration with a backfill on a money column, and a rollup rewrite.
+3. **Multi-currency display only** — store USD, render a converted figure marked
+   as indicative. Cheapest middle. Wrong if anyone treats the displayed number
+   as the contract value.
+
+**My recommendation: option 1 until a real prospect asks.** Nothing measured says
+they will, the guard makes the silent version impossible, and options 2 and 3
+both need a rate source you do not have. Revisit when a non-USD deal is actually
+requested.
+
+⚠️ **Recorded deviation, not a gap:** §5.6 asks for `amount_minor BIGINT`; the
+column is `numeric(14, 2)`. Both avoid binary floating point, which is what the
+spec protects against, and §2's authority order puts running code above the
+contract. Pinned by the same test so it cannot drift to a float.
+
+---
+
+## DECISION-20 — Should sends respect the recipient's timezone and holidays? · `OPEN`
+
+Raised 2026-09-12 while auditing §5.7.
+
+**What §5.7 asks for:** "Sending windows evaluate in `contact.timezone` when
+known, else campaign timezone, else workspace timezone. Business-day math uses
+one workspace calendar (working weekdays + holiday list) via a single utility."
+
+**What exists, and it is mostly good.** `lib/email/schedule.ts` is that single
+utility and it is careful work: it walks days in the account's own calendar
+rather than adding 24h to a UTC instant, with the reasoning written down —
+across a DST change a "day" is 23 or 25 hours, and adding 24 would drift the
+send an hour off the window every spring. `email-schedule.test.ts` covers DST in
+both directions plus Asia/Kolkata's half-hour offset. Working weekdays exist as
+`sendDays`. Nothing here needs fixing.
+
+**Three divergences, all in the same direction:**
+
+1. ⚠️ **Sends use the MAILBOX's timezone, not the recipient's.** And this is
+   *unmodelled*, not unwired — `crm_contacts` has **no `timezone` column at
+   all**, so the first link of the fallback chain has nowhere to read from.
+2. **No holiday list.** `sendDays` is weekday-of-week only, so a campaign sends
+   on Christmas Day.
+3. **The calendar is per-mailbox, not per-workspace.** Two mailboxes can hold
+   contradictory windows with nothing reconciling them.
+
+**Why it is a decision:** both fixes need data the product does not have.
+Recipient-local sending needs a timezone per contact, and the only free way to
+get one is to infer it from a free-text location — a guess that decides when a
+stranger's phone lights up, and close enough to CLAUDE.md rule 4 that it should
+be a deliberate choice rather than a default. A holiday list needs a source per
+country, which is a vendor.
+
+**Options:**
+
+1. **Leave it; say so in the UI.** Done as of this commit — the sending-window
+   panel now states the times are in the mailbox's timezone, not each
+   recipient's, and suggests picking a window that lands in their working day.
+   Cheapest, and removes the false belief, which was the actual risk.
+2. **Add `crm_contacts.timezone`, populated only when a human or a provider
+   supplies it**, and use it when present. Honest — no inference — but mostly
+   null, so most sends keep the current behaviour anyway.
+3. **Infer the timezone from location.** Highest coverage, and the one I would
+   argue against: a wrong guess emails someone at 4am, which is the exact
+   pattern that trains a mailbox provider to treat the domain as spam. Outlio
+   sells deliverability.
+
+**My recommendation: option 1 now, option 2 if a customer asks.** The
+deliverability risk was never the scheduler; it was a user believing the
+scheduler did something it does not. That is fixed. Holidays can wait for
+someone to complain about a send on a public holiday — a real complaint is
+better evidence than a guess about which country's calendar matters.
+
+---
+
+## DECISION-21 — Encrypt the webhook signing secret at rest? · `OPEN`
+
+Raised 2026-09-12 while auditing §5.12.
+
+**What holds.** Provider tokens *are* encrypted at rest: `integration_connections`
+stores a `secret_reference` and `lib/integrations/crypto.ts` does the work, so
+the machinery and the key (`INTEGRATION_ENCRYPTION_KEY`) already exist. Nothing
+leaks a secret to a client — verified and now guarded by
+`tests/unit/secret-rotation.test.ts`. API keys are SHA-256 hashed at rest.
+
+**The exception.** `webhook_subscriptions.signing_secret` is stored **plaintext**.
+It cannot be hashed — HMAC has to reproduce it to sign — but it could be
+encrypted with the key that already exists.
+
+**The exposure:** anyone who can read the table (a backup, a leaked service-role
+key, a SQL-injection path) can forge signed events to every customer endpoint.
+Their systems would accept them as genuine Outlio events. That is an integrity
+attack on the customer, not on us — the same asymmetry as the LinkedIn risk.
+
+**Why it is a decision:** encrypting it means a migration plus a decrypt step on
+the delivery path, and migrations are applied by hand by the owner.
+
+⚠️ **It is cheapest right now, and that will stop being true.** `publishEvent`
+had no callers until 2026-09-08, so this table has likely never held a row — an
+expand → backfill → contract sequence with nothing to backfill. Every
+subscription created from here on makes the migration more expensive.
+
+**Options:**
+
+1. **Encrypt now, while the table is probably empty.** Cheapest it will ever be.
+   Needs one migration and a decrypt on the send path.
+2. **Leave it and accept the exposure**, on the grounds that a database read is
+   already a full compromise. Defensible, and it is what many products do.
+3. **Encrypt later.** Same work plus a backfill, and the window where a leak
+   matters is exactly the window where you have customers.
+
+**My recommendation: option 1**, and soon, purely on cost. The security argument
+is real but arguable; the timing argument is not. **I have not written the
+migration** — confirming the table's row count needs a production read, which
+needs your authorisation, and a backfill written against an unknown row count is
+a guess.
+
+**Shipped in the meantime:** §5.12's "rotatable" now holds. A leaked secret can
+be replaced without deleting the subscription — see the commit for why that
+matters more than it sounds.

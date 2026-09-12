@@ -66,7 +66,15 @@ export default async function InboxPage({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold text-ink">Inbox</h1>
+        {/*
+          ⚠️ `h2`, NOT `h1`. The email layout already renders `<h1>Email</h1>`
+          above this, so an `h1` here gave the page two — a screen reader
+          announces two competing page titles and the outline says the document
+          is about two things. It is also the only page in `/crm`, `/email`,
+          `/flows` or `/settings` that did this; the scale now matches its
+          siblings as well.
+        */}
+        <h2 className="text-base font-semibold tracking-[-0.02em] text-ink">Inbox</h2>
         <p className="mt-1 text-sm leading-relaxed text-muted">
           {seesAllThreads(policy)
             ? 'Every reply to your workspace’s campaigns, in one place.'

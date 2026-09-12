@@ -5,8 +5,11 @@ import { ExtensionCard } from '@/components/extension/ExtensionCard'
 import { FirstRun } from '@/components/onboarding/FirstRun'
 import { LiveCapture } from '@/components/extension/LiveCapture'
 import { CreditsSummary } from '@/components/product/CreditsSummary'
+import { PerformanceRow } from '@/components/product/PerformanceRow'
+import { LocalTime } from '@/components/ui/LocalTime'
 import { ReferralCard } from '@/components/product/ReferralCard'
 import { requireAccess } from '@/lib/auth/access'
+import { getOverviewPerformance, hasRealActivity } from '@/lib/crm/overview'
 import { getActiveSession } from '@/lib/extension/capture'
 import { countDevices } from '@/lib/extension/devices'
 import { appOrigin } from '@/lib/auth/redirects'
@@ -54,12 +57,28 @@ export default async function DashboardPage() {
    * no checklist.
    */
   const workspace = await getWorkspaceContext()
-  const firstRun = workspace
-    ? await loadFirstRun(workspace.workspace.id, {
-        role: workspace.role,
-        modules: workspace.modules,
-      })
-    : null
+  const policy = workspace ? { role: workspace.role, modules: workspace.modules } : null
+
+  /*
+   * ⚠️ THE PERFORMANCE ROW IS GATED AND FAILS SOFT, for the two separate
+   * reasons above it. Gated because these are CRM figures and a member without
+   * `crm.contact.view` has no business reading them; soft because a Lead Engine
+   * account has no workspace at all, and neither that nor a reporting outage
+   * may take the upload path down with it.
+   */
+  const [firstRun, performance] = await Promise.all([
+    workspace && policy ? loadFirstRun(workspace.workspace.id, policy) : null,
+    workspace && policy && can(policy, 'crm.contact.view')
+      ? getOverviewPerformance(workspace.workspace.id, ctx.userId!)
+      : null,
+  ])
+
+  const checklist =
+    firstRun && shouldShowFirstRun(firstRun) && workspace && policy ? (
+      <FirstRun data={firstRun} canDismiss={can(policy, 'workspace.settings.manage')} />
+    ) : null
+  // A first day has nothing to read; a working week does.
+  const checklistFirst = !performance || !hasRealActivity(performance)
 
   const referral = Array.isArray(referralRows) ? referralRows[0] : null
   const balance = Array.isArray(balanceRows) ? balanceRows[0] : null
@@ -109,14 +128,11 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-            Lead Engine
-          </p>
-          <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
+          <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
             Overview
           </h1>
           <p className="mt-1 text-sm text-muted">
-            Usage this billing period.
+            What your outreach did, and what it used.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -137,25 +153,32 @@ export default async function DashboardPage() {
       </header>
 
       {/*
-        ⚠️ ABOVE THE USAGE NUMBERS ON PURPOSE, and only until it is finished.
-        Someone on their first day has no usage to read; a row of zeroes is a
-        worse first screen than a list of what to do next. It disappears on its
-        own once every step is done -- see `shouldShowFirstRun`.
-      */}
-      {firstRun && shouldShowFirstRun(firstRun) && workspace ? (
-        <FirstRun
-          data={firstRun}
-          canDismiss={can(
-            { role: workspace.role, modules: workspace.modules },
-            'workspace.settings.manage',
-          )}
-        />
-      ) : null}
+        ⚠️ OUTCOMES ABOVE CONSUMPTION, which is the whole point of the change.
+        Every number on this screen used to be about what the customer had
+        spent — credits, searches, exports — and none about whether any of it
+        worked. A setter opens the product to find out whether anyone replied.
 
-      <section aria-label="Usage this period" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {metrics.map((metric) => (
-          <UsageCard key={metric.label} {...metric} />
-        ))}
+        ⚠️ AND THE CHECKLIST'S OWN REASON DECIDES WHICH OF THE TWO LEADS. It
+        was placed above the numbers because a first-day row of zeroes is a
+        worse first screen than a list of what to do next — so it keeps that
+        place until there are real figures, and yields it once there are.
+        Seven items fill the entire first viewport; whichever is up there is
+        the only thing most people will see. It still disappears entirely once
+        every step is done — see `shouldShowFirstRun`.
+      */}
+      {checklistFirst ? checklist : null}
+      {performance ? <PerformanceRow data={performance} /> : null}
+      {checklistFirst ? null : checklist}
+
+      <section aria-label="Usage this period" className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+          Usage this period
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {metrics.map((metric) => (
+            <UsageCard key={metric.label} {...metric} />
+          ))}
+        </div>
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
@@ -215,18 +238,20 @@ export default async function DashboardPage() {
           <dl className="mt-5 divide-y divide-border">
             <AccountRow label="Plan" value={ctx.plan?.name ?? 'Current plan'} />
             <AccountRow label="Account" value={ctx.email ?? ''} />
-            <AccountRow
-              label="Access until"
-              value={
-                ctx.accessExpiresAt
-                  ? new Date(ctx.accessExpiresAt).toLocaleDateString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })
-                  : 'No expiry'
-              }
-            />
+            {/*
+              ⚠️ THE ONE ROW HERE WHERE A DAY MATTERS. This formatted in the
+              server's timezone — UTC on Vercel — so an expiry stored at
+              midnight UTC rendered a day EARLY for every reader west of it.
+              Telling somebody their access ends on the 11th when it ends on
+              the 12th is the kind of wrong that generates a support ticket.
+            */}
+            <AccountRow label="Access until">
+              {ctx.accessExpiresAt ? (
+                <LocalTime iso={ctx.accessExpiresAt} dateOnly />
+              ) : (
+                'No expiry'
+              )}
+            </AccountRow>
           </dl>
         </section>
         <section className="credits-gradient relative overflow-hidden rounded-[var(--radius-xl)] border border-accent/15 p-5 shadow-[var(--shadow-sm)]">
@@ -326,12 +351,26 @@ function UsageCard({
   )
 }
 
-function AccountRow({ label, value }: { label: string; value: string }) {
+/**
+ * `value` for plain text, `children` for anything that has to render itself —
+ * a date needs the reader's timezone, and only a Client Component knows it.
+ * `title` is set only in the string case, because a full-text tooltip for a
+ * truncated value is the one thing children cannot provide.
+ */
+function AccountRow({
+  label,
+  value,
+  children,
+}: {
+  label: string
+  value?: string
+  children?: React.ReactNode
+}) {
   return (
     <div className="grid gap-1 py-3 first:pt-0 last:pb-0">
       <dt className="text-[11px] font-medium text-muted">{label}</dt>
       <dd className="truncate text-sm font-semibold text-ink" title={value}>
-        {value}
+        {children ?? value}
       </dd>
     </div>
   )

@@ -6,6 +6,7 @@ import { consume } from '@/lib/auth/rate-limit'
 import { ACTION_LIMITS } from '@/lib/security/action-limits'
 import { toClientError } from '@/lib/errors/catalog'
 import { askHubble, type AskSubject } from '@/lib/hubble/ask'
+import { getWorkspaceContext } from '@/lib/workspaces/context'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
@@ -34,9 +35,19 @@ const inputSchema = z.object({
 
 export async function POST(request: NextRequest) {
   let userId: string
+  let workspaceId: string
   try {
     const ctx = await assertHubbleAccess()
     userId = ctx.userId!
+    /*
+     * Whose metering record this call lands against (Phase 12 item 4). Same
+     * cookie-based resolution the workspace UI uses; `null` means the user
+     * belongs to no workspace, which `assertHubbleAccess` should already have
+     * caught — treated as an auth failure rather than metering nobody.
+     */
+    const ws = await getWorkspaceContext()
+    if (!ws?.workspace.id) throw new Error('no workspace')
+    workspaceId = ws.workspace.id
   } catch (error) {
     const safe = toClientError(error)
     return NextResponse.json(safe.body, { status: safe.status })
@@ -157,8 +168,13 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const result = await askHubble(userId, subject, body.question, undefined, (update) =>
-          send({ type: 'progress', ...update }),
+        const result = await askHubble(
+          userId,
+          subject,
+          body.question,
+          undefined,
+          (update) => send({ type: 'progress', ...update }),
+          workspaceId,
         )
 
         send({

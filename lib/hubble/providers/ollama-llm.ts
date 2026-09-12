@@ -22,12 +22,13 @@ import 'server-only'
  * The schema validation and the source-tier confidence ceiling are what keep a
  * weaker model honest, and they matter MORE here, not less.
  */
-import type {
-  LlmAttempt,
-  LlmRequest,
-  LlmResult,
-  LLMProvider,
-  LlmVendor,
+import {
+  resolveLlmProvider,
+  type LlmAttempt,
+  type LlmRequest,
+  type LlmResult,
+  type LLMProvider,
+  type LlmVendor,
 } from '@/lib/intelligence/llm/provider'
 import { ollamaConfig } from '@/lib/hubble/providers/ollama-config'
 
@@ -239,6 +240,25 @@ export class LlmWaterfall implements LLMProvider {
     return this.local.isConfigured() ? this.local.vendor : this.hosted.vendor
   }
 
+  /**
+   * Whether the LOCAL half of the waterfall will actually answer — Phase 12
+   * item 4. `evidenceBudgetFor` sizes the evidence set by this: a local model
+   * gets fewer, shorter passages or it times out (see the latency table in
+   * `lib/hubble/reason.ts`). Before this method the waterfall could not be
+   * probed at all, so callers constructed a bare `OllamaLlmProvider` just to
+   * ask "is Ollama up?" — which put a provider import outside the boundary
+   * the model-call guard polices. Delegating the probe keeps the question
+   * and the answer in the same object.
+   *
+   * A health check, never a prompt: `isUsable` reads the `/api/tags` endpoint.
+   */
+  async isUsable(): Promise<boolean> {
+    const probe = this.local as unknown as { isUsable?: () => Promise<boolean> }
+    return this.local.isConfigured() && typeof probe.isUsable === 'function'
+      ? await probe.isUsable()
+      : false
+  }
+
   get model(): string {
     return this.local.isConfigured() ? this.local.model : this.hosted.model
   }
@@ -317,4 +337,22 @@ export class LlmWaterfall implements LLMProvider {
       attempts: [...localAttempts, ...hostedAttempts],
     }
   }
+}
+
+/**
+ * The model Hubble reasons with: local Ollama first, hosted second.
+ *
+ * ⚠️ ONLY HUBBLE'S PATH CHANGES. `resolveLlmProvider` still serves the batch
+ * pipeline unchanged — swapping the model under an already-working system for
+ * a weaker local one would be a regression nobody asked for.
+ *
+ * ⚠️ DEFINED IN A PROVIDER MODULE, ON PURPOSE. It used to live in
+ * `lib/hubble/reason.ts`, which meant any module importing `reason.ts` could
+ * obtain a model without ever importing a provider — invisible to a guard that
+ * watches provider imports. Here, every importer of this function is an
+ * importer of a provider module, and `tests/unit/model-call-boundary.test.ts`
+ * sees it.
+ */
+export function createHubbleLlm(): LLMProvider {
+  return new LlmWaterfall(new OllamaLlmProvider(), resolveLlmProvider())
 }

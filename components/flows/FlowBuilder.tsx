@@ -23,17 +23,9 @@ import {
   type ActionType,
   type FlowDefinition,
 } from '@/lib/flows/definition'
-import { HUBBLE_TASKS, quoteCredits, type HubbleTask } from '@/lib/hubble/pricing'
+import { HUBBLE_TASKS, quoteCredits } from '@/lib/hubble/pricing'
+import { hubbleTaskForAction } from '@/lib/capabilities/registry'
 
-const TASK_FOR: Partial<Record<ActionType, HubbleTask>> = {
-  HUBBLE_ICP_SCORE: 'icp_score',
-  HUBBLE_RESEARCH: 'research',
-  HUBBLE_CLASSIFY: 'classification',
-  HUBBLE_PERSONALIZE: 'personalization',
-  HUBBLE_REPLY_DRAFT: 'reply_draft',
-  HUBBLE_CLASSIFY_REPLY: 'response_classification',
-  HUBBLE_ACCOUNT_SUMMARY: 'account_summary',
-}
 
 /*
  * ⚠️ ONLY ACTIONS THAT HAVE A HANDLER ARE OFFERED. Seven entries in
@@ -110,7 +102,7 @@ export function FlowBuilder({
     let credits = 0
     for (const step of definition.steps) {
       if (step.type === 'ACTION') {
-        const task = TASK_FOR[step.action]
+        const task = hubbleTaskForAction(step.action)
         if (task) credits += quoteCredits(task)
       }
     }
@@ -219,7 +211,7 @@ export function FlowBuilder({
                   */}
                   {row.costsCredits && row.step.type === 'ACTION' ? (
                     <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
-                      {quoteCredits(TASK_FOR[row.step.action]!)} credits
+                      {quoteCredits(hubbleTaskForAction(row.step.action)!)} credits
                     </span>
                   ) : null}
                   {orphans.has(row.step.id) ? (
@@ -405,7 +397,7 @@ function AddHere({
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {AI_ACTIONS.map((action) => {
-            const task = TASK_FOR[action]
+            const task = hubbleTaskForAction(action)
             return (
               <button
                 key={action}
@@ -860,6 +852,31 @@ const BRANCH_FIELDS: { key: string; label: string }[] = [
   { key: 'contact.location', label: 'Contact — location' },
   { key: 'contact.owner_user_id', label: 'Contact — owner' },
   { key: 'contact.company_id', label: 'Contact — company' },
+  { key: 'company.name', label: 'Company — name' },
+  { key: 'company.domain', label: 'Company — domain' },
+  { key: 'company.industry', label: 'Company — industry' },
+  { key: 'company.headquarters', label: 'Company — headquarters' },
+  { key: 'company.employee_count', label: 'Company — employee count' },
+  { key: 'company.owner_user_id', label: 'Company — owner' },
+  { key: 'opportunity.count', label: 'Opportunity — count' },
+  { key: 'opportunity.open_count', label: 'Opportunity — open count' },
+  { key: 'opportunity.latest_status', label: 'Opportunity — latest status' },
+  { key: 'opportunity.latest_title', label: 'Opportunity — latest title' },
+  { key: 'opportunity.latest_value', label: 'Opportunity — latest value' },
+  { key: 'opportunity.total_value', label: 'Opportunity — total value' },
+  { key: 'activity.count', label: 'Activity — count' },
+  { key: 'activity.latest_type', label: 'Activity — latest type' },
+  { key: 'activity.latest_at', label: 'Activity — latest occurred at' },
+  { key: 'task.count', label: 'Task — count' },
+  { key: 'task.open_count', label: 'Task — open count' },
+  { key: 'email.count', label: 'Email — count' },
+  { key: 'email.sent_count', label: 'Email — sent count' },
+  { key: 'email.failed_count', label: 'Email — failed count' },
+  { key: 'email.latest_status', label: 'Email — latest status' },
+  { key: 'conversation.count', label: 'Conversation — count' },
+  { key: 'conversation.open_count', label: 'Conversation — open count' },
+  { key: 'conversation.latest_direction', label: 'Conversation — latest direction' },
+  { key: 'conversation.latest_message_at', label: 'Conversation — latest message at' },
 ]
 
 /*
@@ -890,6 +907,47 @@ const LIST_OPERATORS = new Set(['in', 'not_in'])
 /** Operators that coerce with `Number()`. */
 const NUMERIC = new Set(['greater_than', 'less_than'])
 
+/**
+ * Fields whose FACT is a number, not a string — every count and amount
+ * `buildDomainFacts` produces.
+ *
+ * ⚠️ THIS LIST IS NOT GUESSED. `equals` is strict `===` and `in` is
+ * `includes`, so a text "5" stored beside the numeric fact 5 is a comparison
+ * that can never be true — silently, because nothing validates a condition's
+ * value at publish time. A numeric fact missing here keeps that defect; a
+ * string fact listed here makes the number box a lie.
+ * `flow-fact-coverage.test.ts` asserts both directions against the builder's
+ * runtime output, so this set and the fact set cannot drift apart.
+ */
+const NUMERIC_FIELDS = new Set([
+  'company.employee_count',
+  'opportunity.count',
+  'opportunity.open_count',
+  'opportunity.latest_value',
+  'opportunity.total_value',
+  'activity.count',
+  'task.count',
+  'task.open_count',
+  'email.count',
+  'email.sent_count',
+  'email.failed_count',
+  'conversation.count',
+  'conversation.open_count',
+])
+
+/**
+ * Parses the value box for a numeric comparison. Empty and unparseable both
+ * store `undefined` — NEVER 0, which is what `Number('')` returns and which
+ * would fabricate an equals-zero condition out of an untouched input. Zero is
+ * a real observed fact here ("we looked; there are none"), not a placeholder.
+ */
+function toNumber(raw: string): number | undefined {
+  const trimmed = raw.trim()
+  if (trimmed === '') return undefined
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 type BranchCondition = { field: string; operator: string; value?: unknown }
 
 /**
@@ -904,10 +962,11 @@ type BranchCondition = { field: string; operator: string; value?: unknown }
  * ║  This editor stores a real array, which is the whole reason it is worth   ║
  * ║  more than a textarea.                                                    ║
  * ║                                                                           ║
- * ║  ⚠️ `equals` IS STRICT `===`, and every fact is a string or null. So the  ║
- * ║  value is kept as text for those operators and coerced to a number only   ║
- * ║  for the two that call `Number()`. Storing 5 where "5" is meant is a      ║
- * ║  comparison that can never be true.                                       ║
+ * ║  ⚠ `equals` IS STRICT `===` AND SOME FACTS ARE NUMBERS. The value         ║
+ * ║  box is typed by the FIELD, not the operator: the 13 counts and amounts   ║
+ * ║  in `NUMERIC_FIELDS` are stored as numbers, everything else as text.      ║
+ * ║  `changeField` reshapes the value when the type flips — 'Founder'         ║
+ * ║  carried into a count is the same silent defect, reached by a dropdown.   ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 function BranchEditor({
@@ -944,8 +1003,47 @@ function BranchEditor({
     if (VALUELESS.has(operator)) value = undefined
     else if (LIST_OPERATORS.has(operator)) value = Array.isArray(value) ? value : []
     else if (Array.isArray(value)) value = value.join(', ')
+    /*
+     * A numeric field under a single-value operator must hold a number —
+     * `in` can leave '1, 2' text behind when the operator flips to `equals`.
+     * Unparseable becomes undefined, never the 0 that Number('') fabricates.
+     */
+    if (!VALUELESS.has(operator) && !LIST_OPERATORS.has(operator) && NUMERIC_FIELDS.has(current.field))
+      value = toNumber(String(value ?? ''))
 
     update(index, { operator, value })
+  }
+
+  /**
+   * Re-shapes the stored value when the FIELD changes type. The picker can
+   * carry a text value into a numeric field (and back) — 'Founder' stored
+   * against task.count is the same never-true comparison, reached by a
+   * dropdown instead of a keyboard.
+   */
+  const changeField = (index: number, field: string) => {
+    const current = conditions[index]!
+    let value: unknown = current.value
+
+    if (NUMERIC_FIELDS.has(current.field) !== NUMERIC_FIELDS.has(field)) {
+      // VALUELESS operators store nothing; NUMERIC operators already
+      // coerce on their own path, so only the text↔numeric flip reshapes.
+      if (!VALUELESS.has(current.operator) && !NUMERIC.has(current.operator)) {
+        if (NUMERIC_FIELDS.has(field)) {
+          value = Array.isArray(value)
+            ? value.map(Number).filter((n) => Number.isFinite(n))
+            : toNumber(String(value ?? ''))
+        } else {
+          value =
+            value === undefined || value === null
+              ? ''
+              : Array.isArray(value)
+                ? value.map(String)
+                : String(value)
+        }
+      }
+    }
+
+    update(index, { field, value })
   }
 
   return (
@@ -969,6 +1067,7 @@ function BranchEditor({
         {conditions.map((condition, index) => {
           const valueless = VALUELESS.has(condition.operator)
           const isList = LIST_OPERATORS.has(condition.operator)
+          const numeric = NUMERIC.has(condition.operator) || NUMERIC_FIELDS.has(condition.field)
           const known =
             BRANCH_FIELDS.some((f) => f.key === condition.field) ||
             condition.field.startsWith(VARIABLE_PREFIX)
@@ -989,7 +1088,7 @@ function BranchEditor({
                       : condition.field
                   }
                   aria-label={`Condition ${index + 1} field`}
-                  onChange={(event) => update(index, { field: event.target.value })}
+                  onChange={(event) => changeField(index, event.target.value)}
                   className="min-w-0 rounded-[var(--radius-md)] border border-border bg-surface px-2.5 py-1.5 text-xs text-ink outline-none [color-scheme:light]"
                 >
                   {BRANCH_FIELDS.map((field) => (
@@ -1040,7 +1139,7 @@ function BranchEditor({
 
               {!valueless ? (
                 <input
-                  type={NUMERIC.has(condition.operator) ? 'number' : 'text'}
+                  type={!isList && numeric ? 'number' : 'text'}
                   value={
                     Array.isArray(condition.value)
                       ? condition.value.join(', ')
@@ -1049,15 +1148,17 @@ function BranchEditor({
                         : String(condition.value)
                   }
                   aria-label={`Condition ${index + 1} value`}
-                  placeholder={isList ? 'Founder, CEO, Owner' : 'Founder'}
+                  placeholder={isList ? (numeric ? '10, 50, 100' : 'Founder, CEO, Owner') : numeric ? '50' : 'Founder'}
                   onChange={(event) => {
                     const raw = event.target.value
                     update(index, {
                       value: isList
                         ? // Split into a REAL array. A string here never matches.
-                          raw.split(',').map((part) => part.trim()).filter(Boolean)
-                        : NUMERIC.has(condition.operator)
-                          ? Number(raw)
+                          numeric
+                            ? raw.split(',').map((part) => part.trim()).filter(Boolean).map(Number).filter((n) => Number.isFinite(n))
+                            : raw.split(',').map((part) => part.trim()).filter(Boolean)
+                        : numeric
+                          ? toNumber(raw)
                           : raw,
                     })
                   }}
@@ -1277,7 +1378,7 @@ function HubbleStepEditor({
   config: Record<string, unknown>
   onChange: (config: Record<string, unknown>) => void
 }) {
-  const task = TASK_FOR[action]
+  const task = hubbleTaskForAction(action)
   const credits = task ? quoteCredits(task) : 0
   const failOnEmpty = config.onNoCredits === 'fail'
   const storeAs = typeof config.storeAs === 'string' ? config.storeAs : ''

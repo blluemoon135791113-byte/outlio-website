@@ -16,6 +16,7 @@ import 'server-only'
  * `reconcileReporting` meaningful. The moment a number exists only here, this
  * stops being a cache and starts being a second source of truth.
  */
+import { evaluateDerived } from '@/lib/reporting/registry'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 /** Attribution basis — Ledger §20. */
@@ -213,9 +214,14 @@ export async function getMetricTotals(
  * has no reply rate, and showing 0% reads as failure rather than absence.
  */
 export function replyRate(totals: MetricTotals): number | null {
-  const emailed = totals.contacts_emailed?.count ?? 0
-  if (emailed === 0) return null
-  return (totals.replies?.count ?? 0) / emailed
+  /*
+   * ⚠️ DELEGATED TO THE REGISTRY, NOT REIMPLEMENTED. This function and
+   * `DERIVED_METRICS.reply_rate` were the same formula written twice, and two
+   * agreeing copies is how `TASK_FOR` came to exist three times and diverge.
+   * The registry owns the definition; this stays as the name the reports page
+   * already calls, so the call sites did not have to change.
+   */
+  return evaluateDerived('reply_rate', totals)
 }
 
 export type SetterDashboard = {

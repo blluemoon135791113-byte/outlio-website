@@ -69,6 +69,22 @@ export function SendingSettings({ account }: { account: AccountSchedule }) {
         <p className="mt-0.5 text-xs text-muted">
           Mail is only sent inside this window. Anything raised outside it waits.
         </p>
+        {/*
+          ⚠️ SAYS WHOSE CLOCK IT IS, BECAUSE THE ASSUMPTION RUNS THE OTHER WAY.
+          The window is evaluated in THIS MAILBOX'S timezone. A reader setting
+          "09:00–17:00, Europe/London" can reasonably assume prospects receive it
+          during their own working day — and 9am in London is 4am in New York,
+          which is both rude and a spam-folder pattern.
+
+          Outlio has no recipient timezone to schedule by: `crm_contacts` has no
+          `timezone` column, so recipient-local sending is unmodelled rather than
+          unwired (build contract §5.7, DECISION-20). Saying so is the honest
+          option; implying otherwise by silence is not.
+        */}
+        <p className="mt-1 text-xs text-muted">
+          Times are in this mailbox&apos;s timezone, not each recipient&apos;s. If you
+          write to another region, pick a window that lands inside their working day.
+        </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">

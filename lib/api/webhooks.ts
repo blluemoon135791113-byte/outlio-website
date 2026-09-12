@@ -15,12 +15,24 @@ import 'server-only'
  * ║  doing the right thing would still double-process.                        ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
+import { openWebhookSecret } from '@/lib/api/webhook-secret'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { backoffSeconds, signWebhookPayload, type WebhookEvent } from '@/lib/api/signing'
+import {
+  backoffSecondsWithJitter,
+  signWebhookPayload,
+  type WebhookEvent,
+} from '@/lib/api/signing'
 import { assertSafeWebhookUrl, UnsafeWebhookUrlError } from '@/lib/api/webhook-url'
 
 export { backoffSeconds, signWebhookPayload, WEBHOOK_EVENTS } from '@/lib/api/signing'
 export type { WebhookEvent } from '@/lib/api/signing'
+
+/**
+ * §5.13: "30-day delivery log". Matches `RUN_RETENTION_DAYS` in the tick, which
+ * uses the same window for the same reason — the table answers "recently", not
+ * "ever".
+ */
+export const DELIVERY_RETENTION_DAYS = 30
 
 export type DeliveryOutcome = {
   delivered: number
@@ -136,14 +148,43 @@ export async function deliverPendingWebhooks(limit = 20): Promise<DeliveryOutcom
       created_at: new Date().toISOString(),
       data: delivery.payload,
     })
-    const { signature } = signWebhookPayload(body, subscription.signing_secret)
+    /*
+     * ⚠️ DECRYPTED HERE, PER DELIVERY. The secret is stored as an AES-256-GCM
+     * envelope; a plaintext row predating that is accepted and logged rather
+     * than failed, because a webhook that silently stops verifying is worse for
+     * the subscriber than one signed with a secret we have not yet re-sealed.
+     */
+    let secret: string
+    try {
+      secret = openWebhookSecret(subscription.signing_secret, delivery.subscription_id)
+    } catch {
+      /*
+       * The envelope is present but will not open — a rotated or wrong
+       * INTEGRATION_ENCRYPTION_KEY. Signing with a wrong secret would deliver
+       * events the subscriber rejects, forever, while the delivery log claimed
+       * success. Exhaust it loudly instead.
+       */
+      await db
+        .from('webhook_deliveries')
+        .update({
+          status: 'exhausted',
+          last_error: 'The signing secret could not be read. Rotate the secret to restore delivery.',
+        })
+        .eq('id', delivery.id)
+      outcome.exhausted += 1
+      continue
+    }
+
+    const { signature } = signWebhookPayload(body, secret)
 
     // Claim the attempt BEFORE sending.
     await db
       .from('webhook_deliveries')
       .update({
         attempts: attempt,
-        next_attempt_at: new Date(Date.now() + backoffSeconds(attempt) * 1000).toISOString(),
+        next_attempt_at: new Date(
+          Date.now() + backoffSecondsWithJitter(attempt) * 1000,
+        ).toISOString(),
       })
       .eq('id', delivery.id)
 
@@ -238,4 +279,50 @@ export async function deliverPendingWebhooks(limit = 20): Promise<DeliveryOutcom
   }
 
   return outcome
+}
+
+/**
+ * Deletes delivery rows past their retention window — §5.13's "30-day
+ * delivery log".
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  THE LOG WAS VISIBLE IN-APP AND UNBOUNDED. "30-DAY" IS HALF A SENTENCE.   ║
+ * ║                                                                           ║
+ * ║  Settings → Developers reads `webhook_deliveries`, so the visibility half  ║
+ * ║  of §5.13 was built. Nothing ever deleted a row: the only other mention   ║
+ * ║  of the table outside the delivery worker is a GRANT.                     ║
+ * ║                                                                           ║
+ * ║  ⚠️ AND IT IS A RETENTION PROBLEM, NOT A DISK ONE. Every row carries the   ║
+ * ║  event `payload` — contact ids, and for reply and bounce events the        ║
+ * ║  person's email address. An unbounded log of personal data is exactly     ║
+ * ║  what storage limitation forbids, and it sat behind a page that queries   ║
+ * ║  it. The row count grows with one multiplication: events × subscribers.   ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ TERMINAL ROWS ONLY. A `pending` or `retrying` row past the window is an
+ * event the consumer never received — deleting it would silently drop a
+ * delivery the product still owes, and hide whatever bug stranded it. With
+ * `max_attempts` at 5 over about three hours, a row older than a day that is
+ * still pending is a defect to look at, not a row to sweep.
+ */
+export async function pruneDeliveryLog(retentionDays = DELIVERY_RETENTION_DAYS): Promise<number> {
+  const cutoff = new Date(Date.now() - retentionDays * 86_400_000).toISOString()
+
+  const { data, error } = await createAdminClient()
+    .from('webhook_deliveries')
+    .delete()
+    .in('status', ['delivered', 'exhausted'])
+    .lt('created_at', cutoff)
+    .select('id')
+
+  /*
+   * Never throws into the tick. Failing to prune is a housekeeping problem;
+   * failing the tick would stop delivery, which is the thing customers notice.
+   */
+  if (error) {
+    console.error('[webhooks] pruning the delivery log failed', { message: error.message })
+    return 0
+  }
+
+  return data?.length ?? 0
 }

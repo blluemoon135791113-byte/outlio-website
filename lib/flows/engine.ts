@@ -28,8 +28,14 @@ import {
   type ActionType,
   type FlowStep,
 } from '@/lib/flows/definition'
+import { gatherFacts } from '@/lib/flows/facts'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Json } from '@/types/database'
+
+// Re-exported so the module's public surface is unchanged for its callers
+// (`lib/flows/simulate.ts` imports gatherFacts from here). The implementation
+// lives in `lib/flows/facts.ts`, beside the row types it reads.
+export { gatherFacts } from '@/lib/flows/facts'
 
 /**
  * ⚠️ JSONB COLUMNS TAKE `Json`, NOT `Record<string, unknown>`. The generated
@@ -263,7 +269,7 @@ export type AdvanceResult = {
   status: 'completed' | 'waiting' | 'failed' | 'running'
   stepsExecuted: number
   /** Set when the run stopped because a step failed. */
-  error?: { stepId: string; code: string; message: string }
+  error?: { stepId: string | null; code: string; message: string }
 }
 
 /**
@@ -320,7 +326,24 @@ export async function advanceRun(
    * step would be a round trip for state we already hold.
    */
   const variables: Record<string, unknown> = { ...(run.variables as Record<string, unknown> ?? {}) }
-  const contactFacts = await gatherFacts(workspaceId, run.contact_id)
+  let contactFacts: Record<string, unknown>
+  try {
+    contactFacts = await gatherFacts(workspaceId, run.contact_id)
+  } catch (factsError) {
+    // An empty fact set here would make every is_empty condition read
+    // TRUE — a cold sequence could enroll a contact and send outbound
+    // email because the database hiccuped. Failing the run is honest.
+    await finish(db, runId, 'failed')
+    return {
+      status: 'failed',
+      stepsExecuted,
+      error: {
+        stepId: run.current_step,
+        code: 'FACTS_UNAVAILABLE',
+        message: factsError instanceof Error ? factsError.message : "The run's facts could not be read.",
+      },
+    }
+  }
   const facts: Record<string, unknown> = { ...contactFacts }
   for (const [key, value] of Object.entries(variables)) facts[`vars.${key}`] = value
 
@@ -474,40 +497,6 @@ async function finish(
     .from('flow_runs')
     .update({ status, current_step: null, resume_at: null, finished_at: new Date().toISOString() })
     .eq('id', runId)
-}
-
-/**
- * The facts a branch can read.
- *
- * ⚠️ READ ONCE PER RUN, not per condition. A branch evaluating against a
- * contact that changed mid-run would take inconsistent paths on adjacent
- * conditions, which is impossible to reason about after the fact.
- */
-export async function gatherFacts(
-  workspaceId: string,
-  contactId: string | null,
-): Promise<Record<string, unknown>> {
-  if (!contactId) return {}
-
-  const { data } = await createAdminClient()
-    .from('crm_contacts')
-    .select('id, full_name, first_name, last_name, job_title, headline, location, owner_user_id, primary_company_id')
-    .eq('workspace_id', workspaceId)
-    .eq('id', contactId)
-    .maybeSingle()
-
-  if (!data) return {}
-
-  return {
-    'contact.full_name': data.full_name,
-    'contact.first_name': data.first_name,
-    'contact.last_name': data.last_name,
-    'contact.job_title': data.job_title,
-    'contact.headline': data.headline,
-    'contact.location': data.location,
-    'contact.owner_user_id': data.owner_user_id,
-    'contact.company_id': data.primary_company_id,
-  }
 }
 
 /** Runs that are due to wake up. */

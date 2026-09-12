@@ -56,7 +56,7 @@ export function SenderAddress({ address }: { address: string | null }) {
           <button
             type="submit"
             disabled={pending}
-            className="rounded-clay bg-ink px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+            className="rounded-clay bg-accent px-3 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
           >
             {pending ? 'Saving…' : 'Save address'}
           </button>

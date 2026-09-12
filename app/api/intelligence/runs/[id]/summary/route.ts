@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { assertHubbleAccess } from '@/lib/auth/access'
 import { toClientError } from '@/lib/errors/catalog'
 import { summarizeRun } from '@/lib/hubble/summarize'
+import { hubbleExecute } from '@/lib/hubble/execute'
+import { getWorkspaceContext } from '@/lib/workspaces/context'
 import { getRunResults } from '@/lib/intelligence/results'
 
 /**
@@ -29,9 +31,14 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   let userId: string
+  let workspaceId: string
   try {
     const ctx = await assertHubbleAccess()
     userId = ctx.userId!
+    // Whose metering record this summary lands against (Phase 12 item 4).
+    const ws = await getWorkspaceContext()
+    if (!ws?.workspace.id) throw new Error('no workspace')
+    workspaceId = ws.workspace.id
   } catch (error) {
     const safe = toClientError(error)
     return NextResponse.json(safe.body, { status: safe.status })
@@ -58,7 +65,16 @@ export async function POST(
       )
     }
 
-    const summary = await summarizeRun(results.queryText, results.rows, results.columns)
+    /*
+     * Metered door (Phase 12 item 4): the summarising model arrives as
+     * `tools.llm` and `hubble_calls` records the row.
+     */
+    const metered = await hubbleExecute(
+      'intelligence.summarize',
+      { workspaceId, userId, source: 'http:summary' },
+      (tools) => summarizeRun(tools.llm, results.queryText, results.rows, results.columns),
+    )
+    const summary = metered.ok ? metered.result : null
 
     /*
      * `null` is a real outcome, not an error: nothing was found, or no model

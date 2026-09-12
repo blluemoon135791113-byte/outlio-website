@@ -22,7 +22,7 @@ import 'server-only'
  * narrate absence — the exact padding this replaces. The count of what was
  * dropped is kept, so the panel can state coverage honestly in one line.
  */
-import { resolveHubbleLlm } from '@/lib/hubble/reason'
+import type { LLMProvider } from '@/lib/intelligence/llm/provider'
 import type { ResultRow } from '@/lib/intelligence/results'
 
 export type RunSummary = {
@@ -212,6 +212,8 @@ function coverageFinding(withData: number, total: number, columns: readonly stri
 }
 
 export async function summarizeRun(
+  /** The metered model, handed in from inside `hubbleExecute` (Phase 12 item 4). */
+  llm: LLMProvider,
   question: string,
   rows: readonly ResultRow[],
   columns: readonly string[],
@@ -223,7 +225,6 @@ export async function summarizeRun(
   // summarise nothing will produce an apology, which helps no one.
   if (withData.length === 0) return null
 
-  const llm = resolveHubbleLlm()
   const fallback = {
     text: coverageFinding(withData.length, rows.length, columns),
     withData: withData.length,

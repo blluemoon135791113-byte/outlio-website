@@ -10,6 +10,7 @@ import { ProductIcon, ProductNav } from '@/components/product/ProductNav'
 import { NavigationProgress } from '@/components/product/NavigationProgress'
 import { SidebarReferral } from '@/components/product/SidebarReferral'
 import { signOutAction } from '@/lib/auth/actions'
+import { CommandPalette, CommandPaletteTrigger } from '@/components/product/CommandPalette'
 
 function pageLabel(pathname: string) {
   if (pathname.startsWith('/admin')) return 'User administration'
@@ -219,6 +220,9 @@ export function ProductShell({
               </div>
             </div>
 
+            <div className="ml-auto flex items-center gap-2 sm:gap-3">
+              <CommandPaletteTrigger />
+
             <details className="group relative">
               <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-xl p-1.5 pr-2 transition-[background-color,transform] duration-150 hover:bg-surface-muted active:scale-[0.98] [&::-webkit-details-marker]:hidden">
                 <span
@@ -264,12 +268,20 @@ export function ProductShell({
                 </form>
               </div>
             </details>
+            </div>
           </div>
         </header>
 
         <main className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
           {children}
         </main>
+
+        {/*
+          Rendered once, at the shell level, so ⌘K reaches it from every product
+          page — and so there is exactly one palette rather than one per screen
+          fighting over the same shortcut.
+        */}
+        <CommandPalette />
       </div>
     </div>
   )

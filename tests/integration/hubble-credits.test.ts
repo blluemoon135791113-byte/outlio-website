@@ -33,7 +33,7 @@ beforeAll(async () => {
   registerAllActions()
 
   // A real runner, so a successful call is genuinely a call.
-  registerHubbleRunner('icp_score', async () => ({ score: 72 }))
+  registerHubbleRunner('hubble.icp_score', async () => ({ score: 72 }))
 
   user = await createAuthUser(`hubble-${RUN}`)
   const db = adminClient()
@@ -106,7 +106,7 @@ describeIf('the boundary meters honestly', () => {
     expect(before.remaining).toBe(2)
 
     const outcome = await hubbleExecute(
-      'icp_score',
+      'hubble.icp_score',
       { workspaceId, userId: user!.id, source: 'test' },
       async () => ({ score: 72 }),
     )
@@ -122,7 +122,7 @@ describeIf('the boundary meters honestly', () => {
     const before = await creditsRemaining(user!.id)
 
     const outcome = await hubbleExecute(
-      'icp_score',
+      'hubble.icp_score',
       { workspaceId, userId: user!.id, source: 'test' },
       async () => {
         throw new Error('the model fell over')
@@ -156,7 +156,7 @@ describeIf('CRITERION 4 — exhaustion is graceful', () => {
     const db = adminClient()
 
     // Spend the allowance for real: 2 credits, 1 already used above.
-    await hubbleExecute('icp_score', { workspaceId, userId: user!.id }, async () => ({ x: 1 }))
+    await hubbleExecute('hubble.icp_score', { workspaceId, userId: user!.id }, async () => ({ x: 1 }))
 
     const atLimit = await creditsRemaining(user!.id)
     expect(atLimit.remaining).toBe(0)
@@ -167,7 +167,7 @@ describeIf('CRITERION 4 — exhaustion is graceful', () => {
       .eq('period_start', PERIOD_START.toISOString()).maybeSingle()
 
     const outcome = await hubbleExecute(
-      'icp_score',
+      'hubble.icp_score',
       { workspaceId, userId: user!.id, source: 'test' },
       async () => ({ shouldNotRun: true }),
     )

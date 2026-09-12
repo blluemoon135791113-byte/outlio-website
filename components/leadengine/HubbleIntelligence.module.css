@@ -186,16 +186,30 @@
 .copy { max-width: 34rem; }
 
 .satelliteMark {
+  position: relative;
   display: block;
-  width: clamp(5.15rem, 6.45vw, 6.65rem);
+  width: clamp(3.45rem, 4.2vw, 4.35rem);
   height: auto;
   margin: 0 0 1.45rem -0.2rem;
-  opacity: 0.96;
-  filter:
-    grayscale(1)
-    brightness(0.22)
-    contrast(1.85)
-    drop-shadow(0.08rem 0.14rem 0 rgba(13, 23, 37, 0.2));
+  aspect-ratio: 1;
+  overflow: hidden;
+  mix-blend-mode: multiply;
+}
+
+/* Match the envelope's optical width while retaining clear space around the orbit. */
+.satelliteImage {
+  /* Neutralize the sample's paper tint; white blends into the module below. */
+  filter: grayscale(1) contrast(2);
+  position: absolute;
+  width: 110%;
+  max-width: none;
+  height: auto;
+  left: -6.5%;
+  top: -3%;
+}
+
+@media (max-width: 30rem) {
+  .satelliteMark { width: 3.3rem; }
 }
 
 .eyebrow {
@@ -273,7 +287,7 @@
 @media (max-width: 38rem) {
   .section { margin: 0.2rem; padding: 2.35rem 0.75rem 0.75rem; border-radius: 2.35rem; }
   .copy { padding-inline: 0.35rem; }
-  .satelliteMark { width: 4.95rem; margin-bottom: 1rem; }
+  .satelliteMark { margin-bottom: 1rem; }
   .eyebrow { margin-bottom: 1.35rem; font-size: 0.72rem; }
   .heading { font-size: clamp(2.6rem, 12vw, 3.6rem); }
   .description { font-size: 1rem; }

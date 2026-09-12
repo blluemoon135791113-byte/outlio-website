@@ -55,10 +55,7 @@ export default async function ExtensionConnectPage({
 
   return (
     <div className="mx-auto w-full max-w-lg px-6 py-16">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
-        Browser extension
-      </p>
-      <h1 className="mt-3 text-2xl font-semibold tracking-[-0.015em] text-ink">
+      <h1 className="text-2xl font-semibold tracking-[-0.015em] text-ink">
         Connect this browser
       </h1>
       <p className="mt-2 text-sm leading-6 text-muted">

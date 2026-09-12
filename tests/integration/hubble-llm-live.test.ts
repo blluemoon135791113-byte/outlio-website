@@ -9,10 +9,18 @@
 import { describe, expect, it } from 'vitest'
 
 import { answerFromEvidence } from '@/lib/hubble/reason'
+import { hubbleExecute } from '@/lib/hubble/execute'
 import type { ScoredChunk } from '@/lib/hubble/retrieve'
 
 const live = process.env.RUN_HUBBLE_LLM === '1'
 const describeIf = live ? describe : describe.skip
+
+/*
+ * A synthetic but well-formed credit context. This is a smoke test, not a
+ * tenancy test; the ids only label the hubble_calls row it writes.
+ */
+const WS = '00000000-0000-0000-0000-000000000001'
+const USER = '00000000-0000-0000-0000-000000000002'
 
 if (!live) {
   console.warn('[hubble-llm-live] SKIPPED. Set RUN_HUBBLE_LLM=1 to call the configured model.')
@@ -41,15 +49,28 @@ const evidence: ScoredChunk[] = [
 
 describeIf('live Hubble synthesis', () => {
   it('writes a specific, cited answer through the production model waterfall', async () => {
-    const result = await answerFromEvidence(
-      'When did Acme raise its Series A, how much was it, and who led it?',
-      evidence,
-      'Company: Acme',
-      'acme.example',
-      'Acme',
-      Date.now() + 30_000,
-      2,
+    /*
+     * The model comes from the metered door (Phase 12 item 4); this live test
+     * exercises synthesis quality, not the boundary, so it asks the door for
+     * the same waterfall the product hands its runners.
+     */
+    const outcome = await hubbleExecute(
+      'hubble.ask',
+      { workspaceId: WS, userId: USER, source: 'test:live-synthesis' },
+      (tools) =>
+        answerFromEvidence(
+          tools.llm,
+          'When did Acme raise its Series A, how much was it, and who led it?',
+          evidence,
+          'Company: Acme',
+          'acme.example',
+          'Acme',
+          Date.now() + 30_000,
+          2,
+        ),
     )
+    if (!outcome.ok) throw new Error(`hubbleExecute refused: ${JSON.stringify(outcome)}`)
+    const result = outcome.result
 
     console.log('\nHubble synthesis:', JSON.stringify(result.answer, null, 2))
 

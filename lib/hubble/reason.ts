@@ -24,19 +24,20 @@ import 'server-only'
 import type { AnswerSource, AnswerStatus } from '@/lib/hubble/providers/types'
 import type { ScoredChunk } from '@/lib/hubble/retrieve'
 import { canCorroborate, confidenceCeiling } from '@/lib/hubble/source-quality'
-import { LlmWaterfall, OllamaLlmProvider } from '@/lib/hubble/providers/ollama-llm'
-import { resolveLlmProvider } from '@/lib/intelligence/llm/provider'
-
-/**
- * The model Hubble reasons with: local Ollama first, hosted second.
+/*
+ * ⚠️ THE MODEL IS A PARAMETER, NOT A CONSTRUCTION — Phase 12 item 4. This
+ * module used to build its own model with `createHubbleLlm()`, which is why
+ * `/api/hubble/ask` ran unmetered: nothing reminded the caller to bring the
+ * meter. `askHubble` now enters `hubbleExecute` first and hands the model
+ * back to these functions as an argument, so a model cannot be reached here
+ * without a credit context having been established.
  *
- * ⚠️ ONLY HUBBLE'S PATH CHANGES. `resolveLlmProvider` still serves the batch
- * pipeline unchanged — swapping the model under an already-working system for
- * a weaker local one would be a regression nobody asked for.
+ * No provider module is imported at runtime any more. The evidence budget
+ * (fewer passages for a local model — see `evidenceBudgetFor`) is likewise
+ * computed by the caller, inside the door, and passed in as a value; this
+ * file holds the sizing rule, not the right to build a provider.
  */
-export function resolveHubbleLlm() {
-  return new LlmWaterfall(new OllamaLlmProvider(), resolveLlmProvider())
-}
+import type { LLMProvider } from '@/lib/intelligence/llm/provider'
 
 /**
  * How much evidence the answering model can actually digest.
@@ -65,8 +66,14 @@ export const HOSTED_EVIDENCE: EvidenceBudget = { maxPassages: 12, maxCharsEach: 
 export const LOCAL_EVIDENCE: EvidenceBudget = { maxPassages: 6, maxCharsEach: 1_200 }
 
 export async function evidenceBudgetFor(provider: {
+  /**
+   * Present when the model is the waterfall the door hands out — it delegates
+   * to the local half's `/api/tags` health probe. A bare hosted provider has
+   * no local half, so the absent method reads as "not local", which is the
+   * correct answer for it.
+   */
   isUsable?: () => Promise<boolean>
-}): Promise<EvidenceBudget> {
+} & Partial<LLMProvider>): Promise<EvidenceBudget> {
   const local = typeof provider.isUsable === 'function' ? await provider.isUsable() : false
   return local ? LOCAL_EVIDENCE : HOSTED_EVIDENCE
 }
@@ -124,13 +131,14 @@ RULES:
 - Return between 1 and 4 queries. Fewer, better queries beat many vague ones.`
 
 export async function planResearch(
+  /** The metered model, handed in by `askHubble` from inside `hubbleExecute`. */
+  llm: LLMProvider,
   question: string,
   context: { companyName: string | null; domain: string | null; personName: string | null; known: string },
   maxQueries: number,
   deadlineAt?: number,
   llmAllowed = true,
 ): Promise<{ plan: ResearchPlan; llmCalls: number }> {
-  const llm = resolveHubbleLlm()
 
   const fallback: ResearchPlan = {
     intent: question,
@@ -364,6 +372,8 @@ Use standard spelling and complete sentences. Do not copy misspellings,
 navigation labels, cookie banners, or broken fragments from the evidence.`
 
 export async function answerFromEvidence(
+  /** The metered model, handed in by `askHubble` from inside `hubbleExecute`. */
+  llm: LLMProvider,
   question: string,
   chunks: readonly ScoredChunk[],
   leadContext: string,
@@ -372,7 +382,6 @@ export async function answerFromEvidence(
   deadlineAt?: number,
   maxLlmCalls = 2,
 ): Promise<{ answer: HubbleAnswer; llmCalls: number }> {
-  const llm = resolveHubbleLlm()
 
   if (chunks.length === 0) {
     return {
@@ -417,9 +426,12 @@ export async function answerFromEvidence(
   /*
    * ⚠️ TRIMMED TO WHAT THIS MODEL CAN ACTUALLY DIGEST. A local model is given
    * fewer, shorter passages; a hosted one gets the full set, because trimming
-   * it would discard corroboration for no benefit. See `evidenceBudgetFor`.
+   * it would discard corroboration for no benefit. `llm` is the waterfall the
+   * metered door handed in, and its `isUsable` delegates to the local half —
+   * the health probe answers "will a local model take this?", and `/api/tags`
+   * is read, never a prompt sent.
    */
-  const budget = await evidenceBudgetFor(new OllamaLlmProvider())
+  const budget = await evidenceBudgetFor(llm)
   const shown = chunks.slice(0, budget.maxPassages)
 
   const evidence = shown

@@ -5,6 +5,8 @@ import { z } from 'zod'
 import { assertHubbleAccess } from '@/lib/auth/access'
 import { consume } from '@/lib/auth/rate-limit'
 import { planQuery } from '@/lib/intelligence/planner'
+import { hubbleExecute } from '@/lib/hubble/execute'
+import { getWorkspaceContext } from '@/lib/workspaces/context'
 import { researchScopeSchema } from '@/lib/intelligence/plan'
 import { estimateScope } from '@/lib/intelligence/results'
 import { claimAndProcessResearchRun, createResearchRun } from '@/lib/intelligence/run'
@@ -34,9 +36,14 @@ const inputSchema = z.object({
 
 export async function POST(request: NextRequest) {
   let userId: string
+  let workspaceId: string
   try {
     const ctx = await assertHubbleAccess()
     userId = ctx.userId!
+    // Whose metering record this plan lands against (Phase 12 item 4).
+    const ws = await getWorkspaceContext()
+    if (!ws?.workspace.id) throw new Error('no workspace')
+    workspaceId = ws.workspace.id
   } catch (error) {
     // `toClientError` already returns the full client-safe envelope; wrapping it
     // again would nest `error` inside `error` and break every caller.
@@ -82,7 +89,20 @@ export async function POST(request: NextRequest) {
    * choose — an exhausted account falls through to the next engine instead of
    * failing the question.
    */
-  const planned = await planQuery({ question: query })
+  /*
+   * The planner runs inside the metered door (Phase 12 item 4). Its model
+   * comes from `tools.llm`, so this route no longer reaches a provider
+   * directly and `hubble_calls` gains a row per plan attempt.
+   */
+  const meteredPlan = await hubbleExecute(
+    'intelligence.plan',
+    { workspaceId, userId, source: 'http:query' },
+    (tools) => planQuery({ question: query, llm: tools.llm }),
+  )
+
+  const planned = !meteredPlan.ok
+    ? ({ status: 'failed', reason: meteredPlan.message } as const)
+    : meteredPlan.result
 
   if (planned.status === 'refused') {
     return NextResponse.json({ status: 'refused', reason: planned.reason }, { status: 422 })

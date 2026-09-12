@@ -46,6 +46,21 @@ const eslintConfig = defineConfig([
     ".claude/skills/**",
     ".agents/skills/**",
     ".github/skills/**",
+
+    // ⚠️ GENERATED DESIGN SCRATCH, AND IT BROKE `npm run lint` — WHICH GATES CI.
+    //
+    // `.codex-previews/` holds one-off preview harnesses written while
+    // iterating on UI (`refine-alpha.cjs` and friends). One of them uses
+    // `require()`, which `@typescript-eslint/no-require-imports` reports as an
+    // ERROR rather than a warning, so `npm run lint` exited non-zero — and the
+    // CI `verify` job runs lint. A scratch file nobody ships would have blocked
+    // every merge.
+    //
+    // Gitignored alongside this, so it cannot reach CI in the first place.
+    // Ignored rather than fixed because it is not this project's source: a
+    // `.cjs` preview script using `require` is correct for what it is.
+    ".codex-previews/**",
+    ".codex/**",
   ]),
 ]);
 

@@ -47,34 +47,36 @@ export default function LeadEnginePage() {
      * this one class is the entire colour change — and nothing outside this
      * page moves. See globals.css.
      */
-    <div className="leadengine-surface">
+    <div className="leadengine-surface leadengine-clay-scale">
       <Nav surface="leadengine" />
 
       <main className="leadengine-story">
         <LeadEngineHero />
 
         <div className="leadengine-story-flow">
-          <div className="leadengine-story-panel">
+          <div className="leadengine-story-panel" data-clay-module="overview">
             <PlatformOverview />
           </div>
 
-          <div className="leadengine-story-panel leadengine-story-panel-extraction">
+          <div className="leadengine-story-panel leadengine-story-panel-extraction" data-clay-module="extraction">
             <ExtractionJourney />
           </div>
 
-          <div className="leadengine-story-panel leadengine-story-panel-inner-only">
+          <div className="leadengine-story-panel leadengine-story-panel-inner-only" data-clay-module="hubble">
             <HubbleIntelligence />
           </div>
 
-          <div className="leadengine-story-panel leadengine-story-panel-inner-only">
+          <div className="leadengine-story-panel leadengine-story-panel-inner-only" data-clay-module="outbound">
             <OutreachAutomation />
           </div>
 
-          <div className="leadengine-story-panel">
+          <div className="leadengine-story-panel" data-clay-module="pricing">
             <Pricing />
           </div>
 
-          <LeadLibrary />
+          <div data-clay-module="library">
+            <LeadLibrary />
+          </div>
         </div>
       </main>
 

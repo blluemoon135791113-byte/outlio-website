@@ -24,20 +24,30 @@ import 'server-only'
  */
 import { hubbleExecute } from '@/lib/hubble/execute'
 import type { HubbleTask } from '@/lib/hubble/pricing'
+import { CAPABILITIES, aiCapabilityIds, hubbleTaskForAction } from '@/lib/capabilities/registry'
 import { registerAction, type ActionHandler, type ActionResult } from '@/lib/flows/engine'
 import type { ActionType } from '@/lib/flows/definition'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-/** Which Hubble task each flow action performs. */
-const TASK_FOR: Record<string, HubbleTask> = {
-  HUBBLE_ICP_SCORE: 'icp_score',
-  HUBBLE_RESEARCH: 'research',
-  HUBBLE_CLASSIFY: 'classification',
-  HUBBLE_PERSONALIZE: 'personalization',
-  HUBBLE_REPLY_DRAFT: 'reply_draft',
-  HUBBLE_CLASSIFY_REPLY: 'response_classification',
-  HUBBLE_ACCOUNT_SUMMARY: 'account_summary',
-}
+/**
+ * The flow actions that perform an AI capability, read from the registry.
+ *
+ * ⚠️ THIS USED TO BE A HAND-WRITTEN TABLE, AND THERE WERE THREE OF IT — here,
+ * in the flow page, and in the builder. The registry is now the one place a
+ * flow action is tied to what it costs.
+ */
+const AI_FLOW_ACTIONS: readonly string[] = aiCapabilityIds().flatMap((id) => {
+  /*
+   * ⚠️ NOT EVERY AI CAPABILITY IS A FLOW ACTION. `hubble.ask` and the two
+   * intelligence entries are reached over HTTP and have no `flowAction`, so
+   * this narrows before reading it rather than assuming the field is there.
+   * Registering a handler for them would offer them as flow steps, which is
+   * the opposite of what DECISION-16 leaves open.
+   */
+  const entry = CAPABILITIES[id]
+  const action = 'flowAction' in entry ? entry.flowAction : undefined
+  return action ? [action] : []
+})
 
 /**
  * The work each task performs.
@@ -65,7 +75,7 @@ export function registerHubbleRunner(
 
 function hubbleHandler(action: string): ActionHandler {
   return async (ctx, config): Promise<ActionResult> => {
-    const task = TASK_FOR[action]
+    const task = hubbleTaskForAction(action)
     if (!task) {
       return { ok: false, code: 'UNKNOWN_TASK', message: `${action} is not a Hubble task.`, retryable: false }
     }
@@ -145,7 +155,7 @@ function hubbleHandler(action: string): ActionHandler {
 }
 
 export function registerHubbleActions(): void {
-  for (const action of Object.keys(TASK_FOR)) {
+  for (const action of AI_FLOW_ACTIONS) {
     registerAction(action as ActionType, hubbleHandler(action))
   }
 }

@@ -12,6 +12,7 @@ import 'server-only'
  */
 import { recordActivity } from '@/lib/crm/activities'
 import { createOpportunity, moveStage } from '@/lib/crm/opportunities'
+import { emitDomainEvent } from '@/lib/events/emit'
 import { registerAction, type ActionHandler, type ActionResult } from '@/lib/flows/engine'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -57,12 +58,25 @@ const assignOwner: ActionHandler = async (ctx, config) => {
    * M4 criterion 2 exists for: work done before the reassignment must stay
    * credited to whoever did it.
    */
-  await recordActivity(ctx.workspaceId, {
+  const activityId = await recordActivity(ctx.workspaceId, {
     contactId: ctx.contactId,
     activityType: 'OWNER_ASSIGNED',
     channel: 'system',
     actorUserId: null,
     metadata: { assigned_to: userId, by: 'flow', run_id: ctx.runId },
+  })
+
+  /*
+   * `crm.contact.assigned` from the flow side too — the same business moment
+   * as the manual path, so subscribers see one event shape either way. The
+   * activity id is the occurrence; a retried run step cannot fire it twice.
+   */
+  await emitDomainEvent({
+    workspaceId: ctx.workspaceId,
+    triggerType: 'contact_assigned',
+    contactId: ctx.contactId,
+    idempotencyKey: `contact_assigned:${activityId}`,
+    payload: { contactId: ctx.contactId, to: userId, by: 'flow' },
   })
 
   return ok({ assignedTo: userId })
@@ -109,12 +123,20 @@ const roundRobin: ActionHandler = async (ctx, config) => {
 
   if (error) return fail('ASSIGN_FAILED', 'Could not assign this contact.', true)
 
-  await recordActivity(ctx.workspaceId, {
+  const activityId = await recordActivity(ctx.workspaceId, {
     contactId: ctx.contactId,
     activityType: 'OWNER_ASSIGNED',
     channel: 'system',
     actorUserId: null,
     metadata: { assigned_to: chosen.userId, by: 'flow_round_robin', run_id: ctx.runId },
+  })
+
+  await emitDomainEvent({
+    workspaceId: ctx.workspaceId,
+    triggerType: 'contact_assigned',
+    contactId: ctx.contactId,
+    idempotencyKey: `contact_assigned:${activityId}`,
+    payload: { contactId: ctx.contactId, to: chosen.userId, by: 'flow_round_robin' },
   })
 
   return ok({ assignedTo: chosen.userId, openContacts: chosen.count })

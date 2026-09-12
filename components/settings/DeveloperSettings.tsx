@@ -7,10 +7,11 @@ import {
   createWebhook,
   deleteWebhook,
   revokeApiKey,
+  rotateWebhookSecret,
   setWebhookActive,
   type DeveloperActionState,
 } from '@/app/(product)/dashboard/settings/developers/actions'
-import { WEBHOOK_EVENTS } from '@/lib/api/signing'
+import { WEBHOOK_EVENTS } from '@/lib/api/webhook-events'
 
 const SCOPE_GROUPS = [
   { resource: 'contacts', label: 'Contacts' },
@@ -292,11 +293,18 @@ export function Webhooks({
   const [state, action, pending] = useActionState<DeveloperActionState, FormData>(createWebhook, null)
   const [toggleState, toggle] = useActionState<DeveloperActionState, FormData>(setWebhookActive, null)
   const [removeState, remove] = useActionState<DeveloperActionState, FormData>(deleteWebhook, null)
+  const [rotateState, rotate] = useActionState<DeveloperActionState, FormData>(rotateWebhookSecret, null)
   const [open, setOpen] = useState(false)
   const [dismissed, setDismissed] = useState(false)
 
-  const secret = state?.ok && state.secret && !dismissed ? state.secret : null
-  const notice = toggleState ?? removeState
+  /*
+   * ⚠️ EITHER SOURCE, ONE PANEL. A rotated secret is shown exactly like a newly
+   * created one — it is the same value with the same "you will not see this
+   * again" property, so it must not get a quieter treatment.
+   */
+  const issued = state?.ok && state.secret ? state.secret : rotateState?.ok && rotateState.secret ? rotateState.secret : null
+  const secret = issued && !dismissed ? issued : null
+  const notice = toggleState ?? removeState ?? (rotateState?.ok ? null : rotateState)
 
   return (
     <section className="space-y-4">
@@ -412,6 +420,20 @@ export function Webhooks({
                         className="rounded-[var(--radius-md)] border border-border px-2 py-1 text-xs font-semibold text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
                       >
                         {sub.isActive ? 'Pause' : 'Enable'}
+                      </button>
+                    </form>
+                    {/*
+                      §5.12 "rotatable". Without this, the only answer to a
+                      leaked secret was Remove + recreate — losing the
+                      subscription's id, its events and its failure history.
+                    */}
+                    <form action={rotate}>
+                      <input type="hidden" name="subscriptionId" value={sub.id} />
+                      <button
+                        type="submit"
+                        className="rounded-[var(--radius-md)] px-2 py-1 text-xs font-semibold text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-ink"
+                      >
+                        New secret
                       </button>
                     </form>
                     <form action={remove}>

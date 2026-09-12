@@ -79,6 +79,36 @@ describe('every background worker has a trigger', () => {
       definedIn: 'lib/flows/engine.ts',
       breaks: 'a flow that hits a WAIT step never resumes',
     },
+    /*
+     * ⚠️ ADDED AFTER THE LIST ABOVE MISSED IT — which is the lesson, not a
+     * footnote. This guard is a HAND-CURATED list, so it catches exactly what
+     * someone remembered to write down. R0 enumerated six engines; the
+     * reporting rollup was not one of them, so `rollupWorkspace` sat with a
+     * single caller — `tests/integration/crm-metrics` — from M4 until now,
+     * while every structural guard in the repo stayed green.
+     *
+     * `lib/crm/metrics.ts` passes the orphan-module check because the reports
+     * page imports it, so module-level reachability could not see this either:
+     * the module was reachable and this function inside it was not.
+     */
+    {
+      name: 'rollupWorkspace',
+      definedIn: 'lib/crm/metrics.ts',
+      breaks: 'crm_reporting_daily is never written and every report reads zero',
+    },
+    /*
+     * ⚠️ FOUND THE SAME WAY, AND EASY TO MISTAKE FOR COVERED. The TARGETED
+     * claim (`claimAndProcessJob`) has three callers, so extraction plainly
+     * works and the queue looks wired. The UNTARGETED drain had none — so a job
+     * whose `after()` nudge never ran sat `queued` with nothing looking for it.
+     * Neither retry nor the reaper reaches it: both only act on a job that was
+     * already claimed once.
+     */
+    {
+      name: 'claimAndProcessOne',
+      definedIn: 'lib/worker/process-job.ts',
+      breaks: 'an upload orphaned by a dead after() callback is never processed',
+    },
   ]
 
   for (const worker of WORKERS) {

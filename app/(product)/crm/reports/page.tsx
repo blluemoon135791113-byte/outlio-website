@@ -17,6 +17,8 @@ import {
   type ForecastPeriod,
   type RangeKey,
 } from '@/lib/crm/reports'
+import { StatCard } from '@/components/product/StatCard'
+import { LocalTime } from '@/components/ui/LocalTime'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
 
@@ -118,7 +120,14 @@ export default async function ReportsPage({
       */}
       {lastRun?.finishedAt ? (
         <p className="text-xs text-muted">
-          Figures computed {new Date(lastRun.finishedAt).toLocaleString()}
+          {/*
+            ⚠️ `toLocaleString()` HERE FORMATTED IN THE SERVER'S TIMEZONE, which
+            is UTC on Vercel — so this line has been reporting a time that is
+            hours off for every reader outside it, on the one line whose whole
+            job is to say how fresh the figures are. `LocalTime` is the existing
+            primitive for exactly this.
+          */}
+          Figures computed <LocalTime iso={lastRun.finishedAt} />
           {lastRun.discrepancies && lastRun.discrepancies > 0 ? (
             <span className="ml-2 rounded-full bg-warning-soft px-2 py-0.5 font-semibold text-warning">
               {lastRun.discrepancies} unreconciled
@@ -462,30 +471,32 @@ function Stat({
   change?: number | null
   previous?: number
 }) {
+  /*
+   * ⚠️ AN ADAPTER NOW, NOT AN IMPLEMENTATION. This rendered its own change
+   * badge, and the overview row rendered a second one — two independently
+   * correct answers to "how do we show a delta", which is precisely how
+   * `TASK_FOR` came to exist three times and diverge. `StatCard` owns the rule
+   * that a percentage from a zero baseline is invented; this keeps its own
+   * prop shape so the seventeen call sites above did not have to change.
+   *
+   * The baseline moves from an inline "was N" to the hint slot rather than
+   * being dropped: in a grid this dense it is the number that makes a
+   * percentage judgeable, and the badge alone carries it only to a screen
+   * reader.
+   */
   return (
-    <div className="clay p-4">
-      <p className="text-xs uppercase tracking-[0.08em] text-muted">{label}</p>
-      <p className="mt-1 text-xl font-semibold tracking-[-0.02em] text-ink">{value}</p>
-      {previous === undefined ? null : (
-        <p className="mt-1 text-xs">
-          {change === null || change === undefined ? (
-            /*
-              ⚠️ NO PERCENTAGE FROM A ZERO BASE. Going from 0 to 5 is not
-              "+500%" and not "+100%" — any percentage there is invented. The
-              previous figure is shown instead so the reader can judge it.
-            */
-            <span className="text-muted">
-              {previous === 0 ? 'none last period' : `was ${previous}`}
-            </span>
-          ) : (
-            <span className={change >= 0 ? 'text-success' : 'text-danger'}>
-              {change >= 0 ? '▲' : '▼'} {Math.abs(Math.round(change * 100))}%
-              <span className="ml-1 text-muted">was {previous}</span>
-            </span>
-          )}
-        </p>
-      )}
-    </div>
+    <StatCard
+      label={label}
+      value={value}
+      delta={previous === undefined ? undefined : { change: change ?? null, previous }}
+      hint={
+        previous === undefined
+          ? undefined
+          : previous === 0
+            ? 'none last period'
+            : `was ${previous.toLocaleString()}`
+      }
+    />
   )
 }
 

@@ -1041,7 +1041,7 @@
   overflow-y: auto;
   border: 0;
   border-radius: 1.65rem;
-  background: #fff;
+  background: #c85d39;
   color: #302b29;
   box-shadow: 0 1.8rem 4.2rem rgba(37, 24, 17, 0.2);
   overscroll-behavior: contain;
@@ -1063,7 +1063,7 @@
   align-items: center;
   gap: 0.8rem;
   padding: 0 1.5rem;
-  border-radius: 1.65rem 1.65rem 0 0;
+  border-radius: 0;
   background: #c85d39;
   color: #fffaf3;
   font-size: 0.9rem;
@@ -1094,6 +1094,7 @@
 
 .modalBody {
   padding: 1.5rem 1.65rem 1.7rem;
+  background: #fff;
 }
 
 .modal .profileHeader {

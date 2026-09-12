@@ -22,7 +22,7 @@ import { recordActivity } from '@/lib/crm/activities'
 import { getEmailAccount } from '@/lib/email/accounts'
 import { providerFor } from '@/lib/email/providers/registry'
 import { suppressEmail } from '@/lib/email/send'
-import { dispatchFlowTrigger } from '@/lib/flows/dispatch'
+import { emitDomainEvent } from '@/lib/events/emit'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { NormalizedReply, SyncCursor } from '@/lib/email/provider'
 
@@ -34,6 +34,12 @@ export type SyncOutcome = {
   sequencesStopped: number
   /** Inbound mail from an address we have no live enrollment for. */
   unmatched: number
+  /**
+   * Inbound mail from an address this workspace has NEVER emailed — the
+   * owner's ordinary correspondence, arriving in a mailbox the sync reads
+   * whole. Stored for the inbox, but not a reply and not acted on.
+   */
+  unrelated: number
 }
 
 /**
@@ -56,6 +62,7 @@ export async function syncMailbox(
     bounces: 0,
     sequencesStopped: 0,
     unmatched: 0,
+    unrelated: 0,
   }
 
   const account = await getEmailAccount(workspaceId, accountId)
@@ -105,6 +112,28 @@ export async function syncMailbox(
     .eq('id', account.id)
 
   return outcome
+}
+
+/**
+ * Has this workspace ever sent mail to this address?
+ *
+ * ⚠️ `email_messages`, NOT just enrollments. A one-off manual send never
+ * creates an enrollment, and a genuine reply to one is still a reply. Checking
+ * only enrollments would trade one wrong answer for another.
+ */
+async function hasEverMailed(
+  db: ReturnType<typeof createAdminClient>,
+  workspaceId: string,
+  toEmail: string,
+): Promise<boolean> {
+  const { count } = await db
+    .from('email_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('workspace_id', workspaceId)
+    .eq('to_email', toEmail)
+    .limit(1)
+
+  return (count ?? 0) > 0
 }
 
 async function processInbound(
@@ -204,6 +233,27 @@ async function processInbound(
   const campaignId = attribution?.campaign_id ?? null
 
   /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ A MESSAGE IS NOT A REPLY JUST BECAUSE IT ARRIVED.                    ║
+   * ║                                                                           ║
+   * ║  Measured on production 2026-09-07: 261 threads, 254 `replied` events —  ║
+   * ║  against TWO messages ever sent. The sync reads the whole mailbox, so     ║
+   * ║  every newsletter, receipt and notification in the owner's inbox was      ║
+   * ║  recorded as a prospect reply and fired an `email_replied` flow trigger.  ║
+   * ║                                                                           ║
+   * ║  Consequences, all silent: reply-rate metrics are meaningless, automation ║
+   * ║  fires on unrelated mail, and the CRM timeline fills with correspondence  ║
+   * ║  nobody had with a prospect.                                              ║
+   * ║                                                                           ║
+   * ║  The evidence that something IS a reply is that we mailed the address.    ║
+   * ║  Enrollments cover sequences; `email_messages` covers one-off sends the   ║
+   * ║  enrollment table never sees.                                             ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const weMailedThem =
+    everMailed.length > 0 || (await hasEverMailed(db, workspaceId, from))
+
+  /*
    * ⚠️ STORED BEFORE THE DEDUPE GATE BELOW, and deliberately so. The message
    * itself must survive even when the EVENT was already recorded by an earlier
    * run that crashed part-way — otherwise a reply is acted on but never
@@ -268,6 +318,18 @@ async function processInbound(
 
   if (!isNew) return
 
+  /*
+   * ⚠️ RECORDED, THEN DROPPED — deliberately in that order. The message is
+   * still stored above, because the unified inbox is meant to show the
+   * mailbox. What it must not do is claim a prospect replied, suppress an
+   * address on a bounce for mail we never sent, or fire automation at a
+   * newsletter.
+   */
+  if (!weMailedThem) {
+    outcome.unrelated += 1
+    return
+  }
+
   if (classification.kind === 'bounce') {
     outcome.bounces += 1
     /*
@@ -288,13 +350,14 @@ async function processInbound(
       p_reason: 'bounced',
     })
 
-    await dispatchFlowTrigger({
+    await emitDomainEvent({
       workspaceId,
       triggerType: 'email_bounced',
       contactId,
       // The provider's message id IS the occurrence — a re-sync of the same
       // mailbox must not fire twice for one bounce.
       idempotencyKey: `email_bounced:${reply.providerMessageId}`,
+      payload: { contactId: contactId ?? null, fromEmail: reply.fromEmail },
     })
     return
   }
@@ -318,11 +381,12 @@ async function processInbound(
    * ignore the tasks.
    */
   if (countsAsReply(classification)) {
-    await dispatchFlowTrigger({
+    await emitDomainEvent({
       workspaceId,
       triggerType: 'email_replied',
       contactId,
       idempotencyKey: `email_replied:${reply.providerMessageId}`,
+      payload: { contactId: contactId ?? null, fromEmail: reply.fromEmail },
     })
   }
 
@@ -379,6 +443,7 @@ export async function syncWorkspaceReplies(workspaceId: string): Promise<SyncOut
 
   const total: SyncOutcome = {
     fetched: 0, replies: 0, autoReplies: 0, bounces: 0, sequencesStopped: 0, unmatched: 0,
+    unrelated: 0,
   }
 
   for (const row of data ?? []) {
@@ -391,6 +456,7 @@ export async function syncWorkspaceReplies(workspaceId: string): Promise<SyncOut
     total.bounces += one.bounces
     total.sequencesStopped += one.sequencesStopped
     total.unmatched += one.unmatched
+    total.unrelated += one.unrelated
   }
 
   return total

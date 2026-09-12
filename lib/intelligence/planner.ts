@@ -20,7 +20,7 @@ import 'server-only'
  */
 import { validatePlan, type ResearchPlan } from '@/lib/intelligence/plan'
 import { preserveExplicitConstraints } from '@/lib/intelligence/filters'
-import { resolveLlmProvider, type LLMProvider } from '@/lib/intelligence/llm/provider'
+import type { LLMProvider } from '@/lib/intelligence/llm/provider'
 import { RESEARCH_FIELDS, type ResearchField } from '@/lib/intelligence/types'
 
 /**
@@ -231,7 +231,17 @@ export type PlannerOutcome =
 
 export type PlanQueryOptions = {
   question: string
-  llm?: LLMProvider
+  /**
+   * ⚠️ THE MODEL IS REQUIRED SINCE PHASE 12 ITEM 4 — and it must be the one
+   * `hubbleExecute` handed you as `tools.llm`. This module used to build its
+   * own with `resolveLlmProvider()`, which is exactly how `/api/intelligence
+   * /query` spent months calling a model with no credit context: being metered
+   * depended on a caller remembering to import the meter. There is no
+   * fallback construction here any more; the type has no default and the
+   * boundary guard (`tests/unit/model-call-boundary.test.ts`) refuses any
+   * importer of a provider module outside the door.
+   */
+  llm: LLMProvider
   /** One retry with the validation error fed back. Two total attempts. */
   maxAttempts?: number
 }
@@ -425,7 +435,7 @@ export async function planQuery(options: PlanQueryOptions): Promise<PlannerOutco
     }
   }
 
-  const llm = options.llm ?? resolveLlmProvider()
+  const llm = options.llm
   if (!llm.isConfigured()) {
     return { status: 'failed', reason: 'No language model is configured.' }
   }

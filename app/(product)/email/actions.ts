@@ -19,6 +19,8 @@ import { formatDiagnostics, type MailboxDiagnostics } from '@/lib/email/diagnost
 import { assertLaunchable, type CampaignType } from '@/lib/email/campaign-policy'
 import { bulkEnroll, summarize } from '@/lib/email/enrollment'
 import { assessAccount } from '@/lib/email/readiness-runner'
+import { suppressEmail } from '@/lib/email/send'
+import { removeSuppression } from '@/lib/email/suppressions'
 import { runTick } from '@/lib/workers/tick'
 import { requireProvider } from '@/lib/email/providers/registry'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -636,4 +638,86 @@ export async function updateSenderPostalAddress(
     ok: true,
     message: address === '' ? 'Address cleared.' : 'Address saved.',
   }
+}
+
+/**
+ * Adds an address to the suppression list by hand.
+ *
+ * ⚠️ GATED ON `email.account.manage`, THE SAME PERMISSION AS THE SENDER
+ * ADDRESS. Suppression decides who the workspace may never contact again; a
+ * setter changing it is a compliance decision made by someone without the
+ * authority to make it.
+ */
+export async function addSuppressionAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('email.account.manage')
+  } catch {
+    return { ok: false, error: 'You do not have permission to change sending settings.' }
+  }
+
+  const email = String(formData.get('email') ?? '').trim().toLowerCase()
+
+  /*
+   * ⚠️ SHAPE ONLY, NOT DELIVERABILITY. Someone suppressing an address is
+   * telling us not to mail it; refusing because the address looks unusual
+   * would mail a person who asked not to be mailed. The bar is "is this an
+   * address at all".
+   */
+  if (!email || !/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) {
+    return { ok: false, error: 'Enter an email address to suppress.' }
+  }
+
+  const note = String(formData.get('note') ?? '').trim().slice(0, 200)
+
+  try {
+    await suppressEmail({
+      workspaceId: ctx.workspace.id,
+      email,
+      reason: 'manual',
+      source: note || `Added by ${ctx.userId}`,
+      createdBy: ctx.userId,
+    })
+  } catch {
+    return { ok: false, error: 'Could not add that address.' }
+  }
+
+  revalidatePath('/dashboard/settings/email')
+  return { ok: true, message: `${email} will not be emailed again.` }
+}
+
+/**
+ * Removes a suppression so the address can be mailed again.
+ *
+ * ⚠️ THE RESULT IS REPORTED, NOT ASSUMED. A delete scoped to the wrong
+ * workspace matches nothing and succeeds, which is indistinguishable from
+ * working — so `removeSuppression` returns whether a row went, and a miss is
+ * an error rather than a cheerful confirmation.
+ */
+export async function removeSuppressionAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('email.account.manage')
+  } catch {
+    return { ok: false, error: 'You do not have permission to change sending settings.' }
+  }
+
+  const id = String(formData.get('suppressionId') ?? '')
+  if (!id) return { ok: false, error: 'Nothing selected.' }
+
+  try {
+    const removed = await removeSuppression(ctx.workspace.id, id)
+    if (!removed) return { ok: false, error: 'That entry no longer exists.' }
+  } catch {
+    return { ok: false, error: 'Could not remove that entry.' }
+  }
+
+  revalidatePath('/dashboard/settings/email')
+  return { ok: true, message: 'Removed. This address can be emailed again.' }
 }

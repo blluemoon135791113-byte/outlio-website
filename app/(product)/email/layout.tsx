@@ -46,10 +46,7 @@ export default async function EmailLayout({ children }: { children: ReactNode })
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-          {ctx.workspace.name}
-        </p>
-        <h1 className="mt-1.5 text-[30px] font-semibold tracking-[-0.035em] text-ink">Email</h1>
+        <h1 className="text-[30px] font-semibold tracking-[-0.035em] text-ink">Email</h1>
       </header>
 
       <EmailNav />
