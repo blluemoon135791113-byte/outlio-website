@@ -797,8 +797,26 @@ assumption look like an observation.
 
 `lib/email/schedule.ts` already does the hard part correctly — IANA-aware,
 DST-correct, walking days in the account's own calendar rather than adding 24h
-to a UTC instant. What remains is reading the contact's zone ahead of the
-mailbox's, and the per-campaign policy control the owner asked for.
+to a UTC instant.
+
+### Chain wired 2026-09-13 — `lib/email/send-timezone.ts`
+
+`enqueueEmail` now resolves contact → campaign → mailbox, where before only the
+mailbox was ever consulted. A blank or whitespace value counts as UNKNOWN: the
+column is free text behind a shape check, an import will eventually write `''`,
+and treating that as known hands `zonedParts` something it cannot resolve — the
+failure then surfaces as an unusable schedule on a send rather than as the
+missing data it is.
+
+⚠️ **THE WINDOW MOVED; THE ALLOWANCE DID NOT.** A ramp of 20/day is 20 per
+MAILBOX day. Evaluating it against a recipient's calendar would let one mailbox
+send two Mondays' worth by picking recipients either side of the date line — a
+burst, from a domain that sells deliverability. Only the window's timezone is
+substituted, and a guard asserts the ramp is not handed the recipient's zone.
+
+**Still open:** the per-campaign policy control the owner asked for — letting a
+customer choose among the options rather than always taking the recipient's
+zone — plus holidays, which nothing models yet.
 
 
 Raised 2026-09-12 while auditing §5.7.

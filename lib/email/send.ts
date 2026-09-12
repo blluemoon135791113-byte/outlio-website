@@ -31,6 +31,7 @@ import { providerFor } from '@/lib/email/providers/registry'
 import { checkRampAllowance } from '@/lib/email/ramp'
 import { isAccountSendable, rampSettingsOf, todayIn } from '@/lib/email/readiness-runner'
 import { contactIsStopped } from '@/lib/crm/contact-stop'
+import { resolveSendTimezone } from '@/lib/email/send-timezone'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   applyMinimumDelay,
@@ -165,6 +166,15 @@ export type EnqueueInput = {
   /** Groups this message with an existing conversation in our own inbox. */
   threadId?: string | null
   /**
+   * The campaign's timezone, the middle link of §5.7's chain.
+   *
+   * ⚠️ PASSED IN RATHER THAN LOOKED UP. The caller already holds the campaign
+   * — `sequence-runner` selects it alongside the enrollment — so fetching it
+   * again here would be a second query per message to learn something the
+   * caller just read.
+   */
+  campaignTimezone?: string | null
+  /**
    * ⚠️ THE RFC 5322 Message-ID OF THE MESSAGE THIS ANSWERS, and the difference
    * between a reply and a new email in the recipient's client. The SMTP
    * provider has always set In-Reply-To and References from this; until R11
@@ -185,14 +195,24 @@ export type EnqueueResult =
   /** Readiness says this mailbox must not send at all right now. */
   | { queued: false; reason: 'unhealthy'; message: string }
 
-function scheduleOf(account: {
-  timezone: string
-  sendWindowStart: string
-  sendWindowEnd: string
-  sendDays: number[]
-}): SendSchedule {
+/**
+ * ⚠️ THE WINDOW'S CLOCK IS THE RECIPIENT'S WHEN IT IS KNOWN; THE ALLOWANCE'S IS
+ * ALWAYS THE ACCOUNT'S. Those are different questions and conflating them would
+ * be a real defect: a ramp of 20/day is 20 per MAILBOX day, and evaluating it
+ * against a recipient's calendar would let a mailbox send two Mondays' worth by
+ * picking recipients either side of the date line. Only `timezone` moves here.
+ */
+function scheduleOf(
+  account: {
+    timezone: string
+    sendWindowStart: string
+    sendWindowEnd: string
+    sendDays: number[]
+  },
+  windowTimezone?: string,
+): SendSchedule {
   return {
-    timezone: account.timezone,
+    timezone: windowTimezone ?? account.timezone,
     sendWindowStart: account.sendWindowStart,
     sendWindowEnd: account.sendWindowEnd,
     sendDays: account.sendDays,
@@ -269,16 +289,28 @@ export async function enqueueEmail(input: EnqueueInput): Promise<EnqueueResult> 
   }
 
   let scheduledAt: Date
+  /*
+   * §5.7's chain: the contact's zone, else the campaign's, else the mailbox's.
+   * Only the last of the three was ever consulted before — `crm_contacts.
+   * timezone` arrived in 0121 and nothing read it.
+   */
+  const sendZone = resolveSendTimezone({
+    contactTimezone: await recipientTimezone(input.workspaceId, input.contactId),
+    campaignTimezone: input.campaignTimezone ?? null,
+    accountTimezone: account.timezone,
+  })
+
   try {
     const candidate = input.scheduledAt ?? new Date()
+    const schedule = scheduleOf(account, sendZone.timezone)
     scheduledAt = account.lastSendAt
       ? applyMinimumDelay(
-          scheduleOf(account),
+          schedule,
           candidate,
           new Date(account.lastSendAt),
           account.minDelaySeconds,
         )
-      : nextSendTime(scheduleOf(account), candidate)
+      : nextSendTime(schedule, candidate)
   } catch (error) {
     if (error instanceof UnusableScheduleError) {
       return { queued: false, reason: 'unusable_schedule', message: error.message }
@@ -614,6 +646,35 @@ async function resolveSuppressionContact(
     const owners = [...new Set((data ?? []).map((row) => row.contact_id))]
     return owners.length === 1 ? (owners[0] ?? null) : null
   } catch {
+    return null
+  }
+}
+
+/**
+ * The recipient's own timezone, when the CRM knows one.
+ *
+ * ⚠️ ONE INDEXED LOOKUP ON THE ENQUEUE PATH, NOT THE SEND LOOP. It runs once
+ * per message queued rather than once per claim, and `null` — no contact, no
+ * row, or a blank column — simply falls through to the next link of the chain
+ * rather than failing the send.
+ */
+async function recipientTimezone(
+  workspaceId: string,
+  contactId: string | null | undefined,
+): Promise<string | null> {
+  if (!contactId) return null
+  try {
+    const { data } = await createAdminClient()
+      .from('crm_contacts')
+      .select('timezone')
+      // Service role bypasses RLS — scoping by workspace here is mandatory.
+      .eq('workspace_id', workspaceId)
+      .eq('id', contactId)
+      .is('deleted_at', null)
+      .maybeSingle()
+    return data?.timezone ?? null
+  } catch {
+    // A scheduling refinement must never stop a send.
     return null
   }
 }
