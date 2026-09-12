@@ -98,48 +98,63 @@ const roundRobin: ActionHandler = async (ctx, config) => {
     : []
   if (pool.length === 0) return fail('NO_POOL', 'This step has nobody configured to assign to.')
 
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ ONE CALL, BECAUSE COUNTING AND ASSIGNING IN SEPARATE STATEMENTS    ║
+   * ║  WAS A RACE.                                                          ║
+   * ║                                                                       ║
+   * ║  This used to count every candidate, pick the lowest, then update.    ║
+   * ║  Two runs starting together both finished counting before either      ║
+   * ║  wrote, so both saw the same totals and both chose the same person —  ║
+   * ║  the least-loaded member collected the entire batch, which is the     ║
+   * ║  opposite of round robin.                                             ║
+   * ║                                                                       ║
+   * ║  It never errored. Both updates succeeded, both runs reported ok,     ║
+   * ║  both wrote a truthful activity. There was nothing to find in a log;  ║
+   * ║  the only symptom was a quietly unfair split.                         ║
+   * ║                                                                       ║
+   * ║  0125 does the count, the decision and the write inside one           ║
+   * ║  transaction, under an advisory lock on the workspace. A row lock     ║
+   * ║  would not have worked: concurrent runs assign DIFFERENT contacts, so ║
+   * ║  they never contend on a row. The thing being protected is the        ║
+   * ║  distribution, not a record.                                          ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   */
   const db = createAdminClient()
-  const counts = await Promise.all(
-    pool.map(async (userId) => {
-      const { count } = await db
-        .from('crm_contacts')
-        .select('id', { count: 'exact', head: true })
-        .eq('workspace_id', ctx.workspaceId)
-        .eq('owner_user_id', userId)
-        .is('deleted_at', null)
-      return { userId, count: count ?? 0 }
-    }),
-  )
-
-  // Ties break on the pool's own order, so the result is deterministic rather
-  // than dependent on how the database happened to answer.
-  const chosen = counts.reduce((best, row) => (row.count < best.count ? row : best), counts[0]!)
-
-  const { error } = await db
-    .from('crm_contacts')
-    .update({ owner_user_id: chosen.userId })
-    .eq('workspace_id', ctx.workspaceId)
-    .eq('id', ctx.contactId)
+  const { data, error } = await db.rpc('crm_round_robin_assign', {
+    p_workspace_id: ctx.workspaceId,
+    p_contact_id: ctx.contactId,
+    p_user_ids: pool,
+  })
 
   if (error) return fail('ASSIGN_FAILED', 'Could not assign this contact.', true)
 
-  const activityId = await recordActivity(ctx.workspaceId, {
-    contactId: ctx.contactId,
-    activityType: 'OWNER_ASSIGNED',
-    channel: 'system',
-    actorUserId: null,
-    metadata: { assigned_to: chosen.userId, by: 'flow_round_robin', run_id: ctx.runId },
-  })
+  const result = (data ?? {}) as { assigned_to?: string; activity_id?: string | null }
+  const assignedTo = result.assigned_to
+  if (!assignedTo) return fail('ASSIGN_FAILED', 'Could not assign this contact.', true)
 
-  await emitDomainEvent({
-    workspaceId: ctx.workspaceId,
-    triggerType: 'contact_assigned',
-    contactId: ctx.contactId,
-    idempotencyKey: `contact_assigned:${activityId}`,
-    payload: { contactId: ctx.contactId, to: chosen.userId, by: 'flow_round_robin' },
-  })
+  /*
+   * ⚠️ THE ACTIVITY IS WRITTEN BY 0125, NOT HERE. It goes through
+   * `crm_assign_contact_owner`, so the owner change and its audit row commit
+   * together — `crm_activities` is append-only, and a row claiming a handover
+   * that did not happen can never be corrected.
+   *
+   * The event still belongs out here: it is a notification, not history, and
+   * emitting it inside the transaction would announce a change that could
+   * still roll back. The activity id is the occurrence, so a retried step
+   * cannot fire it twice.
+   */
+  if (result.activity_id) {
+    await emitDomainEvent({
+      workspaceId: ctx.workspaceId,
+      triggerType: 'contact_assigned',
+      contactId: ctx.contactId,
+      idempotencyKey: `contact_assigned:${result.activity_id}`,
+      payload: { contactId: ctx.contactId, to: assignedTo, by: 'flow_round_robin' },
+    })
+  }
 
-  return ok({ assignedTo: chosen.userId, openContacts: chosen.count })
+  return ok({ assignedTo })
 }
 
 const createTask: ActionHandler = async (ctx, config) => {
