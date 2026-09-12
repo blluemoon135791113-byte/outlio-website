@@ -46,8 +46,9 @@ That is how `0121` was confirmed rather than assumed.
 which `gen types` cannot see, so it remains unverified from this side. The only
 direct check would be calling it, which claims real production messages.
 
-**Standing:** `0120` — owner says applied, not independently verified. `0121` —
-verified applied. `0122` — written, smoke-tested locally, **not applied**.
+**Standing:** `0120` — owner says applied, not independently verified (a
+function body cannot be seen through `gen types`). `0121` and `0122` — verified
+applied, by checking the live schema for their tables, enums and functions.
 
 ## LinkedIn channel — phase state (2026-09-13)
 
@@ -66,14 +67,15 @@ Its own phase numbering, not §9's:
 | 1 | Capability audit | **COMPLETE** — [`LINKEDIN_CAPABILITY_MAP.md`](LINKEDIN_CAPABILITY_MAP.md) |
 | 2 | Contact-level stop at email dispatch | **COMPLETE** — found a live defect; `enqueueEmail` matched suppression on address alone |
 | 3 | Contact DNC + `crm_contacts.timezone` | **COMPLETE** — migration `0121`, **applied** |
-| 4 | Sender identity and account policy | **PARTIAL** — schema `0122` **not applied**; stage ladder and budget arithmetic built |
+| 4 | Sender identity and account policy | **COMPLETE (server side)** — `0122` **applied**; schema, stage ladder, budget arithmetic and `lib/linkedin/senders.ts`. No UI yet |
 | 5 | Enrollment / task / conversation state split | **COMPLETE** (logic) — tables deferred |
 | 6 | LinkedIn action types | **DEFERRED** — they land with their handlers, not before |
 | 7 | Action Inbox decision layer | **PARTIAL** — outcome vocabulary and profile-link safety built; the card needs 4 and 5 |
 | 8 | Message set (§4.9) | **COMPLETE** — `lib/linkedin/{templates,variables,render}.ts` |
 | 9 | Metrics (§4.18) | **COMPLETE** — `lib/linkedin/metrics.ts` |
 
-⚠️ **Six `lib/linkedin/*` modules are in `KNOWN_ORPHANS`** with named exit
+⚠️ **Six `lib/linkedin/*` modules are in `KNOWN_ORPHANS`** (`outcomes` and
+`budget` have since left it by gaining importers) with named exit
 conditions. They leave when the Action Inbox renders a draft and its result
 form. If it ever ships while they remain, the card built its own renderer,
 outcome vocabulary, profile-link check or idea of a valid approval — which is

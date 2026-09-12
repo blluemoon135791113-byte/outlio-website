@@ -6211,6 +6211,157 @@ export type Database = {
         }
         Relationships: []
       }
+      linkedin_sender_actions: {
+        Row: {
+          contact_id: string | null
+          id: string
+          kind: Database["public"]["Enums"]["linkedin_action_kind"]
+          lifecycle: Database["public"]["Enums"]["linkedin_action_lifecycle"]
+          logical_action_id: string
+          occurred_at: string | null
+          reserved_at: string
+          resolution_note: string | null
+          resolved_at: string | null
+          sender_id: string
+          workspace_id: string
+        }
+        Insert: {
+          contact_id?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["linkedin_action_kind"]
+          lifecycle?: Database["public"]["Enums"]["linkedin_action_lifecycle"]
+          logical_action_id: string
+          occurred_at?: string | null
+          reserved_at?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          sender_id: string
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["linkedin_action_kind"]
+          lifecycle?: Database["public"]["Enums"]["linkedin_action_lifecycle"]
+          logical_action_id?: string
+          occurred_at?: string | null
+          reserved_at?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          sender_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_sender_actions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_sender_actions_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_senders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_sender_actions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_sender_links: {
+        Row: {
+          created_at: string
+          id: string
+          linked_by_user_id: string | null
+          permitted_kinds: Database["public"]["Enums"]["linkedin_action_kind"][]
+          sender_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          linked_by_user_id?: string | null
+          permitted_kinds?: Database["public"]["Enums"]["linkedin_action_kind"][]
+          sender_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          linked_by_user_id?: string | null
+          permitted_kinds?: Database["public"]["Enums"]["linkedin_action_kind"][]
+          sender_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_sender_links_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_senders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_sender_links_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_senders: {
+        Row: {
+          budget_timezone: string
+          budget_timezone_changed_at: string | null
+          created_at: string
+          display_label: string
+          external_reserve_per_day: number
+          id: string
+          identity_key: string
+          last_owner_review_at: string | null
+          owner_user_id: string
+          stage: number
+          status: Database["public"]["Enums"]["linkedin_sender_status"]
+          updated_at: string
+        }
+        Insert: {
+          budget_timezone?: string
+          budget_timezone_changed_at?: string | null
+          created_at?: string
+          display_label: string
+          external_reserve_per_day?: number
+          id?: string
+          identity_key: string
+          last_owner_review_at?: string | null
+          owner_user_id: string
+          stage?: number
+          status?: Database["public"]["Enums"]["linkedin_sender_status"]
+          updated_at?: string
+        }
+        Update: {
+          budget_timezone?: string
+          budget_timezone_changed_at?: string | null
+          created_at?: string
+          display_label?: string
+          external_reserve_per_day?: number
+          id?: string
+          identity_key?: string
+          last_owner_review_at?: string | null
+          owner_user_id?: string
+          stage?: number
+          status?: Database["public"]["Enums"]["linkedin_sender_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meeting_bookings: {
         Row: {
           cancel_reason: string | null
@@ -8526,6 +8677,14 @@ export type Database = {
           match_strategy: string
         }[]
       }
+      linkedin_sender_used: {
+        Args: {
+          p_kind: Database["public"]["Enums"]["linkedin_action_kind"]
+          p_sender_id: string
+          p_window: string
+        }
+        Returns: number
+      }
       merge_lead_enrichment: {
         Args: { p_enrichment: Json; p_lead_ids: string[]; p_user_id: string }
         Returns: number
@@ -9127,6 +9286,26 @@ export type Database = {
         | "partially_completed"
         | "failed"
         | "cancelled"
+      linkedin_action_kind:
+        | "invitation"
+        | "direct_message"
+        | "inmail"
+        | "profile_review"
+        | "engagement"
+      linkedin_action_lifecycle:
+        | "reserved"
+        | "performed"
+        | "skipped"
+        | "expired"
+        | "unknown"
+      linkedin_sender_status:
+        | "unknown"
+        | "owner_reviewed"
+        | "warning"
+        | "paused"
+        | "restricted"
+        | "disconnected"
+        | "auth_expired"
       meeting_event_type:
         | "booked"
         | "cancelled"
@@ -9474,6 +9653,29 @@ export const Constants = {
         "partially_completed",
         "failed",
         "cancelled",
+      ],
+      linkedin_action_kind: [
+        "invitation",
+        "direct_message",
+        "inmail",
+        "profile_review",
+        "engagement",
+      ],
+      linkedin_action_lifecycle: [
+        "reserved",
+        "performed",
+        "skipped",
+        "expired",
+        "unknown",
+      ],
+      linkedin_sender_status: [
+        "unknown",
+        "owner_reviewed",
+        "warning",
+        "paused",
+        "restricted",
+        "disconnected",
+        "auth_expired",
       ],
       meeting_event_type: [
         "booked",

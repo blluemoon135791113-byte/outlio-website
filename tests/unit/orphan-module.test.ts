@@ -159,11 +159,18 @@ const KNOWN_ORPHANS = new Set(
      * not orphans — the guard rejected them from this list, correctly, on
      * exactly that basis.
      *
-     * ⚠️ `outcomes.ts` LEFT THIS LIST WITHOUT ANYONE DECIDING TO REMOVE IT.
-     * `budget.ts` imports `TaskKind` from it, so it acquired a production
-     * importer and the both-directions assertion failed until the entry was
-     * deleted. That is the ratchet paying for itself: the list shrank because
-     * the code changed, not because somebody remembered to tidy it.
+     * ⚠️ `outcomes.ts` AND `budget.ts` BOTH LEFT THIS LIST WITHOUT ANYONE
+     * DECIDING TO REMOVE THEM. Each acquired a production importer — `budget`
+     * imports `TaskKind` from `outcomes`, and `senders` imports from `budget` —
+     * and the both-directions assertion failed until the entries were deleted.
+     * The list shrinks because the code changes, not because somebody
+     * remembers to tidy it.
+     *
+     * `senders.ts` replaced `budget.ts` here rather than joining it: it is the
+     * new frontier of the same chain, and it leaves when a route or component
+     * links a sender. Until then it is the ONLY way into a table with no RLS
+     * select policy, which is why `schema-without-code` released that table the
+     * moment this file appeared.
      *
      * ⚠️ THE EXIT CONDITION IS NAMED, because an entry with no way out is how
      * this list stops shrinking. Every entry below leaves when the Action Inbox
@@ -180,7 +187,7 @@ const KNOWN_ORPHANS = new Set(
     'lib/linkedin/preflight.ts',
     'lib/linkedin/enrollment.ts',
     'lib/linkedin/metrics.ts',
-    'lib/linkedin/budget.ts',
+    'lib/linkedin/senders.ts',
   ].map((p) => p.replace(/\//g, sep)),
 )
 
