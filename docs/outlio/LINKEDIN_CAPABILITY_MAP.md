@@ -1,0 +1,221 @@
+# LinkedIn workflows — Phase 1 capability map
+
+Audited 2026-09-12 against `Outlio_LinkedIn_Workflow_Master.md` §4.2 and §6.
+Status vocabulary is the brief's: `VERIFIED_PRESENT` · `PARTIAL` · `MISSING` ·
+`UNVERIFIED`.
+
+**The brief's own standard is applied literally:** *"A name in an action
+registry or an empty 'unimplemented' list is insufficient if the handler is a
+stub or has no functioning UI path."* Every `VERIFIED_PRESENT` below cites a
+file and line that was read, not a table or symbol that merely exists.
+
+Nothing here has been built. This is the map, and it is the deliverable of
+§4.19 phase 1.
+
+---
+
+## 0. Headline
+
+Three findings decide the shape of the whole build.
+
+1. **The email channel cannot currently honour a contact-level stop.** This is
+   the §4.15 coordination contract, and the brief is explicit about what to do
+   when it does not hold: *"If the repository cannot enforce the shared guard at
+   actual email dispatch, report the integration as incomplete and keep
+   simultaneous coordinated programs disabled."* See §2 below. It is a
+   one-predicate gap, not an architectural one.
+2. **No sender identity model exists at all.** Zero tables match `sender*` or
+   `linkedin*` in a 222-table schema. §4.10 — per-account budgets, sender
+   states, ramp stages, pinned assignment — is greenfield.
+3. **The repository already enforces the brief's central discipline.**
+   `UNIMPLEMENTED_ACTIONS` plus `flow-action-coverage.test.ts` exist precisely
+   to stop an action being offered before it works, and the list is currently
+   empty. The brief's §4.2 warning describes a defect this codebase has already
+   met and built a guard against.
+
+---
+
+## 1. Workflow engine and action registry — `VERIFIED_PRESENT`
+
+| Item | Status | Evidence |
+|---|---|---|
+| Action registration, single entry point | `VERIFIED_PRESENT` | `lib/flows/actions/index.ts` — `registerAllActions()`, idempotent, called from `lib/workers/tick.ts` |
+| Registered handlers | `VERIFIED_PRESENT` | 23 explicit `registerAction(...)` calls across `actions/{compute,crm,email,notify,webhook}.ts`, plus a dynamic set in `actions/hubble.ts:159` |
+| Catalogue-vs-handler guard | `VERIFIED_PRESENT` | `lib/flows/definition.ts:139` `UNIMPLEMENTED_ACTIONS` (empty), checked by `tests/unit/flow-action-coverage.test.ts` |
+| Durable waits | `VERIFIED_PRESENT` | `claimWaitingRuns` / `advanceRun`, driven by `runTick`'s `advance_flows` job |
+| Immutable published versions | `VERIFIED_PRESENT` | `flow_versions` table; enrollments pin `version_id` (`app/(product)/flows/[id]/page.tsx`) |
+| Registry-version deprecation warnings | `VERIFIED_PRESENT` | `flowDefinitionWarnings`, rendered on the flow page |
+
+**Reusable for LinkedIn.** §4.14's DSL requirements — registered node types,
+schema validation, permissions, credit classification, side-effect category —
+map onto `ACTION_CATALOGUE` + `capabilityForFlowAction` without a parallel
+system. The brief forbids building a second engine; nothing here requires one.
+
+**Gap against §4.6's starter registry.** The LinkedIn intents
+(`REVIEW_PROFILE`, `CONNECTION_REQUEST`, `DIRECT_MESSAGE`, `INMAIL`) and the
+optional human tasks (`REVIEW_POST`, `FOLLOW_PROFILE`, `LIKE_POST`,
+`COMMENT_POST`, `VOICE_NOTE`) do not exist. Adding them **must** go through
+`UNIMPLEMENTED_ACTIONS` until their handlers and Action Inbox path work, or the
+repo reproduces the exact defect the list was built to prevent.
+
+---
+
+## 2. Email coordination (§4.15) — `PARTIAL`, and this is the critical one
+
+| Item | Status | Evidence |
+|---|---|---|
+| Suppression exists and is enforced | `VERIFIED_PRESENT` | `lib/email/send.ts:216` at enqueue, and again inside the claim |
+| Checked at enrollment too | `VERIFIED_PRESENT` | `lib/email/enrollment.ts:146-211` |
+| Stop-on-reply policy | `VERIFIED_PRESENT` | `lib/email/campaign-policy.ts:36,118` — `stepStopsOnReply` |
+| **Contact-level stop honoured at dispatch** | **`MISSING`** | `lib/email/send.ts:217-221` queries `.eq('workspace_id', …).eq('email', toEmail)` |
+
+### The precise defect
+
+`email_suppressions` **has** a `contact_id` column. `enqueueEmail` never reads
+it — suppression is resolved purely by email address.
+
+So a do-not-contact recorded against a *contact*, which is exactly what a
+LinkedIn reply or a manual `Mark DNC` produces, does not stop an email send.
+It only stops one if a suppression row happens to exist carrying that person's
+exact address.
+
+This is G11/§4.15 stated as a code path rather than a concern. It is also
+**narrow**: the fix is one additional predicate on an existing query against an
+existing column, plus writing `contact_id` on every suppression insert. It is
+not an architectural change.
+
+### What the brief requires until it is fixed
+
+Coordinated simultaneous programs stay **disabled**, and the integration is
+reported incomplete. The brief anticipates this exact situation and says an
+event stored in CRM "alone does not prove the email worker honors it."
+
+**Recommended as phase 3 of the build**, before any LinkedIn enrollment exists —
+the shared stop has to be real before two channels can rely on it.
+
+---
+
+## 3. Sender identity and account policy (§4.10) — `MISSING`
+
+Zero tables match `sender*`, `linkedin*`, or `inbox*` across 222 tables.
+
+Everything in §4.10 is greenfield: real-account identity, ownership
+verification, per-account daily/rolling-7-day budgets shared across campaigns,
+ramp stages 0–3, sender states (`UNKNOWN`, `OWNER_REVIEWED`, `WARNING`,
+`LIMIT_REACHED`, `PAUSED`, `RESTRICTED`, `DISCONNECTED`), warning capture,
+pinned sender-per-thread assignment.
+
+⚠️ **One constraint to carry into the design.** §4.10 requires a sender's budget
+to be shared across *all* workspaces that owner participates in, while no
+workspace may see another's activity. That is a service-only control record with
+a per-workspace projection — the brief says so explicitly ("Do not create a
+global browseable list of customer LinkedIn accounts"). It cuts across this
+repo's `workspace_id` tenancy model and needs designing deliberately rather than
+as a column on a workspace-scoped table.
+
+---
+
+## 4. Tasks and the Action Inbox (§4.13) — `PARTIAL`
+
+`crm_tasks` exists with: `workspace_id`, `contact_id`, `company_id`,
+`assigned_to_user_id`, `due_at`, `status`, `title`, `body`, `completed_at`,
+`completed_by`, soft delete.
+
+Good bones. **Absent** for §4.13: task kind/intent, sender identity, approved
+content version, evidence reference, recorded-outcome distinct from completion,
+skip reason, last-thread-check timestamp, and the
+`REQUEST_MARKED_SENT` / `CONNECTION_ACCEPTANCE_RECORDED` /
+`MESSAGE_MARKED_SENT` / `INBOX_REVIEW_RECORDED` event vocabulary from §4.7.
+
+The brief's hardest requirement here is semantic, not structural: *"'Mark
+request sent' cannot mark acceptance"* and *"task created ≠ message sent."* A
+single `status` enum cannot carry that; §4.7's separate enrollment / task /
+conversation / sender states are load-bearing.
+
+---
+
+## 5. Conversations (§4.11) — `MISSING` as a channel-agnostic concept
+
+`email_threads` and `email_inbound_messages` exist; there is no
+channel-neutral `conversations` table. §4.11 needs conversation ownership,
+assignment, SLA timers and reply classification that a LinkedIn manual capture
+and an email provider event can both write to.
+
+---
+
+## 6. Credits (§4.14) — `PARTIAL`
+
+`hubble_spend_credits` and `hubble_refund_credits` exist
+(`lib/hubble/execute.ts:141,190,225`). That is **spend-then-refund**, an
+optimistic model.
+
+§4.14 asks for **reserve / commit / release** "so concurrent workflows cannot
+overspend." These are not the same: refund-on-failure cannot prevent two
+concurrent flows from both spending past the balance, it only repairs one
+afterwards. Whether that matters depends on the concurrency the LinkedIn build
+introduces — recorded as a gap, not yet a required change.
+
+---
+
+## 7. Plan gates (§4.3) — `VERIFIED_PRESENT`
+
+`lib/limits/plans.ts:76-81` — `crm_enabled`, `email_enabled`, `flows_enabled`,
+`reports_enabled`, `integrations_enabled`, `hubble_enabled`, plus
+`workspace_member_limit`. Module entitlement already lives in `plans.limits`
+with a workspace flag that can only switch a module **off**, never on
+(`lib/workspaces/entitlements.ts`).
+
+A `linkedin_enabled` entitlement fits this existing mechanism with no new table,
+which CLAUDE.md requires ("All plan limits come from `plans.limits` JSONB at
+runtime. Never hardcode.").
+
+---
+
+## 8. Contact model — `PARTIAL`
+
+`crm_contacts` has **no** `timezone` column and **no** contact-level DNC flag.
+
+- The missing timezone is the same gap DECISION-20 records for send windows.
+  §4.8's timing table needs it ("If recipient timezone is unknown, show the
+  campaign fallback explicitly").
+- The missing DNC flag is the other half of §2 above.
+
+Both are additive columns on an existing table.
+
+---
+
+## 9. Not yet audited — `UNVERIFIED`
+
+Stated rather than guessed, per the brief's evidence standard:
+
+- How service-role background jobs enforce tenancy in practice. `CLAUDE.md`
+  requires every service-role query to scope by `workspace_id`/`user_id` in
+  code and `tests/unit/service-role-scoping.test.ts` exists, but this audit did
+  not read it.
+- Whether operator/member records already cross workspaces (§4.10's shared
+  budget depends on the answer).
+- Deployed capacity. §4.20's load targets cannot be assessed from source, and
+  the brief is explicit that throughput is a measured deployment property.
+- Which connectors hold legitimate signal or inbox capability. `Calendly` is
+  wired; the rest is unread.
+
+---
+
+## 10. Proposed build order
+
+Deviates from §4.19 in one place, for a stated reason.
+
+| # | Phase | Why here |
+|---|---|---|
+| 1 | This map | done |
+| 2 | **Contact-level stop at email dispatch** | §4.19 puts this at phase 3. It moves first because it is small, it is the one defect already shipping today, and every later coordination claim depends on it |
+| 3 | Contact model additions (`timezone`, DNC) | unblocks both the stop above and §4.8 timing |
+| 4 | Sender identity + account policy (§4.10) | the largest greenfield piece; everything in §4.8 releases through it |
+| 5 | Task/enrollment/conversation state split (§4.7) | the semantic core: sent ≠ accepted, created ≠ sent |
+| 6 | LinkedIn action types behind `UNIMPLEMENTED_ACTIONS` | registered only as handlers land |
+| 7 | Action Inbox (§4.13) | needs 4 and 5 |
+| 8 | Templates + fallback registry (§4.9) | pure rendering, testable in isolation |
+| 9 | Metrics (§4.18) | denominators need the event vocabulary from 5 |
+
+**Migrations required** (owner-applied, per CLAUDE.md): phases 3, 4, 5. Phase 2
+needs none — it is a query predicate and an insert field.

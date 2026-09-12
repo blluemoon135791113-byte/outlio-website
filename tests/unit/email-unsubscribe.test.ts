@@ -150,8 +150,18 @@ describe('the suppression gate is wired into enqueueEmail', () => {
   const source = readFileSync(join(__dirname, '..', '..', 'lib/email/send.ts'), 'utf8')
 
   it('refuses a suppressed recipient at enqueue', () => {
+    /*
+     * ⚠️ REPOINTED, NOT RELAXED. This matched the single-lookup shape
+     * `if (suppressed) return ...`, which stopped existing when the check grew
+     * a second lookup so that a suppression recorded against a CONTACT stops a
+     * send to any of that person's addresses (0120). The defect it guards is
+     * unchanged — enqueue must still refuse — so the assertion follows the
+     * code rather than being deleted for going red.
+     */
     expect(
-      /if \(suppressed\)\s*return \{ queued: false, reason: 'suppressed' \}/.test(source),
+      /if \(byEmail\.data \|\| byContact\.data\)\s*return \{ queued: false, reason: 'suppressed' \}/.test(
+        source,
+      ),
       'enqueueEmail no longer refuses suppressed recipients, so an unsubscribed or ' +
         'hard-bounced address can be mailed again.',
     ).toBe(true)
@@ -171,7 +181,7 @@ describe('the suppression gate is wired into enqueueEmail', () => {
      * and calling it the body.
      */
     const lookup = source.indexOf("from('email_suppressions')")
-    const gate = source.indexOf('if (suppressed) return')
+    const gate = source.indexOf('if (byEmail.data || byContact.data) return')
     expect(lookup).toBeGreaterThan(-1)
     expect(gate).toBeGreaterThan(-1)
     expect(gate).toBeGreaterThan(lookup)

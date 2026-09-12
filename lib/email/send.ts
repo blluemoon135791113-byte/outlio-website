@@ -213,14 +213,43 @@ export async function enqueueEmail(input: EnqueueInput): Promise<EnqueueResult> 
   const account = await getEmailAccount(input.workspaceId, input.accountId)
   if (!account) return { queued: false, reason: 'no_account' }
 
-  const { data: suppressed } = await db
-    .from('email_suppressions')
-    .select('id')
-    .eq('workspace_id', input.workspaceId)
-    .eq('email', toEmail)
-    .maybeSingle()
+  /*
+   * ⚠️ SUPPRESSION IS A FACT ABOUT A PERSON, NOT ABOUT ONE OF THEIR ADDRESSES.
+   *
+   * This matched on `email` alone, and `crm_contact_emails` lets one contact
+   * hold several. So somebody who unsubscribed — or who was marked
+   * do-not-contact after replying — kept receiving mail at their second
+   * address, because the row recording that decision named the first.
+   *
+   * `email_suppressions.contact_id` has existed the whole time and
+   * `suppressEmail` writes it; nothing read it. That also makes this the
+   * predicate the LinkedIn channel needs (§4.15 of the LinkedIn brief): a stop
+   * recorded against a contact has to reach a send addressed by email, and
+   * until now it could not.
+   *
+   * Two queries rather than one `.or()`: an email local part may legally
+   * contain a comma or parenthesis, which are PostgREST's own `or` syntax, and
+   * `lib/crm/contacts-list.ts` already documents what that costs to get wrong.
+   */
+  const [byEmail, byContact] = await Promise.all([
+    db
+      .from('email_suppressions')
+      .select('id')
+      .eq('workspace_id', input.workspaceId)
+      .eq('email', toEmail)
+      .maybeSingle(),
+    input.contactId
+      ? db
+          .from('email_suppressions')
+          .select('id')
+          .eq('workspace_id', input.workspaceId)
+          .eq('contact_id', input.contactId)
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
 
-  if (suppressed) return { queued: false, reason: 'suppressed' }
+  if (byEmail.data || byContact.data) return { queued: false, reason: 'suppressed' }
 
   /*
    * ⚠️ THE SAFETY GATE AND THE RAMP ARE ENFORCED HERE, AT ENQUEUE — M5
