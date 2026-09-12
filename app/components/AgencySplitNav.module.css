@@ -22,15 +22,15 @@
 }
 
 .topState {
-  height: 80px;
+  height: 84px;
   background-color: transparent;
   border-bottom-color: transparent;
 }
 
 .compactState {
-  height: 68px;
-  background-color: var(--nav-ivory);
-  border-bottom-color: rgba(41, 39, 36, 0.12);
+  height: 80px;
+  background: transparent;
+  border-bottom-color: transparent;
 }
 
 .hiddenState {
@@ -43,12 +43,24 @@
   grid-template-columns: 44px minmax(0, 1fr) max-content;
   align-items: center;
   column-gap: clamp(18px, 2.6vw, 48px);
-  width: min(calc(100% - 80px), 1440px);
-  height: 100%;
+  width: min(calc(100% - 48px), 1440px);
+  height: 64px;
   margin-inline: auto;
-  padding-bottom: 12px;
-  padding-top: 16px;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(41, 39, 36, 0.08);
+  border-radius: 18px;
+  background: rgba(250, 247, 240, 0.96);
+  box-shadow: 0 6px 24px rgba(40, 35, 30, 0.07);
   pointer-events: auto;
+  transition:
+    width 200ms ease,
+    height 200ms ease,
+    padding 200ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease,
+    border-radius 200ms ease,
+    box-shadow 200ms ease;
 }
 
 .logoLink,
@@ -81,33 +93,34 @@
   display: flex;
   justify-self: center;
   width: max-content;
-  height: 52px;
+  height: 44px;
   align-items: center;
   gap: 26px;
-  padding-inline: 28px;
-  border: 1px solid rgba(41, 39, 36, 0.08);
+  padding-inline: 8px;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--nav-ivory);
-  box-shadow: 0 4px 20px rgba(40, 35, 30, 0.06);
+  background: transparent;
+  box-shadow: none;
   white-space: nowrap;
 }
 
 .compactState .container {
-  grid-template-columns: 40px minmax(0, 1fr) max-content;
-  column-gap: clamp(16px, 2vw, 32px);
-  width: min(calc(100% - 48px), 1440px);
-  padding-top: 12px;
-  padding-bottom: 11px;
+  display: flex;
+  width: max-content;
+  max-width: calc(100% - 48px);
+  height: 60px;
+  justify-content: center;
+  margin-top: 10px;
+  padding: 7px 26px;
+  border: 1px solid rgb(250 247 240 / 0.12);
+  border-radius: 999px;
+  background: rgb(35 33 30 / 0.98);
+  box-shadow: 0 12px 34px rgb(38 32 27 / 0.18);
 }
 
 .compactState .logoLink,
-.compactState .logo {
-  width: 40px;
-  height: 40px;
-}
-
-.compactState .logo {
-  border-radius: 10px;
+.compactState .desktopActions {
+  display: none;
 }
 
 .compactState .desktopNav {
@@ -119,8 +132,8 @@
   box-shadow: none;
 }
 
-.compactState .action {
-  padding-inline: 16px;
+.compactState .navLink {
+  color: var(--nav-ivory);
 }
 
 .navLink {
@@ -332,8 +345,8 @@
   }
 
   .desktopNav {
-    gap: 24px;
-    padding-inline: 24px;
+    gap: 20px;
+    padding-inline: 4px;
   }
 
   .compactState .desktopNav {
@@ -355,19 +368,49 @@
     grid-template-columns: 44px 44px;
     justify-content: space-between;
     width: calc(100% - 48px);
-    padding-bottom: 8px;
-    padding-top: 12px;
+    height: 60px;
+    margin-top: 10px;
+    padding: 8px 10px;
   }
 
   .compactState {
-    height: 68px;
+    height: 76px;
   }
 
   .compactState .container {
-    grid-template-columns: 40px 44px;
-    width: calc(100% - 48px);
-    padding-top: 10px;
-    padding-bottom: 10px;
+    width: 60px;
+    height: 60px;
+    margin-top: 8px;
+    padding: 8px;
+  }
+
+  .compactState .menuButton {
+    border-color: rgb(250 247 240 / 0.16);
+    background: rgb(250 247 240 / 0.08);
+    color: var(--nav-ivory);
+    box-shadow: none;
+  }
+
+  .compactState .mobileMenu {
+    right: auto;
+    left: 50%;
+    width: min(320px, calc(100vw - 24px));
+    border-color: rgb(250 247 240 / 0.12);
+    background: rgb(35 33 30 / 0.98);
+    box-shadow: 0 18px 42px rgb(28 24 20 / 0.24);
+    transform: translateX(-50%);
+  }
+
+  .compactState .mobileLink {
+    color: var(--nav-ivory);
+  }
+
+  .compactState .mobileLink:hover {
+    background: rgb(250 247 240 / 0.08);
+  }
+
+  .compactState .mobileActions {
+    display: none;
   }
 
   .desktopNav,
@@ -387,6 +430,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .header,
+  .container,
   .navLink,
   .navLink::after,
   .action,
