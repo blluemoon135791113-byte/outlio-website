@@ -147,9 +147,24 @@ export async function listContactTimeline(
 /**
  * Assigns a contact, recording the change as an event.
  *
- * ⚠️ THE ACTIVITY IS WRITTEN BEFORE THE OWNER CHANGES, deliberately. The event
- * belongs to the owner it is leaving; recording it afterwards would credit the
- * handover to the person receiving the book.
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ ONE TRANSACTION, IN THE DATABASE. THIS USED TO BE TWO STATEMENTS.     ║
+ * ║                                                                           ║
+ * ║  It read the owner, inserted OWNER_ASSIGNED, then updated the contact.    ║
+ * ║  When the update failed the insert had already committed — and            ║
+ * ║  `crm_activities` is append-only, so the false row could never be         ║
+ * ║  deleted or corrected. The timeline permanently claimed a handover that   ║
+ * ║  never happened while the contact still belonged to its old owner.        ║
+ * ║                                                                           ║
+ * ║  Reordering would only have traded a false audit row for a missing one.   ║
+ * ║  `crm_assign_contact_owner` (0123) does the locked read, the insert and   ║
+ * ║  the update together, so either both land or neither does.                ║
+ * ║                                                                           ║
+ * ║  The activity is still written BEFORE the owner changes, inside that      ║
+ * ║  transaction: the event belongs to the owner it is leaving, and           ║
+ * ║  `owner_user_id_at_event` is read from the locked row rather than from    ║
+ * ║  the value about to be written.                                           ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * There is no separate `assignment_events` table — see Ledger D23. All metrics
  * derive from this one stream.
@@ -162,40 +177,33 @@ export async function assignContact(
 ): Promise<void> {
   const db = createAdminClient()
 
-  const { data: current, error: readError } = await db
-    .from('crm_contacts')
-    .select('owner_user_id')
-    .eq('workspace_id', workspaceId)
-    .eq('id', contactId)
-    .maybeSingle()
-
-  if (readError) throw new Error(`assignContact failed: ${readError.message}`)
-  if (!current) throw new Error('assignContact: no such contact in this workspace')
-  if (current.owner_user_id === newOwnerUserId) return
-
-  /*
-   * ⚠️ THE ACTIVITY ID IS THE OCCURRENCE. One assignment produces one
-   * OWNER_ASSIGNED row; using its id as the idempotency key means a retried
-   * business operation (this function is called from a server action a browser
-   * may resubmit) cannot fire the assignment twice, while A→B→A fires twice,
-   * as it should — each move is its own activity.
-   */
-  const activityId = await recordActivity(workspaceId, {
-    contactId,
-    activityType: 'OWNER_ASSIGNED',
-    channel: 'system',
-    actorUserId,
-    ownerUserIdAtEvent: current.owner_user_id,
-    metadata: { from: current.owner_user_id, to: newOwnerUserId },
+  const { data, error } = await db.rpc('crm_assign_contact_owner', {
+    p_workspace_id: workspaceId,
+    p_contact_id: contactId,
+    /*
+     * ⚠️ NULL IS A LEGITIMATE OWNER — it is what unassigned means — and the
+     * generated types cannot express that a `uuid` PARAMETER accepts null.
+     * The cast documents the gap rather than hiding it, exactly as
+     * `lib/flows/engine.ts` does for `flow_check_loop_protection`.
+     */
+    p_new_owner: (newOwnerUserId ?? null) as unknown as string,
+    p_actor_id: (actorUserId ?? null) as unknown as string,
   })
 
-  const { error } = await db
-    .from('crm_contacts')
-    .update({ owner_user_id: newOwnerUserId })
-    .eq('workspace_id', workspaceId)
-    .eq('id', contactId)
+  if (error) {
+    // The function raises `no_data_found` for a contact that is not in this
+    // workspace; the message is preserved so callers read the same thing they
+    // did before.
+    if (error.code === 'P0002' || /no such contact/i.test(error.message)) {
+      throw new Error('assignContact: no such contact in this workspace')
+    }
+    throw new Error(`assignContact failed: ${error.message}`)
+  }
 
-  if (error) throw new Error(`assignContact failed: ${error.message}`)
+  const result = data as { changed: boolean; activity_id: string | null; from: string | null }
+
+  // Already theirs. No activity was written, so there is nothing to announce.
+  if (!result.changed) return
 
   /*
    * `crm.contact.assigned` — the one shared manual path (the single-contact
@@ -203,12 +211,22 @@ export async function assignContact(
    * ASSIGN_OWNER and ROUND_ROBIN emit their own; this is not in a flow's
    * step runner, so the same event cannot feed itself within one run.
    */
+  /*
+   * ⚠️ THE ACTIVITY ID IS STILL THE OCCURRENCE, now returned by the function
+   * rather than by a separate insert. One assignment produces one
+   * OWNER_ASSIGNED row, so a retried business operation — this is called from
+   * a server action a browser may resubmit — cannot fire the assignment twice,
+   * while A→B→A fires twice, as it should.
+   *
+   * Emitted AFTER the transaction commits: an event announcing a handover that
+   * then rolled back is worse than a late one.
+   */
   await emitDomainEvent({
     workspaceId,
     triggerType: 'contact_assigned',
     contactId,
-    idempotencyKey: `contact_assigned:${activityId}`,
-    payload: { contactId, from: current.owner_user_id, to: newOwnerUserId },
+    idempotencyKey: `contact_assigned:${result.activity_id}`,
+    payload: { contactId, from: result.from, to: newOwnerUserId },
   })
 }
 
