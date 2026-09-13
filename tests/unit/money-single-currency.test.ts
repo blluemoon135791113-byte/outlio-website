@@ -272,6 +272,43 @@ describe('§5.6 is half built, and the half that is missing is named', () => {
     ])
   })
 
+  it('the unconvertible count reaches a screen, not just the database', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ `crm_unconvertible_deals()` SHIPPED WITH ZERO CALLERS.            ║
+     * ║                                                                       ║
+     * ║  Written in 0123, referenced only from comments — the same shape as    ║
+     * ║  `suppressContact`, in code written the same day by someone who had    ║
+     * ║  spent the session fixing exactly that defect.                         ║
+     * ║                                                                       ║
+     * ║  It matters because the count and the money deliberately disagree:     ║
+     * ║  `openDeals` counts every deal, `openValue` sums only the convertible  ║
+     * ║  ones. Without this on screen, that gap is invisible and an average    ║
+     * ║  deal size computed from the two is simply wrong.                     ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const reports = readFileSync(join(ROOT, 'lib/crm/reports.ts'), 'utf8')
+    expect(reports).toMatch(/rpc\(\s*'crm_unconvertible_deals'/)
+    expect(reports).toMatch(/unconvertible:/)
+
+    const page = readFileSync(join(ROOT, 'app/(product)/crm/reports/page.tsx'), 'utf8')
+    // Rendered for BOTH the personal and the workspace money blocks — one of
+    // them silently omitting the caveat is the same bug at half scale.
+    const rendered = page.match(/<ExcludedDeals count=\{/g) ?? []
+    expect(rendered.length, 'the caveat is missing from a money block').toBe(2)
+  })
+
+  it('a failed count adds no caveat rather than taking out the page', () => {
+    /*
+     * ⚠️ FAIL-OPEN HERE, AND IT IS THE OPPOSITE OF `contactIsStopped` ON
+     * PURPOSE. This number only ever ADDS a footnote to a total; it never
+     * changes the total. Throwing would lose the whole reports page in order to
+     * explain a footnote.
+     */
+    const reports = readFileSync(join(ROOT, 'lib/crm/reports.ts'), 'utf8')
+    expect(reports).toMatch(/unconvertibleError \? 0 :/)
+  })
+
   it('an unconvertible deal is counted, because a total that is short must say so', () => {
     /*
      * ⚠️ THE COUNT AND THE VALUE NOW DISAGREE ON PURPOSE, and that is the part

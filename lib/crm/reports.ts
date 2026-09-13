@@ -17,6 +17,21 @@ export type PipelineTotals = {
   weightedValue: number
   wonDeals: number
   wonValue: number
+  /**
+   * Priced deals left OUT of the values above for want of an exchange rate.
+   *
+   * ⚠️ THE COUNT AND THE VALUE DISAGREE ON PURPOSE, AND THIS IS WHAT EXPLAINS
+   * IT. `openDeals` counts every open deal; `openValue` sums only the ones
+   * that could be converted (0124 sums `value_amount_base`, and `sum()` skips
+   * the NULLs). So a workspace with one USD and one EUR deal reads 2 deals and
+   * one deal's worth of money, and anybody dividing the two gets an average
+   * deal size wrong by half.
+   *
+   * Reported as a COUNT, never an amount: the amounts are in currencies we
+   * cannot convert, so adding them together would recreate the original bug
+   * inside the warning about it.
+   */
+  unconvertible: number
 }
 
 /**
@@ -36,6 +51,21 @@ export async function getPipelineTotals(
 
   if (error) throw new Error(`getPipelineTotals failed: ${error.message}`)
 
+  /*
+   * ⚠️ ASKED FOR EVERY WORKSPACE, NOT ONLY WHEN IT MIGHT BE NON-ZERO. Fetching
+   * it conditionally is how it gets forgotten — the same reasoning the export's
+   * suppression list carried before it moved behind one predicate.
+   *
+   * ⚠️ AND IT IGNORES `ownerUserId` DELIBERATELY. `crm_unconvertible_deals`
+   * counts the workspace, so a setter's own view can report more excluded deals
+   * than their own numbers left out. Over-reporting a caveat is the safe
+   * direction; under-reporting it hides a total that is short.
+   */
+  const { data: unconvertible, error: unconvertibleError } = await createAdminClient().rpc(
+    'crm_unconvertible_deals',
+    { p_workspace_id: workspaceId },
+  )
+
   const row = data?.[0]
   return {
     openDeals: Number(row?.open_deals ?? 0),
@@ -43,6 +73,13 @@ export async function getPipelineTotals(
     weightedValue: Number(row?.weighted_value ?? 0),
     wonDeals: Number(row?.won_deals ?? 0),
     wonValue: Number(row?.won_value ?? 0),
+    /*
+     * ⚠️ A FAILED COUNT REPORTS 0, WHICH IS THE ONE PLACE THAT IS SAFE. This
+     * number only ever ADDS a caveat to a total; it never changes the total
+     * itself. Throwing here would take out the whole reports page to explain a
+     * footnote, and today the count is 0 on every workspace anyway.
+     */
+    unconvertible: unconvertibleError ? 0 : Number(unconvertible ?? 0),
   }
 }
 
