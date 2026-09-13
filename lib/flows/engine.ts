@@ -194,11 +194,43 @@ export async function startRun(input: StartRunInput): Promise<StartRunResult> {
    * types cannot express that a `uuid` PARAMETER accepts null, so the cast
    * documents the gap rather than hiding it.
    */
-  const { data: haltReason } = await db.rpc('flow_check_loop_protection', {
+  const { data: loopCheck, error: loopError } = await db.rpc('flow_check_loop_protection', {
     p_flow_id: input.flowId,
     p_contact_id: (input.contactId ?? null) as unknown as string,
     p_chain_depth: chainDepth,
   })
+
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ A FAILED CHECK HALTS. THIS USED TO DISCARD THE ERROR AND PROCEED.     ║
+   * ║                                                                           ║
+   * ║  `flow_check_loop_protection` returns NULL to mean "may proceed", so a     ║
+   * ║  thrown-away error produced `undefined` — falsy — and the run went ahead   ║
+   * ║  with no protection at all. Silently, and precisely when the database was  ║
+   * ║  already unhappy.                                                         ║
+   * ║                                                                           ║
+   * ║  0093's own comment says what is at stake: "a self-triggering flow is the  ║
+   * ║  dangerous case, because it can spawn thousands of runs in seconds." The   ║
+   * ║  per-contact-per-day limit goes with it, which in an outreach product      ║
+   * ║  means the same person entering the same flow repeatedly.                  ║
+   * ║                                                                           ║
+   * ║  ⚠️ FAIL-CLOSED HERE, FAIL-OPEN IN `consume_rate_limit` — deliberately    ║
+   * ║  opposite. Refusing a rate-limited action on a blip costs one delayed      ║
+   * ║  request. Proceeding without loop protection costs thousands of runs, or   ║
+   * ║  repeated mail to a real person, and neither can be taken back. A run      ║
+   * ║  that halts is retried on the next tick; mail that went out is not.       ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const haltReason = loopError
+    ? 'Stopped: Outlio could not check this flow’s loop protection, so the run was held. It will be retried.'
+    : loopCheck
+
+  if (loopError) {
+    console.error('flow loop protection unavailable', {
+      flowId: input.flowId,
+      error: loopError.message,
+    })
+  }
 
   if (haltReason) {
     /*
