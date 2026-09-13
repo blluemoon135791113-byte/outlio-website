@@ -165,8 +165,16 @@ export const CHANNEL_SETUP: Record<ChannelProvider, { label: string; help: strin
  */
 export const NOTIFIABLE_EVENTS = [
   { value: 'email.message.replied', label: 'Someone replies' },
-  { value: 'meeting.booked', label: 'A meeting is booked' },
-  { value: 'meeting.cancelled', label: 'A meeting is cancelled' },
+  /*
+   * ⚠️ `meeting.booked` AND `.cancelled` WERE WITHDRAWN HERE TOO (2026-09-13,
+   * DECISION-18). Removing them from `WEBHOOK_EVENTS` and leaving them offered
+   * as Slack checkboxes would fix the dead promise on one surface and keep it
+   * on another — which is this codebase's most common defect, not a fix.
+   *
+   * Nothing publishes them, so a channel subscribed to "A meeting is booked"
+   * was silent forever. `describeEvent` below still renders them: it is a
+   * FORMATTER, not an offer, and a flow step can pass an arbitrary event name.
+   */
   { value: 'crm.opportunity.won', label: 'A deal is won' },
   { value: 'crm.opportunity.stage_changed', label: 'A deal changes stage' },
   { value: 'crm.contact.assigned', label: 'A contact is assigned to someone' },

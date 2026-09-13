@@ -203,11 +203,18 @@ describeIf('CRITERION 8 — signed, retried, idempotent, logged', () => {
     received = []
     respondWith = 500
 
-    await publishEvent(workspaceId, 'meeting.booked', { id: 'meeting-1' })
+    /*
+     * ⚠️ ANY WIRED EVENT WILL DO — what is under test is retry mechanics, not
+     * this event. It used to be `meeting.booked`, which was WITHDRAWN from the
+     * catalogue on 2026-09-13 (DECISION-18) because nothing publishes it.
+     * `crm.task.completed` is unused elsewhere in this file, so the
+     * `.single()` lookup below still matches exactly one row.
+     */
+    await publishEvent(workspaceId, 'crm.task.completed', { id: 'task-1' })
     const db = adminClient()
     const { data: pending } = await db
       .from('webhook_deliveries')
-      .select('id').eq('event_type', 'meeting.booked').single()
+      .select('id').eq('event_type', 'crm.task.completed').single()
 
     await makeDue(pending!.id)
     await deliverPendingWebhooks()

@@ -225,9 +225,29 @@ describe('the event catalogue', () => {
     }
   })
 
-  it('covers the CRM, email and meeting domains', () => {
+  it('covers the CRM and email domains, and no longer claims meeting', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE `meeting` DOMAIN WAS WITHDRAWN ON 2026-09-13 — DECISION-18.   ║
+     * ║                                                                       ║
+     * ║  This used to require it, which is how a domain that never fired once  ║
+     * ║  stayed in the catalogue with a test defending it. Three events were   ║
+     * ║  offered as checkboxes and nothing in the product published them,      ║
+     * ║  because §5.13 specifies the transport and nothing about bodies.       ║
+     * ║                                                                       ║
+     * ║  ASSERTED IN BOTH DIRECTIONS: `meeting` must be ABSENT, so re-adding   ║
+     * ║  it fails here and sends the next person to the payload contract       ║
+     * ║  rather than to this line.                                            ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
     const domains = new Set(WEBHOOK_EVENTS.map((e) => e.split('.')[0]))
-    expect(domains).toEqual(new Set(['crm', 'email', 'meeting']))
+    expect(domains).toEqual(new Set(['crm', 'email']))
+    expect(
+      domains.has('meeting'),
+      'meeting.* is back in the catalogue. It has no payload contract — a ' +
+        'webhook body IS the API, and offering an event that never arrives is ' +
+        'the same fabrication one step earlier. Specify the body first.',
+    ).toBe(false)
   })
 })
 

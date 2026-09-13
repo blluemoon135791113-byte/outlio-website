@@ -177,12 +177,24 @@ describe('the mapping covers every trigger that has a source', () => {
  */
 describe('every notifiable event has a source', () => {
   /*
-   * ⚠️ MAY ONLY SHRINK. Both remain unsourced for the payload-contract reason
-   * in PHASE_23.md — Calendly's normalized shape is not a published API, and
-   * inventing a body is fabricating one. Sourcing them means deleting the
-   * entry, which is what makes this list a backlog rather than an excuse.
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ EMPTY AS OF 2026-09-13, AND IT EMPTIED THE OTHER WAY.             ║
+   * ║                                                                       ║
+   * ║  This held `meeting.booked` and `meeting.cancelled`. The comment said  ║
+   * ║  "sourcing them means deleting the entry, which is what makes this a   ║
+   * ║  backlog rather than an excuse" — and assumed the only exit was        ║
+   * ║  building them.                                                       ║
+   * ║                                                                       ║
+   * ║  DECISION-18 took the other exit: WITHDRAWN. They were offered for     ║
+   * ║  months and fired zero times, there are zero subscribers, and no       ║
+   * ║  payload contract existed to build against. Removing a promise nobody  ║
+   * ║  could keep is as valid a way to close a gap as keeping it.            ║
+   * ║                                                                       ║
+   * ║  ⚠️ IT MAY ONLY SHRINK, AND IT IS ALREADY EMPTY — so an addition here  ║
+   * ║  is now always wrong. Offer an event you can emit, or do not offer it. ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
    */
-  const KNOWN_UNSOURCED = ['meeting.booked', 'meeting.cancelled'] as const
+  const KNOWN_UNSOURCED: readonly string[] = []
 
   /** The webhook event names `emitDomainEvent` can actually produce. */
   const emittable = new Set(
@@ -218,6 +230,20 @@ describe('every notifiable event has a source', () => {
     // list rots into a permanent excuse.
     const stale = KNOWN_UNSOURCED.filter((value) => emittable.has(value as never))
     expect(stale, 'These now have a source — delete them from KNOWN_UNSOURCED').toEqual([])
+  })
+
+  it('the exemption list is empty, so every offer is backed by a source', () => {
+    /*
+     * ⚠️ THE STRONGEST FORM THIS GUARD CAN TAKE, and it is only reachable
+     * because the last two entries were withdrawn rather than built. Adding an
+     * entry from here is always the wrong move: it would mean shipping a
+     * checkbox that does nothing, which is what this file exists to stop.
+     */
+    expect(
+      KNOWN_UNSOURCED,
+      'An unsourced event is being offered again. Emit it or withdraw it — do ' +
+        'not exempt it.',
+    ).toEqual([])
   })
 })
 
