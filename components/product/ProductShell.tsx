@@ -46,6 +46,7 @@ function SidebarContent({
   canUseScraper,
   showCrm,
   showEmail,
+  showLinkedIn,
   showFlows,
   referralLink,
   onNavigate,
@@ -54,6 +55,7 @@ function SidebarContent({
   canUseScraper: boolean
   showCrm: boolean
   showEmail: boolean
+  showLinkedIn: boolean
   showFlows: boolean
   /** `null` until a profile has a code allocated. */
   referralLink: string | null
@@ -88,6 +90,7 @@ function SidebarContent({
           canUseScraper={canUseScraper}
           showCrm={showCrm}
           showEmail={showEmail}
+          showLinkedIn={showLinkedIn}
           showFlows={showFlows}
           onNavigate={onNavigate}
         />
@@ -122,6 +125,7 @@ export function ProductShell({
   canUseScraper,
   showCrm = false,
   showEmail = false,
+  showLinkedIn = false,
   showFlows = false,
   avatarUrl,
   referralLink = null,
@@ -134,6 +138,7 @@ export function ProductShell({
   canUseScraper: boolean
   showCrm?: boolean
   showEmail?: boolean
+  showLinkedIn?: boolean
   showFlows?: boolean
   avatarUrl?: string | null
   referralLink?: string | null
@@ -151,6 +156,7 @@ export function ProductShell({
           canUseScraper={canUseScraper}
           showCrm={showCrm}
           showEmail={showEmail}
+          showLinkedIn={showLinkedIn}
           showFlows={showFlows}
           referralLink={referralLink}
         />
@@ -178,6 +184,7 @@ export function ProductShell({
               canUseScraper={canUseScraper}
               showCrm={showCrm}
               showEmail={showEmail}
+          showLinkedIn={showLinkedIn}
           showFlows={showFlows}
               referralLink={referralLink}
               onNavigate={() => setMobileOpen(false)}

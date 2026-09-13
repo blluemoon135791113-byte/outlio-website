@@ -94,6 +94,23 @@ const EMAIL_SECTION: NavSection = {
   ],
 }
 
+/*
+ * ⚠️ ITS OWN SECTION RATHER THAN A CHILD OF "OUTREACH", because the work is
+ * different in kind. Email outreach is something Outlio does for you; a
+ * LinkedIn task is something YOU do, in LinkedIn, and the queue only moves when
+ * a person works it. Filing it under a heading that means "the software is
+ * sending" would be the wrong promise in the one place it matters most.
+ */
+const LINKEDIN_SECTION: NavSection = {
+  href: '/linkedin',
+  label: 'LinkedIn',
+  icon: 'crm',
+  children: [
+    { href: '/linkedin', label: 'Tasks' },
+    { href: '/dashboard/settings/linkedin', label: 'Accounts' },
+  ],
+}
+
 // "Flows" is jargon until you have used one. "Automations" says what it is.
 const FLOWS_SECTION: NavSection = {
   href: '/flows',
@@ -107,6 +124,7 @@ export function ProductNav({
   canUseScraper,
   showCrm = false,
   showEmail = false,
+  showLinkedIn = false,
   showFlows = false,
   onNavigate,
 }: {
@@ -125,6 +143,8 @@ export function ProductNav({
    */
   showEmail?: boolean
   /** Same module gate again; `/flows` refuses independently. */
+  /** Same rule as the others: a plan without the module never sees the nav. */
+  showLinkedIn?: boolean
   showFlows?: boolean
   onNavigate?: () => void
 }) {
@@ -134,6 +154,7 @@ export function ProductNav({
   const sections: NavSection[] = [
     ...(showCrm ? [CRM_SECTION] : []),
     ...(showEmail ? [EMAIL_SECTION] : []),
+    ...(showLinkedIn ? [LINKEDIN_SECTION] : []),
     ...(showFlows ? [FLOWS_SECTION] : []),
   ]
 
