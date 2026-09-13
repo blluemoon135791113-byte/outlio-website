@@ -17,6 +17,16 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = join(__dirname, '..', '..')
 
+/**
+ * Repo-relative path with POSIX separators.
+ *
+ * ⚠️ The allowlists below are keyed by forward-slash paths ('app/layout.tsx').
+ * path.relative returns backslashes on Windows, so every lookup misses and the
+ * four legitimate first-party innerHTML uses are reported as rule-3 violations.
+ * A guard that cries wolf on a clean tree gets muted, and then it is not a guard.
+ */
+const rel = (p: string) => relative(ROOT, p).replace(/\\/g, '/')
+
 function sourceFiles(dir: string): string[] {
   const out: string[] = []
   let entries
@@ -73,7 +83,7 @@ describe('rule 3 — uploaded HTML is never rendered', () => {
 
   it('has no HTML injection outside the allowlist', () => {
     const offenders = files
-      .map((f) => relative(ROOT, f))
+      .map(rel)
       .filter((name) => !INNER_HTML_ALLOWED.has(name))
       .filter((name) => DANGEROUS.test(code(join(ROOT, name))))
 
@@ -116,7 +126,7 @@ describe('rule 6 — the service role key is never client-visible', () => {
     const bad = /NEXT_PUBLIC_[A-Z0-9_]*(SERVICE_ROLE|SECRET_KEY|ENCRYPTION_KEY|CRON_SECRET)/
     const offenders = files
       .filter((f) => bad.test(readFileSync(f, 'utf8')))
-      .map((f) => relative(ROOT, f))
+      .map(rel)
 
     expect(offenders, 'a server-only secret is named as a public variable').toEqual([])
   })
@@ -161,7 +171,7 @@ describe('design — the product uses tokens, not literal colours', () => {
 
       const offenders = files
         .filter((f) => COLOUR.test(code(f)))
-        .map((f) => relative(ROOT, f))
+        .map(rel)
 
       expect(
         offenders,

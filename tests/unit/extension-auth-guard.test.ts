@@ -110,12 +110,21 @@ describe('resolveExtensionAuth keeps all seven checks', () => {
 })
 
 describe('every extension route goes through it', () => {
+  /*
+   * ⚠️ The segment is CARRIED from the directory entry, never re-derived by
+   * splitting the path. It used to be `route.split('/').slice(-2)[0]`, which on
+   * Windows split a backslash path into one element and returned the whole path
+   * as the segment — so SELF_AUTHENTICATING never matched, and the two exempt
+   * routes below were silently held to a rule they are documented not to follow.
+   * A guard whose exemption list stops working on one OS is worse than no
+   * exemption list, because the failure looks like a real finding.
+   */
   const routes = readdirSync(ROUTES, { withFileTypes: true })
     .filter((e) => e.isDirectory())
-    .map((e) => join(ROUTES, e.name, 'route.ts'))
-    .filter((p) => {
+    .map((e) => ({ segment: e.name, path: join(ROUTES, e.name, 'route.ts') }))
+    .filter(({ path }) => {
       try {
-        readFileSync(p)
+        readFileSync(path)
         return true
       } catch {
         return false
@@ -135,14 +144,14 @@ describe('every extension route goes through it', () => {
    */
   const SELF_AUTHENTICATING = new Set(['pair', 'refresh'])
 
-  for (const route of routes) {
-    const name = relative(ROOT, route)
-    const segment = route.split('/').slice(-2)[0]!
+  for (const { segment, path } of routes) {
+    // Reported with forward slashes so the test name reads the same on every OS.
+    const name = relative(ROOT, path).replace(/\\/g, '/')
 
     it(`${name} resolves auth before acting`, () => {
       if (SELF_AUTHENTICATING.has(segment)) {
         // Still must not be silently unguarded — assert it authenticates somehow.
-        const src = code(route)
+        const src = code(path)
         expect(
           /hashToken|resolveExtensionAuth|verifyAccessToken/.test(src),
           `${name} is exempt from resolveExtensionAuth but authenticates nothing.`,
@@ -151,7 +160,7 @@ describe('every extension route goes through it', () => {
       }
 
       expect(
-        code(route).includes('resolveExtensionAuth('),
+        code(path).includes('resolveExtensionAuth('),
         `${name} does not call resolveExtensionAuth. The extension is public code; ` +
           'a route that re-derives entitlement itself is a route that gets it wrong.',
       ).toBe(true)

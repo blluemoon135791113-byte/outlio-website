@@ -35,12 +35,21 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-const ROOT = join(__dirname, '..', '..')
+/*
+ * ⚠️ POSIX SEPARATORS THROUGHOUT, including ROOT. Two things downstream assume
+ * forward slashes: the scanner's own guard below matches
+ * `.includes('crm/pipeline/actions')`, and every offender is reported via
+ * `path.replace(`${ROOT}/`, '')`. With native Windows separators the first
+ * silently fails — leaving the vacuity check passing against a set it never
+ * verified — and the second prints absolute paths. Node's fs accepts forward
+ * slashes on Windows, so nothing else has to change.
+ */
+const ROOT = join(__dirname, '..', '..').replace(/\\/g, '/')
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     if (entry === 'node_modules' || entry === '.next' || entry.startsWith('.')) continue
-    const full = join(dir, entry)
+    const full = `${dir}/${entry}`
     if (statSync(full).isDirectory()) sourceFiles(full, out)
     else if (full.endsWith('.ts') || full.endsWith('.tsx')) out.push(full)
   }
@@ -49,7 +58,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 
 /** Files whose FIRST directive is 'use server' — the whole-module form. */
 function useServerFiles(): { path: string; source: string }[] {
-  const files = ['app', 'lib', 'components'].flatMap((dir) => sourceFiles(join(ROOT, dir)))
+  const files = ['app', 'lib', 'components'].flatMap((dir) => sourceFiles(`${ROOT}/${dir}`))
 
   return files
     .map((path) => ({ path, source: readFileSync(path, 'utf8') }))

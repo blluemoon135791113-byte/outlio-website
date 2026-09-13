@@ -1,0 +1,34 @@
+# Every text file is stored LF and checked out LF, on every platform.
+#
+# ⚠️ THIS FILE IS LOAD-BEARING FOR THE GUARD TESTS, not a formatting preference.
+#
+# Git-for-Windows defaults to core.autocrlf=true, which checks out this
+# repository's 1,247 LF-stored text files as CRLF. The static-analysis guards in
+# tests/unit — the ones enforcing hard rule 3, service-role tenancy scoping and
+# "every server action calls an auth gate" — work by readFileSync-ing source and
+# asserting on its text. Several assert on multi-line strings containing \n:
+#
+#   expect(ENGINE).toContain("await finish(db, runId, 'failed')\n    return {")
+#
+# Against a CRLF working tree that match fails, the guard goes red for a reason
+# that has nothing to do with the code, and a developer learns to filter it out.
+# A guard that is routinely ignored is a guard that fails OPEN — the vacuous
+# guard defect class already recorded twice in docs/PROGRESS.md.
+#
+# The index already holds LF for all of these, so normalising the working tree
+# changes no committed content.
+* text=auto eol=lf
+
+# Binary assets: never examined as text, never line-ending converted.
+*.png  -text
+*.jpg  -text
+*.webp -text
+
+# ⚠️ Two files are binary despite text-shaped extensions. Both are deliberate
+# and both must survive byte-identical.
+#
+# binary-renamed.html is an MS-DOS executable — one of the hostile fixtures
+# CLAUDE.md requires ("binary renamed .html"). Normalising it would defeat the
+# content-sniffing test that consumes it.
+tests/fixtures/html/binary-renamed.html -text
+tests/unit/parse.test.ts                -text
