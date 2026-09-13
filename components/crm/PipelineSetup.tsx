@@ -10,7 +10,20 @@ import {
 type StageDraft = {
   name: string
   kind: 'open' | 'won' | 'lost'
-  probability: number
+  /**
+   * ⚠️ NULLABLE IN THE FORM, THOUGH NOT IN THE DATABASE.
+   *
+   * This was a plain `number`, and the change handler did
+   * `Number(value) || 0` — so clearing the field, the natural way to say "I
+   * have not decided", became a deliberate 0%. A stage at 0% contributes
+   * nothing to the weighted forecast, which reads as "these deals will not
+   * close" rather than "nobody said".
+   *
+   * `default_probability` is `not null default 0` and cannot store unknown, so
+   * the form lets the box be empty and the submit refuses it. Asking is
+   * honest; inventing a number on somebody's behalf is not.
+   */
+  probability: number | null
 }
 
 /**
@@ -95,7 +108,9 @@ export function PipelineSetup({
                   drift out of sync with what is on screen. */}
               <input type="hidden" name="stageName" value={stage.name} />
               <input type="hidden" name="stageKind" value={stage.kind} />
-              <input type="hidden" name="stageProbability" value={stage.probability} />
+              {/* Empty submits as '', which the action refuses rather than
+                  reading as 0%. */}
+              <input type="hidden" name="stageProbability" value={stage.probability ?? ''} />
 
               <div className="flex flex-col">
                 <button
@@ -144,10 +159,15 @@ export function PipelineSetup({
                   type="number"
                   min={0}
                   max={100}
-                  value={stage.probability}
-                  onChange={(event) =>
-                    update(index, { probability: Number(event.target.value) || 0 })
-                  }
+                  value={stage.probability ?? ''}
+                  onChange={(event) => {
+                    // Empty stays empty. `Number('') || 0` is what silently
+                    // turned "not decided" into "0%".
+                    const raw = event.target.value.trim()
+                    update(index, {
+                      probability: raw === '' ? null : Number(raw),
+                    })
+                  }}
                   aria-label={`Stage ${index + 1} probability`}
                   className="w-16 rounded-[var(--radius-md)] border border-line bg-surface px-2 py-1.5 text-xs text-ink"
                 />
