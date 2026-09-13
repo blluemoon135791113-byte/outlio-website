@@ -98,12 +98,40 @@ vi.mock('@/lib/supabase/admin', () => ({
         resolve({ data: read('current').map((r) => ({ ...r })), error: null }),
     })
     return {
-      rpc: vi.fn(async (name: string) => {
+      rpc: vi.fn(async (name: string, args?: Record<string, unknown>) => {
         if (name === 'claim_email_messages')
           return { data: read('email_messages'), error: null }
         if (name === 'stop_enrollments_for_email') return { data: 1, error: null }
         if (name === 'record_email_event') return { data: true, error: null }
         if (name === 'email_thread_mark_outbound') return { data: null, error: null }
+        /*
+         * ⚠️ MODELLED, NOT STUBBED. `crm_assign_contact_owner` (0123) does the
+         * locked read, the OWNER_ASSIGNED insert and the owner update in ONE
+         * transaction — that atomicity is the whole point of the function, and
+         * it cannot be observed from here. What the assertions below DO depend
+         * on is what it returns: the activity id that becomes the idempotency
+         * key, and the previous owner the event announces. So those are
+         * reproduced faithfully, including the no-op that writes nothing.
+         *
+         * The transactional guarantee itself is covered where it can actually
+         * be exercised: `smoke/0123_crm_assign_contact_owner.smoke.sql`, run
+         * against a real Postgres.
+         */
+        if (name === 'crm_assign_contact_owner') {
+          const contact = (mocks.rows.get('crm_contacts') ?? [])[0]
+          const from = (contact?.owner_user_id as string | null) ?? null
+          const to = (args?.p_new_owner ?? null) as string | null
+
+          // `is not distinct from` in SQL: null-safe, so unassigned-to-
+          // unassigned is a no-op rather than a phantom handover.
+          if (from === to) return { data: { changed: false, activity_id: null, from }, error: null }
+
+          if (contact) contact.owner_user_id = to
+          return {
+            data: { changed: true, activity_id: String(mocks.nextId++), from },
+            error: null,
+          }
+        }
         return { data: null, error: null }
       }),
       from: vi.fn((table: string) => {
