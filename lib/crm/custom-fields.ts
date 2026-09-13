@@ -37,12 +37,35 @@ export type CustomFieldType =
 /** Mirrors `crm_custom_field_entity`. */
 export type CustomFieldEntity = 'contact' | 'company' | 'opportunity'
 
+/**
+ * One permitted choice on a `select` or `multi_select` field.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THE ID IS THE IDENTITY. THE LABEL IS A CAPTION THAT MAY CHANGE.       ║
+ * ║                                                                           ║
+ * ║  Options used to be bare strings, and a stored value WAS its label. So    ║
+ * ║  renaming "Enterprise" to "Enterprise (500+)" silently orphaned every     ║
+ * ║  record carrying it and every saved filter naming it: the value stayed    ║
+ * ║  "Enterprise", the option list no longer contained "Enterprise", and the  ║
+ * ║  field simply stopped matching. Spec §9 forbids exactly this.             ║
+ * ║                                                                           ║
+ * ║  ⚠️ AN ID IS NEVER DERIVED FROM THE LABEL. A slug would re-break on        ║
+ * ║  rename, which is the whole defect wearing a different hat.               ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export type CustomFieldOption = {
+  /** Opaque and stable. What a stored value holds. */
+  id: string
+  /** What a human reads. Free to change without touching stored values. */
+  label: string
+}
+
 export type CustomFieldDefinition = {
   key: string
   label: string
   fieldType: CustomFieldType
   /** Permitted choices. Only meaningful for `select` and `multi_select`. */
-  options: string[]
+  options: CustomFieldOption[]
   isRequired: boolean
 }
 
@@ -150,10 +173,26 @@ function normalizeNumber(raw: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-/** Options are compared case-insensitively but stored as the definition spells them. */
-function matchOption(options: string[], candidate: string): string | null {
-  const wanted = candidate.trim().toLowerCase()
-  return options.find((option) => option.trim().toLowerCase() === wanted) ?? null
+/**
+ * Resolves a candidate to an option ID, which is what gets stored.
+ *
+ * ⚠️ ACCEPTS AN ID OR A LABEL, AND THE ASYMMETRY IS DELIBERATE. A UI submits
+ * the id it rendered; a CSV cell holds whatever a human typed. Matching an id
+ * EXACTLY and a label case-insensitively means an import keeps working while a
+ * rename cannot silently re-point a stored value at a different option.
+ *
+ * The id is tried first: if a label ever collided with some other option's id,
+ * the id is the meaning that was written down.
+ */
+function matchOption(options: CustomFieldOption[], candidate: string): string | null {
+  const trimmed = candidate.trim()
+  if (trimmed === '') return null
+
+  const byId = options.find((option) => option.id === trimmed)
+  if (byId) return byId.id
+
+  const wanted = trimmed.toLowerCase()
+  return options.find((option) => option.label.trim().toLowerCase() === wanted)?.id ?? null
 }
 
 /**
@@ -262,12 +301,29 @@ export function validateCustomFieldValue(
  * A broken definition is worse than a broken value: it silently invalidates
  * every value already stored against it.
  */
-export function validateCustomFieldDefinition(input: {
-  key: string
-  label: string
-  fieldType: CustomFieldType
-  options?: unknown
-}): { ok: true; options: string[] } | { ok: false; reason: string } {
+export function validateCustomFieldDefinition(
+  input: {
+    key: string
+    label: string
+    fieldType: CustomFieldType
+    /**
+     * A bare string is a NEW option and is given an id. An object carrying an
+     * id is an EXISTING option being re-submitted, and keeps it — that is how
+     * a rename preserves every stored value.
+     */
+    options?: unknown
+  },
+  /*
+   * ⚠️ INJECTED, AND NOT SOMETHING A CALLER SUPPLIES PER OPTION.
+   *
+   * This module's header promises PURE — no I/O, and the tests depend on that.
+   * A generator parameter keeps the output a function of the inputs while
+   * still denying callers the chance to pass an id of their own choosing: the
+   * one thing that would let the label-as-id defect back in is a caller that
+   * "helpfully" passes the label.
+   */
+  newOptionId: () => string = () => crypto.randomUUID(),
+): { ok: true; options: CustomFieldOption[] } | { ok: false; reason: string } {
   // Mirrors the CHECK constraint in 0071. The key is a merge variable and an
   // API field name, so it is deliberately narrow.
   if (!/^[a-z][a-z0-9_]{0,48}$/.test(input.key)) {
@@ -299,22 +355,56 @@ export function validateCustomFieldDefinition(input: {
     return { ok: false, reason: 'A choice field needs at least one option.' }
   }
 
-  const options: string[] = []
+  const options: CustomFieldOption[] = []
   for (const entry of input.options) {
-    if (typeof entry !== 'string') {
+    /*
+     * Two accepted shapes. A string is a new option. An object with an id is
+     * one that already exists and is keeping its identity across this edit —
+     * which is the entire mechanism by which a rename does not orphan stored
+     * values.
+     */
+    let label: string
+    let existingId: string | null = null
+
+    if (typeof entry === 'string') {
+      label = entry
+    } else if (
+      typeof entry === 'object' &&
+      entry !== null &&
+      typeof (entry as { label?: unknown }).label === 'string'
+    ) {
+      label = (entry as { label: string }).label
+      const rawId = (entry as { id?: unknown }).id
+      if (rawId !== undefined) {
+        if (typeof rawId !== 'string' || rawId.trim() === '') {
+          return { ok: false, reason: 'An option id must be text.' }
+        }
+        existingId = rawId.trim()
+      }
+    } else {
       return { ok: false, reason: 'Options must be text.' }
     }
-    const option = entry.trim()
+
+    const option = label.trim()
     if (!option) return { ok: false, reason: 'An option cannot be blank.' }
     if (option.length > MAX_OPTION) {
       return { ok: false, reason: `An option must be ${MAX_OPTION} characters or fewer.` }
     }
-    // Case-insensitive, because `matchOption` resolves values that way: two
-    // options differing only by case could never both be selected.
-    if (options.some((existing) => existing.toLowerCase() === option.toLowerCase())) {
+    // Case-insensitive, because `matchOption` resolves LABELS that way: two
+    // options differing only by case could never both be selected by name.
+    if (options.some((existing) => existing.label.toLowerCase() === option.toLowerCase())) {
       return { ok: false, reason: `“${option}” is listed twice.` }
     }
-    options.push(option)
+    /*
+     * ⚠️ Ids are checked for collision too. Two options sharing an id would
+     * make a stored value ambiguous, and `matchOption` would resolve it to
+     * whichever came first — silently, and differently after a reorder.
+     */
+    if (existingId !== null && options.some((existing) => existing.id === existingId)) {
+      return { ok: false, reason: `Two options share the id “${existingId}”.` }
+    }
+
+    options.push({ id: existingId ?? newOptionId(), label: option })
   }
 
   return { ok: true, options }

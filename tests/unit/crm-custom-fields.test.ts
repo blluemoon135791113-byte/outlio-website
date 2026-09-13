@@ -11,9 +11,24 @@ import {
   validateCustomFieldDefinition,
   validateCustomFieldValue,
   type CustomFieldDefinition,
+  type CustomFieldOption,
   type CustomFieldType,
 } from '@/lib/crm/custom-fields'
 import { normalizeTagName } from '@/lib/crm/normalize'
+
+/**
+ * Options with ids that are readable in a failure message and, crucially, bear
+ * no relation to the label — so a test that accidentally asserts on the label
+ * cannot pass.
+ */
+const opts = (...labels: string[]): CustomFieldOption[] =>
+  labels.map((label, i) => ({ id: `opt-${i + 1}`, label }))
+
+/** A deterministic id source, so the pure validator stays testable. */
+function ids(prefix = 'new'): () => string {
+  let n = 0
+  return () => `${prefix}-${(n += 1)}`
+}
 
 function field(
   fieldType: CustomFieldType,
@@ -205,46 +220,83 @@ describe('email', () => {
 })
 
 describe('select', () => {
-  const single = field('select', { options: ['Hot', 'Warm', 'Cold'] })
+  const single = field('select', { options: opts('Hot', 'Warm', 'Cold') })
 
-  it('accepts an option and stores it as the definition spells it', () => {
-    expect(ok(single, 'Hot')).toBe('Hot')
-    expect(ok(single, '  hot ')).toBe('Hot')
-    expect(ok(single, 'HOT')).toBe('Hot')
+  it('stores the option id, not the label', () => {
+    /*
+     * ⚠️ THE WHOLE POINT OF §9. What is written down is the identity, so the
+     * label above it is free to change later without stranding this value.
+     */
+    expect(ok(single, 'Hot')).toBe('opt-1')
+    expect(ok(single, '  hot ')).toBe('opt-1')
+    expect(ok(single, 'HOT')).toBe('opt-1')
+  })
+
+  it('accepts the id itself, which is what a UI submits', () => {
+    expect(ok(single, 'opt-2')).toBe('opt-2')
   })
 
   it('rejects anything not on the list', () => {
     expect(rejected(single, 'Lukewarm')).toBe(true)
     expect(rejected(single, 42)).toBe(true)
   })
+
+  it('survives a rename, which is the defect this replaced', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  THE BUG, IN ONE TEST.                                                ║
+     * ║                                                                       ║
+     * ║  Options used to be bare strings and a stored value WAS its label. So ║
+     * ║  renaming "Hot" to "Hot lead" orphaned every record carrying "Hot":   ║
+     * ║  the value stayed, the option list no longer held it, and the field   ║
+     * ║  silently stopped matching. Saved filters naming it broke the same    ║
+     * ║  way.                                                                 ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const stored = ok(single, 'Hot')
+
+    const renamed = field('select', {
+      options: [{ id: 'opt-1', label: 'Hot lead' }, ...opts('Warm', 'Cold').slice(0)],
+    })
+
+    // The value written before the rename still resolves, unchanged.
+    expect(ok(renamed, stored as string)).toBe('opt-1')
+    // And the old label no longer resolves, because it no longer names anything.
+    expect(rejected(renamed, 'Hot')).toBe(true)
+  })
 })
 
 describe('multi_select', () => {
-  const multi = field('multi_select', { options: ['Hot', 'Warm', 'Cold'] })
+  const multi = field('multi_select', { options: opts('Hot', 'Warm', 'Cold') })
 
-  it('accepts a list and canonicalizes each entry', () => {
-    expect(ok(multi, ['hot', 'COLD'])).toEqual(['Hot', 'Cold'])
+  it('accepts a list and resolves each entry to its id', () => {
+    expect(ok(multi, ['hot', 'COLD'])).toEqual(['opt-1', 'opt-3'])
   })
 
   it('accepts a bare string, so a CSV cell needs no special case', () => {
-    expect(ok(multi, 'Hot')).toEqual(['Hot'])
+    expect(ok(multi, 'Hot')).toEqual(['opt-1'])
   })
 
   it('deduplicates', () => {
     // Otherwise selecting one option twice changes how many records a filter
     // reports as carrying it.
-    expect(ok(multi, ['Hot', 'hot', ' HOT '])).toEqual(['Hot'])
+    expect(ok(multi, ['Hot', 'hot', ' HOT '])).toEqual(['opt-1'])
+  })
+
+  it('deduplicates across the id and the label for one option', () => {
+    // Two spellings of the same choice must not survive as two entries.
+    expect(ok(multi, ['Hot', 'opt-1'])).toEqual(['opt-1'])
   })
 
   it('skips blank entries rather than failing a whole import row', () => {
-    expect(ok(multi, ['Hot', '', '  '])).toEqual(['Hot'])
+    expect(ok(multi, ['Hot', '', '  '])).toEqual(['opt-1'])
   })
 
   it('is null when every entry was blank, unless required', () => {
     expect(ok(multi, ['', '  '])).toBeNull()
-    expect(rejected(field('multi_select', { options: ['Hot'], isRequired: true }), ['', ' '])).toBe(
-      true,
-    )
+    expect(
+      rejected(field('multi_select', { options: opts('Hot'), isRequired: true }), ['', ' ']),
+    ).toBe(true)
   })
 
   it('rejects an unknown option, naming it', () => {
@@ -255,9 +307,11 @@ describe('multi_select', () => {
 
   it('rejects a list longer than the cap', () => {
     const many = field('multi_select', {
-      options: Array.from({ length: 60 }, (_, i) => `opt${i}`),
+      options: opts(...Array.from({ length: 60 }, (_, i) => `label${i}`)),
     })
-    expect(rejected(many, Array.from({ length: 51 }, (_, i) => `opt${i}`))).toBe(true)
+    expect(
+      rejected(many, Array.from({ length: 51 }, (_, i) => `opt-${i + 1}`)),
+    ).toBe(true)
   })
 })
 
@@ -314,17 +368,21 @@ describe('validateCustomFieldDefinition', () => {
     ).toBe(false)
   })
 
-  it('trims options and rejects case-insensitive duplicates', () => {
+  it('trims labels and rejects case-insensitive duplicates', () => {
     expect(
-      validateCustomFieldDefinition({
-        key: 'k',
-        label: 'K',
-        fieldType: 'select',
-        options: [' Hot ', 'Cold'],
-      }),
-    ).toEqual({ ok: true, options: ['Hot', 'Cold'] })
+      validateCustomFieldDefinition(
+        { key: 'k', label: 'K', fieldType: 'select', options: [' Hot ', 'Cold'] },
+        ids(),
+      ),
+    ).toEqual({
+      ok: true,
+      options: [
+        { id: 'new-1', label: 'Hot' },
+        { id: 'new-2', label: 'Cold' },
+      ],
+    })
 
-    // Two options that resolve identically could never both be selected.
+    // Two options that resolve identically could never both be selected by name.
     expect(
       validateCustomFieldDefinition({
         key: 'k',
@@ -335,10 +393,79 @@ describe('validateCustomFieldDefinition', () => {
     ).toBe(false)
   })
 
-  it('rejects blank and non-string options', () => {
-    for (const options of [[''], ['  '], [42], [null], ['a'.repeat(201)]]) {
+  it('gives a new option an id that is not its label', () => {
+    /*
+     * ⚠️ A SLUG WOULD RE-BREAK ON RENAME, which is the original defect wearing
+     * a different hat. The id must carry no information about the caption.
+     */
+    const result = validateCustomFieldDefinition({
+      key: 'k',
+      label: 'K',
+      fieldType: 'select',
+      options: ['Enterprise'],
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.options[0]!.label).toBe('Enterprise')
+    expect(result.options[0]!.id).not.toBe('Enterprise')
+    expect(result.options[0]!.id.toLowerCase()).not.toContain('enterprise')
+  })
+
+  it('keeps the id of an option that already has one', () => {
+    // This is what makes a rename safe: the caller re-submits the option with
+    // its id, and every value stored against that id still resolves.
+    const result = validateCustomFieldDefinition(
+      {
+        key: 'k',
+        label: 'K',
+        fieldType: 'select',
+        options: [{ id: 'opt-1', label: 'Enterprise (500+)' }, 'Mid-market'],
+      },
+      ids(),
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      options: [
+        { id: 'opt-1', label: 'Enterprise (500+)' },
+        { id: 'new-1', label: 'Mid-market' },
+      ],
+    })
+  })
+
+  it('refuses two options sharing an id', () => {
+    // A stored value would be ambiguous, and would resolve differently after a
+    // reorder — silently.
+    expect(
+      validateCustomFieldDefinition({
+        key: 'k',
+        label: 'K',
+        fieldType: 'select',
+        options: [
+          { id: 'dupe', label: 'Hot' },
+          { id: 'dupe', label: 'Cold' },
+        ],
+      }).ok,
+    ).toBe(false)
+  })
+
+  it('rejects blank labels, bad ids and unusable shapes', () => {
+    const bad: unknown[][] = [
+      [''],
+      ['  '],
+      [42],
+      [null],
+      ['a'.repeat(201)],
+      [{ label: '' }],
+      [{ id: '', label: 'Hot' }],
+      [{ id: 7, label: 'Hot' }],
+      [{ nolabel: true }],
+    ]
+    for (const options of bad) {
       expect(
         validateCustomFieldDefinition({ key: 'k', label: 'K', fieldType: 'select', options }).ok,
+        `expected ${JSON.stringify(options)} to be refused`,
       ).toBe(false)
     }
   })
