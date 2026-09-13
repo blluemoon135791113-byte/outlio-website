@@ -51,9 +51,14 @@ describe('the per-message figure says it is per message', () => {
   })
 
   it('still refuses to show a rate before anything is sent', () => {
-    // Pre-existing and worth keeping: 0% before launch reads as failure rather
-    // than as not-started.
-    expect(ANALYTICS).toMatch(/totals\.sent > 0 \?/)
+    /*
+     * Pre-existing and worth keeping: 0% before launch reads as failure rather
+     * than as not-started. The check MOVED rather than went away — `rateOf`
+     * now owns it, along with the volume floor the inline version never had —
+     * so this follows it instead of asserting the old spelling.
+     */
+    expect(ANALYTICS).toMatch(/rateOf\(/)
+    expect(ANALYTICS).toMatch(/=== null \? tooFewHint/)
   })
 })
 
@@ -78,5 +83,48 @@ describe('the per-person figure keeps its contacts denominator', () => {
   it('returns null rather than 0% when nobody was emailed', () => {
     // A team that has emailed nobody has no reply rate; 0% reads as failure.
     expect(METRICS).toMatch(/number \| null/)
+  })
+})
+
+describe('a rate needs enough evidence to be a rate', () => {
+  const READINESS = read('lib/email/readiness.ts')
+
+  it('analytics uses the readiness floor rather than its own', () => {
+    /*
+     * ⚠️ THE ALARMING NUMBER HAD NO FLOOR. 3 sends and 1 bounce read 33.3% on
+     * this page — over three times `bounceCritical` — on the screen somebody
+     * checks when they are worried about deliverability, while the readiness
+     * check that actually gates sending said it did not know.
+     */
+    expect(ANALYTICS).toMatch(/rateOf\(totals\.bounced, totals\.sent\)/)
+    expect(ANALYTICS).toMatch(/rateOf\(totals\.replied, totals\.sent\)/)
+    expect(ANALYTICS, 'analytics divides without the floor').not.toMatch(
+      /totals\.bounced \/ totals\.sent/,
+    )
+  })
+
+  it('the floor is a real number, not zero', () => {
+    // A floor of 0 or 1 would make `rateOf` a rename of division.
+    expect(READINESS).toMatch(/minimumVolumeForRates:\s*(\d+)/)
+    const value = Number(/minimumVolumeForRates:\s*(\d+)/.exec(READINESS)?.[1])
+    expect(value).toBeGreaterThan(1)
+  })
+
+  it('distinguishes "not enough yet" from "nothing yet"', () => {
+    /*
+     * A mailbox that has sent 12 is working and being measured; one that has
+     * sent 0 has not started. One sentence for both would tell the first that
+     * their campaign never launched.
+     */
+    expect(ANALYTICS).toMatch(/totals\.sent === 0/)
+    expect(ANALYTICS).toMatch(/Not enough sent yet/)
+    expect(ANALYTICS).toMatch(/Nothing sent yet/)
+  })
+
+  it('says how many more are needed rather than just refusing', () => {
+    // "Not enough" with no number is a dead end; the reader cannot tell whether
+    // they are one send away or a hundred.
+    expect(ANALYTICS).toMatch(/THRESHOLDS\.minimumVolumeForRates/)
+    expect(ANALYTICS).toMatch(/\$\{totals\.sent\} so far/)
   })
 })
