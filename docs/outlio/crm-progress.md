@@ -140,6 +140,48 @@ neutralising the visibility check fails exactly 3 of the new file's 7 tests.
 
 ---
 
+## Entry 004 — A5, and a correction to A4
+
+**Date:** 2026-09-13 · **Status:** PR open
+
+**A5 — a departed member's authority outlived their membership.** The send step
+read `config.actorAuthorized`, a boolean stamped into an immutable published
+version. On its own it asserted only "this person could send in March", so a
+member removed in April kept sending from every flow they had published until
+somebody re-published it. The same shape applied to `config.userId`: their
+personal AI credit allowance kept being spent by a workspace they had left.
+
+Fixed by re-checking authority at execution against the CURRENT membership.
+**No migration was required**, because `flow_versions.created_by` already
+records the publisher — so the fix works for every already-published version,
+with no re-stamping and no deploy ordering hazard. It rides on a query
+`advanceRun` was already making, so it costs no extra reads.
+
+Stamp **and** live check, not either: dropping the stamp would let a flow
+published by somebody unauthorized start sending the moment they were later
+granted the permission. Keeping both can only refuse more than before.
+
+**Changed:** `lib/workspaces/authority.ts` (new), `lib/flows/engine.ts`,
+`lib/flows/actions/email.ts`, `lib/flows/actions/hubble.ts`,
+`tests/unit/removed-member-authority.test.ts` (new).
+
+**Result:** 3,532 passed / 3,532. Mutation-verified both ways.
+
+### ⚠️ A4 was overstated, and is now mostly closed
+
+Phase 0 recorded that a removed member "keeps a live session". That is wrong —
+`assertWorkspacePermission` re-reads membership uncached on every call, so
+interactive access stops on their next request. The prescribed session
+revocation is both impossible on the installed SDK (`signOut` takes a JWT, not a
+user id) and wrong for this product, where a user's Lead Engine data is
+personally theirs and independent of any workspace.
+
+Full reasoning in `crm-implementation-map.md`. **Remaining A4 work:** the
+`status` column, so an inactive membership survives for attribution. Needs a
+migration; scope it with CRM-DN-02/03.
+
+---
+
 ## Next executable task
 
 **CRM-DN-04's two missing safeguards** — the only ruled decision that is ready

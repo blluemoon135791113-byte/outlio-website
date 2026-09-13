@@ -33,7 +33,13 @@ const run = (
 ): Promise<ActionResult> => {
   const handler = handlerFor(action)
   if (!handler) throw new Error(`${action} is not registered`)
-  return handler({ workspaceId: 'ws', runId: 'run', contactId: 'c', facts }, config)
+  // DATE_CALC and TEXT_TRANSFORM are pure and act on nobody's behalf, so the
+  // publisher is irrelevant here — but the context carries it for the handlers
+  // that do check it.
+  return handler(
+    { workspaceId: 'ws', runId: 'run', contactId: 'c', publisherUserId: 'publisher', facts },
+    config,
+  )
 }
 
 const value = (result: ActionResult) => (result.ok ? result.output?.value : undefined)
