@@ -52,6 +52,17 @@ export function useBoardRealtime(
           if (pipeline && pipeline !== pipelineId) return
 
           apply((columns) => {
+            /*
+             * ⚠️ CAPTURED BEFORE THE REMOVAL BELOW WIPES IT. This subscription
+             * fires on EVERY update to the row — a rename, an owner change, a
+             * value edit — not only on a move, and the card is rebuilt from the
+             * payload each time. Without the previous card there is nothing to
+             * carry `isStale` forward from.
+             */
+            const previousCard = columns
+              .flatMap((column) => column.cards.map((card) => ({ card, stageId: column.stageId })))
+              .find((entry) => entry.card.id === id)
+
             // Remove first, everywhere. That is what makes re-applying an echo
             // harmless: the card ends up in exactly one column whether or not
             // it was already there.
@@ -88,9 +99,29 @@ export function useBoardRealtime(
               ownerUserId: (next.owner_user_id as string | null) ?? null,
               contactId: (next.contact_id as string | null) ?? null,
               updatedAt: (next.updated_at as string) ?? new Date().toISOString(),
-              // Recomputed on the next full load. A card that just moved is by
-              // definition not rotting, so claiming otherwise would be wrong.
-              isStale: false,
+              stageEnteredAt:
+                previousCard && previousCard.stageId === stageId
+                  ? previousCard.card.stageEnteredAt
+                  : new Date().toISOString(),
+              /*
+               * ⚠️ ONLY A MOVE CLEARS IT.
+               *
+               * This used to be a flat `false`, reasoning that a card which
+               * just moved is by definition not rotting. True — but this
+               * handler also fires for renames, owner changes and value edits,
+               * so fixing a typo on a deal that had sat in Proposal since March
+               * cleared its badge until the next full load. §8: an edit resets
+               * neither the stage clock nor the badge.
+               *
+               * Same stage means the clock kept running, so the previous
+               * verdict stands. A different stage is a genuine move, and a card
+               * that just arrived is not stale. No previous card means it
+               * arrived from off-board, which is also a move.
+               */
+              isStale:
+                previousCard && previousCard.stageId === stageId
+                  ? previousCard.card.isStale
+                  : false,
             }
 
             return without.map((column) =>
