@@ -31,6 +31,14 @@ export type SendGateFacts = {
   /** The address is on the do-not-contact list. */
   suppressed: boolean
   suppressionReason?: string | null
+  /**
+   * ⚠️ WHICH KIND OF STOP, BECAUSE THE OPERATOR'S NEXT ACTION DIFFERS. An
+   * address suppression is something the recipient did; a `contact` stop is a
+   * decision a teammate made and can undo. Telling them "this address
+   * unsubscribed" when a colleague marked the person DNC sends them looking in
+   * the wrong place.
+   */
+  suppressionVia?: 'contact' | 'address' | 'unknown' | null
   /** Messages this mailbox may still send today (ramp + configured limit). */
   remainingToday: number
   /** The person the flow runs as holds `email.campaign.launch`. */
@@ -93,9 +101,7 @@ export function checkSendGate(facts: SendGateFacts): SendGateResult {
     return {
       allowed: false,
       failure: 'suppressed',
-      reason: facts.suppressionReason
-        ? `This address is on the do-not-contact list (${facts.suppressionReason}).`
-        : 'This address is on the do-not-contact list.',
+      reason: suppressionMessage(facts),
     }
   }
 
@@ -151,4 +157,17 @@ export function checkSendGate(facts: SendGateFacts): SendGateResult {
  */
 export function isTransient(failure: SendGateFailure): boolean {
   return failure === 'daily_limit_reached' || failure === 'provider_unhealthy'
+}
+
+/** The sentence an operator reads when a send was refused for permission. */
+function suppressionMessage(facts: SendGateFacts): string {
+  const detail = facts.suppressionReason ? ` (${facts.suppressionReason})` : ''
+  if (facts.suppressionVia === 'contact') {
+    return `This contact is marked do-not-contact${detail}.`
+  }
+  if (facts.suppressionVia === 'unknown') {
+    // Fail-closed: not a stop we found, a stop we could not rule out.
+    return 'Could not check the do-not-contact list, so this send was held.'
+  }
+  return `This address is on the do-not-contact list${detail}.`
 }

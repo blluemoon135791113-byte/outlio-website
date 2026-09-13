@@ -17,11 +17,21 @@ import 'server-only'
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 import { policyFor, type CampaignType } from '@/lib/email/campaign-policy'
+import { contactsStopped } from '@/lib/crm/contact-stop'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type SkipReason =
   | 'no_email'
   | 'suppressed'
+  /*
+   * ⚠️ SEPARATE FROM `suppressed`, BECAUSE THE CAUSE IS DIFFERENT AND SO IS
+   * THE FIX. `suppressed` means this ADDRESS unsubscribed or bounced;
+   * `do_not_contact` means somebody marked this PERSON do-not-contact, which
+   * is a decision a teammate made and can undo. Reporting both as
+   * "unsubscribed or bounced" told the second group a falsehood about their
+   * own data.
+   */
+  | 'do_not_contact'
   | 'already_enrolled'
   | 'collision'
   | 'campaign_not_enrollable'
@@ -42,6 +52,7 @@ export type BulkEnrollResult = {
 const EMPTY_REASONS: Record<SkipReason, number> = {
   no_email: 0,
   suppressed: 0,
+  do_not_contact: 0,
   already_enrolled: 0,
   collision: 0,
   campaign_not_enrollable: 0,
@@ -142,16 +153,20 @@ export async function bulkEnroll(input: BulkEnrollInput): Promise<BulkEnrollResu
     if (!emailByContact.has(row.contact_id)) emailByContact.set(row.contact_id, row.address)
   }
 
-  const addresses = [...new Set(emailByContact.values())]
-  const suppressed = new Set<string>()
-  if (addresses.length > 0) {
-    const { data } = await db
-      .from('email_suppressions')
-      .select('email')
-      .eq('workspace_id', input.workspaceId)
-      .in('email', addresses)
-    for (const row of data ?? []) suppressed.add(row.email)
-  }
+  /*
+   * ⚠️ BOTH SUPPRESSION TABLES, THROUGH THE ONE PREDICATE. This read
+   * `email_suppressions` directly and never touched `crm_contact_suppressions`,
+   * so a person marked do-not-contact was enrolled here and then silently
+   * dropped by `enqueueEmail` at every send — the customer was told it worked.
+   */
+  const stops = await contactsStopped({
+    workspaceId: input.workspaceId,
+    channel: 'email',
+    contacts: input.contactIds.map((id) => ({
+      contactId: id,
+      email: emailByContact.get(id) ?? null,
+    })),
+  })
 
   const { data: existing } = await db
     .from('email_enrollments')
@@ -205,10 +220,29 @@ export async function bulkEnroll(input: BulkEnrollInput): Promise<BulkEnrollResu
       continue
     }
 
-    if (suppressed.has(email)) {
-      // Absolute. `respectsSuppression` is true on every campaign type and
-      // there is no acknowledgement that overrides it.
-      skip(contactId, 'suppressed', 'This address is on the do-not-contact list.')
+    const stop = stops.get(contactId)
+    if (stop?.stopped) {
+      /*
+       * Absolute. `respectsSuppression` is true on every campaign type and
+       * there is no acknowledgement that overrides it — including the
+       * fail-closed `unknown`, where the honest answer is that we could not
+       * establish permission and so do not have it.
+       */
+      if (stop.via === 'contact') {
+        skip(
+          contactId,
+          'do_not_contact',
+          `${contact.full_name ?? 'This contact'} is marked do-not-contact.`,
+        )
+      } else if (stop.via === 'address') {
+        skip(contactId, 'suppressed', 'This address is on the do-not-contact list.')
+      } else {
+        skip(
+          contactId,
+          'do_not_contact',
+          'Could not check the do-not-contact list, so this contact was left out.',
+        )
+      }
       continue
     }
 
@@ -289,6 +323,7 @@ export function summarize(result: BulkEnrollResult): string {
   const label: Record<SkipReason, string> = {
     no_email: 'no email address',
     suppressed: 'unsubscribed or bounced',
+    do_not_contact: 'marked do-not-contact',
     already_enrolled: 'already enrolled',
     collision: 'owned by a teammate',
     campaign_not_enrollable: 'campaign not accepting contacts',

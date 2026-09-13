@@ -17,8 +17,15 @@ import 'server-only'
  * ║  outright.                                                                ║
  * ║                                                                           ║
  * ║  Neither can express the other's case. What stops them diverging is that   ║
- * ║  this function is the ONE reader. Two channels asking the same question    ║
- * ║  two ways is how a stop ends up honoured on one and not the other.        ║
+ * ║  this MODULE is the one reader. Two callers asking the same question two   ║
+ * ║  ways is how a stop ends up honoured on one path and not the other.       ║
+ * ║                                                                           ║
+ * ║  ⚠️ THAT CLAIM WAS FALSE WHEN IT WAS FIRST WRITTEN, and the wording is    ║
+ * ║  now "module" rather than "function" because of how it was made true:      ║
+ * ║  two bulk call sites were querying `email_suppressions` themselves and     ║
+ * ║  never reading `crm_contact_suppressions` at all. They had a real reason   ║
+ * ║  — a per-contact loop is two round trips each — so the fix was to give     ║
+ * ║  them `contactsStopped` below, not to ask them to be slower.              ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * ⚠️ IT FAILS CLOSED ON ERROR — the opposite of the rate limiter, deliberately.
@@ -118,6 +125,99 @@ export async function contactIsStopped(input: {
   } catch {
     // See the note above: a database that will not answer is not permission.
     return { stopped: true, via: 'unknown', reason: 'lookup_failed' }
+  }
+}
+
+/**
+ * The same question, asked about many people at once.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THIS EXISTS SO THE BULK PATHS STOP ASKING THE QUESTION THEMSELVES.    ║
+ * ║                                                                           ║
+ * ║  The banner above claims `contactIsStopped` is the ONE reader. It was not: ║
+ * ║  `lib/email/enrollment.ts` and `lib/flows/actions/email.ts` each queried   ║
+ * ║  `email_suppressions` directly and checked `crm_contact_suppressions`      ║
+ * ║  NOWHERE — so a person marked do-not-contact was reported as enrolled and  ║
+ * ║  as eligible, then silently skipped at every send by `enqueueEmail`.       ║
+ * ║                                                                           ║
+ * ║  No mail went out, because the send gate was always complete. What was     ║
+ * ║  wrong was everything the customer was TOLD: they marked somebody DNC,     ║
+ * ║  watched the product enrol them anyway, and had no way to learn why        ║
+ * ║  nothing was ever sent.                                                    ║
+ * ║                                                                           ║
+ * ║  A per-contact loop would be two round trips each, which is why those      ║
+ * ║  call sites hand-rolled a bulk query in the first place. Two queries total ║
+ * ║  removes the reason to.                                                    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Keyed by `contactId`. A contact absent from the result is not stopped.
+ */
+export async function contactsStopped(input: {
+  workspaceId: string
+  channel: StopChannel
+  contacts: readonly { contactId: string; email?: string | null }[]
+}): Promise<Map<string, ContactStop>> {
+  const stops = new Map<string, ContactStop>()
+  if (input.contacts.length === 0) return stops
+
+  const contactIds = [...new Set(input.contacts.map((c) => c.contactId))]
+  const emailOf = new Map(
+    input.contacts.map((c) => [c.contactId, c.email?.trim().toLowerCase() ?? null]),
+  )
+  const addresses = [...new Set([...emailOf.values()].filter((e): e is string => e !== null))]
+
+  /** Fails CLOSED, for the reason in the banner at the top of this file. */
+  const allStopped = (): Map<string, ContactStop> =>
+    new Map(contactIds.map((id) => [id, { stopped: true, via: 'unknown', reason: 'lookup_failed' }]))
+
+  try {
+    const db = createAdminClient()
+
+    const [byContact, byAddress] = await Promise.all([
+      db
+        .from('crm_contact_suppressions')
+        .select('contact_id, reason')
+        // Service role bypasses RLS — scoping by workspace is mandatory.
+        .eq('workspace_id', input.workspaceId)
+        .in('contact_id', contactIds)
+        .in('scope', ['all', input.channel]),
+      addresses.length > 0
+        ? db
+            .from('email_suppressions')
+            .select('email, reason')
+            .eq('workspace_id', input.workspaceId)
+            .in('email', addresses)
+        : Promise.resolve({ data: [], error: null }),
+    ])
+
+    if (byContact.error || byAddress.error) return allStopped()
+
+    for (const row of byContact.data ?? []) {
+      stops.set(row.contact_id, { stopped: true, via: 'contact', reason: row.reason })
+    }
+
+    /*
+     * ⚠️ SAME SCOPE RULE AS THE SINGLE VERSION. An address suppression is
+     * evidence about one mailbox and says nothing about LinkedIn; and a
+     * person-level stop already recorded above is not overwritten by it,
+     * because `via: 'contact'` is the more specific fact.
+     */
+    if (input.channel === 'email' && (byAddress.data ?? []).length > 0) {
+      const suppressedAddresses = new Map(
+        (byAddress.data ?? []).map((r) => [r.email, r.reason as string]),
+      )
+      for (const [contactId, email] of emailOf) {
+        if (stops.has(contactId) || email === null) continue
+        const reason = suppressedAddresses.get(email)
+        if (reason !== undefined) {
+          stops.set(contactId, { stopped: true, via: 'address', reason })
+        }
+      }
+    }
+
+    return stops
+  } catch {
+    return allStopped()
   }
 }
 

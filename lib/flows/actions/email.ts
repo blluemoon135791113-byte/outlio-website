@@ -23,6 +23,7 @@ import { isAccountSendable } from '@/lib/email/readiness-runner'
 import { checkRampAllowance } from '@/lib/email/ramp'
 import { rampSettingsOf, todayIn } from '@/lib/email/readiness-runner'
 import { getEmailAccount } from '@/lib/email/accounts'
+import { contactIsStopped } from '@/lib/crm/contact-stop'
 import { enqueueEmail } from '@/lib/email/send'
 import { renderTemplate, contextFor } from '@/lib/email/template'
 import { checkSendGate, isTransient, type SendGateFacts } from '@/lib/flows/send-gate'
@@ -193,17 +194,27 @@ async function gatherSendFacts(
     recipientEmail = data?.address ?? null
   }
 
+  /*
+   * ⚠️ BOTH TABLES, THROUGH THE ONE PREDICATE. This asked `email_suppressions`
+   * directly and never read `crm_contact_suppressions`, so a person marked
+   * do-not-contact was reported here as NOT suppressed. The send still refused
+   * — `enqueueEmail` has always checked both — which made it worse rather than
+   * better: these facts exist so an operator can explain why a flow stopped
+   * sending overnight, and the one fact that explained it was missing.
+   */
   let suppressed = false
   let suppressionReason: string | null = null
-  if (recipientEmail) {
-    const { data } = await db
-      .from('email_suppressions')
-      .select('reason')
-      .eq('workspace_id', workspaceId)
-      .eq('email', recipientEmail)
-      .maybeSingle()
-    suppressed = Boolean(data)
-    suppressionReason = data?.reason ?? null
+  let suppressionVia: 'contact' | 'address' | 'unknown' | null = null
+  if (contactId) {
+    const stop = await contactIsStopped({
+      workspaceId,
+      channel: 'email',
+      contactId,
+      email: recipientEmail,
+    })
+    suppressed = stop.stopped
+    suppressionReason = stop.stopped ? stop.reason : null
+    suppressionVia = stop.stopped ? stop.via : null
   }
 
   const account = accountId ? await getEmailAccount(workspaceId, accountId) : null
@@ -237,6 +248,7 @@ async function gatherSendFacts(
     recipientEmail,
     suppressed,
     suppressionReason,
+    suppressionVia,
     remainingToday,
     actorAuthorized,
     // Eligibility beyond suppression is campaign-level in M6; at flow level a
