@@ -24,6 +24,7 @@ import 'server-only'
  */
 import {
   actionCostsCredits,
+  MAX_RUN_LIFETIME_HOURS,
   validateFlowDefinition,
   type ActionType,
   type FlowStep,
@@ -266,7 +267,13 @@ export async function startRun(input: StartRunInput): Promise<StartRunResult> {
 }
 
 export type AdvanceResult = {
-  status: 'completed' | 'waiting' | 'failed' | 'running'
+  /*
+   * `halted` was always reachable — the early return casts `run.status`, which
+   * the database enum already allowed — but it was missing from this union, so
+   * a caller matching on the result could not see it. The lifetime cap now
+   * returns it deliberately.
+   */
+  status: 'completed' | 'waiting' | 'failed' | 'running' | 'halted'
   stepsExecuted: number
   /** Set when the run stopped because a step failed. */
   error?: { stepId: string | null; code: string; message: string }
@@ -289,7 +296,7 @@ export async function advanceRun(
 
   const { data: run, error } = await db
     .from('flow_runs')
-    .select('id, flow_id, version_id, contact_id, current_step, status, variables')
+    .select('id, flow_id, version_id, contact_id, current_step, status, variables, started_at')
     .eq('workspace_id', workspaceId)
     .eq('id', runId)
     .single()
@@ -297,6 +304,42 @@ export async function advanceRun(
   if (error) throw new Error(`advanceRun failed: ${error.message}`)
   if (run.status !== 'running' && run.status !== 'waiting') {
     return { status: run.status as AdvanceResult['status'], stepsExecuted: 0 }
+  }
+
+  /*
+   * ╔═════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THE LIFETIME CAP, CHECKED BEFORE ANY STEP RUNS — CRM-DN-04.         ║
+   * ║                                                                         ║
+   * ║  Nothing expired a run before this. A chain of waits, or a legal cycle  ║
+   * ║  (one containing a wait), kept a run in `waiting` forever: re-claimed   ║
+   * ║  by every tick, holding a contact enrolled, and still able to send.     ║
+   * ║                                                                         ║
+   * ║  Placed HERE, above the version load and the fact gather, because the   ║
+   * ║  point of a cap is that an expired run performs no further side         ║
+   * ║  effects. A check after the step dispatch would expire runs that had    ║
+   * ║  just sent one more email.                                              ║
+   * ║                                                                         ║
+   * ║  `halted` already exists and already requires a reason, so an operator  ║
+   * ║  reading the run sees which rule stopped it rather than a run that      ║
+   * ║  simply stopped.                                                        ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   */
+  const ageHours = (Date.now() - new Date(run.started_at).getTime()) / 3_600_000
+  if (ageHours > MAX_RUN_LIFETIME_HOURS) {
+    const haltReason = `run_lifetime_exceeded: started ${Math.round(ageHours / 24)} days ago, limit ${Math.round(MAX_RUN_LIFETIME_HOURS / 24)}`
+
+    await db
+      .from('flow_runs')
+      .update({
+        status: 'halted',
+        halt_reason: haltReason,
+        current_step: null,
+        resume_at: null,
+        finished_at: new Date().toISOString(),
+      })
+      .eq('id', runId)
+
+    return { status: 'halted', stepsExecuted: 0 }
   }
 
   /*
