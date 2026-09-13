@@ -50,6 +50,20 @@ export type FlowContext = {
   workspaceId: string
   runId: string
   contactId: string | null
+  /**
+   * Who published the version this run is executing — `flow_versions.created_by`.
+   *
+   * ⚠️ THE RUN ACTS WITH THIS PERSON'S AUTHORITY, SO IT MUST BE RE-CHECKED,
+   * NOT ASSUMED. A published version froze `actorAuthorized` at publish time,
+   * which meant a member who left in March was still sending mail in
+   * September. Handlers that act on somebody's behalf ask
+   * `memberMayNow(workspaceId, publisherUserId, …)` rather than trusting a
+   * stamped boolean.
+   *
+   * Null when the version predates the column or the publisher's auth row was
+   * deleted. Both must fail closed.
+   */
+  publisherUserId: string | null
   /** Values the branch conditions read. Populated per run. */
   facts: Record<string, unknown>
 }
@@ -347,13 +361,18 @@ export async function advanceRun(
    * flow's current pointer. This is criterion 3 at the point it actually
    * matters — one line away from being wrong.
    */
+  /*
+   * `created_by` rides along on the query that was already being made, so
+   * knowing whose authority this run carries costs nothing.
+   */
   const { data: version } = await db
     .from('flow_versions')
-    .select('definition')
+    .select('definition, created_by')
     .eq('id', run.version_id)
     .single()
 
   const definition = validateFlowDefinition(version!.definition)
+  const publisherUserId = version!.created_by
   const byId = new Map(definition.steps.map((s) => [s.id, s]))
 
   /*
@@ -452,7 +471,10 @@ export async function advanceRun(
     const handler = handlerFor(step.action)
 
     const result: ActionResult = handler
-      ? await handler({ workspaceId, runId, contactId: run.contact_id, facts }, step.config)
+      ? await handler(
+          { workspaceId, runId, contactId: run.contact_id, publisherUserId, facts },
+          step.config,
+        )
       : {
           ok: false,
           code: 'ACTION_NOT_AVAILABLE',

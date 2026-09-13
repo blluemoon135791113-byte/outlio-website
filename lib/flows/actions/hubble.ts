@@ -23,6 +23,7 @@ import 'server-only'
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 import { hubbleExecute } from '@/lib/hubble/execute'
+import { memberMayNow } from '@/lib/workspaces/authority'
 import type { HubbleTask } from '@/lib/hubble/pricing'
 import { CAPABILITIES, aiCapabilityIds, hubbleTaskForAction } from '@/lib/capabilities/registry'
 import { registerAction, type ActionHandler, type ActionResult } from '@/lib/flows/engine'
@@ -92,6 +93,29 @@ function hubbleHandler(action: string): ActionHandler {
         ok: false,
         code: 'NO_BILLING_USER',
         message: 'This AI step has nobody to bill. Set the flow owner.',
+        retryable: false,
+      }
+    }
+
+    /*
+     * ⚠️ THE BILLED USER MUST STILL BE A MEMBER, CHECKED NOW.
+     *
+     * `userId` is stamped into the published version and a published version
+     * is immutable, so on its own it keeps charging whoever published the flow
+     * long after they left the workspace — their personal credit allowance,
+     * spent by a workspace they are no longer part of, with nobody watching.
+     *
+     * `crm.contact.view` is the weakest CRM permission every role holds, so
+     * this asks "are they still a member of this workspace at all", not "may
+     * they do something specific". Removal is the case it exists to catch.
+     */
+    const stillAMember = await memberMayNow(ctx.workspaceId, userId, 'crm.contact.view')
+    if (!stillAMember) {
+      return {
+        ok: false,
+        code: 'BILLING_USER_INACTIVE',
+        message:
+          'The person this AI step bills is no longer a member of this workspace. Re-publish the flow to bill someone who is.',
         retryable: false,
       }
     }

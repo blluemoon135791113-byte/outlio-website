@@ -28,6 +28,7 @@ import { enqueueEmail } from '@/lib/email/send'
 import { renderTemplate, contextFor } from '@/lib/email/template'
 import { checkSendGate, isTransient, type SendGateFacts } from '@/lib/flows/send-gate'
 import { registerAction, type ActionHandler, type ActionResult } from '@/lib/flows/engine'
+import { memberMayNow } from '@/lib/workspaces/authority'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const ok = (output: Record<string, string | number | boolean | null> = {}): ActionResult => ({
@@ -267,11 +268,29 @@ const sendEmail: ActionHandler = async (ctx, config) => {
   }
 
   /*
-   * ⚠️ AUTHORIZATION IS PASSED IN, NOT ASSUMED. A flow runs unattended, so the
-   * permission belongs to whoever published it. `false` when absent, because
-   * this gate fails closed.
+   * ╔═════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ AUTHORIZED AT PUBLISH **AND** STILL AUTHORIZED NOW.                 ║
+   * ║                                                                         ║
+   * ║  `config.actorAuthorized` is stamped by `stampSendAuthority` when the   ║
+   * ║  version is published, and a published version is immutable. On its own ║
+   * ║  it therefore says only "this person could send in March" — so a member ║
+   * ║  removed in April kept sending mail from every flow they had ever       ║
+   * ║  published, indefinitely, until somebody happened to re-publish it.     ║
+   * ║                                                                         ║
+   * ║  The live half reads the CURRENT membership. No membership row means    ║
+   * ║  removed, and `memberMayNow` answers false, so the gate refuses at the  ║
+   * ║  next step rather than at the next re-publish.                          ║
+   * ║                                                                         ║
+   * ║  ⚠️ BOTH, NOT EITHER. Dropping the stamp would let a flow published by  ║
+   * ║  someone unauthorized start sending the moment they were later granted  ║
+   * ║  the permission — authority they never had when the flow was reviewed.  ║
+   * ║  Keeping both can only ever refuse more than before, which is the only  ║
+   * ║  safe direction for this change.                                        ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
    */
-  const actorAuthorized = config.actorAuthorized === true
+  const actorAuthorized =
+    config.actorAuthorized === true &&
+    (await memberMayNow(ctx.workspaceId, ctx.publisherUserId, 'email.campaign.launch'))
 
   const facts = await gatherSendFacts(ctx.workspaceId, ctx.contactId, accountId, actorAuthorized)
   const gate = checkSendGate(facts)
