@@ -131,23 +131,100 @@ describe('money is single-currency, and the code says so', () => {
   })
 })
 
-describe('§5.6 either holds or is honestly absent', () => {
-  it('the fx snapshot is absent exactly while the product is single-currency', () => {
+describe('§5.6 is half built, and the half that is missing is named', () => {
+  const FX = readFileSync(
+    join(ROOT, 'supabase', 'migrations', '0123_deal_fx_snapshot.sql'),
+    'utf8',
+  )
+
+  it('the snapshot columns now exist', () => {
     /*
-     * ⚠️ ASSERTED IN BOTH DIRECTIONS, which is what makes this a guard rather
-     * than a comment. Multi-currency without a snapshot is the silent money
-     * bug. A snapshot while still single-currency is machinery for a population
-     * of zero — and would mean this file is stale and should be deleted.
+     * ⚠️ THIS ASSERTION IS INVERTED FROM WHAT IT USED TO BE, and the old
+     * message is why: it said "a snapshot while still single-currency is
+     * machinery for a population of zero — delete this file if §5.6 is
+     * genuinely implemented". §5.6 is now genuinely HALF implemented, which is
+     * neither case it anticipated, so the file stays and says which half.
+     *
+     * Built (0123): the columns, the both-or-neither constraint, the identity
+     * rule, the converted column, the unconvertible count.
+     * Not built: a rate vendor, and therefore the close-time re-snapshot.
      */
-    const multiCurrency = currencyCallers.length > 0
+    expect(hasFxSnapshot, '0123 is gone — the snapshot columns were dropped').toBe(true)
+    expect(FX).toMatch(/fx_rate_to_workspace_currency\s+numeric/)
+    expect(FX).toMatch(/fx_rate_date\s+date/)
+  })
+
+  it('a rate of 1 is only ever written when the currencies are identical', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE WHOLE SAFETY ARGUMENT FOR SHIPPING WITHOUT A VENDOR.          ║
+     * ║                                                                       ║
+     * ║  Writing 1 when the deal currency equals the workspace currency is an  ║
+     * ║  IDENTITY — a restatement of a fact the row already carries. Writing 1 ║
+     * ║  for any other pair is inventing an exchange rate, which is rule 4     ║
+     * ║  with a decimal point in it, and it would make €10,000 worth $10,000.  ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    // The trigger fills only a NULL rate, and only on a currency match.
+    expect(FX).toMatch(/new\.currency = v_workspace_currency/)
+    expect(FX).toMatch(/new\.fx_rate_to_workspace_currency is null/)
+    // The backfill applies the same rule rather than a bulk guess.
+    expect(FX).toMatch(/and o\.currency = w\.default_currency/)
+    // And no unconditional default anywhere.
+    expect(FX, 'a rate is being defaulted to 1 without a currency check').not.toMatch(
+      /fx_rate_to_workspace_currency\s+numeric\([^)]*\)\s+not null\s+default/i,
+    )
+  })
+
+  it('an unknown rate makes a deal unconvertible rather than free', () => {
+    // NULL through the generated column, so `sum()` drops the row instead of
+    // adding a foreign amount at face value.
+    expect(FX).toMatch(/value_amount_base/)
+    expect(FX).toMatch(/fx_rate_to_workspace_currency is null then null/)
+    // And the shortfall is counted, because a total nobody knows is short is
+    // worse than a total that is wrong.
+    expect(FX).toMatch(/function public\.crm_unconvertible_deals/)
+  })
+
+  it('a rate cannot be stored without the date that audits it', () => {
+    /*
+     * ⚠️ ANCHORED ON THE DDL, NOT THE NAME. `toMatch(/crm_opportunities_fx_pair/)`
+     * passed against a constraint renamed to `..._fx_pair_DISABLED` — the same
+     * substring mistake that let `/suppressContact\(\{/` match inside
+     * `unsuppressContact({`. Matching the `add constraint … check` keeps the
+     * assertion tied to the constraint existing rather than to its name
+     * appearing somewhere in the file.
+     */
+    expect(FX).toMatch(/add constraint crm_opportunities_fx_pair\s+check/)
+    expect(FX).toMatch(/fx_rate_to_workspace_currency is null\) = \(fx_rate_date is null/)
+    expect(FX).toMatch(/add constraint crm_opportunities_fx_rate_positive\s+check/)
+  })
+
+  it('⚠️ THE ROLLUPS STILL DO NOT CONVERT, which is why the gate above stands', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  0123 GAVE EVERY DEAL A CONVERTED AMOUNT. NOTHING READS IT YET.       ║
+     * ║                                                                       ║
+     * ║  Eight `sum(value_amount)` sites across 0082, 0083 and 0084 still add  ║
+     * ║  raw amounts across currencies. Today that is harmless — every deal is ║
+     * ║  the workspace currency, so converted and raw are the same number —    ║
+     * ║  and it is exactly why no caller may pass a currency until they are    ║
+     * ║  switched to `value_amount_base`.                                     ║
+     * ║                                                                       ║
+     * ║  Asserted so the two facts stay tied: the day the rollups convert,     ║
+     * ║  this fails and points at reopening the currency gate above.          ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const unconverted = ['0082_reporting_aggregates', '0083_crm_funnel', '0084_crm_forecast']
+      .map((f) => readFileSync(join(ROOT, 'supabase', 'migrations', `${f}.sql`), 'utf8'))
+      .join('\n')
+
+    expect(unconverted).toMatch(/sum\(o\.value_amount\)/)
     expect(
-      hasFxSnapshot,
-      multiCurrency
-        ? 'Multi-currency is now reachable and §5.6 is not implemented.'
-        : 'An fx snapshot exists while every deal is still the default currency — ' +
-          'either multi-currency shipped without updating this guard, or the ' +
-          'snapshot is unused. Delete this file if §5.6 is genuinely implemented.',
-    ).toBe(multiCurrency)
+      unconverted,
+      'A rollup now sums the converted column. Multi-currency may be safe to ' +
+        'open — revisit the caller gate in this file rather than leaving it shut.',
+    ).not.toMatch(/sum\(o\.value_amount_base\)/)
   })
 
   it('records the storage deviation rather than silently differing', () => {
