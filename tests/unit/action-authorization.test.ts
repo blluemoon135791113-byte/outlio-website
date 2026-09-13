@@ -48,7 +48,9 @@ function walk(dir: string): string[] {
 
 /** Comments removed by whole line, so a blank line is never manufactured. */
 const stripComments = (s: string) =>
-  s.replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\n/gm, '').replace(/^[ \t]*\/\/.*\n/gm, '')
+  // `\r?\n` because `.` does not match `\r`: against a CRLF checkout this
+  // stripped nothing, and every comment stayed in the "code" being scanned.
+  s.replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\r?\n/gm, '').replace(/^[ \t]*\/\/.*\r?\n/gm, '')
 
 /**
  * Anything that establishes who the caller is and what they may do.
