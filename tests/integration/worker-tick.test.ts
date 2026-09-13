@@ -44,6 +44,22 @@ const EXPECTED_JOBS = [
   'advance_flows',
   'deliver_webhooks',
   'sync_contact_evidence',
+  /*
+   * ⚠️ BOTH ADDED WHEN THEIR ORPHANED WORKERS WERE FINALLY TRIGGERED, and both
+   * missed from this list at the time — which is the second and third time the
+   * warning above has been earned. The list is what caught it again.
+   *
+   * `drain_extraction_queue` is the untargeted backstop for an extraction whose
+   * `after()` nudge never ran: one job per tick, because it is a safety net
+   * rather than the road.
+   *
+   * `rollup_reporting` writes `crm_reporting_daily`, which nothing wrote in
+   * production — `/crm/reports` read an empty table and rendered a screen of
+   * zeroes, and a zero there reads as "you did nothing this week" rather than
+   * "not computed".
+   */
+  'drain_extraction_queue',
+  'rollup_reporting',
 ] as const
 
 describeIf('the tick runs every background job', () => {
