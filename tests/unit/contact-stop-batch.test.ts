@@ -18,8 +18,18 @@
  * ║  watched the product enrol them, and never learned why nothing sent.      ║
  * ║                                                                           ║
  * ║  ⚠️ THE THIRD HAD NO SUCH GATE. The rows leave in a CSV and are mailed by ║
- * ║  a tool that has never heard of Outlio. That one was a real contact of a  ║
- * ║  person who asked not to be contacted.                                   ║
+ * ║  a tool that has never heard of Outlio.                                  ║
+ * ║                                                                           ║
+ * ║  ⚠️ NOTHING HAD LEAKED YET, AND THE REASON WAS ITS OWN DEFECT:            ║
+ * ║  `suppressContact` — the only writer to `crm_contact_suppressions` — had  ║
+ * ║  NO CALLERS. There was no Mark DNC control anywhere, so the table was     ║
+ * ║  always empty and every reader above agreed on nothing, correctly, by     ║
+ * ║  accident. That is why none of this was noticed, and why the fix is not   ║
+ * ║  complete until the control exists — see the end-to-end chain below.      ║
+ * ║                                                                           ║
+ * ║  Neither reachability guard catches it: `action-reachability` only scans  ║
+ * ║  files containing `'use server'`, and `orphan-module` flags whole modules ║
+ * ║  — an uncalled EXPORT inside a heavily-used module is invisible to both.  ║
  * ║                                                                           ║
  * ║  All three had a legitimate reason to hand-roll it: a per-contact loop is ║
  * ║  two round trips each. So the fix was `contactsStopped`, not a rule       ║
@@ -306,6 +316,117 @@ describe('the module really is the only reader now', () => {
         new RegExp(`${fn}\\(\\{`),
       )
     }
+  })
+})
+
+describe('the do-not-contact chain is complete end to end', () => {
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ EVERY LINK EXISTED EXCEPT ONE, AND THAT IS WHY NOBODY NOTICED.        ║
+   * ║                                                                           ║
+   * ║  Migration 0121 created the table. `suppressContact` wrote to it.         ║
+   * ║  `contactIsStopped` read it. `enqueueEmail` honoured it. And NOTHING      ║
+   * ║  ANYWHERE COULD PUT A ROW IN — no action, no panel, no button. The        ║
+   * ║  feature was complete in every respect except being reachable by a human. ║
+   * ║                                                                           ║
+   * ║  `action-reachability` did not catch it because that guard only scans     ║
+   * ║  files containing `'use server'`, and `suppressContact` lives in a        ║
+   * ║  `server-only` module. `orphan-module` did not catch it because           ║
+   * ║  `contact-stop.ts` is heavily imported — just never for THAT export.      ║
+   * ║                                                                           ║
+   * ║  So this asserts the chain itself, link by link. It is narrow on purpose: ║
+   * ║  a general "every export has a caller" rule over `lib/` is a different    ║
+   * ║  and much larger piece of work.                                          ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const find = (file: string) => PRODUCT.find((f) => f.file === file)
+
+  it('the writer has a caller outside its own module', () => {
+    const callers = PRODUCT.filter(
+      (f) =>
+        f.file !== 'lib/crm/contact-stop.ts' &&
+        // ⚠️ \b OR THIS MATCHES INSIDE \`unsuppressContact({\`, and the guard
+        // passes on the presence of the OPPOSITE function. Caught by mutation.
+        /\bsuppressContact\(\{/.test(f.code),
+    ).map((f) => f.file)
+    expect(
+      callers,
+      'suppressContact has no caller again — nothing can mark a person ' +
+        'do-not-contact, so crm_contact_suppressions is always empty and every ' +
+        'reader of it agrees on nothing by accident.',
+    ).toContain('lib/crm/contact-actions.ts')
+  })
+
+  it('a mark can be lifted, not only made', () => {
+    // A mark with no way back is a trap: the people most likely to be marked
+    // by accident are the ones being actively worked.
+    expect(find('lib/crm/contact-stop.ts')!.code).toMatch(/export async function unsuppressContact/)
+    expect(find('lib/crm/contact-actions.ts')!.code).toMatch(/clearDoNotContactAction/)
+  })
+
+  it('both actions gate, because an action is a public HTTP endpoint', () => {
+    const actions = find('lib/crm/contact-actions.ts')!.code
+    const mark = actions.slice(actions.indexOf('export async function markDoNotContactAction'))
+    const clear = actions.slice(actions.indexOf('export async function clearDoNotContactAction'))
+    for (const [label, body] of [['mark', mark], ['clear', clear]] as const) {
+      expect(body.slice(0, 600), `${label} does not assert a permission`).toMatch(
+        /assertWorkspacePermission\('crm\.contact\.edit'\)/,
+      )
+      /*
+       * ⚠️ AND SCOPES TO THE WORKSPACE BEFORE WRITING. The service role
+       * bypasses RLS, so a posted id from another tenant would otherwise be
+       * marked, and the response would look identical to a legitimate one.
+       */
+      expect(body.slice(0, 2500), `${label} does not scope by workspace`).toMatch(
+        /\.eq\('workspace_id', ctx\.workspace\.id\)/,
+      )
+    }
+  })
+
+  it('the panel is rendered on the contact page, not merely written', () => {
+    const page = find('app/(product)/crm/contacts/[id]/page.tsx')
+    expect(page, 'the contact detail page moved').toBeDefined()
+    expect(page!.code).toMatch(/<DoNotContact\b/)
+    expect(page!.code).toMatch(/contactStopRecord\(/)
+  })
+
+  it('the panel calls the actions rather than importing them', () => {
+    /*
+     * ⚠️ `action-reachability` IS SATISFIED BY AN IMPORT ALONE — it matches the
+     * name anywhere in another file. An imported-but-never-invoked action would
+     * pass it while being exactly as unreachable, so this checks the call.
+     */
+    const panel = find('components/crm/ContactPanels.tsx')!.code
+    expect(panel).toMatch(/useActionState\(markDoNotContactAction,/)
+    expect(panel).toMatch(/useActionState\(clearDoNotContactAction,/)
+  })
+
+  it('the client half never imports the server-only module', () => {
+    /*
+     * ⚠️ THIS FAILED THE BUILD ONCE ALREADY. `contact-stop.ts` is `server-only`,
+     * so pulling the scope and reason lists from it put `server-only` in the
+     * browser bundle. `contact-stop-copy.ts` exists for the same reason
+     * `lib/email/suppression-copy.ts` does.
+     */
+    const panel = find('components/crm/ContactPanels.tsx')!.code
+    expect(panel).toMatch(/from '@\/lib\/crm\/contact-stop-copy'/)
+    expect(panel, 'a client component imports the server-only module').not.toMatch(
+      /from '@\/lib\/crm\/contact-stop'/,
+    )
+    expect(find('lib/crm/contact-stop-copy.ts')!.code).not.toContain("import 'server-only'")
+  })
+
+  it('a teammate cannot file a mark as the person having unsubscribed', () => {
+    /*
+     * ⚠️ FORGED CONSENT PROVENANCE. `unsubscribed` records something the
+     * RECIPIENT did by clicking a link. A colleague choosing it from a dropdown
+     * would make the record claim the person opted out themselves — a stronger
+     * and legally different fact than "we wrote it down".
+     */
+    const copy = find('lib/crm/contact-stop-copy.ts')!.code
+    const list = /export const STOP_REASONS = \[([\s\S]*?)\]/.exec(copy)?.[1] ?? ''
+    expect(list).not.toContain('unsubscribed')
+    expect(list).toContain('explicit_request')
   })
 })
 

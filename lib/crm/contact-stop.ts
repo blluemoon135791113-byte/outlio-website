@@ -37,8 +37,21 @@ import 'server-only'
  */
 import { createAdminClient } from '@/lib/supabase/admin'
 
-/** Which channel is asking. `all` scopes always apply. */
-export type StopChannel = 'email' | 'linkedin'
+/*
+ * ⚠️ THE SCOPES, REASONS AND LABELS LIVE IN `contact-stop-copy.ts`. This module
+ * is `server-only`, and the panel that marks a contact is a Client Component —
+ * importing them from here fails the build outright. Re-exported so a server
+ * caller still has one import.
+ */
+export type { StopChannel } from '@/lib/crm/contact-stop-copy'
+export {
+  STOP_REASONS,
+  STOP_SCOPES,
+  type StopReason,
+  type StopScope,
+} from '@/lib/crm/contact-stop-copy'
+
+import type { StopChannel } from '@/lib/crm/contact-stop-copy'
 
 export type ContactStop =
   | { stopped: false }
@@ -260,4 +273,89 @@ export async function suppressContact(input: {
     )
 
   if (error) throw new Error(`suppressContact failed: ${error.message}`)
+}
+
+/**
+ * The person-level mark on one contact, for DISPLAY.
+ *
+ * ⚠️ NOT A PERMISSION CHECK, AND DELIBERATELY NOT SHAPED LIKE ONE. It returns
+ * the row so a panel can show the scope and the note; it does not consult
+ * `email_suppressions` and it does not fail closed, because nothing decides
+ * anything from it. Use `contactIsStopped` to decide whether to contact
+ * somebody — a reader that returns `null` on error would be a catastrophic
+ * answer to that question and a harmless one to this.
+ */
+export async function contactStopRecord(
+  workspaceId: string,
+  contactId: string,
+): Promise<{ scope: 'all' | 'email' | 'linkedin'; reason: string; source: string | null } | null> {
+  const { data, error } = await createAdminClient()
+    .from('crm_contact_suppressions')
+    .select('scope, reason, source')
+    // Service role bypasses RLS — scoping by workspace is mandatory.
+    .eq('workspace_id', workspaceId)
+    .eq('contact_id', contactId)
+    /*
+     * Broadest first, so a contact marked both `all` and `email` reads as
+     * `all` — showing the narrower of two marks would understate the stop.
+     *
+     * ⚠️ THIS WORKS BY ALPHABET, NOT BY BREADTH: 'all' < 'email' < 'linkedin'
+     * happens to sort correctly. A fourth scope would not necessarily, so add
+     * an explicit ordering rather than trusting this to keep holding.
+     */
+    .order('scope', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (error || !data) return null
+  return {
+    scope: data.scope as 'all' | 'email' | 'linkedin',
+    reason: data.reason,
+    source: data.source,
+  }
+}
+
+/**
+ * Lifts a do-not-contact, so the person may be approached again.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THIS EXISTS BECAUSE A MARK YOU CANNOT LIFT IS A TRAP, NOT A CONTROL.  ║
+ * ║                                                                           ║
+ * ║  A setter mis-clicking on the wrong row would otherwise make that person   ║
+ * ║  permanently uncontactable with no way back short of SQL — and the people  ║
+ * ║  most likely to be marked by accident are the ones being actively worked.  ║
+ * ║                                                                           ║
+ * ║  It is deliberately NOT harder to reach than marking: gating it behind a   ║
+ * ║  role the person who made the mistake does not have means the mistake      ║
+ * ║  stands until a manager is free. The safeguard is that it is explicit,     ║
+ * ║  scoped, and attributable — not that it is difficult.                     ║
+ * ║                                                                           ║
+ * ║  ⚠️ THE `email_suppressions` ROW IS NOT TOUCHED. If this person also       ║
+ * ║  unsubscribed by clicking a link, that is THEIR decision and lifting a     ║
+ * ║  colleague's note must not quietly overturn it. `contactIsStopped` will    ║
+ * ║  keep returning `via: 'address'`, which is correct.                       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Returns whether a row was actually removed — a delete matching nothing must
+ * not report success, or a wrong workspace looks identical to a real lift.
+ */
+export async function unsuppressContact(input: {
+  workspaceId: string
+  contactId: string
+  /** Omit to lift every scope for this contact. */
+  scope?: 'all' | 'email' | 'linkedin'
+}): Promise<boolean> {
+  let query = createAdminClient()
+    .from('crm_contact_suppressions')
+    .delete()
+    // Service role bypasses RLS — scoping by workspace is mandatory.
+    .eq('workspace_id', input.workspaceId)
+    .eq('contact_id', input.contactId)
+
+  if (input.scope) query = query.eq('scope', input.scope)
+
+  const { data, error } = await query.select('contact_id')
+
+  if (error) throw new Error(`unsuppressContact failed: ${error.message}`)
+  return (data ?? []).length > 0
 }
