@@ -47,7 +47,20 @@ const RANK: Record<WorkspaceRole, number> = {
  * switched off per workspace (A3: "ALL NEW MODULES SHIP BEHIND WORKSPACE-LEVEL
  * FEATURE FLAGS").
  */
-export type Module = 'crm' | 'email' | 'flows' | 'reports' | 'integrations' | 'hubble'
+export type Module =
+  | 'crm'
+  | 'email'
+  | 'flows'
+  | 'reports'
+  | 'integrations'
+  | 'hubble'
+  /*
+   * ⚠️ MANUAL EXECUTION ONLY. This module entitles Outlio to PREPARE LinkedIn
+   * work — drafts, schedules, budgets, records — never to perform it. Rules 1
+   * and 2 are unrevised: no credentials, no session, no automation browser. The
+   * account owner acts in LinkedIn's own interface.
+   */
+  | 'linkedin'
 
 export const MODULES: readonly Module[] = [
   'crm',
@@ -56,6 +69,7 @@ export const MODULES: readonly Module[] = [
   'reports',
   'integrations',
   'hubble',
+  'linkedin',
 ]
 
 export type Permission =

@@ -8,6 +8,8 @@
  * later shows up as a margin nobody can reconcile.
  */
 
+import { formatMoney } from '@/lib/format/money'
+
 /** 1 USD. */
 export const MICROS_PER_UNIT = 1_000_000
 
@@ -20,14 +22,15 @@ export function fromMicros(micros: number): number {
   return micros / MICROS_PER_UNIT
 }
 
-/** For display. Never used to compute a total. */
+/**
+ * For display. Never used to compute a total.
+ *
+ * ⚠️ `micro` PRECISION, NOT `whole`. A per-call provider price is genuinely a
+ * fraction of a cent, and rounding it for display would render most of this
+ * ledger as `$0.00`.
+ */
 export function formatMicros(micros: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  }).format(fromMicros(micros))
+  return formatMoney(fromMicros(micros), currency, 'micro')
 }
 
 export function sumMicros(values: readonly number[]): number {

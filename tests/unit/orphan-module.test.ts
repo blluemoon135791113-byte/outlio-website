@@ -146,6 +146,51 @@ const KNOWN_ORPHANS = new Set(
      * the only check that the SQL rule is what anyone intended.
      */
     'lib/fastspring/access.ts',
+    /*
+     * ⚠️ THE LINKEDIN BUILD, AND THIS GUARD CAUGHT EVERY PIECE IMMEDIATELY —
+     * which is correct. Phase 8's message set and phase 7's decision layer are
+     * both logic with no surface yet: the Action Inbox that will call them
+     * needs the sender model (phase 4) and the task state split (phase 5),
+     * neither of which exists. The brief is explicit that a live-looking
+     * button backed by a stub is worse than an absent one.
+     *
+     * ⚠️ ONLY THE ENTRY POINTS ARE LISTED. `templates.ts` and `variables.ts`
+     * are imported by `render.ts`, so they have a production importer and are
+     * not orphans — the guard rejected them from this list, correctly, on
+     * exactly that basis.
+     *
+     * ⚠️ `outcomes.ts` AND `budget.ts` BOTH LEFT THIS LIST WITHOUT ANYONE
+     * DECIDING TO REMOVE THEM. Each acquired a production importer — `budget`
+     * imports `TaskKind` from `outcomes`, and `senders` imports from `budget` —
+     * and the both-directions assertion failed until the entries were deleted.
+     * The list shrinks because the code changes, not because somebody
+     * remembers to tidy it.
+     *
+     * ⚠️ `senders.ts` HAS SINCE LEFT TOO, and with it the whole chain
+     * `senders → budget → outcomes` is now reachable from a real screen:
+     * `/dashboard/settings/linkedin` links accounts and reads budgets through
+     * it. Three entries removed by the code changing, none by anyone tidying.
+     *
+     * What remains below is the half with no surface yet — the message set, the
+     * preflight, the enrollment state machine, the metrics and the profile-link
+     * check. They leave when the Action Inbox renders a draft and its result
+     * form, which needs the task tables §4.7 describes.
+     *
+     * ⚠️ THE EXIT CONDITION IS NAMED, because an entry with no way out is how
+     * this list stops shrinking. Every entry below leaves when the Action Inbox
+     * renders a draft and its result form — `components/linkedin/ActionInboxCard`
+     * or its equivalent — and `preflight.ts` additionally when the release job
+     * calls it. If the Action Inbox ships without calling them, that is a defect
+     * this list is supposed to surface rather than excuse: it would mean the
+     * card built its own renderer, its own outcome vocabulary, its own idea of
+     * a safe profile link, or — worst — its own idea of when an approval is
+     * still valid.
+     */
+    'lib/linkedin/render.ts',
+    'lib/linkedin/profile-reference.ts',
+    'lib/linkedin/preflight.ts',
+    'lib/linkedin/enrollment.ts',
+    'lib/linkedin/metrics.ts',
   ].map((p) => p.replace(/\//g, sep)),
 )
 

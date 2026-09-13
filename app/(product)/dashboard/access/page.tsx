@@ -7,6 +7,7 @@ import { invitationsEnabled } from '@/lib/access/actions'
 import { requireUser, type AccessReason } from '@/lib/auth/access'
 import { listActivePlans } from '@/lib/limits/plans'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 export const metadata: Metadata = {
   title: 'Access | Outlio',
@@ -79,13 +80,7 @@ export default async function AccessPage() {
         {pending ? (
           <p className="mt-3 text-sm text-ink">
             Submitted{' '}
-            <time dateTime={pending.created_at}>
-              {new Date(pending.created_at).toLocaleDateString('en-GB', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
-            </time>
+            <LocalTime iso={pending.created_at} dateOnly />
             .
           </p>
         ) : null}

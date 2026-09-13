@@ -15,6 +15,7 @@ import { requireAdmin } from '@/lib/auth/access'
 import { listActivePlans } from '@/lib/limits/plans'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ProfileRow, UserRole } from '@/types/database'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 export const metadata: Metadata = {
   title: 'Admin | Outlio',
@@ -233,14 +234,14 @@ export default async function AdminPage() {
                 <span className="min-w-0 flex-1 truncate text-sm text-muted">
                   {a.reason ?? ''}
                 </span>
-                <time dateTime={a.created_at} className="text-xs text-muted">
-                  {new Date(a.created_at).toLocaleString('en-GB', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </time>
+                {/*
+                  ⚠️ AN AUDIT TIMESTAMP IN THE READER'S CLOCK. This is a Server
+                  Component, so the hand-rolled version rendered every admin
+                  action in the SERVER's timezone — UTC on Vercel. "Who did what
+                  and when" is the only question this list answers, and an hour
+                  column that is silently five hours off answers it wrongly.
+                */}
+                <LocalTime iso={a.created_at} className="text-xs text-muted" />
               </li>
             ))}
           </ul>

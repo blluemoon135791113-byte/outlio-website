@@ -151,32 +151,59 @@ describe('the suppression filter', () => {
    * executed one and far stronger than nothing — and this is the rule whose
    * silent removal is most costly.
    */
-  it('excludes suppressed addresses from the marketing export', () => {
+  it('excludes stopped contacts from the marketing export', () => {
     expect(SOURCE).toContain("if (options.kind === 'marketing')")
-    expect(SOURCE).toMatch(/if \(suppressedSet\.has\(email\.toLowerCase\(\)\)\) continue/)
+    expect(SOURCE).toMatch(/if \(stops\.get\(row\.id\)\?\.stopped\) continue/)
   })
 
   it('skips contacts with no address rather than exporting a blank row', () => {
     expect(SOURCE).toMatch(/if \(!email\) continue/)
   })
 
-  it('compares lowercased on both sides', () => {
+  it('consults the PERSON-level table, not only the address one', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE PATH WITH NO SECOND CHANCE. This module read                  ║
+     * ║  `email_suppressions` alone, so a contact marked do-not-contact under  ║
+     * ║  §4.11 was written into a file whose entire purpose is to be uploaded  ║
+     * ║  to a mail tool — while the banner promised "only addresses that may   ║
+     * ║  lawfully be mailed".                                                  ║
+     * ║                                                                        ║
+     * ║  Enrollment and the flow preflight had the identical gap and were      ║
+     * ║  saved by `enqueueEmail` refusing at send. NOTHING SAVES THIS ONE. The ║
+     * ║  rows leave in a CSV and are mailed by software that has never heard   ║
+     * ║  of Outlio.                                                            ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    expect(SOURCE).toMatch(/contactsStopped\(\{/)
+    expect(SOURCE, 'the export queries the suppression table itself again').not.toContain(
+      "from('email_suppressions')",
+    )
+  })
+
+  it('folds case inside the shared predicate, on both sides', () => {
     /*
      * ⚠️ `crm_contact_emails.address` KEEPS THE SOURCE'S CASE while
      * `email_suppressions.email` has a `= lower(email)` check. A
      * case-sensitive comparison would miss `Sam@Example.com` against a
      * suppression on `sam@example.com` and mail someone who unsubscribed.
+     *
+     * The fold MOVED rather than went away — it belongs to `contactsStopped`
+     * now, so this follows it instead of asserting the old spelling.
      */
-    expect(SOURCE).toMatch(/s\.email\.toLowerCase\(\)/)
-    expect(SOURCE).toMatch(/email\.toLowerCase\(\)/)
+    const stop = readFileSync(join(ROOT, 'lib/crm/contact-stop.ts'), 'utf8')
+    expect(stop).toMatch(/c\.email\?\.trim\(\)\.toLowerCase\(\)/)
   })
 
-  it('fetches the suppression list unconditionally', () => {
-    // Fetching it only for `marketing` is how it gets forgotten when a third
-    // export kind is added.
-    const fetchBlock = SOURCE.slice(SOURCE.indexOf('Promise.all(['), SOURCE.indexOf('])', SOURCE.indexOf('Promise.all([')))
-    expect(fetchBlock).toContain("from('email_suppressions')")
-    expect(fetchBlock).not.toContain('kind ===')
+  it('asks once for every contact, not only the mailable ones', () => {
+    /*
+     * Asking only when `kind === 'marketing'` is how the check gets forgotten
+     * the day a third export kind is added — the same reasoning the previous
+     * version of this guard had for fetching the list unconditionally.
+     */
+    const call = SOURCE.slice(SOURCE.indexOf('const stops = await contactsStopped'))
+    expect(call).toMatch(/contacts: rows\.map\(/)
+    expect(call.slice(0, 200), 'the check is now conditional').not.toContain('kind ===')
   })
 })
 

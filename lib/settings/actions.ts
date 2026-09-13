@@ -334,11 +334,19 @@ export async function resumeSubscriptionAction(
   return { status: 'success', message: 'Your plan will keep renewing. Nothing else changed.' }
 }
 
+/**
+ * ⚠️ UTC, BECAUSE THIS IS A STRING IN A SERVER ACTION'S MESSAGE. No component
+ * can render here, so there is no reader's clock to use — and the server's own
+ * timezone is an arbitrary choice that silently moves "you keep access until
+ * the 15th" to the 14th. The provider records billing dates in UTC; this shows
+ * the date they recorded.
+ */
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: 'UTC',
   })
 }
 

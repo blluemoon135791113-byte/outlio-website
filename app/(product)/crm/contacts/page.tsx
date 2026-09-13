@@ -12,6 +12,7 @@ import {
 } from '@/components/crm/ContactsTable'
 import { NewContactButton } from '@/components/crm/NewContact'
 import { isContactSort, isContactSource, listContacts } from '@/lib/crm/contacts-list'
+import { emptyReason, otherFilterCount } from '@/lib/crm/empty-reason'
 import { listSavedViews } from '@/lib/crm/saved-views'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
@@ -367,16 +368,28 @@ export default async function ContactsPage({
       />
 
       {result.rows.length === 0 ? (
-        <div className="clay p-10 text-center">
-          <h3 className="text-base font-semibold text-ink">
-            {search ? 'Nothing matched' : 'No contacts yet'}
-          </h3>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
-            {search
-              ? 'Try part of a name or an email address.'
-              : 'Contacts arrive from a lead search or a CSV import, and appear here once they do.'}
-          </p>
-        </div>
+        /*
+         * ⚠️ "NO CONTACTS YET" WAS A CLAIM ABOUT THE WORKSPACE, MADE FROM A
+         * FILTERED QUERY.
+         *
+         * This branched on `search` alone, but the query has ten dimensions
+         * that change membership — owner, tags, company, created range,
+         * has-email, source. A workspace holding five thousand contacts,
+         * filtered by one tag to zero, was told it had no contacts. That is the
+         * same shape as the credit balance that rendered `?? 0`: the most
+         * discouraging available reading of missing data, and untrue.
+         *
+         * `activeFilterCount` already knows the answer and already excludes
+         * sort and direction, because those change the order and not the
+         * membership.
+         */
+        <EmptyContacts
+          search={search}
+          filterCount={activeFilterCount(query)}
+          page={page}
+          total={result.total}
+          query={query}
+        />
       ) : (
         <BulkAssign
           assignees={assignees}
@@ -430,6 +443,121 @@ export default async function ContactsPage({
  * of these files is safe to upload to a mailing tool and the other is not,
  * because only one excludes people who have unsubscribed.
  */
+/**
+ * The three genuinely different reasons this list is empty.
+ *
+ * ⚠️ THEY NEED DIFFERENT SENTENCES BECAUSE THEY NEED DIFFERENT ACTIONS. Telling
+ * somebody to "try part of a name" when they filtered by tag sends them to fix
+ * the wrong thing, and telling a workspace with five thousand contacts that it
+ * has none is simply false.
+ *
+ * ⚠️ EACH ONE OFFERS THE WAY OUT. The previous version described how contacts
+ * arrive and gave nothing to click — a dead end on the screen setters spend
+ * their day in.
+ */
+function EmptyContacts({
+  search,
+  filterCount,
+  page,
+  total,
+  query,
+}: {
+  search: string
+  filterCount: number
+  page: number
+  /** The FILTERED total — rows matching, across all pages. */
+  total: number
+  query: ContactsTableQuery
+}) {
+  const reason = emptyReason({ search, filterCount, page, total })
+  const otherFilters = otherFilterCount(search, filterCount)
+
+  /*
+   * ⚠️ A FOURTH REASON, AND IT HAS TO BE CHECKED FIRST. `page` is not clamped
+   * to the last page, so `?page=99` on a workspace with five thousand contacts
+   * renders zero rows — and every branch below would then explain the absence
+   * with something about filters or an empty workspace, all of it wrong.
+   *
+   * `total` is the FILTERED total, which is what makes this distinguishable: a
+   * positive total with no rows on this page means the rows exist and you have
+   * walked past them. A zero total means the question really is about filters.
+   *
+   * This was missed when the other three branches were written, and it is the
+   * same mistake in miniature — reading one signal and explaining an absence
+   * it does not account for.
+   */
+  if (reason === 'past_end') {
+    return (
+      <div className="clay p-10 text-center">
+        <h3 className="text-base font-semibold text-ink">Nothing on page {page}</h3>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
+          There {total === 1 ? 'is 1 contact' : `are ${total.toLocaleString()} contacts`} matching
+          this view, on earlier pages.
+        </p>
+        <div className="mt-5 flex justify-center">
+          <Link
+            // Keeps their filters and only resets the page — going back to an
+            // unfiltered first page would throw away the view they built.
+            href={contactsHref(query, { page: 1 })}
+            className="inline-flex h-9 items-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-3.5 text-sm font-semibold text-ink transition-colors duration-150 hover:bg-surface-muted"
+          >
+            Back to the first page
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const { title, body, action } = reason === 'no_match_search'
+    ? {
+        title: `Nothing matched “${search}”`,
+        body:
+          otherFilters > 0
+            ? 'Other filters are narrowing this too. Try part of a name or an email address, or clear the filters.'
+            : 'Try part of a name or an email address.',
+        action: { href: '/crm/contacts', label: 'Clear search and filters' },
+      }
+    : reason === 'no_match_filters'
+      ? {
+          title: 'No contacts match these filters',
+          /*
+           * Deliberately says nothing about how many contacts exist. The count
+           * on this page is already filtered, so quoting it would be quoting
+           * zero back at them.
+           */
+          body: `${otherFilters} filter${otherFilters === 1 ? ' is' : 's are'} applied. Clearing them shows the full list.`,
+          action: { href: '/crm/contacts', label: 'Clear filters' },
+        }
+      : {
+          title: 'No contacts yet',
+          body: 'Contacts arrive from a lead search or a CSV import. Either one brings them in here.',
+          action: { href: '/crm/import', label: 'Import a CSV' },
+        }
+
+  return (
+    <div className="clay p-10 text-center">
+      <h3 className="text-base font-semibold text-ink">{title}</h3>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">{body}</p>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+        <Link
+          href={action.href}
+          className="inline-flex h-9 items-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-3.5 text-sm font-semibold text-ink transition-colors duration-150 hover:bg-surface-muted"
+        >
+          {action.label}
+        </Link>
+        {reason === 'none_yet' ? (
+          <Link
+            href="/dashboard/extract/new"
+            className="product-gradient inline-flex h-9 items-center rounded-[var(--radius-md)] px-3.5 text-sm font-semibold text-white transition-[filter] duration-150 hover:brightness-95"
+          >
+            Find leads
+          </Link>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function ContactExportLinks() {
   const className =
     'rounded-[var(--radius-md)] border border-border px-2.5 py-1 text-xs font-medium text-muted transition-colors duration-150 hover:border-border-strong hover:text-ink'

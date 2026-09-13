@@ -2,13 +2,14 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { AddNote, AssignOwner, EraseContact } from '@/components/crm/ContactPanels'
+import { AddNote, AssignOwner, DoNotContact, EraseContact } from '@/components/crm/ContactPanels'
 import { NewTaskButton } from '@/components/crm/NewTask'
 import { LocalTime, RelativeTime } from '@/components/ui/LocalTime'
 import { Monogram } from '@/components/ui/Monogram'
 import { threadsForContact } from '@/lib/email/inbox'
 import { listContactTimeline } from '@/lib/crm/activities'
 import { checkCollision } from '@/lib/crm/collision'
+import { contactStopRecord } from '@/lib/crm/contact-stop'
 import { MoreDetails } from '@/components/crm/MoreDetails'
 import { ValueProvenance } from '@/components/crm/ValueProvenance'
 import { companyDetails, companyWebsite } from '@/lib/crm/company-details'
@@ -87,6 +88,14 @@ export default async function ContactDetailPage({
 
   const emails = withProvenance(contact.emails, citations, contact.source)
   const phones = withProvenance(contact.phones, citations, contact.source)
+
+  /*
+   * ⚠️ FOR DISPLAY ONLY. Nothing on this page decides whether the person may be
+   * contacted — `enqueueEmail` and the export do, through `contactIsStopped`.
+   * This just lets the panel show the existing mark instead of offering to
+   * create a second one.
+   */
+  const stopRecord = await contactStopRecord(ctx.workspace.id, contact.id)
 
   /*
    * ⚠️ BOTH GO THROUGH A VALIDATOR BEFORE REACHING AN `href`. A domain is a bare
@@ -430,6 +439,24 @@ export default async function ContactDetailPage({
               <p className="mt-1 text-sm text-muted">{contact.ownerName ?? 'Unassigned'}</p>
             </section>
           )}
+
+          {/*
+            ⚠️ ITS OWN SECTION, NOT FILED UNDER "DATA SUBJECT REQUESTS". A
+            do-not-contact is consent-adjacent, but the person who needs it is a
+            setter who has just been told to stop calling — burying it under a
+            GDPR heading is how a request that must be honoured today waits for
+            somebody to go looking.
+          */}
+          {can(policy, 'crm.contact.edit') ? (
+            <section className="clay space-y-3 p-4">
+              <h3 className="text-sm font-semibold text-ink">Contact permission</h3>
+              <DoNotContact
+                contactId={contact.id}
+                name={contact.fullName ?? 'this contact'}
+                current={stopRecord}
+              />
+            </section>
+          ) : null}
 
           {/*
             ⚠️ HIDDEN FROM PEOPLE WHO CANNOT USE IT, WHICH IS NOT THE CONTROL.

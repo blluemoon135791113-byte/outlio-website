@@ -24,6 +24,7 @@ import 'server-only'
  */
 import type { TenantScope } from '@/lib/auth/scope'
 import { safeSourceUrl, type Provenance } from '@/lib/crm/provenance'
+import { formatMoney } from '@/lib/format/money'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 /** One thing worth showing, with where it came from. */
@@ -63,25 +64,37 @@ function provenanceOf(row: EvidenceRow): Provenance {
   }
 }
 
-/** `500000` + `USD` → `$500,000`. Never a currency we did not observe. */
+/**
+ * `500000` + `USD` → `$500,000`. Never a currency we did not observe.
+ *
+ * ⚠️ THE ANTI-FABRICATION RULE HERE IS NOW `formatMoney`'s. A missing currency
+ * returns the bare number rather than guessing USD — this file is where that
+ * decision was first made, and it moved into the shared helper so the other
+ * five money sites inherit it instead of each choosing again.
+ */
 function money(amount: unknown, currency: unknown): string | null {
   if (typeof amount !== 'number' || !Number.isFinite(amount)) return null
-  if (typeof currency !== 'string' || !currency) {
-    // ⚠️ The amount alone, unformatted. Guessing USD would be a fabrication
-    // that reads as a fact, and the number is still useful without it.
-    return amount.toLocaleString()
-  }
-  try {
-    return new Intl.NumberFormat('en', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  } catch {
-    // An unrecognised currency code is still an observation; show it plainly
-    // rather than dropping the amount.
-    return `${amount.toLocaleString()} ${currency}`
-  }
+  return formatMoney(amount, typeof currency === 'string' ? currency : null)
+}
+
+/**
+ * A funding date, as recorded.
+ *
+ * ⚠️ UTC AND A PINNED LOCALE, BECAUSE THIS FILE IS `server-only`. Bare
+ * `toLocaleDateString()` formats in the SERVER's timezone and the SERVER's
+ * locale — so a round closed at `2026-01-01T00:00:00Z` renders as `31/12/2025`
+ * anywhere west of Greenwich, and the day is simply wrong. `components/ui/
+ * LocalTime.tsx` carries the same warning for timestamps; this is the date-only
+ * case, where the right answer is the date that was observed rather than the
+ * reader's local rendering of an instant.
+ */
+function fundingDate(date: Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date)
 }
 
 /**
@@ -121,7 +134,7 @@ export function formatEvidenceItem(row: EvidenceRow): DetailItem | null {
       const announced = v.isAnnouncementDate === true
       return {
         label: announced ? 'Announced' : 'Raised on',
-        text: date.toLocaleDateString(),
+        text: fundingDate(date),
         provenance,
       }
     }
@@ -154,7 +167,7 @@ export function formatEvidenceItem(row: EvidenceRow): DetailItem | null {
 
       return {
         label: v.isAnnouncementDate === true ? 'Funding announced' : 'Last raised',
-        text: `${elapsed} (${date.toLocaleDateString()})`,
+        text: `${elapsed} (${fundingDate(date)})`,
         provenance,
       }
     }

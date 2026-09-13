@@ -55,11 +55,21 @@ export function StatCard({
   const large = size === 'lg'
 
   return (
-    <article
-      className={`rounded-[var(--radius-xl)] border border-border bg-panel shadow-[var(--shadow-sm)] ${
-        large ? 'p-5' : 'p-4'
-      }`}
-    >
+    /*
+     * ⚠️ `clay`, NOT A HAND-BUILT PANEL. Inside `.product-clay` that class
+     * resolves to white, a hairline border, no shadow and `--radius-clay`,
+     * which the product scope tightens to 0.625rem. DESIGN_TOKENS gives the
+     * reason: "a large radius reads as 'soft object'; a small one reads as
+     * 'region of a page', which is what these now are."
+     *
+     * This was `rounded-[var(--radius-xl)] … shadow-[var(--shadow-sm)]`, which
+     * broke both halves of that — a 16px radius against every other card's 10px,
+     * and a shadow on a panel that does not float. The token block says it
+     * outright: "Panels get NO shadow. These remain for genuinely floating
+     * things." Twenty-one cards across the two most numeric screens, each
+     * slightly the wrong shape.
+     */
+    <article className={`clay ${large ? 'p-5' : 'p-4'}`}>
       <div className="flex items-start justify-between gap-3">
         <p
           className={`font-semibold uppercase text-muted ${

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+import { Monogram } from '@/components/ui/Monogram'
+
 /**
  * Lead lookup, on ⌘K.
  *
@@ -266,9 +268,15 @@ export function CommandPalette() {
                 index === active ? 'bg-accent-soft' : 'hover:bg-surface-muted'
               }`}
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-muted text-[11px] font-semibold text-muted">
-                {initials(result.name)}
-              </span>
+              {/*
+                ⚠️ THE SHARED COMPONENT, NOT A LOCAL COPY. This rendered its own
+                initials with its own rule, and the rule differed: a one-word
+                name gave `CH` in the contacts table and `C` here, for the same
+                person on the same screen. It also drew a flat grey chip, losing
+                the derived tint that makes a monogram scannable, and was not
+                `aria-hidden` — so the row announced "C H, Cher".
+              */}
+              <Monogram name={result.name} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-ink">
                   {result.name ?? 'Unnamed contact'}
@@ -283,16 +291,6 @@ export function CommandPalette() {
       </div>
     </div>
   )
-}
-
-/** Two letters, or one, or a dash — never a crash on an unnamed contact. */
-function initials(name: string | null): string {
-  if (!name) return '—'
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '—'
-  const first = parts[0]?.[0] ?? ''
-  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : ''
-  return (first + last).toUpperCase()
 }
 
 /** The affordance that tells people the shortcut exists. */

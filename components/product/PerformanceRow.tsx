@@ -99,7 +99,8 @@ function Frame({ children }: { children: React.ReactNode }) {
   return (
     <section aria-label="Your activity" className="space-y-3">
       <Heading />
-      <div className="rounded-[var(--radius-xl)] border border-border bg-panel px-5 py-4 shadow-[var(--shadow-sm)]">
+      {/* Same surface class as the cards it stands in for — see StatCard. */}
+      <div className="clay px-5 py-4">
         {children}
       </div>
     </section>

@@ -17,6 +17,7 @@ import {
   type SettingsActionState,
 } from '@/lib/settings/actions'
 import { createClient } from '@/lib/supabase/client'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 const INITIAL: SettingsActionState = { status: 'idle' }
 
@@ -144,14 +145,6 @@ export function SubscriptionSettings({
   const [resumeState, resumeAction] = useActionState(resumeSubscriptionAction, INITIAL)
   const [confirming, setConfirming] = useState(false)
 
-  const endsOn = cancelAt
-    ? new Date(cancelAt).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
-    : null
-
   if (cancelAt) {
     return (
       <form action={resumeAction} className="space-y-4">
@@ -159,7 +152,8 @@ export function SubscriptionSettings({
         <div className="rounded-xl border border-warning/25 bg-warning-soft p-4">
           <p className="text-sm font-semibold text-ink">Cancellation scheduled</p>
           <p className="mt-1 text-sm leading-6 text-muted">
-            {planName} stays fully active until <strong className="font-semibold text-ink">{endsOn}</strong>.
+            {planName} stays fully active until{' '}
+            <LocalTime iso={cancelAt} dateOnly className="font-semibold text-ink" />.
             Your leads and exports are untouched until then. Change your mind any time
             before that date.
           </p>

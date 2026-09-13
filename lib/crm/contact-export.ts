@@ -24,6 +24,7 @@ import 'server-only'
  * ║  hidden. The service role bypasses RLS, so this file is the boundary.     ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
+import { contactsStopped } from '@/lib/crm/contact-stop'
 import { toCsv, type CsvColumn } from '@/lib/export/sanitize'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -135,7 +136,7 @@ export async function collectContactsForExport(
   const companyIds = [...new Set(rows.map((r) => r.primary_company_id).filter(Boolean))] as string[]
   const ownerIds = [...new Set(rows.map((r) => r.owner_user_id).filter(Boolean))] as string[]
 
-  const [companies, owners, emails, phones, suppressed] = await Promise.all([
+  const [companies, owners, emails, phones] = await Promise.all([
     companyIds.length
       ? db.from('crm_companies').select('id, name').in('id', companyIds)
       : Promise.resolve({ data: [] as { id: string; name: string | null }[] }),
@@ -154,12 +155,6 @@ export async function collectContactsForExport(
       .eq('workspace_id', workspaceId)
       .in('contact_id', ids)
       .is('deleted_at', null),
-    /*
-     * The suppression list for this workspace. Fetched for BOTH kinds so the
-     * CRM export can be filtered too if that is ever wanted, and because
-     * fetching it conditionally is how it gets forgotten.
-     */
-    db.from('email_suppressions').select('email').eq('workspace_id', workspaceId),
   ])
 
   const companyName = new Map((companies.data ?? []).map((c) => [c.id, c.name]))
@@ -178,17 +173,32 @@ export async function collectContactsForExport(
   }
 
   /*
-   * ⚠️ COMPARED LOWERCASED. The column has a `email = lower(email)` check so
-   * the stored side is already folded, but `crm_contact_emails.address` keeps
-   * whatever case the source gave us — so a case-sensitive comparison would
-   * miss `Sam@Example.com` against a suppression on `sam@example.com` and mail
-   * someone who unsubscribed.
+   * ╔═════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ BOTH SUPPRESSION TABLES, AND THIS IS THE PATH WHERE IT MATTERS MOST. ║
+   * ║                                                                         ║
+   * ║  This file read `email_suppressions` alone and never                     ║
+   * ║  `crm_contact_suppressions`, so a person marked do-not-contact appeared  ║
+   * ║  in a file whose whole purpose is to be uploaded to a mail tool — while  ║
+   * ║  the banner at the top of this module promised "only addresses that may  ║
+   * ║  lawfully be mailed".                                                    ║
+   * ║                                                                          ║
+   * ║  The enrollment and flow paths had the same gap and survived it, because ║
+   * ║  `enqueueEmail` refuses at the moment of sending. THERE IS NO SUCH GATE  ║
+   * ║  HERE. The rows leave in a CSV and are mailed by something that has      ║
+   * ║  never heard of Outlio.                                                 ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   *
+   * ⚠️ ADDRESSES ARE LOWERCASED BEFORE THE LOOKUP, inside `contactsStopped`.
+   * `email_suppressions.email` has a `= lower(email)` check so the stored side
+   * is folded, but `crm_contact_emails.address` keeps whatever case the source
+   * gave us — a case-sensitive comparison would miss `Sam@Example.com` against
+   * a suppression on `sam@example.com` and mail someone who unsubscribed.
    */
-  const suppressedSet = new Set(
-    ((suppressed as { data: { email: string }[] | null }).data ?? []).map((s) =>
-      s.email.toLowerCase(),
-    ),
-  )
+  const stops = await contactsStopped({
+    workspaceId,
+    channel: 'email',
+    contacts: rows.map((r) => ({ contactId: r.id, email: emailFor.get(r.id) ?? null })),
+  })
 
   const out: ContactExportRow[] = []
   for (const row of rows) {
@@ -197,7 +207,12 @@ export async function collectContactsForExport(
     if (options.kind === 'marketing') {
       // No address, nothing to mail.
       if (!email) continue
-      if (suppressedSet.has(email.toLowerCase())) continue
+      /*
+       * ⚠️ FAIL-CLOSED INCLUDES `unknown`. If the lookup errored, this row is
+       * left out. An export is repeatable at no cost; a mail sent to somebody
+       * who asked not to be mailed is not retractable at any.
+       */
+      if (stops.get(row.id)?.stopped) continue
     }
 
     const { first, last } = splitName(row.full_name)

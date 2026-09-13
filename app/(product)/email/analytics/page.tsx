@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { rateOf, THRESHOLDS } from '@/lib/email/readiness'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
 
@@ -109,8 +110,57 @@ export default async function EmailAnalyticsPage({
    * has gone out tells someone their outreach is failing when in fact it has
    * not started.
    */
-  const replyRate = totals.sent > 0 ? `${((totals.replied / totals.sent) * 100).toFixed(1)}%` : null
-  const bounceRate = totals.sent > 0 ? `${((totals.bounced / totals.sent) * 100).toFixed(1)}%` : null
+
+  /*
+   * ⚠️ THIS IS PER MESSAGE, NOT PER PERSON, AND IT IS NOT THE PRODUCT'S REPLY
+   * RATE.
+   *
+   * `email_mailbox_report` counts MESSAGES (`status = 'sent'`) and reply
+   * EVENTS, so a four-step sequence to 100 people with 20 repliers reads 5%
+   * here and 20% on `/crm/reports` — where `lib/crm/metrics.ts` computes it
+   * over contacts emailed and states the reason outright: "using the event
+   * count would quarter the rate of a team that follows up four times — it
+   * would punish doing the job properly".
+   *
+   * Both numbers are useful and neither is wrong; what was wrong was calling
+   * them the same thing. Per message is the right shape for a MAILBOX health
+   * screen — it answers "what does this mailbox get back per message it
+   * sends" — so the figure stays and the LABEL now says which question it
+   * answers. The per-person figure needs a distinct-contact count this RPC
+   * does not return, which is a migration rather than a rename.
+   */
+  /*
+   * ⚠️ THE SAME VOLUME FLOOR THE READINESS CHECK USES, AND IT WAS MISSING HERE.
+   *
+   * `rateOf` refuses a rate below `minimumVolumeForRates` (20) and says why:
+   * "One bounce out of three sends is not a 33% bounce rate — it is three
+   * sends." This page had no floor at all, so a mailbox with 3 sends and 1
+   * bounce read 33.3% — over THREE TIMES the `bounceCritical` threshold — on
+   * the screen a customer checks when they are worried about deliverability,
+   * while the readiness check that actually gates sending correctly said it did
+   * not know.
+   *
+   * Two numbers for one question, and the alarming one had no floor. Reusing
+   * `rateOf` rather than writing a third version is the point: the threshold is
+   * a judgement about evidence, and it should be made once.
+   */
+  const replyPerMessageRate = rateOf(totals.replied, totals.sent)
+  const bounceRateValue = rateOf(totals.bounced, totals.sent)
+
+  const replyPerMessage =
+    replyPerMessageRate === null ? null : `${(replyPerMessageRate * 100).toFixed(1)}%`
+  const bounceRate = bounceRateValue === null ? null : `${(bounceRateValue * 100).toFixed(1)}%`
+
+  /*
+   * ⚠️ "NOT ENOUGH YET" AND "NOTHING YET" ARE DIFFERENT FACTS. A mailbox that
+   * has sent 12 is working and being measured; one that has sent 0 has not
+   * started. Collapsing them into "Nothing sent yet" would tell the first that
+   * their campaign never launched.
+   */
+  const tooFewHint =
+    totals.sent === 0
+      ? 'Nothing sent yet'
+      : `Not enough sent yet — ${THRESHOLDS.minimumVolumeForRates} needed, ${totals.sent} so far`
 
   return (
     <div className="space-y-4">
@@ -151,14 +201,18 @@ export default async function EmailAnalyticsPage({
         <Stat label="Delivered" value={totals.delivered} />
         <Stat label="Replies" value={totals.replied} />
         <Stat
-          label="Reply rate"
-          value={replyRate}
-          hint={replyRate === null ? 'Nothing sent yet' : undefined}
+          label="Replies per message"
+          value={replyPerMessage}
+          hint={
+            replyPerMessage === null
+              ? tooFewHint
+              : 'Per message sent. Reports measures replies per person.'
+          }
         />
         <Stat
           label="Bounce rate"
           value={bounceRate}
-          hint={bounceRate === null ? 'Nothing sent yet' : undefined}
+          hint={bounceRate === null ? tooFewHint : undefined}
         />
       </section>
 

@@ -10,6 +10,7 @@ import {
   type AdminActionState,
 } from '@/lib/admin/actions'
 import type { UserRole } from '@/types/database'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 const INITIAL: AdminActionState = { status: 'idle' }
 
@@ -132,9 +133,14 @@ export function UserRow({
           {user.planName ? (
             <p className="text-sm text-muted">
               {user.planName}
-              {user.accessExpiresAt
-                ? ` | expires ${new Date(user.accessExpiresAt).toLocaleDateString('en-GB')}`
-                : ' | no expiry'}
+              {user.accessExpiresAt ? (
+                <>
+                  {' | expires '}
+                  <LocalTime iso={user.accessExpiresAt} dateOnly />
+                </>
+              ) : (
+                ' | no expiry'
+              )}
             </p>
           ) : null}
 

@@ -35,6 +35,7 @@ const ENTITLEMENT_KEY: Record<Module, keyof PlanLimits> = {
   reports: 'reports_enabled',
   integrations: 'integrations_enabled',
   hubble: 'hubble_enabled',
+  linkedin: 'linkedin_enabled',
 }
 
 /** `workspace_feature_flags.flag` value that can switch each module off. */
@@ -45,6 +46,8 @@ export const MODULE_FLAG: Record<Module, string> = {
   reports: 'module.reports',
   integrations: 'module.integrations',
   hubble: 'module.hubble',
+  // A3: every module ships behind a workspace flag that can switch it OFF.
+  linkedin: 'module.linkedin',
 }
 
 export type WorkspaceEntitlements = {
@@ -108,6 +111,36 @@ export function resolveModules(
  * override", which is why the column is nullable and unlimited is expressed by
  * the PLAN, never by an override.
  */
+/**
+ * How many LinkedIn senders a workspace may link.
+ *
+ * ⚠️ AN ABSENT CAP FALLS BACK TO THE SEAT COUNT, NOT TO UNLIMITED — and that
+ * is the whole point of the default. §4.10 defines a sender as one real person
+ * who performs their own actions in LinkedIn's interface, and warns that "one
+ * person using multiple borrowed, purchased, or shared accounts is not the
+ * supported way to scale". A workspace with more senders than seats is one
+ * where somebody is operating an account that is not theirs.
+ *
+ * ⚠️ `null` FROM THE PLAN IS "NOT SET", WHILE `null` FROM THE SEAT COUNT IS
+ * "UNLIMITED". They read identically and mean opposite things. An absent plan
+ * key and an explicit null are indistinguishable after Zod's default, so both
+ * mean "not set" and the seat count answers — including when the seat count is
+ * itself unlimited, which passes straight through.
+ *
+ * ⚠️ AND `||` WOULD BE WRONG HERE, THOUGH `??` WOULD NOT. A plan that grants
+ * the module but zero senders is coherent, and `||` turns that 0 into the seat
+ * count — silently handing out senders a pricing decision withheld. The
+ * explicit comparison says which case is which rather than relying on the
+ * reader knowing that difference.
+ */
+export function resolveSenderLimit(
+  limits: PlanLimits | null,
+  memberLimit: number | null,
+): number | null {
+  const configured = limits?.linkedin_senders_max ?? null
+  return configured === null ? memberLimit : configured
+}
+
 export function resolveMemberLimit(
   limits: PlanLimits | null,
   override: number | null,

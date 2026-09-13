@@ -30,6 +30,8 @@ import { type CampaignType } from '@/lib/email/campaign-policy'
 import { providerFor } from '@/lib/email/providers/registry'
 import { checkRampAllowance } from '@/lib/email/ramp'
 import { isAccountSendable, rampSettingsOf, todayIn } from '@/lib/email/readiness-runner'
+import { contactIsStopped } from '@/lib/crm/contact-stop'
+import { resolveSendTimezone } from '@/lib/email/send-timezone'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   applyMinimumDelay,
@@ -164,6 +166,15 @@ export type EnqueueInput = {
   /** Groups this message with an existing conversation in our own inbox. */
   threadId?: string | null
   /**
+   * The campaign's timezone, the middle link of §5.7's chain.
+   *
+   * ⚠️ PASSED IN RATHER THAN LOOKED UP. The caller already holds the campaign
+   * — `sequence-runner` selects it alongside the enrollment — so fetching it
+   * again here would be a second query per message to learn something the
+   * caller just read.
+   */
+  campaignTimezone?: string | null
+  /**
    * ⚠️ THE RFC 5322 Message-ID OF THE MESSAGE THIS ANSWERS, and the difference
    * between a reply and a new email in the recipient's client. The SMTP
    * provider has always set In-Reply-To and References from this; until R11
@@ -184,14 +195,24 @@ export type EnqueueResult =
   /** Readiness says this mailbox must not send at all right now. */
   | { queued: false; reason: 'unhealthy'; message: string }
 
-function scheduleOf(account: {
-  timezone: string
-  sendWindowStart: string
-  sendWindowEnd: string
-  sendDays: number[]
-}): SendSchedule {
+/**
+ * ⚠️ THE WINDOW'S CLOCK IS THE RECIPIENT'S WHEN IT IS KNOWN; THE ALLOWANCE'S IS
+ * ALWAYS THE ACCOUNT'S. Those are different questions and conflating them would
+ * be a real defect: a ramp of 20/day is 20 per MAILBOX day, and evaluating it
+ * against a recipient's calendar would let a mailbox send two Mondays' worth by
+ * picking recipients either side of the date line. Only `timezone` moves here.
+ */
+function scheduleOf(
+  account: {
+    timezone: string
+    sendWindowStart: string
+    sendWindowEnd: string
+    sendDays: number[]
+  },
+  windowTimezone?: string,
+): SendSchedule {
   return {
-    timezone: account.timezone,
+    timezone: windowTimezone ?? account.timezone,
     sendWindowStart: account.sendWindowStart,
     sendWindowEnd: account.sendWindowEnd,
     sendDays: account.sendDays,
@@ -213,14 +234,24 @@ export async function enqueueEmail(input: EnqueueInput): Promise<EnqueueResult> 
   const account = await getEmailAccount(input.workspaceId, input.accountId)
   if (!account) return { queued: false, reason: 'no_account' }
 
-  const { data: suppressed } = await db
-    .from('email_suppressions')
-    .select('id')
-    .eq('workspace_id', input.workspaceId)
-    .eq('email', toEmail)
-    .maybeSingle()
+  /*
+   * ⚠️ ONE PREDICATE, SHARED WITH EVERY OTHER CHANNEL. This grew its own
+   * two-table lookup, and the LinkedIn channel was about to need the same
+   * question answered — two readers of one rule is how a stop ends up honoured
+   * on one channel and not the other. `contactIsStopped` owns it now.
+   *
+   * It fails CLOSED: a lookup that errors returns stopped. Mailing somebody who
+   * asked not to be mailed cannot be undone, which is the opposite asymmetry to
+   * the rate limiter's deliberate fail-open.
+   */
+  const stop = await contactIsStopped({
+    workspaceId: input.workspaceId,
+    channel: 'email',
+    contactId: input.contactId,
+    email: toEmail,
+  })
 
-  if (suppressed) return { queued: false, reason: 'suppressed' }
+  if (stop.stopped) return { queued: false, reason: 'suppressed' }
 
   /*
    * ⚠️ THE SAFETY GATE AND THE RAMP ARE ENFORCED HERE, AT ENQUEUE — M5
@@ -258,16 +289,28 @@ export async function enqueueEmail(input: EnqueueInput): Promise<EnqueueResult> 
   }
 
   let scheduledAt: Date
+  /*
+   * §5.7's chain: the contact's zone, else the campaign's, else the mailbox's.
+   * Only the last of the three was ever consulted before — `crm_contacts.
+   * timezone` arrived in 0121 and nothing read it.
+   */
+  const sendZone = resolveSendTimezone({
+    contactTimezone: await recipientTimezone(input.workspaceId, input.contactId),
+    campaignTimezone: input.campaignTimezone ?? null,
+    accountTimezone: account.timezone,
+  })
+
   try {
     const candidate = input.scheduledAt ?? new Date()
+    const schedule = scheduleOf(account, sendZone.timezone)
     scheduledAt = account.lastSendAt
       ? applyMinimumDelay(
-          scheduleOf(account),
+          schedule,
           candidate,
           new Date(account.lastSendAt),
           account.minDelaySeconds,
         )
-      : nextSendTime(scheduleOf(account), candidate)
+      : nextSendTime(schedule, candidate)
   } catch (error) {
     if (error instanceof UnusableScheduleError) {
       return { queued: false, reason: 'unusable_schedule', message: error.message }
@@ -568,6 +611,74 @@ export async function reapExpiredClaims(): Promise<number> {
 }
 
 /** Adds an address to the do-not-contact list. Idempotent by design. */
+/**
+ * Which contact, if any, an address unambiguously belongs to.
+ *
+ * ⚠️ EXACTLY ONE, OR NONE. A shared inbox — `info@`, `sales@`, `hello@` — is
+ * routinely attached to several contacts, and §4.5 of the LinkedIn brief is
+ * explicit that "shared inbox email addresses and ambiguous matches must not
+ * cause automatic person merges". Attributing a do-not-contact to whichever of
+ * three colleagues happened to sort first would be inventing a fact about a
+ * person, which is the same defect as a fabricated lead field.
+ *
+ * When it is ambiguous the suppression is still recorded — by address, which is
+ * what was actually observed — and simply carries no contact.
+ *
+ * ⚠️ NEVER THROWS. Suppression is the safety-critical half and attribution is
+ * the bonus; a failed lookup must not stop somebody being added to a
+ * do-not-contact list.
+ */
+async function resolveSuppressionContact(
+  workspaceId: string,
+  email: string,
+): Promise<string | null> {
+  try {
+    const { data } = await createAdminClient()
+      .from('crm_contact_emails')
+      .select('contact_id')
+      // Service role bypasses RLS — scoping by workspace here is mandatory.
+      .eq('workspace_id', workspaceId)
+      .eq('address', email)
+      .is('deleted_at', null)
+      // Two is enough to know it is ambiguous; there is no need to count them all.
+      .limit(2)
+
+    const owners = [...new Set((data ?? []).map((row) => row.contact_id))]
+    return owners.length === 1 ? (owners[0] ?? null) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The recipient's own timezone, when the CRM knows one.
+ *
+ * ⚠️ ONE INDEXED LOOKUP ON THE ENQUEUE PATH, NOT THE SEND LOOP. It runs once
+ * per message queued rather than once per claim, and `null` — no contact, no
+ * row, or a blank column — simply falls through to the next link of the chain
+ * rather than failing the send.
+ */
+async function recipientTimezone(
+  workspaceId: string,
+  contactId: string | null | undefined,
+): Promise<string | null> {
+  if (!contactId) return null
+  try {
+    const { data } = await createAdminClient()
+      .from('crm_contacts')
+      .select('timezone')
+      // Service role bypasses RLS — scoping by workspace here is mandatory.
+      .eq('workspace_id', workspaceId)
+      .eq('id', contactId)
+      .is('deleted_at', null)
+      .maybeSingle()
+    return data?.timezone ?? null
+  } catch {
+    // A scheduling refinement must never stop a send.
+    return null
+  }
+}
+
 export async function suppressEmail(input: {
   workspaceId: string
   email: string
@@ -576,15 +687,33 @@ export async function suppressEmail(input: {
   contactId?: string | null
   createdBy?: string | null
 }): Promise<void> {
+  const email = input.email.trim().toLowerCase()
+
+  /*
+   * ⚠️ THE CONTACT IS RESOLVED HERE, BECAUSE MOST CALLERS CANNOT SUPPLY IT.
+   *
+   * `contact_id` has been on this table since 0086 and only ONE of the three
+   * call sites ever passed it — the bounce path. One-click unsubscribe and the
+   * manual add did not, which are the two that matter most: an unsubscribe is
+   * a stated wish with legal weight, and it was recorded against an address
+   * with no idea whose it was.
+   *
+   * That made the contact-level check added to `enqueueEmail` nearly inert —
+   * a reader for a column almost nothing wrote. Resolving it in the one place
+   * every suppression passes through fixes all three call sites at once,
+   * rather than asking each to remember.
+   */
+  const contactId = input.contactId ?? (await resolveSuppressionContact(input.workspaceId, email))
+
   const { error } = await createAdminClient()
     .from('email_suppressions')
     .upsert(
       {
         workspace_id: input.workspaceId,
-        email: input.email.trim().toLowerCase(),
+        email,
         reason: input.reason,
         source: input.source ?? null,
-        contact_id: input.contactId ?? null,
+        contact_id: contactId,
         created_by: input.createdBy ?? null,
       },
       // ⚠️ The FIRST reason wins. If someone unsubscribed and later hard

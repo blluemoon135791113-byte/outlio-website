@@ -124,6 +124,13 @@ export type PlanLimits = {
   reports_enabled: boolean
   integrations_enabled: boolean
   hubble_enabled: boolean
+  /** Migration-free: the LinkedIn channel module. Defaults false — not built. */
+  linkedin_enabled?: boolean
+  /**
+   * Senders a workspace may link. `null`/absent falls back to the SEAT count,
+   * never to unlimited — see `resolveSenderLimit`.
+   */
+  linkedin_senders_max?: number | null
 
   /** Seats per workspace, owner included. `null` means unlimited. */
   workspace_member_limit: number | null
@@ -1998,7 +2005,6 @@ export type Database = {
           contact_id: string
           created_at: string
           deleted_at: string | null
-          // Migration 0113 — the research_evidence row this value was observed in.
           evidence_id: string | null
           id: string
           identity_key: string
@@ -2042,6 +2048,13 @@ export type Database = {
             referencedColumns: ["id", "workspace_id"]
           },
           {
+            foreignKeyName: "crm_contact_emails_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "research_evidence"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "crm_contact_emails_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
@@ -2055,9 +2068,8 @@ export type Database = {
           contact_id: string
           created_at: string
           deleted_at: string | null
-          // Migration 0113 — the research_evidence row this value was observed in.
-          evidence_id: string | null
           e164: string | null
+          evidence_id: string | null
           id: string
           is_primary: boolean
           kind: string | null
@@ -2070,8 +2082,8 @@ export type Database = {
           contact_id: string
           created_at?: string
           deleted_at?: string | null
-          evidence_id?: string | null
           e164?: string | null
+          evidence_id?: string | null
           id?: string
           is_primary?: boolean
           kind?: string | null
@@ -2084,8 +2096,8 @@ export type Database = {
           contact_id?: string
           created_at?: string
           deleted_at?: string | null
-          evidence_id?: string | null
           e164?: string | null
+          evidence_id?: string | null
           id?: string
           is_primary?: boolean
           kind?: string | null
@@ -2103,7 +2115,62 @@ export type Database = {
             referencedColumns: ["id", "workspace_id"]
           },
           {
+            foreignKeyName: "crm_contact_phones_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "research_evidence"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "crm_contact_phones_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_contact_suppressions: {
+        Row: {
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          reason: Database["public"]["Enums"]["crm_contact_dnc_reason"]
+          scope: Database["public"]["Enums"]["crm_contact_dnc_scope"]
+          source: string | null
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason: Database["public"]["Enums"]["crm_contact_dnc_reason"]
+          scope?: Database["public"]["Enums"]["crm_contact_dnc_scope"]
+          source?: string | null
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason?: Database["public"]["Enums"]["crm_contact_dnc_reason"]
+          scope?: Database["public"]["Enums"]["crm_contact_dnc_scope"]
+          source?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_suppressions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_contact_suppressions_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2176,6 +2243,7 @@ export type Database = {
           primary_company_id: string | null
           source: Database["public"]["Enums"]["crm_record_source"]
           source_lead_id: string | null
+          timezone: string | null
           updated_at: string
           workspace_id: string
         }
@@ -2197,6 +2265,7 @@ export type Database = {
           primary_company_id?: string | null
           source?: Database["public"]["Enums"]["crm_record_source"]
           source_lead_id?: string | null
+          timezone?: string | null
           updated_at?: string
           workspace_id: string
         }
@@ -2218,6 +2287,7 @@ export type Database = {
           primary_company_id?: string | null
           source?: Database["public"]["Enums"]["crm_record_source"]
           source_lead_id?: string | null
+          timezone?: string | null
           updated_at?: string
           workspace_id?: string
         }
@@ -5329,11 +5399,11 @@ export type Database = {
           idempotency_key: string | null
           parent_run_id: string | null
           resume_at: string | null
-          variables: Json
           started_at: string
           status: Database["public"]["Enums"]["flow_run_status"]
           trigger_type: string
           updated_at: string
+          variables: Json
           version_id: string
           workspace_id: string
         }
@@ -5349,11 +5419,11 @@ export type Database = {
           idempotency_key?: string | null
           parent_run_id?: string | null
           resume_at?: string | null
-          variables?: Json
           started_at?: string
           status?: Database["public"]["Enums"]["flow_run_status"]
           trigger_type: string
           updated_at?: string
+          variables?: Json
           version_id: string
           workspace_id: string
         }
@@ -5369,11 +5439,11 @@ export type Database = {
           idempotency_key?: string | null
           parent_run_id?: string | null
           resume_at?: string | null
-          variables?: Json
           started_at?: string
           status?: Database["public"]["Enums"]["flow_run_status"]
           trigger_type?: string
           updated_at?: string
+          variables?: Json
           version_id?: string
           workspace_id?: string
         }
@@ -6138,6 +6208,157 @@ export type Database = {
           last_seen?: string
           seen_count?: number
           user_id?: string
+        }
+        Relationships: []
+      }
+      linkedin_sender_actions: {
+        Row: {
+          contact_id: string | null
+          id: string
+          kind: Database["public"]["Enums"]["linkedin_action_kind"]
+          lifecycle: Database["public"]["Enums"]["linkedin_action_lifecycle"]
+          logical_action_id: string
+          occurred_at: string | null
+          reserved_at: string
+          resolution_note: string | null
+          resolved_at: string | null
+          sender_id: string
+          workspace_id: string
+        }
+        Insert: {
+          contact_id?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["linkedin_action_kind"]
+          lifecycle?: Database["public"]["Enums"]["linkedin_action_lifecycle"]
+          logical_action_id: string
+          occurred_at?: string | null
+          reserved_at?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          sender_id: string
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["linkedin_action_kind"]
+          lifecycle?: Database["public"]["Enums"]["linkedin_action_lifecycle"]
+          logical_action_id?: string
+          occurred_at?: string | null
+          reserved_at?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          sender_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_sender_actions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_sender_actions_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_senders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_sender_actions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_sender_links: {
+        Row: {
+          created_at: string
+          id: string
+          linked_by_user_id: string | null
+          permitted_kinds: Database["public"]["Enums"]["linkedin_action_kind"][]
+          sender_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          linked_by_user_id?: string | null
+          permitted_kinds?: Database["public"]["Enums"]["linkedin_action_kind"][]
+          sender_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          linked_by_user_id?: string | null
+          permitted_kinds?: Database["public"]["Enums"]["linkedin_action_kind"][]
+          sender_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_sender_links_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_senders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_sender_links_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_senders: {
+        Row: {
+          budget_timezone: string
+          budget_timezone_changed_at: string | null
+          created_at: string
+          display_label: string
+          external_reserve_per_day: number
+          id: string
+          identity_key: string
+          last_owner_review_at: string | null
+          owner_user_id: string
+          stage: number
+          status: Database["public"]["Enums"]["linkedin_sender_status"]
+          updated_at: string
+        }
+        Insert: {
+          budget_timezone?: string
+          budget_timezone_changed_at?: string | null
+          created_at?: string
+          display_label: string
+          external_reserve_per_day?: number
+          id?: string
+          identity_key: string
+          last_owner_review_at?: string | null
+          owner_user_id: string
+          stage?: number
+          status?: Database["public"]["Enums"]["linkedin_sender_status"]
+          updated_at?: string
+        }
+        Update: {
+          budget_timezone?: string
+          budget_timezone_changed_at?: string | null
+          created_at?: string
+          display_label?: string
+          external_reserve_per_day?: number
+          id?: string
+          identity_key?: string
+          last_owner_review_at?: string | null
+          owner_user_id?: string
+          stage?: number
+          status?: Database["public"]["Enums"]["linkedin_sender_status"]
+          updated_at?: string
         }
         Relationships: []
       }
@@ -7930,8 +8151,6 @@ export type Database = {
           member_limit_override: number | null
           name: string
           owner_user_id: string
-          // Migration 0111. Nullable on purpose: enforced at campaign launch,
-          // because backfilling it would mean inventing a postal address.
           sender_postal_address: string | null
           updated_at: string
         }
@@ -7968,19 +8187,6 @@ export type Database = {
           api_key_id: string
           rate_limit_per_minute: number
           scopes: Database["public"]["Enums"]["api_scope"][]
-          workspace_id: string
-        }[]
-      }
-      due_webhook_deliveries: {
-        Args: { p_limit?: number }
-        Returns: {
-          attempts: number
-          event_id: string
-          event_type: string
-          id: string
-          max_attempts: number
-          payload: Json
-          subscription_id: string
           workspace_id: string
         }[]
       }
@@ -8233,6 +8439,19 @@ export type Database = {
         Args: { p_provider: string; p_user_id: string }
         Returns: boolean
       }
+      due_webhook_deliveries: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          event_id: string
+          event_type: string
+          id: string
+          max_attempts: number
+          payload: Json
+          subscription_id: string
+          workspace_id: string
+        }[]
+      }
       email_account_volume: {
         Args: { p_account_id: string; p_since: string }
         Returns: {
@@ -8458,10 +8677,19 @@ export type Database = {
           match_strategy: string
         }[]
       }
+      linkedin_sender_used: {
+        Args: {
+          p_kind: Database["public"]["Enums"]["linkedin_action_kind"]
+          p_sender_id: string
+          p_window: string
+        }
+        Returns: number
+      }
       merge_lead_enrichment: {
         Args: { p_enrichment: Json; p_lead_ids: string[]; p_user_id: string }
         Returns: number
       }
+      my_workspace_ids: { Args: never; Returns: string[] }
       paddle_subscription_grants_access: {
         Args: { p_status: string }
         Returns: boolean
@@ -8670,10 +8898,7 @@ export type Database = {
         }
         Returns: string
       }
-      scheduler_diagnostics: {
-        Args: Record<string, never>
-        Returns: Json
-      }
+      scheduler_diagnostics: { Args: never; Returns: Json }
       set_user_suspension: {
         Args: { p_admin_id: string; p_suspend: boolean; p_user_id: string }
         Returns: undefined
@@ -8934,6 +9159,14 @@ export type Database = {
         | "MERGED"
         | "COLLISION_OVERRIDE"
       crm_collision_mode: "off" | "warn" | "require_approval"
+      crm_contact_dnc_reason:
+        | "unsubscribed"
+        | "not_interested"
+        | "explicit_request"
+        | "hostile"
+        | "privacy_request"
+        | "manual"
+      crm_contact_dnc_scope: "all" | "email" | "linkedin"
       crm_custom_field_entity: "contact" | "company" | "opportunity"
       crm_custom_field_type:
         | "text"
@@ -9053,6 +9286,26 @@ export type Database = {
         | "partially_completed"
         | "failed"
         | "cancelled"
+      linkedin_action_kind:
+        | "invitation"
+        | "direct_message"
+        | "inmail"
+        | "profile_review"
+        | "engagement"
+      linkedin_action_lifecycle:
+        | "reserved"
+        | "performed"
+        | "skipped"
+        | "expired"
+        | "unknown"
+      linkedin_sender_status:
+        | "unknown"
+        | "owner_reviewed"
+        | "warning"
+        | "paused"
+        | "restricted"
+        | "disconnected"
+        | "auth_expired"
       meeting_event_type:
         | "booked"
         | "cancelled"
@@ -9271,6 +9524,15 @@ export const Constants = {
         "COLLISION_OVERRIDE",
       ],
       crm_collision_mode: ["off", "warn", "require_approval"],
+      crm_contact_dnc_reason: [
+        "unsubscribed",
+        "not_interested",
+        "explicit_request",
+        "hostile",
+        "privacy_request",
+        "manual",
+      ],
+      crm_contact_dnc_scope: ["all", "email", "linkedin"],
       crm_custom_field_entity: ["contact", "company", "opportunity"],
       crm_custom_field_type: [
         "text",
@@ -9391,6 +9653,29 @@ export const Constants = {
         "partially_completed",
         "failed",
         "cancelled",
+      ],
+      linkedin_action_kind: [
+        "invitation",
+        "direct_message",
+        "inmail",
+        "profile_review",
+        "engagement",
+      ],
+      linkedin_action_lifecycle: [
+        "reserved",
+        "performed",
+        "skipped",
+        "expired",
+        "unknown",
+      ],
+      linkedin_sender_status: [
+        "unknown",
+        "owner_reviewed",
+        "warning",
+        "paused",
+        "restricted",
+        "disconnected",
+        "auth_expired",
       ],
       meeting_event_type: [
         "booked",

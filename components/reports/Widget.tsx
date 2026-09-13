@@ -1,3 +1,4 @@
+import { formatMoney } from '@/lib/format/money'
 import type { MetricValue } from '@/lib/reports/metrics'
 
 /**
@@ -40,15 +41,18 @@ export function Widget({
    */
   const unknown = !value || value.value === null
 
+  /*
+   * ⚠️ `unit` IS A CURRENCY CODE OR '%' — NEVER A FREE-FORM LABEL. The only
+   * producers are `lib/reports/metrics.ts`, which emits '%' or the constrained
+   * `crm_opportunities.currency`. `lib/reporting/registry.ts` has its own
+   * `unit` of 'ratio' | 'count' | 'money' which would THROW here; it feeds
+   * `lib/crm/metrics.ts` and must never be routed into a Widget.
+   */
   const formatted = unknown
     ? '—'
     : value!.unit && value!.unit !== '%'
-      ? new Intl.NumberFormat(undefined, {
-          style: 'currency',
-          currency: value!.unit,
-          maximumFractionDigits: 0,
-        }).format(value!.value!)
-      : `${value!.value!.toLocaleString()}${value!.unit ?? ''}`
+      ? formatMoney(value!.value!, value!.unit)
+      : `${value!.value!.toLocaleString('en-US')}${value!.unit ?? ''}`
 
   const pct =
     !unknown && value!.outOf

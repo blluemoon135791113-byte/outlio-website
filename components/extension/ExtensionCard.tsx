@@ -14,7 +14,7 @@ export function ExtensionCard({ connectedDevices }: { connectedDevices: number }
   const connected = connectedDevices > 0
 
   return (
-    <section className="flex flex-col gap-4 rounded-[var(--radius-xl)] border border-border bg-panel p-4 shadow-[var(--shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
+    <section className="clay flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border bg-surface-muted">
           <Image

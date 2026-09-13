@@ -19,6 +19,7 @@ import {
 } from '@/lib/crm/reports'
 import { StatCard } from '@/components/product/StatCard'
 import { LocalTime } from '@/components/ui/LocalTime'
+import { formatMoney } from '@/lib/format/money'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
 
@@ -523,11 +524,13 @@ function total(rows: ForecastPeriod[], key: 'openDeals' | 'openValue' | 'weighte
 /**
  * ⚠️ FORMATS ONE ALREADY-TOTALLED VALUE. Every sum reaching this page was
  * computed in Postgres (Ledger D25); nothing here adds two money values.
+ *
+ * ⚠️ USD IS HARDCODED, AND IS CORRECT ONLY WHILE EVERY DEAL IS USD. Migration
+ * 0082 rolls these sums up with no grouping by currency, so the figure this
+ * renders is only money at all under that same assumption.
+ * `tests/unit/money-single-currency.test.ts` fails the moment a caller sets a
+ * currency — that guard, not this line, is what protects the number.
  */
 function money(amount: number): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(amount)
+  return formatMoney(amount, 'USD')
 }

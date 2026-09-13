@@ -66,6 +66,20 @@ export const TABLE_TENANCY: Record<string, Tenancy> = {
   fastspring_webhook_events: 'global',
   integration_secrets: 'global',
   invitation_codes: 'global',
+  /*
+   * ⚠️ `global` HERE MEANS "ONE ROW PER REAL PERSON", NOT "BELONGS TO NOBODY".
+   *
+   * §4.10 requires a sender's budget to be shared across every workspace its
+   * owner participates in, so the table deliberately has no `workspace_id` —
+   * it is the one place in this schema that cannot be workspace-scoped without
+   * breaking the requirement.
+   *
+   * Its isolation comes from somewhere else entirely: no `authenticated`
+   * select policy at all, and one security-definer function that returns a
+   * COUNT rather than rows. `linkedin_sender_links` and
+   * `linkedin_sender_actions` carry `workspace_id` and are scoped normally.
+   */
+  linkedin_senders: 'global',
   job_queue: 'global',
   paddle_webhook_events: 'global',
   plans: 'global',

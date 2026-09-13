@@ -13,6 +13,13 @@ import { z } from 'zod'
 
 import { addNote, assignContact, eraseContact } from '@/lib/crm/activities'
 import { createContactManually } from '@/lib/crm/ingest'
+import {
+  STOP_REASONS,
+  STOP_SCOPES,
+  suppressContact,
+  unsuppressContact,
+  type StopReason,
+} from '@/lib/crm/contact-stop'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   checkCollision,
@@ -613,6 +620,142 @@ export async function eraseContactAction(
 
     return ok(
       `Erased. ${rows} record${rows === 1 ? '' : 's'} destroyed; an audit entry proving the erasure remains.`,
+    )
+  } catch (error) {
+    return toState(error)
+  }
+}
+
+/**
+ * Marks a person do-not-contact — §4.11.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ `suppressContact` HAD EXISTED WITH ZERO CALLERS. Migration 0121        ║
+ * ║  created `crm_contact_suppressions`, the writer was written, three readers ║
+ * ║  were repaired to consult it — and nothing anywhere could put a row in.    ║
+ * ║  The table was always empty, which is exactly why nobody noticed those     ║
+ * ║  readers were wrong: they all agreed on nothing, correctly, by accident.   ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ `crm.contact.edit`, WHICH IS SETTER-LEVEL, AND THAT IS THE POINT. The
+ * person who hears "take me off your list" is the one on the call. Requiring a
+ * manager would mean the request waits, and a request to stop that waits is a
+ * request that gets ignored.
+ */
+export async function markDoNotContactAction(
+  _prev: ContactActionState,
+  formData: FormData,
+): Promise<ContactActionState> {
+  try {
+    const ctx = await assertWorkspacePermission('crm.contact.edit')
+
+    const contactId = uuid.safeParse(formData.get('contact_id'))
+    if (!contactId.success) return fail('That contact could not be read.')
+
+    const scope = String(formData.get('scope') ?? 'all')
+    if (!(STOP_SCOPES as readonly string[]).includes(scope)) {
+      return fail('Choose what to stop.')
+    }
+
+    const reason = String(formData.get('reason') ?? 'manual')
+    if (!(STOP_REASONS as readonly string[]).includes(reason)) {
+      return fail('Choose a reason.')
+    }
+
+    const note = String(formData.get('note') ?? '').trim()
+    if (note.length > 500) return fail('That note is too long.')
+
+    /*
+     * ⚠️ THE CONTACT MUST BE IN THIS WORKSPACE, CHECKED BEFORE THE WRITE. The
+     * service role bypasses RLS, so without this a posted id from another
+     * tenant would be marked — and the response would look identical to a
+     * legitimate one. Same reasoning as `eraseContactAction`.
+     */
+    const { data: contact } = await createAdminClient()
+      .from('crm_contacts')
+      .select('id, full_name')
+      .eq('workspace_id', ctx.workspace.id)
+      .eq('id', contactId.data)
+      .maybeSingle()
+
+    if (!contact) return fail('That contact is not in this workspace.')
+
+    await suppressContact({
+      workspaceId: ctx.workspace.id,
+      contactId: contactId.data,
+      reason: reason as StopReason,
+      scope: scope as 'all' | 'email' | 'linkedin',
+      source: note || null,
+      createdBy: ctx.userId,
+    })
+
+    revalidatePath(`/crm/contacts/${contactId.data}`)
+    revalidatePath('/crm/contacts')
+
+    const who = contact.full_name ?? 'This contact'
+    return ok(
+      scope === 'all'
+        ? `${who} will not be contacted on any channel.`
+        : `${who} will not be contacted by ${scope === 'email' ? 'email' : 'LinkedIn'}.`,
+    )
+  } catch (error) {
+    return toState(error)
+  }
+}
+
+/**
+ * Lifts a do-not-contact.
+ *
+ * ⚠️ SAME PERMISSION AS MARKING, AND THE SAFEGUARD IS THE TYPED CONFIRMATION
+ * RATHER THAN THE ROLE. Gating this behind manager would mean a setter who
+ * mis-clicked cannot undo their own mistake until somebody senior is free,
+ * while the contact sits uncontactable. Overloading `crm.contact.delete` to
+ * stand in for "manager" would also quietly change what that permission means
+ * the next time somebody edits the role table.
+ */
+export async function clearDoNotContactAction(
+  _prev: ContactActionState,
+  formData: FormData,
+): Promise<ContactActionState> {
+  try {
+    const ctx = await assertWorkspacePermission('crm.contact.edit')
+
+    const contactId = uuid.safeParse(formData.get('contact_id'))
+    if (!contactId.success) return fail('That contact could not be read.')
+
+    // Checked server-side. The client-side copy is a courtesy; this is the
+    // control, because the form is an HTTP endpoint anybody can post to.
+    const confirmation = String(formData.get('confirm') ?? '').trim().toUpperCase()
+    if (confirmation !== 'ALLOW') {
+      return fail('Type ALLOW to confirm you may contact this person again.')
+    }
+
+    const { data: contact } = await createAdminClient()
+      .from('crm_contacts')
+      .select('id')
+      .eq('workspace_id', ctx.workspace.id)
+      .eq('id', contactId.data)
+      .maybeSingle()
+
+    if (!contact) return fail('That contact is not in this workspace.')
+
+    const lifted = await unsuppressContact({
+      workspaceId: ctx.workspace.id,
+      contactId: contactId.data,
+    })
+
+    if (!lifted) return fail('That contact was not marked do-not-contact.')
+
+    revalidatePath(`/crm/contacts/${contactId.data}`)
+    revalidatePath('/crm/contacts')
+
+    /*
+     * ⚠️ SAYS WHAT THIS DID NOT DO. If the person also unsubscribed themselves,
+     * the address suppression still stands and mail will still refuse — which
+     * would otherwise look like the button having failed.
+     */
+    return ok(
+      'Do-not-contact lifted. Any unsubscribe the person made themselves still applies.',
     )
   } catch (error) {
     return toState(error)

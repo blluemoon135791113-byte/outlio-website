@@ -7,6 +7,7 @@ import {
   revokeDeviceAction,
 } from '@/app/(product)/dashboard/settings/extension-actions'
 import type { ConnectedDevice } from '@/lib/extension/devices'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 /** Store listings, or a developer-build note where none exists yet. */
 export type StoreLinks = {
@@ -29,10 +30,6 @@ function relative(iso: string | null): string {
 
   const days = Math.round(hours / 24)
   return `${days} day${days === 1 ? '' : 's'} ago`
-}
-
-function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 export function ExtensionSettings({
@@ -145,7 +142,7 @@ export function ExtensionSettings({
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-ink">{device.label}</p>
                   <p className="mt-0.5 text-xs text-muted">
-                    Connected {shortDate(device.connectedAt)} · Last active{' '}
+                    Connected <LocalTime iso={device.connectedAt} dateOnly /> · Last active{' '}
                     {relative(device.lastActiveAt)}
                   </p>
                 </div>

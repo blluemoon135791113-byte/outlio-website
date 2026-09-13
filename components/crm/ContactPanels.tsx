@@ -5,11 +5,19 @@ import { useActionState, useState } from 'react'
 import {
   addNoteAction,
   assignContactAction,
+  clearDoNotContactAction,
   eraseContactAction,
+  markDoNotContactAction,
   requestReassignmentAction,
   type ContactActionState,
 } from '@/lib/crm/contact-actions'
+import {
+  STOP_REASONS,
+  STOP_REASON_LABEL,
+  STOP_SCOPE_LABEL,
+} from '@/lib/crm/contact-stop-copy'
 import type { CollisionReport } from '@/lib/crm/collision'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 const INITIAL: ContactActionState = { status: 'idle' }
 
@@ -75,7 +83,7 @@ export function AssignOwner({
           </p>
           <p className="mt-1 leading-relaxed">
             Last activity {party.lastActivityType?.toLowerCase().replace(/_/g, ' ')} on{' '}
-            {new Date(party.lastActivityAt!).toLocaleDateString()}
+            <LocalTime iso={party.lastActivityAt!} dateOnly />
             {party.openOpportunities > 0
               ? ` · ${party.openOpportunities} open ${party.openOpportunities === 1 ? 'deal' : 'deals'}`
               : ''}
@@ -295,6 +303,172 @@ export function EraseContact({ contactId, name }: { contactId: string; name: str
             className="rounded-[var(--radius-md)] bg-danger px-3 py-2 text-sm font-semibold text-cream shadow-[var(--shadow-button)] transition-[background-color,transform] duration-150 hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Erase permanently
+          </button>
+          <button type="button" onClick={() => setOpen(false)} className={ghostClass}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+
+/**
+ * Mark or lift a do-not-contact — §4.11.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THE STATE IS SHOWN BEFORE THE CONTROL, because "is this person marked" ║
+ * ║  is the question somebody opens this panel to answer. A bare "Mark         ║
+ * ║  do-not-contact" button that looks identical whether or not they already   ║
+ * ║  are is how the same person gets marked twice and nobody learns the        ║
+ * ║  original reason.                                                         ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export function DoNotContact({
+  contactId,
+  name,
+  current,
+}: {
+  contactId: string
+  name: string
+  /** The existing mark, if any. Null means contactable. */
+  current: { scope: 'all' | 'email' | 'linkedin'; reason: string; source: string | null } | null
+}) {
+  const [markState, mark] = useActionState(markDoNotContactAction, INITIAL)
+  const [clearState, clear] = useActionState(clearDoNotContactAction, INITIAL)
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState('')
+
+  if (current) {
+    return (
+      <div className="space-y-3 rounded-[var(--radius-lg)] border border-warning/30 bg-warning-soft/40 p-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-ink">Marked do-not-contact</h3>
+          <p className="text-sm text-muted">
+            {current.scope === 'all'
+              ? `${name} is not to be contacted on any channel.`
+              : `${name} is not to be contacted by ${current.scope === 'email' ? 'email' : 'LinkedIn'}.`}{' '}
+            Reason recorded: {STOP_REASON_LABEL[current.reason] ?? current.reason}.
+            {current.source ? ` “${current.source}”` : ''}
+          </p>
+        </div>
+
+        {!open ? (
+          <button type="button" onClick={() => setOpen(true)} className={ghostClass}>
+            Lift this…
+          </button>
+        ) : (
+          <form action={clear} className="space-y-2">
+            <input type="hidden" name="contact_id" value={contactId} />
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                Type ALLOW to confirm you may contact {name} again
+              </span>
+              <input
+                name="confirm"
+                value={typed}
+                onChange={(event) => setTyped(event.target.value)}
+                autoComplete="off"
+                className={inputClass}
+              />
+            </label>
+
+            <Feedback state={clearState} />
+
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                // Disabled until it matches — and the server checks it again.
+                // Never `disabled` as the only gate.
+                disabled={typed.trim().toUpperCase() !== 'ALLOW'}
+                className={buttonClass}
+              >
+                Lift do-not-contact
+              </button>
+              <button type="button" onClick={() => setOpen(false)} className={ghostClass}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    )
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-sm font-semibold text-ink underline decoration-border underline-offset-4 transition-opacity duration-150 hover:opacity-80"
+      >
+        Mark do-not-contact…
+      </button>
+    )
+  }
+
+  return (
+    <div className="space-y-3 rounded-[var(--radius-lg)] border border-border bg-surface-muted/40 p-4">
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold text-ink">Do not contact {name}</h3>
+        <p className="text-sm text-muted">
+          Outreach stops immediately on the channels you choose — campaigns,
+          flows, and the marketing export all refuse. It does not delete
+          anything, and you can lift it again.
+        </p>
+      </div>
+
+      <form action={mark} className="space-y-2">
+        <input type="hidden" name="contact_id" value={contactId} />
+
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            What to stop
+          </span>
+          {/*
+            ⚠️ DEFAULTS TO EVERYTHING. §4.15: an ambiguous request is read
+            broadly. Someone saying "stop contacting me" has not carved out
+            LinkedIn, and guessing the narrower reading in our own favour is
+            how a stated wish gets quietly reduced.
+          */}
+          <select name="scope" defaultValue="all" className={inputClass}>
+            <option value="all">Every channel</option>
+            <option value="email">Email only</option>
+            <option value="linkedin">LinkedIn only</option>
+          </select>
+        </label>
+
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Reason
+          </span>
+          <select name="reason" defaultValue="explicit_request" className={inputClass}>
+            {STOP_REASONS.map((reason) => (
+              <option key={reason} value={reason}>
+                {STOP_REASON_LABEL[reason]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Note (optional)
+          </span>
+          <input
+            name="note"
+            maxLength={500}
+            placeholder="Asked to be removed on today's call"
+            className={inputClass}
+          />
+        </label>
+
+        <Feedback state={markState} />
+
+        <div className="flex items-center gap-2">
+          <button type="submit" className={buttonClass}>
+            Mark do-not-contact
           </button>
           <button type="button" onClick={() => setOpen(false)} className={ghostClass}>
             Cancel
