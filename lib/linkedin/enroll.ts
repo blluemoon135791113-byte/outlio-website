@@ -23,7 +23,8 @@ import {
   type TerminalReason,
 } from '@/lib/linkedin/enrollment'
 import { profileReference } from '@/lib/linkedin/profile-reference'
-import { renderLinkedInMessage } from '@/lib/linkedin/render'
+import { missingForGroundedOpener } from '@/lib/linkedin/context'
+import { CONNECTION_NOTE_LIMIT, renderLinkedInMessage } from '@/lib/linkedin/render'
 import type { TemplateId } from '@/lib/linkedin/templates'
 import type { LinkedInContext } from '@/lib/linkedin/render'
 import type { TaskKind } from '@/lib/linkedin/outcomes'
@@ -74,6 +75,21 @@ export async function enrollContact(input: {
   senderId: string
   templateId: TemplateId
   context: LinkedInContext
+  /**
+   * The operator's own words, when the evidence cannot support a grounded
+   * opener.
+   *
+   * ⚠️ §4.9's STATED REMEDY, NOT A BYPASS. "Require a manual rewrite or skip;
+   * do not fabricate familiarity." With honest evidence most contacts have
+   * neither a verified relationship nor a verified responsibility, so
+   * `manual_rewrite` is the COMMON path rather than the exception — and a
+   * product that only refused would be one nobody could use.
+   *
+   * What makes it safe is who is writing: a person who has looked at the
+   * profile and is accountable for the message, rather than a template filling
+   * a gap with something plausible.
+   */
+  manualBody?: string | null
   actorUserId: string
 }): Promise<EnrollResult> {
   const db = createAdminClient()
@@ -153,16 +169,43 @@ export async function enrollContact(input: {
    * enrollment — creating it and discovering that later leaves a row nobody can
    * act on.
    */
-  const rendered = renderLinkedInMessage(input.templateId, input.context)
-  if (rendered.kind !== 'rendered') {
-    return {
-      ok: false,
-      reason: 'needs_manual_rewrite',
-      message:
-        rendered.kind === 'manual_rewrite'
-          ? `Not enough verified detail to write this yet — missing ${rendered.missing.join(', ')}.`
-          : 'This contact cannot be approached with this template yet.',
+  const manual = input.manualBody?.trim()
+  let body: string
+
+  if (manual) {
+    /*
+     * ⚠️ THE LENGTH CAP IS ENFORCED ON A HUMAN'S TEXT TOO. §4.9: "do not blindly
+     * truncate" — an overlong connection note is REFUSED rather than cut,
+     * because a note silently clipped mid-sentence is worse than one that was
+     * never sent.
+     */
+    if (input.templateId === 'T01' && manual.length > CONNECTION_NOTE_LIMIT) {
+      return {
+        ok: false,
+        reason: 'needs_manual_rewrite',
+        message: `A connection note has to fit ${CONNECTION_NOTE_LIMIT} characters — yours is ${manual.length}.`,
+      }
     }
+    body = manual
+  } else {
+    const rendered = renderLinkedInMessage(input.templateId, input.context)
+    if (rendered.kind !== 'rendered') {
+      /*
+       * ⚠️ NAMES WHAT IS MISSING. An operator told "not enough detail" retries
+       * the same contact tomorrow; one told which fact is absent can go and find
+       * it, or decide to write the note themselves.
+       */
+      const missing = missingForGroundedOpener(input.context)
+      return {
+        ok: false,
+        reason: 'needs_manual_rewrite',
+        message:
+          missing.length > 0
+            ? `No verified ${missing.slice(0, 2).join(' or ')} for this contact — write the note yourself, or research them first.`
+            : 'This contact cannot be approached with this template yet.',
+      }
+    }
+    body = rendered.text
   }
 
   /*
@@ -222,7 +265,7 @@ export async function enrollContact(input: {
        * still fits; hiding it until the next step would ask them to judge
        * without the thing being judged.
        */
-      body: rendered.text,
+      body,
       logical_action_id: logicalActionId({
         workspaceId: input.workspaceId,
         enrollmentId: enrollment.id,

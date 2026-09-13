@@ -10,6 +10,8 @@ import { threadsForContact } from '@/lib/email/inbox'
 import { listContactTimeline } from '@/lib/crm/activities'
 import { checkCollision } from '@/lib/crm/collision'
 import { contactStopRecord } from '@/lib/crm/contact-stop'
+import { EnrollContact } from '@/components/linkedin/EnrollContact'
+import { listWorkspaceSenders } from '@/lib/linkedin/senders'
 import { MoreDetails } from '@/components/crm/MoreDetails'
 import { ValueProvenance } from '@/components/crm/ValueProvenance'
 import { companyDetails, companyWebsite } from '@/lib/crm/company-details'
@@ -96,6 +98,17 @@ export default async function ContactDetailPage({
    * create a second one.
    */
   const stopRecord = await contactStopRecord(ctx.workspace.id, contact.id)
+
+  /*
+   * ⚠️ ONLY WHEN THE MODULE IS ON. Reading senders for a workspace that cannot
+   * use them is a query nobody needs, and the panel below is hidden anyway.
+   */
+  const linkedInSenders = ctx.modules.has('linkedin')
+    ? (await listWorkspaceSenders(ctx.workspace.id)).map((sender) => ({
+        id: sender.senderId,
+        label: sender.displayLabel,
+      }))
+    : []
 
   /*
    * ⚠️ BOTH GO THROUGH A VALIDATOR BEFORE REACHING AN `href`. A domain is a bare
@@ -447,6 +460,18 @@ export default async function ContactDetailPage({
             GDPR heading is how a request that must be honoured today waits for
             somebody to go looking.
           */}
+          {can(policy, 'crm.contact.edit') && ctx.modules.has('linkedin') ? (
+            <section className="clay space-y-3 p-4">
+              <h3 className="text-sm font-semibold text-ink">LinkedIn</h3>
+              {/*
+                ⚠️ THE SENDER LIST IS READ THROUGH `listWorkspaceSenders`, which
+                never returns `identity_key` — the global join key that would let
+                two workspaces correlate a sender between them (§4.10).
+              */}
+              <EnrollContact contactId={contact.id} senders={linkedInSenders} />
+            </section>
+          ) : null}
+
           {can(policy, 'crm.contact.edit') ? (
             <section className="clay space-y-3 p-4">
               <h3 className="text-sm font-semibold text-ink">Contact permission</h3>

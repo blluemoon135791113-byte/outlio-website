@@ -152,58 +152,30 @@ const KNOWN_UNREACHABLE = new Map<string, string>([
    */
   /*
    * ╔═══════════════════════════════════════════════════════════════════════╗
-   * ║  ⚠️ `enroll.ts` AND ITS THREE DEPENDENCIES WAIT ON A VARIABLE CONTEXT. ║
+   * ║  THE LINKEDIN ISLAND IS GONE. Seven entries, then four, now none.      ║
    * ║                                                                       ║
-   * ║  `enrollContact` renders the first message with                        ║
-   * ║  `renderLinkedInMessage(templateId, context)`, and `context` is a map   ║
-   * ║  of EVIDENCED variables — greeting, connection_context, topic — each    ║
-   * ║  carrying how it was verified. Nothing builds one from a contact's      ║
-   * ║  research yet.                                                        ║
+   * ║  The last four said they were waiting on "a LinkedInContext builder    ║
+   * ║  that maps a contact's verified evidence into §4.9 variables", and     ║
+   * ║  that wiring them to invented values "would fabricate familiarity,     ║
+   * ║  which the brief forbids by name". `lib/linkedin/context.ts` is that   ║
+   * ║  builder, and it is mostly a list of refusals — it will not split a    ║
+   * ║  full name, will not derive `role_area` from a job title, and holds no ║
+   * ║  relationship data to ground `connection_context` in.                  ║
    * ║                                                                       ║
-   * ║  That gap is NOT fillable with placeholder text. §4.9: "If neither     ║
-   * ║  context nor role is supported, require a manual rewrite or skip; do   ║
-   * ║  not fabricate familiarity." A context assembled from guesses would    ║
-   * ║  render a confident opener about a stranger — rule 4 with a friendly   ║
-   * ║  tone. So the entry point waits for the evidence mapper rather than     ║
-   * ║  being wired to something invented.                                    ║
-   * ║                                                                       ║
-   * ║  Reachable the moment that exists; these four come out together.       ║
+   * ║  Which means the honest context usually CANNOT render a grounded       ║
+   * ║  opener, and §4.9's own remedy — a human writes the note — is what     ║
+   * ║  makes the path reachable. The allowlist emptied because the code      ║
+   * ║  changed, not because anybody tidied it.                              ║
    * ╚═══════════════════════════════════════════════════════════════════════╝
+   *
+   * `metrics.ts` alone remains: it leaves when something REPORTS on LinkedIn
+   * outcomes, and there is no outcome history to measure yet.
    */
   [
-    'lib/linkedin/enroll.ts',
-    'Needs a LinkedInContext builder that maps a contact\'s verified evidence ' +
-      'into §4.9 variables. Wiring it to invented values would fabricate ' +
-      'familiarity, which the brief forbids by name.',
-  ],
-  [
-    'lib/linkedin/enrollment.ts',
-    'The state machine, reached only through enroll.ts. See the note above.',
-  ],
-  [
-    'lib/linkedin/render.ts',
-    'Reached only through enroll.ts. See the note above.',
-  ],
-  [
-    'lib/linkedin/profile-reference.ts',
-    'The read-only profile-link allowlist, reached only through enroll.ts.',
-  ],
-  [
     'lib/linkedin/metrics.ts',
-    'Acceptance and reply rates (§4.18). Nothing reports on LinkedIn yet — the ' +
-      'first enrollment was created today and there is no outcome history to ' +
-      'measure. Wire it when the reporting surface exists.',
-  ],
-  [
-    'lib/linkedin/templates.ts',
-    'Reached only through `render.ts`, which imports TEMPLATES directly; no ' +
-      'caller picks a template by id yet because `enrollContact` is given one. ' +
-      'Becomes reachable when a sequence builder chooses between them.',
-  ],
-  [
-    'lib/linkedin/variables.ts',
-    'Same: the variable specs are consumed inside `render.ts`. A campaign ' +
-      'builder that validates publication-required variables will reach them.',
+    'Acceptance and reply rates (§4.18). Nothing reports on LinkedIn outcomes ' +
+      'yet — enrollments can only be created from today, so a report would be a ' +
+      'screen of zeroes pretending to be a finding.',
   ],
 
   /* ── Genuinely dead, and newly surfaced by this guard. ──────────────────── */
