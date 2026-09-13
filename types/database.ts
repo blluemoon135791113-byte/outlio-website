@@ -3442,6 +3442,7 @@ export type Database = {
           deleted_at: string | null
           due_at: string | null
           id: string
+          opportunity_id: string | null
           status: Database["public"]["Enums"]["crm_task_status"]
           title: string
           updated_at: string
@@ -3459,6 +3460,7 @@ export type Database = {
           deleted_at?: string | null
           due_at?: string | null
           id?: string
+          opportunity_id?: string | null
           status?: Database["public"]["Enums"]["crm_task_status"]
           title: string
           updated_at?: string
@@ -3476,6 +3478,7 @@ export type Database = {
           deleted_at?: string | null
           due_at?: string | null
           id?: string
+          opportunity_id?: string | null
           status?: Database["public"]["Enums"]["crm_task_status"]
           title?: string
           updated_at?: string
@@ -3494,6 +3497,13 @@ export type Database = {
             columns: ["contact_id", "workspace_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_tasks_opportunity_fk"
+            columns: ["opportunity_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_opportunities"
             referencedColumns: ["id", "workspace_id"]
           },
           {

@@ -237,6 +237,20 @@ export async function assignContact(
 export type CreateTaskInput = {
   contactId?: string | null
   companyId?: string | null
+  /**
+   * The deal this task advances.
+   *
+   * ⚠️ §8 DEFINES THE NEXT ACTION AS "the earliest permitted open activity
+   * linked to THAT DEAL", and until 0124 there was nowhere to put the link —
+   * so the next-action indicator, next-action coverage in reporting, and the
+   * "deals without a next action" row of My Work were all unanswerable for
+   * want of a column rather than for want of logic.
+   *
+   * The composite FK is on `(opportunity_id, workspace_id)`, so a deal from
+   * another workspace cannot be named here: the row it would reference does
+   * not exist.
+   */
+  opportunityId?: string | null
   title: string
   body?: string | null
   dueAt?: Date | string | null
@@ -254,6 +268,7 @@ export async function createTask(
       workspace_id: workspaceId,
       contact_id: input.contactId ?? null,
       company_id: input.companyId ?? null,
+      opportunity_id: input.opportunityId ?? null,
       title: input.title.trim(),
       body: input.body?.trim() || null,
       due_at: toIso(input.dueAt),

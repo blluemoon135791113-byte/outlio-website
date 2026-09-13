@@ -119,6 +119,25 @@ export default async function TasksPage({
     for (const c of contacts ?? []) names.set(c.id, c.full_name ?? 'Unnamed contact')
   }
 
+  /*
+   * ⚠️ THE DEAL PICKER IS WHY 0124's COLUMN HAS ANY DATA IN IT. §8 defines a
+   * deal's next action as "the earliest permitted open activity linked to that
+   * deal", so a task that names no deal answers nothing — and before this
+   * select there was no way for a person to name one.
+   *
+   * Only OPEN deals: a task is future work, and a won or lost deal has none
+   * left. Capped, because this is a picker rather than a list — a workspace
+   * with hundreds of open deals needs search, which is its own change.
+   */
+  const { data: openDeals } = await db
+    .from('crm_opportunities')
+    .select('id, title')
+    .eq('workspace_id', ctx.workspace.id)
+    .eq('status', 'open')
+    .is('deleted_at', null)
+    .order('updated_at', { ascending: false })
+    .limit(100)
+
   const rows: TaskRow[] = tasks.map((t) => ({
     id: t.id,
     title: t.title,
@@ -141,7 +160,7 @@ export default async function TasksPage({
 
         {/* ⚠️ Until R2 a task could only arrive from a flow, so this queue was
             empty for anyone who had not built an automation first. */}
-        <NewTaskButton />
+        <NewTaskButton deals={openDeals ?? []} />
       </div>
 
       <nav aria-label="Task views" className="flex flex-wrap gap-1 border-b border-border">
