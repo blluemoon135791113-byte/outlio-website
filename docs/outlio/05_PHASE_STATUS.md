@@ -24,7 +24,7 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 14 | Reporting foundation | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_14.md`](phases/PHASE_14.md) — rollup table, rollup + reconcile functions and a live `/crm/reports` page all exist (migration `0082`). §5.14's metric registry + formula AST closed 2026-09-12 (`lib/reporting/registry.ts`). ⚠️ And the rollup had NO TRIGGER until 2026-09-12 — `rollupWorkspace` was called only by its integration test, so `crm_reporting_daily` was never written in production and every report read zero. Wired into `runTick`. ⚠️ The brief's "12,700% reply rate" warning was wrong about the mechanism — corrected in place |
 | 15 | LinkedIn capability matrix + RISK_REGISTER | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_15.md`](phases/PHASE_15.md) · [`RISK_REGISTER.md`](RISK_REGISTER.md) |
 | 16–20 | LinkedIn channel | **IN PROGRESS** | `platform-m1-workspaces` | DECISION-17 answered 2026-09-12: **build it, manual execution only.** See [`LINKEDIN_CAPABILITY_MAP.md`](LINKEDIN_CAPABILITY_MAP.md) and the table below |
-| 23 | Integrations + webhooks | **MOSTLY COMPLETE** | `platform-m1-workspaces` | [`PHASE_23.md`](phases/PHASE_23.md) — 9 of 12 webhook events sourced (6 on 2026-09-08, 3 on 2026-09-09); 3 `meeting.*` blocked on DECISION-18 (payload contract); Slack/Teams delivery unverified |
+| 23 | Integrations + webhooks | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_23.md`](phases/PHASE_23.md) — DECISION-18 answered 2026-09-13: **withdraw**. The three `meeting.*` events are removed from `WEBHOOK_EVENTS` and from `NOTIFIABLE_EVENTS`, so every event the catalogue offers now actually fires. `KNOWN_UNSOURCED` is empty and asserted to stay empty. Slack/Teams delivery still unverified |
 | 21–22, 24–25 | see §9 | NOT_STARTED | — | ⚠️ Phase 22's substance exists in `/crm/reports` (`dataScope(ctx.role)`, leaderboard behind `report.team.view`) |
 | §6.4 | Data subject rights | **DELIVERED** | `platform-m1-workspaces` | Erasure was built in `0075` and **unreachable its whole life** — no action, no UI, only its own integration test called it. Now gated + reachable, and the missing half (per-contact access export) built. Invariant: the export covers what the erasure destroys, exclusions asserted both ways. `tests/unit/data-subject-rights.test.ts` |
 
@@ -67,23 +67,31 @@ Its own phase numbering, not §9's:
 | 1 | Capability audit | **COMPLETE** — [`LINKEDIN_CAPABILITY_MAP.md`](LINKEDIN_CAPABILITY_MAP.md) |
 | 2 | Contact-level stop at email dispatch | **COMPLETE** — found a live defect; `enqueueEmail` matched suppression on address alone |
 | 3 | Contact DNC + `crm_contacts.timezone` | **COMPLETE** — migration `0121`, **applied** |
-| 4 | Sender identity and account policy | **COMPLETE (server side)** — `0122` **applied**; schema, stage ladder, budget arithmetic and `lib/linkedin/senders.ts`. No UI yet |
-| 5 | Enrollment / task / conversation state split | **COMPLETE** (logic) — tables deferred |
+| 4 | Sender identity and account policy | **COMPLETE** — `0122` applied; `/dashboard/settings/linkedin` links accounts, records owner review and reports warnings. ⚠️ Budgets read a ledger nothing wrote until phase 10 landed, so the panel showed a full cap that could never fall |
+| 5 | Enrollment / task / conversation state split | **COMPLETE** — migration `0125` (applied) built `linkedin_enrollments` and `linkedin_tasks`. ⚠️ It also added `crm_contacts.version`, which `preflight()` had always required and which **did not exist** — §4.7's durable cancellation was inert. `0126` then corrected which columns bump it |
 | 6 | LinkedIn action types | **DEFERRED** — they land with their handlers, not before |
-| 7 | Action Inbox decision layer | **PARTIAL** — outcome vocabulary and profile-link safety built; the card needs 4 and 5 |
+| 7 | Action Inbox decision layer | **COMPLETE** — `/linkedin` renders the draft and its result form; `releaseTask` runs preflight + budget and reserves a ledger slot, `recordOutcome` resolves it. An Observation is refused by the enum AND by the service |
 | 8 | Message set (§4.9) | **COMPLETE** — `lib/linkedin/{templates,variables,render}.ts` |
-| 9 | Metrics (§4.18) | **COMPLETE** — `lib/linkedin/metrics.ts` |
+| 9 | Metrics (§4.18) | **COMPLETE (logic), UNREACHABLE** — `lib/linkedin/metrics.ts` is the last module in the reachability allowlist. It leaves when something REPORTS on LinkedIn outcomes; there is no outcome history to measure yet |
+| 10 | Release pipeline + evidence mapper | **COMPLETE** — `lib/linkedin/{tasks,enroll,context}.ts`, `/linkedin`, enrolment from the contact page. ⚠️ `buildLinkedInContext` is mostly refusals: it will not split a full name, derive `role_area` from a job title, or invent `connection_context`, so T01 usually routes to `manual_rewrite` and a human writes the note — §4.9's stated outcome |
 
-⚠️ **Six `lib/linkedin/*` modules are in `KNOWN_ORPHANS`** (`outcomes` and
-`budget` have since left it by gaining importers) with named exit
-conditions. They leave when the Action Inbox renders a draft and its result
-form. If it ever ships while they remain, the card built its own renderer,
-outcome vocabulary, profile-link check or idea of a valid approval — which is
-what that list exists to surface.
+✅ **The orphan list is down to one.** Six `lib/linkedin/*` modules were in
+`KNOWN_ORPHANS` with the named exit condition "they leave when the Action Inbox
+renders a draft and its result form", plus the warning that an inbox shipping
+while they remained would mean the card "built its own renderer, outcome
+vocabulary, profile-link check or idea of a valid approval". It has none of
+those — the card imports `allowedOutcomes`, the release path imports
+`preflight`, `enroll` imports the renderer and the link allowlist. Only
+`metrics.ts` remains, on a different condition.
 
-**Blocked on the owner:** apply `0122`, then `npm run db:types`; and two of the
-four questions in [`LINKEDIN_PHASE_4_SENDER_DESIGN.md`](LINKEDIN_PHASE_4_SENDER_DESIGN.md)
-(`linkedin_enabled` tiers, sender cap per workspace) before any UI ships.
+**Still blocked on the owner:** the two questions in
+[`LINKEDIN_PHASE_4_SENDER_DESIGN.md`](LINKEDIN_PHASE_4_SENDER_DESIGN.md) —
+`linkedin_enabled` tiers and the sender cap per workspace. Neither blocks the
+code, which is built and gated on the module; they decide who may use it.
+
+⚠️ **Nothing in the LinkedIn channel has been exercised against a real contact.**
+Every guard is unit-level or mutation-proved; no enrolment, release or outcome
+has run end to end with live data.
 
 ## Phase 0 result (2026-09-04)
 
