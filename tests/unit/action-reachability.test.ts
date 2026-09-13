@@ -70,7 +70,9 @@ function serverActions(): Action[] {
  * alarm about it. Same stripper `action-authorization.test.ts` uses.
  */
 const stripComments = (s: string) =>
-  s.replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\n/gm, '').replace(/^[ \t]*\/\/.*\n/gm, '')
+  // `\r?\n` because `.` does not match `\r`: against a CRLF checkout this
+  // stripped nothing, and every comment stayed in the "code" being scanned.
+  s.replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\r?\n/gm, '').replace(/^[ \t]*\/\/.*\r?\n/gm, '')
 
 /** Every file that could plausibly reference an action. */
 function callSites(): Map<string, string> {

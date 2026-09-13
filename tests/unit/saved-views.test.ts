@@ -133,7 +133,9 @@ describe('the module is private-only by construction (DECISION-09)', () => {
      * until DECISION-09 is revisited, writing it true from here would ship
      * sharing by accident.
      */
-    const source = SOURCE.replace(/^[ \t]*\/\/.*\n/gm, '')
+    // `\r?\n` because `.` does not match `\r`: against a CRLF checkout this
+    // stripped nothing, and every comment stayed in the "code" being scanned.
+    const source = SOURCE.replace(/^[ \t]*\/\/.*\r?\n/gm, '')
 
     expect(source).toContain('is_shared: false')
     expect(source).not.toMatch(/is_shared:\s*true/)
