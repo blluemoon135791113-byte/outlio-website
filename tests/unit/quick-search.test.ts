@@ -104,6 +104,49 @@ describe('the palette is reachable and behaves', () => {
     expect(PALETTE).toContain('setTimeout(')
   })
 
+  it('draws the shared monogram rather than its own initials', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ONE PERSON, TWO SETS OF LETTERS, ON THE SAME SCREEN.                 ║
+     * ║                                                                       ║
+     * ║  The palette had a private `initials()` that took ONE letter from a    ║
+     * ║  one-word name while `Monogram.initialsOf` takes TWO — so a contact    ║
+     * ║  called "Cher" was `CH` in the contacts table and `C` in ⌘K. It also   ║
+     * ║  drew a flat grey chip, dropping the derived tint that makes a         ║
+     * ║  monogram scannable, and omitted `aria-hidden`, so a screen reader     ║
+     * ║  announced the row as "C H, Cher".                                    ║
+     * ║                                                                       ║
+     * ║  Nothing typed it, nothing tested it, and both spellings looked        ║
+     * ║  correct in isolation. Only reading the two together showed it.        ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    expect(PALETTE).toContain('<Monogram name={result.name} />')
+    expect(PALETTE, 'a second initials rule is back').not.toMatch(
+      /function initials\s*\(/,
+    )
+  })
+
+  it('there is exactly one initials rule in the product', async () => {
+    /*
+     * ⚠️ ASSERTED IN BOTH DIRECTIONS. `not.toMatch` above passes if the palette
+     * stops rendering a monogram at all; this is what says the rule still
+     * exists and still lives in one place.
+     *
+     * `lib/intelligence/avatar.ts` keeps its own `initialsFor` deliberately —
+     * it strips punctuation and falls back to '?' rather than '—' for the
+     * Hubble surface. The two AGREE on the case that mattered here, the
+     * one-word name, and that agreement is what is pinned.
+     */
+    const { initialsOf } = await import('@/components/ui/Monogram')
+    const { initialsFor } = await import('@/lib/intelligence/avatar')
+
+    expect(initialsOf('Cher')).toBe('CH')
+    expect(initialsFor('Cher')).toBe('CH')
+    expect(initialsOf('Ada Lovelace')).toBe('AL')
+    expect(initialsFor('Ada Lovelace')).toBe('AL')
+    expect(initialsOf(null)).toBe('—')
+  })
+
   it('ships all four states, which the design rules require', () => {
     for (const state of ["'idle'", "'loading'", "'ready'", "'error'"]) {
       expect(PALETTE, `no ${state} state`).toContain(state)

@@ -6,6 +6,7 @@ import { MoreDetails } from '@/components/crm/MoreDetails'
 import { ValueProvenance } from '@/components/crm/ValueProvenance'
 import { companyDetails, companyWebsite, linkedInSlug } from '@/lib/crm/company-details'
 import { companyCitations, safeSourceUrl, type Provenance } from '@/lib/crm/provenance'
+import { formatMoney } from '@/lib/format/money'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { dataScope } from '@/lib/workspaces/permissions'
@@ -258,10 +259,7 @@ export default async function CompanyPage({
                   */}
                   {deal.value_amount === null
                     ? 'Value not set'
-                    : new Intl.NumberFormat(undefined, {
-                        style: 'currency',
-                        currency: deal.currency ?? 'USD',
-                      }).format(Number(deal.value_amount))}
+                    : formatMoney(Number(deal.value_amount), deal.currency, 'cents')}
                 </span>
               </li>
             ))}

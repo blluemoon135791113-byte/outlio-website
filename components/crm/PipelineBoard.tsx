@@ -4,6 +4,7 @@ import { useCallback, useState, useTransition } from 'react'
 
 import { useBoardRealtime } from '@/components/crm/useBoardRealtime'
 import { moveCardAction, type MoveCardState } from '@/lib/crm/board-actions'
+import { formatMoney as sharedFormatMoney } from '@/lib/format/money'
 import type { BoardColumn } from '@/lib/crm/opportunities'
 
 /**
@@ -262,16 +263,13 @@ export function PipelineBoard({
  * ⚠️ FORMATS ONE VALUE. Never add the values up here — see the note on
  * `Opportunity.valueAmount`: what arrives from PostgREST is a double, and a
  * pipeline total has to be summed in SQL.
+ *
+ * ⚠️ THE SHARED HELPER IS LOAD-BEARING IN A CLIENT COMPONENT. This file is
+ * `'use client'`, which is still server-rendered before it hydrates. The local
+ * version passed `undefined` as the locale, so the HTML carried the server's
+ * formatting and the hydration pass carried the browser's — a mismatch on a
+ * money string for any reader outside en-US. `lib/format/money.ts` pins it.
  */
 function formatMoney(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  } catch {
-    // An unknown currency code must not blank the card.
-    return `${amount} ${currency}`
-  }
+  return sharedFormatMoney(amount, currency)
 }
