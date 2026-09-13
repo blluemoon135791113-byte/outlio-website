@@ -25,12 +25,86 @@ import { LocalTime } from '@/components/ui/LocalTime'
  *
  * ⚠️ PRESENTATION ONLY. Both actions assert `email.account.manage` server-side.
  */
-export function SuppressionList({ suppressions }: { suppressions: Suppression[] }) {
+export function SuppressionList({
+  suppressions,
+  total,
+  search,
+}: {
+  suppressions: Suppression[]
+  /** Every suppression in the workspace, which may exceed what is shown. */
+  total: number
+  /** The address the operator asked about, if any. */
+  search?: string | null
+}) {
+  const shown = suppressions.length
+  const truncated = !search && total > shown
+
   return (
     <div className="space-y-4">
       <AddForm />
 
-      {suppressions.length === 0 ? (
+      {/*
+        ⚠️ THE LOOKUP EXISTS BECAUSE THE LIST CANNOT ANSWER THE QUESTION. The
+        question a person is actually asked is "did you remove me?", about ONE
+        address, and the list stops at 500 ordered newest first — so the oldest
+        suppressions, the ones most likely to be asked about, are exactly the
+        ones missing. An exact lookup answers it whatever the size of the list.
+      */}
+      <form method="get" className="flex flex-wrap items-end gap-2">
+        <label className="min-w-56 flex-1 space-y-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Check one address
+          </span>
+          <input
+            type="search"
+            name="suppressed"
+            defaultValue={search ?? ''}
+            placeholder="someone@example.com"
+            className="w-full field px-3 py-2 text-sm text-ink"
+          />
+        </label>
+        <button
+          type="submit"
+          className="rounded-[var(--radius-md)] border border-border-strong px-3 py-2 text-sm font-semibold text-ink transition-colors duration-150 hover:bg-surface-muted"
+        >
+          Check
+        </button>
+        {search ? (
+          <a
+            href="?"
+            className="rounded-[var(--radius-md)] px-2 py-2 text-sm font-semibold text-muted transition-colors duration-150 hover:text-ink"
+          >
+            Clear
+          </a>
+        ) : null}
+      </form>
+
+      {/*
+        ⚠️ A "NOT FOUND" HERE IS A REAL ANSWER, and it has to be unambiguous:
+        somebody is about to tell a person whether they were removed. It says
+        the address was checked, not merely that nothing is on screen.
+      */}
+      {search && shown === 0 ? (
+        <p className="rounded-[var(--radius-md)] border border-border bg-surface-muted/40 px-3 py-2 text-sm text-ink">
+          <span className="font-semibold">{search}</span> is not on the suppression
+          list. Mail to it is not blocked by this list.
+        </p>
+      ) : null}
+
+      {truncated ? (
+        /*
+         * ⚠️ SAYS THE LIST IS SHORT, which it did not. Ordered newest first and
+         * capped, so an operator scrolling to answer "did you remove me?" about
+         * somebody who opted out a year ago would have concluded, confidently,
+         * that they had not.
+         */
+        <p className="text-xs text-warning">
+          Showing the {shown} most recent of {total}. Use the check above to look
+          up an address that is not listed here.
+        </p>
+      ) : null}
+
+      {suppressions.length === 0 && !search ? (
         /*
          * ⚠️ SAYS WHAT AN EMPTY LIST MEANS. A blank panel reads as "this is
          * broken" or "we lost your data" — and for a compliance control, the

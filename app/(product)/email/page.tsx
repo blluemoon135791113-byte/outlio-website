@@ -25,7 +25,18 @@ export const metadata: Metadata = {
  * one on that domain, and an average would hide exactly the one that needs
  * stopping (Ledger D42).
  */
-export default async function MailboxesPage() {
+export default async function MailboxesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ suppressed?: string }>
+}) {
+  /*
+   * ⚠️ THE LOOKUP IS A URL PARAMETER, NOT CLIENT STATE. "Is this address
+   * suppressed?" is a question somebody gets asked over email and needs to
+   * answer with a link — and a shareable answer is worth more than a slicker
+   * one that only exists in a tab nobody else has open.
+   */
+  const suppressionSearch = (await searchParams).suppressed?.trim() || null
   const ctx = await workspaceContextIfPermitted('email.campaign.view')
   // The layout renders the reason; this only stops the page computing and
   // serialising its result into the RSC payload.
@@ -38,9 +49,10 @@ export default async function MailboxesPage() {
    */
   const canManage = can({ role: ctx.role, modules: ctx.modules }, 'email.account.manage')
 
-  const [accounts, domains, { data: workspace }] = await Promise.all([
+  const [accounts, domains, suppressions, { data: workspace }] = await Promise.all([
     listEmailAccounts(ctx.workspace.id),
     getDomainHealth(ctx.workspace.id),
+    listSuppressions(ctx.workspace.id, { search: suppressionSearch }),
     // Migration 0111. Required in the footer of every campaign email.
     createAdminClient()
       .from('workspaces')
@@ -100,7 +112,17 @@ export default async function MailboxesPage() {
               here on their own; removing one lets you email that address again.
             </p>
           </div>
-          <SuppressionList suppressions={await listSuppressions(ctx.workspace.id)} />
+          {/*
+            ⚠️ THE LIST IS CAPPED AT 500 AND ORDERED NEWEST FIRST, so the
+            suppressions most likely to be asked about — the oldest — are
+            exactly the ones cut off. The count and the lookup below are what
+            stop a partial list reading as a complete one.
+          */}
+          <SuppressionList
+            suppressions={suppressions.rows}
+            total={suppressions.total}
+            search={suppressionSearch}
+          />
         </section>
       ) : null}
 
