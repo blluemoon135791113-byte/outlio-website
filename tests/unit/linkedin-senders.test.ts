@@ -12,7 +12,7 @@
  * ║  until this file existed.                                                 ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -106,6 +106,69 @@ describe('a new sender starts at stage zero', () => {
     // status". A freshly linked account is unreviewed, not presumed fine.
     expect(SENDERS).toMatch(/stage: 0/)
     expect(SENDERS).toMatch(/status: 'unknown'/)
+  })
+})
+
+describe('the budget says what it does not know', () => {
+  const PANEL = strip(
+    readFileSync(join(ROOT, 'components/linkedin/SenderSettings.tsx'), 'utf8'),
+  )
+  const LEDGER_WRITERS = (() => {
+    const dirs = ['lib', 'app']
+    const out: string[] = []
+    const walk = (d: string) => {
+      let names: string[]
+      try {
+        names = readdirSync(d)
+      } catch {
+        return
+      }
+      for (const name of names) {
+        if (name === 'node_modules' || name.startsWith('.')) continue
+        const full = join(d, name)
+        if (statSync(full).isDirectory()) walk(full)
+        else if (/\.tsx?$/.test(full)) {
+          const code = strip(readFileSync(full, 'utf8'))
+          if (/from\('linkedin_sender_actions'\)[\s\S]{0,120}?\.(insert|upsert)\(/.test(code)) {
+            out.push(full)
+          }
+        }
+      }
+    }
+    for (const d of dirs) walk(join(ROOT, d))
+    return out
+  })()
+
+  it('the ledger still has no writer, which is why the caption exists', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ EVERY BUDGET COUNTS ROWS IN A TABLE NOTHING WRITES TO.            ║
+     * ║                                                                       ║
+     * ║  `linkedin_sender_used()` counts `linkedin_sender_actions`; the        ║
+     * ║  release pipeline that would insert there is not built. So every       ║
+     * ║  figure on the settings panel is the full stage cap and cannot fall.   ║
+     * ║                                                                       ║
+     * ║  Not a lie — nothing has been released, so everything does remain —    ║
+     * ║  but a progress bar pinned at 100% reads as monitoring, and a person   ║
+     * ║  trusting it can send their way into a restriction on a real account.  ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     *
+     * ⚠️ ASSERTED IN BOTH DIRECTIONS. When the pipeline lands this fails, and
+     * the fix is to come back and re-read the caption rather than delete this.
+     */
+    expect(
+      LEDGER_WRITERS,
+      'Something now writes to linkedin_sender_actions. The budget has become ' +
+        'a real measurement — revisit the caption on SenderSettings, which ' +
+        'currently explains that it is not one.',
+    ).toEqual([])
+  })
+
+  it('the panel does not present the figure as monitoring', () => {
+    // The caption stays true after the pipeline lands too: manual LinkedIn
+    // activity is never visible to Outlio, which is what the reserve is for.
+    expect(PANEL).toMatch(/Counts what Outlio has prepared for you/)
+    expect(PANEL).toMatch(/not counted/)
   })
 })
 

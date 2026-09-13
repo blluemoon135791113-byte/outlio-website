@@ -267,9 +267,30 @@ function ReviewPrompt({ sender }: { sender: SenderView }) {
  * ⚠️ THE NUMBER IS "REMAINING", NOT "USED". A setter planning their morning
  * needs to know how many more they may do; used-of-cap makes them do the
  * subtraction, and they will do it wrong when they are busy.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ AND IT COUNTS ONLY WHAT OUTLIO RECORDED, WHICH IS SAID OUT LOUD BELOW.║
+ * ║                                                                           ║
+ * ║  `linkedin_sender_used()` counts rows in `linkedin_sender_actions`, and   ║
+ * ║  NOTHING WRITES TO THAT TABLE YET — the release pipeline that would is    ║
+ * ║  not built. So every figure here is currently the full stage cap and      ║
+ * ║  cannot go down.                                                          ║
+ * ║                                                                           ║
+ * ║  The number is not wrong: nothing has been released, so everything does   ║
+ * ║  remain. What would be wrong is letting a progress bar at 100% imply that ║
+ * ║  Outlio is watching a real LinkedIn account. It is not, and it never will ║
+ * ║  be for actions taken directly in LinkedIn — which is exactly what        ║
+ * ║  `external_reserve_per_day` exists for. Somebody reading this as          ║
+ * ║  monitoring could send their way into a restriction while the bar stays   ║
+ * ║  full.                                                                    ║
+ * ║                                                                           ║
+ * ║  The caption is therefore true both now and after the pipeline lands, so  ║
+ * ║  it does not need taking out again.                                      ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 function BudgetRow({ budgets }: { budgets: SenderView['budgets'] }) {
   return (
+    <>
     <div className="mt-4 grid gap-3 sm:grid-cols-3">
       {budgets.map((b) => {
         const pct = b.cap === 0 ? 0 : Math.min((b.remaining / b.cap) * 100, 100)
@@ -306,6 +327,18 @@ function BudgetRow({ budgets }: { budgets: SenderView['budgets'] }) {
         )
       })}
     </div>
+
+    {/*
+      ⚠️ SAYS WHAT THE NUMBER DOES NOT KNOW. See the banner above: a full bar
+      must not read as "Outlio is watching this account". Anything done
+      directly in LinkedIn is invisible here, which is what the daily reserve
+      is for.
+    */}
+    <p className="mt-2 text-[11px] leading-4 text-muted">
+      Counts what Outlio has prepared for you. Anything you do directly in
+      LinkedIn is not counted — set a daily reserve to hold room for it.
+    </p>
+    </>
   )
 }
 
