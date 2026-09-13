@@ -40,12 +40,26 @@ describe('runJob time budget', () => {
   })
 
   it('abandons a job that hangs, instead of waiting for the platform to kill the tick', async () => {
-    const result = emptyResult()
-    // 80ms of budget left, so the race resolves in 80ms rather than 20s.
-    await runJob(result, 'stuck', never, beganSoThatRemainingIs(80))
+    /*
+     * ⚠️ FAKE TIMERS FOR THE SAME REASON AS THE BOUNDARY CASE BELOW, though
+     * this one has 80ms of slack rather than sitting on the edge. On real
+     * timers an 80ms stall between `beganSoThatRemainingIs` and `runJob`'s
+     * first `Date.now()` — a GC pause on a loaded runner will do it — makes
+     * `remaining <= 0`, and the job is reported 'skipped' rather than 'timed
+     * out'. Deterministic here, and the suite stops waiting 80ms for it.
+     */
+    vi.useFakeTimers()
+    try {
+      const result = emptyResult()
+      const hung = runJob(result, 'stuck', never, beganSoThatRemainingIs(80))
+      await vi.advanceTimersByTimeAsync(80)
+      await hung
 
-    expect(result.jobs.stuck.ok).toBe(false)
-    expect(result.jobs.stuck.detail).toContain('timed out')
+      expect(result.jobs.stuck.ok).toBe(false)
+      expect(result.jobs.stuck.detail).toContain('timed out')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('lets later jobs run after an earlier one hangs — the whole point', async () => {
@@ -85,15 +99,44 @@ describe('runJob time budget', () => {
      * The other side of the same coin, and the reason the skip message exists:
      * late in a tick there may be nothing left to give, and that must be
      * visible rather than silent.
+     *
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ FAKE TIMERS, BECAUSE THIS ASSERTION SITS EXACTLY ON THE BOUNDARY. ║
+     * ║                                                                       ║
+     * ║  `runJob` skips when `remaining <= 0`, and with 120ms left the hung   ║
+     * ║  job must consume the last of it — measured by `Date.now()`. Node's   ║
+     * ║  timers run off libuv's cached loop time rather than `Date.now()`,    ║
+     * ║  and can fire a millisecond EARLY against it. One millisecond left is ║
+     * ║  `remaining = 1`, the second job runs, and the assertion reads        ║
+     * ║  '3 delivered'.                                                       ║
+     * ║                                                                       ║
+     * ║  It flipped on runner speed: observed passing and failing on the SAME ║
+     * ║  commit (ad45a29, a two-file SQL change that cannot touch this code). ║
+     * ║  A required check that fails for reasons unrelated to the diff is one ║
+     * ║  people learn to re-run without reading — the vacuous-guard failure   ║
+     * ║  this repository has already recorded twice.                          ║
+     * ║                                                                       ║
+     * ║  Under fake timers `Date.now()` advances in lockstep with the         ║
+     * ║  scheduler, so 120ms advanced is 120ms elapsed, exactly. Same pattern ║
+     * ║  the test above already uses, and for the same underlying reason.     ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
      */
-    const result = emptyResult()
-    const began = beganSoThatRemainingIs(120)
+    vi.useFakeTimers()
+    try {
+      const result = emptyResult()
+      const began = beganSoThatRemainingIs(120)
 
-    await runJob(result, 'sync_replies', never, began)
-    await runJob(result, 'deliver_webhooks', async () => '3 delivered', began)
+      const hung = runJob(result, 'sync_replies', never, began)
+      await vi.advanceTimersByTimeAsync(120)
+      await hung
 
-    expect(result.jobs.sync_replies.detail).toContain('timed out')
-    expect(result.jobs.deliver_webhooks.detail).toBe('skipped — tick budget exhausted')
+      await runJob(result, 'deliver_webhooks', async () => '3 delivered', began)
+
+      expect(result.jobs.sync_replies.detail).toContain('timed out')
+      expect(result.jobs.deliver_webhooks.detail).toBe('skipped — tick budget exhausted')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('records budget-exhausted jobs as skipped rather than dropping them', async () => {
