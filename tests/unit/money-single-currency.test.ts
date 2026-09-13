@@ -101,32 +101,49 @@ describe('the scanner can see what it polices', () => {
   })
 })
 
-describe('money is single-currency, and the code says so', () => {
-  it('no caller supplies a currency, so every deal is the default', () => {
-    expect(
-      currencyCallers,
-      'A caller now sets a currency on an opportunity. Reporting cannot handle ' +
-        'that: migration 0082 sums value_amount with no grouping by currency, so ' +
-        'mixed-currency deals add together into a number that is not money. ' +
-        'Implement §5.6 — fx_rate_to_workspace_currency and fx_rate_date ' +
-        'snapshotted at create and at close, and a rollup that uses them — ' +
-        'before wiring this up.',
-    ).toEqual([])
+describe('a currency may now be supplied, because the snapshot is written', () => {
+  it('⚠️ THIS GATE IS OPEN NOW, AND THAT IS THE CHANGE', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  THIS USED TO FORBID ANY CALLER PASSING A CURRENCY.                   ║
+     * ║                                                                       ║
+     * ║  The reason was real: 0082 summed `value_amount` with no conversion,   ║
+     * ║  so a €10,000 and a $10,000 deal added to 20,000 with nothing          ║
+     * ║  erroring. That reason is gone — 0123 snapshots a rate, 0124 converts  ║
+     * ║  in all eight sum sites, and an unrated deal is excluded and counted.  ║
+     * ║                                                                       ║
+     * ║  So the assertion is no longer "nobody may" but "if anybody does, the  ║
+     * ║  snapshot is written at create". A guard kept shut after its reason    ║
+     * ║  expired is a guard people learn to delete.                           ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const opportunities = readFileSync(join(ROOT, 'lib/crm/opportunities.ts'), 'utf8')
+
+    // The rate is resolved and BOTH halves of the pair are written.
+    expect(opportunities).toMatch(/resolveFxRate\(\{ from: currency, to: workspace\.default_currency \}\)/)
+    expect(opportunities).toMatch(/fx_rate_to_workspace_currency: fx\?\.rate \?\? null/)
+    expect(opportunities).toMatch(/fx_rate_date: fx\?\.date \?\? null/)
+
+    /*
+     * ⚠️ NEVER WRITTEN BY A CALLER. `value_amount_base` is a GENERATED column;
+     * inserting it errors at runtime, and a money insert that throws after the
+     * rate lookup is the worst place to find out.
+     */
+    expect(opportunities, 'a caller writes the generated column').not.toMatch(
+      /value_amount_base:/,
+    )
   })
 
-  it('the rollup still has no currency grouping, which is why the above matters', () => {
+  it('a missing rate is stored as NULL rather than defaulted to 1', () => {
     /*
-     * Asserted so the two facts stay tied together. If someone adds grouping,
-     * this fails and points them at removing the single-currency assumption
-     * rather than leaving a guard that no longer describes the system.
+     * ⚠️ THE ONE LINE THAT KEEPS THE WHOLE THING HONEST. `?? 1` here would make
+     * every unconvertible deal silently worth its face value in the wrong
+     * currency — the exact bug this file has guarded against since it was
+     * written, just relocated into TypeScript.
      */
-    const sql = readFileSync(
-      join(ROOT, 'supabase', 'migrations', '0082_reporting_aggregates.sql'),
-      'utf8',
-    )
-    expect(sql).toContain('sum(o.value_amount)')
-    expect(sql, 'the rollup now groups by currency — revisit this guard').not.toMatch(
-      /group by[^\n]*currency/i,
+    const opportunities = readFileSync(join(ROOT, 'lib/crm/opportunities.ts'), 'utf8')
+    expect(opportunities, 'an absent rate is being defaulted').not.toMatch(
+      /fx_rate_to_workspace_currency: fx\?\.rate \?\? 1/,
     )
   })
 })
@@ -200,31 +217,78 @@ describe('§5.6 is half built, and the half that is missing is named', () => {
     expect(FX).toMatch(/add constraint crm_opportunities_fx_rate_positive\s+check/)
   })
 
-  it('⚠️ THE ROLLUPS STILL DO NOT CONVERT, which is why the gate above stands', () => {
+  it('the rollups convert, and every sum site moved together', () => {
     /*
      * ╔═══════════════════════════════════════════════════════════════════════╗
-     * ║  0123 GAVE EVERY DEAL A CONVERTED AMOUNT. NOTHING READS IT YET.       ║
+     * ║  0124 SWITCHED ALL EIGHT SUM SITES TO `value_amount_base`.            ║
      * ║                                                                       ║
-     * ║  Eight `sum(value_amount)` sites across 0082, 0083 and 0084 still add  ║
-     * ║  raw amounts across currencies. Today that is harmless — every deal is ║
-     * ║  the workspace currency, so converted and raw are the same number —    ║
-     * ║  and it is exactly why no caller may pass a currency until they are    ║
-     * ║  switched to `value_amount_base`.                                     ║
+     * ║  Proven against a throwaway Postgres with mixed currencies: a $5,000   ║
+     * ║  won deal plus a £10,000 won deal at 1.35 reported 15,000 before and   ║
+     * ║  18,500 after. The old number was not merely adding wrong units — it   ║
+     * ║  was materially wrong, in whichever direction the rate happened to go. ║
      * ║                                                                       ║
-     * ║  Asserted so the two facts stay tied: the day the rollups convert,     ║
-     * ║  this fails and points at reopening the currency gate above.          ║
+     * ║  ⚠️ ALL EIGHT OR NONE. One site left on the raw column would make two  ║
+     * ║  screens disagree about the same pipeline, which is this project's     ║
+     * ║  most common defect wearing a currency symbol.                        ║
      * ╚═══════════════════════════════════════════════════════════════════════╝
      */
-    const unconverted = ['0082_reporting_aggregates', '0083_crm_funnel', '0084_crm_forecast']
-      .map((f) => readFileSync(join(ROOT, 'supabase', 'migrations', `${f}.sql`), 'utf8'))
-      .join('\n')
+    const converted = readFileSync(
+      join(ROOT, 'supabase', 'migrations', '0124_rollups_convert_currency.sql'),
+      'utf8',
+    )
+    /*
+     * ⚠️ COUNTED ON THE COMMENT-STRIPPED BODY. The header of 0124 documents the
+     * substitution by quoting both spellings, so counting the raw file finds
+     * nine and the guard fails for the most annoying possible reason. This is
+     * the trap `outlio-verification-habits` records — files here quote the
+     * rules they obey — and it has now caught five separate guards.
+     */
+    const body = converted.replace(/^--.*$/gm, '')
+    const sites = body.match(/sum\(o\.value_amount_base\b/g) ?? []
+    expect(sites.length, 'a sum site was left on the raw amount').toBe(8)
+    expect(body, 'an unconverted sum survives in 0124').not.toMatch(/sum\(o\.value_amount\)/)
+  })
 
-    expect(unconverted).toMatch(/sum\(o\.value_amount\)/)
-    expect(
-      unconverted,
-      'A rollup now sums the converted column. Multi-currency may be safe to ' +
-        'open — revisit the caller gate in this file rather than leaving it shut.',
-    ).not.toMatch(/sum\(o\.value_amount_base\)/)
+  it('0124 replaces every function that had a sum, and nothing else', () => {
+    /*
+     * ⚠️ THE BODIES ARE COPIED VERBATIM FROM 0082/0083/0084 with one
+     * mechanical substitution. Retyping a reporting function from memory is how
+     * a rollup quietly starts measuring something else — the same mistake that
+     * produced a wrong `claim_email_messages` signature earlier in this build.
+     */
+    const converted = readFileSync(
+      join(ROOT, 'supabase', 'migrations', '0124_rollups_convert_currency.sql'),
+      'utf8',
+    )
+    const replaced = (converted.match(/create or replace function public\.(\w+)/g) ?? []).map(
+      (m) => m.replace('create or replace function public.', ''),
+    )
+    expect(replaced.sort()).toEqual([
+      'crm_batch_funnel',
+      'crm_forecast_by_period',
+      'crm_pipeline_totals',
+      'crm_rollup_activity_metrics',
+      'crm_win_rates',
+    ])
+  })
+
+  it('an unconvertible deal is counted, because a total that is short must say so', () => {
+    /*
+     * ⚠️ THE COUNT AND THE VALUE NOW DISAGREE ON PURPOSE, and that is the part
+     * a screen has to explain. With one USD and one EUR open deal,
+     * `crm_pipeline_totals` returns `open_deals = 2` and `open_value = 10000` —
+     * the EUR deal is real pipeline but has no rate, so it is in the count and
+     * not in the money. A reader dividing one by the other gets an average
+     * deal size that is wrong by half.
+     *
+     * `crm_unconvertible_deals()` is what makes that legible, so it must exist.
+     */
+    const fx = readFileSync(
+      join(ROOT, 'supabase', 'migrations', '0123_deal_fx_snapshot.sql'),
+      'utf8',
+    )
+    expect(fx).toMatch(/create or replace function public\.crm_unconvertible_deals/)
+    expect(fx).toMatch(/fx_rate_to_workspace_currency is null/)
   })
 
   it('records the storage deviation rather than silently differing', () => {

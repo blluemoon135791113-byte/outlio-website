@@ -11,6 +11,7 @@ import 'server-only'
  * ⚠️ THE SERVICE ROLE BYPASSES RLS. Every query is scoped by `workspace_id`.
  */
 import { emitDomainEvent } from '@/lib/events/emit'
+import { resolveFxRate } from '@/lib/crm/fx'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database'
 
@@ -222,6 +223,31 @@ export async function createOpportunity(
     probability = data.default_probability
   }
 
+  const currency = (input.currency ?? 'USD').toUpperCase()
+
+  /*
+   * ⚠️ THE RATE IS SNAPSHOTTED AT CREATE (§5.6) AND MAY LEGITIMATELY BE NULL.
+   *
+   * `resolveFxRate` answers the identity case without touching the network and
+   * asks Frankfurter for anything else. A null means the deal is UNCONVERTIBLE:
+   * `value_amount_base` stays NULL, totals drop it, and
+   * `crm_unconvertible_deals()` counts it. Defaulting to 1 would add a foreign
+   * amount to the total at face value — the bug §5.6 exists to prevent.
+   *
+   * ⚠️ A MISSING WORKSPACE ROW MEANS NO SNAPSHOT, NOT A GUESSED ONE. Migration
+   * 0123's trigger writes the identity rate independently, so the invariant
+   * survives this returning null for any reason.
+   */
+  const { data: workspace } = await db
+    .from('workspaces')
+    .select('default_currency')
+    .eq('id', workspaceId)
+    .maybeSingle()
+
+  const fx = workspace?.default_currency
+    ? await resolveFxRate({ from: currency, to: workspace.default_currency })
+    : null
+
   const { data, error } = await db
     .from('crm_opportunities')
     .insert({
@@ -233,7 +259,13 @@ export async function createOpportunity(
       company_id: input.companyId ?? null,
       owner_user_id: input.ownerUserId ?? null,
       value_amount: input.valueAmount ?? null,
-      currency: (input.currency ?? 'USD').toUpperCase(),
+      currency,
+      /*
+       * Both or neither — 0123's check constraint refuses a half pair, and
+       * `value_amount_base` is GENERATED, so it is never written here.
+       */
+      fx_rate_to_workspace_currency: fx?.rate ?? null,
+      fx_rate_date: fx?.date ?? null,
       probability,
       expected_close_date: input.expectedCloseDate ?? null,
       created_by: actorUserId,

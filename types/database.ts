@@ -2934,6 +2934,8 @@ export type Database = {
           currency: string
           deleted_at: string | null
           expected_close_date: string | null
+          fx_rate_date: string | null
+          fx_rate_to_workspace_currency: number | null
           id: string
           lost_reason: string | null
           owner_user_id: string | null
@@ -2944,6 +2946,7 @@ export type Database = {
           title: string
           updated_at: string
           value_amount: number | null
+          value_amount_base: number | null
           version: number
           workspace_id: string
         }
@@ -2956,6 +2959,8 @@ export type Database = {
           currency?: string
           deleted_at?: string | null
           expected_close_date?: string | null
+          fx_rate_date?: string | null
+          fx_rate_to_workspace_currency?: number | null
           id?: string
           lost_reason?: string | null
           owner_user_id?: string | null
@@ -2966,6 +2971,7 @@ export type Database = {
           title: string
           updated_at?: string
           value_amount?: number | null
+          value_amount_base?: number | null
           version?: number
           workspace_id: string
         }
@@ -2978,6 +2984,8 @@ export type Database = {
           currency?: string
           deleted_at?: string | null
           expected_close_date?: string | null
+          fx_rate_date?: string | null
+          fx_rate_to_workspace_currency?: number | null
           id?: string
           lost_reason?: string | null
           owner_user_id?: string | null
@@ -2988,6 +2996,7 @@ export type Database = {
           title?: string
           updated_at?: string
           value_amount?: number | null
+          value_amount_base?: number | null
           version?: number
           workspace_id?: string
         }
@@ -8146,6 +8155,7 @@ export type Database = {
       workspaces: {
         Row: {
           created_at: string
+          default_currency: string
           deleted_at: string | null
           id: string
           member_limit_override: number | null
@@ -8156,6 +8166,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          default_currency?: string
           deleted_at?: string | null
           id?: string
           member_limit_override?: number | null
@@ -8166,6 +8177,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          default_currency?: string
           deleted_at?: string | null
           id?: string
           member_limit_override?: number | null
@@ -8416,6 +8428,10 @@ export type Database = {
       }
       crm_rollup_activity_metrics: {
         Args: { p_from_day: string; p_to_day: string; p_workspace_id: string }
+        Returns: number
+      }
+      crm_unconvertible_deals: {
+        Args: { p_status?: string; p_workspace_id: string }
         Returns: number
       }
       crm_undo_batch: {
