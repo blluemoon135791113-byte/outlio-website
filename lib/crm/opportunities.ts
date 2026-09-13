@@ -30,6 +30,45 @@ export type StageInput = {
   staleAfterDays?: number | null
 }
 
+/**
+ * A stage probability as typed into the setup form. `null` means the field did
+ * not contain a usable number.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ BLANK IS NOT ZERO, AND THE SCHEMA CANNOT HOLD THE DIFFERENCE.         ║
+ * ║                                                                           ║
+ * ║  The form used `Number(value) || 0`, so clearing the field — the natural  ║
+ * ║  way to say "I don't know yet" — stored a deliberate 0%. Every deal in    ║
+ * ║  that stage then contributed nothing to the weighted forecast, which      ║
+ * ║  reads as "these deals are worthless" rather than "nobody said".          ║
+ * ║                                                                           ║
+ * ║  `default_probability` is `not null default 0`, so unknown genuinely has  ║
+ * ║  nowhere to live. Until §8's nullable probability exists, the honest      ║
+ * ║  response is to REFUSE the blank rather than invent a number for it: a    ║
+ * ║  person who is asked returns a figure they meant, and a forecast built    ║
+ * ║  from figures people meant is the only kind worth showing.                ║
+ * ║                                                                           ║
+ * ║  ⚠️ 0 ITSELF STAYS VALID. "Lost" is legitimately 0%, and the suggested    ║
+ * ║  stages ship it. Rejecting 0 would break the default pipeline.            ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export function parseStageProbability(raw: string): number | null {
+  const text = raw.trim()
+
+  /*
+   * ⚠️ DIGITS, NOT `Number()`. A shape test rather than a coercion, because
+   * `Number` accepts far more than a percentage: '1e2' is 100, '0x10' is 16,
+   * '' is 0 and '  ' is 0. Deciding validity from what JavaScript is willing
+   * to parse means the rule is whatever that function happens to do, which
+   * nobody can read off this line. The column is `integer`, so a percentage
+   * here is one to three digits and nothing else.
+   */
+  if (!/^\d{1,3}$/.test(text)) return null
+
+  const value = Number(text)
+  return value <= 100 ? value : null
+}
+
 export type Pipeline = {
   id: string
   name: string
