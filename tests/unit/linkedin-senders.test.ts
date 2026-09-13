@@ -117,3 +117,42 @@ describe('task kinds map to the budget they spend', () => {
     expect(budgetKindForTask('REVIEW_PROFILE')).toBe('profile_review')
   })
 })
+
+describe('a failure is vague to the user and specific in the log', () => {
+  /*
+   * ⚠️ FOUND BY HITTING IT. On a staging project missing this table, linking
+   * failed with "contact support" and nothing anywhere said why — the lookup's
+   * error was discarded, so an infrastructure fault and an account conflict
+   * were indistinguishable to the one person who could act on the difference.
+   */
+  it('logs all three failure paths', () => {
+    for (const path of ['sender lookup failed', 'sender insert failed', 'sender link failed']) {
+      expect(SENDERS, `${path} is silent`).toContain(path)
+    }
+  })
+
+  it('no longer discards the lookup error', () => {
+    expect(SENDERS).toMatch(/error: lookupError/)
+    expect(SENDERS).toMatch(/if \(lookupError\)/)
+  })
+
+  it('never logs the identity key', () => {
+    /*
+     * ⚠️ IT NAMES A REAL PERSON'S PROFILE. CLAUDE.md forbids logging full lead
+     * records for the same reason, and a sender's identity key is the most
+     * identifying string in this module.
+     */
+    const logs = SENDERS.match(/console\.error\([\s\S]{0,240}?\)/g) ?? []
+    expect(logs.length).toBeGreaterThanOrEqual(3)
+    for (const log of logs) {
+      expect(log, 'a log line carries the identity key').not.toContain('identityKey')
+      expect(log).not.toContain('profileUrl')
+    }
+  })
+
+  it('still tells the user nothing that distinguishes the causes', () => {
+    // The vagueness is the privacy control; the log is where the difference
+    // goes. Adding detail to the response would undo it.
+    expect(SENDERS).not.toMatch(/reason: '(already_claimed|conflict|db_error)'/)
+  })
+})

@@ -63,11 +63,31 @@ export async function linkSender(input: {
 
   const db = createAdminClient()
 
-  const { data: existing } = await db
+  const { data: existing, error: lookupError } = await db
     .from('linkedin_senders')
     .select('id, owner_user_id')
     .eq('identity_key', identityKey)
     .maybeSingle()
+
+  /*
+   * ⚠️ THE ERROR WAS IGNORED HERE, AND IT COST REAL TIME. A failed lookup left
+   * `existing` null, so the code fell through to an insert that also failed,
+   * and the operator got "contact support" while support had nothing to look
+   * at. I hit exactly that on a staging project missing this table and spent
+   * several minutes unable to tell an infrastructure fault from an account
+   * conflict — which is precisely what the customer-facing message is designed
+   * NOT to distinguish.
+   *
+   * The message to the client stays deliberately vague; the LOG is where the
+   * difference goes. Never the identity key: it names a real person's profile.
+   */
+  if (lookupError) {
+    console.error('[linkedin] sender lookup failed', {
+      workspaceId: input.workspaceId,
+      message: lookupError.message,
+    })
+    return { ok: false, reason: 'unavailable' }
+  }
 
   let senderId: string
   let created = false
@@ -96,8 +116,21 @@ export async function linkSender(input: {
       .select('id')
       .single()
 
-    // A unique violation here is the race version of the branch above.
-    if (error || !inserted) return { ok: false, reason: 'unavailable' }
+    /*
+     * A unique violation here is the race version of the branch above — two
+     * requests creating the same sender at once. Anything else is a fault, and
+     * the two are worth telling apart in the log even though the caller is told
+     * the same thing either way.
+     */
+    if (error || !inserted) {
+      console.error('[linkedin] sender insert failed', {
+        workspaceId: input.workspaceId,
+        // `23505` is a unique violation: somebody else holds this identity.
+        code: error?.code ?? 'none',
+        message: error?.message ?? 'no row returned',
+      })
+      return { ok: false, reason: 'unavailable' }
+    }
     senderId = inserted.id
     created = true
   }
@@ -114,7 +147,13 @@ export async function linkSender(input: {
       { onConflict: 'workspace_id,sender_id', ignoreDuplicates: true },
     )
 
-  if (linkError) return { ok: false, reason: 'unavailable' }
+  if (linkError) {
+    console.error('[linkedin] sender link failed', {
+      workspaceId: input.workspaceId,
+      message: linkError.message,
+    })
+    return { ok: false, reason: 'unavailable' }
+  }
   return { ok: true, senderId, created }
 }
 
