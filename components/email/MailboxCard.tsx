@@ -13,6 +13,7 @@ import {
   testMailboxConnection,
   type ActionState,
 } from '@/app/(product)/email/actions'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 type Check = { id: string; label: string; status: string; detail: string }
 
@@ -212,7 +213,7 @@ export function MailboxCard({
 
         {account.lastSendAt ? (
           <span className="ml-auto text-xs text-muted">
-            Last send {new Date(account.lastSendAt).toLocaleDateString()}
+            Last send <LocalTime iso={account.lastSendAt} dateOnly />
           </span>
         ) : (
           <span className="ml-auto text-xs text-muted">Nothing sent yet</span>

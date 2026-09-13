@@ -19,7 +19,23 @@ import { useSyncExternalStore } from 'react'
  * ║  before hydration.                                                        ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-export function LocalTime({ iso, dateOnly = false }: { iso: string; dateOnly?: boolean }) {
+/**
+ * ⚠️ `className` EXISTS BECAUSE ITS ABSENCE WAS BEING ROUTED AROUND. Six client
+ * components hand-rolled `new Date(x).toLocaleString()` inside their own styled
+ * `<span>` or `<time>` rather than lose the class — and every one of them lost
+ * `suppressHydrationWarning` and the machine-readable `dateTime` along with it.
+ * A shared component that cannot be styled is a shared component people stop
+ * using, and the workaround was worse than the styling gap.
+ */
+export function LocalTime({
+  iso,
+  dateOnly = false,
+  className,
+}: {
+  iso: string
+  dateOnly?: boolean
+  className?: string
+}) {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return null
 
@@ -29,7 +45,7 @@ export function LocalTime({ iso, dateOnly = false }: { iso: string; dateOnly?: b
    * differ by design. Suppressing it anywhere else would hide a real bug.
    */
   return (
-    <time dateTime={iso} suppressHydrationWarning>
+    <time dateTime={iso} className={className} suppressHydrationWarning>
       {dateOnly
         ? date.toLocaleDateString(undefined, { dateStyle: 'medium' })
         : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}

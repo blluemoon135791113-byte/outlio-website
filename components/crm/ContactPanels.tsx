@@ -10,6 +10,7 @@ import {
   type ContactActionState,
 } from '@/lib/crm/contact-actions'
 import type { CollisionReport } from '@/lib/crm/collision'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 const INITIAL: ContactActionState = { status: 'idle' }
 
@@ -75,7 +76,7 @@ export function AssignOwner({
           </p>
           <p className="mt-1 leading-relaxed">
             Last activity {party.lastActivityType?.toLowerCase().replace(/_/g, ' ')} on{' '}
-            {new Date(party.lastActivityAt!).toLocaleDateString()}
+            <LocalTime iso={party.lastActivityAt!} dateOnly />
             {party.openOpportunities > 0
               ? ` · ${party.openOpportunities} open ${party.openOpportunities === 1 ? 'deal' : 'deals'}`
               : ''}

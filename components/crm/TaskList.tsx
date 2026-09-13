@@ -4,6 +4,7 @@ import { useActionState } from 'react'
 import Link from 'next/link'
 
 import { setTaskDone, type TaskActionState } from '@/app/(product)/crm/tasks/actions'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 export type TaskRow = {
   id: string
@@ -15,14 +16,11 @@ export type TaskRow = {
   contactName: string | null
 }
 
-function dueLabel(dueAt: string | null): { text: string; overdue: boolean } {
+function dueLabel(dueAt: string | null): { overdue: boolean } {
   // ⚠️ NO DUE DATE IS NOT OVERDUE. An undated task is simply undated, and
   // colouring it red would train people to ignore the colour.
-  if (!dueAt) return { text: 'No date', overdue: false }
-
-  const due = new Date(dueAt)
-  const overdue = due.getTime() < Date.now()
-  return { text: due.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), overdue }
+  if (!dueAt) return { overdue: false }
+  return { overdue: new Date(dueAt).getTime() < Date.now() }
 }
 
 function Task({ row, canManage }: { row: TaskRow; canManage: boolean }) {
@@ -64,7 +62,23 @@ function Task({ row, canManage }: { row: TaskRow; canManage: boolean }) {
 
         <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
           <span className={due.overdue && !row.done ? 'font-medium text-danger' : 'text-muted'}>
-            {due.overdue && !row.done ? `Overdue — ${due.text}` : due.text}
+            {/*
+              ⚠️ THE DATE IS A COMPONENT; `overdue` IS STILL COMPUTED IN RENDER.
+              The date was formatted with the SERVER's timezone on the SSR pass,
+              which is the bug being fixed. `overdue` keeps its `Date.now()`
+              comparison: it is impure in the same way, but the two clocks would
+              have to straddle the due instant within the hydration window to
+              disagree, and the fix for that is `RelativeTime`'s external store
+              rather than anything this line can do.
+            */}
+            {row.dueAt === null ? (
+              'No date'
+            ) : (
+              <>
+                {due.overdue && !row.done ? 'Overdue — ' : ''}
+                <LocalTime iso={row.dueAt} dateOnly />
+              </>
+            )}
           </span>
           {row.contactId ? (
             <Link

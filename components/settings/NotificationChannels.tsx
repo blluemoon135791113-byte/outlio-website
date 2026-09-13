@@ -10,6 +10,7 @@ import {
   type ChannelActionState,
 } from '@/app/(product)/dashboard/settings/notifications/actions'
 import { CHANNEL_SETUP, NOTIFIABLE_EVENTS, type ChannelProvider } from '@/lib/notifications/format'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 export type ChannelRow = {
   id: string
@@ -168,7 +169,7 @@ function ChannelCard({ channel, canManage }: { channel: ChannelRow; canManage: b
         </p>
       ) : channel.lastSentAt ? (
         <p className="text-xs text-muted">
-          Last sent {new Date(channel.lastSentAt).toLocaleString()}
+          Last sent <LocalTime iso={channel.lastSentAt} />
         </p>
       ) : (
         <p className="text-xs text-muted">Nothing sent yet.</p>

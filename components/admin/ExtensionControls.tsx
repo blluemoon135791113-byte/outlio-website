@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, type ReactNode } from 'react'
 
 import {
   adminRevokeAllDevicesAction,
@@ -9,6 +9,7 @@ import {
   type AdminActionState,
   type ExtensionUsage,
 } from '@/lib/admin/extension-actions'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 const INITIAL: AdminActionState = { status: 'idle' }
 
@@ -60,7 +61,12 @@ export function ExtensionControls({
 function Usage({ usage }: { usage: ExtensionUsage }) {
   return (
     <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
-      {[
+      {/*
+        ⚠️ TYPED `ReactNode`, NOT `string`, SO A TIMESTAMP CAN BE A COMPONENT.
+        The row held a pre-formatted string, which is why this one rendered in
+        the server's timezone while the rest of the product used `LocalTime`.
+      */}
+      {([
         ['Browsers', String(usage.devices)],
         ['Sessions', String(usage.sessions)],
         ['Pages', String(usage.pagesProcessed)],
@@ -69,9 +75,9 @@ function Usage({ usage }: { usage: ExtensionUsage }) {
           'Last active',
           // Absent is stated, not blanked — "never" and "we did not load it"
           // look identical as an empty cell.
-          usage.lastActiveAt ? new Date(usage.lastActiveAt).toLocaleString() : 'Never',
+          usage.lastActiveAt ? <LocalTime iso={usage.lastActiveAt} /> : 'Never',
         ],
-      ].map(([label, value]) => (
+      ] satisfies [string, ReactNode][]).map(([label, value]) => (
         <div key={label} className="flex items-baseline gap-1.5">
           <dt className="text-muted">{label}</dt>
           <dd className="font-medium text-ink">{value}</dd>
@@ -164,9 +170,13 @@ function DeviceRow({ userId, device }: { userId: string; device: ExtensionDevice
         {[device.browser, device.platform].filter(Boolean).join(' · ') || 'Unknown browser'}
       </span>
       <span className="min-w-0 flex-1 text-xs text-muted">
-        {device.lastActiveAt
-          ? `Last active ${new Date(device.lastActiveAt).toLocaleString()}`
-          : 'Never used'}
+        {device.lastActiveAt ? (
+          <>
+            Last active <LocalTime iso={device.lastActiveAt} />
+          </>
+        ) : (
+          'Never used'
+        )}
       </span>
 
       {/*

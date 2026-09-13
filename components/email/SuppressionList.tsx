@@ -8,6 +8,7 @@ import {
   type ActionState,
 } from '@/app/(product)/email/actions'
 import { REASON_COPY, type Suppression } from '@/lib/email/suppression-copy'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 /**
  * The addresses this workspace will never email again.
@@ -119,9 +120,7 @@ function Row({ suppression }: { suppression: Suppression }) {
         <span className="min-w-0 flex-1 truncate text-xs text-muted">
           {suppression.source ?? ''}
         </span>
-        <time className="text-xs text-muted" dateTime={suppression.createdAt}>
-          {new Date(suppression.createdAt).toLocaleDateString()}
-        </time>
+        <LocalTime iso={suppression.createdAt} dateOnly className="text-xs text-muted" />
 
         {confirming ? null : (
           <button

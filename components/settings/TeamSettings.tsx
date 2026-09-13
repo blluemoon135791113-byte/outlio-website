@@ -15,6 +15,7 @@ import {
 } from '@/lib/workspaces/actions'
 import type { WorkspaceRole } from '@/lib/workspaces/permissions'
 import type { PendingInvitation, TeamMember } from '@/lib/workspaces/roster'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 const INITIAL: WorkspaceActionState = { status: 'idle' }
 
@@ -41,14 +42,6 @@ const ROLE_HINT: Record<WorkspaceRole, string> = {
   manager: 'All team data, reports, flows and campaigns.',
   setter: 'Only records assigned to them. No exports.',
   viewer: 'Read-only, assigned records.',
-}
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
 }
 
 /**
@@ -187,7 +180,7 @@ function MemberRow({
           {isSelf ? <span className="ml-1.5 text-xs font-medium text-muted">(you)</span> : null}
         </p>
         <p className="truncate text-xs text-muted">
-          {member.email} · joined {formatDate(member.joinedAt)}
+          {member.email} · joined <LocalTime iso={member.joinedAt} dateOnly />
         </p>
         {roleState.status === 'error' ? (
           <p className="mt-1 text-xs text-danger">{roleState.message}</p>
@@ -276,7 +269,7 @@ function InvitationRow({ invitation }: { invitation: PendingInvitation }) {
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-ink">{invitation.email}</p>
         <p className="truncate text-xs text-muted">
-          {ROLE_LABEL[invitation.role]} · expires {formatDate(invitation.expiresAt)}
+          {ROLE_LABEL[invitation.role]} · expires <LocalTime iso={invitation.expiresAt} dateOnly />
         </p>
         {state.status === 'error' ? (
           <p role="status" aria-live="polite" className="mt-1 text-xs text-danger">{state.message}</p>

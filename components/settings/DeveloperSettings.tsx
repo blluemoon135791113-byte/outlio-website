@@ -12,6 +12,7 @@ import {
   type DeveloperActionState,
 } from '@/app/(product)/dashboard/settings/developers/actions'
 import { WEBHOOK_EVENTS } from '@/lib/api/webhook-events'
+import { LocalTime } from '@/components/ui/LocalTime'
 
 const SCOPE_GROUPS = [
   { resource: 'contacts', label: 'Contacts' },
@@ -234,7 +235,7 @@ export function ApiKeys({
                   </td>
                   <td className="px-4 py-3 text-xs text-muted">
                     {/* "Never" is the useful answer: an unused key is one to revoke. */}
-                    {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : 'Never'}
+                    {key.lastUsedAt ? <LocalTime iso={key.lastUsedAt} dateOnly /> : 'Never'}
                   </td>
                   <td className="px-4 py-3 text-right">
                     {canManage && !key.revokedAt ? (
@@ -513,7 +514,7 @@ export function Webhooks({
                     </td>
                     <td className="px-4 py-2.5 text-xs text-muted">{d.attempts}</td>
                     <td className="px-4 py-2.5 text-xs text-muted">
-                      {new Date(d.createdAt).toLocaleString()}
+                      <LocalTime iso={d.createdAt} />
                     </td>
                   </tr>
                 ))}
