@@ -22,6 +22,7 @@ import {
 } from '@/lib/crm/collision'
 import { isAppError } from '@/lib/errors/catalog'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
+import { dataScope } from '@/lib/workspaces/permissions'
 
 export type ContactActionState =
   | { status: 'idle' }
@@ -154,6 +155,14 @@ export async function addNoteAction(
 
 export type CreateContactState =
   | { ok: true; message: string; contactId: string; created: boolean }
+  /**
+   * §4's fourth create-time outcome: a PRIVATE ADMIN-REVIEW CONFLICT.
+   *
+   * The entry matched somebody this caller may not read. No id, no name, no
+   * owner and no count crosses back — `held` carries no payload on purpose,
+   * because every field it could carry is one T04 forbids.
+   */
+  | { ok: true; held: true; message: string }
   | { ok: false; error: string }
   | null
 
@@ -201,6 +210,51 @@ export async function createContactAction(
       },
       ctx.userId,
     )
+
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  A MATCH THE CALLER CANNOT READ IS NOT AN ANSWER THEY GET.            ║
+     * ║                                                                       ║
+     * ║  Dedup runs on the service role, so it matches across the whole        ║
+     * ║  workspace — including records a setter's `assigned` scope hides.      ║
+     * ║  Returning that contact's id told them the person exists, who they     ║
+     * ║  are, and gave them the id to navigate to: an enumeration oracle for   ║
+     * ║  the entire contact list, one guessed email at a time.                 ║
+     * ║                                                                       ║
+     * ║  T04: no owner, name, id or count disclosure — and the admin review    ║
+     * ║  path must still prevent the unsafe duplicate. So the record is not    ║
+     * ║  created, nothing identifying is returned, and the existing            ║
+     * ║  reassignment queue carries the conflict to someone who may act on it. ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const matchedSomeoneElses =
+      !result.created &&
+      dataScope(ctx.role) !== 'all' &&
+      result.ownerUserId !== ctx.userId
+
+    if (matchedSomeoneElses) {
+      try {
+        await requestReassignment(
+          ctx.workspace.id,
+          result.contactId,
+          ctx.userId,
+          'Opened automatically: tried to add a contact the workspace already has.',
+        )
+      } catch (error) {
+        // Already asked. The review path is open, which is all this needs — and
+        // the requester must not learn that a second attempt behaved
+        // differently from the first.
+        if (!(error instanceof DuplicateRequestError)) throw error
+      }
+
+      return {
+        ok: true,
+        held: true,
+        message:
+          'That contact needs an administrator to review it before it can be added. ' +
+          'They have been asked.',
+      }
+    }
 
     revalidatePath('/crm/contacts')
 

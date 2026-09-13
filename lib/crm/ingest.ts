@@ -635,7 +635,7 @@ export async function createContactManually(
   workspaceId: string,
   input: ContactInput,
   actorUserId: string | null = null,
-): Promise<{ contactId: string; created: boolean }> {
+): Promise<{ contactId: string; created: boolean; ownerUserId: string | null }> {
   const db = createAdminClient()
 
   /*
@@ -702,5 +702,32 @@ export async function createContactManually(
     })
   }
 
-  return { contactId, created: outcome.created > 0 }
+  const created = outcome.created > 0
+
+  /*
+   * ⚠️ THE OWNER IS RETURNED SO THE CALLER CAN DECIDE WHETHER TO SAY ANYTHING.
+   *
+   * A match is somebody the workspace already had, and the caller may be a
+   * setter who cannot see that person. Handing back only `{ contactId, created }`
+   * left the action with no way to tell "already yours" from "already someone
+   * else's", so it said "already in your CRM" either way — disclosing the
+   * existence and the id of a record the requester is not permitted to read.
+   *
+   * Read only on the match path: a created contact is owned by whoever asked
+   * for it, which the input already says, so the happy path keeps its one
+   * round trip.
+   */
+  let ownerUserId: string | null = input.ownerUserId ?? null
+  if (!created) {
+    const { data: matched } = await db
+      .from('crm_contacts')
+      .select('owner_user_id')
+      .eq('workspace_id', workspaceId)
+      .eq('id', contactId)
+      .maybeSingle()
+
+    ownerUserId = matched?.owner_user_id ?? null
+  }
+
+  return { contactId, created, ownerUserId }
 }
