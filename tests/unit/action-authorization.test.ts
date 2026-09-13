@@ -27,10 +27,17 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = join(__dirname, '..', '..')
 
+/*
+ * ⚠️ Relative paths are built with '/', not path.join, because they are used as
+ * KEYS: the ALLOWED set below is written 'lib/auth/actions.ts:signUpAction'.
+ * path.join emits backslashes on Windows, no exemption ever matches, and the
+ * five legitimately session-less auth actions are reported as ungated — burying
+ * a genuine finding in noise the reader has been taught to expect.
+ */
 function walk(dir: string): string[] {
   const out: string[] = []
   for (const entry of readdirSync(join(ROOT, dir))) {
-    const rel = join(dir, entry)
+    const rel = `${dir}/${entry}`
     if (statSync(join(ROOT, rel)).isDirectory()) {
       if (entry === 'node_modules' || entry === '.next') continue
       out.push(...walk(rel))

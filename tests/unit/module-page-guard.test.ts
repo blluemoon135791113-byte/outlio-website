@@ -37,6 +37,13 @@ const ROOT = join(__dirname, '..', '..')
 const APP = join(ROOT, 'app')
 
 /**
+ * Repo-relative path with POSIX separators, so comparisons hold on Windows.
+ * Named `relPath` rather than `rel` because a loop below already binds `rel`
+ * to a page's path string.
+ */
+const relPath = (p: string) => relative(ROOT, p).replace(/\\/g, '/')
+
+/**
  * ⚠️ PLAIN RECURSION, NOT A GLOB. The route group directory is literally named
  * `(product)`, and every glob library reads those parentheses as a pattern
  * group — the first version of this file matched nothing and reported all
@@ -83,14 +90,20 @@ function guardingLayouts(): Surface[] {
     // Refuses by redirecting → the page's output never reaches the client.
     if (/\bredirect\(/.test(source)) continue
 
-    surfaces.push({ dir: layout.replace(/\/layout\.tsx$/, ''), layout, permission })
+    /*
+     * ⚠️ Both separators. With a forward-slash-only pattern this strips nothing
+     * on Windows, `dir` keeps the `layout.tsx` filename, and the readdirSync in
+     * filesNamed is handed a file — ENOTDIR takes the whole suite down before a
+     * single assertion runs.
+     */
+    surfaces.push({ dir: layout.replace(/[/\\]layout\.tsx$/, ''), layout, permission })
   }
 
   return surfaces
 }
 
 function pagesUnder(dir: string): string[] {
-  return filesNamed(dir, 'page.tsx').map((p) => relative(ROOT, p))
+  return filesNamed(dir, 'page.tsx').map(relPath)
 }
 
 describe('the scanner itself', () => {
@@ -104,7 +117,7 @@ describe('the scanner itself', () => {
     expect(surfaces.length, 'no gating layouts found — has decidePermission been renamed?')
       .toBeGreaterThanOrEqual(3)
 
-    const names = surfaces.map((s) => relative(ROOT, s.layout))
+    const names = surfaces.map((s) => relPath(s.layout))
     expect(names).toContain('app/(product)/crm/layout.tsx')
     expect(names).toContain('app/(product)/email/layout.tsx')
     expect(names).toContain('app/(product)/flows/layout.tsx')
@@ -113,7 +126,7 @@ describe('the scanner itself', () => {
   it('skips a layout that refuses by redirecting', () => {
     // `app/admin/layout.tsx` guards with `requireAdmin()`, which redirects — and
     // it is not in the list, which is the point.
-    const names = guardingLayouts().map((s) => relative(ROOT, s.layout))
+    const names = guardingLayouts().map((s) => relPath(s.layout))
     expect(names).not.toContain('app/admin/layout.tsx')
   })
 
@@ -137,7 +150,7 @@ describe('every page under a rendering-gate layout guards itself', () => {
       it(`${rel} calls workspaceContextIfPermitted('${surface.permission}')`, () => {
         expect(
           source.includes(`workspaceContextIfPermitted('${surface.permission}')`),
-          `${rel} relies on ${relative(ROOT, surface.layout)} to refuse unauthorised ` +
+          `${rel} relies on ${relPath(surface.layout)} to refuse unauthorised ` +
             `callers. That layout hides the output; it does NOT stop this page ` +
             `querying and serialising its result into the RSC payload, where View ` +
             `Source reads it.`,
