@@ -223,7 +223,23 @@ export async function createOpportunity(
     probability = data.default_probability
   }
 
-  const currency = (input.currency ?? 'USD').toUpperCase()
+  /*
+   * ⚠️ THE WORKSPACE'S CURRENCY IS THE DEFAULT, NOT 'USD'.
+   *
+   * This read `input.currency ?? 'USD'`, which was harmless while every
+   * workspace reported in dollars. Once one reports in GBP, a deal created
+   * without an explicit currency would be stored as USD, get a real GBP rate
+   * from the feed, and convert — arriving at a number that is right by
+   * arithmetic and wrong by intent. Somebody entering "50000" in a GBP
+   * workspace means fifty thousand pounds.
+   */
+  const { data: workspace } = await db
+    .from('workspaces')
+    .select('default_currency')
+    .eq('id', workspaceId)
+    .maybeSingle()
+
+  const currency = (input.currency ?? workspace?.default_currency ?? 'USD').toUpperCase()
 
   /*
    * ⚠️ THE RATE IS SNAPSHOTTED AT CREATE (§5.6) AND MAY LEGITIMATELY BE NULL.
@@ -238,12 +254,6 @@ export async function createOpportunity(
    * 0123's trigger writes the identity rate independently, so the invariant
    * survives this returning null for any reason.
    */
-  const { data: workspace } = await db
-    .from('workspaces')
-    .select('default_currency')
-    .eq('id', workspaceId)
-    .maybeSingle()
-
   const fx = workspace?.default_currency
     ? await resolveFxRate({ from: currency, to: workspace.default_currency })
     : null

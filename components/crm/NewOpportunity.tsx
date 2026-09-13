@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from 'react'
 
+import { CURRENCIES } from '@/lib/crm/currencies'
 import {
   createOpportunityAction,
   type OpportunityActionState,
@@ -21,6 +22,7 @@ export function NewOpportunityForm({
   stages,
   contacts,
   fixedContact,
+  workspaceCurrency,
   onCancel,
 }: {
   pipelineId: string
@@ -28,6 +30,12 @@ export function NewOpportunityForm({
   /** Omitted when the contact is already decided. */
   contacts?: ContactOption[]
   fixedContact?: ContactOption
+  /**
+   * What this workspace reports in. Pre-selected, because the overwhelmingly
+   * common case is a deal in the workspace's own currency — and a picker that
+   * opens on the wrong one is a data-entry error waiting to happen.
+   */
+  workspaceCurrency?: string
   onCancel?: () => void
 }) {
   const [state, action, pending] = useActionState<OpportunityActionState, FormData>(
@@ -120,6 +128,33 @@ export function NewOpportunityForm({
             Blank means unknown, and is left out of the forecast.
           </span>
         </label>
+
+        <label className="block">
+          <span className="text-xs font-medium text-ink">Currency</span>
+          {/*
+            ⚠️ A CURATED LIST, NOT FREE TEXT, AND THE REASON IS NOT TIDINESS.
+            A currency the rate feed cannot quote does not fail loudly — the
+            deal saves, its rate is NULL, and it silently drops out of every
+            money total, surfacing only in the "not included" caveat on
+            Reports. Every code in `CURRENCIES` was checked against
+            Frankfurter's own list.
+          */}
+          <select
+            name="currency"
+            defaultValue={workspaceCurrency ?? 'USD'}
+            className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
+          >
+            {CURRENCIES.map((currency) => (
+              <option key={currency.code} value={currency.code}>
+                {currency.code} — {currency.name}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-muted">
+            Converted to {workspaceCurrency ?? 'USD'} for reporting, at the rate
+            on the day the deal is created.
+          </span>
+        </label>
       </div>
 
       <label className="block">
@@ -169,6 +204,8 @@ export function NewOpportunityButton(props: {
   stages: StageOption[]
   contacts?: ContactOption[]
   fixedContact?: ContactOption
+  /** Forwarded to the form. See its own note on why it is pre-selected. */
+  workspaceCurrency?: string
   label?: string
 }) {
   const [open, setOpen] = useState(false)
