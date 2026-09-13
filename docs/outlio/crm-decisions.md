@@ -58,13 +58,41 @@ could not be run. The repo's own five agents in `.claude/agents/` were used.
 
 ## Part 2 — Decisions REQUIRED from the owner
 
-**These four block implementation.** In each case the repository made a
+> ## ✅ RULED 2026-09-13 — all four decided, owner took the recommendation
+>
+> Each section below keeps its full reasoning; the ruling is recorded at the top
+> of each. Summary of what is now decided, and what it costs:
+>
+> | # | Ruling | Migration? | Status |
+> |---|---|---|---|
+> | CRM-DN-01 | Option 3 — configurable, **defaulting to today's owner-only behaviour** | Yes | Not started. Largest item in the plan. |
+> | CRM-DN-02 | Option 3 — keep the unique email, add an admin override for shared/role addresses | Yes | **Deferred** until Pile A closes, per the recommendation. |
+> | CRM-DN-03 | Keep the unique domain, revisit alongside CRM-DN-02 | Yes | **Deferred.** |
+> | CRM-DN-04 | Keep 200 nodes / 90-day wait; **add** the run-lifetime cap and per-path side-effect ceiling | Probably not | Ready to implement. |
+>
+> ⚠️ **Being ruled is not being built.** Two of the four were recommended as
+> *defer*, so accepting the recommendations does not schedule them now. The only
+> immediately buildable piece is CRM-DN-04's two missing safeguards; CRM-DN-01
+> is a large change to the CRM's whole read path and should be planned as its
+> own phase, not appended to a defect fix.
+
+**These four blocked implementation.** In each case the repository made a
 deliberate, documented choice that the specification contradicts. Writing code
 against the spec here would regress working behaviour.
 
 ---
 
 ### CRM-DN-01 — Default record visibility ⚠️ largest blast radius
+
+> **✅ RULED 2026-09-13: option 3.** Visibility becomes a workspace setting.
+> **Existing workspaces keep owner-only** — the default does not change under
+> anyone, which was the whole point of choosing this over option 2.
+>
+> Scope, so it is not underestimated: a new workspace setting and migration,
+> `dataScope` taking the setting rather than the role alone, and every list,
+> detail, export, dashboard and report read path taught to respect it. Plan it
+> as its own phase with its own gate. `crm_move_opportunity_stage` aside, this
+> touches more of the CRM than any other item in the map.
 
 **The conflict:**
 
@@ -91,6 +119,15 @@ other member — a privacy change no customer asked for.
 
 ### CRM-DN-02 — Workspace-wide unique email on people
 
+> **✅ RULED 2026-09-13: option 3, deferred.** Keep the unique index; add an
+> admin override for addresses explicitly marked shared or role.
+>
+> ⚠️ The deferral is part of the ruling, not a delay in acting on it. The index
+> is load-bearing for the ingest race guard (`0072_crm_ingestion.sql:355` relies
+> on `unique_violation` to resolve concurrent creates to one canonical row), so
+> the override has to be designed without removing that guarantee. Scheduling it
+> next to a defect fix is how the race guard gets broken by accident.
+
 **The conflict:**
 
 | | Position |
@@ -116,6 +153,11 @@ territory) and should not be smuggled in as part of a defect fix.
 
 ### CRM-DN-03 — Workspace-wide unique company domain
 
+> **✅ RULED 2026-09-13: keep, revisit with CRM-DN-02.** Lower urgency — no
+> acceptance test blocks on it, and the failure mode (two subsidiaries sharing a
+> domain collapse into one company) is rarer than the shared-inbox case. Both
+> are the same shape of change and should be designed together.
+
 **The conflict:** `crm_companies_domain_uniq` (`0071:137`) enforces one company
 per domain per workspace. Spec §4 forbids treating a domain as globally unique —
 subsidiaries and distinct legal entities share one.
@@ -129,6 +171,20 @@ into one company record) is rarer than the shared-inbox case.
 ---
 
 ### CRM-DN-04 — Workflow safeguard numbers
+
+> **✅ RULED 2026-09-13: keep the repo's numbers, add the two missing limits.**
+>
+> 200 nodes and a 90-day maximum wait stand; the spec is amended, not the code.
+> The two safeguards that do **not** exist are added, because they are the ones
+> that bound damage rather than express taste:
+>
+> - a **maximum run lifetime** — nothing currently expires a long-lived run
+> - a **per-path side-effect ceiling** — nothing currently caps side effects on
+>   a single path through a graph
+>
+> This is the only one of the four that is ready to build. Both limits look
+> implementable in `lib/flows/definition.ts` (publish-time validation) and the
+> engine (run age), so probably no migration — to be confirmed when started.
 
 **The conflict:**
 

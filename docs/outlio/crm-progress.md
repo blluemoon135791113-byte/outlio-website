@@ -74,33 +74,94 @@ splits three ways — 10 defects in shipped code, ~10 absent subsystems, and
 
 ### Blockers
 
-| # | Blocker | Needs |
-|---|---|---|
-| B1 | **4 spec/repo conflicts** — visibility default, unique email, unique domain, safeguard numbers | Owner ruling. See `crm-decisions.md` Part 2. **CRM-DN-01 blocks the most work.** |
-| B2 | Integration + E2E unverified | Staging Supabase credentials |
-| B3 | Guard tests blind on Windows | Decision on CRM-Q-01 |
+| # | Blocker | Needs | Status |
+|---|---|---|---|
+| B1 | **4 spec/repo conflicts** | Owner ruling | ✅ **CLEARED 2026-09-13** — all four ruled, owner took the recommendations. See `crm-decisions.md` Part 2. |
+| B2 | Integration + E2E unverified | Staging Supabase credentials | Open |
+| B3 | Guard tests blind on Windows | Decision on CRM-Q-01 | ✅ **CLEARED** — fixed and merged, see entry 002 |
 
-⚠️ **B1 is a hard blocker for Pile C only.** Pile A defect work can start now —
-none of the ten defects depend on an unresolved conflict.
+⚠️ **Clearing B1 did not schedule all four.** Two of the rulings were *defer*
+(CRM-DN-02, CRM-DN-03), and CRM-DN-01 is a phase-sized change to the CRM's whole
+read path. The only immediately buildable piece is CRM-DN-04's two missing
+safeguards.
 
 ### Next executable task
 
-**Recommended: CRM-Q-01 — make the guard tests OS-independent.**
+Superseded — see entries 002 and 003 below.
 
-Normalise `\\`→`/` on collected paths and `\r\n`→`\n` after `readFileSync` in the
-13 affected tests (listed in `crm-verification.md`). Self-contained, touches no
-application code, and restores a safety net that currently fails *open* on
-Windows — the same vacuous-guard defect class recorded twice in
-`docs/PROGRESS.md`. Doing it first means every later change is actually guarded.
+---
 
-**Then, Pile A in order.** A1 (multi-currency sum), A2 (staleness on
-`updated_at`) and A9 (probability cannot be unknown) are self-contained and
-independently shippable. A4 (membership hard-delete, no session revocation) and
-A5 (flows freeze publisher authority) are the security pair and should be
-scoped together.
+## Entry 002 — CRM-Q-01: the guard tests
+
+**Date:** 2026-09-13 · **Status:** ✅ MERGED (PR #14, merge commit `9346bb2`)
+
+Thirteen static-analysis guards could not run on Windows, and 55 further tests
+never executed at all because two suites died at collection.
+
+Two causes, neither in application code: no `.gitattributes`, so 1,247 LF-stored
+files checked out CRLF; and `path.join` output compared against POSIX literals.
+Failures pointed both ways — `worker-wiring` and `orphan-module` failed **open**
+(live code reported dead), while `action-authorization` and `hard-rules` failed
+**closed**, reporting five legitimately session-less auth actions as ungated and
+four first-party innerHTML uses as rule-3 violations.
+
+**Changed:** `.gitattributes` (new) + 9 files under `tests/unit/`. No
+application code.
+
+**Result:** 26 failed / 3,189 passed → **3,270 passed / 3,270**, 186 files.
+
+---
+
+## Entry 003 — A6: duplicate detection disclosed records the caller could not read
+
+**Date:** 2026-09-13 · **Status:** PR #16 open, `verify` green locally
+
+**Requirement:** spec §4 create-time outcomes; acceptance test **T04**.
+
+Dedup runs on the service role and matches the whole workspace, but the manual
+create path applied no visibility filter to the match. It returned the matched
+contact's id and "already in your CRM" whoever owned them — an enumeration
+oracle over the private half of the contact database, one guessed address at a
+time.
+
+Adds §4's missing fourth outcome, the private admin-review conflict: no id, no
+name, no owner, no count, and the conflict routed to the existing
+`crm_reassignment_requests` queue so T04's "admin review path still prevents
+unsafe duplication" half is satisfied too. A repeat attempt returns
+byte-identical to the first, because `DuplicateRequestError` surfacing would
+confirm the guess.
+
+**Changed:** `lib/crm/contact-actions.ts`, `lib/crm/ingest.ts`,
+`components/crm/NewContact.tsx`, `tests/unit/crm-duplicate-disclosure.test.ts`
+(new). **No migration.**
+
+**Result:** **3,277 passed / 3,277**, 187 files. Mutation-verified per §2.1 —
+neutralising the visibility check fails exactly 3 of the new file's 7 tests.
+
+---
+
+## Next executable task
+
+**CRM-DN-04's two missing safeguards** — the only ruled decision that is ready
+to build. A maximum run lifetime (nothing expires a long-lived flow run) and a
+per-path side-effect ceiling. Both look implementable in
+`lib/flows/definition.ts` and the engine, probably without a migration.
+
+**Then Pile A, in this order** — grouped by what they need:
+
+| Needs nothing | Needs a migration you must apply | Phase-sized |
+|---|---|---|
+| A3 (audit written before the update, not atomic) | A1 (multi-currency sum) | CRM-DN-01 (visibility setting) |
+| A10 (custom-field options keyed by label) | A9 (probability cannot be unknown) | |
+| | A2 (stage_age vs engagement_age) | |
+| | `crm_tasks.opportunity_id` | |
+
+A4 (membership hard-delete, no session revocation) and A5 (published flows
+freeze publisher authority) are the security pair and should be scoped together,
+not picked off individually.
 
 **Do not start Pile B** (deal files, social profiles, My Work, Hubble→workflow)
-until Pile A is closed — several Pile B items are built on top of the defective
+until Pile A is closed — several Pile B items are built on the defective
 behaviour.
 
 ---
