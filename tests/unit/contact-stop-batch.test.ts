@@ -392,9 +392,11 @@ describe('the do-not-contact chain is complete end to end', () => {
 
   it('the panel calls the actions rather than importing them', () => {
     /*
-     * ⚠️ `action-reachability` IS SATISFIED BY AN IMPORT ALONE — it matches the
-     * name anywhere in another file. An imported-but-never-invoked action would
-     * pass it while being exactly as unreachable, so this checks the call.
+     * ⚠️ THIS CHECKS THE CALL, NOT THE IMPORT. `action-reachability` used to be
+     * satisfied by an import alone — it matched the name anywhere in another
+     * file, so an imported-but-never-invoked action passed it while being
+     * exactly as unreachable. That hole is closed now (it strips imports as
+     * well as comments), and this stays as the specific check for these two.
      */
     const panel = find('components/crm/ContactPanels.tsx')!.code
     expect(panel).toMatch(/useActionState\(markDoNotContactAction,/)
