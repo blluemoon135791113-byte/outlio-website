@@ -68,6 +68,8 @@ export type WorkspaceContext = {
   modules: ReadonlySet<Module>
   /** Seats including the owner. `null` means unlimited. */
   memberLimit: number | null
+  /** LinkedIn accounts this workspace may link. `null` means unlimited. */
+  senderLimit: number | null
   memberCount: number
   /**
    * The tenant scope for this request.
@@ -154,6 +156,7 @@ async function resolve(userId: string, email: string | null): Promise<WorkspaceC
     role: active.role,
     modules: entitlements.modules,
     memberLimit: entitlements.memberLimit,
+    senderLimit: entitlements.senderLimit,
     memberCount,
     scope: { workspaceId: active.id, userId },
   }

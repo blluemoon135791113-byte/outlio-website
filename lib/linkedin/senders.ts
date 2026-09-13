@@ -42,6 +42,8 @@ export type LinkSenderResult =
    */
   | { ok: false; reason: 'unavailable' }
   | { ok: false; reason: 'invalid_profile_url' }
+  /** The plan's cap on linked accounts is already reached. */
+  | { ok: false; reason: 'sender_limit'; limit: number }
 
 /**
  * Links a LinkedIn account to a workspace, creating the sender if needed.
@@ -57,11 +59,56 @@ export async function linkSender(input: {
   ownerUserId: string
   profileUrl: string
   displayLabel: string
+  /**
+   * From `ctx.senderLimit` — the plan's cap. `null` means unlimited.
+   *
+   * ⚠️ PASSED IN RATHER THAN READ HERE, so the caller's already-resolved
+   * entitlements are the single source. Re-reading the plan in this function
+   * would be a second answer to "what may this workspace do", which is the
+   * defect this codebase keeps finding.
+   */
+  senderLimit?: number | null
 }): Promise<LinkSenderResult> {
   const identityKey = canonicalLinkedInUrl(input.profileUrl)
   if (!identityKey) return { ok: false, reason: 'invalid_profile_url' }
 
   const db = createAdminClient()
+
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ §4.10's CAP, AND THE REASON IT IS NOT REALLY AN ABUSE CONTROL.        ║
+   * ║                                                                           ║
+   * ║  Every LinkedIn action in this product is performed BY A HUMAN, BY HAND.  ║
+   * ║  At the stage-3 ladder one sender is ~55 manual actions a day, so twenty  ║
+   * ║  senders is already about three hours of someone's time. A cap far above  ║
+   * ║  that is not a cap; it is a number nobody can reach.                      ║
+   * ║                                                                           ║
+   * ║  The other half is the attestation: every sender carries `owner_user_id`, ║
+   * ║  a person saying "this is my account". §4.10 names the shape this guards  ║
+   * ║  against — "one person using multiple borrowed, purchased, or shared      ║
+   * ║  accounts is not the supported way to scale."                             ║
+   * ║                                                                           ║
+   * ║  ⚠️ COUNTED BEFORE THE LOOKUP, so a workspace at its cap cannot discover  ║
+   * ║  whether a given profile is already on Outlio by watching which error it  ║
+   * ║  gets — the same disclosure the generic `unavailable` reason exists for.  ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const limit = input.senderLimit ?? null
+  if (limit !== null) {
+    const { count, error: countError } = await db
+      .from('linkedin_sender_links')
+      .select('sender_id', { count: 'exact', head: true })
+      .eq('workspace_id', input.workspaceId)
+
+    /*
+     * ⚠️ A FAILED COUNT REFUSES. Coalescing to 0 would read an outage as "no
+     * accounts linked" and hand out a sender past the cap — the same
+     * fail-closed reasoning `senderBudget` uses for the same table.
+     */
+    if (countError || (count ?? Number.MAX_SAFE_INTEGER) >= limit) {
+      return { ok: false, reason: 'sender_limit', limit }
+    }
+  }
 
   const { data: existing, error: lookupError } = await db
     .from('linkedin_senders')

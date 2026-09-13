@@ -68,9 +68,63 @@ describe('one user cannot claim another user’s profile', () => {
      */
     const conflictReasons = SENDERS.match(/reason: '([a-z_]+)'/g) ?? []
     const distinct = new Set(conflictReasons)
-    // Only two failure reasons exist at all, and neither names the cause.
-    expect(distinct).toEqual(new Set(["reason: 'unavailable'", "reason: 'invalid_profile_url'"]))
+    /*
+     * ⚠️ `sender_limit` IS THE ONE SPECIFIC REASON, AND IT DISCLOSES NOTHING.
+     * The other two are deliberately vague because the alternative — telling
+     * somebody their link failed because this profile is ALREADY on Outlio —
+     * is a disclosure about a person who never signed up here. The cap is
+     * about the workspace's own plan, a number the customer can read on their
+     * billing page, so vagueness there would be obstruction rather than
+     * discretion.
+     *
+     * ⚠️ AND IT IS CHECKED BEFORE THE PROFILE LOOKUP, which is what keeps it
+     * from becoming a probe: a workspace at its cap gets the same answer for
+     * every URL, so it cannot learn which profiles exist by watching which
+     * error comes back. The assertion below pins that order.
+     */
+    expect(distinct).toEqual(
+      new Set([
+        "reason: 'unavailable'",
+        "reason: 'invalid_profile_url'",
+        "reason: 'sender_limit'",
+      ]),
+    )
     expect(SENDERS).not.toMatch(/already_claimed|belongs_to|taken/)
+  })
+
+  it('checks the cap BEFORE looking the profile up, so it cannot be a probe', () => {
+    /*
+     * ⚠️ SCOPED TO `linkSender`'s BODY. Searching the whole file found
+     * `from('linkedin_senders')` inside an EARLIER function, so the comparison
+     * was against the wrong occurrence and passed while the cap sat after the
+     * lookup. Caught by mutation — the same anchoring mistake as
+     * `suppressContact` inside `unsuppressContact`.
+     */
+    const body = SENDERS.slice(
+      SENDERS.indexOf('export async function linkSender'),
+      SENDERS.indexOf('export type SenderBudget'),
+    )
+    expect(body.length).toBeGreaterThan(400)
+
+    const capAt = body.indexOf("reason: 'sender_limit'")
+    const lookupAt = body.indexOf("from('linkedin_senders')")
+    expect(capAt).toBeGreaterThan(-1)
+    expect(lookupAt).toBeGreaterThan(-1)
+    expect(
+      capAt,
+      'the cap is checked after the lookup, so a workspace at its limit could ' +
+        'still learn whether a given profile is on Outlio',
+    ).toBeLessThan(lookupAt)
+  })
+
+  it('a failed count refuses rather than reading as "none linked"', () => {
+    /*
+     * ⚠️ SAME FAIL-CLOSED ASYMMETRY AS `senderBudget`, on the same table.
+     * Coalescing a failed count to 0 would hand out a sender past the cap
+     * precisely when the database is already unhappy.
+     */
+    expect(SENDERS).toMatch(/countError \|\| \(count \?\? Number\.MAX_SAFE_INTEGER\) >= limit/)
+    expect(SENDERS, 'a failed count falls back to zero').not.toMatch(/count \?\? 0\) >= limit/)
   })
 
   it('treats a second workspace for the SAME user as a link, not a conflict', () => {
