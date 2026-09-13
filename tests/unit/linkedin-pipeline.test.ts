@@ -304,6 +304,79 @@ describe('an outcome is what the operator did, never what they later saw', () =>
   })
 })
 
+describe('the version invalidates exactly what could make a draft wrong', () => {
+  const VERSION_FN = readFileSync(
+    join(ROOT, 'supabase/migrations/0126_contact_version_columns.sql'),
+    'utf8',
+  )
+
+  /** Columns the trigger compares. */
+  const bumpsOn = [...VERSION_FN.matchAll(/new\.(\w+)\s+is distinct from old\.\1/g)].map(
+    (m) => m[1]!,
+  )
+
+  it('covers every field the drafted message is built from', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ 0125 MISSED `first_name`, WHICH IS THE GREETING.                  ║
+     * ║                                                                       ║
+     * ║  A contact corrected from "Ada" to "Adaeze" left a pending card        ║
+     * ║  reading "Hi Ada," and nothing invalidated it — the exact failure the  ║
+     * ║  version was added to prevent, uncovered by the version itself.        ║
+     * ║                                                                       ║
+     * ║  `source` is here for a subtler reason: it decides the VERIFICATION    ║
+     * ║  level, so a demotion can make an allowed greeting no longer allowed   ║
+     * ║  with the text unchanged.                                             ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    for (const column of [
+      'first_name',
+      'last_name',
+      'full_name',
+      'job_title',
+      'headline',
+      'linkedin_url',
+      'primary_company_id',
+      'source',
+      'deleted_at',
+    ]) {
+      expect(bumpsOn, `${column} can change a draft and does not invalidate it`).toContain(
+        column,
+      )
+    }
+  })
+
+  it('does NOT invalidate on things a draft never contains', () => {
+    /*
+     * ⚠️ OVER-INVALIDATING IS NOT THE SAFE SIDE. 0125 bumped on
+     * `owner_user_id`, so a routine bulk reassignment of 200 contacts silently
+     * staled every pending card for them — and the operator saw "the contact
+     * changed" about a contact that had not changed in any way they could see.
+     *
+     * A version that bumps on everything makes re-approval a reflex, and a
+     * reflex waves a genuinely stale draft through with the rest.
+     */
+    for (const column of ['owner_user_id', 'timezone', 'updated_at', 'location']) {
+      expect(bumpsOn, `${column} invalidates approved content for no reason`).not.toContain(
+        column,
+      )
+    }
+  })
+
+  it('the sender is on the enrollment, which is why owner does not matter', () => {
+    /*
+     * The reasoning behind excluding `owner_user_id`, asserted rather than
+     * only written down: reassigning a contact cannot change who performs the
+     * action, because the account is fixed at enrollment.
+     */
+    const migration = readFileSync(
+      join(ROOT, 'supabase/migrations/0125_linkedin_tasks.sql'),
+      'utf8',
+    )
+    expect(migration).toMatch(/sender_id\s+uuid not null references public\.linkedin_senders/)
+  })
+})
+
 describe('the schema and the code agree on every vocabulary', () => {
   const MIGRATION = readFileSync(
     join(ROOT, 'supabase/migrations/0125_linkedin_tasks.sql'),
