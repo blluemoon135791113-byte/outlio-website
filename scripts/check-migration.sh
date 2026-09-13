@@ -119,12 +119,54 @@ create table public.rate_limits (
   blocked_until timestamptz,
   primary key (bucket, subject, window_start));
 create table public.extraction_jobs (id uuid primary key default gen_random_uuid());
-create table public.extracted_leads (id uuid primary key default gen_random_uuid());
+/*
+ * ⚠️ `user_id` IS NOT DECORATION. 0114's backfill joins
+ * `research_evidence.user_id = extracted_leads.user_id` — the seam between the
+ * user-keyed Lead Engine and the workspace-keyed CRM. Without the column the
+ * migration fails here while working perfectly on the real database, which is
+ * the false-failure this scaffold's header warns about.
+ */
+create table public.extracted_leads (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade);
 create table public.companies (id uuid primary key default gen_random_uuid());
+/*
+ * From 0044, which this harness does not replay. 0113 adds an `evidence_id` FK
+ * pointing here and then VERIFIES the constraint resolves, so a stub with only
+ * an id is not enough — 0114 reads entity_type, entity_id, field, value_json
+ * and user_id to decide which citation belongs to which address.
+ */
+create table public.research_evidence (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  entity_type  text not null,
+  entity_id    uuid not null,
+  field        text not null,
+  value_json   jsonb not null default '{}'::jsonb,
+  -- 0114 ranks candidate citations newest-first, so this one is load-bearing
+  -- rather than descriptive.
+  retrieved_at timestamptz not null default now());
 SQL
 
+# ---------------------------------------------------------------------------
 # Prerequisites, in order. Extend this list as the platform grows.
-for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api 0098_webhook_url_loopback 0099_notification_channels 0100_unified_inbox 0101_inbound_optional_args 0102_onboarding_state 0103_plan_module_entitlements 0104_email_reply_threading 0105_fix_claim_column_name 0106_restore_claim_safety; do
+#
+# ⚠️ A MIGRATION MISSING FROM HERE IS NOT NEUTRAL — IT VALIDATES THE ONE UNDER
+# TEST AGAINST A SCHEMA NOBODY RUNS. This list stopped at 0106 while the
+# repository reached 0123, so seventeen migrations' worth of tables, columns and
+# constraints were absent from every check. 0123 passed anyway, but only because
+# it happened to touch nothing newer than 0075 — luck, not coverage.
+#
+# ⚠️ 0118_pg_cron_tick IS DELIBERATELY EXCLUDED, AND THAT IS DIFFERENT FROM
+# BEING FORGOTTEN. It does `create extension pg_cron`, which is not available in
+# a stock postgres image — verified: "extension pg_cron is not available". A
+# migration that CANNOT replay locally belongs here as a named exclusion, so the
+# next person knows the gap is understood rather than overlooked.
+#
+# 0119_scheduler_diagnostics is included and passes: it reads cron.job through
+# a guard that tolerates the schema being absent.
+# ---------------------------------------------------------------------------
+for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api 0098_webhook_url_loopback 0099_notification_channels 0100_unified_inbox 0101_inbound_optional_args 0102_onboarding_state 0103_plan_module_entitlements 0104_email_reply_threading 0105_fix_claim_column_name 0106_restore_claim_safety 0107_dashboards 0108_flow_run_variables 0109_fix_user_fk_append_only 0110_restore_signup_gate 0111_sender_postal_address 0112_contact_list_sort_indexes 0113_contact_value_citations 0114_backfill_contact_citations 0115_rls_membership_setmembership 0116_due_webhook_deliveries 0117_worker_runs 0119_scheduler_diagnostics 0120_suppress_by_contact 0121_contact_dnc_and_timezone 0122_linkedin_senders; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break
