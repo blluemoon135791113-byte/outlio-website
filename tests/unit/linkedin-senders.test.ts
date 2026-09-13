@@ -139,29 +139,61 @@ describe('the budget says what it does not know', () => {
     return out
   })()
 
-  it('the ledger still has no writer, which is why the caption exists', () => {
+  it('the ledger now has exactly one writer, and it is the release path', () => {
     /*
      * ╔═══════════════════════════════════════════════════════════════════════╗
-     * ║  ⚠️ EVERY BUDGET COUNTS ROWS IN A TABLE NOTHING WRITES TO.            ║
+     * ║  ⚠️ THIS ASSERTION IS INVERTED, AND THAT IS HOW IT WAS MEANT TO END.  ║
      * ║                                                                       ║
-     * ║  `linkedin_sender_used()` counts `linkedin_sender_actions`; the        ║
-     * ║  release pipeline that would insert there is not built. So every       ║
-     * ║  figure on the settings panel is the full stage cap and cannot fall.   ║
+     * ║  It used to require `linkedin_sender_actions` to have NO writer, with ║
+     * ║  the note: "when the release path lands it fails, and the fix is to    ║
+     * ║  come back and re-read the caption rather than delete the test."       ║
+     * ║  The release path landed the same day. This is that return.           ║
      * ║                                                                       ║
-     * ║  Not a lie — nothing has been released, so everything does remain —    ║
-     * ║  but a progress bar pinned at 100% reads as monitoring, and a person   ║
-     * ║  trusting it can send their way into a restriction on a real account.  ║
+     * ║  Budgets are now real: `releaseTask` reserves a slot when a card is    ║
+     * ║  released and `recordOutcome` resolves it, so the figures on the       ║
+     * ║  settings panel can finally fall.                                     ║
+     * ║                                                                       ║
+     * ║  ⚠️ ONE WRITER, NOT "AT LEAST ONE". A second module inserting ledger   ║
+     * ║  rows would be a second opinion about what spends an account's quota,  ║
+     * ║  and this repository's most expensive defects are all two opinions of  ║
+     * ║  one question.                                                        ║
      * ╚═══════════════════════════════════════════════════════════════════════╝
-     *
-     * ⚠️ ASSERTED IN BOTH DIRECTIONS. When the pipeline lands this fails, and
-     * the fix is to come back and re-read the caption rather than delete this.
      */
-    expect(
-      LEDGER_WRITERS,
-      'Something now writes to linkedin_sender_actions. The budget has become ' +
-        'a real measurement — revisit the caption on SenderSettings, which ' +
-        'currently explains that it is not one.',
-    ).toEqual([])
+    expect(LEDGER_WRITERS.map((f) => f.split('/').slice(-2).join('/'))).toEqual([
+      'linkedin/tasks.ts',
+    ])
+  })
+
+  it('a reservation is made at RELEASE, not at completion', () => {
+    /*
+     * ⚠️ §4.10's BUDGET COUNTS `reserved` ROWS. A card sitting in somebody's
+     * inbox already holds its slot; reserving only when the work is confirmed
+     * done would let a whole day of cards be released against a cap of twenty,
+     * and the cap would exist only on paper.
+     */
+    const TASKS = strip(readFileSync(join(ROOT, 'lib/linkedin/tasks.ts'), 'utf8'))
+    expect(TASKS).toMatch(/lifecycle: 'reserved'/)
+    // Written BEFORE the task moves, so a failed reservation leaves the card
+    // releasable rather than released with no slot.
+    expect(TASKS.indexOf("lifecycle: 'reserved'")).toBeLessThan(
+      TASKS.indexOf("state: 'RELEASED'"),
+    )
+  })
+
+  it('an unknown outcome keeps its slot; only a definite non-action frees it', () => {
+    /*
+     * ⚠️ §4.17, AND THE ASYMMETRY IS THE POINT. An action we cannot rule out
+     * having happened has to keep counting, because the cost of being wrong is
+     * a restriction on somebody's real LinkedIn account. `OUTCOME_UNKNOWN`
+     * therefore maps to `unknown` — which `linkedin_sender_used()` counts —
+     * and never to `skipped`.
+     */
+    const TASKS = strip(readFileSync(join(ROOT, 'lib/linkedin/tasks.ts'), 'utf8'))
+    expect(TASKS).toMatch(/releasesQuota\(outcome\) \? 'skipped'/)
+    expect(TASKS).toMatch(/outcome === 'OUTCOME_UNKNOWN' \? 'unknown'/)
+    expect(TASKS, 'an unknown outcome is being treated as a non-action').not.toMatch(
+      /OUTCOME_UNKNOWN' \? 'skipped'/,
+    )
   })
 
   it('the panel does not present the figure as monitoring', () => {

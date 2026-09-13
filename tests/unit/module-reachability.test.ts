@@ -139,27 +139,72 @@ const KNOWN_UNREACHABLE = new Map<string, string>([
       'access. Uncalled ON PURPOSE and must not be deleted.',
   ],
 
-  /* ── LinkedIn: built ahead of the pipeline that will call it. ───────────── */
-  ...(
-    [
-      'enrollment',
-      'metrics',
-      'preflight',
-      'profile-reference',
-      'render',
-      'templates',
-      'variables',
-    ] as const
-  ).map(
-    (name) =>
-      [
-        `lib/linkedin/${name}.ts`,
-        'The LinkedIn logic layer is complete; the task table and release ' +
-          'pipeline that call it are not built yet (no linkedin_tasks migration ' +
-          'exists — 0122 created linkedin_senders only). Remove this entry when ' +
-          'the release path lands.',
-      ] as [string, string],
-  ),
+  /* ── LinkedIn: the island is mostly gone. ───────────────────────────────── */
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  SEVEN ENTRIES BECAME THREE, AND THAT IS THIS GUARD PAYING FOR ITSELF. ║
+   * ║                                                                       ║
+   * ║  `enrollment`, `preflight`, `render`, `profile-reference` are now      ║
+   * ║  reachable from /linkedin through `tasks.ts` and `enroll.ts`. The      ║
+   * ║  entries below are the ones the release path genuinely does not call   ║
+   * ║  YET — kept honest rather than removed early.                         ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   */
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ `enroll.ts` AND ITS THREE DEPENDENCIES WAIT ON A VARIABLE CONTEXT. ║
+   * ║                                                                       ║
+   * ║  `enrollContact` renders the first message with                        ║
+   * ║  `renderLinkedInMessage(templateId, context)`, and `context` is a map   ║
+   * ║  of EVIDENCED variables — greeting, connection_context, topic — each    ║
+   * ║  carrying how it was verified. Nothing builds one from a contact's      ║
+   * ║  research yet.                                                        ║
+   * ║                                                                       ║
+   * ║  That gap is NOT fillable with placeholder text. §4.9: "If neither     ║
+   * ║  context nor role is supported, require a manual rewrite or skip; do   ║
+   * ║  not fabricate familiarity." A context assembled from guesses would    ║
+   * ║  render a confident opener about a stranger — rule 4 with a friendly   ║
+   * ║  tone. So the entry point waits for the evidence mapper rather than     ║
+   * ║  being wired to something invented.                                    ║
+   * ║                                                                       ║
+   * ║  Reachable the moment that exists; these four come out together.       ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   */
+  [
+    'lib/linkedin/enroll.ts',
+    'Needs a LinkedInContext builder that maps a contact\'s verified evidence ' +
+      'into §4.9 variables. Wiring it to invented values would fabricate ' +
+      'familiarity, which the brief forbids by name.',
+  ],
+  [
+    'lib/linkedin/enrollment.ts',
+    'The state machine, reached only through enroll.ts. See the note above.',
+  ],
+  [
+    'lib/linkedin/render.ts',
+    'Reached only through enroll.ts. See the note above.',
+  ],
+  [
+    'lib/linkedin/profile-reference.ts',
+    'The read-only profile-link allowlist, reached only through enroll.ts.',
+  ],
+  [
+    'lib/linkedin/metrics.ts',
+    'Acceptance and reply rates (§4.18). Nothing reports on LinkedIn yet — the ' +
+      'first enrollment was created today and there is no outcome history to ' +
+      'measure. Wire it when the reporting surface exists.',
+  ],
+  [
+    'lib/linkedin/templates.ts',
+    'Reached only through `render.ts`, which imports TEMPLATES directly; no ' +
+      'caller picks a template by id yet because `enrollContact` is given one. ' +
+      'Becomes reachable when a sequence builder chooses between them.',
+  ],
+  [
+    'lib/linkedin/variables.ts',
+    'Same: the variable specs are consumed inside `render.ts`. A campaign ' +
+      'builder that validates publication-required variables will reach them.',
+  ],
 
   /* ── Genuinely dead, and newly surfaced by this guard. ──────────────────── */
   [

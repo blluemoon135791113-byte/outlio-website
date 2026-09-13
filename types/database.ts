@@ -2245,6 +2245,7 @@ export type Database = {
           source_lead_id: string | null
           timezone: string | null
           updated_at: string
+          version: number
           workspace_id: string
         }
         Insert: {
@@ -2267,6 +2268,7 @@ export type Database = {
           source_lead_id?: string | null
           timezone?: string | null
           updated_at?: string
+          version?: number
           workspace_id: string
         }
         Update: {
@@ -2289,6 +2291,7 @@ export type Database = {
           source_lead_id?: string | null
           timezone?: string | null
           updated_at?: string
+          version?: number
           workspace_id?: string
         }
         Relationships: [
@@ -6220,6 +6223,70 @@ export type Database = {
         }
         Relationships: []
       }
+      linkedin_enrollments: {
+        Row: {
+          contact_id: string
+          created_at: string
+          ended_at: string | null
+          id: string
+          sender_id: string
+          state: Database["public"]["Enums"]["linkedin_enrollment_state"]
+          terminal_reason:
+            | Database["public"]["Enums"]["linkedin_terminal_reason"]
+            | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          sender_id: string
+          state?: Database["public"]["Enums"]["linkedin_enrollment_state"]
+          terminal_reason?:
+            | Database["public"]["Enums"]["linkedin_terminal_reason"]
+            | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          sender_id?: string
+          state?: Database["public"]["Enums"]["linkedin_enrollment_state"]
+          terminal_reason?:
+            | Database["public"]["Enums"]["linkedin_terminal_reason"]
+            | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_enrollments_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_enrollments_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_senders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_enrollments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       linkedin_sender_actions: {
         Row: {
           contact_id: string | null
@@ -6370,6 +6437,95 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      linkedin_tasks: {
+        Row: {
+          approved_at_contact_version: number
+          body: string | null
+          completed_at: string | null
+          completed_by: string | null
+          contact_id: string
+          created_at: string
+          enrollment_id: string
+          id: string
+          kind: Database["public"]["Enums"]["linkedin_task_kind"]
+          last_thread_check_at: string | null
+          logical_action_id: string
+          outcome: Database["public"]["Enums"]["linkedin_task_outcome"] | null
+          released_at: string | null
+          sender_id: string
+          skip_reason: string | null
+          state: Database["public"]["Enums"]["linkedin_task_state"]
+          workspace_id: string
+        }
+        Insert: {
+          approved_at_contact_version: number
+          body?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          contact_id: string
+          created_at?: string
+          enrollment_id: string
+          id?: string
+          kind: Database["public"]["Enums"]["linkedin_task_kind"]
+          last_thread_check_at?: string | null
+          logical_action_id: string
+          outcome?: Database["public"]["Enums"]["linkedin_task_outcome"] | null
+          released_at?: string | null
+          sender_id: string
+          skip_reason?: string | null
+          state?: Database["public"]["Enums"]["linkedin_task_state"]
+          workspace_id: string
+        }
+        Update: {
+          approved_at_contact_version?: number
+          body?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          contact_id?: string
+          created_at?: string
+          enrollment_id?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["linkedin_task_kind"]
+          last_thread_check_at?: string | null
+          logical_action_id?: string
+          outcome?: Database["public"]["Enums"]["linkedin_task_outcome"] | null
+          released_at?: string | null
+          sender_id?: string
+          skip_reason?: string | null
+          state?: Database["public"]["Enums"]["linkedin_task_state"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_tasks_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_tasks_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_tasks_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_senders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meeting_bookings: {
         Row: {
@@ -9314,6 +9470,18 @@ export type Database = {
         | "skipped"
         | "expired"
         | "unknown"
+      linkedin_enrollment_state:
+        | "DRAFT"
+        | "ELIGIBILITY_REVIEW"
+        | "READY"
+        | "RUNNING"
+        | "WAITING_EVENT"
+        | "WAITING_APPROVAL"
+        | "WAITING_MANUAL_ACTION"
+        | "PAUSED"
+        | "COMPLETED"
+        | "CANCELLED"
+        | "FAILED"
       linkedin_sender_status:
         | "unknown"
         | "owner_reviewed"
@@ -9322,6 +9490,29 @@ export type Database = {
         | "restricted"
         | "disconnected"
         | "auth_expired"
+      linkedin_task_kind:
+        | "REVIEW_PROFILE"
+        | "CONNECTION_REQUEST"
+        | "DIRECT_MESSAGE"
+        | "INMAIL"
+      linkedin_task_outcome:
+        | "REQUEST_MARKED_SENT"
+        | "MESSAGE_MARKED_SENT"
+        | "PROFILE_REVIEW_RECORDED"
+        | "SKIPPED"
+        | "FAILED"
+        | "OUTCOME_UNKNOWN"
+      linkedin_task_state: "PENDING" | "RELEASED" | "COMPLETED" | "EXPIRED"
+      linkedin_terminal_reason:
+        | "GOAL_MET"
+        | "REPLIED"
+        | "NOT_INTERESTED"
+        | "DNC"
+        | "NOT_ACCEPTED"
+        | "NO_REPLY"
+        | "EXPIRED"
+        | "DISQUALIFIED"
+        | "MANUAL_STOP"
       meeting_event_type:
         | "booked"
         | "cancelled"
@@ -9684,6 +9875,19 @@ export const Constants = {
         "expired",
         "unknown",
       ],
+      linkedin_enrollment_state: [
+        "DRAFT",
+        "ELIGIBILITY_REVIEW",
+        "READY",
+        "RUNNING",
+        "WAITING_EVENT",
+        "WAITING_APPROVAL",
+        "WAITING_MANUAL_ACTION",
+        "PAUSED",
+        "COMPLETED",
+        "CANCELLED",
+        "FAILED",
+      ],
       linkedin_sender_status: [
         "unknown",
         "owner_reviewed",
@@ -9692,6 +9896,32 @@ export const Constants = {
         "restricted",
         "disconnected",
         "auth_expired",
+      ],
+      linkedin_task_kind: [
+        "REVIEW_PROFILE",
+        "CONNECTION_REQUEST",
+        "DIRECT_MESSAGE",
+        "INMAIL",
+      ],
+      linkedin_task_outcome: [
+        "REQUEST_MARKED_SENT",
+        "MESSAGE_MARKED_SENT",
+        "PROFILE_REVIEW_RECORDED",
+        "SKIPPED",
+        "FAILED",
+        "OUTCOME_UNKNOWN",
+      ],
+      linkedin_task_state: ["PENDING", "RELEASED", "COMPLETED", "EXPIRED"],
+      linkedin_terminal_reason: [
+        "GOAL_MET",
+        "REPLIED",
+        "NOT_INTERESTED",
+        "DNC",
+        "NOT_ACCEPTED",
+        "NO_REPLY",
+        "EXPIRED",
+        "DISQUALIFIED",
+        "MANUAL_STOP",
       ],
       meeting_event_type: [
         "booked",

@@ -171,25 +171,31 @@ const KNOWN_ORPHANS = new Set(
      * `/dashboard/settings/linkedin` links accounts and reads budgets through
      * it. Three entries removed by the code changing, none by anyone tidying.
      *
-     * What remains below is the half with no surface yet — the message set, the
-     * preflight, the enrollment state machine, the metrics and the profile-link
-     * check. They leave when the Action Inbox renders a draft and its result
-     * form, which needs the task tables §4.7 describes.
+     * ╔═══════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ FOUR MORE LEFT ON 2026-09-13, ON THE EXIT CONDITION THIS LIST  ║
+     * ║  WROTE DOWN FOR ITSELF.                                            ║
+     * ║                                                                    ║
+     * ║  The condition was: "they leave when the Action Inbox renders a     ║
+     * ║  draft and its result form... and `preflight.ts` additionally when  ║
+     * ║  the release job calls it." 0125 built the task tables,             ║
+     * ║  `lib/linkedin/tasks.ts` calls `preflight` before releasing, and    ║
+     * ║  `components/linkedin/ActionInbox.tsx` renders the draft and offers ║
+     * ║  `allowedOutcomes(kind)`.                                          ║
+     * ║                                                                    ║
+     * ║  The same note warned what a bad exit would look like: an inbox     ║
+     * ║  that shipped with "its own renderer, its own outcome vocabulary,   ║
+     * ║  its own idea of a safe profile link, or — worst — its own idea of  ║
+     * ║  when an approval is still valid." It has none of those. The card   ║
+     * ║  imports the vocabulary, the release path imports the preflight,    ║
+     * ║  and `enroll.ts` imports the renderer and the link allowlist.       ║
+     * ╚═══════════════════════════════════════════════════════════════════╝
      *
-     * ⚠️ THE EXIT CONDITION IS NAMED, because an entry with no way out is how
-     * this list stops shrinking. Every entry below leaves when the Action Inbox
-     * renders a draft and its result form — `components/linkedin/ActionInboxCard`
-     * or its equivalent — and `preflight.ts` additionally when the release job
-     * calls it. If the Action Inbox ships without calling them, that is a defect
-     * this list is supposed to surface rather than excuse: it would mean the
-     * card built its own renderer, its own outcome vocabulary, its own idea of
-     * a safe profile link, or — worst — its own idea of when an approval is
-     * still valid.
+     * `metrics.ts` remains, and its exit condition is different: it leaves when
+     * something REPORTS on LinkedIn outcomes. Nothing does — the first
+     * enrollment can only be created today, so there is no history to measure
+     * and a report over an empty table would be a screen of zeroes pretending
+     * to be a finding.
      */
-    'lib/linkedin/render.ts',
-    'lib/linkedin/profile-reference.ts',
-    'lib/linkedin/preflight.ts',
-    'lib/linkedin/enrollment.ts',
     'lib/linkedin/metrics.ts',
   ].map((p) => p.replace(/\//g, sep)),
 )

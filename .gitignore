@@ -127,3 +127,5 @@ playwright-report/
 # `npm run lint` exit non-zero — which gates CI. Also in eslint.config.mjs.
 .codex-previews/
 .codex/
+APPLY_TO_SUPABASE.sql
+.pending-migrations/
