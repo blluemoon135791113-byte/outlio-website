@@ -33,6 +33,16 @@ const eslintConfig = defineConfig([
     "services/web-research-mcp/dist/**",
     "next-env.d.ts",
 
+    // ⚠️ A WORKTREE IS A SEPARATE CHECKOUT, NOT THIS ONE'S SOURCE.
+    //
+    // `.claude/worktrees/**` holds other sessions' in-flight branches. Linting
+    // them reports THEIR errors against THIS tree's gate — a real one turned up
+    // in `security-hardening/app/admin/page.tsx` and failed a run that had
+    // nothing to do with it. Each worktree runs its own lint against its own
+    // branch; borrowing its failures here only teaches people to ignore the
+    // number.
+    ".claude/worktrees/**",
+
     // ⚠️ AGENT TOOLING, NOT THIS PROJECT'S SOURCE.
     //
     // `npx impeccable install` vendors its own bundled JS (live-browser.js,

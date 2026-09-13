@@ -109,7 +109,27 @@ export default async function EmailAnalyticsPage({
    * has gone out tells someone their outreach is failing when in fact it has
    * not started.
    */
-  const replyRate = totals.sent > 0 ? `${((totals.replied / totals.sent) * 100).toFixed(1)}%` : null
+
+  /*
+   * ⚠️ THIS IS PER MESSAGE, NOT PER PERSON, AND IT IS NOT THE PRODUCT'S REPLY
+   * RATE.
+   *
+   * `email_mailbox_report` counts MESSAGES (`status = 'sent'`) and reply
+   * EVENTS, so a four-step sequence to 100 people with 20 repliers reads 5%
+   * here and 20% on `/crm/reports` — where `lib/crm/metrics.ts` computes it
+   * over contacts emailed and states the reason outright: "using the event
+   * count would quarter the rate of a team that follows up four times — it
+   * would punish doing the job properly".
+   *
+   * Both numbers are useful and neither is wrong; what was wrong was calling
+   * them the same thing. Per message is the right shape for a MAILBOX health
+   * screen — it answers "what does this mailbox get back per message it
+   * sends" — so the figure stays and the LABEL now says which question it
+   * answers. The per-person figure needs a distinct-contact count this RPC
+   * does not return, which is a migration rather than a rename.
+   */
+  const replyPerMessage =
+    totals.sent > 0 ? `${((totals.replied / totals.sent) * 100).toFixed(1)}%` : null
   const bounceRate = totals.sent > 0 ? `${((totals.bounced / totals.sent) * 100).toFixed(1)}%` : null
 
   return (
@@ -151,9 +171,13 @@ export default async function EmailAnalyticsPage({
         <Stat label="Delivered" value={totals.delivered} />
         <Stat label="Replies" value={totals.replied} />
         <Stat
-          label="Reply rate"
-          value={replyRate}
-          hint={replyRate === null ? 'Nothing sent yet' : undefined}
+          label="Replies per message"
+          value={replyPerMessage}
+          hint={
+            replyPerMessage === null
+              ? 'Nothing sent yet'
+              : 'Per message sent. Reports measures replies per person.'
+          }
         />
         <Stat
           label="Bounce rate"
