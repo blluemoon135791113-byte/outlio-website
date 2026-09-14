@@ -453,3 +453,84 @@ describe('design — product motion stays within 150ms and never animates in', (
     )
   })
 })
+
+/**
+ * Touch targets in the product shell.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ MEASURED ON A REAL PHONE VIEWPORT, NOT INFERRED FROM THE CLASSES.     ║
+ * ║                                                                           ║
+ * ║  At 375×812 every authenticated route reported exactly five controls       ║
+ * ║  under 44px — the same five, because they live in the shell rather than    ║
+ * ║  the pages. Three are 36×240 and easy to hit. Two were not:               ║
+ * ║                                                                           ║
+ * ║      Open navigation   36×36   ← the primary nav control on a phone       ║
+ * ║      Search leads ⌘K   36×42   (the label is `hidden sm:inline`)          ║
+ * ║                                                                           ║
+ * ║  Both clear WCAG 2.5.8's 24px floor and miss the 44px that Apple's HIG    ║
+ * ║  and WCAG 2.5.5 ask for.                                                  ║
+ * ║                                                                           ║
+ * ║  ⚠️ THE FIX GROWS THE HIT AREA, NOT THE BOX. `h-11 w-11` would have       ║
+ * ║  changed the header's rhythm to solve a touch problem. A `before:-inset-1`║
+ * ║  pseudo-element adds 4px a side, leaving the visible border identical —   ║
+ * ║  verified in the browser: visual 36×36, touch 44×44, and a hit test 3px   ║
+ * ║  outside the border resolves to the button.                              ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('design — the shell’s small controls carry an extended touch target', () => {
+  const TOUCH_INSET = /before:absolute before:-inset-1 before:content-\[''\]/
+
+  it('the mobile navigation toggle', () => {
+    const shell = code(join(ROOT, 'components/product/ProductShell.tsx'))
+    const marker = shell.indexOf('aria-label="Open navigation"')
+    expect(marker, 'the nav toggle lost its label').toBeGreaterThan(-1)
+
+    /*
+     * ⚠️ SCOPED TO THIS BUTTON'S OWN TAG. The file has many buttons; matching
+     * the inset anywhere in it would pass while the toggle itself stayed 36px.
+     */
+    const tagStart = shell.lastIndexOf('<button', marker)
+    const opening = shell.slice(tagStart, shell.indexOf('>', marker) + 1)
+    expect(opening).toMatch(TOUCH_INSET)
+    expect(opening, 'the pseudo-element needs a positioned parent').toMatch(/\brelative\b/)
+    // The visible box is deliberately unchanged.
+    expect(opening).toMatch(/\bh-9 w-9\b/)
+  })
+
+  it('the command palette trigger', () => {
+    const palette = code(join(ROOT, 'components/product/CommandPalette.tsx'))
+
+    /*
+     * ⚠️ ANCHORED ON THE CLASSNAME, NOT ON "Search leads". That string appears
+     * FOUR times in this file and the first is an `aria-label` on the modal,
+     * 127 lines before the trigger — so searching backwards from it found
+     * nothing and the test failed on correct code. Third time this shape of
+     * anchoring bug has appeared in this session.
+     */
+    const tagStart = palette.indexOf('className="relative flex h-9')
+    expect(tagStart, 'the trigger no longer carries the touch inset').toBeGreaterThan(-1)
+    const opening = palette.slice(tagStart, palette.indexOf('>', tagStart) + 1)
+    expect(opening).toMatch(TOUCH_INSET)
+
+    // And it really is the trigger: the label follows within the same element.
+    expect(palette.slice(tagStart, tagStart + 900)).toContain('Search leads')
+  })
+
+  it('records the measurement, so the inset is not read as decoration', () => {
+    /*
+     * `before:-inset-1` on a button looks like a stray utility. Without the
+     * numbers beside it, removing it is a tidy-up that silently returns the
+     * primary mobile nav control to 36×36.
+     */
+    /*
+     * ⚠️ READ RAW, NOT THROUGH `code()`. That helper strips comments — it says
+     * so on the tin, "comments are prose about the rule, not uses of it" — so
+     * asserting comment text through it checks a string that has already been
+     * deleted, and passes only when the expectation is inverted. My first
+     * version did exactly that.
+     */
+    const shellRaw = readFileSync(join(ROOT, 'components/product/ProductShell.tsx'), 'utf8')
+    expect(shellRaw).toMatch(/36px OF BORDER, 44px OF TOUCH/)
+    expect(shellRaw).toMatch(/WCAG 2\.5\.8/)
+  })
+})
