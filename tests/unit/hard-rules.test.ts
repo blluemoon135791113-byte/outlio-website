@@ -516,6 +516,26 @@ describe('design — the shell’s small controls carry an extended touch target
     expect(palette.slice(tagStart, tagStart + 900)).toContain('Search leads')
   })
 
+  it('the admin row’s external link clears the 24px floor', () => {
+    /*
+     * ⚠️ THE ONLY CONTROL IN THE PRODUCT THAT FAILED WCAG 2.5.8 AA, and there
+     * were 29 of them on one screen: an inline text link whose height was just
+     * the `text-sm` line box, 17px. Every other small target measures 34px or
+     * more — those clear AA and only miss the 44px AAA figure.
+     *
+     * ⚠️ `inline-block` IS HALF THE FIX AND THE HALF THAT IS EASY TO DROP.
+     * Vertical padding does not apply to an inline element, so `py-1` alone
+     * would change nothing while looking like a fix. Measured after: the page
+     * went from 29 controls under 24px to zero.
+     */
+    const row = code(join(ROOT, 'components/admin/UserRow.tsx'))
+    const marker = row.indexOf('text-accent hover:underline')
+    expect(marker, 'the admin external link moved').toBeGreaterThan(-1)
+    const cls = row.slice(row.lastIndexOf('className="', marker), marker)
+    expect(cls, 'py-1 on an inline element does nothing').toContain('inline-block')
+    expect(cls).toContain('py-1')
+  })
+
   it('records the measurement, so the inset is not read as decoration', () => {
     /*
      * `before:-inset-1` on a button looks like a stray utility. Without the

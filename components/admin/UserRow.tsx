@@ -122,7 +122,19 @@ export function UserRow({
                   href={user.linkedinUrl}
                   target="_blank"
                   rel="noopener noreferrer nofollow"
-                  className="text-accent hover:underline"
+                  /*
+                   * ⚠️ 17px TALL WITHOUT THE PADDING — the only control in the
+                   * product below WCAG 2.5.8's 24×24 floor, and there are 29 of
+                   * them on one screen. Measured on a phone viewport; every
+                   * other small target in the product is 34px or more, which
+                   * clears AA and only misses the 44px AAA figure.
+                   *
+                   * `inline-block py-1` takes the line box to 25px while leaving
+                   * it an inline text link in the sentence. A height utility
+                   * would not apply to an inline element at all, which is the
+                   * fix that looks right and changes nothing.
+                   */
+                  className="inline-block py-1 text-accent hover:underline"
                 >
                   LinkedIn
                 </a>
