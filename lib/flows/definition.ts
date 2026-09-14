@@ -557,7 +557,18 @@ export function publishProblems(definition: FlowDefinition): string[] {
  * entry can only fail to catch a bad publish; a wrong entry would refuse a
  * good one. `tests/unit/flow-required-config.test.ts` keeps the two in step.
  */
-const REQUIRED_ACTION_CONFIG: Partial<Record<string, readonly string[]>> = {
+/**
+ * ⚠️ EXPORTED SO THE GENERATOR CAN BE TOLD, rather than left to guess.
+ *
+ * The first real eval run failed almost every case on "needs tag set before
+ * this flow can be published". The prompt said "fill every config value the
+ * action needs" and then listed only action NAMES — so the model was being
+ * marked wrong for not knowing something nobody had told it.
+ *
+ * §5.10's snapshot is meant to be the closed world handed to the model. A world
+ * that names the verbs but not their arguments is not closed, it is just small.
+ */
+export const REQUIRED_ACTION_CONFIG: Partial<Record<string, readonly string[]>> = {
   ASSIGN_OWNER: ['userId'],
   ROUND_ROBIN: ['userIds'],
   CREATE_TASK: ['title'],

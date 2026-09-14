@@ -64,6 +64,13 @@ export default defineConfig({
           environment: 'node',
           include: ['tests/eval/**/*.eval.ts'],
           /*
+           * ⚠️ WITHOUT THIS THE EVAL CANNOT RUN AND DOES NOT SAY SO. Vitest does
+           * not read `.env` files; the integration project has always had a
+           * setup file doing it and this one shipped without. Five model keys
+           * were set in `.env.local` and the run still reported "41 skipped".
+           */
+          setupFiles: ['tests/setup.eval.ts'],
+          /*
            * ⚠️ A THIRD PROJECT BECAUSE IT HAS A THIRD CONSTRAINT: it SPENDS
            * MONEY. Unit must be fast, integration must be serial, and this must
            * be neither automatic nor accidental — it calls a real model once per

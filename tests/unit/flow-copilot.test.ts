@@ -237,3 +237,28 @@ describe('it proposes; it does not publish', () => {
     expect(CODE).not.toMatch(/resolveLlmProvider|createGeminiProvider/)
   })
 })
+
+describe('the eval cannot masquerade as a customer', () => {
+  it('defaults to the customer source when nobody says otherwise', async () => {
+    /*
+     * ⚠️ THE DEFAULT IS THE SAFE DIRECTION. A caller that forgets to tag itself
+     * is counted as real usage, which over-counts spend. The opposite default
+     * would silently drop real drafts out of the ledger the price is chosen
+     * from, and nobody would notice the number was low.
+     */
+    expect(CODE).toMatch(/source: input\.source \?\? 'http:flow-copilot'/)
+  })
+
+  it('the eval tags itself so its rows can be excluded', () => {
+    /*
+     * Forty cases write 40-80 metering rows in a few minutes. `flows.copilot`
+     * is priced at 0 precisely so `hubble_calls` fills with REAL usage before
+     * anyone picks a number — "a price picked over an empty ledger is a guess".
+     * Untagged, the evidence under that decision would be mostly this test.
+     */
+    const evalSource = readFileSync(join(ROOT, 'tests/eval/flow-copilot.eval.ts'), 'utf8')
+    expect(evalSource).toMatch(/source: 'eval:flow-copilot'/)
+    // A prefix, so any future harness is excluded by the same `like 'eval:%'`.
+    expect(evalSource).toMatch(/source: 'eval:/)
+  })
+})

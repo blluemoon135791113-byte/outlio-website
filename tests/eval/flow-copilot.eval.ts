@@ -77,6 +77,22 @@ describe('the eval is configured, or deliberately not', () => {
   })
 })
 
+/**
+ * ⚠️ PACED, BECAUSE THE VENDOR RATE-LIMITS AND THE PRODUCT REPORTS THAT AS
+ * "the model was unavailable".
+ *
+ * A single draft succeeds in about two seconds. Forty of them back to back all
+ * failed — every case, including the ten refusals, which is what a quota reply
+ * looks like from inside. The first full run scored 2/42 for that reason and
+ * nothing about it said "rate limit".
+ *
+ * Four seconds a case keeps the run under Gemini's free-tier ceiling and costs
+ * roughly three minutes. A faster key can lower it; it is a property of the
+ * ACCOUNT, not of the copilot.
+ */
+const PACE_MS = Number(process.env.EVAL_PACE_MS ?? 4_000)
+const pace = () => new Promise((r) => setTimeout(r, PACE_MS))
+
 type Score = { id: string; passed: boolean; detail: string }
 const scores: Score[] = []
 
@@ -85,6 +101,15 @@ async function score(testCase: EvalCase): Promise<Score> {
     workspaceId: WORKSPACE_ID,
     userId: USER_ID,
     description: testCase.prompt,
+    /*
+     * ⚠️ TAGGED SO THE PRICING LEDGER STAYS HONEST. These rows land in the same
+     * `hubble_calls` table a real draft does, and `flows.copilot` is priced at 0
+     * so that table can fill with REAL usage before a number is chosen. Forty
+     * cases in five minutes would swamp it and be untellable afterwards.
+     *
+     * Anything analysing spend should exclude `source like 'eval:%'`.
+     */
+    source: 'eval:flow-copilot',
   })
 
   if (testCase.outcome === 'refusal') {
@@ -100,6 +125,28 @@ async function score(testCase: EvalCase): Promise<Score> {
     if (result.reason !== 'unusable') {
       return { id: testCase.id, passed: false, detail: `door refused (${result.reason}), model never ran` }
     }
+
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ A DEAD MODEL IS NOT A CORRECT REFUSAL, AND THIS SCORED IT AS ONE. ║
+     * ║                                                                       ║
+     * ║  `unusable` is returned both when the model answered and the answer    ║
+     * ║  would not compile, AND when no model answered at all. On the first    ║
+     * ║  real run every vendor call failed — and all ten refusal cases PASSED, ║
+     * ║  reporting perfect judgement from a model that was never reached.      ║
+     * ║                                                                       ║
+     * ║  That is the exact failure this corpus exists to catch, inside the     ║
+     * ║  thing built to catch it: a check that cannot tell success from        ║
+     * ║  absence.                                                             ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const outage = result.attempts.some((a) =>
+      a.problems.some((p) => p.includes('The model was unavailable')),
+    )
+    if (outage) {
+      return { id: testCase.id, passed: false, detail: 'model unavailable — refusal not demonstrated' }
+    }
+
     return { id: testCase.id, passed: true, detail: 'refused' }
   }
 
@@ -139,6 +186,7 @@ describeIf('flow copilot, against a real model', () => {
     it(
       `${testCase.id}: ${testCase.outcome}`,
       async () => {
+        await pace()
         const result = await score(testCase)
         scores.push(result)
         expect(result.passed, `${result.id} — ${result.detail}`).toBe(true)

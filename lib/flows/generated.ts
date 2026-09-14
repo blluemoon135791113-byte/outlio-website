@@ -41,6 +41,7 @@ import {
   CONDITION_OPERATORS,
   FlowDefinitionError,
   TRIGGER_TYPES,
+  REQUIRED_ACTION_CONFIG,
   actionIsImplemented,
   publishProblems,
   validateFlowDefinition,
@@ -65,6 +66,15 @@ export type RegistrySnapshot = {
   matchModes: readonly ('all' | 'any')[]
   /** Fact keys a BRANCH condition may read. */
   factKeys: readonly string[]
+  /**
+   * Config keys each action cannot run without.
+   *
+   * ⚠️ WITHOUT THIS THE GENERATOR IS GUESSING. `publishProblems` refuses a step
+   * whose required config is missing, and the first real eval run failed nearly
+   * every case on exactly that — an `ADD_TAG` with no `tag`. The model was
+   * being marked wrong for not knowing something the snapshot never said.
+   */
+  requiredConfig: Readonly<Record<string, readonly string[]>>
 }
 
 /**
@@ -154,6 +164,11 @@ export function registrySnapshot(): RegistrySnapshot {
     operators: CONDITION_OPERATORS,
     matchModes: ['all', 'any'],
     factKeys: factKeys(),
+    requiredConfig: Object.fromEntries(
+      (Object.keys(ACTION_TYPES) as ActionType[])
+        .map((action) => [action, REQUIRED_ACTION_CONFIG[action] ?? []] as const)
+        .filter(([, keys]) => keys.length > 0),
+    ),
   }
 }
 

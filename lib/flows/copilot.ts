@@ -81,7 +81,54 @@ const FLOW_SCHEMA = {
           label: { type: 'string' },
           type: { type: 'string', enum: ['ACTION', 'WAIT', 'BRANCH'] },
           action: { type: 'string' },
-          config: { type: 'object' },
+          /*
+           * ╔═══════════════════════════════════════════════════════════════════╗
+           * ║  ⚠️ `{ type: 'object' }` WITH NO PROPERTIES MADE THE FEATURE     ║
+           * ║  IMPOSSIBLE, NOT MERELY WORSE.                                    ║
+           * ║                                                                   ║
+           * ║  Structured output strips anything the schema does not declare, so ║
+           * ║  `config` came back `{}` EVERY TIME — proven directly against the  ║
+           * ║  model. `publishProblems` then refused every ACTION step for       ║
+           * ║  missing its required config, on both attempts, for every prompt.  ║
+           * ║                                                                   ║
+           * ║  The copilot was shipped and reachable and could not produce a     ║
+           * ║  publishable flow for anyone. No unit test could see it: they all  ║
+           * ║  fed the compiler hand-written JSON, which is the one input the    ║
+           * ║  schema never touches.                                            ║
+           * ╚═══════════════════════════════════════════════════════════════════╝
+           *
+           * ⚠️ EVERY KEY IS LISTED BECAUSE AN OMITTED ONE IS SILENTLY DROPPED —
+           * the same failure in miniature. These are the keys the handlers read
+           * (`lib/flows/actions/*`) plus every entry in `REQUIRED_ACTION_CONFIG`.
+           * `flow-copilot-schema.test.ts` keeps the two in step.
+           */
+          config: {
+            type: 'object',
+            properties: {
+              tag: { type: 'string' },
+              title: { type: 'string' },
+              userId: { type: 'string' },
+              userIds: { type: 'array', items: { type: 'string' } },
+              campaignId: { type: 'string' },
+              accountId: { type: 'string' },
+              subject: { type: 'string' },
+              body: { type: 'string' },
+              field: { type: 'string' },
+              value: { type: 'string' },
+              listId: { type: 'string' },
+              pipelineId: { type: 'string' },
+              stageId: { type: 'string' },
+              url: { type: 'string' },
+              storeAs: { type: 'string' },
+              operation: { type: 'string' },
+              message: { type: 'string' },
+              event: { type: 'string' },
+              dueInHours: { type: 'integer' },
+              addDays: { type: 'integer' },
+              addHours: { type: 'integer' },
+              valueAmount: { type: 'number' },
+            },
+          },
           hours: { type: 'integer' },
           conditions: {
             type: 'array',
@@ -127,6 +174,18 @@ function systemPrompt(snapshot: RegistrySnapshot): string {
     `Comparisons: ${snapshot.operators.join(', ')}`,
     `Match modes: ${snapshot.matchModes.join(', ')}`,
     `Fact keys a BRANCH may read: ${snapshot.factKeys.join(', ')}`,
+    '',
+    '## Config each action must carry',
+    '',
+    /*
+     * ⚠️ THE SINGLE BIGGEST CAUSE OF REJECTED OUTPUT. Without these lines the
+     * model emitted `ADD_TAG` with an empty config and was refused by
+     * `publishProblems` — on the first real eval run that was nearly every
+     * case. It was being marked wrong for not knowing something unsaid.
+     */
+    ...Object.entries(snapshot.requiredConfig).map(
+      ([action, keys]) => `- ${action} requires: ${keys.join(', ')}`,
+    ),
     '',
     '## Rules',
     '',
@@ -181,13 +240,37 @@ export async function generateFlowDefinition(input: {
   workspaceId: string
   userId: string
   description: string
+  /**
+   * Where the request came from, recorded on the `hubble_calls` row.
+   *
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THE EVAL MUST NOT LOOK LIKE A CUSTOMER, AND IT DID.                  ║
+   * ║                                                                           ║
+   * ║  Every call here writes a metering row, and `flows.copilot` is priced at  ║
+   * ║  0 precisely so that ledger fills with REAL usage before anyone picks a   ║
+   * ║  number: "a price picked over an empty ledger is a guess."                ║
+   * ║                                                                           ║
+   * ║  A 40-case eval run writes 40-80 rows in a few minutes. Tagged the same   ║
+   * ║  as a real draft, they are indistinguishable afterwards — so the evidence ║
+   * ║  under the pricing decision would be mostly me, and nobody would be able  ║
+   * ║  to tell. That is a guess wearing the costume of data.                   ║
+   * ║                                                                           ║
+   * ║  Defaulting to the customer path keeps the product honest by omission:    ║
+   * ║  only a caller that deliberately says otherwise is excluded.             ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  source?: string
 }): Promise<CopilotResult> {
   const snapshot = registrySnapshot()
   const attempts: CopilotAttempt[] = []
 
   const metered = await hubbleExecute(
     'flows.copilot',
-    { workspaceId: input.workspaceId, userId: input.userId, source: 'http:flow-copilot' },
+    {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      source: input.source ?? 'http:flow-copilot',
+    },
     async (tools: HubbleTools) => {
       let problems: string[] = []
 
