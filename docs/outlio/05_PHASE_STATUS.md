@@ -84,10 +84,37 @@ those — the card imports `allowedOutcomes`, the release path imports
 `preflight`, `enroll` imports the renderer and the link allowlist. Only
 `metrics.ts` remains, on a different condition.
 
-**Still blocked on the owner:** the two questions in
-[`LINKEDIN_PHASE_4_SENDER_DESIGN.md`](LINKEDIN_PHASE_4_SENDER_DESIGN.md) —
-`linkedin_enabled` tiers and the sender cap per workspace. Neither blocks the
-code, which is built and gated on the module; they decide who may use it.
+✅ **Both owner questions answered and verified live (2026-09-14).**
+[`LINKEDIN_PHASE_4_SENDER_DESIGN.md`](LINKEDIN_PHASE_4_SENDER_DESIGN.md)'s two
+questions are closed: entitled on **trial, professional, custom**; caps **2 / 10
+/ 20** senders per workspace. Migration `0127`, applied to both projects and
+confirmed by reading back `plans.limits` — `linkedin_enabled = true` with the
+matching cap on those three, and both keys absent on `starter` and `agency` by
+decision.
+
+⚠️ **THE ENTITLEMENT WAS SET, LOST, AND SET AGAIN, AND THE MIDDLE STEP IS THE
+LESSON.** It was first applied as an ad-hoc `UPDATE` in the SQL editor and never
+written to a migration, then a second hand-applied statement set
+`linkedin_senders_max` from a scratch file that had been overwritten in between.
+Production carried a sender cap for a module no plan was entitled to. Nothing
+could detect it: every other module entitlement is in `0103`, so there was no
+record that this one was meant to exist, and a fresh project would have replayed
+`0002..0126` into a database with LinkedIn off for everyone — correctly,
+permanently and silently.
+
+`0127` sets both keys in one statement per plan and raises if it ever finds them
+split. `tests/unit/entitlement-migrations.test.ts` reads the module map from
+`entitlements.ts`, so a module added later is covered the day it is added.
+
+⚠️ **AND `check-migration.sh` PASSED THE BROKEN MIGRATION TOO.** `plans.key` is
+the enum `public.plan_key`; the harness scaffolded it as `text`, which accepts
+every expression the enum accepts *and* every one it rejects — so
+`string_agg(key, …)` looked fine locally and failed in the editor. Its
+prerequisite list had also stopped at `0106`, giving `0124` and `0125` false
+failures about columns their own predecessors create. A harness that cries wolf
+gets ignored, which is why `0127` reached the editor unvalidated at all. Both
+repaired, and `tests/unit/migration-harness-coverage.test.ts` now checks the
+harness.
 
 ⚠️ **Nothing in the LinkedIn channel has been exercised against a real contact.**
 Every guard is unit-level or mutation-proved; no enrolment, release or outcome

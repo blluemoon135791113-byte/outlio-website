@@ -148,6 +148,83 @@ describe('the mapping covers every trigger that has a source', () => {
     })
   }
 
+  /*
+   * ╔═════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THE LOOP ABOVE CANNOT DETECT A MISSING MAPPING, WHICH IS THE ONE     ║
+   * ║  FAILURE THE COMMENT ABOVE CLAIMS IT PREVENTS.                          ║
+   * ║                                                                         ║
+   * ║  `WIRED` lives in this file and GENERATES its own test cases, so         ║
+   * ║  deleting a row deletes the assertion. Proven by mutation: removing      ║
+   * ║  `['opportunity_won', ...]` left 18 tests passing and nothing red. It    ║
+   * ║  catches a WRONG mapping — changing the value to `crm.opportunity.WRONG` ║
+   * ║  does fail — and is blind to an ABSENT one.                             ║
+   * ║                                                                         ║
+   * ║  That is this project's signature defect sitting inside the guard        ║
+   * ║  written against it: a check whose expectations are its own data         ║
+   * ║  answers a question it asked itself.                                    ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   *
+   * So compare KEY SETS against the product's own table. `WEBHOOK_FOR_TRIGGER`
+   * is deliberately not exported — widening the product API to be testable is
+   * how the API grows shapes nobody wanted — so it is read from source, which
+   * is the established pattern here.
+   */
+  it('the product wires exactly these nine triggers, no more and no fewer', () => {
+    const source = readFileSync(join(ROOT, 'lib/events/emit.ts'), 'utf8')
+    const open = source.indexOf('const WEBHOOK_FOR_TRIGGER')
+    expect(open, 'WEBHOOK_FOR_TRIGGER was renamed').toBeGreaterThan(-1)
+    const close = source.indexOf('}', open)
+
+    /*
+     * ⚠️ COMMENTS STRIPPED FIRST. `emit.ts` names events in prose immediately
+     * above this table — including the three `meeting.*` events it deliberately
+     * does NOT wire. Matching the raw slice would read those as mappings and
+     * report a product that publishes an API it refuses to publish.
+     */
+    const table = source
+      .slice(open, close)
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .map((l) => l.replace(/\/\/.*$/, ''))
+      .join('\n')
+
+    const inProduct = [...table.matchAll(/^\s*(\w+):\s*'[\w.]+',/gm)].map((m) => m[1]!)
+
+    expect(
+      inProduct.slice().sort(),
+      'The product\'s trigger→webhook table and this file\'s WIRED list ' +
+        'disagree. A trigger in the product but not in WIRED is an event ' +
+        'shipping unreviewed; a trigger in WIRED but not in the product is a ' +
+        'webhook that silently stopped while its flow kept running — the exact ' +
+        'asymmetry Phase 23 found.',
+    ).toEqual(
+      WIRED.map(([trigger]) => trigger)
+        .slice()
+        .sort(),
+    )
+  })
+
+  it('the door still actually calls the publisher', () => {
+    /*
+     * ⚠️ A VACUITY GUARD, AND IT WAS MISSING. `BUILD_HANDOFF` §0.2 assumed one
+     * existed; mutation proved it did not. Neutering the call —
+     * `webhooksQueued = 0 && await publishEvent(...)` — left all 19 tests
+     * green, so every mapping assertion above would have kept passing about a
+     * door that queued nothing.
+     *
+     * Asserted on the assignment, because the RESULT is what the caller reads:
+     * a `publishEvent` whose return value is discarded reports zero deliveries
+     * forever, and `webhooksQueued` is what tells a customer their webhook
+     * fired.
+     */
+    const source = readFileSync(join(ROOT, 'lib/events/emit.ts'), 'utf8')
+    expect(source).toMatch(/webhooksQueued = await publishEvent\(/)
+    expect(
+      source,
+      'the publishEvent call is short-circuited; the door queues nothing',
+    ).not.toMatch(/webhooksQueued = [^a]\S*\s*&&\s*await publishEvent\(/)
+  })
+
   it('does not invent a public event for a trigger that has no payload contract', () => {
     /*
      * `call_booked` is Calendly's own concern and starts a run directly.
