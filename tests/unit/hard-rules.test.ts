@@ -149,6 +149,47 @@ const PRODUCT_SURFACES = [
   'components/crm',
   'components/email',
   'components/admin',
+  /*
+   * ⚠️ WIDENED 2026-09-14, AND THE OMISSION HAD COST SOMETHING. The list above
+   * covered five surfaces and left out most of the authenticated product —
+   * `components/product` (the shell, nav and dashboard rows),
+   * `components/intelligence` (Hubble), `components/settings`,
+   * `components/flows`, `components/linkedin`, and `app/(auth)`.
+   *
+   * That is why `LeadModal`'s `duration-200` sat over the 150ms cap unseen:
+   * `components/intelligence` was not a surface any design guard looked at.
+   *
+   * ⚠️ WIDENING WAS FREE, WHICH IS THE ARGUMENT FOR DOING IT. Every one of
+   * these directories already had ZERO literal colours when measured — 61
+   * files across nine directories. So this ratchets what the product already
+   * does rather than declaring a goal, which is the only kind of rule that
+   * survives.
+   */
+  'components/product',
+  'components/intelligence',
+  'components/settings',
+  'components/flows',
+  'components/linkedin',
+  'components/reports',
+  'components/jobs',
+  'app/(auth)',
+]
+
+/**
+ * Marketing files that live under a shared directory.
+ *
+ * ⚠️ NAMED INDIVIDUALLY, NEVER BY EXCLUDING `components/ui` WHOLESALE. That
+ * directory also holds `LocalTime.tsx`, which every product surface renders
+ * dates through — excluding the folder to spare two hero components would
+ * quietly stop policing a genuinely shared one.
+ *
+ * `singularity-hero-scene.tsx` is imported only by `components/leadengine`
+ * (the landing page, read-only under rule 5). `orbital-hero-section.tsx` has
+ * NO importer at all and is a hand-tuned gradient.
+ */
+const MARKETING_FILES = [
+  'components/ui/singularity-hero-scene.tsx',
+  'components/ui/orbital-hero-section.tsx',
 ]
 
 describe('design — the product uses tokens, not literal colours', () => {
@@ -312,5 +353,103 @@ describe('design — the product has loading and error states', () => {
     const bars = source.match(/rounded-\[var\(--radius/g) ?? []
     const hidden = source.match(/aria-hidden/g) ?? []
     expect(hidden.length).toBeGreaterThanOrEqual(bars.length - 2)
+  })
+})
+
+/**
+ * Motion, product-wide.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ BOTH OF THESE RULES WERE ENFORCED ON EXACTLY TWO COMPONENTS.          ║
+ * ║                                                                           ║
+ * ║  `overview-performance.test.ts` asserts "never animates in and never uses ║
+ * ║  Reveal" — over `PerformanceRow` and one card. Nothing else in the        ║
+ * ║  product was checked, so the rules held by habit rather than by anything. ║
+ * ║                                                                           ║
+ * ║  `LeadModal` is what habit missed: `duration-200`, over the 150ms cap,    ║
+ * ║  shipped and unnoticed because `components/intelligence` was not a        ║
+ * ║  surface any design guard looked at.                                     ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('design — product motion stays within 150ms and never animates in', () => {
+  const surfaces = () =>
+    PRODUCT_SURFACES.flatMap((surface) => sourceFiles(join(ROOT, surface)))
+      .concat(
+        sourceFiles(join(ROOT, 'components/ui')).filter(
+          (f) => !MARKETING_FILES.includes(relative(ROOT, f).split('\\').join('/')),
+        ),
+      )
+      .map((f) => ({ file: relative(ROOT, f).split('\\').join('/'), code: code(f) }))
+
+  it('scans a believable number of files', () => {
+    // Vacuity: an empty sweep passes every assertion below over nothing, which
+    // is precisely the state the two-component version was already in.
+    expect(surfaces().length).toBeGreaterThan(60)
+  })
+
+  it('no transition or animation runs longer than 150ms', () => {
+    /*
+     * ⚠️ MATCHES TAILWIND'S SCALE AND ARBITRARY VALUES BOTH. `duration-200` and
+     * `duration-[300ms]` are the same violation written two ways, and checking
+     * only the named scale would miss the one somebody reaches for precisely
+     * because it is not on the scale.
+     */
+    const TOO_SLOW = /duration-(?:200|300|500|700|1000)\b|duration-\[(\d+)ms\]/g
+    const offenders: string[] = []
+
+    for (const { file, code: source } of surfaces()) {
+      for (const match of source.matchAll(TOO_SLOW)) {
+        const arbitrary = match[1] ? Number(match[1]) : null
+        if (arbitrary !== null && arbitrary <= 150) continue
+        offenders.push(`${file}: ${match[0]}`)
+      }
+    }
+
+    expect(
+      offenders,
+      'CLAUDE.md caps product motion at 150ms. Anything slower reads as the ' +
+        'interface thinking, on a surface somebody uses all day.',
+    ).toEqual([])
+  })
+
+  it('nothing in the product animates in', () => {
+    /*
+     * ⚠️ `Reveal` MATCHED AS A WHOLE WORD. `SecretReveal` in DeveloperSettings
+     * and a `revealed` state in `PasswordField` are unrelated and legitimate —
+     * a substring match would report both and get this rule deleted.
+     */
+    const offenders: string[] = []
+    for (const { file, code: source } of surfaces()) {
+      if (/\bReveal\b(?!ed)/.test(source.replace(/SecretReveal/g, ''))) {
+        offenders.push(`${file}: Reveal`)
+      }
+      const entrance = source.match(/animate-(?:in|fade|slide)[\w-]*/g)
+      if (entrance) offenders.push(`${file}: ${entrance.join(', ')}`)
+    }
+
+    expect(
+      offenders,
+      'No entrance animations in the product, and never `Reveal.tsx`. Content ' +
+        'that fades in is content somebody is waiting for twice — once for the ' +
+        'request and once for the animation.',
+    ).toEqual([])
+  })
+
+  it('the marketing exclusions are individual files, not a directory', () => {
+    /*
+     * Excluding `components/ui` wholesale would stop policing `LocalTime.tsx`,
+     * which every product surface renders dates through. Asserted so the
+     * shortcut is not taken later.
+     */
+    for (const file of MARKETING_FILES) {
+      expect(existsSync(join(ROOT, file)), `${file} moved`).toBe(true)
+      expect(file.endsWith('.tsx'), 'an exclusion became a directory').toBe(true)
+    }
+    const ui = sourceFiles(join(ROOT, 'components/ui')).map((f) =>
+      relative(ROOT, f).split('\\').join('/'),
+    )
+    expect(ui.some((f) => !MARKETING_FILES.includes(f)), 'components/ui is unpoliced').toBe(
+      true,
+    )
   })
 })

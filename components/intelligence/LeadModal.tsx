@@ -187,7 +187,11 @@ export function LeadModal({
         aria-modal="true"
         aria-label={`${lead.fullName ?? 'Lead'} details`}
         tabIndex={-1}
-        className={`skeuo flex w-full max-w-xl flex-col overflow-hidden outline-none transition-[max-height] duration-200 ease-out ${
+        // ⚠️ 150ms, NOT 200. CLAUDE.md caps product motion at 150ms; this was
+        // the only surface over it, and it went unseen because the design
+        // guards were scoped to `components/crm`, `components/email` and
+        // `components/admin` — not to `components/intelligence`.
+        className={`skeuo flex w-full max-w-xl flex-col overflow-hidden outline-none transition-[max-height] duration-150 ease-out ${
           expanded ? 'max-h-[85vh]' : 'max-h-[70vh]'
         }`}
       >
