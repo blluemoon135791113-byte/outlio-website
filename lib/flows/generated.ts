@@ -265,15 +265,34 @@ export function compileGeneratedDefinition(
     }
   }
 
-  /*
-   * ⚠️ THE PUBLISH TIER RUNS TOO, AND IS NOT DUPLICATED HERE. It catches the
-   * missing required config — an ASSIGN_OWNER with no `userId` — that a model
-   * omits constantly because the shape looks complete without it. Re-stating
-   * those rules would be the two-implementations defect; calling them is the
-   * whole point of them being a function.
-   */
-  problems.push(...publishProblems(definition))
-
   if (problems.length > 0) throw new FlowDefinitionError(problems)
   return definition
+}
+
+
+/**
+ * What a generated draft still needs from a person before it can be published.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THIS WAS A REJECTION AND SHOULD NEVER HAVE BEEN ONE.                  ║
+ * ║                                                                           ║
+ * ║  `compileGeneratedDefinition` used to run `publishProblems` and throw, so  ║
+ * ║  a draft missing a `listId` was discarded entirely. The model does not     ║
+ * ║  KNOW this workspace's lists, stages, pipelines or people — it was never   ║
+ * ║  given them — so on the first real run it began declining perfectly        ║
+ * ║  buildable requests: "Missing listId for the REMOVE_FROM_LIST action".     ║
+ * ║                                                                           ║
+ * ║  ⚠️ STRICT IN THE WRONG DIMENSION. The generated tier must be harsh about  ║
+ * ║  what a person CANNOT see — an invented capability, a fact Outlio does not ║
+ * ║  observe, a stale registry pin. A missing list id is the opposite: it      ║
+ * ║  appears in the builder as an empty dropdown, next to the step that needs  ║
+ * ║  it, in front of the person who knows the answer.                         ║
+ * ║                                                                           ║
+ * ║  ⚠️ AND THE PUBLISH GATE IS UNTOUCHED. `publishFlow` runs                  ║
+ * ║  `publishProblems` itself, so nothing unfinished can reach a live flow.    ║
+ * ║  This only decides whether the DRAFT is worth handing over.               ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export function generatedDraftWarnings(definition: FlowDefinition): string[] {
+  return publishProblems(definition)
 }

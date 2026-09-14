@@ -31,6 +31,7 @@ import {
 } from '@/lib/flows/definition'
 import {
   compileGeneratedDefinition,
+  generatedDraftWarnings,
   registrySnapshot,
   type RegistrySnapshot,
 } from '@/lib/flows/generated'
@@ -268,29 +269,69 @@ describe('an invented fact key is the failure the parser cannot catch', () => {
   })
 })
 
-describe('the publish tier runs too, and is not restated', () => {
-  it('catches config a model omits', () => {
-    /*
-     * ⚠️ ASSIGN_OWNER WITH NO `userId` IS THE OBSERVED PRODUCTION FAILURE that
-     * `publishProblems` was written for, and a model omits it constantly
-     * because the shape looks complete without it. Calling that function rather
-     * than re-stating its rules is the point of it being a function.
-     */
+describe('missing ids are handed over, not thrown away', () => {
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THIS TIER USED TO RUN `publishProblems` AND REJECT. THAT WAS WRONG,   ║
+   * ║  AND THE FIRST REAL EVAL RUN IS WHAT PROVED IT.                          ║
+   * ║                                                                           ║
+   * ║  The model does not know this workspace's list, stage, pipeline or user   ║
+   * ║  ids — it was never given them. Rejecting a draft for a missing `listId`  ║
+   * ║  made it DECLINE perfectly buildable requests: "Missing listId for the    ║
+   * ║  REMOVE_FROM_LIST action".                                               ║
+   * ║                                                                           ║
+   * ║  ⚠️ STRICT IN THE WRONG DIMENSION. Be harsh about what a person CANNOT    ║
+   * ║  see — an invented capability, a fact Outlio does not observe, a stale    ║
+   * ║  pin. A missing list id is the opposite: an empty dropdown beside the     ║
+   * ║  step that needs it, in front of the person who knows the answer.        ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  it('a step with no required config still compiles', () => {
     const input = generated({
       steps: [{ id: 's1', type: 'ACTION', action: 'ASSIGN_OWNER', config: {}, next: null }],
     })
-    expect(problemsOf(input).join(' ')).toMatch(/needs userId set before this flow can be published/)
+    expect(problemsOf(input)).toEqual([])
   })
 
-  it('reports every problem at once, not the first', () => {
+  it('but it is reported as something the draft still needs', () => {
     /*
-     * A repair attempt upstream is a second model call. Returning one fault per
-     * round trip would make a two-attempt loop discover two faults and give up
-     * on a flow with three.
+     * ⚠️ NOT SILENTLY DROPPED. The gap is surfaced so the UI can say the draft
+     * is unfinished; it simply is not a reason to throw the draft away.
      */
+    const definition = compileGeneratedDefinition(
+      generated({
+        steps: [{ id: 's1', type: 'ACTION', action: 'ASSIGN_OWNER', config: {}, next: null }],
+      }),
+      SNAPSHOT,
+    )
+    expect(generatedDraftWarnings(definition).join(' ')).toMatch(/needs userId set/)
+  })
+
+  it('the publish gate is untouched, which is what makes this safe', () => {
+    /*
+     * `publishFlow` runs `publishProblems` itself, so an unfinished draft
+     * cannot become a live flow. Asserted here because the leniency above is
+     * only defensible while that remains true.
+     */
+    const publish = readFileSync(join(ROOT, 'app/(product)/flows/actions.ts'), 'utf8')
+    expect(publish).toMatch(/publishProblems\(authorized\)/)
+  })
+
+  it('still reports every problem at once, not the first', () => {
     const input = generated({
       registryVersion: CAPABILITY_REGISTRY_VERSION + 5,
-      steps: [{ id: 's1', type: 'ACTION', action: 'ASSIGN_OWNER', config: {}, next: null }],
+      trigger: { type: 'contact_created' },
+      entryStepId: 'b1',
+      steps: [
+        {
+          id: 'b1',
+          type: 'BRANCH',
+          conditions: [{ field: 'contact.invented', operator: 'is_not_empty' }],
+          match: 'all',
+          onTrue: null,
+          onFalse: null,
+        },
+      ],
     })
     expect(problemsOf(input).length).toBeGreaterThanOrEqual(2)
   })

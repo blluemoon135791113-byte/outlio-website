@@ -62,9 +62,28 @@ const MAX_ATTEMPTS = 2
  */
 const FLOW_SCHEMA = {
   type: 'object',
-  required: ['trigger', 'entryStepId', 'steps', 'registryVersion'],
+  required: ['registryVersion'],
   properties: {
     registryVersion: { type: 'integer' },
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE MODEL NEEDS A WAY TO SAY "I CANNOT", OR IT WILL SUBSTITUTE.    ║
+     * ║                                                                       ║
+     * ║  The first real run passed 28 of 30 buildable cases and failed ALL TEN ║
+     * ║  refusals: asked to send an SMS, to connect on LinkedIn, to charge a   ║
+     * ║  customer, it built a flow every time. The compiler cannot catch that  ║
+     * ║  — what it builds is VALID, it just does something else.              ║
+     * ║                                                                       ║
+     * ║  Two causes, both mine. The schema REQUIRED a flow, so "no" was not an ║
+     * ║  expressible answer. And the prompt asked for "the closest flow",      ║
+     * ║  which is substitution by instruction.                                ║
+     * ║                                                                       ║
+     * ║  Someone who asks for SMS and silently receives a task has been handed ║
+     * ║  something they never agreed to, in a machine that will then run       ║
+     * ║  unattended against real people.                                      ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    cannotBuild: { type: 'string' },
     trigger: {
       type: 'object',
       required: ['type'],
@@ -195,7 +214,16 @@ function systemPrompt(snapshot: RegistrySnapshot): string {
      * matters. Saying the request cannot be satisfied is a valid answer and the
      * model must know that.
      */
-    '1. Use ONLY the names listed above. If the request needs something not listed, do not invent it — build the closest flow that uses only these, and leave out what you cannot express.',
+    /*
+     * ⚠️ REFUSE, DO NOT APPROXIMATE. This previously read "build the closest
+     * flow that uses only these, and leave out what you cannot express" — and
+     * the model obediently turned "text the contact" into a task and "charge
+     * the customer" into something else entirely. Every refusal case failed
+     * because the instruction asked for exactly that.
+     */
+    '1. Use ONLY the names listed above. If the request needs something that is not listed — a different channel, a fact you were not given, an action that does not exist — do NOT approximate it with something that is. Set "cannotBuild" to one sentence naming what is missing, and return no steps.',
+    '   A flow that quietly does something other than what was asked is worse than no flow.',
+    '   But a missing id is NOT a missing capability: if the action exists and you simply do not know which list or person, build the step and leave that field empty.',
     /*
      * ⚠️ THE MODEL EMITS THE VERSION; THE SERVER DOES NOT STAMP IT.
      * Stamping would make the version check vacuous — it would always match,
@@ -208,7 +236,14 @@ function systemPrompt(snapshot: RegistrySnapshot): string {
     '4. A step that ends the flow has "next": null.',
     '5. Steps must be reachable from the entry step, and must not loop back without a WAIT in between.',
     '6. A BRANCH needs "conditions", "onTrue" and "onFalse". An ACTION needs "action" and "config".',
-    '7. Fill every config value the action needs. Do not leave a required field empty or guess an id you were not given.',
+    /*
+     * ⚠️ "LEAVE IT EMPTY" IS DELIBERATE, AND REPLACED "do not leave a required
+     * field empty". The model has no way to know this workspace's list, stage,
+     * pipeline or user ids — so that instruction made it DECLINE buildable
+     * requests rather than draft them. An empty dropdown beside the right step
+     * is a far better answer than nothing.
+     */
+    '7. Fill every config value you can infer from the request. You do NOT know this workspace\'s list ids, stage ids, pipeline ids or user ids — leave those empty rather than guessing or refusing; the person will pick them in the builder.',
   ].join('\n')
 }
 
@@ -298,6 +333,18 @@ export async function generateFlowDefinition(input: {
           return { definition: null, attempts }
         }
 
+        /*
+         * ⚠️ CHECKED BEFORE COMPILING. An answer that declines is not a
+         * malformed answer, and running it through the compiler would report
+         * "entryStepId is not one of the steps" — a parser complaint standing
+         * in for a real and useful sentence about what Outlio cannot do.
+         */
+        const declined = (result.json as { cannotBuild?: unknown })?.cannotBuild
+        if (typeof declined === 'string' && declined.trim().length > 0) {
+          attempts.push({ attempt, problems: [declined.trim()] })
+          return { definition: null, attempts, declined: declined.trim() }
+        }
+
         try {
           const definition = compileGeneratedDefinition(result.json, snapshot)
           attempts.push({ attempt, problems: [] })
@@ -323,7 +370,11 @@ export async function generateFlowDefinition(input: {
     return { ok: false, reason: 'refused', message: metered.message, attempts }
   }
 
-  const { definition, attempts: made } = metered.result
+  const { definition, attempts: made, declined } = metered.result as {
+    definition: FlowDefinition | null
+    attempts: CopilotAttempt[]
+    declined?: string
+  }
 
   if (!definition) {
     /*
@@ -334,6 +385,17 @@ export async function generateFlowDefinition(input: {
      * machine's guess about intent while believing they were reviewing their
      * own request.
      */
+    /*
+     * ⚠️ THE MODEL'S OWN SENTENCE WINS WHEN IT DECLINED. "Outlio has no SMS
+     * action" is something the person can act on — they rephrase, or they stop
+     * expecting a channel that does not exist. Burying it under the generic
+     * "could not turn that into a flow" would throw away the only useful part
+     * of the answer.
+     */
+    if (declined) {
+      return { ok: false, reason: 'unusable', message: declined, attempts: made }
+    }
+
     const last = made[made.length - 1]?.problems ?? []
     return {
       ok: false,
