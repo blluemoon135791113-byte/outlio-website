@@ -464,6 +464,45 @@ export function publishProblems(definition: FlowDefinition): string[] {
   for (const step of definition.steps) {
     if (step.type !== 'ACTION') continue
 
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ `actionIsImplemented` WAS ENFORCED IN ONE PLACE: A DROPDOWN.      ║
+     * ║                                                                       ║
+     * ║  Its only callers were `FlowBuilder.tsx`'s two action pickers, which   ║
+     * ║  filter an unimplemented action out of the menu. CLAUDE.md rule 8 —    ║
+     * ║  "hiding a button is not access control" — and a server action is a    ║
+     * ║  public HTTP endpoint, so the definition can arrive without ever       ║
+     * ║  passing a dropdown.                                                  ║
+     * ║                                                                       ║
+     * ║  ⚠️ LATENT TODAY, NOT LIVE. `UNIMPLEMENTED_ACTIONS` is empty, so       ║
+     * ║  nothing can currently slip through, and `flow-action-coverage.test`   ║
+     * ║  fails if an action is added without a runner. But that guard protects ║
+     * ║  the REPO at CI time, which is a different guarantee from refusing a   ║
+     * ║  REQUEST — and the list's own comment exists precisely because the     ║
+     * ║  next action added is expected to sit in it for a while.              ║
+     * ║                                                                       ║
+     * ║  ⚠️ AND PHASE 13 MAKES IT LOAD-BEARING. A model emitting a definition  ║
+     * ║  never touches the picker, so UI-only enforcement is worth nothing to  ║
+     * ║  it. §5.10 requires an unavailable capability be a validation failure, ║
+     * ║  not a repair opportunity, and a step that publishes and then dies at  ║
+     * ║  execution is the two-candidate-causes problem PHASE_13's deferral was ║
+     * ║  written to avoid.                                                     ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     *
+     * ⚠️ HERE AND NOT IN `validateFlowDefinition`, for the reason that
+     * function's own header gives: `advanceRun` parses every STORED definition
+     * on every run, so tightening the parser retroactively invalidates
+     * published flows. If an action is ever retired, a flow already using it
+     * must still LOAD — so that its author can open it and repair it — while
+     * being refused the next time it is published.
+     */
+    if (!actionIsImplemented(step.action)) {
+      const name = step.label?.trim() || step.id
+      problems.push(
+        `“${name}” uses ${step.action}, which Outlio cannot run yet. Remove the step or choose another action.`,
+      )
+    }
+
     const required = REQUIRED_ACTION_CONFIG[step.action]
     if (!required) continue
 
