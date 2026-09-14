@@ -217,7 +217,7 @@ describe('the ratchet: nobody builds their own money formatter', () => {
     ).toEqual([])
   })
 
-  it('the six call sites really do delegate', () => {
+  it('the seven call sites really do delegate', () => {
     /*
      * ⚠️ ASSERTED IN BOTH DIRECTIONS. The ratchet above passes trivially if
      * every call site were deleted; this is what says they still exist and
@@ -230,6 +230,10 @@ describe('the ratchet: nobody builds their own money formatter', () => {
       'app/(product)/crm/companies/[id]/page.tsx',
       'app/(product)/crm/reports/page.tsx',
       'components/crm/PipelineBoard.tsx',
+      // Phase 22's team row on the home dashboard, added 2026-09-14. It renders
+      // `value_amount_base`, already converted in Postgres by 0124 — so it
+      // formats one total and never adds two money values together.
+      'components/product/TeamRow.tsx',
       'components/reports/Widget.tsx',
       'lib/crm/company-details.ts',
       'lib/intelligence/costs.ts',
