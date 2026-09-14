@@ -171,39 +171,6 @@ const KNOWN_UNREACHABLE = new Map<string, string>([
    * `metrics.ts` alone remains: it leaves when something REPORTS on LinkedIn
    * outcomes, and there is no outcome history to measure yet.
    */
-  /*
-   * ╔═══════════════════════════════════════════════════════════════════════╗
-   * ║  ⚠️ THIS GUARD CAUGHT `lib/flows/generated.ts` THE MOMENT IT WAS      ║
-   * ║  WRITTEN, WHICH IS CORRECT AND WAS EXPECTED.                          ║
-   * ║                                                                       ║
-   * ║  It is Phase 13 slice 2: the validation tier for a definition a MODEL ║
-   * ║  produced. It is deliberately built BEFORE the thing that generates,  ║
-   * ║  because it is what makes generated output safe — and building the    ║
-   * ║  generation first would give every bad output two candidate causes,   ║
-   * ║  the prompt and the compiler, which is the two-candidate-causes       ║
-   * ║  problem PHASE_13's original deferral was written to avoid.           ║
-   * ║                                                                       ║
-   * ║  ⚠️ IT MUST NOT BE WIRED INTO THE HUMAN PUBLISH PATH TO SATISFY THIS  ║
-   * ║  LIST. It requires `registryVersion` to be present and to match,      ║
-   * ║  which five pre-registry `flow_versions` rows in production do not    ║
-   * ║  have — so applying it to human publishes would refuse flows a        ║
-   * ║  customer can currently open and repair. Reaching for the quickest    ║
-   * ║  way off this list would break production.                            ║
-   * ║                                                                       ║
-   * ║  EXIT CONDITION, NAMED: it leaves when slice 3 generates a definition ║
-   * ║  and calls it. If slice 3 ships and this entry is still here, the     ║
-   * ║  generator built its own validation — which is the defect.            ║
-   * ╚═══════════════════════════════════════════════════════════════════════╝
-   */
-  [
-    'lib/flows/generated.ts',
-    'Phase 13 slice 2 — the generated-input validation tier, built before the ' +
-      'generator on purpose so the guard exists before the thing it guards. ' +
-      'Leaves when slice 3 calls it. Must NOT be wired into the human publish ' +
-      'path: it requires a matching registryVersion that five production ' +
-      'flow_versions rows do not have.',
-  ],
-
   [
     'lib/linkedin/metrics.ts',
     'Acceptance and reply rates (§4.18). Nothing reports on LinkedIn outcomes ' +

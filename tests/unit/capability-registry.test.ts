@@ -69,6 +69,8 @@ const SHIPPED_IDS = [
   'hubble.ask',
   'intelligence.plan',
   'intelligence.summarize',
+  // Registry version 3, 2026-09-14 — Phase 13's Flow Copilot.
+  'flows.copilot',
 ] as const
 
 describe('the registry may only grow', () => {

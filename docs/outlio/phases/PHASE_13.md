@@ -147,12 +147,56 @@ Proposed slices:
 
 1. ~~**Compiler + validator against a pinned registry snapshot.**~~
    **✅ MOSTLY ALREADY BUILT — corrected 2026-09-14 after looking.** See below.
-2. **Registry entry + `hubbleExecute` wiring**, priced 0 per DECISION-16. The
-   boundary guard stops refusing it at this point, and that transition is itself
-   the test.
-3. **Generation and the two-attempt repair loop**, now that malformed output has
-   somewhere safe to land.
+2. ✅ **The generated-input tier** — `lib/flows/generated.ts`. Done.
+3. ✅ **Registry entry, `hubbleExecute` wiring, generation and the two-attempt
+   repair loop** — `lib/flows/copilot.ts`, `generateFlowAction`, `FlowCopilot`.
+   Done. Registry version bumped to **3** for `flows.copilot`, priced 0 per
+   DECISION-16, gated on `flow.manage` rather than `hubble.use`.
 4. **The ≥30-prompt eval corpus**, which only means something once 1–3 exist.
+
+### Slices 2 and 3 as built — 2026-09-14
+
+⚠️ **SLICE 2's REGISTRY ENTRY WAS MOVED INTO SLICE 3, DELIBERATELY.** Adding a
+priced capability before the call it meters exists creates exactly the orphan
+this repo keeps producing — the sender cap was "designed, typed, schema'd and
+never asked". The entry now lands with its caller.
+
+**The copilot proposes; it does not publish.** `generateFlowAction` writes a
+flow and a version 1 draft with `published_at` null, following the template
+path's own rule: someone who typed a sentence to see what Outlio would build has
+agreed to even less than someone who picked a template. `publishFlow` remains
+the only gate that matters — it stamps send authority from the publisher's
+permissions and runs `publishProblems`.
+
+**`flows.copilot` has no `flowAction`,** so it can never become a flow step. A
+flow that generates and publishes flows writes flows unattended, and 0093's loop
+protection counts RUNS, not authored definitions.
+
+**The model emits `registryVersion`; the server does not stamp it.** Stamping
+would make the version check vacuous — always matching, never able to fail. A
+mismatch is real evidence that the model answered from training data rather than
+the snapshot it was handed.
+
+**Two attempts, and the number is a decision.** One wastes a correctable
+near-miss; three is where a model that has misunderstood starts reshaping the
+flow to satisfy the validator rather than the person, at real cost, while
+looking like progress.
+
+⚠️ **NO SILENT REPAIR.** §5.10's "not a repair opportunity" is the load-bearing
+half. Mapping `ADD_TAGS`→`ADD_TAG` is a guess about intent made for someone who
+is not present; the test asserts no such lookup exists.
+
+### What the guards caught, in order
+
+Worth recording, because each was the mechanism working rather than an obstacle:
+
+1. `module-reachability` + `orphan-module` flagged `generated.ts` the moment it
+   was written → ADR-006, with a named exit condition.
+2. The same guards then declared that entry **stale** once `copilot.ts` called
+   it — ADR-006's exit fired within the same session and the allowlist shrank.
+3. `action-reachability` caught `generateFlowAction` gated with **zero callers**,
+   which is the failure CLAUDE.md says this repo has shipped repeatedly. That is
+   what forced the UI to exist rather than being deferred.
 
 ### ⚠️ SLICE 1 WAS ALREADY BUILT, AND SAYING SO IS THE POINT
 

@@ -21,7 +21,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { CAPABILITY_REGISTRY_VERSION } from '@/lib/capabilities/registry'
+import { CAPABILITY_REGISTRY_VERSION, capabilityForFlowAction } from '@/lib/capabilities/registry'
 import {
   CONDITION_OPERATORS,
   TRIGGER_TYPES,
@@ -130,6 +130,34 @@ describe('the snapshot is the closed world, and it is not empty', () => {
       'the snapshot no longer withholds unimplemented actions; a generator ' +
         'handed one produces a flow that publishes and dies at execution',
     ).toMatch(/\.filter\(actionIsImplemented\)/)
+  })
+
+  it('withholds deprecated capabilities, which is a different filter', () => {
+    /*
+     * ⚠️ NOT THE SAME QUESTION AS "IS IT IMPLEMENTED". A runner can exist while
+     * the capability is on its way out: `flowDefinitionWarnings` says so in its
+     * own message — deprecated "still runs, but it will not be offered for new
+     * flows" — and a generated flow is as new as a flow gets. Offering one has
+     * the model author a flow that is deprecated the moment it is written,
+     * while §5.10 requires deprecation to come with a migration path rather
+     * than fresh adoption.
+     *
+     * ⚠️ ALSO STRUCTURAL, AND FOR THE SAME REASON. Nothing is deprecated today,
+     * so the filter is a no-op that no behavioural assertion can distinguish.
+     * It becomes behavioural the first time a capability is retired.
+     */
+    for (const action of SNAPSHOT.actions) {
+      expect(
+        capabilityForFlowAction(action).status,
+        `${action} is deprecated but was still offered to the generator`,
+      ).not.toBe('deprecated')
+    }
+
+    const source = readFileSync(join(ROOT, 'lib/flows/generated.ts'), 'utf8')
+    expect(
+      source,
+      'the snapshot no longer withholds deprecated capabilities',
+    ).toMatch(/status !== 'deprecated'/)
   })
 })
 

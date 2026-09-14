@@ -328,10 +328,21 @@ The three tiers are different on purpose:
 | `publishProblems` | strict | the author is present to fix what it names |
 | `compileGeneratedDefinition` | strictest | **nobody is present**, and the producer will emit a plausible capability that does not exist |
 
-### Exit condition, stated so it can be checked
+### Exit condition, stated so it can be checked — ✅ **FIRED 2026-09-14**
 
 The entry leaves both allowlists when **slice 3 generates a definition and calls
 `compileGeneratedDefinition`**.
+
+**It did, in the same session.** `lib/flows/copilot.ts` calls it, and
+`generateFlowAction` in `app/(product)/flows/actions.ts` calls that — so the
+module became reachable and both guards immediately said so, one of them in as
+many words: *"lib/flows/generated.ts is still orphaned (remove from the list
+once fixed)"*. Both entries are gone.
+
+⚠️ **The allowlist shrank rather than accumulating another line, which is the
+only outcome that makes this ADR honest.** An exit condition nobody checks is a
+promise; this one was enforced by the guard that demanded it, within hours of
+being written.
 
 ⚠️ **If slice 3 ships and the entry is still there, the generator wrote its own
 validation** — which is the two-implementations defect this codebase keeps

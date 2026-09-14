@@ -25,8 +25,22 @@
  */
 import type { Permission } from '@/lib/workspaces/permissions'
 
-/** Bumped when an entry is added or deprecated. Never when one is edited in place. */
-export const CAPABILITY_REGISTRY_VERSION = 2
+/**
+ * Bumped when an entry is added or deprecated. Never when one is edited in place.
+ *
+ * ⚠️ 3 SINCE 2026-09-14, when `flows.copilot` was added.
+ *
+ * A bump is not cosmetic: `flowDefinitionWarnings` raises `registry_drift` on
+ * any stored definition pinned BELOW this number, and
+ * `compileGeneratedDefinition` REFUSES generated input that does not match it
+ * exactly. The asymmetry is deliberate — a published flow that predates a new
+ * capability is merely out of date, while a model that returned a stale pin was
+ * working from a snapshot we did not hand it.
+ *
+ * Checked before bumping: the five `flow_versions` rows in production carry no
+ * pin at all, and absent is not stale, so none of them starts warning.
+ */
+export const CAPABILITY_REGISTRY_VERSION = 3
 
 export type CapabilityStatus = 'active' | 'deprecated'
 
@@ -119,6 +133,28 @@ export const CAPABILITIES = {
   'hubble.ask': { isAi: true, credits: 0, label: 'Ask Hubble', permission: 'hubble.use', status: 'active', since: 2 },
   'intelligence.plan': { isAi: true, credits: 0, label: 'Plan a research query', permission: 'hubble.use', status: 'active', since: 2 },
   'intelligence.summarize': { isAi: true, credits: 0, label: 'Summarise a research run', permission: 'hubble.use', status: 'active', since: 2 },
+
+  /*
+   * --- Phase 13, the Flow Copilot. Added at registry version 3. ---------------
+   *
+   * ⚠️ `flow.manage`, NOT `hubble.use`. The other AI entries answer questions
+   * about a contact; this one AUTHORS AUTOMATION that will act on contacts
+   * unattended. Someone with `hubble.use` and no `flow.manage` can research an
+   * account but may not build a machine that emails it — so the generator is
+   * gated on the thing it produces, not on the fact that it happens to be AI.
+   *
+   * ⚠️ NO `flowAction`, ON PURPOSE, and for a stronger reason than the three
+   * HTTP entries above. Those lack a flow meaning; this one must never have
+   * one. A flow step that generates and publishes a flow is a flow that writes
+   * flows unattended — the loop protection in 0093 counts RUNS, not authored
+   * definitions, so nothing in the product would stop it.
+   *
+   * Priced 0 on DECISION-16's standing rule: meter it, charge nothing, let
+   * `hubble_calls` fill with real rows before a number is chosen. Flow parity
+   * for reference would be around 3 — it is a long generation with a repair
+   * attempt behind it.
+   */
+  'flows.copilot': { isAi: true, credits: 0, label: 'Generate a flow from a description', permission: 'flow.manage', status: 'active', since: 3 },
 } as const satisfies Record<string, Capability>
 
 export type CapabilityId = keyof typeof CAPABILITIES

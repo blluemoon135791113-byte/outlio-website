@@ -147,25 +147,6 @@ const KNOWN_ORPHANS = new Set(
      */
     'lib/fastspring/access.ts',
     /*
-     * ⚠️ CAUGHT BY THIS GUARD THE MOMENT IT WAS WRITTEN, AND THAT IS THE
-     * INTENDED BEHAVIOUR RATHER THAN AN INCONVENIENCE.
-     *
-     * Phase 13 slice 2 — the validation tier for a definition a MODEL
-     * produced, built deliberately BEFORE the generator so that the guard
-     * exists before the thing it guards. Building generation first would give
-     * every bad output two candidate causes, the prompt and the compiler,
-     * which is the problem PHASE_13's original deferral named.
-     *
-     * ⚠️ DO NOT WIRE IT INTO THE HUMAN PUBLISH PATH TO CLEAR THIS ENTRY. It
-     * requires `registryVersion` present and matching, which five pre-registry
-     * `flow_versions` rows in production do not have — so the quickest route
-     * off this list refuses flows a customer can currently open and repair.
-     *
-     * EXIT: slice 3 generates a definition and calls it. If slice 3 ships with
-     * this entry still here, the generator wrote its own validation.
-     */
-    'lib/flows/generated.ts',
-    /*
      * ⚠️ THE LINKEDIN BUILD, AND THIS GUARD CAUGHT EVERY PIECE IMMEDIATELY —
      * which is correct. Phase 8's message set and phase 7's decision layer are
      * both logic with no surface yet: the Action Inbox that will call them

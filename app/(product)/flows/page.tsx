@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { CreateFlow } from '@/components/flows/CreateFlow'
+import { FlowCopilot } from '@/components/flows/FlowCopilot'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
@@ -59,6 +60,8 @@ export default async function FlowsPage() {
         </div>
         {canManage ? <CreateFlow /> : null}
       </div>
+
+      {canManage ? <FlowCopilot /> : null}
 
       {(flows ?? []).length === 0 ? (
         <div className="clay p-8 text-center">

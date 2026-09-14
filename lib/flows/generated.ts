@@ -50,7 +50,10 @@ import {
   type TriggerType,
 } from '@/lib/flows/definition'
 import { buildDomainFacts } from '@/lib/flows/facts'
-import { CAPABILITY_REGISTRY_VERSION } from '@/lib/capabilities/registry'
+import {
+  CAPABILITY_REGISTRY_VERSION,
+  capabilityForFlowAction,
+} from '@/lib/capabilities/registry'
 
 /** The closed world a model is allowed to draw from. */
 export type RegistrySnapshot = {
@@ -129,7 +132,24 @@ function factKeys(): string[] {
 export function registrySnapshot(): RegistrySnapshot {
   return {
     version: CAPABILITY_REGISTRY_VERSION,
-    actions: (Object.keys(ACTION_TYPES) as ActionType[]).filter(actionIsImplemented),
+    /*
+     * ⚠️ DEPRECATED IS WITHHELD TOO, AND THAT IS NOT THE SAME FILTER.
+     * `actionIsImplemented` asks "does a runner exist"; `status` asks "should
+     * anything NEW use this". `flowDefinitionWarnings` states the intent in its
+     * own message — a deprecated capability "still runs, but it will not be
+     * offered for new flows" — and a generated flow is as new as a flow gets.
+     *
+     * Offering one would have the model author a flow that is deprecated the
+     * moment it is written, and §5.10 requires deprecation to come with a
+     * migration path rather than fresh adoption.
+     *
+     * ⚠️ LATENT TODAY: nothing is deprecated, so this filter is currently a
+     * no-op, exactly like the implemented filter beside it. Both are asserted
+     * structurally in the test for that reason.
+     */
+    actions: (Object.keys(ACTION_TYPES) as ActionType[])
+      .filter(actionIsImplemented)
+      .filter((action) => capabilityForFlowAction(action).status !== 'deprecated'),
     triggers: TRIGGER_TYPES,
     operators: CONDITION_OPERATORS,
     matchModes: ['all', 'any'],
