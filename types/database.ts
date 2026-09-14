@@ -8605,6 +8605,14 @@ export type Database = {
         Args: { p_from_day: string; p_to_day: string; p_workspace_id: string }
         Returns: number
       }
+      crm_round_robin_assign: {
+        Args: {
+          p_contact_id: string
+          p_user_ids: string[]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       crm_unconvertible_deals: {
         Args: { p_status?: string; p_workspace_id: string }
         Returns: number

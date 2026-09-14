@@ -17,7 +17,28 @@
 # smoke file so a FUNCTION can be executed rather than merely created — the
 # only way to catch the 0072 class of bug.
 #
-# Nothing here touches the project database. It needs Docker and nothing else.
+# Nothing here touches the project database.
+#
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  ⚠️ IT NO LONGER NEEDS DOCKER, AND THAT IS A CORRECTNESS FIX RATHER THAN  ║
+# ║  A CONVENIENCE.                                                           ║
+# ║                                                                           ║
+# ║  This script used to require Docker outright. Docker is not part of this  ║
+# ║  product — nothing in the app, the build or the deployment uses it — so   ║
+# ║  the only thing gating migration validation was a dependency the project  ║
+# ║  does not otherwise have. When Docker was unavailable the harness did not ║
+# ║  warn; it simply could not run, and migrations shipped UNCHECKED.         ║
+# ║  `scripts/rehearse-migration.mjs` exists because that already happened:   ║
+# ║  0095 reached staging with a cast error that failed on every call.        ║
+# ║                                                                           ║
+# ║  So the engine is now chosen, not assumed:                                ║
+# ║                                                                           ║
+# ║    docker   — a throwaway container, as before                            ║
+# ║    local    — a throwaway cluster from an installed initdb/postgres       ║
+# ║                                                                           ║
+# ║  Both are disposable and neither touches the project database. Set        ║
+# ║  CHECK_MIGRATION_ENGINE to force one.                                     ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
 #
 # Usage:
 #   scripts/check-migration.sh supabase/migrations/0074_crm_deduplication.sql
@@ -28,36 +49,108 @@ set -euo pipefail
 MIGRATION="${1:?usage: check-migration.sh <migration.sql> [smoke.sql]}"
 SMOKE="${2:-}"
 CONTAINER=outlio-sqlcheck
-PSQL="docker exec -i $CONTAINER psql -U postgres -X -q -v ON_ERROR_STOP=1"
 
-cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
-trap cleanup EXIT
-
-cleanup
-docker run -d --name "$CONTAINER" -e POSTGRES_PASSWORD=check postgres:16 >/dev/null
-# ⚠️ NOT pg_isready. The postgres image starts a TEMPORARY server to run its
-# init scripts, then shuts it down and starts the real one. pg_isready answers
-# "yes" during that first window, so the loop broke early and every psql after
-# it failed with "No such file or directory" on the socket -- a confusing error
-# that looks like Docker is broken rather than like a race.
-#
-# Waiting on an actual query, twice a second apart, only passes once the real
-# server is up and staying up.
-ready=""
-for _ in $(seq 1 60); do
-  if docker exec "$CONTAINER" psql -U postgres -X -q -c 'select 1' >/dev/null 2>&1; then
-    sleep 1
-    if docker exec "$CONTAINER" psql -U postgres -X -q -c 'select 1' >/dev/null 2>&1; then
-      ready=yes
-      break
-    fi
+engine="${CHECK_MIGRATION_ENGINE:-}"
+if [ -z "$engine" ]; then
+  if docker info >/dev/null 2>&1; then
+    engine=docker
+  elif command -v initdb >/dev/null 2>&1 && command -v postgres >/dev/null 2>&1; then
+    engine=local
+  else
+    echo "No Postgres to validate against." >&2
+    echo "  Either start Docker, or install PostgreSQL so initdb and postgres are on PATH." >&2
+    echo "  A migration cannot be checked without a real server -- plpgsql bodies are" >&2
+    echo "  not name-resolved until they run (see 0072)." >&2
+    exit 1
   fi
-  sleep 1
-done
-if [ -z "$ready" ]; then
-  echo "Postgres in $CONTAINER never accepted a connection." >&2
-  docker logs "$CONTAINER" 2>&1 | tail -20 >&2
-  exit 1
+fi
+echo "→ engine: $engine"
+
+if [ "$engine" = docker ]; then
+  PSQL="docker exec -i $CONTAINER psql -U postgres -X -q -v ON_ERROR_STOP=1"
+  cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
+  trap cleanup EXIT
+
+  cleanup
+  docker run -d --name "$CONTAINER" -e POSTGRES_PASSWORD=check postgres:16 >/dev/null
+  # ⚠️ NOT pg_isready. The postgres image starts a TEMPORARY server to run its
+  # init scripts, then shuts it down and starts the real one. pg_isready answers
+  # "yes" during that first window, so the loop broke early and every psql after
+  # it failed with "No such file or directory" on the socket -- a confusing error
+  # that looks like Docker is broken rather than like a race.
+  #
+  # Waiting on an actual query, twice a second apart, only passes once the real
+  # server is up and staying up.
+  ready=""
+  for _ in $(seq 1 60); do
+    if docker exec "$CONTAINER" psql -U postgres -X -q -c 'select 1' >/dev/null 2>&1; then
+      sleep 1
+      if docker exec "$CONTAINER" psql -U postgres -X -q -c 'select 1' >/dev/null 2>&1; then
+        ready=yes
+        break
+      fi
+    fi
+    sleep 1
+  done
+  if [ -z "$ready" ]; then
+    echo "Postgres in $CONTAINER never accepted a connection." >&2
+    docker logs "$CONTAINER" 2>&1 | tail -20 >&2
+    exit 1
+  fi
+else
+  # ---------------------------------------------------------------------------
+  # A throwaway cluster on a spare port.
+  #
+  # ⚠️ THE DATA DIRECTORY IS SHORT AND OUTSIDE THE REPO, deliberately. On
+  # Windows initdb fails with a bare "No such file or directory" when the path
+  # approaches MAX_PATH, which reads as a missing binary rather than a long
+  # path. Keeping it under the system temp root avoids that, and keeps a
+  # throwaway cluster out of the working tree where a stray `git add` could
+  # reach it.
+  #
+  # ⚠️ PORT 55432, NOT 5432. A developer machine with a real local Postgres
+  # must not have this script connect to it -- scaffolding and replaying 50
+  # migrations into somebody's actual database would be destructive, and the
+  # failure would look like a migration bug.
+  # ---------------------------------------------------------------------------
+  PGCHECK_DIR="${TMPDIR:-/tmp}/outlio-sqlcheck.$$"
+  PGCHECK_PORT=55432
+  PSQL="psql -h 127.0.0.1 -p $PGCHECK_PORT -U postgres -d postgres -X -q -v ON_ERROR_STOP=1"
+
+  cleanup() {
+    if [ -n "${PGCHECK_PID:-}" ]; then kill "$PGCHECK_PID" >/dev/null 2>&1 || true; fi
+    rm -rf "$PGCHECK_DIR" >/dev/null 2>&1 || true
+  }
+  trap cleanup EXIT
+
+  mkdir -p "$PGCHECK_DIR"
+  initdb -D "$PGCHECK_DIR/data" -U postgres -A trust -E UTF8 >"$PGCHECK_DIR/initdb.log" 2>&1 || {
+    echo "initdb failed:" >&2
+    tail -20 "$PGCHECK_DIR/initdb.log" >&2
+    exit 1
+  }
+
+  postgres -D "$PGCHECK_DIR/data" -p "$PGCHECK_PORT" -k "" >"$PGCHECK_DIR/pg.log" 2>&1 &
+  PGCHECK_PID=$!
+
+  # Same two-checks-apart wait as the container path, for the same reason: a
+  # server that answers once and then exits is not a server that is up.
+  ready=""
+  for _ in $(seq 1 60); do
+    if psql -h 127.0.0.1 -p "$PGCHECK_PORT" -U postgres -d postgres -X -q -c 'select 1' >/dev/null 2>&1; then
+      sleep 1
+      if psql -h 127.0.0.1 -p "$PGCHECK_PORT" -U postgres -d postgres -X -q -c 'select 1' >/dev/null 2>&1; then
+        ready=yes
+        break
+      fi
+    fi
+    sleep 1
+  done
+  if [ -z "$ready" ]; then
+    echo "The local cluster never accepted a connection." >&2
+    tail -20 "$PGCHECK_DIR/pg.log" >&2
+    exit 1
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -166,7 +259,7 @@ SQL
 # 0119_scheduler_diagnostics is included and passes: it reads cron.job through
 # a guard that tolerates the schema being absent.
 # ---------------------------------------------------------------------------
-for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api 0098_webhook_url_loopback 0099_notification_channels 0100_unified_inbox 0101_inbound_optional_args 0102_onboarding_state 0103_plan_module_entitlements 0104_email_reply_threading 0105_fix_claim_column_name 0106_restore_claim_safety 0107_dashboards 0108_flow_run_variables 0109_fix_user_fk_append_only 0110_restore_signup_gate 0111_sender_postal_address 0112_contact_list_sort_indexes 0113_contact_value_citations 0114_backfill_contact_citations 0115_rls_membership_setmembership 0116_due_webhook_deliveries 0117_worker_runs 0119_scheduler_diagnostics 0120_suppress_by_contact 0121_contact_dnc_and_timezone 0122_linkedin_senders; do
+for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api 0098_webhook_url_loopback 0099_notification_channels 0100_unified_inbox 0101_inbound_optional_args 0102_onboarding_state 0103_plan_module_entitlements 0104_email_reply_threading 0105_fix_claim_column_name 0106_restore_claim_safety 0107_dashboards 0108_flow_run_variables 0109_fix_user_fk_append_only 0110_restore_signup_gate 0111_sender_postal_address 0112_contact_list_sort_indexes 0113_contact_value_citations 0114_backfill_contact_citations 0115_rls_membership_setmembership 0116_due_webhook_deliveries 0117_worker_runs 0119_scheduler_diagnostics 0120_suppress_by_contact 0121_contact_dnc_and_timezone 0122_linkedin_senders 0123_crm_assign_contact_owner 0124_crm_tasks_opportunity; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break
@@ -192,5 +285,8 @@ echo "✓ applies cleanly"
 
 if [ -n "$SMOKE" ]; then
   echo "→ running smoke test $(basename "$SMOKE")"
-  docker exec -i "$CONTAINER" psql -U postgres -X -q < "$SMOKE"
+  # ⚠️ THROUGH $PSQL, NOT `docker exec`. This line named the container directly
+  # while every other statement went through $PSQL -- harmless while docker was
+  # the only engine, and an immediate failure the moment it is not.
+  $PSQL < "$SMOKE"
 fi
