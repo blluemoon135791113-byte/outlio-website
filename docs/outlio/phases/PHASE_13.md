@@ -145,15 +145,60 @@ two-candidate-causes problem this brief used to justify the original deferral.
 
 Proposed slices:
 
-1. **Compiler + validator against a pinned registry snapshot.** No network.
-   Rejects unknown capability IDs, unknown enum values, and a snapshot version
-   mismatch. Mutation-proven.
+1. ~~**Compiler + validator against a pinned registry snapshot.**~~
+   **✅ MOSTLY ALREADY BUILT — corrected 2026-09-14 after looking.** See below.
 2. **Registry entry + `hubbleExecute` wiring**, priced 0 per DECISION-16. The
    boundary guard stops refusing it at this point, and that transition is itself
    the test.
 3. **Generation and the two-attempt repair loop**, now that malformed output has
    somewhere safe to land.
 4. **The ≥30-prompt eval corpus**, which only means something once 1–3 exist.
+
+### ⚠️ SLICE 1 WAS ALREADY BUILT, AND SAYING SO IS THE POINT
+
+Written above as if the compiler had to be created. It does not. Checked:
+
+| §5.10 requirement | Where it already lives |
+|---|---|
+| Accept untrusted input | `validateFlowDefinition(input: unknown)` — already the exact signature a model's output needs |
+| Reject unknown capability IDs | `z.enum(Object.keys(ACTION_TYPES))` on the ACTION step |
+| Reject unknown enum values | `z.enum(TRIGGER_TYPES)`, `z.enum(['all','any'])`, `conditionSchema` |
+| Pin the registry version | `registryVersion` on `flowDefinitionSchema`, citing §5.10 by name |
+| Reject a definition that cannot terminate | Graph checks: duplicate ids, missing entry step, dangling `next`, unreachable steps, and a cycle with no WAIT in it |
+| A dry run | `lib/flows/simulate.ts` → `simulateFlow` |
+
+Building a second compiler beside this one would have been the
+"one question, two implementations" defect this codebase is full of. **The
+lesson for slices 2–4: look before writing the brief's next noun.**
+
+### What slice 1 actually turned out to be
+
+One real gap, narrower and more interesting than a compiler.
+
+`actionIsImplemented` had exactly one caller: `FlowBuilder.tsx`'s two action
+pickers. Nothing server-side asked. Rule 8 — hiding a button is not access
+control — and publish is a server action, so a definition can arrive without
+passing a picker. **Latent, not live**: `UNIMPLEMENTED_ACTIONS` is empty and
+`flow-action-coverage.test.ts` fails if an action ships without a runner, but
+that protects the repo at CI time rather than refusing a request.
+
+Phase 13 is what makes it load-bearing — a model never touches the picker.
+
+Fixed in `publishProblems`, deliberately **not** in the parser: `advanceRun`
+parses every stored definition on every run, so tightening the parser would stop
+a published flow from LOADING the moment an action was retired, and its author
+could no longer open it to repair it. `tests/unit/flow-action-availability.test.ts`
+(34 tests) asserts that tier separation as an absence, because it is invisible in
+behaviour while the list is empty.
+
+### Remaining open question for slice 2
+
+`registryVersion` is **optional**, deliberately, so that five pre-registry
+`flow_versions` rows in production still parse. For a *generated* definition it
+must be **required and matched** against the snapshot handed to the model — a
+generated flow with no pinned version defeats §5.10 entirely. That is a third
+validation tier (parse → publish → generated), not a change to either existing
+one, and it belongs with slice 2 rather than being retrofitted into the parser.
 
 ## COST IMPACT
 
