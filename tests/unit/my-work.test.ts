@@ -51,7 +51,8 @@ vi.mock('server-only', () => ({}))
  * ⚠️ A STUB THAT CANNOT EXPRESS THE BUG CANNOT CATCH IT. An earlier version
  * ignored `.eq()` and returned every seeded row, so removing a workspace filter
  * from the module changed nothing and the tenancy test passed for a reason that
- * had nothing to do with the code. This one applies each operator.
+ * had nothing to do with the code. This one applies each operator — including
+ * `.or()`, which the snooze filter uses.
  */
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
@@ -60,6 +61,21 @@ vi.mock('@/lib/supabase/admin', () => ({
       const preds: ((r: Row) => boolean)[] = []
       let order: { column: string; ascending: boolean } | null = null
       let limit = Infinity
+
+      /** One `column.operator.value` clause of a PostgREST logic tree. */
+      const clause = (text: string): ((r: Row) => boolean) => {
+        const first = text.indexOf('.')
+        const second = text.indexOf('.', first + 1)
+        const column = text.slice(0, first)
+        const op = text.slice(first + 1, second)
+        const value = text.slice(second + 1).replace(/^"|"$/g, '')
+        if (op === 'is' && value === 'null') return (r) => (r[column] ?? null) === null
+        if (op === 'lte') return (r) => r[column] != null && String(r[column]) <= value
+        if (op === 'gte') return (r) => r[column] != null && String(r[column]) >= value
+        if (op === 'lt') return (r) => r[column] != null && String(r[column]) < value
+        if (op === 'eq') return (r) => String(r[column]) === value
+        throw new Error(`stub does not understand or-clause operator ${op}`)
+      }
 
       const chain: Record<string, unknown> = {}
       const run = () => {
@@ -105,6 +121,13 @@ vi.mock('@/lib/supabase/admin', () => ({
         },
         not: (c: string, _op: string, v: null) => {
           preds.push((r) => (r[c] ?? null) !== v)
+          return chain
+        },
+        or: (tree: string) => {
+          filters.or = tree
+          // Timestamps carry no commas, so a top-level split is exact here.
+          const alternatives = tree.split(',').map(clause)
+          preds.push((r) => alternatives.some((p) => p(r)))
           return chain
         },
         in: (c: string, vs: unknown[]) => {
@@ -161,6 +184,8 @@ function task(over: Row = {}): Row {
     due_at: '2026-09-14T09:00:00.000Z',
     contact_id: null,
     opportunity_id: null,
+    snoozed_until: null,
+    version: 1,
     ...over,
   }
 }
@@ -309,6 +334,63 @@ describe('deals without a next action', () => {
 
     const coverage = mocks.queries.filter((q) => q.table === 'crm_tasks' && 'in:opportunity_id' in q.filters)
     expect(coverage).toHaveLength(0)
+  })
+})
+
+describe('snoozed tasks (0126)', () => {
+  it('stay out of the queue until their review date', async () => {
+    mocks.tables.crm_tasks = [
+      task({ id: 'overdue-snoozed', due_at: '2026-09-10T09:00:00.000Z', snoozed_until: '2026-09-15T00:00:00.000Z' }),
+      task({ id: 'today-snoozed', due_at: '2026-09-14T18:00:00.000Z', snoozed_until: '2026-09-15T00:00:00.000Z' }),
+    ]
+
+    expect(await run()).toEqual([])
+  })
+
+  it('come back once the review date has passed, still overdue', async () => {
+    // A snooze is a review date, not a new due date: the task returns as the
+    // overdue commitment it always was.
+    mocks.tables.crm_tasks = [
+      task({ id: 'back', due_at: '2026-09-10T09:00:00.000Z', snoozed_until: '2026-09-14T06:00:00.000Z' }),
+    ]
+
+    const items = await run()
+
+    expect(items.map((i) => i.key)).toEqual(['overdue:back'])
+  })
+
+  it('still count as the deal’s next action while snoozed', async () => {
+    /*
+     * ⚠️ HIDDEN FROM THE PERSON, NOT FROM THE DEAL. The work is still booked;
+     * reporting the deal as uncovered would invite a duplicate task.
+     */
+    mocks.tables.crm_opportunities = [deal({ id: 'd1' })]
+    mocks.tables.crm_tasks = [
+      task({ id: 'booked', opportunity_id: 'd1', due_at: '2026-09-20T09:00:00.000Z', snoozed_until: '2026-09-18T00:00:00.000Z' }),
+    ]
+
+    const items = await run()
+
+    expect(items.filter((i) => i.reason === 'deal_without_next_action')).toHaveLength(0)
+  })
+})
+
+describe('what the row actions need', () => {
+  it('task rows carry their id and the version they were read at', async () => {
+    mocks.tables.crm_tasks = [task({ id: 'k9', due_at: '2026-09-10T09:00:00.000Z', version: 3 })]
+
+    const items = await run()
+
+    expect(items[0]!.task).toEqual({ id: 'k9', version: 3 })
+  })
+
+  it('replies and deals have no task to act on', async () => {
+    mocks.tables.email_threads = [thread()]
+    mocks.tables.crm_opportunities = [deal()]
+
+    const items = await run()
+
+    expect(items.map((i) => i.task)).toEqual([null, null])
   })
 })
 

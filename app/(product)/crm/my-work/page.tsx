@@ -1,9 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { WorkItemActions } from '@/components/crm/WorkItemActions'
 import { LocalTime } from '@/components/ui/LocalTime'
-import { listMyWork, REASON_LABEL, type WorkReason } from '@/lib/crm/my-work'
+import { listAssignableMembers } from '@/lib/crm/contacts-list'
+import { listMyWork, REASON_LABEL, snoozeBounds, type WorkReason } from '@/lib/crm/my-work'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
+import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
   title: 'My Work | Outlio',
@@ -35,10 +38,26 @@ export default async function MyWorkPage() {
   // serialising its result into the RSC payload.
   if (!ctx) return null
 
-  const items = await listMyWork({
-    workspaceId: ctx.workspace.id,
-    userId: ctx.userId!,
-  })
+  const policy = { role: ctx.role, modules: ctx.modules }
+  const canManage = can(policy, 'crm.task.manage')
+  const canReassign = can(policy, 'crm.contact.assign')
+
+  const [items, members] = await Promise.all([
+    listMyWork({ workspaceId: ctx.workspace.id, userId: ctx.userId! }),
+    // Only fetched for someone who may reassign; nobody else is shown the list.
+    canReassign ? listAssignableMembers(ctx.workspace.id) : Promise.resolve([]),
+  ])
+
+  // Handing your own task to yourself is not a reassignment.
+  const otherMembers = members.filter((m) => m.userId !== ctx.userId)
+
+  /*
+   * ⚠️ THE SNOOZE BOUNDS COME FROM THE SERVER. Computing "tomorrow" in the
+   * client component would render one date on the server pass and another
+   * after hydration whenever the two straddle midnight. The action and the
+   * database re-check both bounds regardless.
+   */
+  const { minSnoozeDate, maxSnoozeDate } = snoozeBounds(new Date())
 
   return (
     <div className="space-y-4">
@@ -60,7 +79,7 @@ export default async function MyWorkPage() {
           <p className="text-sm font-medium text-ink">Nothing is waiting on you.</p>
           <p className="mt-1 text-sm text-muted">
             No unanswered replies, nothing overdue or due today, and every open deal you own
-            has a next action booked.
+            has a next action booked. Snoozed tasks come back on their review date.
           </p>
           <Link
             href="/crm/pipeline"
@@ -72,17 +91,21 @@ export default async function MyWorkPage() {
       ) : (
         <ul className="space-y-2">
           {items.map((item) => (
-            <li key={item.key}>
-              <Link
-                href={item.href}
-                className="clay flex flex-wrap items-center justify-between gap-3 p-4 transition-colors duration-150 hover:border-accent"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-ink">{item.title}</p>
+            <li key={item.key} className="clay p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {/*
+                  ⚠️ THE LINK AND THE ACTIONS ARE SIBLINGS. The whole row used to
+                  be one link; forms inside an anchor are invalid HTML and a
+                  click on "Complete" would also navigate away.
+                */}
+                <Link href={item.href} className="group min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-ink transition-colors duration-150 group-hover:text-accent">
+                    {item.title}
+                  </p>
                   {item.context ? (
                     <p className="mt-0.5 truncate text-xs text-muted">{item.context}</p>
                   ) : null}
-                </div>
+                </Link>
 
                 <div className="flex shrink-0 items-center gap-2">
                   {/*
@@ -96,11 +119,20 @@ export default async function MyWorkPage() {
                   >
                     {REASON_LABEL[item.reason]}
                   </span>
-                  {item.at ? (
-                    <LocalTime iso={item.at} className="text-xs text-muted" />
-                  ) : null}
+                  {item.at ? <LocalTime iso={item.at} className="text-xs text-muted" /> : null}
                 </div>
-              </Link>
+              </div>
+
+              {item.task && canManage ? (
+                <WorkItemActions
+                  taskId={item.task.id}
+                  version={item.task.version}
+                  canReassign={canReassign}
+                  members={otherMembers}
+                  minSnoozeDate={minSnoozeDate}
+                  maxSnoozeDate={maxSnoozeDate}
+                />
+              ) : null}
             </li>
           ))}
         </ul>

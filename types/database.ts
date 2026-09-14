@@ -3443,9 +3443,12 @@ export type Database = {
           due_at: string | null
           id: string
           opportunity_id: string | null
+          outcome: string | null
+          snoozed_until: string | null
           status: Database["public"]["Enums"]["crm_task_status"]
           title: string
           updated_at: string
+          version: number
           workspace_id: string
         }
         Insert: {
@@ -3461,9 +3464,12 @@ export type Database = {
           due_at?: string | null
           id?: string
           opportunity_id?: string | null
+          outcome?: string | null
+          snoozed_until?: string | null
           status?: Database["public"]["Enums"]["crm_task_status"]
           title: string
           updated_at?: string
+          version?: number
           workspace_id: string
         }
         Update: {
@@ -3479,9 +3485,12 @@ export type Database = {
           due_at?: string | null
           id?: string
           opportunity_id?: string | null
+          outcome?: string | null
+          snoozed_until?: string | null
           status?: Database["public"]["Enums"]["crm_task_status"]
           title?: string
           updated_at?: string
+          version?: number
           workspace_id?: string
         }
         Relationships: [
@@ -8526,6 +8535,17 @@ export type Database = {
           won_revenue: number
         }[]
       }
+      crm_complete_task: {
+        Args: {
+          p_actor_id: string
+          p_expected_version: number
+          p_outcome: string
+          p_restrict_to_assignee?: string
+          p_task_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       crm_erase_contact: {
         Args: {
           p_actor_id?: string
@@ -8583,6 +8603,16 @@ export type Database = {
           won_value: number
         }[]
       }
+      crm_reassign_task: {
+        Args: {
+          p_actor_id: string
+          p_expected_version: number
+          p_new_assignee: string
+          p_task_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       crm_reconcile_reporting: {
         Args: { p_from_day: string; p_to_day: string; p_workspace_id: string }
         Returns: {
@@ -8609,6 +8639,17 @@ export type Database = {
         Args: {
           p_contact_id: string
           p_user_ids: string[]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      crm_snooze_task: {
+        Args: {
+          p_actor_id: string
+          p_expected_version: number
+          p_restrict_to_assignee?: string
+          p_task_id: string
+          p_until: string
           p_workspace_id: string
         }
         Returns: Json
@@ -9357,6 +9398,8 @@ export type Database = {
         | "QUALIFIED"
         | "MERGED"
         | "COLLISION_OVERRIDE"
+        | "TASK_SNOOZED"
+        | "TASK_REASSIGNED"
       crm_collision_mode: "off" | "warn" | "require_approval"
       crm_contact_dnc_reason:
         | "unsubscribed"
@@ -9756,6 +9799,8 @@ export const Constants = {
         "QUALIFIED",
         "MERGED",
         "COLLISION_OVERRIDE",
+        "TASK_SNOOZED",
+        "TASK_REASSIGNED",
       ],
       crm_collision_mode: ["off", "warn", "require_approval"],
       crm_contact_dnc_reason: [
