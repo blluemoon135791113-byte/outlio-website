@@ -60,7 +60,8 @@ const MAX_ATTEMPTS = 2
  * The response shape. Mirrors `flowDefinitionSchema` — Zod still has the final
  * say, because a JSON Schema handed to a provider is a request, not a guarantee.
  */
-const FLOW_SCHEMA = {
+function flowSchema(snapshot: RegistrySnapshot) {
+  return {
   type: 'object',
   required: ['registryVersion'],
   properties: {
@@ -87,7 +88,7 @@ const FLOW_SCHEMA = {
     trigger: {
       type: 'object',
       required: ['type'],
-      properties: { type: { type: 'string' } },
+      properties: { type: { type: 'string', enum: [...snapshot.triggers] } },
     },
     entryStepId: { type: 'string' },
     steps: {
@@ -99,7 +100,22 @@ const FLOW_SCHEMA = {
           id: { type: 'string' },
           label: { type: 'string' },
           type: { type: 'string', enum: ['ACTION', 'WAIT', 'BRANCH'] },
-          action: { type: 'string' },
+          /*
+           * ╔═══════════════════════════════════════════════════════════════════╗
+           * ║  ⚠️ CONSTRAIN IT IN THE SCHEMA, DO NOT ASK IT IN PROSE.          ║
+           * ║                                                                   ║
+           * ║  This was a bare `{ type: 'string' }` while the prompt listed the  ║
+           * ║  valid names and said "use ONLY these". Under a long prompt the    ║
+           * ║  model drifted anyway and three cases died on                     ║
+           * ║  "steps.1.action: Invalid option" — yet the SAME model picks       ║
+           * ║  correctly when asked in isolation, so it was never ignorance.     ║
+           * ║                                                                   ║
+           * ║  An enum here makes an invalid action unrepresentable rather than  ║
+           * ║  discouraged. The compiler's own check stays exactly as it is:     ║
+           * ║  this narrows what arrives, it does not decide what is allowed.    ║
+           * ╚═══════════════════════════════════════════════════════════════════╝
+           */
+          action: { type: 'string', enum: [...snapshot.actions] },
           /*
            * ╔═══════════════════════════════════════════════════════════════════╗
            * ║  ⚠️ `{ type: 'object' }` WITH NO PROPERTIES MADE THE FEATURE     ║
@@ -156,7 +172,8 @@ const FLOW_SCHEMA = {
               required: ['field', 'operator'],
               properties: {
                 field: { type: 'string' },
-                operator: { type: 'string' },
+                // Same argument as `action`: the closed set belongs in the schema.
+                operator: { type: 'string', enum: [...snapshot.operators] },
                 value: {},
               },
             },
@@ -168,8 +185,9 @@ const FLOW_SCHEMA = {
         },
       },
     },
-  },
-} as const
+    },
+  } as const
+}
 
 /**
  * The closed world, written out for the model.
@@ -225,6 +243,13 @@ function systemPrompt(snapshot: RegistrySnapshot): string {
     '   A flow that quietly does something other than what was asked is worse than no flow.',
     '   But a missing id is NOT a missing capability: if the action exists and you simply do not know which list or person, build the step and leave that field empty.',
     /*
+     * ⚠️ NAMED SEPARATELY FOR FACTS, which is the case that kept slipping.
+     * Asked to "branch on seniority", the model stopped using the invented key
+     * — the compiler would have caught that — and built a flow that tags
+     * EVERYONE instead. Valid, plausible, and not what was asked.
+     */
+    '   And a missing FACT is a missing capability. If the request branches on something outside the fact list above — seniority, revenue, a score — you cannot express it. Do not drop the condition and act on everyone regardless: that flow would treat every contact as a match. Set "cannotBuild".',
+    /*
      * ⚠️ THE MODEL EMITS THE VERSION; THE SERVER DOES NOT STAMP IT.
      * Stamping would make the version check vacuous — it would always match,
      * and a guard that cannot fail is not a guard. Asking for it back is a
@@ -243,12 +268,42 @@ function systemPrompt(snapshot: RegistrySnapshot): string {
      * requests rather than draft them. An empty dropdown beside the right step
      * is a far better answer than nothing.
      */
-    '7. Fill every config value you can infer from the request. You do NOT know this workspace\'s list ids, stage ids, pipeline ids or user ids — leave those empty rather than guessing or refusing; the person will pick them in the builder.',
+    /*
+     * ⚠️ TWO RULES, BECAUSE THEY ARE TWO DIFFERENT GAPS. Collapsed into one
+     * ("leave config you do not know empty") the model also declined to write a
+     * task TITLE, which the request had already given it. An id it cannot know;
+     * a sentence it can read.
+     */
+    `7. These config keys point at records only the workspace knows: ${snapshot.unknowableConfig.join(', ')}. Leave them out entirely — do not guess, and do not refuse the request because of them. The person picks those in the builder.`,
+    '8. EVERY OTHER config value you must write yourself from the request. A title, tag, subject, body, message or field name is in the words the person used — "create a review task" means the title is "Review". Never refuse because one of these is missing; write it.',
+    /*
+     * ⚠️ ADDED FOR `task-completed-move-stage`, which asked to move the stage
+     * AND log an activity and returned only the move. A dropped half is worse
+     * than a refusal: the flow runs and quietly does less than was agreed.
+     */
+    '9. Cover the WHOLE request. If it asks for two things — move the deal and log it — the flow needs both steps. Do not silently drop one.',
   ].join('\n')
 }
 
 /** The repair turn: the model's own output, and exactly what was wrong with it. */
-function repairPrompt(description: string, problems: string[]): string {
+function repairPrompt(
+  description: string,
+  problems: string[],
+  snapshot: RegistrySnapshot,
+): string {
+  /*
+   * ⚠️ "Invalid option" IS A ZOD MESSAGE, NOT AN INSTRUCTION. When the model
+   * drifts to an action outside the enum it is told `steps.1.action: Invalid
+   * option` — which names the fault and withholds the remedy, so the second
+   * attempt is a guess. The schema enum cannot save it either: strict mode
+   * needs every property in `required`, and a step cannot manage that (an
+   * ACTION has no `hours`, a WAIT has no `action`), so the enum is advisory
+   * with this provider and the compiler is the real gate.
+   *
+   * Repeating the list costs a few hundred tokens on the retry only.
+   */
+  const invalidAction = problems.some((p) => /\baction: Invalid option/.test(p))
+
   return [
     `ORIGINAL REQUEST: ${description}`,
     '',
@@ -261,6 +316,12 @@ function repairPrompt(description: string, problems: string[]): string {
      * gets something they never asked for that happens to validate.
      */
     'Change only what is needed to fix these problems. Keep the rest of the flow as it was.',
+    ...(invalidAction
+      ? [
+          '',
+          `The ONLY valid values for "action" are: ${snapshot.actions.join(', ')}. Pick the closest one from that list.`,
+        ]
+      : []),
   ].join('\n')
 }
 
@@ -315,8 +376,8 @@ export async function generateFlowDefinition(input: {
           user:
             attempt === 1
               ? `REQUEST: ${input.description}`
-              : repairPrompt(input.description, problems),
-          schema: FLOW_SCHEMA as unknown as Record<string, unknown>,
+              : repairPrompt(input.description, problems, snapshot),
+          schema: flowSchema(snapshot) as unknown as Record<string, unknown>,
           // Structure, not prose. A creative temperature here invents step ids.
           temperature: 0.1,
           maxOutputTokens: 2_000,
@@ -342,6 +403,34 @@ export async function generateFlowDefinition(input: {
         const declined = (result.json as { cannotBuild?: unknown })?.cannotBuild
         if (typeof declined === 'string' && declined.trim().length > 0) {
           attempts.push({ attempt, problems: [declined.trim()] })
+
+          /*
+           * ╔═══════════════════════════════════════════════════════════════════╗
+           * ║  ⚠️ A REFUSAL GETS THE SECOND ATTEMPT TOO, AND DID NOT BEFORE.   ║
+           * ║                                                                   ║
+           * ║  Declining returned immediately, so a WRONG refusal was final      ║
+           * ║  while a malformed answer got another try — exactly backwards.     ║
+           * ║  Over-refusal became the dominant failure: "Missing campaignId"    ║
+           * ║  when the rules say to omit ids, and "Missing company name fact"   ║
+           * ║  when `company.name` is in the list it was handed.                ║
+           * ║                                                                   ║
+           * ║  ⚠️ THE CHALLENGE MUST NOT BE "TRY HARDER". Pushing a model off a  ║
+           * ║  correct refusal is how the substitution bug comes back. It is     ║
+           * ║  told only what it may have overlooked, and that refusing is       ║
+           * ║  still right if the thing is genuinely absent.                     ║
+           * ╚═══════════════════════════════════════════════════════════════════╝
+           */
+          if (attempt < MAX_ATTEMPTS) {
+            problems = [
+              `You declined, saying: "${declined.trim()}".`,
+              'Check that against the lists you were given before declining again.',
+              `If it was an id from this list, OMIT it and build the flow anyway: ${snapshot.unknowableConfig.join(', ')}.`,
+              'If it was a fact, re-read the fact keys — the one you need may be there under a different name.',
+              'If the capability genuinely does not exist, decline again and you are right to.',
+            ]
+            continue
+          }
+
           return { definition: null, attempts, declined: declined.trim() }
         }
 

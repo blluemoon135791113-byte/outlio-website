@@ -56,6 +56,23 @@ import {
   capabilityForFlowAction,
 } from '@/lib/capabilities/registry'
 
+/**
+ * Config keys that point at a row in this workspace.
+ *
+ * ⚠️ DEFINED HERE RATHER THAN GUESSED IN THE PROMPT. A model cannot invent a
+ * uuid, and asking it to try produces a flow that looks configured and targets
+ * nothing. Everything absent from this list is text the request supplies.
+ */
+const UNKNOWABLE_CONFIG = [
+  'userId',
+  'userIds',
+  'campaignId',
+  'accountId',
+  'listId',
+  'pipelineId',
+  'stageId',
+] as const
+
 /** The closed world a model is allowed to draw from. */
 export type RegistrySnapshot = {
   /** Pinned onto the definition and re-checked here. */
@@ -66,6 +83,24 @@ export type RegistrySnapshot = {
   matchModes: readonly ('all' | 'any')[]
   /** Fact keys a BRANCH condition may read. */
   factKeys: readonly string[]
+  /**
+   * Config keys that name a record only this workspace knows.
+   *
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ AN ID AND A SENTENCE ARE NOT THE SAME KIND OF GAP, AND TREATING THEM  ║
+   * ║  ALIKE COST THREE EVAL CASES.                                            ║
+   * ║                                                                           ║
+   * ║  Told only "leave config you do not know empty", the model also declined  ║
+   * ║  to write a TASK TITLE — "Missing task title for CREATE_TASK action" —    ║
+   * ║  when "create a review task" contains the title in plain sight.           ║
+   * ║                                                                           ║
+   * ║  A `campaignId` is unknowable: it is a uuid in a table the model has      ║
+   * ║  never seen. A `title`, `tag`, `subject` or `message` is the opposite —   ║
+   * ║  it is the part of the request the person already wrote down. Splitting   ║
+   * ║  the two lets the prompt ask for one and excuse the other.               ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  unknowableConfig: readonly string[]
   /**
    * Config keys each action cannot run without.
    *
@@ -164,6 +199,12 @@ export function registrySnapshot(): RegistrySnapshot {
     operators: CONDITION_OPERATORS,
     matchModes: ['all', 'any'],
     factKeys: factKeys(),
+    /*
+     * ⚠️ IDS AND REFERENCES ONLY. Everything else in `REQUIRED_ACTION_CONFIG`
+     * is text the request itself supplies, and excusing those made the model
+     * refuse to write a title it had been handed.
+     */
+    unknowableConfig: UNKNOWABLE_CONFIG,
     requiredConfig: Object.fromEntries(
       (Object.keys(ACTION_TYPES) as ActionType[])
         .map((action) => [action, REQUIRED_ACTION_CONFIG[action] ?? []] as const)

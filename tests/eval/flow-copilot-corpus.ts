@@ -319,11 +319,27 @@ export const CORPUS: readonly EvalCase[] = [
     outcome: 'refusal',
     because: 'there is no SMS action',
   },
+  /*
+   * ⚠️ THIS WAS A REFUSAL CASE AND IT WAS WRONG. It marked the copilot down for
+   * building NOTIFY here, on the grounds that a channel post is not a direct
+   * message. But `ChannelProvider` is `'slack' | 'teams'` — NOTIFY really does
+   * reach Slack, and the person asking to be told about wins gets told about
+   * wins.
+   *
+   * ⚠️ THE TEST THAT SEPARATES IT FROM `refuse-sms` IS WHO RECEIVES SOMETHING.
+   * "Text the contact" answered with a task changes the recipient from the
+   * CONTACT to the operator — a different outcome wearing the right shape. DM
+   * versus channel changes the envelope, not the reader.
+   *
+   * Marking a correct answer wrong is the failure mode this corpus polices in
+   * the other direction; it was doing it here from the start.
+   */
   {
-    id: 'refuse-slack-dm',
+    id: 'slack-notify-on-won',
     prompt: 'Send me a Slack DM whenever a deal is won.',
-    outcome: 'refusal',
-    because: 'there is no direct-message action; NOTIFY is a channel notification, not a DM to a person',
+    outcome: 'flow',
+    trigger: 'opportunity_won',
+    mustUse: ['NOTIFY'],
   },
   {
     id: 'refuse-delete-contact',
