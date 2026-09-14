@@ -85,6 +85,20 @@ function flowSchema(snapshot: RegistrySnapshot) {
      * ╚═══════════════════════════════════════════════════════════════════════╝
      */
     cannotBuild: { type: 'string' },
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE MODEL SAYS WHAT IT HEARD, SO A DROPPED HALF BECOMES VISIBLE.  ║
+     * ║                                                                       ║
+     * ║  "Move the opportunity to the next stage and log it" reliably returned ║
+     * ║  the move without the activity. Nothing could catch it: the compiler   ║
+     * ║  sees the DEFINITION and never the REQUEST, so a flow that does half   ║
+     * ║  of what was asked is indistinguishable from one that does all of it.  ║
+     * ║                                                                       ║
+     * ║  Enumerating the asks makes the omission checkable — and the act of    ║
+     * ║  enumerating tends to prevent it in the first place.                   ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    covers: { type: 'array', items: { type: 'string' } },
     trigger: {
       type: 'object',
       required: ['type'],
@@ -282,6 +296,30 @@ function systemPrompt(snapshot: RegistrySnapshot): string {
      * than a refusal: the flow runs and quietly does less than was agreed.
      */
     '9. Cover the WHOLE request. If it asks for two things — move the deal and log it — the flow needs both steps. Do not silently drop one.',
+    /*
+     * ⚠️ THE SECOND SENTENCE IS NOT OPTIONAL. With only the first, enumerating
+     * the asks became pressure to satisfy them: `refuse-sms` went from a clean
+     * refusal to building a task for "text the contact", twice in a row. The
+     * listing habit that fixes dropped steps also pushes toward substitution
+     * unless refusal is named in the same breath.
+     */
+    '10. Set "covers" to one short phrase per distinct thing the request asks Outlio to DO. "Move the opportunity and log it" is two: ["move the opportunity to the next stage", "log an activity"]. Count them before you write the steps.',
+    /*
+     * ⚠️ THE TEST IS THE OUTCOME AND THE RECIPIENT, NOT THE LITERAL WORDS.
+     *
+     * A blunt "if any item cannot be done, refuse" is wrong in both
+     * directions, and I shipped it and watched it break: it refused
+     * "Slack DM" — which NOTIFY genuinely delivers, to the same person, about
+     * the same event — while a looser rule let "text the contact" become a
+     * task for the operator.
+     *
+     * The difference is WHO ends up receiving something and WHAT happens to
+     * them. A different channel to the same reader is a near-miss worth
+     * building; a different reader, or a different action on a contact, is a
+     * substitution the person never agreed to.
+     */
+    '11. Before substituting anything, ask: does an available action reach the SAME person with the SAME outcome? Telling someone on Slack rather than by direct message is the same person and the same news — build it. Creating a task for the operator instead of texting the contact is a DIFFERENT person entirely — do not build it; set "cannotBuild" naming what is missing.',
+    '12. Never quietly drop an item you listed in "covers". Cover it, or decline the request and say which part you could not do.',
   ].join('\n')
 }
 
@@ -436,6 +474,31 @@ export async function generateFlowDefinition(input: {
 
         try {
           const definition = compileGeneratedDefinition(result.json, snapshot)
+
+          /*
+           * ⚠️ A WARNING, NOT A VERDICT, AND ONLY ON THE FIRST ATTEMPT. One
+           * step can legitimately satisfy two phrasings, so a mismatch is a
+           * suspicion rather than a fault — it buys one retry and then the
+           * answer stands. Refusing on it would turn a heuristic into a gate
+           * and start rejecting correct flows.
+           */
+          const covers = Array.isArray((result.json as { covers?: unknown }).covers)
+            ? ((result.json as { covers: unknown[] }).covers.filter(
+                (c): c is string => typeof c === 'string' && c.trim().length > 0,
+              ))
+            : []
+          const doing = definition.steps.filter((step) => step.type === 'ACTION').length
+
+          if (attempt < MAX_ATTEMPTS && covers.length > doing) {
+            problems = [
+              `You said this request asks Outlio to do ${covers.length} things: ${covers.join('; ')}.`,
+              `The flow has only ${doing} action step(s), so at least one of them is missing.`,
+              'Add the missing step. If one step genuinely covers two of those phrases, return the same flow again.',
+            ]
+            attempts.push({ attempt, problems })
+            continue
+          }
+
           attempts.push({ attempt, problems: [] })
           return { definition, attempts }
         } catch (error) {
