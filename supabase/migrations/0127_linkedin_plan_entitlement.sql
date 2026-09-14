@@ -74,7 +74,17 @@ declare
   split_count int;
   offenders   text;
 begin
-  select count(*), string_agg(key, ', ' order by key)
+  /*
+   * ⚠️ `key::text` IS REQUIRED. `plans.key` is the ENUM `public.plan_key`
+   * (0001), not text, and `string_agg` has no overload for it —
+   * "function string_agg(plan_key, unknown) does not exist". The comparisons
+   * above need no cast because a literal coerces to the enum, so this is the
+   * one place in the migration where the type shows through.
+   *
+   * 0059 already does `where key::text = v_subscription.plan_key` for the same
+   * reason. This was prior art and I did not follow it.
+   */
+  select count(*), string_agg(key::text, ', ' order by key)
     into split_count, offenders
     from public.plans
    where (limits ? 'linkedin_enabled') <> (limits ? 'linkedin_senders_max');

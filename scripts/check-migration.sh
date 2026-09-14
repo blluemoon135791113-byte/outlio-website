@@ -98,9 +98,28 @@ create table public.profiles (
  * the real database. A harness that reports a false failure gets ignored, which
  * is worse than not having one.
  */
+/*
+ * ⚠️ `key` IS THE ENUM, NOT text. It was scaffolded as `text` and the harness
+ * therefore reported "applies cleanly" for a migration that failed in the
+ * Supabase editor with:
+ *
+ *   ERROR: function string_agg(plan_key, unknown) does not exist
+ *
+ * A scaffold looser than production is not a conservative approximation — it
+ * is a harness that passes what the real database rejects, which is the one
+ * failure mode a pre-flight check must not have. `text` accepts every
+ * expression the enum does AND every one it does not, so the entire class of
+ * enum-type errors on `plans.key` was invisible here.
+ *
+ * The comment above about a fuller replica "giving false confidence" still
+ * stands for columns nothing references. It does not license modelling a
+ * column LOOSER than production, which is the opposite mistake.
+ */
+create type public.plan_key as enum (
+  'trial', 'starter', 'professional', 'agency', 'custom');
 create table public.plans (
   id uuid primary key default gen_random_uuid(),
-  key text,
+  key public.plan_key unique,
   name text,
   limits jsonb not null default '{}'::jsonb);
 create table public.usage_counters (
@@ -119,12 +138,74 @@ create table public.rate_limits (
   blocked_until timestamptz,
   primary key (bucket, subject, window_start));
 create table public.extraction_jobs (id uuid primary key default gen_random_uuid());
-create table public.extracted_leads (id uuid primary key default gen_random_uuid());
+-- `user_id` is needed by 0114's backfill, which joins evidence to the lead it
+-- came from and scopes the join by owner. Real type and FK from 0006.
+create table public.extracted_leads (
+  id      uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade);
 create table public.companies (id uuid primary key default gen_random_uuid());
+/*
+ * 0113 adds `evidence_id` FKs pointing here and then ASSERTS the constraint
+ * resolves to this exact relname; 0114 backfills through it. Created by 0044,
+ * which this harness does not replay.
+ *
+ * ⚠️ TYPES AND CHECKS COPIED FROM 0044, NOT APPROXIMATED. `entity_type` and
+ * `source_confidence` carry CHECK constraints in production, and a scaffold
+ * that dropped them would accept a backfill the real database rejects — the
+ * same too-permissive mistake that let `plans.key` hide an enum error. Only
+ * the columns 0113/0114 touch are modelled, which is the scaffold's rule.
+ */
+create table public.research_evidence (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references auth.users(id) on delete cascade,
+  entity_type       text not null check (entity_type in ('company', 'person')),
+  entity_id         uuid not null,
+  field             text not null,
+  value_json        jsonb not null,
+  source_provider   text not null,
+  source_url        text,
+  source_confidence text not null check (source_confidence in ('high', 'medium', 'low')),
+  retrieved_at      timestamptz not null default now(),
+  expires_at        timestamptz,
+  created_at        timestamptz not null default now());
 SQL
 
 # Prerequisites, in order. Extend this list as the platform grows.
-for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api 0098_webhook_url_loopback 0099_notification_channels 0100_unified_inbox 0101_inbound_optional_args 0102_onboarding_state 0103_plan_module_entitlements 0104_email_reply_threading 0105_fix_claim_column_name 0106_restore_claim_safety; do
+#
+# ⚠️ IT STOPPED AT 0106 AND THE PLATFORM DID NOT. Twenty migrations later,
+# anything depending on 0107..0126 got a FALSE FAILURE here — 0124 reported
+# "column o.value_amount_base does not exist" (it is created by 0123) and 0125
+# reported "relation public.linkedin_senders does not exist" (0122). Both apply
+# perfectly to the real database.
+#
+# This is the exact outcome the scaffold comment above warns about: "a harness
+# that reports a false failure gets ignored, which is worse than not having
+# one." It was ignored, and 0127 went to the SQL editor unvalidated and failed
+# there on an enum cast this harness is built to catch.
+#
+# ⚠️ SO EXTENDING THIS LIST IS NOT HOUSEKEEPING. A skipped prerequisite does
+# not weaken the check, it INVERTS it: the migration under test fails for a
+# reason that has nothing to do with the migration, and the only rational
+# response to a tool that cries wolf is to stop running it.
+for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api 0098_webhook_url_loopback 0099_notification_channels 0100_unified_inbox 0101_inbound_optional_args 0102_onboarding_state 0103_plan_module_entitlements 0104_email_reply_threading 0105_fix_claim_column_name 0106_restore_claim_safety \
+          0107_dashboards 0108_flow_run_variables 0109_fix_user_fk_append_only \
+          0110_restore_signup_gate 0111_sender_postal_address \
+          0112_contact_list_sort_indexes 0113_contact_value_citations \
+          0114_backfill_contact_citations 0115_rls_membership_setmembership \
+          0116_due_webhook_deliveries 0117_worker_runs \
+          `# ⚠️ 0118 and 0119 ARE DELIBERATELY ABSENT AND MUST STAY ABSENT.` \
+          `# 0118 needs pg_cron and 0119 reads cron.job and net._http_response.` \
+          `# Supabase provides those; stock postgres:16 does not, so replaying` \
+          `# them here fails on the ENVIRONMENT rather than on the SQL — the` \
+          `# false-failure mode this list's header is about. Verified that` \
+          `# nothing in 0120..0127 references a cron or net object, so skipping` \
+          `# them costs no schema. A migration that itself touches pg_cron` \
+          `# cannot be checked by this harness at all; say so rather than` \
+          `# letting it report a green it did not earn.` \
+          0120_suppress_by_contact \
+          0121_contact_dnc_and_timezone 0122_linkedin_senders \
+          0123_deal_fx_snapshot 0124_rollups_convert_currency \
+          0125_linkedin_tasks 0126_contact_version_columns; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break
