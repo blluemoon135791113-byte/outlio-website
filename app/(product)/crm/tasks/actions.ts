@@ -119,6 +119,7 @@ export async function createTaskAction(
   if (!title) return { ok: false, error: 'Give the task a title.' }
 
   const contactId = String(formData.get('contactId') ?? '') || null
+  const opportunityId = String(formData.get('opportunityId') ?? '') || null
   const dueAt = String(formData.get('dueAt') ?? '').trim() || null
 
   const db = createAdminClient()
@@ -139,11 +140,34 @@ export async function createTaskAction(
     if (!contact) return { ok: false, error: 'That contact is not in this workspace.' }
   }
 
+  /*
+   * ⚠️ CHECKED IN CODE TOO, THOUGH 0124's COMPOSITE FK WOULD ALSO REFUSE IT.
+   *
+   * `(opportunity_id, workspace_id)` against `crm_opportunities (id,
+   * workspace_id)` makes a cross-tenant link unrepresentable, so the database
+   * is the real wall here. This check exists for the answer it gives: the FK
+   * violation surfaces as "Could not create that task", which tells somebody
+   * nothing, while this says which claim was rejected. Same reasoning as the
+   * contact check above, which the FK also backstops.
+   */
+  if (opportunityId) {
+    const { data: deal } = await db
+      .from('crm_opportunities')
+      .select('id')
+      .eq('workspace_id', ctx.workspace.id)
+      .eq('id', opportunityId)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (!deal) return { ok: false, error: 'That deal is not in this workspace.' }
+  }
+
   const { error } = await db.from('crm_tasks').insert({
     workspace_id: ctx.workspace.id,
     title,
     body: String(formData.get('body') ?? '').trim() || null,
     contact_id: contactId,
+    opportunity_id: opportunityId,
     /*
      * Assigned to the creator by default. An unassigned task belongs to
      * nobody and is the kind that sits in a queue forever.

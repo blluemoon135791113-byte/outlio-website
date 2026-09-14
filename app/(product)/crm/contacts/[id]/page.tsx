@@ -98,6 +98,24 @@ export default async function ContactDetailPage({
   const stopRecord = await contactStopRecord(ctx.workspace.id, contact.id)
 
   /*
+   * ⚠️ NARROWED TO THIS PERSON'S DEALS, unlike the tasks page's workspace-wide
+   * list. A task created from a contact is almost always about one of that
+   * contact's own deals, and offering every open deal in the workspace here
+   * would make the wrong one easy to pick.
+   *
+   * Open only — a task is future work, and a won or lost deal has none left.
+   */
+  const { data: contactDeals } = await createAdminClient()
+    .from('crm_opportunities')
+    .select('id, title')
+    .eq('workspace_id', ctx.workspace.id)
+    .eq('contact_id', contact.id)
+    .eq('status', 'open')
+    .is('deleted_at', null)
+    .order('updated_at', { ascending: false })
+    .limit(50)
+
+  /*
    * ⚠️ BOTH GO THROUGH A VALIDATOR BEFORE REACHING AN `href`. A domain is a bare
    * host, so an unprefixed href would resolve RELATIVE to /crm/contacts and 404;
    * a `linkedin_url` was written by an importer and is attacker-influenced, so a
@@ -338,6 +356,7 @@ export default async function ContactDetailPage({
                 <NewTaskButton
                   contactId={contact.id}
                   contactName={contact.fullName ?? 'this contact'}
+                  deals={contactDeals ?? []}
                 />
               ) : null}
             </div>

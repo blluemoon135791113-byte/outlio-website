@@ -11,13 +11,18 @@ import { createTaskAction, type CreateTaskState } from '@/app/(product)/crm/task
  * completed them and offered no way to make one, so the queue stayed empty for
  * anyone who had not built an automation first.
  */
+/** An open deal this task could be about. */
+export type TaskDealOption = { id: string; title: string }
+
 export function NewTaskForm({
   contactId,
   contactName,
+  deals,
   onCancel,
 }: {
   contactId?: string
   contactName?: string
+  deals?: TaskDealOption[]
   onCancel?: () => void
 }) {
   const [state, action, pending] = useActionState<CreateTaskState, FormData>(
@@ -48,6 +53,37 @@ export function NewTaskForm({
           className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
         />
       </label>
+
+      {/*
+        ⚠️ NOT RENDERED WHEN THERE IS NOTHING TO PICK. An empty select reads as
+        a broken control; a workspace with no open deals simply has no deal to
+        name, and the column stays null as it does for every task that predates
+        0124.
+
+        The value is a claim, not authorisation — `createTaskAction` re-checks
+        it against the workspace, and 0124's composite FK makes a cross-tenant
+        link unrepresentable regardless of what this select is made to submit.
+      */}
+      {deals && deals.length > 0 ? (
+        <label className="block">
+          <span className="text-xs font-medium text-ink">Deal</span>
+          <select
+            name="opportunityId"
+            defaultValue=""
+            className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
+          >
+            <option value="">No deal</option>
+            {deals.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.title}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-muted">
+            Linking it here is what makes this the deal&rsquo;s next action.
+          </span>
+        </label>
+      ) : null}
 
       <label className="block">
         <span className="text-xs font-medium text-ink">Due</span>
@@ -99,7 +135,11 @@ export function NewTaskForm({
   )
 }
 
-export function NewTaskButton(props: { contactId?: string; contactName?: string }) {
+export function NewTaskButton(props: {
+  contactId?: string
+  contactName?: string
+  deals?: TaskDealOption[]
+}) {
   const [open, setOpen] = useState(false)
   if (open) return <NewTaskForm {...props} onCancel={() => setOpen(false)} />
 
