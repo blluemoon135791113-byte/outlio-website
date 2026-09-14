@@ -1,7 +1,7 @@
 # Phase 13 — Gemini Flow Copilot
 
-Per §9. Status: **UNBLOCKED 2026-09-14 — every criterion this brief set for
-itself is now met.** The original deferral text is kept below verbatim, because
+Per §9. Status: **DELIVERED 2026-09-14 — all four slices.** Unblocked and built
+in one session; every criterion this brief set for itself was met first. The original deferral text is kept below verbatim, because
 the premise it rested on was refuted rather than argued away, and the difference
 matters.
 
@@ -152,7 +152,44 @@ Proposed slices:
    repair loop** — `lib/flows/copilot.ts`, `generateFlowAction`, `FlowCopilot`.
    Done. Registry version bumped to **3** for `flows.copilot`, priced 0 per
    DECISION-16, gated on `flow.manage` rather than `hubble.use`.
-4. **The ≥30-prompt eval corpus**, which only means something once 1–3 exist.
+4. ✅ **The ≥30-prompt eval corpus** — `tests/eval/flow-copilot-corpus.ts` (41
+   cases), scored by `tests/eval/flow-copilot.eval.ts`, validated for free by
+   `tests/unit/flow-copilot-corpus.test.ts`. Done.
+
+### Slice 4 as built — 2026-09-14
+
+⚠️ **TEN OF THE FORTY-ONE CASES ARE REFUSALS, AND THEY ARE THE POINT.** A corpus
+of only-satisfiable prompts scores a model that invents capabilities exactly as
+highly as one that refuses honestly — which is the single behaviour §5.10 cares
+about. Each refusal names a specific absence (`contact.seniority`, no SMS action,
+no dialler), and the offline test asserts that absence against the live snapshot
+so a case cannot silently become satisfiable and then mark a correct answer
+wrong forever.
+
+**The corpus is checked before it is ever used to judge a model.** A case
+expecting `ADD_TAG` after that action is renamed would score every model as
+failing, and the fault would read as the model's. `flow-copilot-corpus.test.ts`
+runs offline, free, in the default loop: 13 tests over coverage, uniqueness,
+satisfiability and staleness.
+
+**A third vitest project, because it has a third constraint: it spends money.**
+Unit must be fast, integration must be serial, and this must be neither
+automatic nor accidental — one model call per case plus a `hubble_calls` row
+each. `test:all` now names its projects explicitly so the eval cannot be swept
+in. Run it with `npm run eval:copilot`.
+
+⚠️ **A HALF-CONFIGURED EVAL THAT SILENTLY SKIPS IS THE TRAP, and the first
+version had it.** `console.log` was useless — vitest suppresses output from
+skipped files, so the reason printed to nobody and the run read as "41 skipped".
+Someone who set a model key but forgot `EVAL_WORKSPACE_ID` would have concluded
+the copilot scored perfectly. Now: nothing configured is a silent skip (correct
+in CI), and anything configured is intent, so a missing piece **fails and names
+itself**. Verified both ways, and that a model key alone still attempts zero
+paid cases.
+
+**The aggregate is reported, not asserted against a threshold.** A baked-in
+`expect(rate).toBeGreaterThan(0.8)` gets quietly lowered the first time it fails,
+and then it measures nothing. The per-case assertions are the gate.
 
 ### Slices 2 and 3 as built — 2026-09-14
 

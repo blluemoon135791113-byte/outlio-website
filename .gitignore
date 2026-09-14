@@ -129,3 +129,25 @@ playwright-report/
 .codex/
 APPLY_TO_SUPABASE.sql
 .pending-migrations/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠️ ADDED 2026-09-14 AFTER `git add -A` SWEPT UNINTENDED FILES INTO A COMMIT.
+#
+# ⚠️ AND DELIBERATELY NARROW, BECAUSE THE FIRST ATTEMPT AT THESE RULES WAS
+# WORSE THAN THE PROBLEM. It blanket-ignored `.claude/agents/` and `public/`,
+# which would have hidden the five project agents CLAUDE.md names by name
+# (architecture-advisor, docs-auditor, feature-implementer,
+# product-risk-reviewer, verification-reviewer) and the landing page's images —
+# a surface rule 5 makes read-only. Both were already tracked; ignoring them
+# would have made their deletion invisible.
+#
+# Only these three are genuinely never-commit:
+#   worktrees are EMBEDDED GIT REPOSITORIES — git warned at the time that a
+#   clone would not contain them and would not know how to fetch them.
+#
+# ⚠️ THE RULES ARE A BACKSTOP, NOT THE FIX. The fix is staging by path.
+# `git add -A` is what caused this, and no ignore file protects against the
+# next thing it sweeps up.
+# ─────────────────────────────────────────────────────────────────────────────
+.claude/worktrees/
+graphify-out.zip
