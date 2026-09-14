@@ -70,6 +70,9 @@ const CRM_SECTION: NavSection = {
   label: 'Pipeline',
   icon: 'crm',
   children: [
+    // First, because §7 makes it the daily entry point — the screen you open
+    // before you decide anything, not one you navigate to afterwards.
+    { href: '/crm/my-work', label: 'My Work' },
     { href: '/crm/contacts', label: 'People' },
     { href: '/crm/companies', label: 'Companies' },
     { href: '/crm/pipeline', label: 'Deals' },
