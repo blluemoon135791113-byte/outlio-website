@@ -173,12 +173,33 @@ const stepIdSchema = z
   // Referenced by `next`/`branches`, so it must be safe to compare and print.
   .regex(/^[a-zA-Z0-9_-]+$/, 'A step id may contain only letters, numbers, _ and -.')
 
+/**
+ * Every comparison a BRANCH may make.
+ *
+ * ⚠️ EXPORTED SO THERE IS ONE LIST, NOT THREE. It was inlined in the schema
+ * below while `FlowBuilder.tsx` kept its own `BRANCH_OPERATORS` for labels —
+ * typed `{ key: string }`, so a typo there would compile, render a dropdown
+ * entry, and produce a condition the schema rejects at publish. They match
+ * today; nothing was keeping them matched. A generated definition needs the
+ * same list a third time, which is the point at which duplicating it stops
+ * being survivable.
+ */
+export const CONDITION_OPERATORS = [
+  'equals', 'not_equals', 'contains', 'not_contains',
+  'is_empty', 'is_not_empty', 'greater_than', 'less_than', 'in', 'not_in',
+] as const
+
+export type ConditionOperator = (typeof CONDITION_OPERATORS)[number]
+
 const conditionSchema = z.object({
+  /**
+   * ⚠️ DELIBERATELY AN OPEN STRING, WHICH MATTERS FOR GENERATED INPUT. A
+   * stored flow may reference a fact key that has since been removed, and it
+   * must still LOAD so its author can open and repair it. So the parser cannot
+   * close this set — `lib/flows/generated.ts` does, for model output only.
+   */
   field: z.string().min(1).max(120),
-  operator: z.enum([
-    'equals', 'not_equals', 'contains', 'not_contains',
-    'is_empty', 'is_not_empty', 'greater_than', 'less_than', 'in', 'not_in',
-  ]),
+  operator: z.enum(CONDITION_OPERATORS),
   value: z.unknown().optional(),
 })
 

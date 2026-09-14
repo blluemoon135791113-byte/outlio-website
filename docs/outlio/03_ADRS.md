@@ -275,3 +275,78 @@ made possible and that no amount of reading could have produced.
   `.env.local`.** Both files carry a header saying so.
 - The staging database password lives in `.staging-db-password`, gitignored and
   `chmod 600`. It was generated, never reused from anywhere.
+
+---
+
+## ADR-006 — A guard may precede the thing it guards, and is recorded as an orphan while it does
+
+**Status:** accepted, 2026-09-14. Extends ADR-002 rather than replacing it.
+
+### Context
+
+Phase 13 slice 2 built `lib/flows/generated.ts` — the validation tier for a flow
+definition produced by a **model** rather than a person. Both unreachability
+guards flagged it immediately, correctly: it is imported by its own test and by
+nothing else.
+
+ADR-002 decided unreachable modules "keep, guard, or delete, per module". This is
+a case that ADR-002's three options do not cleanly cover, because the module is
+neither dead nor forgotten — it is **early on purpose**.
+
+### Decision
+
+**Keep it, list it in both allowlists, and name the exit condition.**
+
+§5.10 requires that a capability or enum value absent from the snapshot handed
+to the model be *"a validation failure, not a repair opportunity"*. That tier is
+what makes generated output safe. Building the generation first would mean every
+bad output had two candidate causes — the prompt and the compiler — with no way
+to tell them apart from outside, which is precisely the argument PHASE_13's
+original deferral used against building a copilot over an unproven engine. The
+same argument applies one level down.
+
+So the ordering is deliberate: **the guard ships before the thing it guards**,
+and the cost is one allowlist entry for the duration of one slice.
+
+### ⚠️ The trap this ADR exists to close
+
+There is an obvious, wrong way off the allowlist: wire the new tier into the
+human publish path, and it becomes reachable in a single line.
+
+**That would break production.** The generated tier requires `registryVersion` to
+be present *and* to match the current snapshot. Five pre-registry `flow_versions`
+rows in production have no pin at all — `flowDefinitionSchema` makes the field
+optional for exactly that reason, and `advanceRun` parses every stored definition
+on every run. Applying the strictest tier to human publishes would refuse flows
+a customer can currently open and repair.
+
+The three tiers are different on purpose:
+
+| Tier | Strictness | Why |
+|---|---|---|
+| `validateFlowDefinition` | permissive | parses STORED definitions; tightening it stops published flows from loading |
+| `publishProblems` | strict | the author is present to fix what it names |
+| `compileGeneratedDefinition` | strictest | **nobody is present**, and the producer will emit a plausible capability that does not exist |
+
+### Exit condition, stated so it can be checked
+
+The entry leaves both allowlists when **slice 3 generates a definition and calls
+`compileGeneratedDefinition`**.
+
+⚠️ **If slice 3 ships and the entry is still there, the generator wrote its own
+validation** — which is the two-implementations defect this codebase keeps
+paying for, and the reason the allowlist demands a named exit rather than a
+promise.
+
+### Consequences
+
+- `KNOWN_ORPHANS` grew by one, against its own "may only ever shrink" rule. The
+  exception is recorded here rather than argued in the test file.
+- The tier is fully mutation-proven now, before it has a caller: six mutations,
+  each caught — dropping the version requirement, removing the fact-key check,
+  skipping `publishProblems`, unfiltering unimplemented actions, reverting the
+  operator list to an inline copy, and reporting only the first problem.
+- One assertion in it is structural rather than behavioural, and says so:
+  `UNIMPLEMENTED_ACTIONS` is empty, so `.filter(actionIsImplemented)` is a
+  current no-op that no behavioural test can distinguish. It becomes testable
+  the day an action is unimplemented, which is the day it matters.
