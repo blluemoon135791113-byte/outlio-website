@@ -171,6 +171,25 @@ const KNOWN_UNREACHABLE = new Map<string, string>([
    * `metrics.ts` alone remains: it leaves when something REPORTS on LinkedIn
    * outcomes, and there is no outcome history to measure yet.
    */
+  /*
+   * ⚠️ PHASE 19's RULE, BUILT BEFORE ITS SURFACE AND FOR THE SAME REASON AS
+   * PHASE 18's. Migration 0129 is written and validated but NOT YET APPLIED, so
+   * a form writing `linkedin_observations` today would fail on a missing table.
+   *
+   * The rule is the phase: a reply from somebody nothing was ever sent to is
+   * the shape that put 254 false `replied` rows in `email_events`. It is
+   * mutation-proven now, before any screen can offer the button that records
+   * one.
+   *
+   * EXIT: it leaves when a result form records an observation. If Phase 19 is
+   * called done and this is still listed, the form wrote somewhere else.
+   */
+  [
+    'lib/linkedin/observations.ts',
+    'Phase 19 reply-attribution rule. 0129 is validated but unapplied, so no ' +
+      'form can write an observation yet. Leaves when one records a reply.',
+  ],
+
   [
     'lib/linkedin/metrics.ts',
     'Acceptance and reply rates (§4.18). Nothing reports on LinkedIn outcomes ' +

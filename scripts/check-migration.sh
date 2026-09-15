@@ -206,7 +206,7 @@ for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_inge
           0121_contact_dnc_and_timezone 0122_linkedin_senders \
           0123_deal_fx_snapshot 0124_rollups_convert_currency \
           0125_linkedin_tasks 0126_contact_version_columns \
-          0127_linkedin_plan_entitlement; do
+          0127_linkedin_plan_entitlement 0128_linkedin_campaigns; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break

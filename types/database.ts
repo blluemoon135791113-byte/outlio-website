@@ -6420,6 +6420,54 @@ export type Database = {
           },
         ]
       }
+      /*
+       * ⚠️ HAND-WRITTEN FOR 0129, NOT YET APPLIED. Regenerate with
+       * `npm run db:types` once it is, and delete this note — a hand-typed
+       * table that drifts from the schema is worse than none, because the
+       * compiler will confidently agree with the wrong shape.
+       */
+      linkedin_observations: {
+        Row: {
+          contact_id: string
+          created_at: string
+          enrollment_id: string | null
+          evidence_task_id: string | null
+          evidence_was_unconfirmed: boolean
+          id: string
+          kind: Database["public"]["Enums"]["linkedin_observation_kind"]
+          note: string | null
+          observed_at: string
+          recorded_by: string
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          enrollment_id?: string | null
+          evidence_task_id?: string | null
+          evidence_was_unconfirmed?: boolean
+          id?: string
+          kind: Database["public"]["Enums"]["linkedin_observation_kind"]
+          note?: string | null
+          observed_at?: string
+          recorded_by: string
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          enrollment_id?: string | null
+          evidence_task_id?: string | null
+          evidence_was_unconfirmed?: boolean
+          id?: string
+          kind?: Database["public"]["Enums"]["linkedin_observation_kind"]
+          note?: string | null
+          observed_at?: string
+          recorded_by?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       linkedin_enrollments: {
         Row: {
           campaign_id: string | null
@@ -9754,6 +9802,12 @@ export type Database = {
         | "PAUSED"
         | "FINISHED"
         | "ARCHIVED"
+      linkedin_observation_kind:
+        | "CONNECTION_ACCEPTANCE_RECORDED"
+        | "INBOX_REVIEW_RECORDED"
+        | "REPLY_RECORDED"
+        | "MEETING_BOOKED_RECORDED"
+        | "MEETING_HELD_RECORDED"
       linkedin_enrollment_state:
         | "DRAFT"
         | "ELIGIBILITY_REVIEW"
