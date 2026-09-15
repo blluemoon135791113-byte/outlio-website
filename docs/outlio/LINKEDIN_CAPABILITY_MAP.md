@@ -142,9 +142,24 @@ UNKNOWN rather than UTC. It is the first link of §5.7's fallback chain, which
 `lib/email/schedule.ts` already implements correctly against the mailbox's zone
 and had nowhere to read the recipient's from.
 
-**Still open:** 0120 and 0121 are both unapplied. `types/database.ts` carries
-0121's shapes by hand, marked with the migration number, and must be
-regenerated with `npm run db:types` once it is run.
+**Update — 2026-09-15: 0121 IS APPLIED.** Verified read-only against the live
+schema, not inferred: `crm_contact_suppressions` and `crm_contacts.timezone`
+both exist. So does every LinkedIn table (`linkedin_senders`, `linkedin_tasks`,
+`linkedin_enrollments`).
+
+⚠️ **This note said "both unapplied" while `05_PHASE_STATUS.md` said 0121 was
+verified applied, and the two disagreed for three days.** `supabase migration
+list` cannot settle it — migrations here are applied by hand in the SQL editor
+and never reach `schema_migrations`. Only the schema itself can, which is what
+was asked.
+
+`types/database.ts` should be regenerated with `npm run db:types` if it still
+carries 0121's shapes by hand.
+
+**Still genuinely unverified: 0120.** It replaces the `claim_email_messages`
+FUNCTION, and a function body is invisible to `gen types` — the only direct
+check would be calling it, which claims real production messages. Owner says
+applied; that remains the only evidence.
 
 ---
 
