@@ -254,9 +254,32 @@ export async function analysisEntitled(workspaceId: string): Promise<boolean> {
 
   const { data: profile } = await db
     .from('profiles')
-    .select('plan_id')
+    .select('plan_id, role')
     .eq('id', workspace.owner_user_id)
     .maybeSingle()
+
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ PLATFORM ADMIN BYPASSES THE PLAN, AND LEAVING THIS OUT WAS A REAL  ║
+   * ║  DEFECT RATHER THAN A CONSERVATIVE CHOICE.                             ║
+   * ║                                                                       ║
+   * ║  The owner's words were "for premium users only AND ADMIN". Without    ║
+   * ║  this clause the second half was simply not built — and the symptom    ║
+   * ║  was immediate: 27 of 33 workspace owners in production carry no       ║
+   * ║  `plan_id` at all, so `resolveModules` grants them every module        ║
+   * ║  through its own admin bypass while this function refused them the     ║
+   * ║  analysis. A workspace with the LinkedIn module and no way to analyse  ║
+   * ║  it, for no stated reason.                                            ║
+   * ║                                                                       ║
+   * ║  `profiles.role = 'admin'` is Outlio staff, not a workspace role. The   ║
+   * ║  same bypass already exists in `decideAccess` for scraper limits, in    ║
+   * ║  `hasHubbleEntitlement`, and in `resolveModules` — whose comment says   ║
+   * ║  extending it "keeps one rule rather than three". A fourth place that   ║
+   * ║  answers the same question differently is the defect this codebase      ║
+   * ║  pays for most often.                                                  ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   */
+  if (profile?.role === 'admin') return true
 
   if (!profile?.plan_id) return false
 

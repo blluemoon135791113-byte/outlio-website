@@ -10817,3 +10817,88 @@ reload with `{tag: "Warm — replied"}` on that step and `{}` on every other.
 end to end with live data — the walker is unit- and mutation-proved only. That
 line has stood since Phase 10 and this is what finally makes clearing it
 possible.
+
+---
+
+## Phase 20c — prospect strategy, drafting, and the analysis (2026-09-16)
+
+Everything the owner asked for except voice notes, which they deferred.
+Migrations **0133** (`linkedin_prospect_messages`) and **0134** (the analysis
+entitlement) applied.
+
+### The analysis: the arithmetic is the dangerous part, not the model
+
+`email_events` still holds 254 false `replied` rows — a whole mailbox counted as
+prospect replies against two messages ever sent, rendering 12,700%. A model
+handed numbers like those writes a confident, well-argued report about a rep who
+is doing brilliantly, and nobody reading it can tell. So every number a manager
+acts on is computed in `gatherStats`, and the prompt forbids the model from
+computing, restating or estimating a rate.
+
+- **No rate below 20 actions.** Two sends and one reply is not a 50% reply rate.
+- **`null` is rendered as "not enough data", never as 0%.** Zero means thirty
+  were sent and nobody answered — a finding. Null means we have not sent enough
+  to say — not a finding. Telling a rep the wrong one says their approach failed
+  when it has not been tried.
+- **A rate above 100 is refused.** That is the 12,700% shape; printing it either
+  looks broken or hides a data fault.
+- **`OUTCOME_UNKNOWN` sits in the denominator AND is reported separately.**
+  Excluding it inflates every rate; including it silently asserts what nobody can
+  support.
+- **The caveat is computed, not asked for.** A model told "add a caveat if the
+  data is thin" adds one when it *feels* uncertain, which is neither the same
+  thing nor checkable. It shares `RATE_FLOOR` with `rateOf`, so the sentence and
+  the missing percentage cannot disagree.
+
+### The drafting model is never shown the recipient
+
+Not a privacy gesture — the anti-fabrication control. A model shown "VP
+Engineering at Acme, Berlin" writes "loved what you're building on the payments
+side": plausible, specific, invented. Rule 4 forbids exactly that, and no prompt
+instruction reliably stops a model using a fact it can see, so it cannot see one.
+It writes a TEMPLATE; `resolveBody` fills it from what Outlio literally observed
+and refuses when it did not. The absence is stated as a fact it can act on
+("YOU HAVE NOT BEEN GIVEN ANY INFORMATION ABOUT THE RECIPIENT") rather than as a
+rule to obey.
+
+The draft lands in the textarea, never in the record. The rep is the author and
+the analysis groups by author.
+
+### Defects found while building
+
+- ⚠️ **I did not build "and admin", which the owner stated explicitly.**
+  `analysisEntitled` read `plans.limits` and returned false with no plan, while
+  `resolveModules` has a documented platform-admin bypass. The symptom was
+  immediate and measurable: **27 of 33 workspace owners in production carry no
+  `plan_id`**, so they hold every module through that bypass and were refused the
+  analysis — a workspace with the LinkedIn module and no way to analyse it. The
+  same bypass exists in `decideAccess` and `hasHubbleEntitlement`; this is now the
+  fourth place and it agrees with the other three.
+- ⚠️ **A real payload leak, caught by `module-page-guard.test.ts`.** Gating the
+  analysis page only on `report.team.view` meant a manager on a plan with reports
+  but without CRM got the layout's rendered refusal while the page still computed
+  and shipped a colleague's numbers in the RSC payload. The two permissions do
+  not nest.
+- **Campaigns was never in the nav.** The only way to reach a workflow was to
+  know the URL. Both it and the analysis are now linked.
+- **The flow engine's `addTag` was duplicated** rather than shared. Extracted to
+  `lib/crm/tags.ts` — the partial unique index handling and its race fallback is
+  exactly the part two copies get wrong differently.
+
+### Verified
+
+3,894 unit tests across 226 files; 10 integration tests walking one enrolment end
+to end against real staging Supabase; typecheck 0; lint 0 errors. 0133 and 0134
+validated against real Postgres 16 — every constraint both ways, and 0134's
+split guard proven to fire. Eight mutations on the analysis arithmetic and the
+prompt guards, eight caught.
+
+Exercised against production with a real model: the caveat fired first, the reply
+rate read "not enough data" rather than 0%, the per-person breakdown rendered,
+and three findings came back commenting on the copy without inventing a single
+number. Test data removed afterwards.
+
+### Not built
+
+Voice notes — deferred by the owner. Design settled (paperclip delivery,
+`prepares: 'asset'`, render on release); nothing stubbed.

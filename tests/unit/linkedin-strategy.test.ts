@@ -262,6 +262,25 @@ describe('the analysis model is given counts it cannot recompute', () => {
     expect(gate, 'rows are read before the plan is checked').toBeLessThan(read_)
   })
 
+  it('lets a platform admin through, which the owner asked for explicitly', () => {
+    /*
+     * ⚠️ "for premium users only AND ADMIN" — the second half was missing on the
+     * first pass, and the symptom was immediate: 27 of 33 workspace owners in
+     * production carry no `plan_id`, so `resolveModules` grants them every
+     * module through its own admin bypass while this function refused them the
+     * analysis. A workspace with the LinkedIn module and no way to analyse it.
+     *
+     * The same bypass exists in `decideAccess`, `hasHubbleEntitlement` and
+     * `resolveModules`, whose comment says extending it "keeps one rule rather
+     * than three". This is the fourth place, and it now agrees.
+     */
+    const fn = body(ANALYSIS, 'export async function analysisEntitled')
+    expect(fn).toMatch(/profile\?\.role === 'admin'/)
+    const bypass = fn.indexOf("role === 'admin'")
+    const planCheck = fn.indexOf('linkedin_analysis_enabled')
+    expect(bypass, 'the admin bypass runs after the plan check').toBeLessThan(planCheck)
+  })
+
   it('reads the entitlement from plans.limits, never from a plan name', () => {
     /*
      * CLAUDE.md: "All plan limits come from `plans.limits` JSONB at runtime.
