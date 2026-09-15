@@ -8,6 +8,12 @@
 -- with the service role and trust the workspace id they are given; the other
 -- workspace is what proves they touch nothing outside it.
 --
+-- ⚠️ EVERY RUN IS CAUGHT AND RECORDED, NOT LEFT TO ABORT THE SCRIPT. A
+-- function that raises part way — as one that let another workspace's contact
+-- reach crm_assign_contact_owner would — must show up as named failed checks.
+-- An aborted script says nothing about which rule broke, and a mutation run
+-- cannot tell it from a syntax error.
+--
 -- Run it with:
 --   scripts/check-migration.sh supabase/migrations/0129_crm_owner_change_history.sql \
 --     supabase/migrations/smoke/0129_crm_owner_change_history.smoke.sql
@@ -127,7 +133,11 @@ end $$;
  * k5 (unowned) moves; k3 is already S's; k4 is deleted; k9 is another
  * workspace's; the last id exists nowhere. One change, one no-op, three skips.
  */
-insert into ran values ('bulk', public.crm_bulk_assign_contacts(
+do $$
+declare v jsonb;
+begin
+  begin
+    v := public.crm_bulk_assign_contacts(
   'aaaaaaaa-0000-4000-8000-000000000001',
   array[
     'c0000000-0000-4000-8000-000000000005',
@@ -138,7 +148,12 @@ insert into ran values ('bulk', public.crm_bulk_assign_contacts(
   ]::uuid[],
   '00000000-0000-4000-8000-0000000000b1',
   '00000000-0000-4000-8000-00000000000a'
-));
+);
+  exception when others then
+    v := jsonb_build_object('raised', sqlerrm);
+  end;
+  insert into ran values ('bulk', v);
+end $$;
 
 insert into smoke_checks (label, ok)
 select 'bulk: reports one changed, one already theirs, three skipped',
@@ -176,12 +191,21 @@ select 'bulk: the already-theirs, deleted and other-workspace contacts kept thei
        and (select owner_user_id from public.crm_contacts where id = 'c0000000-0000-4000-8000-000000000004') = '00000000-0000-4000-8000-0000000000a1'
        and (select owner_user_id from public.crm_contacts where id = 'c0000000-0000-4000-8000-000000000009') = '00000000-0000-4000-8000-0000000000a1';
 
-insert into ran values ('unassign', public.crm_bulk_assign_contacts(
+do $$
+declare v jsonb;
+begin
+  begin
+    v := public.crm_bulk_assign_contacts(
   'aaaaaaaa-0000-4000-8000-000000000001',
   array['c0000000-0000-4000-8000-000000000005']::uuid[],
   null,
   '00000000-0000-4000-8000-00000000000a'
-));
+);
+  exception when others then
+    v := jsonb_build_object('raised', sqlerrm);
+  end;
+  insert into ran values ('unassign', v);
+end $$;
 
 insert into smoke_checks (label, ok)
 select 'bulk: unassigning writes history too, to nobody',
@@ -218,12 +242,21 @@ begin
            and (select owner_user_id from public.crm_companies where id = 'c0c00000-0000-4000-8000-000000000001') = '00000000-0000-4000-8000-0000000000a1';
 end $$;
 
-insert into ran values ('handover', public.crm_handover_member_records(
+do $$
+declare v jsonb;
+begin
+  begin
+    v := public.crm_handover_member_records(
   'aaaaaaaa-0000-4000-8000-000000000001',
   '00000000-0000-4000-8000-0000000000a1',
   '00000000-0000-4000-8000-0000000000b1',
   '00000000-0000-4000-8000-00000000000a'
-));
+);
+  exception when others then
+    v := jsonb_build_object('raised', sqlerrm);
+  end;
+  insert into ran values ('handover', v);
+end $$;
 
 insert into smoke_checks (label, ok)
 select 'handover: counts three contacts (one deleted), one company, one deal, three open tasks (one deleted)',
@@ -292,12 +325,21 @@ select 'handover: L''s records in the other workspace are untouched',
        and (select assigned_to_user_id from public.crm_tasks where id = '7a500000-0000-4000-8000-000000000009') = '00000000-0000-4000-8000-0000000000a1';
 
 -- A resubmitted removal must do nothing a second time.
-insert into ran values ('handover-again', public.crm_handover_member_records(
+do $$
+declare v jsonb;
+begin
+  begin
+    v := public.crm_handover_member_records(
   'aaaaaaaa-0000-4000-8000-000000000001',
   '00000000-0000-4000-8000-0000000000a1',
   '00000000-0000-4000-8000-0000000000b1',
   '00000000-0000-4000-8000-00000000000a'
-));
+);
+  exception when others then
+    v := jsonb_build_object('raised', sqlerrm);
+  end;
+  insert into ran values ('handover-again', v);
+end $$;
 
 insert into smoke_checks (label, ok)
 select 'handover: running it again moves nothing and writes no history',
@@ -309,12 +351,21 @@ select 'handover: running it again moves nothing and writes no history',
   from ran where label = 'handover-again';
 
 -- With no successor, in O: records are unassigned, with history.
-insert into ran values ('to-nobody', public.crm_handover_member_records(
+do $$
+declare v jsonb;
+begin
+  begin
+    v := public.crm_handover_member_records(
   'bbbbbbbb-0000-4000-8000-000000000002',
   '00000000-0000-4000-8000-0000000000a1',
   null,
   '00000000-0000-4000-8000-00000000000a'
-));
+);
+  exception when others then
+    v := jsonb_build_object('raised', sqlerrm);
+  end;
+  insert into ran values ('to-nobody', v);
+end $$;
 
 insert into smoke_checks (label, ok)
 select 'handover: to nobody unassigns contacts and tasks, and still records it',
