@@ -336,13 +336,51 @@ describe('design — the product has loading and error states', () => {
     expect(source, 'error.tsx renders a stack').not.toContain('error.stack')
   })
 
-  it('the loading state respects prefers-reduced-motion', () => {
+  /**
+   * ⚠️ EVERY `loading.tsx` IN THE PRODUCT, NOT JUST THE GROUP'S.
+   *
+   * These assertions used to name `app/(product)/loading.tsx` alone, which was
+   * correct while it was the only one. Adding `crm/loading.tsx` created a second
+   * skeleton that no guard looked at — the same shape as the design rules being
+   * enforced on five surfaces out of fourteen, and as `Reveal` being policed in
+   * two components.
+   *
+   * A skeleton is exactly where an unguarded `animate-pulse` hides: it is
+   * decorative, it renders for a fraction of a second, and nobody reviewing a
+   * page ever sees it running.
+   */
+  const loadingFiles = () =>
+    sourceFiles(join(ROOT, 'app/(product)'))
+      .filter((f) => f.endsWith('loading.tsx'))
+      .map((f) => ({ file: relative(ROOT, f).split('\\').join('/'), code: code(f) }))
+
+  it('finds every loading state', () => {
+    // Vacuity: if the glob stops matching, every assertion below passes over
+    // nothing — which is how the second skeleton went unchecked to begin with.
+    expect(loadingFiles().length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('every loading state respects prefers-reduced-motion', () => {
     // House convention, matching ExtractionDashboard's live indicator.
-    const source = code(join(GROUP, 'loading.tsx'))
-    expect(source).toContain('motion-safe:animate-pulse')
-    expect(source, 'an unguarded animate-pulse ignores reduced-motion').not.toMatch(
-      /className="[^"]*[^:]animate-pulse/,
-    )
+    for (const { file, code: source } of loadingFiles()) {
+      expect(source, `${file} has no motion-safe pulse`).toContain('motion-safe:animate-pulse')
+      expect(source, `${file}: an unguarded animate-pulse ignores reduced-motion`).not.toMatch(
+        /className="[^"]*[^:]animate-pulse/,
+      )
+    }
+  })
+
+  it('every loading state announces itself once', () => {
+    /*
+     * A screen reader should say "Loading" once, not narrate a dozen decorative
+     * blocks — which is why every bar carries `aria-hidden`. Asserted per file
+     * because the second skeleton could have shipped without either.
+     */
+    for (const { file, code: source } of loadingFiles()) {
+      expect(source, `${file} is not announced`).toContain('aria-busy')
+      expect(source, `${file} has no sr-only announcement`).toContain('sr-only')
+      expect(source, `${file} does not hide its decorative bars`).toContain('aria-hidden')
+    }
   })
 
   it('announces loading once, not a dozen decorative bars', () => {
