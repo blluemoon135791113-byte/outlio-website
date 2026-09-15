@@ -8783,6 +8783,10 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_retry_waiting_leads: {
+        Args: { p_limit: number; p_review_after?: string }
+        Returns: Json
+      }
       crm_route_batch: {
         Args: { p_batch_id: string; p_workspace_id: string }
         Returns: Json

@@ -104,6 +104,11 @@ describe('every background worker has a trigger', () => {
       definedIn: 'lib/crm/metrics.ts',
       breaks: 'crm_reporting_daily is never written and every report reads zero',
     },
+    {
+      name: 'retryWaitingLeads',
+      definedIn: 'lib/crm/routing.ts',
+      breaks: 'a lead left unassigned waits forever after the rule that covers it is published',
+    },
     /*
      * ⚠️ FOUND THE SAME WAY, AND EASY TO MISTAKE FOR COVERED. The TARGETED
      * claim (`claimAndProcessJob`) has three callers, so extraction plainly
