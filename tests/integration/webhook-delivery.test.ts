@@ -16,6 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { verifyWebhookSignature } from '@/lib/api/signing'
 import { deliverPendingWebhooks, publishEvent } from '@/lib/api/webhooks'
+import { sealWebhookSecret } from '@/lib/api/webhook-secret'
 import { adminClient, createAuthUser, deleteTestUser, hasSupabaseEnv } from './helpers'
 
 const RUN = Date.now().toString(36)
@@ -73,7 +74,22 @@ beforeAll(async () => {
       // The check constraint requires https; localhost is fine for the test
       // because `deliverPendingWebhooks` does not inspect the scheme.
       url: `http://127.0.0.1:${port}/hook`,
-      signing_secret: SECRET,
+      /*
+       * ╔═══════════════════════════════════════════════════════════════════════╗
+       * ║  ⚠️ SEALED, BECAUSE A RAW SECRET HERE TESTED THE LEGACY PATH ONLY.   ║
+       * ║                                                                       ║
+       * ║  `openWebhookSecret` TOLERATES plaintext on purpose — a subscription   ║
+       * ║  created before the encryption change must keep delivering — and logs  ║
+       * ║  when it finds one. Seeding a raw secret meant every delivery test     ║
+       * ║  took that legacy branch, printing "[webhooks] signing secret is not   ║
+       * ║  encrypted" on each run, and the decrypt-then-sign path that EVERY     ║
+       * ║  production row takes was never exercised end to end.                 ║
+       * ║                                                                       ║
+       * ║  Unit tests cover seal/open round-trips; they cannot cover "the        ║
+       * ║  delivered signature verifies after a decrypt". That gap is this.      ║
+       * ╚═══════════════════════════════════════════════════════════════════════╝
+       */
+      signing_secret: sealWebhookSecret(SECRET),
       events: [],
       created_by: user.id,
     })
@@ -351,7 +367,7 @@ describeIf('subscription filtering', () => {
         workspace_id: workspaceId,
         name: `Narrow ${RUN}`,
         url: `http://127.0.0.1:${port}/narrow`,
-        signing_secret: SECRET,
+        signing_secret: sealWebhookSecret(SECRET),
         events: ['crm.contact.created'],
         created_by: user!.id,
       })
