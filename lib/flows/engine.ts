@@ -69,7 +69,22 @@ export type FlowContext = {
 }
 
 export type ActionResult =
-  | { ok: true; output?: JsonObject; creditsUsed?: number }
+  | {
+      ok: true
+      output?: JsonObject
+      creditsUsed?: number
+      /**
+       * The step deliberately did nothing, and says why.
+       *
+       * ⚠️ A SKIP IS NOT A SUCCESS AND NOT A FAILURE. §10: "SKIP is an explicit
+       * branch outcome, not a swallowed error." Reported as success, a step that
+       * left an owned contact alone reads as "assigned" in the run trace;
+       * reported as failure, it halts a run that did exactly what it should.
+       * `flow_step_status` has had a `skipped` value all along and nothing ever
+       * wrote it. The run continues to the next step.
+       */
+      skipped?: { code: string; message: string }
+    }
   | { ok: false; code: string; message: string; retryable: boolean }
 
 export type ActionHandler = (
@@ -484,11 +499,17 @@ export async function advanceRun(
 
     const duration = Date.now() - startedAt
 
+    // The skip reason rides in `output`, not `error_message`: the run trace
+    // renders an error message as a failure.
+    const skipped = result.ok ? result.skipped : undefined
+
     await db
       .from('flow_step_runs')
       .update({
-        status: result.ok ? 'succeeded' : 'failed',
-        output: result.ok ? ((result.output ?? {}) as Json) : {},
+        status: !result.ok ? 'failed' : skipped ? 'skipped' : 'succeeded',
+        output: result.ok
+          ? ((skipped ? { ...(result.output ?? {}), skipped } : (result.output ?? {})) as Json)
+          : {},
         error_code: result.ok ? null : result.code,
         error_message: result.ok ? null : result.message,
         credits_used: result.ok ? (result.creditsUsed ?? 0) : 0,

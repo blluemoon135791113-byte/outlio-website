@@ -24,6 +24,7 @@ import {
   type ImportMapping,
 } from '@/lib/crm/csv-import'
 import { ingestExtractionJob, runCsvImport, undoBatch } from '@/lib/crm/ingest'
+import { routeBatch, type RoutingSummary } from '@/lib/crm/routing'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
@@ -41,9 +42,47 @@ export type ImportPreview = {
 
 export type ImportState =
   | { step: 'preview'; preview: ImportPreview }
-  | { step: 'done'; batchId: string; created: number; matched: number; skipped: number }
+  | {
+      step: 'done'
+      batchId: string
+      created: number
+      matched: number
+      skipped: number
+      /** Null when routing did not run; the import itself still succeeded. */
+      routing: RoutingSummary | null
+    }
   | { step: 'error'; error: string }
   | null
+
+/**
+ * Routes what an import just created — §5 intake routing.
+ *
+ * ⚠️ NEVER THROWS, AND THAT IS THE POINT. By the time this runs the contacts
+ * exist. If routing failed inside the import's own try/catch, the person would
+ * be told "That import did not finish. Nothing was changed." about an import
+ * that finished and changed a great deal. A routing failure is reported as
+ * routing not running; the leads stay unassigned and can be assigned from
+ * Contacts, and a later run of the same batch routes each lead once.
+ */
+async function routeImportedBatch(
+  workspaceId: string,
+  batchId: string,
+): Promise<RoutingSummary | null> {
+  try {
+    return await routeBatch(workspaceId, batchId)
+  } catch {
+    return null
+  }
+}
+
+/** How routing is described after an import, in the words the result screen uses. */
+function routingParts(routing: RoutingSummary | null): string[] {
+  if (!routing) return ['routing did not run — assign them from Contacts']
+  const parts: string[] = []
+  if (routing.assigned > 0) parts.push(`${routing.assigned} routed to an owner`)
+  if (routing.unassigned > 0) parts.push(`${routing.unassigned} waiting for an owner`)
+  return parts
+}
 
 /**
  * ⚠️ A HARD CEILING ON WHAT IS PARSED IN A REQUEST. A 200MB CSV would exhaust
@@ -190,6 +229,8 @@ export async function commitImport(
       name: filename,
     })
 
+    const routing = await routeImportedBatch(ctx.workspace.id, result.batchId)
+
     revalidatePath('/crm/contacts')
     revalidatePath('/dashboard')
 
@@ -202,6 +243,7 @@ export async function commitImport(
       // second copy — which is the canonical-contact rule doing its job.
       matched: result.contactsMatched,
       skipped: result.rowsSkipped,
+      routing,
     }
   } catch {
     return { step: 'error', error: 'That import did not finish. Nothing was changed.' }
@@ -276,6 +318,8 @@ export async function sendExtractionToCrm(
       actorUserId: ctx.userId,
     })
 
+    const routing = await routeImportedBatch(ctx.workspace.id, result.batchId)
+
     revalidatePath('/crm/contacts')
     revalidatePath('/dashboard/jobs')
 
@@ -285,6 +329,7 @@ export async function sendExtractionToCrm(
       parts.push(`${result.contactsMatched} already in your CRM`)
     }
     if (result.rowsSkipped > 0) parts.push(`${result.rowsSkipped} skipped`)
+    if (result.contactsCreated > 0) parts.push(...routingParts(routing))
 
     return { ok: true, message: `${parts.join(', ')}.` }
   } catch (error) {

@@ -31,35 +31,14 @@ export type FlowTemplate = {
 }
 
 export const FLOW_TEMPLATES: FlowTemplate[] = [
-  {
-    key: 'new_lead_assignment',
-    name: 'New lead assignment',
-    description:
-      'Share incoming contacts across the team in turn, and give whoever gets one a task to work it.',
-    definition: {
-      trigger: { type: 'contact_created', config: {} },
-      entryStepId: 'assign',
-      allowReEnrollment: false,
-      steps: [
-        {
-          id: 'assign',
-          type: 'ACTION',
-          label: 'Share out in turn',
-          action: 'ROUND_ROBIN',
-          config: {},
-          next: 'task',
-        },
-        {
-          id: 'task',
-          type: 'ACTION',
-          label: 'Task the new owner',
-          action: 'CREATE_TASK',
-          config: { title: 'Research and reach out to this new lead' },
-          next: null,
-        },
-      ],
-    },
-  },
+  /*
+   * ⚠️ "New lead assignment" was removed on 2026-09-14, deliberately. It fired
+   * on contact_created, which only a member adding someone by hand emits — and
+   * that contact already belongs to them — so its ROUND_ROBIN step took
+   * contacts away from the people who added them. Once assignment steps began
+   * skipping owned contacts it could never assign anything. Distributing new
+   * leads is what intake routing rules (0127) are for.
+   */
   {
     key: 'list_follow_up',
     name: 'Follow up on a list',

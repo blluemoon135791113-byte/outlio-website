@@ -28,6 +28,9 @@ const fail = (code: string, message: string, retryable = false): ActionResult =>
   retryable,
 })
 
+/** Why an assignment step left a contact alone. Shown in the run trace. */
+const ALREADY_OWNED_MESSAGE = 'This contact already has an owner, so it was left with them.'
+
 /** Postgres unique-violation. Adding someone already on a list is not an error. */
 const UNIQUE_VIOLATION = '23505'
 
@@ -44,13 +47,45 @@ const assignOwner: ActionHandler = async (ctx, config) => {
   if (!userId) return fail('NO_USER', 'This step has no person configured to assign to.')
 
   const db = createAdminClient()
-  const { error } = await db
+
+  /*
+   * ⚠️ ONLY AN UNOWNED CONTACT IS CLAIMED — owner decision, 2026-09-14.
+   *
+   * `contact_created` is emitted only when a member adds someone by hand, and
+   * that path makes the member the owner. An unconditional update here took the
+   * contact away from them: production shows two contacts added by hand on
+   * 2026-09-03 reassigned about two minutes later, `by: flow`. §5: "Creator
+   * ownership takes precedence for member-added records."
+   *
+   * The condition is IN the update rather than read first, so a contact claimed
+   * between the read and the write is not overwritten.
+   */
+  const { data: claimed, error } = await db
     .from('crm_contacts')
     .update({ owner_user_id: userId })
     .eq('workspace_id', ctx.workspaceId)
     .eq('id', ctx.contactId)
+    .is('owner_user_id', null)
+    .select('id')
 
   if (error) return fail('ASSIGN_FAILED', 'Could not assign this contact.', true)
+
+  if (!claimed || claimed.length === 0) {
+    const { data: existing } = await db
+      .from('crm_contacts')
+      .select('owner_user_id')
+      .eq('workspace_id', ctx.workspaceId)
+      .eq('id', ctx.contactId)
+      .maybeSingle()
+
+    if (!existing) return fail('NO_CONTACT', 'That contact is no longer in this workspace.')
+
+    return {
+      ok: true,
+      output: { assignedTo: existing.owner_user_id },
+      skipped: { code: 'ALREADY_OWNED', message: ALREADY_OWNED_MESSAGE },
+    }
+  }
 
   /*
    * ⚠️ THE ACTIVITY IS RECORDED THROUGH `recordActivity`, which freezes
@@ -129,7 +164,26 @@ const roundRobin: ActionHandler = async (ctx, config) => {
 
   if (error) return fail('ASSIGN_FAILED', 'Could not assign this contact.', true)
 
-  const result = (data ?? {}) as { assigned_to?: string; activity_id?: string | null }
+  const result = (data ?? {}) as {
+    assigned_to?: string
+    activity_id?: string | null
+    skipped?: boolean
+    from?: string | null
+  }
+
+  /*
+   * ⚠️ 0127 SKIPS AN OWNED CONTACT INSIDE THE LOCK, and says so. Reported as a
+   * skip — not a success that announces an assignment, and not a failure that
+   * halts the run.
+   */
+  if (result.skipped) {
+    return {
+      ok: true,
+      output: { assignedTo: result.from ?? null },
+      skipped: { code: 'ALREADY_OWNED', message: ALREADY_OWNED_MESSAGE },
+    }
+  }
+
   const assignedTo = result.assigned_to
   if (!assignedTo) return fail('ASSIGN_FAILED', 'Could not assign this contact.', true)
 
