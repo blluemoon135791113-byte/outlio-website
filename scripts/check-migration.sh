@@ -133,9 +133,30 @@ else
   # below stops there for good instead of moving on.
   export PGCONNECT_TIMEOUT=5
 
+  # ⚠️ STOPPED WITH pg_ctl AND WAITED FOR, NOT JUST KILLED. On Windows `kill`
+  # does not wait for the postmaster or its backends to exit, so `rm -rf` ran
+  # while they still held data/ open: the files went, the directory stayed,
+  # and every run left an empty outlio-sqlcheck.* behind in the temp root.
+  stop_cluster() {
+    if [ -n "${PGCHECK_PID:-}" ]; then
+      pg_ctl -D "$PGCHECK_DIR/data" -m immediate -w -t 30 stop >/dev/null 2>&1 \
+        || kill "$PGCHECK_PID" >/dev/null 2>&1 || true
+      wait "$PGCHECK_PID" 2>/dev/null || true
+      PGCHECK_PID=""
+    fi
+  }
+
   cleanup() {
-    if [ -n "${PGCHECK_PID:-}" ]; then kill "$PGCHECK_PID" >/dev/null 2>&1 || true; fi
-    rm -rf "$PGCHECK_DIR" >/dev/null 2>&1 || true
+    stop_cluster
+    # A handle can outlive its process by a moment on Windows; retry briefly.
+    for _ in $(seq 1 10); do
+      rm -rf "$PGCHECK_DIR" >/dev/null 2>&1 || true
+      [ -e "$PGCHECK_DIR" ] || break
+      sleep 1
+    done
+    if [ -e "$PGCHECK_DIR" ]; then
+      echo "warning: could not remove $PGCHECK_DIR" >&2
+    fi
   }
   trap cleanup EXIT
 
@@ -181,8 +202,7 @@ else
       PGCHECK_PORT=$p
       break
     fi
-    kill "$PGCHECK_PID" >/dev/null 2>&1 || true
-    PGCHECK_PID=""
+    stop_cluster
   done
 
   if [ -z "$ready" ]; then
