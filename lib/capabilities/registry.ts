@@ -40,7 +40,11 @@ import type { Permission } from '@/lib/workspaces/permissions'
  * Checked before bumping: the five `flow_versions` rows in production carry no
  * pin at all, and absent is not stale, so none of them starts warning.
  */
-export const CAPABILITY_REGISTRY_VERSION = 3
+/*
+ * ⚠️ 4 SINCE 2026-09-16, when `linkedin.draft` and `linkedin.analysis` landed.
+ * A published flow definition pins this number, so it only ever grows.
+ */
+export const CAPABILITY_REGISTRY_VERSION = 4
 
 export type CapabilityStatus = 'active' | 'deprecated'
 
@@ -155,6 +159,36 @@ export const CAPABILITIES = {
    * attempt behind it.
    */
   'flows.copilot': { isAi: true, credits: 0, label: 'Generate a flow from a description', permission: 'flow.manage', status: 'active', since: 3 },
+
+  /*
+   * ⚠️ `crm.contact.edit`, NOT `flow.manage`. The copilot above is gated on
+   * `flow.manage` because it AUTHORS AUTOMATION that will act unattended. This
+   * one drafts a message a human then reads, edits and sends by hand — ordinary
+   * setter work, and requiring a manager would mean drafting stops whenever
+   * nobody senior is free.
+   *
+   * Priced 0 on DECISION-16's standing rule: meter it, charge nothing, let
+   * `hubble_calls` fill with real rows before a number is chosen. It is a much
+   * shorter generation than the copilot and has no repair attempt.
+   */
+  'linkedin.draft': { isAi: true, credits: 0, label: 'Draft a LinkedIn message from your instruction', permission: 'crm.contact.edit', status: 'active', since: 4 },
+
+  /*
+   * ⚠️ `report.team.view` — A MANAGER PERMISSION, AND DELIBERATELY SO.
+   *
+   * The owner asked for a report "for each assigned users and overall as well".
+   * That is one rep's numbers shown to somebody else, which is the same
+   * disclosure `report.team.view` already governs on the reports page. Gating it
+   * on `crm.contact.edit` would let any setter read a colleague's reply rate and
+   * a summary of their private messages.
+   *
+   * ⚠️ THE PLAN GATE IS SEPARATE AND IS NOT EXPRESSIBLE HERE. The owner made
+   * this premium-only; `Capability.permission` is a ROLE check, not a plan
+   * check. `lib/linkedin/analysis.ts` asks `plans.limits` as well, and the two
+   * are different questions: what this person may see, and what this workspace
+   * paid for.
+   */
+  'linkedin.analysis': { isAi: true, credits: 0, label: 'Analyse LinkedIn messaging strategy', permission: 'report.team.view', status: 'active', since: 4 },
 } as const satisfies Record<string, Capability>
 
 export type CapabilityId = keyof typeof CAPABILITIES

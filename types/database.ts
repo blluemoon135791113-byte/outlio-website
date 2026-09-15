@@ -6591,6 +6591,54 @@ export type Database = {
           },
         ]
       }
+      linkedin_prospect_messages: {
+        Row: {
+          authored_by: string
+          body: string
+          contact_id: string
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["linkedin_prospect_message_kind"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          authored_by: string
+          body: string
+          contact_id: string
+          created_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["linkedin_prospect_message_kind"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          authored_by?: string
+          body?: string
+          contact_id?: string
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["linkedin_prospect_message_kind"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_prospect_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_prospect_messages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       linkedin_sender_actions: {
         Row: {
           contact_id: string | null
@@ -9933,6 +9981,7 @@ export type Database = {
         | "REPLY_RECORDED"
         | "MEETING_BOOKED_RECORDED"
         | "MEETING_HELD_RECORDED"
+      linkedin_prospect_message_kind: "OPENER" | "PITCH"
       linkedin_sender_status:
         | "unknown"
         | "owner_reviewed"
@@ -10367,6 +10416,7 @@ export const Constants = {
         "MEETING_BOOKED_RECORDED",
         "MEETING_HELD_RECORDED",
       ],
+      linkedin_prospect_message_kind: ["OPENER", "PITCH"],
       linkedin_sender_status: [
         "unknown",
         "owner_reviewed",

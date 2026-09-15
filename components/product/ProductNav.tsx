@@ -107,6 +107,20 @@ const LINKEDIN_SECTION: NavSection = {
   icon: 'crm',
   children: [
     { href: '/linkedin', label: 'Tasks' },
+    /*
+     * ⚠️ CAMPAIGNS WAS MISSING ENTIRELY UNTIL PHASE 20 — the section was built
+     * before the page existed, so the only way to reach a workflow was to know
+     * the URL. Same class of omission as the section having no layout.
+     */
+    { href: '/linkedin/campaigns', label: 'Campaigns' },
+    /*
+     * ⚠️ SHOWN TO EVERYONE THOUGH IT NEEDS `report.team.view` AND A PLAN, which
+     * matches `/crm/reports` directly above in CRM_SECTION: the page refuses
+     * independently and renders a designed explanation. Hiding a nav item is
+     * not access control (CLAUDE.md rule 8), and a link that silently vanishes
+     * is how a manager concludes a feature they pay for does not exist.
+     */
+    { href: '/linkedin/analysis', label: 'Strategy analysis' },
     { href: '/dashboard/settings/linkedin', label: 'Accounts' },
   ],
 }

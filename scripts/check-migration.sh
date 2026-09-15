@@ -208,7 +208,8 @@ for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_inge
           0125_linkedin_tasks 0126_contact_version_columns \
           0127_linkedin_plan_entitlement 0128_linkedin_campaigns \
           0129_linkedin_observations 0130_linkedin_workflows \
-          0131_crm_contacts_navigator_url; do
+          0131_crm_contacts_navigator_url 0132_linkedin_step_config \
+          0133_linkedin_prospect_messages 0134_linkedin_analysis_entitlement; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break

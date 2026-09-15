@@ -39,6 +39,7 @@ function pageLabel(pathname: string) {
    * above.
    */
   if (pathname.startsWith('/linkedin/campaigns')) return 'Campaigns'
+  if (pathname.startsWith('/linkedin/analysis')) return 'Strategy analysis'
   if (pathname.startsWith('/linkedin')) return 'LinkedIn'
   if (pathname.startsWith('/extension')) return 'Extension'
   return 'Overview'

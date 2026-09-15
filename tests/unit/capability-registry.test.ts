@@ -71,6 +71,9 @@ const SHIPPED_IDS = [
   'intelligence.summarize',
   // Registry version 3, 2026-09-14 — Phase 13's Flow Copilot.
   'flows.copilot',
+  // Phase 20 — registry version 4.
+  'linkedin.draft',
+  'linkedin.analysis',
 ] as const
 
 describe('the registry may only grow', () => {

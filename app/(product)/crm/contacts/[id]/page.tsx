@@ -11,8 +11,10 @@ import { listContactTimeline } from '@/lib/crm/activities'
 import { checkCollision } from '@/lib/crm/collision'
 import { contactStopRecord } from '@/lib/crm/contact-stop'
 import { EnrollContact } from '@/components/linkedin/EnrollContact'
+import { ProspectMessages, type ProspectMessageCard } from '@/components/linkedin/ProspectMessages'
 import { RecordObservation } from '@/components/linkedin/RecordObservation'
 import { profileReference } from '@/lib/linkedin/profile-reference'
+import { prospectMessages } from '@/lib/linkedin/prospect-messages'
 import { listWorkspaceSenders } from '@/lib/linkedin/senders'
 import { MoreDetails } from '@/components/crm/MoreDetails'
 import { ValueProvenance } from '@/components/crm/ValueProvenance'
@@ -109,6 +111,20 @@ export default async function ContactDetailPage({
     ? (await listWorkspaceSenders(ctx.workspace.id)).map((sender) => ({
         id: sender.senderId,
         label: sender.displayLabel,
+      }))
+    : []
+
+  /*
+   * ⚠️ ONLY WHEN THE MODULE IS ON, matching the senders read above. The panel
+   * below is hidden anyway, and a query nobody needs is still a round trip on
+   * every contact page in a workspace that does not use LinkedIn.
+   */
+  const prospectDrafts: ProspectMessageCard[] = ctx.modules.has('linkedin')
+    ? (await prospectMessages(ctx.workspace.id, id)).map((message) => ({
+        kind: message.kind,
+        body: message.body,
+        authorName: message.authorName,
+        updatedAt: message.updatedAt,
       }))
     : []
 
@@ -542,6 +558,20 @@ export default async function ContactDetailPage({
               */}
               <div className="border-t border-border pt-3">
                 <RecordObservation contactId={contact.id} />
+              </div>
+
+              {/*
+                ⚠️ THE REP'S OWN STRATEGY, KEPT SEPARATE FROM THE CAMPAIGN'S COPY
+                AND FROM WHAT WAS SENT.
+
+                A workflow step's body goes to everybody in that campaign.
+                `linkedin_tasks.body` is what was actually prepared for one card.
+                These two are what THIS rep decided to say to THIS person — and
+                the difference between two reps' openers is most of what the
+                strategy analysis reads (0133).
+              */}
+              <div className="border-t border-border pt-3">
+                <ProspectMessages contactId={contact.id} messages={prospectDrafts} />
               </div>
             </section>
           ) : null}
