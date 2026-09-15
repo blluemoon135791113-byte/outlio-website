@@ -3338,6 +3338,143 @@ export type Database = {
           },
         ]
       }
+      crm_routing_decisions: {
+        Row: {
+          activity_id: string | null
+          chosen_owner: string | null
+          contact_id: string
+          created_at: string
+          eligible_pool: string[]
+          evaluated: Json
+          id: string
+          intake_key: string
+          outcome: string
+          reason: string
+          rule_id: string | null
+          rule_snapshot: Json | null
+          rule_version: number | null
+          source: Database["public"]["Enums"]["crm_record_source"]
+          workspace_id: string
+        }
+        Insert: {
+          activity_id?: string | null
+          chosen_owner?: string | null
+          contact_id: string
+          created_at?: string
+          eligible_pool?: string[]
+          evaluated?: Json
+          id?: string
+          intake_key: string
+          outcome: string
+          reason: string
+          rule_id?: string | null
+          rule_snapshot?: Json | null
+          rule_version?: number | null
+          source: Database["public"]["Enums"]["crm_record_source"]
+          workspace_id: string
+        }
+        Update: {
+          activity_id?: string | null
+          chosen_owner?: string | null
+          contact_id?: string
+          created_at?: string
+          eligible_pool?: string[]
+          evaluated?: Json
+          id?: string
+          intake_key?: string
+          outcome?: string
+          reason?: string
+          rule_id?: string | null
+          rule_snapshot?: Json | null
+          rule_version?: number | null
+          source?: Database["public"]["Enums"]["crm_record_source"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_routing_decisions_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_routing_decisions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_routing_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          kind: string
+          max_open_workload: number | null
+          member_ids: string[]
+          name: string
+          position: number
+          published_at: string | null
+          sources: Database["public"]["Enums"]["crm_record_source"][]
+          status: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string | null
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          kind: string
+          max_open_workload?: number | null
+          member_ids?: string[]
+          name: string
+          position?: number
+          published_at?: string | null
+          sources?: Database["public"]["Enums"]["crm_record_source"][]
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string | null
+          version?: number
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          kind?: string
+          max_open_workload?: number | null
+          member_ids?: string[]
+          name?: string
+          position?: number
+          published_at?: string | null
+          sources?: Database["public"]["Enums"]["crm_record_source"][]
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string | null
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_routing_rules_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_saved_views: {
         Row: {
           created_at: string
@@ -8259,6 +8396,7 @@ export type Database = {
       }
       workspace_memberships: {
         Row: {
+          away_until: string | null
           created_at: string
           id: string
           invited_by: string | null
@@ -8268,6 +8406,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          away_until?: string | null
           created_at?: string
           id?: string
           invited_by?: string | null
@@ -8277,6 +8416,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          away_until?: string | null
           created_at?: string
           id?: string
           invited_by?: string | null
@@ -8639,6 +8779,19 @@ export type Database = {
         Args: {
           p_contact_id: string
           p_user_ids: string[]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      crm_route_batch: {
+        Args: { p_batch_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      crm_route_contact: {
+        Args: {
+          p_contact_id: string
+          p_intake_key: string
+          p_source: Database["public"]["Enums"]["crm_record_source"]
           p_workspace_id: string
         }
         Returns: Json
