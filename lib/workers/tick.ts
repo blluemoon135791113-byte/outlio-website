@@ -27,6 +27,7 @@ import 'server-only'
  * other customer on the same tick. Each step is isolated and its error is
  * recorded, not thrown.
  */
+import { releaseDue } from '@/lib/linkedin/walk'
 import { deliverPendingWebhooks, pruneDeliveryLog } from '@/lib/api/webhooks'
 import { advanceRun, claimWaitingRuns } from '@/lib/flows/engine'
 import { registerAllActions } from '@/lib/flows/actions'
@@ -72,6 +73,17 @@ const LIMITS = {
    * five per tick still gives every workspace a turn 1,440 times a day.
    */
   reportingWorkspacesPerTick: 5,
+  /*
+   * LinkedIn enrollments whose wait has elapsed, per tick.
+   *
+   * ⚠️ DELIBERATELY SMALL, AND NOT BECAUSE THE WORK IS EXPENSIVE. Each release
+   * produces a CARD A HUMAN MUST THEN PERFORM, against warm-up caps of 5–20
+   * actions per account per day. Releasing 100 would build an inbox nobody can
+   * clear and would not make a single extra action possible — the cap, not this
+   * number, is what governs throughput. A wait that elapses is picked up on the
+   * next tick five minutes later.
+   */
+  linkedinDuePerTick: 20,
 }
 
 /*
@@ -275,6 +287,34 @@ export async function runTick(): Promise<TickResult> {
     }
 
     return `${advanced} run(s) advanced, ${failures} failed`
+  }, began)
+
+  await runJob(result, 'release_linkedin_waits', async () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE TICK'S ONLY LINKEDIN JOB, AND IT RELEASES WAITS AND NOTHING   ║
+     * ║  ELSE.                                                                ║
+     * ║                                                                       ║
+     * ║  Every other transition in that channel is driven by a person          ║
+     * ║  recording what they did — `recordOutcome` advances the enrolment       ║
+     * ║  itself, because the moment the enrolment stops waiting on a human IS   ║
+     * ║  the moment they answer. A worker that also chased task steps would be  ║
+     * ║  asking "has somebody done this yet" on a schedule, which is what the   ║
+     * ║  Action Inbox is for.                                                  ║
+     * ║                                                                       ║
+     * ║  ⚠️ IT STILL SENDS NOTHING. Releasing a wait creates the next CARD.    ║
+     * ║  Rule 1 is unchanged: no request reaches linkedin.com from here or      ║
+     * ║  from anything this calls.                                             ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     *
+     * ⚠️ BEFORE THIS EXISTED, A WAIT NEVER ELAPSED. `lib/workers/tick.ts` had
+     * zero LinkedIn references, so a workflow containing "wait 3 days" parked
+     * its enrolment and nothing ever moved it — indistinguishable, from the
+     * outside, from a sequence that had quietly stopped. The same shape as the
+     * reporting rollup that had no trigger until 2026-09-12.
+     */
+    const outcome = await releaseDue(LIMITS.linkedinDuePerTick)
+    return `${outcome.advanced} advanced, ${outcome.failed} failed, of ${outcome.considered} due`
   }, began)
 
   await runJob(result, 'deliver_webhooks', async () => {

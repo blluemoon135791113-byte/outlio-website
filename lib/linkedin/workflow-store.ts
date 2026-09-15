@@ -22,7 +22,7 @@ export async function getWorkflow(
 ): Promise<WorkflowStep[]> {
   const { data, error } = await createAdminClient()
     .from('linkedin_workflow_steps')
-    .select('id, position, action, body, wait_days')
+    .select('id, position, action, body, wait_days, config')
     .eq('workspace_id', workspaceId)
     .eq('campaign_id', campaignId)
     .order('position', { ascending: true })
@@ -51,6 +51,17 @@ export async function getWorkflow(
       action: row.action,
       body: row.body,
       waitDays: row.wait_days,
+      /*
+       * ⚠️ COERCED TO AN OBJECT. `jsonb` can legally hold a string, a number or
+       * `null`, and 0132's default is `'{}'` only for rows written after it —
+       * every step created by 0130 has whatever the column defaulted to. A
+       * caller doing `config.tag` on a non-object gets `undefined` at best and
+       * throws at worst.
+       */
+      config:
+        row.config && typeof row.config === 'object' && !Array.isArray(row.config)
+          ? (row.config as Record<string, unknown>)
+          : {},
     }))
 }
 
@@ -60,6 +71,8 @@ export type DraftStep = {
   action: string
   body: string | null
   waitDays: number | null
+  /** Per-action settings (0132). `{}` for every action but `ADD_TAG`. */
+  config: Record<string, unknown>
 }
 
 /**
@@ -98,6 +111,7 @@ export async function saveWorkflow(input: {
     action: step.action as WorkflowStep['action'],
     body: step.body,
     waitDays: step.waitDays,
+    config: step.config,
   }))
 
   const compiled = compileWorkflow(draft)
@@ -134,6 +148,7 @@ export async function saveWorkflow(input: {
         action: step.action as WorkflowStep['action'],
         body: step.body,
         wait_days: step.waitDays,
+        config: step.config as never,
       })
       .eq('workspace_id', input.workspaceId)
       .eq('campaign_id', input.campaignId)
@@ -158,6 +173,7 @@ export async function saveWorkflow(input: {
         action: step.action as WorkflowStep['action'],
         body: step.body,
         wait_days: step.waitDays,
+        config: step.config as never,
       })),
     )
 

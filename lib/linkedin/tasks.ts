@@ -38,6 +38,7 @@ import {
   type SenderCondition,
 } from '@/lib/linkedin/preflight'
 import { contactIsStopped } from '@/lib/crm/contact-stop'
+import { advanceAfterTask } from '@/lib/linkedin/walk'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type ReleaseResult =
@@ -220,7 +221,7 @@ export async function recordOutcome(input: {
 
   const { data: task } = await db
     .from('linkedin_tasks')
-    .select('id, kind, state, sender_id, logical_action_id')
+    .select('id, kind, state, sender_id, logical_action_id, enrollment_id')
     .eq('workspace_id', input.workspaceId)
     .eq('id', input.taskId)
     .maybeSingle()
@@ -281,6 +282,45 @@ export async function recordOutcome(input: {
   if (error) {
     console.error('linkedin outcome write failed', { taskId: task.id })
     return { ok: false, error: 'That result could not be recorded.' }
+  }
+
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THE SEQUENCE MOVES HERE, AFTER THE OUTCOME IS DURABLE — AND A FAILURE ║
+   * ║  TO MOVE MUST NOT UNDO IT.                                                ║
+   * ║                                                                           ║
+   * ║  The operator has already performed a real action against a real person.   ║
+   * ║  Returning an error now would invite them to record it again, which is     ║
+   * ║  how one connection request becomes two. The outcome is the fact; the      ║
+   * ║  next card is a consequence, and a missing consequence is recoverable      ║
+   * ║  (the worker picks the enrolment up) while a duplicated action is not.    ║
+   * ║                                                                           ║
+   * ║  ⚠️ IT IS ALSO NOT DONE BY THE TICK. The enrolment is waiting on a person, ║
+   * ║  and the moment that changes is the moment they answer. A worker polling   ║
+   * ║  for completed tasks would do the same work minutes later for no reason.  ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   *
+   * ⚠️ AND IT ADVANCES ON `OUTCOME_UNKNOWN` TOO. §4.17 already treats an unknown
+   * outcome as possibly delivered; refusing to advance on it would strand every
+   * enrolment whose operator was honest about not knowing, punishing exactly the
+   * answer the vocabulary exists to make safe.
+   */
+  try {
+    const walked = await advanceAfterTask({
+      workspaceId: input.workspaceId,
+      enrollmentId: task.enrollment_id,
+    })
+    if (walked.kind === 'failed' || walked.kind === 'orphaned') {
+      console.error('linkedin advance after outcome failed', {
+        enrollmentId: task.enrollment_id,
+        kind: walked.kind,
+      })
+    }
+  } catch (advanceError) {
+    console.error('linkedin advance after outcome threw', {
+      enrollmentId: task.enrollment_id,
+      error: advanceError instanceof Error ? advanceError.message : 'unknown',
+    })
   }
 
   return { ok: true }

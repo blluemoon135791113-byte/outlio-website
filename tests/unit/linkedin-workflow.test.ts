@@ -322,6 +322,14 @@ const step = (over: Partial<WorkflowStep> & { action: StepAction }): WorkflowSte
   position: over.position ?? 0,
   body: over.body ?? null,
   waitDays: over.waitDays ?? null,
+  /*
+   * ⚠️ THE SPREAD COMES LAST AND THE DEFAULTS FIRST, so a test that passes
+   * `config` overrides this and one that does not still gets `{}` rather than
+   * `undefined`. `compileWorkflow` reads `step.config.tag`, which throws on
+   * undefined — a helper that produced an invalid shape would fail tests for a
+   * reason that has nothing to do with what they assert.
+   */
+  config: {},
   ...over,
 })
 

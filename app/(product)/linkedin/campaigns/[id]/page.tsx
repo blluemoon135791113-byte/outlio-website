@@ -97,6 +97,7 @@ export default async function CampaignWorkflowPage({
           action: step.action,
           body: step.body,
           waitDays: step.waitDays,
+          config: step.config,
         }))}
         standingOn={Object.fromEntries(standingOn)}
         /*

@@ -6846,6 +6846,7 @@ export type Database = {
           action: Database["public"]["Enums"]["linkedin_step_action"]
           body: string | null
           campaign_id: string
+          config: Json
           created_at: string
           id: string
           position: number
@@ -6857,6 +6858,7 @@ export type Database = {
           action: Database["public"]["Enums"]["linkedin_step_action"]
           body?: string | null
           campaign_id: string
+          config?: Json
           created_at?: string
           id?: string
           position: number
@@ -6868,6 +6870,7 @@ export type Database = {
           action?: Database["public"]["Enums"]["linkedin_step_action"]
           body?: string | null
           campaign_id?: string
+          config?: Json
           created_at?: string
           id?: string
           position?: number

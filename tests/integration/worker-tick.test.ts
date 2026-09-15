@@ -42,6 +42,14 @@ const EXPECTED_JOBS = [
   'send_email',
   'sync_replies',
   'advance_flows',
+  /*
+   * ⚠️ ADDED WITH THE WALKER (Phase 20). Before it, `tick.ts` had ZERO LinkedIn
+   * references, so an enrolment that reached a wait parked and was never moved
+   * again — indistinguishable from a sequence that had quietly stopped. The
+   * same shape as `rollup_reporting` below, which had no trigger at all until
+   * 2026-09-12.
+   */
+  'release_linkedin_waits',
   'deliver_webhooks',
   'sync_contact_evidence',
   /*

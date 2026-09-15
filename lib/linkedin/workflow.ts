@@ -57,6 +57,17 @@ export type WorkflowStep = {
    * and cannot protect, is the customer's risk to carry, not one to make easy.
    */
   waitDays: number | null
+  /**
+   * Per-action settings (0132). Only `ADD_TAG` uses it today: `{ tag }`.
+   *
+   * ⚠️ IT EXISTS BECAUSE `ADD_TAG` COULD NOT SAY WHICH TAG. 0130 gave every step
+   * a `body` and then correctly forbade one on `ADD_TAG` — a tag name is not a
+   * message — which left the step with nowhere to record its only setting. The
+   * walker then had nothing to execute: it would either skip silently, so a step
+   * the customer added does nothing forever, or fail at run time on a workflow
+   * that had passed validation.
+   */
+  config: Record<string, unknown>
 }
 
 export type WorkflowProblem = {
@@ -223,6 +234,34 @@ export function compileWorkflow(steps: readonly WorkflowStep[]): CompiledWorkflo
       problems.push({
         stepId: step.id,
         message: `"${spec.label}" is not a wait and cannot have a duration.`,
+      })
+    }
+
+    // ---- per-action settings --------------------------------------------
+    if (step.action === 'ADD_TAG') {
+      /*
+       * ⚠️ REQUIRED, BECAUSE THE ALTERNATIVE IS A STEP THAT DOES NOTHING. The
+       * walker performs `ADD_TAG` itself, so an unconfigured one would either be
+       * skipped — silently excluding people from whatever the tag segments — or
+       * fail mid-sequence on a workflow that had already been saved as valid.
+       * 0132's CHECK refuses it in the database too; this is the message a
+       * person can act on.
+       */
+      const tag = typeof step.config.tag === 'string' ? step.config.tag.trim() : ''
+      if (!tag) {
+        problems.push({ stepId: step.id, message: 'Choose which tag to add.' })
+      } else if (tag.length > 100) {
+        problems.push({ stepId: step.id, message: 'A tag name has to be under 100 characters.' })
+      }
+    } else if (Object.keys(step.config).length > 0) {
+      /*
+       * ⚠️ REFUSED RATHER THAN IGNORED, matching how a `wait_days` on a message
+       * step is handled. A setting sitting on an action that does not read it
+       * looks meaningful to the next person and is not.
+       */
+      problems.push({
+        stepId: step.id,
+        message: `"${spec.label}" takes no settings.`,
       })
     }
   }

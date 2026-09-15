@@ -25,11 +25,19 @@ type Card = {
   action: StepAction
   body: string
   waitDays: number | null
+  /** Per-action settings (0132). Only `ADD_TAG` reads one, as `tag`. */
+  config: Record<string, unknown>
 }
 
 export type WorkflowBuilderProps = {
   campaignId: string
-  initial: { id: string; action: StepAction; body: string | null; waitDays: number | null }[]
+  initial: {
+    id: string
+    action: StepAction
+    body: string | null
+    waitDays: number | null
+    config: Record<string, unknown>
+  }[]
   /** How many live enrollments are standing on each step id. */
   standingOn: Record<string, number>
   /** Total people in the campaign, for the header card. */
@@ -69,6 +77,7 @@ export function WorkflowBuilder({
       action: step.action,
       body: step.body ?? '',
       waitDays: step.waitDays,
+      config: step.config,
     })),
   )
   /** Where the "Add an action" sheet will insert, or null when it is closed. */
@@ -89,6 +98,7 @@ export function WorkflowBuilder({
       action: actionName,
       body: '',
       waitDays: actionName === 'WAIT' ? 1 : null,
+      config: {},
     }
     setCards((current) => {
       const at = insertAt ?? current.length
@@ -104,6 +114,13 @@ export function WorkflowBuilder({
       action: card.action,
       body: STEPS[card.action].body === 'none' ? null : card.body.trim() || null,
       waitDays: card.action === 'WAIT' ? card.waitDays : null,
+      /*
+       * ⚠️ SENT ONLY FOR `ADD_TAG`. 0132's `config_shape` CHECK refuses a
+       * non-empty config on any other action, so forwarding a stale one left
+       * behind by switching a card's action would fail the save with a
+       * database error rather than a sentence.
+       */
+      config: card.action === 'ADD_TAG' ? card.config : {},
     })),
   })
 
@@ -328,7 +345,37 @@ function StepCard({
         </p>
       ) : null}
 
-      {spec.body === 'none' ? (
+      {/*
+        ⚠️ `ADD_TAG` IS THE ONE STEP WITH A SETTING, AND IT IS REQUIRED.
+        0132 exists because the step previously had nowhere to say WHICH tag,
+        which left the walker with nothing to execute — it would either skip
+        silently, so a step the customer added does nothing forever, or fail
+        mid-sequence on a workflow that had already saved as valid.
+
+        A free-text field rather than a picker of existing tags, deliberately:
+        `ensureTagAttached` creates the tag if it does not exist, and a picker
+        would mean building a segment before you can route anybody into it.
+        The name is normalised, so "Hot Lead" and "hot lead" cannot become two
+        tags that render identically.
+      */}
+      {card.action === 'ADD_TAG' ? (
+        <div className="mt-3">
+          <label className="block">
+            <span className="text-xs font-medium text-ink">Tag to add</span>
+            <input
+              value={typeof card.config.tag === 'string' ? card.config.tag : ''}
+              onChange={(event) => onChange({ config: { tag: event.target.value } })}
+              maxLength={100}
+              placeholder="Replied — warm"
+              className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink sm:max-w-xs"
+            />
+          </label>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted">
+            Created if it does not exist yet. Nothing reaches LinkedIn — this changes the
+            contact record in Outlio.
+          </p>
+        </div>
+      ) : spec.body === 'none' ? (
         <p className="mt-2 text-xs leading-relaxed text-muted">{spec.note}</p>
       ) : (
         <div className="mt-3">

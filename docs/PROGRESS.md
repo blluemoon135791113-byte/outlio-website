@@ -10743,3 +10743,77 @@ all eight were caught. Builder exercised in the browser: an empty required
 message was refused by name, a valid two-step workflow saved and survived a full
 reload with placeholders intact, and a pre-0131 contact holding a Navigator URL
 in `linkedin_url` now renders correctly labelled "Sales Navigator".
+
+---
+
+## Phase 20b — the walker (2026-09-16)
+
+The builder saved a workflow that produced nothing. `lib/workers/tick.ts` had
+**zero LinkedIn references**, so an enrolment reaching a wait parked and was
+never moved again — indistinguishable from the outside from a sequence that had
+quietly stopped. Same shape as the reporting rollup with no trigger (fixed
+2026-09-12) and the erasure function that was unreachable its whole life.
+
+Migration **0132** applied: `linkedin_workflow_steps.config jsonb`.
+
+### The hole 0130 left, found by writing the executor
+
+`ADD_TAG` had **nowhere to say which tag**. 0130 gave every step a `body` and
+then correctly forbade one on `ADD_TAG` — a tag name is not a message — which
+left the step with no place for its only setting. The walker then had nothing to
+execute: skip silently, so a step the customer added does nothing forever, or
+fail mid-sequence on a workflow already saved as valid. Two CHECK constraints now
+make a tagless `ADD_TAG` unstorable and keep `config` empty on every other
+action.
+
+⚠️ **This was only visible from the consumer side.** The schema, the validator
+and the builder all looked complete. Writing the code that had to *perform* the
+step is what exposed it — the argument for building the executor early rather
+than last.
+
+### Decisions worth re-reading before changing them
+
+- **The pointer is claimed before the walk.** Two overlapping ticks would
+  otherwise both advance the same person. The task insert's unique key stops a
+  duplicate *card*, but `ADD_TAG` has no such key and would be applied twice.
+- **`recordOutcome` advances the sequence, and a failure to advance never undoes
+  the outcome.** The operator has already performed a real action against a real
+  person; returning an error invites them to record it again, which is how one
+  connection request becomes two. A missing next card is recoverable — the worker
+  picks it up. A duplicated action is not.
+- **Reaching the end completes as `NO_REPLY`, not `GOAL_MET`.** Every step
+  performed with nothing coming back is not success, and §4.18 keeps those
+  denominators apart so a wall of completed sequences cannot read as things
+  working.
+- **The do-not-contact check re-runs at every hop.** Days pass between steps; a
+  check that ran only at enrolment answers a question from last week.
+- **A placeholder that cannot be filled leaves the body null and still creates
+  the task.** Refusing strands the person on a step nobody can see; the operator,
+  looking at the profile, is exactly who can fix the record or write the line.
+- **`lib/crm/tags.ts` was extracted, not written twice.** The flow engine already
+  had `addTag`, and the part two copies get wrong differently is real:
+  `crm_tags_name_uniq` is a PARTIAL unique index, so the obvious `upsert` fails
+  outright and the select-then-insert it forces can lose a race.
+
+⚠️ **I claimed the tick was wired before it was.** The previous report said wait
+releases "go through the tick" while `tick.ts` still had no LinkedIn reference —
+`releaseDue` existed and nothing called it. Caught by grepping rather than by
+recalling, and `tests/unit/linkedin-walk.test.ts` now asserts the import AND the
+invocation, because an import alone passes on a file that never runs it.
+
+⚠️ **`tick-job-roster.test.ts` caught the new job immediately**, as designed: the
+integration suite's expectation list did not know about `release_linkedin_waits`.
+
+### Verified
+
+3,861 unit tests across 224 files; typecheck 0; lint 0 errors (no warnings in
+any file touched); build clean. 0132 validated against real Postgres 16 with all
+three migrations replayed in order — eight constraint cases, both directions.
+Five mutations on the walker's guards, all five caught. Exercised in the browser:
+a tagless `ADD_TAG` refused by name, then saved and round-tripped through a full
+reload with `{tag: "Warm — replied"}` on that step and `{}` on every other.
+
+⚠️ **Still not exercised against a real contact.** No enrolment has been walked
+end to end with live data — the walker is unit- and mutation-proved only. That
+line has stood since Phase 10 and this is what finally makes clearing it
+possible.

@@ -47,6 +47,14 @@ const StepSchema = z.object({
   action: z.enum(STEP_ACTIONS),
   body: z.string().max(8_000).nullable(),
   waitDays: z.number().int().min(1).max(MAX_WAIT_DAYS).nullable(),
+  /*
+   * ⚠️ `record(unknown)` AND NOT `any`, AND THE KEYS ARE BOUNDED. Per-action
+   * settings are validated per action by `compileWorkflow`, which knows what
+   * each one takes; this schema's job is only to prove the shape is an object
+   * and is not large enough to be a payload attack. 0132's CHECK is the third
+   * wall, and it is the one that holds when a row is written another way.
+   */
+  config: z.record(z.string().max(100), z.unknown()).default({}),
 })
 
 const PayloadSchema = z.object({
@@ -93,6 +101,7 @@ export async function saveWorkflowAction(
       // and the CHECK constraints are written against NULL.
       body: step.body?.trim() ? step.body : null,
       waitDays: step.waitDays,
+      config: step.config,
     })),
   })
 
