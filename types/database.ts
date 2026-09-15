@@ -3338,6 +3338,143 @@ export type Database = {
           },
         ]
       }
+      crm_routing_decisions: {
+        Row: {
+          activity_id: string | null
+          chosen_owner: string | null
+          contact_id: string
+          created_at: string
+          eligible_pool: string[]
+          evaluated: Json
+          id: string
+          intake_key: string
+          outcome: string
+          reason: string
+          rule_id: string | null
+          rule_snapshot: Json | null
+          rule_version: number | null
+          source: Database["public"]["Enums"]["crm_record_source"]
+          workspace_id: string
+        }
+        Insert: {
+          activity_id?: string | null
+          chosen_owner?: string | null
+          contact_id: string
+          created_at?: string
+          eligible_pool?: string[]
+          evaluated?: Json
+          id?: string
+          intake_key: string
+          outcome: string
+          reason: string
+          rule_id?: string | null
+          rule_snapshot?: Json | null
+          rule_version?: number | null
+          source: Database["public"]["Enums"]["crm_record_source"]
+          workspace_id: string
+        }
+        Update: {
+          activity_id?: string | null
+          chosen_owner?: string | null
+          contact_id?: string
+          created_at?: string
+          eligible_pool?: string[]
+          evaluated?: Json
+          id?: string
+          intake_key?: string
+          outcome?: string
+          reason?: string
+          rule_id?: string | null
+          rule_snapshot?: Json | null
+          rule_version?: number | null
+          source?: Database["public"]["Enums"]["crm_record_source"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_routing_decisions_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_routing_decisions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_routing_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          kind: string
+          max_open_workload: number | null
+          member_ids: string[]
+          name: string
+          position: number
+          published_at: string | null
+          sources: Database["public"]["Enums"]["crm_record_source"][]
+          status: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string | null
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          kind: string
+          max_open_workload?: number | null
+          member_ids?: string[]
+          name: string
+          position?: number
+          published_at?: string | null
+          sources?: Database["public"]["Enums"]["crm_record_source"][]
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string | null
+          version?: number
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          kind?: string
+          max_open_workload?: number | null
+          member_ids?: string[]
+          name?: string
+          position?: number
+          published_at?: string | null
+          sources?: Database["public"]["Enums"]["crm_record_source"][]
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string | null
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_routing_rules_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_saved_views: {
         Row: {
           created_at: string
@@ -3442,9 +3579,13 @@ export type Database = {
           deleted_at: string | null
           due_at: string | null
           id: string
+          opportunity_id: string | null
+          outcome: string | null
+          snoozed_until: string | null
           status: Database["public"]["Enums"]["crm_task_status"]
           title: string
           updated_at: string
+          version: number
           workspace_id: string
         }
         Insert: {
@@ -3459,9 +3600,13 @@ export type Database = {
           deleted_at?: string | null
           due_at?: string | null
           id?: string
+          opportunity_id?: string | null
+          outcome?: string | null
+          snoozed_until?: string | null
           status?: Database["public"]["Enums"]["crm_task_status"]
           title: string
           updated_at?: string
+          version?: number
           workspace_id: string
         }
         Update: {
@@ -3476,9 +3621,13 @@ export type Database = {
           deleted_at?: string | null
           due_at?: string | null
           id?: string
+          opportunity_id?: string | null
+          outcome?: string | null
+          snoozed_until?: string | null
           status?: Database["public"]["Enums"]["crm_task_status"]
           title?: string
           updated_at?: string
+          version?: number
           workspace_id?: string
         }
         Relationships: [
@@ -3494,6 +3643,13 @@ export type Database = {
             columns: ["contact_id", "workspace_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_tasks_opportunity_fk"
+            columns: ["opportunity_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_opportunities"
             referencedColumns: ["id", "workspace_id"]
           },
           {
@@ -6223,12 +6379,6 @@ export type Database = {
         }
         Relationships: []
       }
-      /*
-       * ⚠️ HAND-WRITTEN FOR 0128, WHICH IS NOT YET APPLIED. Regenerate with
-       * `npm run db:types` once it is, and delete this note — a hand-typed
-       * table that drifts from the schema is worse than none, because the
-       * compiler will confidently agree with the wrong shape.
-       */
       linkedin_campaigns: {
         Row: {
           created_at: string
@@ -6260,11 +6410,18 @@ export type Database = {
           updated_at?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_campaigns_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       linkedin_enrollments: {
         Row: {
-          // 0128, by hand until `npm run db:types` runs after it is applied.
           campaign_id: string | null
           contact_id: string
           created_at: string
@@ -6307,6 +6464,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "linkedin_enrollments_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "linkedin_enrollments_contact_id_fkey"
             columns: ["contact_id"]
@@ -8283,6 +8447,7 @@ export type Database = {
       }
       workspace_memberships: {
         Row: {
+          away_until: string | null
           created_at: string
           id: string
           invited_by: string | null
@@ -8292,6 +8457,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          away_until?: string | null
           created_at?: string
           id?: string
           invited_by?: string | null
@@ -8301,6 +8467,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          away_until?: string | null
           created_at?: string
           id?: string
           invited_by?: string | null
@@ -8534,6 +8701,15 @@ export type Database = {
           used: number
         }[]
       }
+      crm_assign_contact_owner: {
+        Args: {
+          p_actor_id?: string
+          p_contact_id: string
+          p_new_owner: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       crm_batch_funnel: {
         Args: { p_batch_id: string; p_workspace_id: string }
         Returns: {
@@ -8549,6 +8725,17 @@ export type Database = {
           won_deals: number
           won_revenue: number
         }[]
+      }
+      crm_complete_task: {
+        Args: {
+          p_actor_id: string
+          p_expected_version: number
+          p_outcome: string
+          p_restrict_to_assignee?: string
+          p_task_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       crm_erase_contact: {
         Args: {
@@ -8607,6 +8794,16 @@ export type Database = {
           won_value: number
         }[]
       }
+      crm_reassign_task: {
+        Args: {
+          p_actor_id: string
+          p_expected_version: number
+          p_new_assignee: string
+          p_task_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       crm_reconcile_reporting: {
         Args: { p_from_day: string; p_to_day: string; p_workspace_id: string }
         Returns: {
@@ -8625,9 +8822,45 @@ export type Database = {
         }
         Returns: string
       }
+      crm_retry_waiting_leads: {
+        Args: { p_limit: number; p_review_after?: string }
+        Returns: Json
+      }
       crm_rollup_activity_metrics: {
         Args: { p_from_day: string; p_to_day: string; p_workspace_id: string }
         Returns: number
+      }
+      crm_round_robin_assign: {
+        Args: {
+          p_contact_id: string
+          p_user_ids: string[]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      crm_route_batch: {
+        Args: { p_batch_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      crm_route_contact: {
+        Args: {
+          p_contact_id: string
+          p_intake_key: string
+          p_source: Database["public"]["Enums"]["crm_record_source"]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      crm_snooze_task: {
+        Args: {
+          p_actor_id: string
+          p_expected_version: number
+          p_restrict_to_assignee?: string
+          p_task_id: string
+          p_until: string
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       crm_unconvertible_deals: {
         Args: { p_status?: string; p_workspace_id: string }
@@ -9373,6 +9606,8 @@ export type Database = {
         | "QUALIFIED"
         | "MERGED"
         | "COLLISION_OVERRIDE"
+        | "TASK_SNOOZED"
+        | "TASK_REASSIGNED"
       crm_collision_mode: "off" | "warn" | "require_approval"
       crm_contact_dnc_reason:
         | "unsubscribed"
@@ -9778,6 +10013,8 @@ export const Constants = {
         "QUALIFIED",
         "MERGED",
         "COLLISION_OVERRIDE",
+        "TASK_SNOOZED",
+        "TASK_REASSIGNED",
       ],
       crm_collision_mode: ["off", "warn", "require_approval"],
       crm_contact_dnc_reason: [
@@ -9923,6 +10160,13 @@ export const Constants = {
         "skipped",
         "expired",
         "unknown",
+      ],
+      linkedin_campaign_state: [
+        "DRAFT",
+        "ACTIVE",
+        "PAUSED",
+        "FINISHED",
+        "ARCHIVED",
       ],
       linkedin_enrollment_state: [
         "DRAFT",

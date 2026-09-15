@@ -171,38 +171,6 @@ const KNOWN_UNREACHABLE = new Map<string, string>([
    * `metrics.ts` alone remains: it leaves when something REPORTS on LinkedIn
    * outcomes, and there is no outcome history to measure yet.
    */
-  /*
-   * ╔═══════════════════════════════════════════════════════════════════════╗
-   * ║  ⚠️ PHASE 18 IS HALF-BUILT ON PURPOSE, AND THIS GUARD IS SAYING SO.   ║
-   * ║                                                                       ║
-   * ║  Migration 0128 is written and validated but NOT YET APPLIED —         ║
-   * ║  migrations here go in by hand. A page reading `linkedin_campaigns`    ║
-   * ║  today would query a table that does not exist, so the surface waits   ║
-   * ║  for the apply rather than shipping something that 500s.              ║
-   * ║                                                                       ║
-   * ║  ⚠️ THE DATA LAYER WAS BUILT FIRST DELIBERATELY. The honest-partial    ║
-   * ║  logic is the whole point of the phase: a campaign must never report a  ║
-   * ║  tidy total when one of its successes rests on an action nobody could   ║
-   * ║  confirm. That is pure and mutation-proven now, before any screen can   ║
-   * ║  render a reassuring number.                                           ║
-   * ║                                                                       ║
-   * ║  EXIT: both leave when a page under `app/(product)/linkedin/` reads a   ║
-   * ║  campaign. If Phase 18 is called done and these are still listed, the   ║
-   * ║  surface was built against something else.                            ║
-   * ╚═══════════════════════════════════════════════════════════════════════╝
-   */
-  [
-    'lib/linkedin/campaigns.ts',
-    'Phase 18 data layer. 0128 is validated but unapplied, so no page can read ' +
-      'it yet. Leaves when a /linkedin page reads a campaign.',
-  ],
-  [
-    'lib/linkedin/campaign-progress.ts',
-    'Phase 18 honest-partial logic, built before the surface so no screen can ' +
-      'render a total before the rule exists. Reached via campaigns.ts; leaves ' +
-      'with it.',
-  ],
-
   [
     'lib/linkedin/metrics.ts',
     'Acceptance and reply rates (§4.18). Nothing reports on LinkedIn outcomes ' +

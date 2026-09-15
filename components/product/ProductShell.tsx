@@ -31,6 +31,15 @@ function pageLabel(pathname: string) {
    */
   if (pathname.startsWith('/email')) return 'Email'
   if (pathname.startsWith('/flows')) return 'Flows'
+  /*
+   * ⚠️ THE WHOLE LINKEDIN SECTION HAD NO ENTRY, so `/linkedin` fell through to
+   * the "Overview" fallback and the header contradicted the page under it.
+   * Pre-existing, not new: the section was built after this map, the same way
+   * it was built without a layout. Longest match first, matching `/crm/reports`
+   * above.
+   */
+  if (pathname.startsWith('/linkedin/campaigns')) return 'Campaigns'
+  if (pathname.startsWith('/linkedin')) return 'LinkedIn'
   if (pathname.startsWith('/extension')) return 'Extension'
   return 'Overview'
 }
