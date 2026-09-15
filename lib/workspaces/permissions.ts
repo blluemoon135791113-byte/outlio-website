@@ -99,6 +99,7 @@ export type Permission =
   | 'crm.opportunity.edit'
   | 'crm.opportunity.delete'
   | 'crm.pipeline.manage'
+  | 'crm.routing.manage'
   | 'crm.task.view'
   | 'crm.task.manage'
   // Email
@@ -176,6 +177,13 @@ const PERMISSIONS: Record<Permission, PermissionSpec> = {
   'crm.opportunity.edit': { minRole: 'setter', module: 'crm' },
   'crm.opportunity.delete': { minRole: 'manager', module: 'crm' },
   'crm.pipeline.manage': { minRole: 'admin', module: 'crm' },
+  /*
+   * Routing rules decide who receives every lead the workspace imports, so
+   * changing them is workspace configuration — the same level as pipelines.
+   * A manager can SEE the rules and the Unassigned queue (via
+   * `crm.contact.assign`); only an admin can change what they do.
+   */
+  'crm.routing.manage': { minRole: 'admin', module: 'crm' },
   'crm.task.view': { minRole: 'viewer', module: 'crm' },
   'crm.task.manage': { minRole: 'setter', module: 'crm' },
 
