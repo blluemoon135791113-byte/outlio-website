@@ -6223,8 +6223,49 @@ export type Database = {
         }
         Relationships: []
       }
+      /*
+       * ⚠️ HAND-WRITTEN FOR 0128, WHICH IS NOT YET APPLIED. Regenerate with
+       * `npm run db:types` once it is, and delete this note — a hand-typed
+       * table that drifts from the schema is worse than none, because the
+       * compiler will confidently agree with the wrong shape.
+       */
+      linkedin_campaigns: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          reconciled_at: string | null
+          state: Database["public"]["Enums"]["linkedin_campaign_state"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          reconciled_at?: string | null
+          state?: Database["public"]["Enums"]["linkedin_campaign_state"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          reconciled_at?: string | null
+          state?: Database["public"]["Enums"]["linkedin_campaign_state"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       linkedin_enrollments: {
         Row: {
+          // 0128, by hand until `npm run db:types` runs after it is applied.
+          campaign_id: string | null
           contact_id: string
           created_at: string
           ended_at: string | null
@@ -6238,6 +6279,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          campaign_id?: string | null
           contact_id: string
           created_at?: string
           ended_at?: string | null
@@ -6251,6 +6293,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          campaign_id?: string | null
           contact_id?: string
           created_at?: string
           ended_at?: string | null
@@ -9470,6 +9513,12 @@ export type Database = {
         | "skipped"
         | "expired"
         | "unknown"
+      linkedin_campaign_state:
+        | "DRAFT"
+        | "ACTIVE"
+        | "PAUSED"
+        | "FINISHED"
+        | "ARCHIVED"
       linkedin_enrollment_state:
         | "DRAFT"
         | "ELIGIBILITY_REVIEW"
