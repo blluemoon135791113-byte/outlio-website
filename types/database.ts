@@ -8675,6 +8675,15 @@ export type Database = {
           won_revenue: number
         }[]
       }
+      crm_bulk_assign_contacts: {
+        Args: {
+          p_actor_id: string
+          p_contact_ids: string[]
+          p_new_owner: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       crm_complete_task: {
         Args: {
           p_actor_id: string
@@ -8703,6 +8712,15 @@ export type Database = {
           period: string
           weighted_value: number
         }[]
+      }
+      crm_handover_member_records: {
+        Args: {
+          p_actor_id: string
+          p_from_user: string
+          p_to_user: string
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       crm_ingest_contacts: {
         Args: { p_batch_id: string; p_contacts: Json; p_workspace_id: string }

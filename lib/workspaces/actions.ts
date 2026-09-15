@@ -318,7 +318,7 @@ export async function removeMemberAction(
 
     let handover
     try {
-      handover = await reassignMemberRecords(ctx.workspace.id, membership.user_id, newOwnerId)
+      handover = await reassignMemberRecords(ctx.workspace.id, membership.user_id, newOwnerId, ctx.userId)
     } catch {
       return fail('Could not reassign their records, so nothing was changed.')
     }

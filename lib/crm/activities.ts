@@ -230,6 +230,95 @@ export async function assignContact(
   })
 }
 
+/** The new owner named for a bulk assignment is not in the workspace. */
+export class NotAMemberError extends Error {}
+
+export type BulkAssignResult = {
+  /** Moved to the new owner; each wrote OWNER_ASSIGNED. */
+  changed: number
+  /** Already theirs. Nothing written. */
+  unchanged: number
+  /** Not this workspace's, or deleted. */
+  skipped: number
+}
+
+/**
+ * Announcements go out in small groups: a handover can move thousands of
+ * contacts, and each event fans out to flows, webhooks and notifications.
+ */
+const EVENT_CONCURRENCY = 20
+
+/**
+ * Announces assignments the database already committed — one
+ * `contact_assigned` per OWNER_ASSIGNED row, keyed on it, like `assignContact`.
+ */
+export async function announceAssignments(
+  workspaceId: string,
+  assignments: { contactId: string; from: string | null; to: string | null; activityId: string }[],
+): Promise<void> {
+  for (let i = 0; i < assignments.length; i += EVENT_CONCURRENCY) {
+    await Promise.all(
+      assignments.slice(i, i + EVENT_CONCURRENCY).map((a) =>
+        emitDomainEvent({
+          workspaceId,
+          triggerType: 'contact_assigned',
+          contactId: a.contactId,
+          idempotencyKey: `contact_assigned:${a.activityId}`,
+          payload: { contactId: a.contactId, from: a.from, to: a.to },
+        }),
+      ),
+    )
+  }
+}
+
+/**
+ * Assigns many contacts, each with its history.
+ *
+ * ⚠️ THIS USED TO BE ONE `update ... set owner_user_id`. Every contact changed
+ * hands with no OWNER_ASSIGNED row, so its timeline never showed the move,
+ * assignment reports missed it, and "on assigned" flows never fired.
+ * `crm_bulk_assign_contacts` (0129) routes each one through the same function
+ * as a single assignment.
+ */
+export async function bulkAssignContacts(
+  workspaceId: string,
+  contactIds: string[],
+  newOwnerUserId: string | null,
+  actorUserId: string,
+): Promise<BulkAssignResult> {
+  const { data, error } = await createAdminClient().rpc('crm_bulk_assign_contacts', {
+    p_workspace_id: workspaceId,
+    p_contact_ids: contactIds,
+    // NULL means unassign; see `assignContact` for why the cast is needed.
+    p_new_owner: (newOwnerUserId ?? null) as unknown as string,
+    p_actor_id: actorUserId,
+  })
+
+  if (error) {
+    if (/not a member/i.test(error.message)) throw new NotAMemberError('That person is not in this workspace.')
+    throw new Error(`bulkAssignContacts failed: ${error.message}`)
+  }
+
+  const result = data as {
+    changed: number
+    unchanged: number
+    skipped: number
+    assignments: { contact_id: string; from: string | null; activity_id: string }[]
+  }
+
+  await announceAssignments(
+    workspaceId,
+    (result.assignments ?? []).map((a) => ({
+      contactId: a.contact_id,
+      from: a.from,
+      to: newOwnerUserId,
+      activityId: a.activity_id,
+    })),
+  )
+
+  return { changed: result.changed, unchanged: result.unchanged, skipped: result.skipped }
+}
+
 // ---------------------------------------------------------------------------
 // Tasks
 // ---------------------------------------------------------------------------
