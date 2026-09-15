@@ -35,6 +35,7 @@ import { advanceSequences } from '@/lib/email/sequence-runner'
 import { syncWorkspaceReplies } from '@/lib/email/reply-sync'
 import { syncContactEvidenceToCrm } from '@/lib/crm/evidence-bridge'
 import { rollupWorkspace } from '@/lib/crm/metrics'
+import { retryWaitingLeads } from '@/lib/crm/routing'
 import { claimAndProcessOne } from '@/lib/worker/process-job'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -72,6 +73,13 @@ const LIMITS = {
    * five per tick still gives every workspace a turn 1,440 times a day.
    */
   reportingWorkspacesPerTick: 5,
+  /*
+   * Waiting leads routed again per tick, oldest first. Only leads whose
+   * workspace changed since their last decision are selected (0128), so most
+   * ticks find none; the cap is for the tick after an admin publishes the rule
+   * that finally covers a large backlog.
+   */
+  waitingLeadsPerTick: 100,
 }
 
 /*
@@ -367,6 +375,22 @@ export async function runTick(): Promise<TickResult> {
     const outcome = await claimAndProcessOne(`tick-${began}`)
     if (!outcome) return 'queue empty'
     return `1 orphaned job ${outcome.status}, ${outcome.leadsKept} lead(s) kept`
+  }, began)
+
+  /*
+   * ⚠️ BEFORE `rollup_reporting`, DELIBERATELY. A retried lead that is placed
+   * writes an OWNER_ASSIGNED activity, which the rollup counts; retrying after
+   * it would leave those assignments one tick stale in reports.
+   *
+   * Catch-up work with no deadline, so it follows every job that sends or
+   * delivers something to a person.
+   */
+  await runJob(result, 'retry_routing', async () => {
+    const outcome = await retryWaitingLeads(LIMITS.waitingLeadsPerTick)
+    return (
+      `${outcome.retried} retried, ${outcome.assigned} assigned, ` +
+      `${outcome.unassigned} still waiting, ${outcome.alreadyOwned} already owned, ${outcome.failed} failed`
+    )
   }, began)
 
   /*

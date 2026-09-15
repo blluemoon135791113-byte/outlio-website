@@ -84,3 +84,65 @@ export async function routeBatch(workspaceId: string, batchId: string): Promise<
     alreadyOwned: result.already_owned,
   }
 }
+
+export type RetrySummary = RoutingSummary & {
+  /** Waiting leads the database routed again this run. */
+  retried: number
+  /** Leads whose re-route raised; the rest of the run carried on. */
+  failed: number
+}
+
+type RetryRouting = {
+  retried: number
+  assigned: number
+  unassigned: number
+  already_owned: number
+  failed: number
+  assignments: { workspace_id: string; contact_id: string; owner: string; activity_id: string }[]
+}
+
+/**
+ * Re-routes leads waiting in the Unassigned queue — F02's "retry only after
+ * relevant availability change or scheduled review".
+ *
+ * ⚠️ THE DATABASE DECIDES WHICH LEADS ARE DUE, NOT THIS FUNCTION. A lead is
+ * retried only when its workspace's rules or memberships changed after its
+ * latest decision, a return date arrived, or the review interval passed — and
+ * each retry writes a new decision, so the next poll skips it (0128). Calling
+ * this every tick is therefore safe; re-routing the queue from here would write
+ * an append-only row per lead per tick.
+ *
+ * Crosses workspaces, so each announcement carries the workspace the database
+ * returned for that lead, never one chosen here.
+ */
+export async function retryWaitingLeads(limit: number): Promise<RetrySummary> {
+  const db = createAdminClient()
+  const { data, error } = await db.rpc('crm_retry_waiting_leads', { p_limit: limit })
+
+  if (error) throw new Error(`retryWaitingLeads failed: ${error.message}`)
+
+  const result = data as unknown as RetryRouting
+  const assignments = result.assignments ?? []
+
+  for (let i = 0; i < assignments.length; i += EVENT_CONCURRENCY) {
+    await Promise.all(
+      assignments.slice(i, i + EVENT_CONCURRENCY).map((a) =>
+        emitDomainEvent({
+          workspaceId: a.workspace_id,
+          triggerType: 'contact_assigned',
+          contactId: a.contact_id,
+          idempotencyKey: `contact_assigned:${a.activity_id}`,
+          payload: { contactId: a.contact_id, to: a.owner, by: 'routing' },
+        }),
+      ),
+    )
+  }
+
+  return {
+    retried: result.retried,
+    assigned: result.assigned,
+    unassigned: result.unassigned,
+    alreadyOwned: result.already_owned,
+    failed: result.failed,
+  }
+}
