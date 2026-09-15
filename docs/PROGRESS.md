@@ -4,6 +4,162 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-09-15 — The Flow Copilot met a real model for the first time
+
+⚠️ **This log had gone two weeks stale.** The newest entry below is
+2026-08-30 while the work went into `docs/outlio/05_PHASE_STATUS.md` and the
+phase docs instead. Phases 13, 22 and part of 24 landed in that gap. Recorded
+here because CLAUDE.md points every new session at THIS file first, and a
+session that reads it would have believed nothing had happened since August.
+
+### Phase 13 — Gemini Flow Copilot: delivered, then actually measured
+
+Unblocked and built in one session. Its deferral premise — "it generates
+definitions for an engine that has never executed one" — had been refuted by
+DECISION-15 with production evidence.
+
+⚠️ **`flow_runs` was deliberately not re-read.** It is 0, and that number is
+uninformative: `startRun` writes a row even when it HALTS, so zero once looked
+like "nothing reached the insert", but the rows existed and were tidied away
+after the owner's verification sessions. A counter that reads zero both for
+"never ran" and "ran, then cleaned up" cannot tell them apart. The
+`OWNER_ASSIGNED` activity trail is the evidence.
+
+Four slices:
+
+1. **Already built.** `validateFlowDefinition` already took `unknown`, already
+   rejected unknown capability IDs, already pinned `registryVersion`. What was
+   missing: `actionIsImplemented` had exactly one caller — a dropdown.
+2. `lib/flows/generated.ts` — a **third validation tier** (parse → publish →
+   generated), strictest because nobody is present.
+3. `lib/flows/copilot.ts` + `generateFlowAction` + `FlowCopilot` on `/flows`.
+4. A 42-case eval corpus, nine of them requests that must be REFUSED.
+
+### ⚠️ The copilot could never have produced a publishable flow
+
+The single most important finding of the session, and no unit test could have
+seen it.
+
+`config: { type: 'object' }` in the response schema, with no properties
+declared. Structured output strips whatever the schema does not declare, so
+`config` came back `{}` **every time**. `publishProblems` then refused every
+ACTION step for missing required config, on both attempts, for every prompt.
+
+It was shipped, reachable on `/flows`, and incapable of drafting one usable
+flow for anybody. Every test fed the compiler hand-written JSON — the one input
+that never passes through the schema.
+
+Score by run as the causes were found: **2/42 → 30 → 23 → 37 → 39 → 41 → 42**.
+
+Each step was a real defect, not tuning:
+
+- The eval project had **no setup file**, so vitest never read `.env.local`.
+  Five model keys were set and it still reported "41 skipped" — and the skip
+  logic hid it, treating "nothing configured" as a deliberate opt-out.
+- The snapshot named actions but **not their required config**, so the prompt
+  said "fill every value the action needs" while never saying what they were.
+- ⚠️ **The eval scored a dead vendor as a correct refusal.** `unusable` covers
+  both "answered badly" and "never answered", so with the vendor rate-limited
+  all nine refusal cases PASSED — perfect judgement from a model never reached.
+  That is the exact failure the corpus exists to catch, inside the thing built
+  to catch it.
+- It **substituted silently, because the prompt told it to**: "build the closest
+  flow" turned "text the contact" into a task for the operator.
+- Then it **over-refused**, which exposed a worse error: the generated tier was
+  strict in the wrong dimension. It ran `publishProblems` and threw whole drafts
+  away over a missing `listId` — which the model cannot know and which appears
+  in the builder as an empty dropdown beside the step that needs it.
+- A **refusal never got the second attempt** while a malformed answer did.
+- ⚠️ **One failure was the corpus being wrong.** `refuse-slack-dm` penalised
+  `NOTIFY`, but `ChannelProvider` is `'slack' | 'teams'` — it genuinely reaches
+  Slack.
+
+⚠️ **The test that resolved the last two cases: the OUTCOME and the RECIPIENT,
+not the literal words.** Telling someone on Slack rather than by DM is the same
+person and the same news — build it. A task for the operator instead of a text
+to the contact is a different person — refuse.
+
+**42/42 measured once, 41/42 once** (that failure a vendor outage, not the
+copilot). Both vendor keys then hit quota. Not averaged over many runs — worth
+re-running when they reset.
+
+### How to run the eval
+
+```bash
+npm run eval:copilot
+```
+
+Needs a model key plus `EVAL_WORKSPACE_ID` and `EVAL_USER_ID` in `.env.local`.
+Never runs in `npm test` or `npm run test:all` — it is a third vitest project
+because it has a third constraint: **it spends money**. Its `hubble_calls` rows
+are tagged `source: 'eval:flow-copilot'`; anything reading spend should exclude
+`source like 'eval:%'`, or the pricing evidence becomes mostly the test.
+
+### Phase 22 — role-aware home dashboards
+
+Most of it was already correct and verifying that was the work: `/crm/reports`
+gates `getLeaderboard` on the FETCH rather than the render, and the nav takes
+server-resolved props while every route refuses independently.
+
+What was missing was role-awareness itself — every role got the same home.
+`TeamRow` now shows workspace pipeline and overdue tasks behind
+`report.team.view`, **gated on the fetch**, because a page that fetches and then
+declines to render has still serialised those figures into the RSC payload.
+
+`ExcludedDeals` was extracted rather than copied: without it "Open deals" and
+"Open pipeline" disagree silently whenever a deal has no exchange rate.
+
+### Phase 24 — groundwork, and four real defects found by looking
+
+The design guards covered **five surfaces out of fourteen**. Widening was free —
+all nine added directories already had zero literal colours across 61 files.
+
+Found by rendering and measuring, not reading:
+
+| Defect | Detail |
+|---|---|
+| Sign-in button below the fold on every phone | 375×812: email at y=726, button at **920**, on an 812 viewport. Fixed with `order-1 lg:order-2`; it looked fine on desktop, which is why it survived |
+| `LeadModal` at `duration-200` | Over the 150ms cap. The only violation, unseen because `components/intelligence` was not a policed surface |
+| Mobile nav button 36×36 | Hit area extended to 44×44 via `before:-inset-1`, visible box unchanged. Verified by a hit test 3px outside the border |
+| 29 admin links at 17px | Below WCAG 2.5.8's 24px floor — the only controls in the product under AA |
+
+Across 13 authenticated routes on a phone there was **no horizontal overflow
+anywhere**, which for a CRM with wide tables is a genuinely good result.
+
+### ⚠️ Two pages deferred their refusal to a layout that did not exist
+
+Twenty-two pages carry `// The layout renders the reason` and `return null`.
+True under `crm/`, `email/` and `flows/`. **False in two places**: `/linkedin`
+had no layout at all, and `dashboard/settings/layout.tsx` is presentation only.
+Both fell through to a blank panel for anyone without the permission.
+
+It looked correct in review, because the comment asserts the very thing that
+was missing. Only the filesystem could tell.
+
+### Environment findings, for whoever reads this next
+
+- ⚠️ **`LLM_ALLOWED_VENDORS` was `gemini` alone.** One quota outage took the
+  whole AI surface down while four configured keys sat idle. Now
+  `gemini,openrouter` in `.env.local` — **which does NOT reach production**;
+  Vercel needs setting separately.
+- **`GROQ_MODEL` and `CEREBRAS_MODEL` name models their APIs reject**
+  (`qwen/qwen3.6-27b`, `gpt-oss-120b`), and `BACKBOARD_MODEL` returns non-JSON.
+  Three paid keys doing nothing.
+- ⚠️ **CLAUDE.md says `npm run test:integration` "hits the real Supabase
+  project". That is stale.** `tests/setup.integration.ts` prefers `.env.staging`
+  when it exists, and it does — so it targets STAGING unless
+  `OUTLIO_TEST_TARGET=production`.
+- The machine ran out of disk mid-session (127 MiB free). `.next` was 3.7 GB and
+  is regenerable; `.claude` is 1.4 GB and was left alone.
+
+### Still never exercised
+
+**Nothing in the LinkedIn channel has run against a real contact.** Every guard
+is unit-level or mutation-proved. That is unchanged and remains the widest gap
+between "built" and "works".
+
+---
+
 ## 2026-08-30 — FastSpring charge records and paid-period credit allocation
 
 The webhook now handles the money half of the integration: every charge attempt
