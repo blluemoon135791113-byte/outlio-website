@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useActionState } from 'react'
 
 import { createCampaignAction, type CampaignActionState } from '@/app/(product)/linkedin/actions'
@@ -100,7 +101,20 @@ export function CampaignList({ campaigns }: { campaigns: CampaignCard[] }) {
               className="rounded-[var(--radius-lg)] border border-line bg-surface p-4"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-sm font-semibold text-ink">{campaign.name}</h3>
+                {/*
+                  ⚠️ THE NAME IS THE LINK, rather than a separate "Open" button.
+                  It is the thing a reader is already looking at when they decide
+                  to go in, and a row whose only affordance is a small button at
+                  the end makes the card look read-only.
+                */}
+                <h3 className="text-sm font-semibold text-ink">
+                  <Link
+                    href={`/linkedin/campaigns/${campaign.id}`}
+                    className="underline decoration-border decoration-dotted underline-offset-2 transition-colors duration-150 hover:text-accent hover:decoration-accent"
+                  >
+                    {campaign.name}
+                  </Link>
+                </h3>
                 <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
                   {campaign.state.toLowerCase()}
                 </span>

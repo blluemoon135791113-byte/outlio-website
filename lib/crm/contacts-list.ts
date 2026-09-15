@@ -397,6 +397,14 @@ export type ContactDetail = {
   headline: string | null
   location: string | null
   linkedInUrl: string | null
+  /*
+   * ⚠️ A SECOND, SEPARATE ADDRESS — NOT A FALLBACK FOR THE FIRST. 0131 split
+   * these because §4.5 forbids deriving a public profile slug from a Sales
+   * Navigator identifier: they are two addresses for the same person and
+   * neither implies the other. A reader with only one of them has less, not
+   * the same.
+   */
+  salesNavigatorUrl: string | null
   ownerUserId: string | null
   ownerName: string | null
   source: string
@@ -445,7 +453,9 @@ export async function getContactDetail(
 
   const { data: contact, error } = await db
     .from('crm_contacts')
-    .select('id, full_name, job_title, headline, location, linkedin_url, owner_user_id, source, created_at, primary_company_id')
+    // ⚠️ ONE STRING LITERAL. supabase-js infers the row shape from it at the
+    // TYPE level, so a concatenation degrades every column to GenericStringError.
+    .select('id, full_name, job_title, headline, location, linkedin_url, sales_navigator_url, owner_user_id, source, created_at, primary_company_id')
     .eq('workspace_id', workspaceId)
     .eq('id', contactId)
     .is('deleted_at', null)
@@ -510,6 +520,7 @@ export async function getContactDetail(
     headline: contact.headline,
     location: contact.location,
     linkedInUrl: contact.linkedin_url,
+    salesNavigatorUrl: contact.sales_navigator_url,
     ownerUserId: contact.owner_user_id,
     ownerName: owner.data?.full_name?.trim() || owner.data?.email || null,
     source: contact.source,

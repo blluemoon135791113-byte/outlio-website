@@ -12,6 +12,7 @@ import { checkCollision } from '@/lib/crm/collision'
 import { contactStopRecord } from '@/lib/crm/contact-stop'
 import { EnrollContact } from '@/components/linkedin/EnrollContact'
 import { RecordObservation } from '@/components/linkedin/RecordObservation'
+import { profileReference } from '@/lib/linkedin/profile-reference'
 import { listWorkspaceSenders } from '@/lib/linkedin/senders'
 import { MoreDetails } from '@/components/crm/MoreDetails'
 import { ValueProvenance } from '@/components/crm/ValueProvenance'
@@ -119,6 +120,27 @@ export default async function ContactDetailPage({
    */
   const companyUrl = companyWebsite(contact.company?.domain ?? null)
   const companyLinkedIn = safeSourceUrl(contact.company?.linkedInUrl ?? null)
+
+  /*
+   * ⚠️ BUCKETED BY WHAT THE URL *IS*, NOT BY WHICH COLUMN IT CAME FROM.
+   *
+   * 0131's own comment records why: before it, `lib/crm/ingest.ts` coalesced the
+   * two addresses into `linkedin_url`, so historic rows hold either kind there —
+   * and on a Sales Navigator save, which is Outlio's primary input, it is
+   * usually the Navigator one. Trusting the column name would label a
+   * `/sales/lead/…` address "LinkedIn profile" on every contact created before
+   * today.
+   *
+   * `profileReference` already distinguishes them (`kind: 'public' |
+   * 'sales_navigator'`) because §4.5 forbids conflating them, so the classifier
+   * exists and is the one to ask.
+   */
+  const references = [contact.linkedInUrl, contact.salesNavigatorUrl]
+    .map((raw) => profileReference(raw))
+    .filter((ref): ref is NonNullable<typeof ref> => ref !== null)
+
+  const publicProfile = references.find((ref) => ref.kind === 'public') ?? null
+  const navigatorProfile = references.find((ref) => ref.kind === 'sales_navigator') ?? null
 
   // The researched micro detail — funding, tech stack, socials, news — for the
   // company this person works at. Empty (and renders nothing) when unresearched.
@@ -306,15 +328,55 @@ export default async function ContactDetailPage({
               </Field>
             </dl>
 
-            {contact.linkedInUrl ? (
-              <a
-                href={contact.linkedInUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="mt-4 inline-flex text-sm font-semibold text-accent hover:underline"
-              >
-                LinkedIn profile
-              </a>
+            {/*
+              ╔═══════════════════════════════════════════════════════════════╗
+              ║  ⚠️ BOTH ADDRESSES, AND BOTH THROUGH THE ALLOWLIST.           ║
+              ║                                                               ║
+              ║  Two fixes in one block. The first is the owner's request:     ║
+              ║  0131 gave a contact a `sales_navigator_url` of its own, and   ║
+              ║  §4.5 forbids deriving either address from the other, so       ║
+              ║  showing one and hiding the other loses information that       ║
+              ║  cannot be recomputed.                                        ║
+              ║                                                               ║
+              ║  The second is that this link was previously rendered as       ║
+              ║  `href={contact.linkedInUrl}` — the raw column, straight into  ║
+              ║  an href. This file's own comment 190 lines above says why     ║
+              ║  that is wrong: "a `linkedin_url` was written by an importer   ║
+              ║  and is attacker-influenced, so a `javascript:` value there is ║
+              ║  stored XSS on a page every rep opens." The company URL beside ║
+              ║  it was validated; the contact's was not.                      ║
+              ║                                                               ║
+              ║  `profileReference` rather than `safeSourceUrl`, because it is ║
+              ║  the stricter of the two: an allowlist of READ-ONLY LinkedIn   ║
+              ║  profile paths, which is what §4.13 requires — "opening a      ║
+              ║  reference never performs a LinkedIn action". LinkedIn has     ║
+              ║  URLs that invite, message and follow, and this page is one    ║
+              ║  click for an operator's real account.                        ║
+              ╚═══════════════════════════════════════════════════════════════╝
+            */}
+            {publicProfile || navigatorProfile ? (
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                {publicProfile ? (
+                  <a
+                    href={publicProfile.href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex text-sm font-semibold text-accent hover:underline"
+                  >
+                    LinkedIn profile
+                  </a>
+                ) : null}
+                {navigatorProfile ? (
+                  <a
+                    href={navigatorProfile.href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex text-sm font-semibold text-accent hover:underline"
+                  >
+                    Sales Navigator
+                  </a>
+                ) : null}
+              </div>
             ) : null}
 
             {contact.tags.length > 0 ? (

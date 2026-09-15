@@ -245,9 +245,127 @@ function of the campaign rather than a constant. It does **not** relax the
 `TaskOutcome` / `Observation` separation (§4.13), which stays: what you did and
 what you later saw remain different questions.
 
-### Open before building
+### ✅ BUILT 2026-09-15 — Phase 20, linear. Migrations 0130 and 0131 applied.
 
-The owner is sending screenshots of how the campaign sequence should look. The
-builder is being designed from those rather than guessed at — guessing at the
-shape of this channel is the mistake recorded below, and it will not be repeated
-one level down.
+The owner supplied screenshots of a reference tool and answered the open
+questions. What follows is what was decided and what shipped.
+
+#### The correction that reshaped the model
+
+> "outlio does not prepare the note text or the message it will be written
+> manually and will give the option to get it written from ai but for that the
+> user has to give input into ai on how he wants it written"
+
+**Outlio composes nothing.** This is narrower than Phase 9 built, and it makes
+the product safer rather than weaker. `templates.ts` renders eight
+Outlio-authored messages from CRM evidence and refuses when the evidence is thin
+— so the common path was a refusal, which `enroll.ts` admits in its own comment.
+Now the operator's own words are the *first* path, and the only machine-filled
+parts are three placeholders resolved from literally-observed CRM values.
+
+The templates are not deleted. They are a starting point to paste and edit, not
+what a step contains.
+
+> "outlio does not prepares the comment draft it would just be marked as
+> comments/engagement done"
+
+`COMMENT_POST` prepares **nothing** — and 0130's `linkedin_workflow_steps_bodyless`
+CHECK makes that physically true, not merely intended. Which is the right answer
+on the evidence: a comment has to respond to what the post actually says, and
+Outlio has never seen the post.
+
+#### Every step declares two halves
+
+The model that came out of this. Tools holding a LinkedIn session collapse
+"prepare" and "perform" because they do both. Outlio cannot, so each step names
+both — and `performs` is on the face of every builder card, in the place a
+competitor would print "automated".
+
+| Step | Outlio prepares | You perform |
+|---|---|---|
+| Visit profile | the validated profile link | open and read it |
+| Connection request | your note (optional) | send it |
+| Message / InMail | your message | paste and send |
+| Like recent post | the profile link | → Recent activity, like the top post |
+| Comment on post | **nothing** | read it and comment in your own words |
+| Add tag | everything | nothing — runs in Outlio |
+| Wait | everything | nothing |
+
+#### "How will Outlio fetch the recent post URL?" — it cannot
+
+Asked by the owner, and the answer is a hard limit rather than a gap. Rule 1
+forbids any request to `linkedin.com`, and LinkedIn gates post feeds behind a
+session — reaching one needs exactly the credential login and bot-detection
+evasion that the 2026-09-03 widening explicitly did **not** cover.
+
+So the card carries the profile link Outlio does hold, validated, and the
+operator makes the one hop themselves. The honest upgrade later is the
+**browser extension**, which already observes pages during a session the user
+starts; it could record the top post URL from an activity page they open. That
+is inside the existing rule. It is circular for *finding* a post, but good for
+re-finding one.
+
+⚠️ **Engagement steps produce tasks that cannot release today.** §4.10 caps the
+`engagement` budget at **0/day at every warm-up stage** — a decision made before
+the customer had any way to put a like in a workflow. They map to that bucket
+rather than to `profile_review`, because picking a cheaper bucket would overturn
+a safety limit by choosing rather than by deciding. The builder says so on the
+card at the moment the step is added.
+
+#### Linear, and the pointer is a step ID
+
+> "OK ship lenier" · "people can entre at diff points"
+
+Those two together are why `linkedin_enrollments.current_step_id` is a **step
+id, never a position number**. A live campaign routinely has people standing on
+several steps at once; positions renumber when a step is inserted. An integer
+pointer would silently move everybody standing on old-5 onto a step they had
+already done — no error, no log line, just the wrong message from a real account
+to a real stranger.
+
+`entry_step_id` is stored separately and never updated, because `current_step_id`
+stops answering "where did they come in" the moment they advance — and that
+comparison is what the DM analysis below will need.
+
+Deleting a step somebody is standing on is the one edit an id pointer does not
+make safe, so it is refused by `on delete restrict` and the UI names how many
+people are affected. Verified against real Postgres: refused when occupied,
+allowed when not.
+
+#### The CRM fix, and a security bug found beside it
+
+> "i need navigator url there as well and linkedin profile url as well"
+
+Cause: one line in `lib/crm/ingest.ts` — `lead.linkedin_url ?? lead.sales_navigator_url`.
+`extracted_leads` holds both; `crm_contacts` held one. On a Sales Navigator save
+`linkedin_url` is usually NULL, so the contact stored a `/sales/lead/…` address
+in a column named `linkedin_url` and the other was discarded. §4.5 forbids
+deriving either from the other, so it was gone for good.
+
+0131 adds the column; ingest writes both, filling a gap and never overwriting.
+**No backfill** — the data to split existing rows exists only for lead-engine
+contacts, and a fix covering some rows while leaving others, with nobody able to
+tell which, is worse than one covering none. The contact page therefore buckets
+by *what the URL is* (`profileReference().kind`), not which column held it.
+
+⚠️ **The page was rendering `href={contact.linkedInUrl}` raw** — the unvalidated
+column straight into an href, while the company URL 190 lines above went through
+a validator. That column is written by importers from uploaded HTML, so a
+`javascript:` value there was stored XSS on a page every rep opens. The file's
+own comment said exactly that, about the other link. Both now go through
+`profileReference`, the read-only allowlist §4.13 requires.
+
+### Still not built, and not started
+
+- **Opener / pitch DM per prospect** in the pipeline section.
+- **The DM & strategy analysis** — the owner's "smartest feature we can build":
+  analyse openers and follow-ups, report what is working per assigned user and
+  overall. **Premium plans and admin only.** It needs the two items above to
+  exist before it has anything to analyse.
+- **AI drafting from the user's own instruction**, applied to all or selected
+  leads. The placeholders it must emit already exist and are enforced.
+- **Voice notes** — ElevenLabs cloning and TTS, downloaded as mp3 and sent by
+  hand as a file. Explicitly deferred by the owner: "KEEP IT FOR LATER".
+- **Task generation from the workflow**: enrolment at a chosen step, and the
+  worker that releases the next step when a wait elapses. The schema for it
+  landed in 0130; nothing walks it yet.

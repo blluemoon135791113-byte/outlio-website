@@ -10667,3 +10667,79 @@ and it sent the owner to recreate a token that was already correct.
 Supabase and real SMTP/IMAP; typecheck 0; lint 0 errors; build clean.
 Scheduler holding at 299-301s across 11 consecutive gaps, read from
 `worker_runs` rather than assumed. `main` refuses a direct push.
+
+---
+
+## Phase 20 — the customer's own campaign workflow (2026-09-15)
+
+Owner decision, after seeing that Phases 18/19 sat on a channel with no
+sequence: **keep it manual, and let the customer build their own workflow per
+campaign.** Linear, by their choice ("OK ship lenier").
+
+Migrations **0130** (`linkedin_workflow_steps`, enrolment pointer, two task
+kinds, `ENGAGEMENT_RECORDED`) and **0131** (`crm_contacts.sales_navigator_url`)
+applied by hand to both projects; `types/database.ts` regenerated and matched.
+
+### The two decisions that carry the phase
+
+**Outlio composes nothing.** "outlio does not prepare the note text or the
+message it will be written manually." The eight templates remain as a paste-and-
+edit starting point, but a step holds the operator's own words plus three
+placeholders — `first_name`, `company`, `location` — resolved from literally
+observed CRM values. A missing value **blocks the task**; it never renders a gap.
+An unknown placeholder is refused **at save**, because at send the only options
+are to leak `{{firstname}}` to a stranger or silently alter the sentence.
+
+**The enrolment pointer is a step ID, never a position.** People enter at
+different points, so a live campaign has people standing on several steps at
+once, and positions renumber on insert. An integer pointer would move them
+silently onto the wrong step — no error, just the wrong message from a real
+account. `on delete restrict` turns the one remaining unsafe edit, deleting an
+occupied step, into a refusal that names how many people are affected.
+
+### Defects found and fixed while building
+
+- **`lib/crm/ingest.ts` discarded one of every contact's two LinkedIn URLs** via
+  a coalesce. §4.5 forbids deriving either from the other, so it was gone for
+  good. Now both are written; no backfill, because the source data exists only
+  for lead-engine contacts and a partial fix nobody can audit is worse than none.
+- **The contact page rendered `href={contact.linkedInUrl}` raw** — an
+  importer-written, attacker-influenced column straight into an href, i.e.
+  stored XSS, while the company URL 190 lines above *was* validated. The file's
+  own comment described the risk, about the other link.
+- **`steps.ts` shipped a second copy of `POSITIVE`** keyed by step action — one
+  question, two implementations. Collapsed to one chain: action → kind → outcome.
+- **A guard-ordering bug, twice in one function.** `compileWorkflow` indexed
+  `STEPS[action]` before checking the action was known; fixing the loop left the
+  identical bug in the aggregate check one line below. A test asserting only that
+  the unknown action is *reported* would still have passed — the throw happens
+  after the problem is pushed.
+
+⚠️ **Switching `TaskKind`/`TaskOutcome` to the generated enums is what found
+three of these.** Both were hand-written unions, so 0130 widened the database
+without breaking any code. Anchoring on the generated type made three exhaustive
+`Record<TaskKind, …>` maps fail to compile until somebody decided what the new
+kinds mean — including which budget they spend.
+
+⚠️ **Engagement is capped at 0/day on every stage (§4.10), so `LIKE_POST` and
+`COMMENT_POST` produce tasks that cannot release.** They map to `engagement`
+rather than the cheaper `profile_review`, because picking a bucket is not a way
+to overturn a safety limit. The builder says so on the card.
+
+### Not built, deliberately
+
+Opener/pitch DM per prospect; the premium DM & strategy analysis; AI drafting
+from the user's own instruction; voice notes (owner: "KEEP IT FOR LATER"); and
+the worker that walks the workflow. 0130 carries the schema for the last of
+these — nothing traverses it yet, and no stub pretends to.
+
+### Verified
+
+3,830 unit tests across 223 files; typecheck 0; lint 0 errors; build clean.
+Migrations validated against a real Postgres 16 before being applied — every
+CHECK exercised in both directions, and `on delete restrict` proven to refuse an
+occupied step and permit an empty one. Eight mutations applied to the new guards;
+all eight were caught. Builder exercised in the browser: an empty required
+message was refused by name, a valid two-step workflow saved and survived a full
+reload with placeholders intact, and a pre-0131 contact holding a Navigator URL
+in `linkedin_url` now renders correctly labelled "Sales Navigator".

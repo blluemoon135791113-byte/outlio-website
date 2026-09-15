@@ -30,6 +30,13 @@ const OUTCOME_LABEL: Record<TaskOutcome, string> = {
   SKIPPED: 'Skip this one',
   FAILED: 'I could not do it',
   OUTCOME_UNKNOWN: 'Not sure whether it went',
+  /*
+   * ⚠️ "I engaged with the post" COVERS BOTH LIKING AND COMMENTING, matching the
+   * single `ENGAGEMENT_RECORDED` outcome. The card above already says which of
+   * the two was asked for, so a label naming one of them would contradict the
+   * card on half of these tasks.
+   */
+  ENGAGEMENT_RECORDED: 'I engaged with the post',
 }
 
 const KIND_LABEL: Record<TaskKind, string> = {
@@ -37,6 +44,8 @@ const KIND_LABEL: Record<TaskKind, string> = {
   CONNECTION_REQUEST: 'Connection request',
   DIRECT_MESSAGE: 'Message',
   INMAIL: 'InMail',
+  LIKE_POST: 'Like recent post',
+  COMMENT_POST: 'Comment on recent post',
 }
 
 export function ActionInbox({ tasks }: { tasks: InboxTask[] }) {

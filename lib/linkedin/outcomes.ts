@@ -23,29 +23,35 @@
  * A result form offers the first. It can never offer the second, because the
  * second is not an outcome of doing anything.
  */
+import type { Database } from '@/types/database'
 
-/** The kinds of manual task an operator can be handed (§4.6). */
-export type TaskKind =
-  | 'REVIEW_PROFILE'
-  | 'CONNECTION_REQUEST'
-  | 'DIRECT_MESSAGE'
-  | 'INMAIL'
+/**
+ * The kinds of manual task an operator can be handed (§4.6).
+ *
+ * ⚠️ THE GENERATED ENUM, NOT A HAND-WRITTEN UNION. Both of these were declared
+ * by hand until 0130 widened the real enums, and the drift was silent until a
+ * caller happened to pass a new value through — `campaignProgress` failed to
+ * compile on `ENGAGEMENT_RECORDED`, which was luck rather than design. Anchoring
+ * on the generated type means `npm run db:types` is what reveals a divergence,
+ * which is the moment it is cheapest to see.
+ */
+export type TaskKind = Database['public']['Enums']['linkedin_task_kind']
 
-/** What the operator did with the task. §4.7's manual evidence events. */
-export type TaskOutcome =
-  | 'REQUEST_MARKED_SENT'
-  | 'MESSAGE_MARKED_SENT'
-  | 'PROFILE_REVIEW_RECORDED'
-  | 'SKIPPED'
-  | 'FAILED'
-  /**
-   * ⚠️ NOT THE SAME AS `FAILED`, AND THE DISTINCTION IS LOAD-BEARING. §4.17:
-   * "an expired action-ready session does not prove 'not sent'. Ask the owner
-   * to confirm sent, not sent, or unknown." An unknown outcome keeps its quota
-   * reservation and must never release another attempt, because the thing we
-   * cannot rule out is that a stranger already received it.
-   */
-  | 'OUTCOME_UNKNOWN'
+/**
+ * What the operator did with the task. §4.7's manual evidence events.
+ *
+ * ⚠️ `OUTCOME_UNKNOWN` IS NOT THE SAME AS `FAILED`, AND THE DISTINCTION IS
+ * LOAD-BEARING. §4.17: "an expired action-ready session does not prove 'not
+ * sent'. Ask the owner to confirm sent, not sent, or unknown." An unknown
+ * outcome keeps its quota reservation and must never release another attempt,
+ * because the thing we cannot rule out is that a stranger already received it.
+ * `releasesQuota` below is where that is enforced.
+ *
+ * ⚠️ `ENGAGEMENT_RECORDED` (0130) COVERS BOTH LIKING AND COMMENTING. Which act
+ * it was is already on the task's `kind`; a second outcome would be a second
+ * thing every metric counting engagement has to remember to include.
+ */
+export type TaskOutcome = Database['public']['Enums']['linkedin_task_outcome']
 
 /**
  * What was later seen to happen. Recorded against the contact, never as the
@@ -66,11 +72,20 @@ const ALWAYS: readonly TaskOutcome[] = ['SKIPPED', 'FAILED', 'OUTCOME_UNKNOWN']
  * answer. Offering two invites the form to become a place where state is
  * asserted rather than recorded.
  */
-const POSITIVE: Readonly<Record<TaskKind, TaskOutcome>> = {
+export const POSITIVE: Readonly<Record<TaskKind, TaskOutcome>> = {
   REVIEW_PROFILE: 'PROFILE_REVIEW_RECORDED',
   CONNECTION_REQUEST: 'REQUEST_MARKED_SENT',
   DIRECT_MESSAGE: 'MESSAGE_MARKED_SENT',
   INMAIL: 'MESSAGE_MARKED_SENT',
+  /*
+   * ⚠️ BOTH ENGAGEMENT KINDS LAND ON ONE OUTCOME, matching 0130's enum comment.
+   * `Record<TaskKind, …>` is what forced these two entries to be written: adding
+   * a value to the database enum now breaks this object until somebody decides
+   * what "done" means for it, rather than defaulting to `undefined` and
+   * offering a result form with no affirmative answer at all.
+   */
+  LIKE_POST: 'ENGAGEMENT_RECORDED',
+  COMMENT_POST: 'ENGAGEMENT_RECORDED',
 }
 
 /** The outcomes a result form may offer for this task. */

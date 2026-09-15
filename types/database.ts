@@ -2241,6 +2241,7 @@ export type Database = {
           merged_into_id: string | null
           owner_user_id: string | null
           primary_company_id: string | null
+          sales_navigator_url: string | null
           source: Database["public"]["Enums"]["crm_record_source"]
           source_lead_id: string | null
           timezone: string | null
@@ -2264,6 +2265,7 @@ export type Database = {
           merged_into_id?: string | null
           owner_user_id?: string | null
           primary_company_id?: string | null
+          sales_navigator_url?: string | null
           source?: Database["public"]["Enums"]["crm_record_source"]
           source_lead_id?: string | null
           timezone?: string | null
@@ -2287,6 +2289,7 @@ export type Database = {
           merged_into_id?: string | null
           owner_user_id?: string | null
           primary_company_id?: string | null
+          sales_navigator_url?: string | null
           source?: Database["public"]["Enums"]["crm_record_source"]
           source_lead_id?: string | null
           timezone?: string | null
@@ -6425,8 +6428,11 @@ export type Database = {
           campaign_id: string | null
           contact_id: string
           created_at: string
+          current_step_id: string | null
           ended_at: string | null
+          entry_step_id: string | null
           id: string
+          next_step_due_at: string | null
           sender_id: string
           state: Database["public"]["Enums"]["linkedin_enrollment_state"]
           terminal_reason:
@@ -6439,8 +6445,11 @@ export type Database = {
           campaign_id?: string | null
           contact_id: string
           created_at?: string
+          current_step_id?: string | null
           ended_at?: string | null
+          entry_step_id?: string | null
           id?: string
+          next_step_due_at?: string | null
           sender_id: string
           state?: Database["public"]["Enums"]["linkedin_enrollment_state"]
           terminal_reason?:
@@ -6453,8 +6462,11 @@ export type Database = {
           campaign_id?: string | null
           contact_id?: string
           created_at?: string
+          current_step_id?: string | null
           ended_at?: string | null
+          entry_step_id?: string | null
           id?: string
+          next_step_due_at?: string | null
           sender_id?: string
           state?: Database["public"]["Enums"]["linkedin_enrollment_state"]
           terminal_reason?:
@@ -6476,6 +6488,20 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_enrollments_current_step_id_fkey"
+            columns: ["current_step_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_workflow_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_enrollments_entry_step_id_fkey"
+            columns: ["entry_step_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_workflow_steps"
             referencedColumns: ["id"]
           },
           {
@@ -6734,6 +6760,7 @@ export type Database = {
           sender_id: string
           skip_reason: string | null
           state: Database["public"]["Enums"]["linkedin_task_state"]
+          step_id: string | null
           workspace_id: string
         }
         Insert: {
@@ -6753,6 +6780,7 @@ export type Database = {
           sender_id: string
           skip_reason?: string | null
           state?: Database["public"]["Enums"]["linkedin_task_state"]
+          step_id?: string | null
           workspace_id: string
         }
         Update: {
@@ -6772,6 +6800,7 @@ export type Database = {
           sender_id?: string
           skip_reason?: string | null
           state?: Database["public"]["Enums"]["linkedin_task_state"]
+          step_id?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -6797,7 +6826,65 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "linkedin_tasks_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_workflow_steps"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "linkedin_tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_workflow_steps: {
+        Row: {
+          action: Database["public"]["Enums"]["linkedin_step_action"]
+          body: string | null
+          campaign_id: string
+          created_at: string
+          id: string
+          position: number
+          updated_at: string
+          wait_days: number | null
+          workspace_id: string
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["linkedin_step_action"]
+          body?: string | null
+          campaign_id: string
+          created_at?: string
+          id?: string
+          position: number
+          updated_at?: string
+          wait_days?: number | null
+          workspace_id: string
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["linkedin_step_action"]
+          body?: string | null
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          position?: number
+          updated_at?: string
+          wait_days?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_workflow_steps_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_workflow_steps_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -9851,11 +9938,22 @@ export type Database = {
         | "restricted"
         | "disconnected"
         | "auth_expired"
+      linkedin_step_action:
+        | "VISIT_PROFILE"
+        | "CONNECTION_REQUEST"
+        | "DIRECT_MESSAGE"
+        | "INMAIL"
+        | "LIKE_POST"
+        | "COMMENT_POST"
+        | "ADD_TAG"
+        | "WAIT"
       linkedin_task_kind:
         | "REVIEW_PROFILE"
         | "CONNECTION_REQUEST"
         | "DIRECT_MESSAGE"
         | "INMAIL"
+        | "LIKE_POST"
+        | "COMMENT_POST"
       linkedin_task_outcome:
         | "REQUEST_MARKED_SENT"
         | "MESSAGE_MARKED_SENT"
@@ -9863,6 +9961,7 @@ export type Database = {
         | "SKIPPED"
         | "FAILED"
         | "OUTCOME_UNKNOWN"
+        | "ENGAGEMENT_RECORDED"
       linkedin_task_state: "PENDING" | "RELEASED" | "COMPLETED" | "EXPIRED"
       linkedin_terminal_reason:
         | "GOAL_MET"
@@ -10274,11 +10373,23 @@ export const Constants = {
         "disconnected",
         "auth_expired",
       ],
+      linkedin_step_action: [
+        "VISIT_PROFILE",
+        "CONNECTION_REQUEST",
+        "DIRECT_MESSAGE",
+        "INMAIL",
+        "LIKE_POST",
+        "COMMENT_POST",
+        "ADD_TAG",
+        "WAIT",
+      ],
       linkedin_task_kind: [
         "REVIEW_PROFILE",
         "CONNECTION_REQUEST",
         "DIRECT_MESSAGE",
         "INMAIL",
+        "LIKE_POST",
+        "COMMENT_POST",
       ],
       linkedin_task_outcome: [
         "REQUEST_MARKED_SENT",
@@ -10287,6 +10398,7 @@ export const Constants = {
         "SKIPPED",
         "FAILED",
         "OUTCOME_UNKNOWN",
+        "ENGAGEMENT_RECORDED",
       ],
       linkedin_task_state: ["PENDING", "RELEASED", "COMPLETED", "EXPIRED"],
       linkedin_terminal_reason: [
