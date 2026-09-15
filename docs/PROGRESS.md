@@ -4,6 +4,104 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-09-15 — The migration harness could pass a failing smoke test
+
+Two fixes to the tooling that validates migrations before the owner applies
+them by hand. Nothing was applied to either Supabase project.
+
+### A smoke check that printed false still passed (#37)
+
+Found while mutation-testing the 0126 smoke file. Four ways a broken migration
+got through:
+
+- `scripts/check-migration.sh` exited 0 unless psql hit a SQL error. A check row
+  reading `ok = f` is not an error: seven false checks, exit 0.
+- `scripts/rehearse-migration.mjs` counted a NULL `ok` as a pass.
+- `fn(...) ->> 'reason' = 'stale'` is NULL, not false, exactly when a broken
+  function succeeds, because there is no `reason` key.
+- A check whose `where` matched no rows printed nothing, which looks the same as
+  a check that was never written.
+
+**Fixed:**
+
+- Smoke files 0120, 0122, 0123, 0124 and 0125 now use the gated pattern from
+  0126:
+  - every check is inserted into `smoke_checks` through `coalesce(…, false)`
+  - a final block raises unless exactly the expected number of checks were
+    recorded (3, 3, 15, 5, 8) and every one is true
+  - there is no 0121 smoke file
+- Both scripts require the gate's `SMOKE PASSED` notice. A smoke file without a
+  gate is refused rather than passed, because nothing in it can fail.
+- rehearse passes only `ok === true`.
+
+⚠️ **The 17 older files in `supabase/smoke/` (0074–0093) have no gate, so both
+scripts now refuse them.** That is deliberate: none of them could fail as
+written. Convert one before relying on it.
+
+⚠️ **Parsing psql's `t`/`f` output was rejected as the fix.** A NULL prints
+blank and a missing row prints nothing, so there is nothing to parse. The gate's
+count is what catches an absent check.
+
+**Also fixed: concurrent runs shared port 55432.** A second run's postgres failed
+to bind, but its readiness loop only asked whether *something* answered, so it
+scaffolded into the first run's cluster. Now:
+
+- each cluster gets a unique `cluster_name` and is trusted only when the
+  answering server reports it
+- a lost bind moves on to the next port (55432–55471)
+- `PGCONNECT_TIMEOUT=5` stops a port that accepts connections but never answers
+  from hanging the scan
+
+**Verified.** Each migration was broken in a copy outside the repo:
+
+| Break | Failing check |
+|---|---|
+| 0120: contact-level suppression removed | suppressed contact's second address |
+| 0122: membership check disabled | a user with no link is denied the budget |
+| 0123: `owner_user_id_at_event` read from the new owner | at_event is the old owner |
+| 0124: FK no longer includes `workspace_id` | a task in A cannot link to B's deal |
+| 0125: `deleted_at` filter removed | a deleted contact is not load |
+
+- Every broken run now exits 1 and names its failing check.
+- The old harness exited 0 on the same 0125 break.
+- After rebasing, 0120–0128 all pass under the new gate.
+- Two concurrent runs got ports 55432 and 55433, and both passed.
+
+### Every local run left an empty temp directory (#38)
+
+`cleanup()` sent `kill` to the postmaster and ran `rm -rf` straight away. On
+Windows postgres was still exiting and holding `data/` open: the files were
+deleted, the directory was not. 148 empty `outlio-sqlcheck.*` directories had
+built up in the temp root.
+
+**Fixed:**
+
+- A new `stop_cluster` stops the cluster with `pg_ctl -m immediate -w`, falls
+  back to `kill`, then `wait`s for the process.
+- Directory removal retries for up to 10 seconds, and warns if the directory
+  survives.
+- The port-retry path uses the same stop.
+
+**Verified.**
+
+- Reproduced with the previous script: exit 0, an empty `data/` left behind.
+- With the fix, a passing run (exit 0) and a failing smoke run (exit 1) both
+  leave no directory and no postgres process.
+
+The 148 leftovers were removed, along with two populated clusters left by other
+sessions' runs, after confirming no postgres was using them.
+
+### ⚠️ Waiting on the owner
+
+- **Vercel fails on every commit, main included:** "Deployment was blocked".
+  The Git author `Abdulsaboor2004` is not a member of the Vercel team. It is not
+  a required check, so it does not block merging, but no previews deploy until
+  that account is given access.
+- **`rehearse-migration.mjs` was not run end to end in this session,** because
+  it connects to the real Supabase database.
+
+---
+
 ## 2026-08-30 — FastSpring charge records and paid-period credit allocation
 
 The webhook now handles the money half of the integration: every charge attempt
