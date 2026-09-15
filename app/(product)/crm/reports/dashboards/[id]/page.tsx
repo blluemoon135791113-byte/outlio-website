@@ -106,7 +106,7 @@ export default async function DashboardPage({
           </p>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           {rendered.map((entry, index) => (
             <div key={entry.widget.id} className={entry.widget.width === 4 ? 'sm:col-span-2 xl:col-span-4' : entry.widget.width === 2 ? 'sm:col-span-2' : ''}>
               {entry.definition === null ? (

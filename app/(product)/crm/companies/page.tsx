@@ -134,7 +134,7 @@ export default async function CompaniesPage({
           </p>
           <Link
             href={reason === 'past_end' ? '/crm/companies' : '/crm/contacts'}
-            className="mt-3 inline-block rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+            className="mt-3 inline-block rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
           >
             {reason === 'past_end' ? 'Back to the first page' : 'Go to contacts'}
           </Link>

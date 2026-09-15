@@ -67,7 +67,7 @@ export function ImportContacts() {
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Link
             href="/crm/contacts"
-            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
           >
             See the contacts
           </Link>
@@ -189,7 +189,7 @@ export function ImportContacts() {
             <button
               type="submit"
               disabled={committing || preview.preview.rowsValid === 0}
-              className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+              className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
             >
               {committing
                 ? 'Importing…'

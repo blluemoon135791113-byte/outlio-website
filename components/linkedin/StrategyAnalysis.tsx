@@ -3,6 +3,14 @@
 import { useActionState } from 'react'
 
 import { analyseAction, type AnalysisState } from '@/app/(product)/linkedin/strategy-actions'
+import { Button } from '@/components/ui/Button'
+/*
+ * ⚠️ `Stat` AND `FormMessage` COME FROM THE SHARED LAYER NOW. This file shipped
+ * with its own `Stat` an hour before `components/ui/Feedback.tsx` existed —
+ * which is precisely how the product reached 148 button definitions. The local
+ * copy is deleted rather than kept "just for this screen".
+ */
+import { FormMessage, Stat } from '@/components/ui/Feedback'
 import type { RepStats } from '@/lib/linkedin/analysis'
 
 /**
@@ -36,19 +44,15 @@ export function StrategyAnalysis() {
           the AI comments on the writing only.
         </p>
         <form action={run} className="mt-3">
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-medium text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
-          >
-            {pending ? 'Analysing…' : 'Run analysis'}
-          </button>
+          <Button type="submit" pending={pending} pendingLabel="Analysing…">
+            Run analysis
+          </Button>
         </form>
 
         {state && !state.ok ? (
-          <p role="alert" className="mt-3 text-xs text-danger">
+          <FormMessage tone="error" className="mt-3">
             {state.error}
-          </p>
+          </FormMessage>
         ) : null}
       </div>
 
@@ -84,7 +88,10 @@ function Report({ report }: { report: NonNullable<Extract<AnalysisState, { ok: t
         read six confident findings has formed a view before reaching it.
       */}
       {report.caveat ? (
-        <p role="note" className="rounded-[var(--radius-md)] bg-surface-muted px-3 py-2 text-xs leading-relaxed text-warning">
+        <p
+          role="note"
+          className="rounded-[var(--radius-md)] bg-surface-muted px-3 py-2 text-xs leading-relaxed text-warning"
+        >
           {report.caveat}
         </p>
       ) : null}
@@ -167,32 +174,5 @@ function StatRow({ stats }: { stats: RepStats }) {
       ) : null}
       <Stat label="Messages written" value={String(stats.openers + stats.pitches)} />
     </dl>
-  )
-}
-
-function Stat({
-  label,
-  value,
-  muted,
-  warn,
-}: {
-  label: string
-  value: string
-  muted?: boolean
-  warn?: boolean
-}) {
-  return (
-    <div>
-      <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-        {label}
-      </dt>
-      <dd
-        className={`mt-0.5 text-sm tabular-nums ${
-          warn ? 'text-warning' : muted ? 'text-muted' : 'text-ink'
-        }`}
-      >
-        {value}
-      </dd>
-    </div>
   )
 }

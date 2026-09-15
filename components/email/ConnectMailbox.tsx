@@ -41,7 +41,7 @@ export function ConnectMailbox() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+        className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
       >
         Connect a mailbox
       </button>
@@ -134,7 +134,7 @@ export function ConnectMailbox() {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+          className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
         >
           {/*
             The label says what is happening. "Saving…" would be a lie: the

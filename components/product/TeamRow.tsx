@@ -61,7 +61,15 @@ export function TeamRow({
         </Link>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      {/*
+        ⚠️ TWO-UP ON A PHONE, THREE FROM `sm`. These are stat cards like
+        `PerformanceRow`'s, and stacking them one-up put a manager's three
+        headline figures across three screens of scroll. Three columns at
+        375px would give ~110px each, which is too narrow for "Open
+        pipeline" plus a currency figure — so this row goes 2 → 3 rather
+        than 1 → 3.
+      */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Figure
           label="Open pipeline"
           /*

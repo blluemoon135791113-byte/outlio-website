@@ -8,6 +8,9 @@ import {
 } from '@/app/(product)/linkedin/campaigns/workflow-actions'
 import { PLACEHOLDERS, PLACEHOLDER_SPECS } from '@/lib/linkedin/placeholders'
 import { STEPS, STEP_ACTIONS, type StepAction } from '@/lib/linkedin/steps'
+import { Button } from '@/components/ui/Button'
+import { EmptyState, FormMessage } from '@/components/ui/Feedback'
+import { Input, Textarea } from '@/components/ui/Field'
 import { MAX_STEPS, MAX_WAIT_DAYS } from '@/lib/linkedin/workflow'
 
 /**
@@ -159,13 +162,10 @@ export function WorkflowBuilder({
             by the design rules, and this one carries the sentence that stops a
             reader assuming the campaign is already doing something.
           */
-          <div className="rounded-[var(--radius-lg)] border border-dashed border-line px-4 py-8 text-center">
-            <p className="text-sm font-medium text-ink">No steps yet</p>
-            <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted">
-              Add the first action you want to take. Nobody is contacted until you build the
-              workflow and perform the tasks it creates.
-            </p>
-          </div>
+          <EmptyState
+            title="No steps yet"
+            body="Add the first action you want to take. Nobody is contacted until you build the workflow and perform the tasks it creates."
+          />
         ) : null}
 
         {cards.map((card, index) => (
@@ -201,24 +201,12 @@ export function WorkflowBuilder({
         ) : null}
 
         <div className="flex flex-wrap items-center gap-3 pt-1">
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-medium text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
-          >
-            {pending ? 'Saving…' : 'Save workflow'}
-          </button>
+          <Button type="submit" pending={pending} pendingLabel="Saving…">
+            Save workflow
+          </Button>
 
-          {state && !state.ok ? (
-            <p role="alert" className="text-xs text-danger">
-              {state.error}
-            </p>
-          ) : null}
-          {state?.ok ? (
-            <p role="status" className="text-xs text-muted">
-              {state.message}
-            </p>
-          ) : null}
+          {state && !state.ok ? <FormMessage tone="error">{state.error}</FormMessage> : null}
+          {state?.ok ? <FormMessage tone="success">{state.message}</FormMessage> : null}
         </div>
       </form>
 
@@ -285,7 +273,7 @@ function StepCard({
               nudge. `min`/`max` mirror the database CHECK rather than replacing
               it — this is a hint, and 0130 is the rule.
             */}
-            <input
+            <Input
               type="number"
               min={1}
               max={MAX_WAIT_DAYS}
@@ -294,16 +282,17 @@ function StepCard({
                 const parsed = Number.parseInt(event.target.value, 10)
                 onChange({ waitDays: Number.isNaN(parsed) ? null : parsed })
               }}
-              className="w-16 rounded-[var(--radius-md)] border border-line bg-surface px-2 py-1 text-sm text-ink"
+              /* ⚠️ `tabular-nums` so the field does not resize between 1 and 30. */
+              className="w-16 px-2 py-1 tabular-nums"
             />
             <span className="text-muted">{card.waitDays === 1 ? 'day' : 'days'}</span>
           </label>
           <RemoveButton onRemove={onRemove} standing={standing} label="wait" />
         </div>
         {problem ? (
-          <p role="alert" className="mt-2 text-xs text-danger">
+          <FormMessage tone="error" className="mt-2">
             {problem}
-          </p>
+          </FormMessage>
         ) : null}
       </div>
     )
@@ -362,12 +351,12 @@ function StepCard({
         <div className="mt-3">
           <label className="block">
             <span className="text-xs font-medium text-ink">Tag to add</span>
-            <input
+            <Input
               value={typeof card.config.tag === 'string' ? card.config.tag : ''}
               onChange={(event) => onChange({ config: { tag: event.target.value } })}
               maxLength={100}
               placeholder="Replied — warm"
-              className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink sm:max-w-xs"
+              className="mt-1 sm:max-w-xs"
             />
           </label>
           <p className="mt-1.5 text-xs leading-relaxed text-muted">
@@ -386,17 +375,16 @@ function StepCard({
                 <span className="font-normal text-muted"> — optional</span>
               ) : null}
             </span>
-            <textarea
+            <Textarea
               value={card.body}
               onChange={(event) => onChange({ body: event.target.value })}
-              rows={4}
               maxLength={8_000}
               placeholder={
                 card.action === 'CONNECTION_REQUEST'
                   ? 'Hi {{first_name}} — saw your work at {{company}} and wanted to connect.'
                   : 'Write what you want to say. Use the placeholders below to personalise it.'
               }
-              className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm leading-relaxed text-ink"
+              className="mt-1"
             />
           </label>
 
@@ -429,9 +417,9 @@ function StepCard({
       )}
 
       {problem ? (
-        <p role="alert" className="mt-2 text-xs text-danger">
+        <FormMessage tone="error" className="mt-2">
           {problem}
-        </p>
+        </FormMessage>
       ) : null}
     </div>
   )
@@ -459,13 +447,9 @@ function RemoveButton({
           {standing === 1 ? '1 person here' : `${standing} people here`}
         </span>
       ) : null}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="rounded-[var(--radius-md)] px-2 py-1 text-xs text-muted transition-colors duration-150 hover:text-danger"
-      >
+      <Button variant="danger" onClick={onRemove}>
         Remove<span className="sr-only"> this {label}</span>
-      </button>
+      </Button>
     </div>
   )
 }
@@ -493,13 +477,9 @@ function ActionSheet({
     <div className="rounded-[var(--radius-lg)] border border-line bg-surface p-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-ink">Add a step</h3>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-[var(--radius-md)] px-2 py-1 text-xs text-muted transition-colors duration-150 hover:text-ink"
-        >
+        <Button variant="ghost" onClick={onClose}>
           Cancel
-        </button>
+        </Button>
       </div>
 
       <p className="mt-2 text-xs font-medium text-muted">You perform these in LinkedIn</p>

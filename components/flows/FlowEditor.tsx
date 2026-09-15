@@ -96,7 +96,7 @@ export function FlowEditor({
           <button
             type="submit"
             disabled={publishing}
-            className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+            className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
           >
             {publishing ? 'Publishing…' : 'Publish new version'}
           </button>

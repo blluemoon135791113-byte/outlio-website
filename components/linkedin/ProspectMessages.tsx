@@ -9,6 +9,9 @@ import {
   type DraftState,
   type ProspectMessageState,
 } from '@/app/(product)/linkedin/strategy-actions'
+import { Button } from '@/components/ui/Button'
+import { FormMessage } from '@/components/ui/Feedback'
+import { Input, Textarea } from '@/components/ui/Field'
 import { PLACEHOLDERS, PLACEHOLDER_SPECS } from '@/lib/linkedin/placeholders'
 
 export type ProspectMessageCard = {
@@ -130,18 +133,16 @@ function MessageEditor({
 
         <label className="block">
           <span className="sr-only">{spec.title}</span>
-          <textarea
+          <Textarea
             name="body"
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            rows={4}
             maxLength={8_000}
             placeholder={
               kind === 'OPENER'
                 ? 'Hi {{first_name}} — saw you are in {{location}}…'
                 : 'What you would say once they are interested…'
             }
-            className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm leading-relaxed text-ink"
           />
         </label>
 
@@ -161,31 +162,23 @@ function MessageEditor({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-medium text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+          <Button type="submit" pending={saving} pendingLabel="Saving…">
+            Save
+          </Button>
 
-          <button
-            type="button"
-            onClick={() => setShowAi((open) => !open)}
-            className="rounded-[var(--radius-md)] bg-surface-muted px-3 py-1.5 text-xs font-medium text-ink transition-colors duration-150 hover:opacity-90"
-          >
+          <Button variant="secondary" onClick={() => setShowAi((open) => !open)}>
             {showAi ? 'Close' : 'Write with AI'}
-          </button>
+          </Button>
 
           {existing ? (
-            <button
-              type="submit"
-              formAction={remove}
-              disabled={removing}
-              className="rounded-[var(--radius-md)] px-2 py-1 text-xs text-muted transition-colors duration-150 hover:text-danger disabled:opacity-60"
-            >
-              {removing ? 'Removing…' : 'Remove'}
-            </button>
+            /*
+              ⚠️ `danger` IS GHOST-WEIGHT, not a filled red button. Remove sits
+              in the same row as Save; a filled red control there reads as the
+              row's primary action.
+            */
+            <Button type="submit" variant="danger" formAction={remove} pending={removing} pendingLabel="Removing…">
+              Remove
+            </Button>
           ) : null}
         </div>
       </form>
@@ -207,12 +200,12 @@ function MessageEditor({
               empty instruction server-side, so this is the hint rather than the
               rule.
             */}
-            <input
+            <Input
               name="instruction"
               required
               maxLength={2_000}
               placeholder="Short and casual, lead with their city, no pitch yet"
-              className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
+              className="mt-1"
             />
           </label>
 
@@ -227,36 +220,28 @@ function MessageEditor({
             placeholders above, and Outlio fills those in from what it has actually recorded.
           </p>
 
-          <button
-            type="submit"
-            disabled={drafting}
-            className="rounded-[var(--radius-md)] bg-surface-muted px-3 py-1.5 text-xs font-medium text-ink transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
-          >
-            {drafting ? 'Writing…' : 'Draft it'}
-          </button>
+          <Button type="submit" variant="secondary" pending={drafting} pendingLabel="Writing…">
+            Draft it
+          </Button>
 
           {draftState && !draftState.ok ? (
-            <p role="alert" className="text-xs text-danger">
-              {draftState.error}
-            </p>
+            <FormMessage tone="error">{draftState.error}</FormMessage>
           ) : null}
           {draftState?.ok ? (
-            <p role="status" className="text-xs text-muted">
-              Draft placed above. Edit it, then press Save.
-            </p>
+            <FormMessage tone="success">Draft placed above. Edit it, then press Save.</FormMessage>
           ) : null}
         </form>
       ) : null}
 
       {state && !state.ok ? (
-        <p role="alert" className="mt-2 text-xs text-danger">
+        <FormMessage tone="error" className="mt-2">
           {state.error}
-        </p>
+        </FormMessage>
       ) : null}
       {state?.ok ? (
-        <p role="status" className="mt-2 text-xs text-muted">
+        <FormMessage tone="success" className="mt-2">
           {state.message}
-        </p>
+        </FormMessage>
       ) : null}
     </div>
   )

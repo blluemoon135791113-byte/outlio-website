@@ -140,9 +140,32 @@ describe('the entitlement and its cap cannot be set apart', () => {
      * entitlement with no cap connects senders without limit, which is worse.
      * §4.10 caps borrowed accounts, and an unbounded cap is not a cap.
      */
-    const offenders = MIGRATIONS.filter(
-      ({ body }) => body.includes(CAP) !== body.includes(ENABLED),
-    ).map((m) => m.name)
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ IT ASKS WHAT A MIGRATION *WRITES*, NOT WHAT IT MENTIONS.           ║
+     * ║                                                                       ║
+     * ║  This was a plain `body.includes(...)` over the whole file, and 0134   ║
+     * ║  broke it by being correct: that migration grants                      ║
+     * ║  `linkedin_analysis_enabled` and READS `linkedin_enabled` in a guard    ║
+     * ║  that refuses to entitle the analysis on a plan without the module.     ║
+     * ║  A substring test cannot tell a SELECT from an assignment, so it        ║
+     * ║  reported a migration whose whole purpose is keeping these keys in     ║
+     * ║  agreement.                                                           ║
+     * ║                                                                       ║
+     * ║  Narrowing to `jsonb_build_object(...)` — the only way these           ║
+     * ║  migrations set a limit — keeps the real rule and drops the false      ║
+     * ║  positive. It does NOT weaken it: a migration that writes the cap      ║
+     * ║  without the entitlement still writes both inside that call, and the   ║
+     * ║  mutation below proves this can still fail.                            ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const written = (body: string): string =>
+      [...body.matchAll(/jsonb_build_object\(([\s\S]*?)\)/g)].map((m) => m[1]).join('\n')
+
+    const offenders = MIGRATIONS.filter(({ body }) => {
+      const sets = written(body)
+      return sets.includes(CAP) !== sets.includes(ENABLED)
+    }).map((m) => m.name)
 
     expect(
       offenders,
@@ -151,6 +174,25 @@ describe('the entitlement and its cap cannot be set apart', () => {
         'connect senders, and how many — and a partial apply leaves a state no ' +
         'code path expects. Set both in one statement.',
     ).toEqual([])
+  })
+
+  it('still catches a cap written without its entitlement', () => {
+    /*
+     * ⚠️ THE NARROWED MATCHER IS PROVED AGAINST A SYNTHETIC OFFENDER, because a
+     * check that was just made more specific is a check that might now match
+     * nothing. 0127 is the real shape it has to keep catching.
+     */
+    const written = (body: string): string =>
+      [...body.matchAll(/jsonb_build_object\(([\s\S]*?)\)/g)].map((m) => m[1]).join('\n')
+
+    const bad = "update public.plans set limits = jsonb_build_object('linkedin_senders_max', 10) || limits;"
+    const sets = written(bad)
+    expect(sets.includes(CAP) !== sets.includes(ENABLED), 'the matcher went blind').toBe(true)
+
+    const good =
+      "update public.plans set limits = jsonb_build_object('linkedin_enabled', true, 'linkedin_senders_max', 10) || limits;"
+    const ok = written(good)
+    expect(ok.includes(CAP) !== ok.includes(ENABLED)).toBe(false)
   })
 
   it('0127 sets both, per plan, in one statement each', () => {
