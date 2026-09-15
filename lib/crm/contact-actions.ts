@@ -11,7 +11,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
-import { addNote, assignContact, eraseContact } from '@/lib/crm/activities'
+import { addNote, assignContact, bulkAssignContacts, eraseContact, NotAMemberError } from '@/lib/crm/activities'
 import { createContactManually } from '@/lib/crm/ingest'
 import {
   STOP_REASONS,
@@ -331,37 +331,21 @@ export async function bulkAssignAction(
   const raw = String(formData.get('ownerUserId') ?? '')
   const ownerUserId = raw === 'none' ? null : raw
 
-  const db = createAdminClient()
-
   /*
-   * ⚠️ THE NEW OWNER MUST BE A MEMBER OF THIS WORKSPACE. The id comes from a
-   * form and the service role bypasses RLS, so without this a crafted request
-   * hands contacts to an outsider, who then owns them legitimately. Same check
-   * as the departing-member handover in R3.
+   * ⚠️ THE WORKSPACE AND MEMBERSHIP CHECKS NOW LIVE IN THE DATABASE, where the
+   * write happens. `crm_bulk_assign_contacts` (0129) only touches this
+   * workspace's live contacts — an id from a form is a claim — and refuses a
+   * new owner who is not a member, so a crafted request cannot hand contacts
+   * to an outsider. Each change goes through the single-assignment function,
+   * so each writes its OWNER_ASSIGNED history.
    */
-  if (ownerUserId) {
-    const { data: member } = await db
-      .from('workspace_memberships')
-      .select('user_id')
-      .eq('workspace_id', ctx.workspace.id)
-      .eq('user_id', ownerUserId)
-      .maybeSingle()
-
-    if (!member) return { ok: false, error: 'That person is not in this workspace.' }
+  let result
+  try {
+    result = await bulkAssignContacts(ctx.workspace.id, ids, ownerUserId, ctx.userId)
+  } catch (error) {
+    if (error instanceof NotAMemberError) return { ok: false, error: error.message }
+    return { ok: false, error: 'Could not assign those contacts.' }
   }
-
-  const { data, error } = await db
-    .from('crm_contacts')
-    .update({ owner_user_id: ownerUserId })
-    // Scoped by workspace in code, and by the id list — an id from a form is a
-    // claim, and this is what stops it reaching another tenant's contact.
-    .eq('workspace_id', ctx.workspace.id)
-    .in('id', ids)
-    .select('id')
-
-  if (error) return { ok: false, error: 'Could not assign those contacts.' }
-
-  const moved = data?.length ?? 0
 
   revalidatePath('/crm/contacts')
 
@@ -370,11 +354,12 @@ export async function bulkAssignAction(
    * differ when a selection spans a page someone no longer has access to, and
    * silently claiming the larger number would hide that.
    */
+  const { changed, unchanged } = result
+  const verb = ownerUserId ? 'assigned' : 'unassigned'
+  const already = unchanged > 0 ? ` ${unchanged} already ${ownerUserId ? 'theirs' : 'unassigned'}.` : ''
   return {
     ok: true,
-    message: ownerUserId
-      ? `${moved} contact${moved === 1 ? '' : 's'} assigned.`
-      : `${moved} contact${moved === 1 ? '' : 's'} unassigned.`,
+    message: `${changed} contact${changed === 1 ? '' : 's'} ${verb}.${already}`,
   }
 }
 
