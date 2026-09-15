@@ -12,6 +12,8 @@ import { z } from 'zod'
 import { buildLinkedInContext, type RecordSource } from '@/lib/linkedin/context'
 import { enrollContact } from '@/lib/linkedin/enroll'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isObservation } from '@/lib/linkedin/outcomes'
+import { recordObservation } from '@/lib/linkedin/observations'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
 export type EnrollActionState =
@@ -94,4 +96,78 @@ export async function enrollContactAction(
   revalidatePath(`/crm/contacts/${contactId.data}`)
   revalidatePath('/linkedin')
   return { ok: true, message: 'Added. The first task is in your LinkedIn inbox.' }
+}
+
+/* -------------------------------------------------------------------------- */
+
+export type ObservationState =
+  | { ok: true; message: string; unconfirmed: boolean }
+  | { ok: false; error: string }
+  | null
+
+/**
+ * Records what the operator later saw happen to this person.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ SEPARATE FROM THE TASK RESULT FORM, AND IT MUST STAY SEPARATE.        ║
+ * ║                                                                           ║
+ * ║  `outcomes.ts`: "A result form offers the first and can never offer the   ║
+ * ║  second, because an observation is not the outcome of doing anything."    ║
+ * ║  `TaskOutcome` is what the operator DID; an Observation is what they      ║
+ * ║  later SAW. Collapsing them lets "mark request sent" mark acceptance —    ║
+ * ║  and acceptance gates the first DM, so the collapse sends a message into  ║
+ * ║  a connection that was never made.                                       ║
+ * ║                                                                           ║
+ * ║  It lives on the CONTACT, not the task, because that is what it is about: ║
+ * ║  a reply can arrive weeks after an enrolment ended.                      ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function recordObservationAction(
+  _previous: ObservationState,
+  formData: FormData,
+): Promise<ObservationState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('crm.contact.edit')
+  } catch {
+    return { ok: false, error: 'You do not have permission to record this.' }
+  }
+
+  if (!ctx.modules.has('linkedin')) {
+    return { ok: false, error: 'LinkedIn is not included in your plan.' }
+  }
+
+  const contactId = String(formData.get('contactId') ?? '')
+  const kind = String(formData.get('kind') ?? '')
+  const note = String(formData.get('note') ?? '')
+
+  /*
+   * ⚠️ VALIDATED AGAINST THE VOCABULARY, NOT TRUSTED FROM THE FORM. A server
+   * action is a public HTTP endpoint, so `kind` is a claim — and the one value
+   * that must never arrive here is a `TaskOutcome`. The enum refuses it in the
+   * database too; this refuses it before the round trip.
+   */
+  if (!isObservation(kind)) {
+    return { ok: false, error: 'That is not something Outlio can record.' }
+  }
+
+  const result = await recordObservation({
+    workspaceId: ctx.workspace.id,
+    contactId,
+    kind,
+    note: note || null,
+    recordedBy: ctx.userId,
+  })
+
+  if (!result.ok) return { ok: false, error: result.message }
+
+  revalidatePath(`/crm/contacts/${contactId}`)
+
+  return {
+    ok: true,
+    unconfirmed: result.unconfirmed,
+    message: result.unconfirmed
+      ? 'Recorded. The outreach it follows was marked unknown, so this is kept but flagged.'
+      : 'Recorded.',
+  }
 }

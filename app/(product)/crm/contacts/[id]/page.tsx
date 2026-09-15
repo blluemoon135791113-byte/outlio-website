@@ -11,6 +11,7 @@ import { listContactTimeline } from '@/lib/crm/activities'
 import { checkCollision } from '@/lib/crm/collision'
 import { contactStopRecord } from '@/lib/crm/contact-stop'
 import { EnrollContact } from '@/components/linkedin/EnrollContact'
+import { RecordObservation } from '@/components/linkedin/RecordObservation'
 import { listWorkspaceSenders } from '@/lib/linkedin/senders'
 import { MoreDetails } from '@/components/crm/MoreDetails'
 import { ValueProvenance } from '@/components/crm/ValueProvenance'
@@ -469,6 +470,17 @@ export default async function ContactDetailPage({
                 two workspaces correlate a sender between them (§4.10).
               */}
               <EnrollContact contactId={contact.id} senders={linkedInSenders} />
+
+              {/*
+                ⚠️ BESIDE THE ENROLMENT, NOT INSIDE THE TASK RESULT FORM.
+                `outcomes.ts`: "a result form offers the first and can never
+                offer the second, because an observation is not the outcome of
+                doing anything". A reply can also arrive weeks after an
+                enrolment ended, which is why it hangs off the CONTACT.
+              */}
+              <div className="border-t border-border pt-3">
+                <RecordObservation contactId={contact.id} />
+              </div>
             </section>
           ) : null}
 

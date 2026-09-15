@@ -6420,54 +6420,6 @@ export type Database = {
           },
         ]
       }
-      /*
-       * ⚠️ HAND-WRITTEN FOR 0129, NOT YET APPLIED. Regenerate with
-       * `npm run db:types` once it is, and delete this note — a hand-typed
-       * table that drifts from the schema is worse than none, because the
-       * compiler will confidently agree with the wrong shape.
-       */
-      linkedin_observations: {
-        Row: {
-          contact_id: string
-          created_at: string
-          enrollment_id: string | null
-          evidence_task_id: string | null
-          evidence_was_unconfirmed: boolean
-          id: string
-          kind: Database["public"]["Enums"]["linkedin_observation_kind"]
-          note: string | null
-          observed_at: string
-          recorded_by: string
-          workspace_id: string
-        }
-        Insert: {
-          contact_id: string
-          created_at?: string
-          enrollment_id?: string | null
-          evidence_task_id?: string | null
-          evidence_was_unconfirmed?: boolean
-          id?: string
-          kind: Database["public"]["Enums"]["linkedin_observation_kind"]
-          note?: string | null
-          observed_at?: string
-          recorded_by: string
-          workspace_id: string
-        }
-        Update: {
-          contact_id?: string
-          created_at?: string
-          enrollment_id?: string | null
-          evidence_task_id?: string | null
-          evidence_was_unconfirmed?: boolean
-          id?: string
-          kind?: Database["public"]["Enums"]["linkedin_observation_kind"]
-          note?: string | null
-          observed_at?: string
-          recorded_by?: string
-          workspace_id?: string
-        }
-        Relationships: []
-      }
       linkedin_enrollments: {
         Row: {
           campaign_id: string | null
@@ -6535,6 +6487,77 @@ export type Database = {
           },
           {
             foreignKeyName: "linkedin_enrollments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_observations: {
+        Row: {
+          contact_id: string
+          created_at: string
+          enrollment_id: string | null
+          evidence_task_id: string | null
+          evidence_was_unconfirmed: boolean
+          id: string
+          kind: Database["public"]["Enums"]["linkedin_observation_kind"]
+          note: string | null
+          observed_at: string
+          recorded_by: string
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          enrollment_id?: string | null
+          evidence_task_id?: string | null
+          evidence_was_unconfirmed?: boolean
+          id?: string
+          kind: Database["public"]["Enums"]["linkedin_observation_kind"]
+          note?: string | null
+          observed_at?: string
+          recorded_by: string
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          enrollment_id?: string | null
+          evidence_task_id?: string | null
+          evidence_was_unconfirmed?: boolean
+          id?: string
+          kind?: Database["public"]["Enums"]["linkedin_observation_kind"]
+          note?: string | null
+          observed_at?: string
+          recorded_by?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_observations_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_observations_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_observations_evidence_task_id_fkey"
+            columns: ["evidence_task_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_observations_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -9802,12 +9825,6 @@ export type Database = {
         | "PAUSED"
         | "FINISHED"
         | "ARCHIVED"
-      linkedin_observation_kind:
-        | "CONNECTION_ACCEPTANCE_RECORDED"
-        | "INBOX_REVIEW_RECORDED"
-        | "REPLY_RECORDED"
-        | "MEETING_BOOKED_RECORDED"
-        | "MEETING_HELD_RECORDED"
       linkedin_enrollment_state:
         | "DRAFT"
         | "ELIGIBILITY_REVIEW"
@@ -9820,6 +9837,12 @@ export type Database = {
         | "COMPLETED"
         | "CANCELLED"
         | "FAILED"
+      linkedin_observation_kind:
+        | "CONNECTION_ACCEPTANCE_RECORDED"
+        | "INBOX_REVIEW_RECORDED"
+        | "REPLY_RECORDED"
+        | "MEETING_BOOKED_RECORDED"
+        | "MEETING_HELD_RECORDED"
       linkedin_sender_status:
         | "unknown"
         | "owner_reviewed"
@@ -10234,6 +10257,13 @@ export const Constants = {
         "COMPLETED",
         "CANCELLED",
         "FAILED",
+      ],
+      linkedin_observation_kind: [
+        "CONNECTION_ACCEPTANCE_RECORDED",
+        "INBOX_REVIEW_RECORDED",
+        "REPLY_RECORDED",
+        "MEETING_BOOKED_RECORDED",
+        "MEETING_HELD_RECORDED",
       ],
       linkedin_sender_status: [
         "unknown",
