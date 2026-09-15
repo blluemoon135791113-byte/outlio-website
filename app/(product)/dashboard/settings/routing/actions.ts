@@ -21,13 +21,13 @@ import {
   updateRule,
   type RuleInput,
 } from '@/lib/crm/routing-rules'
+import { parseAwayDate } from '@/lib/crm/away-date'
 import { describeDecision, type RoutingRuleKind, type RoutingSource } from '@/lib/crm/routing-copy'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
 export type RoutingActionState = { ok: true; message: string } | { ok: false; error: string } | null
 
 const PATH = '/dashboard/settings/routing'
-const AWAY_MAX_MS = 2 * 365 * 24 * 60 * 60 * 1000
 
 const denied = (): RoutingActionState => ({
   ok: false,
@@ -220,21 +220,9 @@ export async function setMemberAwayAction(
   const userId = String(formData.get('userId') ?? '')
   if (!userId) return { ok: false, error: 'Reload the page and try again.' }
 
-  /*
-   * An empty date means available again. A date means away until the START of
-   * that day, read in the server's timezone — the same rule snooze uses,
-   * because no user or workspace timezone exists to read.
-   */
-  const raw = String(formData.get('awayUntil') ?? '').trim()
-  let awayUntil: string | null = null
-  if (raw !== '') {
-    const at = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T00:00:00`) : null
-    if (!at || Number.isNaN(at.getTime())) return { ok: false, error: 'Pick a return date.' }
-    if (at.getTime() <= Date.now() || at.getTime() > Date.now() + AWAY_MAX_MS) {
-      return { ok: false, error: 'Pick a return date after today and within two years, or clear it.' }
-    }
-    awayUntil = at.toISOString()
-  }
+  const parsed = parseAwayDate(String(formData.get('awayUntil') ?? ''), new Date())
+  if ('error' in parsed) return { ok: false, error: parsed.error }
+  const { awayUntil } = parsed
 
   try {
     await setAwayUntil(ctx.workspace.id, ctx.userId!, userId, awayUntil)

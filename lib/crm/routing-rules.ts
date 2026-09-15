@@ -460,12 +460,38 @@ export async function listAvailability(
 }
 
 /**
- * Marks a member away until a moment, or available again with `null`.
+ * One member's own return date, for their Profile — `null` when available, or
+ * when they are not a member of this workspace.
+ *
+ * A passed date is `null`, for the reason `listAvailability` gives. Reads one
+ * row rather than every member's, and no names.
+ */
+export async function getMyAvailability(
+  workspaceId: string,
+  userId: string,
+  now: Date = new Date(),
+): Promise<{ awayUntil: string | null }> {
+  const { data, error } = await createAdminClient()
+    .from('workspace_memberships')
+    .select('away_until')
+    .eq('workspace_id', workspaceId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) throw new Error(`getMyAvailability failed: ${error.message}`)
+  const at = data?.away_until ?? null
+  return { awayUntil: at && new Date(at).getTime() > now.getTime() ? at : null }
+}
+
+/**
+ * Marks a member away until a moment, or available again with `null`. An admin
+ * does this for anyone; a member does it for themselves, and then `actorUserId`
+ * and `userId` are the same person.
  *
  * ⚠️ ROUTING ONLY. Being away hides nothing and moves nothing already owned;
- * it only stops new leads arriving. A lead that could not be placed while
- * someone was away is not re-routed automatically when they return — that is
- * what "Route again" in the queue is for, until scheduled review exists.
+ * it only stops new leads arriving. Changing it bumps the membership's
+ * `updated_at`, which makes leads that waited while this person was away due
+ * for retry on the next tick (0128).
  */
 export async function setAwayUntil(
   workspaceId: string,
