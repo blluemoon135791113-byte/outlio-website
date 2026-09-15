@@ -4,6 +4,92 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-09-16 — Four defects in the owner-change history, and Vercel was blocking every deploy (#36)
+
+A review of #36 before merge. Four real defects, fixed in the same PR (0bdbc84,
+merged as 59c9c60). 0129 changed, so it was re-applied by hand; both functions
+are `create or replace`.
+
+### What the review found
+
+- **A handover moved contacts away from people who were not leaving.**
+  `crm_handover_member_records` read its contact list once, then assigned each
+  through `crm_assign_contact_owner` — which locks and re-reads the row but
+  never asks who owns it. A contact someone reassigned to a third person while
+  a long handover ran was moved on to the successor anyway, writing
+  OWNER_ASSIGNED from an owner who never left. The set-based `update … where
+  owner_user_id = p_from_user` it replaced re-checked the predicate on the
+  locked row, so the rewrite lost a guarantee nobody noticed.
+- **One deleted contact cancelled a whole bulk assignment.** Same shape:
+  `crm_bulk_assign_contacts` filtered `deleted_at is null` in an unlocked read,
+  so a contact soft-deleted before its turn reached
+  `crm_assign_contact_owner`, which raises for deleted rows — rolling back the
+  other 199, against the function's own stated skip-don't-refuse contract.
+- **Handing a book to the departing member orphaned it.** `p_to_user =
+  p_from_user` returned all-zero counts; `removeMemberAction` then deleted the
+  membership and reported "They owned no records." Every record stayed owned by
+  someone no longer in the workspace — the exact state the handover exists to
+  prevent.
+- **A large handover could time out between committing and removing.**
+  Announcements (one `contact_assigned` per moved contact) were awaited between
+  the committed handover and the membership delete. A timeout there left the
+  member in place with their book already moved; a retry moved nothing, so the
+  remaining events were never emitted at all.
+
+### Fixed
+
+- Both contact loops are now `for update`. Postgres re-checks "still the
+  leaver's, still live" against the current row version, so a contact changed
+  mid-run is skipped instead of being swept up or aborting the batch.
+- A handover to the departing member raises `invalid_parameter_value`, and the
+  action refuses it first with its own message.
+- `reassignMemberRecords` returns `assignments` instead of announcing;
+  `removeMemberAction` deletes the membership, then announces with `after()`,
+  once the response is on its way.
+
+### ⚠️ A race cannot be proven inside one smoke file
+
+The smoke files run in one session, inside one transaction. Neither race is
+visible there: both need a second connection committing mid-loop. The proof ran
+through the harness as a scratch file with **committed** seed rows (no `begin`),
+using `dblink` to hold a row lock from a second backend for three seconds while
+the function ran. Against the original 0129 all five race checks fail; against
+the fixed one they pass. Kept out of the repo: it depends on `dblink` and on
+sleeping, so it does not belong in the per-migration smoke.
+
+### Verified
+
+- 0129's smoke is now 20 checks and passes; its new self-handover check fails
+  against the original 0129.
+- Unit tests 10/10, eslint clean, `tsc --noEmit` clean. ⚠️ The typecheck needs
+  `next-env.d.ts`, which is gitignored and absent in a fresh worktree — without
+  it, two image imports fail and look like a real error.
+
+### Vercel was blocking every deployment, and had been since 2026-09-13
+
+⚠️ **Production was stale for three days and nothing said so.** The last
+successful deploy was `45ad798` (2026-09-13). Every merge after it —
+#28 through #41 — was blocked with "Deployment was blocked", because the commit
+author was `Abdulsaboor2004`, who is not on the Vercel team. It never blocked a
+merge, so it read as preview noise.
+
+- **The repo is already public, and that does not help.** Vercel's bot suggests
+  it; the truth is in the redeploy dialog: *Hobby teams do not support
+  collaboration*. Adding a member needs Pro.
+- **The free fix is to author commits as the account that owns the project.**
+  `git config user.email 256972641+blluemoon135791113-byte@users.noreply.github.com`,
+  repo-local. Nothing else changes: pushes still use the existing credentials,
+  because a commit's author is text, not a login.
+- Proven with an empty commit on a throwaway branch: it deployed successfully,
+  where every earlier commit by the other account was refused outright.
+- Production was then promoted to deployment `6470695985`, serving a tree
+  identical to main's tip.
+
+⚠️ **Commits must stay authored by `blluemoon135791113-byte`** or their
+deployments are refused again — including production deploys from main.
+
+---
+
 ## 2026-09-16 — The 17 older smoke files now gate every check (#40)
 
 ⚠️ **Supersedes the 2026-09-15 warning below that `supabase/smoke/` (0074–0093)
