@@ -3,10 +3,22 @@
 -- The claim being tested is the DOMAIN ROLLUP (M5 criterion 5): reputation is
 -- shared across a sending domain, so the rollup must surface the WORST mailbox
 -- rather than average it away.
+--
+-- ⚠️ EVERY CHECK IS RECORDED, THEN GATED. The `select … as pass` rows here used
+-- to fail nothing: an `f` printed and the harness exited 0, and a check whose
+-- `where domain = …` matched no row printed nothing at all. Each check now goes
+-- into `smoke_checks` through `coalesce(…, false)`, and the gate at the end
+-- raises unless exactly the expected number were recorded and every one is true.
 
 \set ON_ERROR_STOP on
 
 begin;
+
+create temp table smoke_checks (
+  n     serial primary key,
+  label text not null,
+  ok    boolean not null
+);
 
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'owner@example.com')
@@ -37,11 +49,20 @@ values
 -- RAMP DEFAULTS — conservative, and actually applied.
 -- ---------------------------------------------------------------------------
 
-select 'RAMP defaults are conservative and enabled' as check,
-       bool_and(ramp_enabled) as pass,
-       bool_and(ramp_initial_daily = 20) as initial_20,
-       bool_and(ramp_daily_increment = 5) as increment_5,
-       bool_and(ramp_target_daily = 200) as target_200
+insert into smoke_checks (label, ok)
+select 'RAMP is enabled by default', coalesce(bool_and(ramp_enabled), false)
+from public.email_accounts;
+
+insert into smoke_checks (label, ok)
+select 'RAMP initial daily volume defaults to 20', coalesce(bool_and(ramp_initial_daily = 20), false)
+from public.email_accounts;
+
+insert into smoke_checks (label, ok)
+select 'RAMP daily increment defaults to 5', coalesce(bool_and(ramp_daily_increment = 5), false)
+from public.email_accounts;
+
+insert into smoke_checks (label, ok)
+select 'RAMP target daily volume defaults to 200', coalesce(bool_and(ramp_target_daily = 200), false)
 from public.email_accounts;
 
 -- ---------------------------------------------------------------------------
@@ -61,22 +82,33 @@ values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','e0000000-0000-0000-0000-00000000000d',
    'ramping', 80,  5,  20, now() - interval '1 hour');
 
-select 'ROLLUP surfaces the worst mailbox, not just the average' as check,
-       worst_score = 30 as pass,
-       -- The average is a healthy-looking 71.7, which is exactly why reporting
-       -- it alone would hide the mailbox that needs stopping.
-       average_score = 71.7 as average_would_have_hidden_it,
-       mailboxes = 3 as counted_all_three,
-       worst_state = 'warning' as worst_state_surfaced
-from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
-where domain = 'acme.example';
+insert into smoke_checks (label, ok) values
+  ('ROLLUP surfaces the worst mailbox score, 30',
+   coalesce((select worst_score = 30
+               from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+              where domain = 'acme.example'), false)),
+  -- The average is a healthy-looking 71.7, which is exactly why reporting it
+  -- alone would hide the mailbox that needs stopping.
+  ('ROLLUP average is 71.7, which alone would have hidden it',
+   coalesce((select average_score = 71.7
+               from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+              where domain = 'acme.example'), false)),
+  ('ROLLUP counted all three acme mailboxes',
+   coalesce((select mailboxes = 3
+               from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+              where domain = 'acme.example'), false)),
+  ('ROLLUP surfaces the worst state, warning',
+   coalesce((select worst_state = 'warning'
+               from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+              where domain = 'acme.example'), false));
 
-select 'ROLLUP keeps domains separate' as check,
-       count(*) = 2 as pass
+insert into smoke_checks (label, ok)
+select 'ROLLUP keeps domains separate', coalesce(count(*) = 2, false)
 from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 
-select 'ROLLUP orders worst domain first' as check,
-       (array_agg(domain order by worst_score))[1] = 'acme.example' as pass
+insert into smoke_checks (label, ok)
+select 'ROLLUP orders worst domain first',
+       coalesce((array_agg(domain order by worst_score))[1] = 'acme.example', false)
 from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 
 -- ---------------------------------------------------------------------------
@@ -89,14 +121,18 @@ insert into public.email_readiness_checks
 values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','e0000000-0000-0000-0000-00000000000c',
         'ready', 92, now());
 
-select 'ROLLUP uses only the most recent check per mailbox' as check,
-       worst_score = 90 as pass,
-       worst_state = 'ready' as recovered
-from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
-where domain = 'acme.example';
+insert into smoke_checks (label, ok) values
+  ('ROLLUP uses only the most recent check per mailbox (worst score now 90)',
+   coalesce((select worst_score = 90
+               from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+              where domain = 'acme.example'), false)),
+  ('ROLLUP shows the recovered domain as ready',
+   coalesce((select worst_state = 'ready'
+               from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+              where domain = 'acme.example'), false));
 
-select 'HISTORY is retained, not overwritten' as check,
-       count(*) = 2 as pass
+insert into smoke_checks (label, ok)
+select 'HISTORY is retained, not overwritten', coalesce(count(*) = 2, false)
 from public.email_readiness_checks
 where account_id = 'e0000000-0000-0000-0000-00000000000c';
 
@@ -109,10 +145,11 @@ insert into public.email_readiness_checks
 values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','e0000000-0000-0000-0000-00000000000a',
         'disconnected', 0, now() + interval '1 minute');
 
-select 'SEVERITY: disconnected outranks ready' as check,
-       worst_state = 'disconnected' as pass
-from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
-where domain = 'acme.example';
+insert into smoke_checks (label, ok)
+values ('SEVERITY: disconnected outranks ready',
+        coalesce((select worst_state = 'disconnected'
+                    from public.email_domain_health('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+                   where domain = 'acme.example'), false));
 
 -- ---------------------------------------------------------------------------
 -- Volume counting — "today" is the MAILBOX's day, not the server's.
@@ -130,20 +167,58 @@ values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','e0000000-0000-0000-0000-00000000000a',
    'p4@buyer.example','s','b','v-4','failed', now());
 
-select 'SENT TODAY excludes old and unsent messages' as check,
-       public.email_sent_today('e0000000-0000-0000-0000-00000000000a', 'UTC') = 2 as pass;
+insert into smoke_checks (label, ok)
+values ('SENT TODAY excludes old and unsent messages',
+        coalesce(public.email_sent_today('e0000000-0000-0000-0000-00000000000a', 'UTC') = 2, false));
 
-select 'VOLUME counts sends and failures in the window' as check,
-       sent = 2 as sent_ok,
-       failed = 1 as failed_ok
-from public.email_account_volume('e0000000-0000-0000-0000-00000000000a', now() - interval '7 days');
+insert into smoke_checks (label, ok) values
+  ('VOLUME counts 2 sends in the window',
+   coalesce((select sent = 2
+               from public.email_account_volume('e0000000-0000-0000-0000-00000000000a',
+                                                now() - interval '7 days')), false)),
+  ('VOLUME counts 1 failure in the window',
+   coalesce((select failed = 1
+               from public.email_account_volume('e0000000-0000-0000-0000-00000000000a',
+                                                now() - interval '7 days')), false));
 
 -- A hard bounce recorded AFTER the send still counts against that mailbox.
 insert into public.email_suppressions (workspace_id, email, reason, created_at)
 values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','p1@buyer.example','hard_bounce', now() + interval '1 minute');
 
-select 'BOUNCE discovered later still counts against the sender' as check,
-       bounced = 1 as pass
-from public.email_account_volume('e0000000-0000-0000-0000-00000000000a', now() - interval '7 days');
+insert into smoke_checks (label, ok)
+values ('BOUNCE discovered later still counts against the sender',
+        coalesce((select bounced = 1
+                    from public.email_account_volume('e0000000-0000-0000-0000-00000000000a',
+                                                     now() - interval '7 days')), false));
+
+-- ---------------------------------------------------------------------------
+-- The gate.
+-- ---------------------------------------------------------------------------
+select n, ok, label from smoke_checks order by n;
+
+do $$
+declare
+  v_expected constant integer := 18;
+  v_total    integer;
+  v_failed   text;
+begin
+  select count(*),
+         string_agg(label, '; ' order by n) filter (where ok is not true)
+    into v_total, v_failed
+    from smoke_checks;
+
+  -- ⚠️ THE COUNT IS PART OF THE TEST. A check that never ran records nothing,
+  -- so it would pass by being absent. Adding or removing a check means
+  -- changing this number, on purpose.
+  if v_total <> v_expected then
+    raise exception 'SMOKE FAILED: expected % checks, recorded %', v_expected, v_total;
+  end if;
+
+  if v_failed is not null then
+    raise exception 'SMOKE FAILED: %', v_failed;
+  end if;
+
+  raise notice 'SMOKE PASSED: % of % checks', v_total, v_expected;
+end $$;
 
 rollback;
