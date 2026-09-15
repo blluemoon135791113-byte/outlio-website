@@ -4,6 +4,51 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-09-16 — The 17 older smoke files now gate every check (#40)
+
+⚠️ **Supersedes the 2026-09-15 warning below that `supabase/smoke/` (0074–0093)
+is refused.** All 17 files now use the gated pattern, and both harness scripts
+accept them. Nothing was applied to either Supabase project.
+
+### Why none of them could fail
+
+- Nine files only printed values for a person to read.
+- The must-fail statements ran with `ON_ERROR_STOP` lifted, so a statement that
+  wrongly succeeded passed silently.
+- The `select … as pass` rows failed nothing, and a few were `select … true as
+  ok`, which could not print anything else.
+
+### How they were converted
+
+- **Printed values** became explicit checks. Expected values came from each
+  file's comments and test data, cross-checked against a baseline run of the
+  original files on the unmodified migrations.
+- **Must-fail statements** became `do` blocks catching the specific error the
+  migration raises (`check_violation`, `restrict_violation`, `unique_violation`,
+  `serialization_failure`, `foreign_key_violation`), not any error. The
+  exception is 0091's erasure and teardown paths, which already caught
+  everything.
+- **Role-scoped checks** (0085) switch role inside the block and record after
+  switching back: `authenticated` cannot write to `smoke_checks`.
+- **psql-only syntax** (`\gset`, `:'var'`, `\echo`) was replaced with plain SQL,
+  so the files also run under `rehearse-migration.mjs`.
+
+⚠️ **0076 expects `serialization_failure` for a stale version.** 0077 changes it
+to `check_violation`, but 0076's smoke file runs against 0076 alone.
+
+### Verified
+
+- All 17 pass against their real migrations: 227 checks.
+- Each migration was broken once, in a copy outside the repo, with the edit
+  asserted before running. Every run exits 1 naming the failing check; the full
+  table is in #40.
+- ⚠️ **A break that errors before the gate proves nothing.** 0090's first break
+  made the migration's own `ON CONFLICT` invalid, so the run died on a SQL error
+  before any check ran. It was replaced with a break the checks catch
+  (auto-replies counted as replies).
+
+---
+
 ## 2026-09-15 — The migration harness could pass a failing smoke test
 
 Two fixes to the tooling that validates migrations before the owner applies
