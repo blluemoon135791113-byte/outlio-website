@@ -211,8 +211,43 @@ exists before any more is built.
 
 ---
 
-## What to tell me
+## ✅ DECIDED 2026-09-15 — Option A, with a shape the options did not offer
 
-Just the letter — **A**, **B**, or **C** — and anything in the workflow above
-that does not match what you thought you were buying. The second half is more
-useful than the first.
+The owner chose **manual execution**, and went further than A as written:
+
+> "keep it manual but the user can create own workflow for their campaigns that
+> they initiate and then add users into that campaign and create a customizable
+> workflow for that campaign… once its saved then they have the option on
+> actions they added only, not fixed actions like sent connection, booked a
+> meeting, etc."
+
+**Outlio still never logs in and never sends.** That half is settled and closed.
+
+What changes is who designs the sequence. A does not mean "Outlio ships a fixed
+ladder of steps" — it means **the customer builds their own**, per campaign:
+
+1. Create a campaign.
+2. Build its workflow — the steps, in their order, with the waits between them.
+3. Add people to it.
+4. Tasks appear when they are due; the operator performs each in LinkedIn.
+
+### ⚠️ The requirement that changes existing code
+
+> "they have the option on actions they added only, not fixed actions"
+
+Today `allowedOutcomes(kind)` returns a **fixed vocabulary per task kind**, and
+the result form offers it. The owner wants the recordable outcomes to follow the
+workflow the customer built: if their campaign has no InMail step, "InMail sent"
+must not be offered.
+
+That is a genuine improvement and not a small one — it makes the result form a
+function of the campaign rather than a constant. It does **not** relax the
+`TaskOutcome` / `Observation` separation (§4.13), which stays: what you did and
+what you later saw remain different questions.
+
+### Open before building
+
+The owner is sending screenshots of how the campaign sequence should look. The
+builder is being designed from those rather than guessed at — guessing at the
+shape of this channel is the mistake recorded below, and it will not be repeated
+one level down.
