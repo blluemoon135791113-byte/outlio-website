@@ -7,6 +7,11 @@
 -- having is that a task CANNOT point at another workspace's deal, and the only
 -- way to know is to try it.
 --
+-- ⚠️ EVERY CHECK IS RECORDED, THEN GATED. Each check goes into `smoke_checks`
+-- through `coalesce(…, false)`, and the gate at the end raises unless exactly
+-- the expected number were recorded and every one is true — a raise that a
+-- NULL comparison skips is not a check.
+--
 -- Run it with:
 --   scripts/check-migration.sh supabase/migrations/0124_crm_tasks_opportunity.sql \
 --     supabase/migrations/smoke/0124_crm_tasks_opportunity.smoke.sql
@@ -14,6 +19,12 @@
 \set ON_ERROR_STOP on
 
 begin;
+
+create temp table smoke_checks (
+  n     serial primary key,
+  label text not null,
+  ok    boolean not null
+);
 
 -- ---------------------------------------------------------------------------
 -- Two workspaces, each with a pipeline, a stage and a deal. Two is the whole
@@ -52,17 +63,10 @@ values ('aaaaaaaa-4444-0000-0000-000000000001',
         'Send the proposal',
         'aaaaaaaa-3333-0000-0000-000000000001');
 
-do $$
-declare v_count integer;
-begin
-  select count(*) into v_count
-    from public.crm_tasks
-   where opportunity_id = 'aaaaaaaa-3333-0000-0000-000000000001';
-
-  if v_count <> 1 then
-    raise exception 'a task in the same workspace could not link to its deal (% rows)', v_count;
-  end if;
-end $$;
+insert into smoke_checks (label, ok)
+select 'a task in the same workspace links to its deal', coalesce(count(*) = 1, false)
+  from public.crm_tasks
+ where opportunity_id = 'aaaaaaaa-3333-0000-0000-000000000001';
 
 -- ---------------------------------------------------------------------------
 -- 2. ⚠️ THE POINT OF THE COMPOSITE KEY. A task in A must NOT be able to name
@@ -81,10 +85,9 @@ begin
     v_refused := true;
   end;
 
-  if not v_refused then
-    raise exception
-      'a task in workspace A linked to a deal in workspace B — the composite FK is not doing its job';
-  end if;
+  insert into smoke_checks (label, ok)
+  values ('a task in workspace A cannot link to a deal in workspace B',
+          coalesce(v_refused, false));
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -98,43 +101,58 @@ values ('aaaaaaaa-0000-0000-0000-000000000001', 'Call them back', null);
 -- ---------------------------------------------------------------------------
 -- 4. Deleting the deal takes its tasks with it, as it does for a contact.
 -- ---------------------------------------------------------------------------
-do $$
-declare v_count integer;
-begin
-  delete from public.crm_opportunities
-   where id = 'aaaaaaaa-3333-0000-0000-000000000001';
+delete from public.crm_opportunities
+ where id = 'aaaaaaaa-3333-0000-0000-000000000001';
 
-  select count(*) into v_count
-    from public.crm_tasks
-   where id = 'aaaaaaaa-4444-0000-0000-000000000001';
+insert into smoke_checks (label, ok)
+select 'the task is deleted with its deal', coalesce(count(*) = 0, false)
+  from public.crm_tasks
+ where id = 'aaaaaaaa-4444-0000-0000-000000000001';
 
-  if v_count <> 0 then
-    raise exception 'the task outlived its deleted deal, attached to nothing';
-  end if;
-
-  -- The deal-less task is untouched: the cascade must not be a table sweep.
-  select count(*) into v_count
-    from public.crm_tasks
-   where workspace_id = 'aaaaaaaa-0000-0000-0000-000000000001'
-     and opportunity_id is null;
-
-  if v_count <> 1 then
-    raise exception 'the cascade removed a task that had no deal (% left)', v_count;
-  end if;
-end $$;
+-- The deal-less task is untouched: the cascade must not be a table sweep.
+insert into smoke_checks (label, ok)
+select 'the cascade leaves the task that had no deal', coalesce(count(*) = 1, false)
+  from public.crm_tasks
+ where workspace_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+   and opportunity_id is null;
 
 -- ---------------------------------------------------------------------------
 -- 5. The index exists. A partial index that was never created is invisible
 --    until somebody profiles the query it was meant to serve.
 -- ---------------------------------------------------------------------------
+insert into smoke_checks (label, ok)
+values ('crm_tasks_opportunity_idx was created',
+        exists (select 1 from pg_indexes
+                 where schemaname = 'public' and indexname = 'crm_tasks_opportunity_idx'));
+
+-- ---------------------------------------------------------------------------
+-- The gate.
+-- ---------------------------------------------------------------------------
+select n, ok, label from smoke_checks order by n;
+
 do $$
+declare
+  v_expected constant integer := 5;
+  v_total    integer;
+  v_failed   text;
 begin
-  if not exists (
-    select 1 from pg_indexes
-     where schemaname = 'public' and indexname = 'crm_tasks_opportunity_idx'
-  ) then
-    raise exception 'crm_tasks_opportunity_idx was not created';
+  select count(*),
+         string_agg(label, '; ' order by n) filter (where ok is not true)
+    into v_total, v_failed
+    from smoke_checks;
+
+  -- ⚠️ THE COUNT IS PART OF THE TEST. A check that never ran records nothing,
+  -- so it would pass by being absent. Adding or removing a check means
+  -- changing this number, on purpose.
+  if v_total <> v_expected then
+    raise exception 'SMOKE FAILED: expected % checks, recorded %', v_expected, v_total;
   end if;
+
+  if v_failed is not null then
+    raise exception 'SMOKE FAILED: %', v_failed;
+  end if;
+
+  raise notice 'SMOKE PASSED: % of % checks', v_total, v_expected;
 end $$;
 
 rollback;

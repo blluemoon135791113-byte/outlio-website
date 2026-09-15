@@ -10,9 +10,16 @@
 -- So this exercises the real function against real rows.
 --
 -- ⚠️ AND IT WAS RUN AGAINST 0106 AS A NEGATIVE CONTROL, which is the half that
--- makes the pass mean anything. Against the shipping function it fails with
--- "a message to a suppressed CONTACT's second address was sending, not
--- suppressed" — so the bug was real, and this test can detect it.
+-- makes the pass mean anything. Against the shipping function the check "a
+-- message to a suppressed contact's second address is suppressed" fails — so
+-- the bug was real, and this test can detect it.
+--
+-- ⚠️ EVERY CHECK IS RECORDED, THEN GATED. `if <bad> then raise` skips silently
+-- when <bad> is NULL — a missing row, a missing JSON key — and a printed `ok`
+-- column fails nothing. So each check goes into `smoke_checks` through
+-- `coalesce(…, false)`, and the gate at the end raises unless exactly the
+-- expected number were recorded and every one is true. check-migration.sh
+-- refuses a smoke file whose gate never reported SMOKE PASSED.
 --
 -- Run it with:
 --   scripts/check-migration.sh supabase/migrations/0120_suppress_by_contact.sql \
@@ -27,6 +34,12 @@
 \set ON_ERROR_STOP on
 
 begin;
+
+create temp table smoke_checks (
+  n     serial primary key,
+  label text not null,
+  ok    boolean not null
+);
 
 -- ---------------------------------------------------------------------------
 -- A workspace, an owner, a mail account, and one contact with TWO addresses.
@@ -106,25 +119,49 @@ begin
 
   -- THE ASSERTION. Suppression named ada.one@; the message went to ada.two@.
   -- Before 0120 this was claimed and sent.
-  if v_status_suppressed <> 'suppressed' then
-    raise exception
-      'FAIL: a message to a suppressed CONTACT''s second address was %, not suppressed',
-      v_status_suppressed;
-  end if;
+  insert into smoke_checks (label, ok)
+  values ('a message to a suppressed contact''s second address is suppressed',
+          coalesce(v_status_suppressed = 'suppressed', false));
 
   -- THE CONTROL. Without this, a predicate that suppressed everything would
   -- pass the assertion above while being catastrophically wrong.
-  if v_status_control <> 'sending' then
-    raise exception
-      'FAIL: the unsuppressed control message was %, expected sending', v_status_control;
-  end if;
+  insert into smoke_checks (label, ok)
+  values ('the unsuppressed control message is sending',
+          coalesce(v_status_control = 'sending', false));
 
-  if v_claimed_count <> 1 then
-    raise exception 'FAIL: expected exactly 1 claimed message, got %', v_claimed_count;
-  end if;
-
-  raise notice 'PASS: contact-level suppression stopped the second address; control unaffected';
+  insert into smoke_checks (label, ok)
+  values ('exactly 1 message was claimed', coalesce(v_claimed_count = 1, false));
 end
 $$;
+
+-- ---------------------------------------------------------------------------
+-- The gate.
+-- ---------------------------------------------------------------------------
+select n, ok, label from smoke_checks order by n;
+
+do $$
+declare
+  v_expected constant integer := 3;
+  v_total    integer;
+  v_failed   text;
+begin
+  select count(*),
+         string_agg(label, '; ' order by n) filter (where ok is not true)
+    into v_total, v_failed
+    from smoke_checks;
+
+  -- ⚠️ THE COUNT IS PART OF THE TEST. A check that never ran records nothing,
+  -- so it would pass by being absent. Adding or removing a check means
+  -- changing this number, on purpose.
+  if v_total <> v_expected then
+    raise exception 'SMOKE FAILED: expected % checks, recorded %', v_expected, v_total;
+  end if;
+
+  if v_failed is not null then
+    raise exception 'SMOKE FAILED: %', v_failed;
+  end if;
+
+  raise notice 'SMOKE PASSED: % of % checks', v_total, v_expected;
+end $$;
 
 rollback;
