@@ -287,6 +287,24 @@ describe('availability', () => {
     ])
   })
 
+  it('reads one member’s own return date, and treats a passed one as available', async () => {
+    mocks.tables.workspace_memberships = [
+      /*
+       * The same person away in ANOTHER workspace: not this one's answer. Stored
+       * FIRST, deliberately — after the right row, a read that forgot the
+       * workspace filter still found this workspace's row first and passed.
+       */
+      { workspace_id: OTHER_WS, user_id: B, role: 'setter', away_until: '2026-12-01T00:00:00.000Z', created_at: '0' },
+      { workspace_id: WS, user_id: A, role: 'setter', away_until: '2026-09-20T00:00:00.000Z', created_at: '1' },
+      { workspace_id: WS, user_id: B, role: 'setter', away_until: '2026-09-10T00:00:00.000Z', created_at: '2' },
+    ]
+    const now = new Date('2026-09-15T12:00:00.000Z')
+
+    expect(await lib.getMyAvailability(WS, A, now)).toEqual({ awayUntil: '2026-09-20T00:00:00.000Z' })
+    expect(await lib.getMyAvailability(WS, B, now)).toEqual({ awayUntil: null })
+    expect(await lib.getMyAvailability(WS, OUTSIDER, now)).toEqual({ awayUntil: null })
+  })
+
   it('refuses someone who is not a member of this workspace', async () => {
     await expect(lib.setAwayUntil(WS, ADMIN, OUTSIDER, '2026-10-01T00:00:00Z')).rejects.toThrow(/not a member/)
     expect(mocks.tables.workspace_memberships.find((m) => m.user_id === OUTSIDER)!.away_until).toBeNull()
