@@ -364,8 +364,26 @@ own comment said exactly that, about the other link. Both now go through
   exist before it has anything to analyse.
 - **AI drafting from the user's own instruction**, applied to all or selected
   leads. The placeholders it must emit already exist and are enforced.
-- **Voice notes** — ElevenLabs cloning and TTS, downloaded as mp3 and sent by
-  hand as a file. Explicitly deferred by the owner: "KEEP IT FOR LATER".
+- **Voice notes** — ElevenLabs cloning and TTS, rendered per contact with the
+  three placeholders spoken, downloaded as mp3. Explicitly deferred by the
+  owner: "KEEP IT FOR LATER".
+
+  ⚠️ **The delivery route is settled: the paperclip.** Owner confirmed
+  2026-09-15 ("yes as paper clip"). This matters to the design, because LinkedIn
+  has no "upload audio as a voice note" — voice messages are recorded in-app by
+  holding the mic, which is why tools that post a waveform bubble are pushing the
+  asset through a session Outlio does not have. Attaching an mp3 delivers as a
+  **file**, not a bubble.
+
+  So the step is a fourth `prepares` value this registry does not yet have —
+  `'asset'`: Outlio renders and stores the audio, the card offers a download, and
+  the operator attaches it themselves. It is not `'text'` (nothing is pasted) and
+  not `'nothing'` (Outlio does prepare something real).
+
+  ⚠️ **Generate on release, never on enrolment.** Each render costs money per
+  contact. A campaign of 824 people whose operator will realistically perform 30
+  of the tasks would bill for 824 — and the owner's own warm-up caps guarantee
+  that gap, since no account may send 824 of anything.
 - **Task generation from the workflow**: enrolment at a chosen step, and the
   worker that releases the next step when a wait elapses. The schema for it
   landed in 0130; nothing walks it yet.
