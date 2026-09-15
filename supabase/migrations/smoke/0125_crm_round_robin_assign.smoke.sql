@@ -10,7 +10,16 @@
 -- ⚠️ AND "IT ASSIGNED SOMEBODY" DOES NOT PROVE IT EITHER. The broken version
 -- assigned somebody too. Every assertion below is about WHICH somebody.
 --
+-- ⚠️ EVERY CHECK IS RECORDED, THEN GATED. These checks used to be printed
+-- `select … as ok` rows, and printing `f` failed nothing: check-migration.sh
+-- exited 0 regardless. So each check goes into `smoke_checks` through
+-- `coalesce(…, false)`, and the gate at the end raises unless exactly the
+-- expected number were recorded and every one is true.
+--
 -- Run it with:
+--   scripts/check-migration.sh supabase/migrations/0125_crm_round_robin_assign.sql \
+--     supabase/migrations/smoke/0125_crm_round_robin_assign.smoke.sql
+-- or against the real database, always rolled back:
 --   node scripts/rehearse-migration.mjs \
 --     supabase/migrations/0125_crm_round_robin_assign.sql \
 --     supabase/migrations/smoke/0125_crm_round_robin_assign.smoke.sql
@@ -18,6 +27,12 @@
 \set ON_ERROR_STOP on
 
 begin;
+
+create temp table smoke_checks (
+  n     serial primary key,
+  label text not null,
+  ok    boolean not null
+);
 
 -- ---------------------------------------------------------------------------
 -- A workspace, three members, and four unassigned leads.
@@ -55,30 +70,37 @@ insert into public.crm_contacts (id, workspace_id, full_name, owner_user_id) val
 --    assignment — which is precisely what the advisory lock guarantees for
 --    calls in SEPARATE transactions. If the function counted nothing, or
 --    counted the wrong workspace, all three would go to Alex.
+--
+--    The calls are `perform`ed rather than selected: a printed jsonb row is
+--    not a check, and rehearse-migration.mjs would judge it as one.
 -- ---------------------------------------------------------------------------
-select public.crm_round_robin_assign(
-  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  'c0000000-0000-4000-8000-000000000001',
-  array['11111111-1111-1111-1111-111111111111',
-        '22222222-2222-2222-2222-222222222222',
-        '33333333-3333-3333-3333-333333333333']::uuid[]);
+do $$
+begin
+  perform public.crm_round_robin_assign(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'c0000000-0000-4000-8000-000000000001',
+    array['11111111-1111-1111-1111-111111111111',
+          '22222222-2222-2222-2222-222222222222',
+          '33333333-3333-3333-3333-333333333333']::uuid[]);
 
-select public.crm_round_robin_assign(
-  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  'c0000000-0000-4000-8000-000000000002',
-  array['11111111-1111-1111-1111-111111111111',
-        '22222222-2222-2222-2222-222222222222',
-        '33333333-3333-3333-3333-333333333333']::uuid[]);
+  perform public.crm_round_robin_assign(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'c0000000-0000-4000-8000-000000000002',
+    array['11111111-1111-1111-1111-111111111111',
+          '22222222-2222-2222-2222-222222222222',
+          '33333333-3333-3333-3333-333333333333']::uuid[]);
 
-select public.crm_round_robin_assign(
-  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  'c0000000-0000-4000-8000-000000000003',
-  array['11111111-1111-1111-1111-111111111111',
-        '22222222-2222-2222-2222-222222222222',
-        '33333333-3333-3333-3333-333333333333']::uuid[]);
+  perform public.crm_round_robin_assign(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'c0000000-0000-4000-8000-000000000003',
+    array['11111111-1111-1111-1111-111111111111',
+          '22222222-2222-2222-2222-222222222222',
+          '33333333-3333-3333-3333-333333333333']::uuid[]);
+end $$;
 
-select 'three leads, three distinct owners' as check,
-       count(distinct owner_user_id) = 3 as ok
+insert into smoke_checks (label, ok)
+select 'three leads, three distinct owners',
+       coalesce(count(distinct owner_user_id) = 3, false)
   from public.crm_contacts
  where workspace_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
    and id in ('c0000000-0000-4000-8000-000000000001',
@@ -90,35 +112,41 @@ select 'three leads, three distinct owners' as check,
 --    If load were counted across tenants, Sam would have been last rather than
 --    second and the ordering above would differ.
 -- ---------------------------------------------------------------------------
-select 'load is counted per workspace' as check,
-       (select owner_user_id
-          from public.crm_contacts
-         where id = 'c0000000-0000-4000-8000-000000000002')
-       = '22222222-2222-2222-2222-222222222222' as ok;
+insert into smoke_checks (label, ok)
+values ('load is counted per workspace',
+        coalesce((select owner_user_id
+                    from public.crm_contacts
+                   where id = 'c0000000-0000-4000-8000-000000000002')
+                 = '22222222-2222-2222-2222-222222222222', false));
 
 -- ---------------------------------------------------------------------------
 -- 3. The fourth lead goes to whoever is level again — everyone now has one, so
 --    the tie breaks on pool order and Alex takes it.
 -- ---------------------------------------------------------------------------
-select public.crm_round_robin_assign(
-  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  'c0000000-0000-4000-8000-000000000004',
-  array['11111111-1111-1111-1111-111111111111',
-        '22222222-2222-2222-2222-222222222222',
-        '33333333-3333-3333-3333-333333333333']::uuid[]);
+do $$
+begin
+  perform public.crm_round_robin_assign(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'c0000000-0000-4000-8000-000000000004',
+    array['11111111-1111-1111-1111-111111111111',
+          '22222222-2222-2222-2222-222222222222',
+          '33333333-3333-3333-3333-333333333333']::uuid[]);
+end $$;
 
-select 'a tie breaks on pool order' as check,
-       (select owner_user_id
-          from public.crm_contacts
-         where id = 'c0000000-0000-4000-8000-000000000004')
-       = '11111111-1111-1111-1111-111111111111' as ok;
+insert into smoke_checks (label, ok)
+values ('a tie breaks on pool order',
+        coalesce((select owner_user_id
+                    from public.crm_contacts
+                   where id = 'c0000000-0000-4000-8000-000000000004')
+                 = '11111111-1111-1111-1111-111111111111', false));
 
 -- ---------------------------------------------------------------------------
 -- 4. Every assignment wrote its audit row, because the write goes through
 --    0123 rather than reimplementing it.
 -- ---------------------------------------------------------------------------
-select 'four assignments, four OWNER_ASSIGNED activities' as check,
-       count(*) = 4 as ok
+insert into smoke_checks (label, ok)
+select 'four assignments, four OWNER_ASSIGNED activities',
+       coalesce(count(*) = 4, false)
   from public.crm_activities
  where workspace_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
    and activity_type = 'OWNER_ASSIGNED';
@@ -138,17 +166,21 @@ insert into public.crm_contacts (id, workspace_id, full_name, owner_user_id)
 values ('c0000000-0000-4000-8000-000000000005',
         'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Lead Five', null);
 
-select public.crm_round_robin_assign(
-  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  'c0000000-0000-4000-8000-000000000005',
-  array['11111111-1111-1111-1111-111111111111',
-        '44444444-4444-4444-4444-444444444444']::uuid[]);
+do $$
+begin
+  perform public.crm_round_robin_assign(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'c0000000-0000-4000-8000-000000000005',
+    array['11111111-1111-1111-1111-111111111111',
+          '44444444-4444-4444-4444-444444444444']::uuid[]);
+end $$;
 
-select 'a member with no contacts is chosen first' as check,
-       (select owner_user_id
-          from public.crm_contacts
-         where id = 'c0000000-0000-4000-8000-000000000005')
-       = '44444444-4444-4444-4444-444444444444' as ok;
+insert into smoke_checks (label, ok)
+values ('a member with no contacts is chosen first',
+        coalesce((select owner_user_id
+                    from public.crm_contacts
+                   where id = 'c0000000-0000-4000-8000-000000000005')
+                 = '44444444-4444-4444-4444-444444444444', false));
 
 -- ---------------------------------------------------------------------------
 -- 6. A deleted contact does not count towards anyone's load.
@@ -164,20 +196,27 @@ values ('c0000000-0000-4000-8000-000000000006',
 
 -- Alex has 2 live, the new joiner has 1 live + 1 deleted. Counting the deleted
 -- one would make them level and hand this to Alex on pool order.
-select public.crm_round_robin_assign(
-  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  'c0000000-0000-4000-8000-000000000006',
-  array['11111111-1111-1111-1111-111111111111',
-        '44444444-4444-4444-4444-444444444444']::uuid[]);
+do $$
+begin
+  perform public.crm_round_robin_assign(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'c0000000-0000-4000-8000-000000000006',
+    array['11111111-1111-1111-1111-111111111111',
+          '44444444-4444-4444-4444-444444444444']::uuid[]);
+end $$;
 
-select 'a deleted contact is not load' as check,
-       (select owner_user_id
-          from public.crm_contacts
-         where id = 'c0000000-0000-4000-8000-000000000006')
-       = '44444444-4444-4444-4444-444444444444' as ok;
+insert into smoke_checks (label, ok)
+values ('a deleted contact is not load',
+        coalesce((select owner_user_id
+                    from public.crm_contacts
+                   where id = 'c0000000-0000-4000-8000-000000000006')
+                 = '44444444-4444-4444-4444-444444444444', false));
 
 -- ---------------------------------------------------------------------------
 -- 7. An empty pool is refused rather than silently assigning nobody.
+--
+--    ⚠️ RECORDED INSIDE THE BLOCK. This used to be followed by
+--    `select … true as ok`, a check that could not print anything else.
 -- ---------------------------------------------------------------------------
 do $$
 declare
@@ -192,12 +231,9 @@ begin
     v_raised := true;
   end;
 
-  if not v_raised then
-    raise exception 'an empty pool was accepted';
-  end if;
+  insert into smoke_checks (label, ok)
+  values ('an empty pool is refused', coalesce(v_raised, false));
 end $$;
-
-select 'an empty pool is refused' as check, true as ok;
 
 -- ---------------------------------------------------------------------------
 -- 8. A contact from another workspace is refused — 0123's check, reached
@@ -216,11 +252,38 @@ begin
     v_raised := true;
   end;
 
-  if not v_raised then
-    raise exception 'a cross-tenant contact was assigned';
-  end if;
+  insert into smoke_checks (label, ok)
+  values ('a cross-tenant contact is refused', coalesce(v_raised, false));
 end $$;
 
-select 'a cross-tenant contact is refused' as check, true as ok;
+-- ---------------------------------------------------------------------------
+-- The gate.
+-- ---------------------------------------------------------------------------
+select n, ok, label from smoke_checks order by n;
+
+do $$
+declare
+  v_expected constant integer := 8;
+  v_total    integer;
+  v_failed   text;
+begin
+  select count(*),
+         string_agg(label, '; ' order by n) filter (where ok is not true)
+    into v_total, v_failed
+    from smoke_checks;
+
+  -- ⚠️ THE COUNT IS PART OF THE TEST. A check that never ran records nothing,
+  -- so it would pass by being absent. Adding or removing a check means
+  -- changing this number, on purpose.
+  if v_total <> v_expected then
+    raise exception 'SMOKE FAILED: expected % checks, recorded %', v_expected, v_total;
+  end if;
+
+  if v_failed is not null then
+    raise exception 'SMOKE FAILED: %', v_failed;
+  end if;
+
+  raise notice 'SMOKE PASSED: % of % checks', v_total, v_expected;
+end $$;
 
 rollback;

@@ -103,20 +103,45 @@ try {
       .replace(/^\s*begin\s*;\s*$/gim, '')
       .replace(/^\s*rollback\s*;\s*$/gim, '')
 
+    const notices = []
+    client.on('notice', (msg) => notices.push(msg.message))
+
     const result = await client.query(smoke)
     const results = Array.isArray(result) ? result : [result]
 
     for (const r of results) {
       for (const row of r.rows ?? []) {
-        const label = row.check ?? Object.values(row)[0]
-        const values = Object.entries(row).filter(([k]) => k !== 'check')
-        const passed = values.every(([, v]) => v === true || v === null)
+        const label = row.check ?? row.label ?? Object.values(row)[0]
+        /*
+         * ⚠️ ONLY `true` PASSES. NULL used to count as a pass, and
+         * `fn(...) ->> 'reason' = 'stale'` is NULL — not false — exactly when
+         * a broken function succeeds, because there is no `reason` key.
+         *
+         * A row with an `ok` column is judged on `ok` alone, so the gate's own
+         * listing (`n, ok, label`) is not failed for its row number.
+         */
+        const values =
+          'ok' in row
+            ? [row.ok]
+            : Object.entries(row).filter(([k]) => k !== 'check').map(([, v]) => v)
+        const passed = values.every((v) => v === true)
         console.log(`  ${values.length === 0 ? ' ' : passed ? 'PASS' : 'FAIL'}  ${label}`)
         if (!passed) {
           failed = true
           console.log(`        ${JSON.stringify(row)}`)
         }
       }
+    }
+
+    /*
+     * ⚠️ AND THE GATE MUST HAVE SPOKEN. A check whose `where` matched no rows
+     * returns nothing to judge above, so an absent check looked like a passing
+     * one. The smoke file's gate counts its checks and raises on a shortfall;
+     * this requires the notice it emits on success, as check-migration.sh does.
+     */
+    if (!notices.some((m) => m.startsWith('SMOKE PASSED'))) {
+      failed = true
+      console.log('  FAIL  smoke test has no gate — end it with the SMOKE PASSED block')
     }
   }
 } catch (error) {

@@ -113,9 +113,25 @@ else
   # migrations into somebody's actual database would be destructive, and the
   # failure would look like a migration bug.
   # ---------------------------------------------------------------------------
+  #
+  # ⚠️ AND NOT A FIXED PORT, EITHER. Two runs at once — two sessions, two
+  # worktrees — used to share 55432. The second postgres failed to bind, but
+  # its readiness loop only asked whether SOMETHING answered, so it scaffolded
+  # into the first run's cluster: one run validating against another's
+  # database. So each run names its cluster uniquely and is only ready once
+  # the server answering carries that name.
+  #
+  # ⚠️ PROBING A PORT IS NOT RESERVING IT. A run still inside initdb is not
+  # listening yet, so a second run can probe the same port, find it quiet, and
+  # lose the bind. When our postgres exits before it is ready, the next port is
+  # tried rather than the run failing.
   PGCHECK_DIR="${TMPDIR:-/tmp}/outlio-sqlcheck.$$"
-  PGCHECK_PORT=55432
-  PSQL="psql -h 127.0.0.1 -p $PGCHECK_PORT -U postgres -d postgres -X -q -v ON_ERROR_STOP=1"
+  PGCHECK_NAME="outlio-sqlcheck-$$"
+  PGCHECK_PORT=""
+  # ⚠️ A PORT THAT ACCEPTS AND NEVER ANSWERS HANGS psql INDEFINITELY — seen on
+  # a wedged cluster left by another run. Without a timeout the port scan
+  # below stops there for good instead of moving on.
+  export PGCONNECT_TIMEOUT=5
 
   cleanup() {
     if [ -n "${PGCHECK_PID:-}" ]; then kill "$PGCHECK_PID" >/dev/null 2>&1 || true; fi
@@ -130,27 +146,52 @@ else
     exit 1
   }
 
-  postgres -D "$PGCHECK_DIR/data" -p "$PGCHECK_PORT" -k "" >"$PGCHECK_DIR/pg.log" 2>&1 &
-  PGCHECK_PID=$!
+  is_ours() {
+    [ "$(psql -h 127.0.0.1 -p "$1" -U postgres -d postgres -X -qtA \
+          -c "select current_setting('cluster_name')" 2>/dev/null | tr -d '\r')" = "$PGCHECK_NAME" ]
+  }
 
-  # Same two-checks-apart wait as the container path, for the same reason: a
-  # server that answers once and then exits is not a server that is up.
   ready=""
-  for _ in $(seq 1 60); do
-    if psql -h 127.0.0.1 -p "$PGCHECK_PORT" -U postgres -d postgres -X -q -c 'select 1' >/dev/null 2>&1; then
-      sleep 1
-      if psql -h 127.0.0.1 -p "$PGCHECK_PORT" -U postgres -d postgres -X -q -c 'select 1' >/dev/null 2>&1; then
-        ready=yes
-        break
-      fi
+  for p in $(seq 55432 55471); do
+    # Something already answers here — another run, or a real local server.
+    if psql -h 127.0.0.1 -p "$p" -U postgres -d postgres -X -q -c 'select 1' >/dev/null 2>&1; then
+      continue
     fi
-    sleep 1
+
+    postgres -D "$PGCHECK_DIR/data" -p "$p" -k "" -c cluster_name="$PGCHECK_NAME" \
+      >"$PGCHECK_DIR/pg.log" 2>&1 &
+    PGCHECK_PID=$!
+
+    # Same two-checks-apart wait as the container path, for the same reason: a
+    # server that answers once and then exits is not a server that is up.
+    for _ in $(seq 1 60); do
+      if is_ours "$p"; then
+        sleep 1
+        if is_ours "$p"; then
+          ready=yes
+          break
+        fi
+      fi
+      # Exited without becoming ready: most likely it lost the bind race.
+      kill -0 "$PGCHECK_PID" >/dev/null 2>&1 || break
+      sleep 1
+    done
+
+    if [ -n "$ready" ]; then
+      PGCHECK_PORT=$p
+      break
+    fi
+    kill "$PGCHECK_PID" >/dev/null 2>&1 || true
+    PGCHECK_PID=""
   done
+
   if [ -z "$ready" ]; then
     echo "The local cluster never accepted a connection." >&2
     tail -20 "$PGCHECK_DIR/pg.log" >&2
     exit 1
   fi
+  echo "→ local cluster on port $PGCHECK_PORT"
+  PSQL="psql -h 127.0.0.1 -p $PGCHECK_PORT -U postgres -d postgres -X -q -v ON_ERROR_STOP=1"
 fi
 
 # ---------------------------------------------------------------------------
@@ -288,5 +329,33 @@ if [ -n "$SMOKE" ]; then
   # ⚠️ THROUGH $PSQL, NOT `docker exec`. This line named the container directly
   # while every other statement went through $PSQL -- harmless while docker was
   # the only engine, and an immediate failure the moment it is not.
-  $PSQL < "$SMOKE"
+  #
+  # ⚠️ EXIT 0 IS NOT A PASS. psql fails only on a SQL error, and a check that
+  # prints `ok = f` is not one — seven false checks once exited 0 here. Nor can
+  # this parse psql's `t`/`f` instead: a NULL `ok` prints blank, and a check
+  # whose `where` matched no rows prints nothing at all, so there is nothing to
+  # find.
+  #
+  # So a smoke file must END IN A GATE that raises unless every recorded check
+  # is true (see any file under supabase/migrations/smoke/), and this demands
+  # the notice that gate emits on success. A file with no gate is refused
+  # rather than passed: it cannot fail, so its exit 0 proves nothing.
+  set +e
+  smoke_output=$($PSQL < "$SMOKE" 2>&1)
+  smoke_status=$?
+  set -e
+
+  echo "$smoke_output"
+
+  if [ $smoke_status -ne 0 ]; then
+    echo "✗ smoke test failed"
+    exit 1
+  fi
+  if ! echo "$smoke_output" | grep -Eq 'NOTICE: +SMOKE PASSED:'; then
+    echo "✗ smoke test has no gate — it exited 0, but nothing in it could have failed"
+    echo "  Record checks in smoke_checks and end with the SMOKE PASSED gate;"
+    echo "  see supabase/migrations/smoke/0120_suppress_by_contact.smoke.sql"
+    exit 1
+  fi
+  echo "✓ smoke test passed"
 fi
