@@ -47,12 +47,19 @@ export function handoverTotal(result: HandoverResult): number {
  * without the check a crafted request could hand a workspace's entire book of
  * business to an outsider — who would then own it legitimately.
  */
+export type HandoverAssignment = { contactId: string; activityId: string }
+
+export type HandoverOutcome = HandoverResult & {
+  /** Contacts that changed hands, each with the OWNER_ASSIGNED row it wrote. */
+  assignments: HandoverAssignment[]
+}
+
 export async function reassignMemberRecords(
   workspaceId: string,
   fromUserId: string,
   toUserId: string | null,
   actorUserId: string | null = null,
-): Promise<HandoverResult> {
+): Promise<HandoverOutcome> {
   const { data, error } = await createAdminClient().rpc('crm_handover_member_records', {
     p_workspace_id: workspaceId,
     p_from_user: fromUserId,
@@ -65,6 +72,9 @@ export async function reassignMemberRecords(
     if (/not in this workspace/i.test(error.message)) {
       throw new Error('reassignMemberRecords: the new owner is not in this workspace')
     }
+    if (/departing member/i.test(error.message)) {
+      throw new Error('reassignMemberRecords: the new owner is the departing member')
+    }
     throw new Error(`reassignMemberRecords failed: ${error.message}`)
   }
 
@@ -72,26 +82,43 @@ export async function reassignMemberRecords(
     assignments: { contact_id: string; activity_id: string }[]
   }
 
-  /*
-   * After the transaction commits, so no flow hears about a handover that
-   * rolled back. Every contact came from the departing member.
-   */
-  await announceAssignments(
-    workspaceId,
-    (result.assignments ?? []).map((a) => ({
-      contactId: a.contact_id,
-      from: fromUserId,
-      to: toUserId,
-      activityId: a.activity_id,
-    })),
-  )
-
   return {
     contacts: result.contacts,
     companies: result.companies,
     opportunities: result.opportunities,
     tasks: result.tasks,
+    assignments: (result.assignments ?? []).map((a) => ({
+      contactId: a.contact_id,
+      activityId: a.activity_id,
+    })),
   }
+}
+
+/**
+ * Announces a handover's contact assignments: one `contact_assigned` per
+ * OWNER_ASSIGNED row, keyed on it.
+ *
+ * ⚠️ SEPARATE FROM THE HANDOVER, AND CALLED ONCE THE MEMBERSHIP IS GONE. A
+ * handover can move thousands of contacts, and announcing them used to sit
+ * between the committed handover and the membership delete: a request that
+ * timed out there left the member in place with their book already moved, and
+ * a retry found nothing left to move — so the rest were never announced.
+ */
+export async function announceHandover(
+  workspaceId: string,
+  fromUserId: string,
+  toUserId: string | null,
+  assignments: HandoverAssignment[],
+): Promise<void> {
+  await announceAssignments(
+    workspaceId,
+    assignments.map((a) => ({
+      contactId: a.contactId,
+      from: fromUserId,
+      to: toUserId,
+      activityId: a.activityId,
+    })),
+  )
 }
 
 /** What a member currently owns, for the confirmation before removing them. */

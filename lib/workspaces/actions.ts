@@ -17,6 +17,7 @@
  */
 import { cookies, headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { z } from 'zod'
 
 import { RULES, enforce, subjectFor } from '@/lib/auth/rate-limit'
@@ -29,7 +30,7 @@ import {
   listMemberships,
 } from '@/lib/workspaces/context'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { handoverTotal, reassignMemberRecords } from '@/lib/workspaces/handover'
+import { announceHandover, handoverTotal, reassignMemberRecords } from '@/lib/workspaces/handover'
 import { getWorkspaceEntitlements } from '@/lib/workspaces/entitlements'
 import { canManageRole, WORKSPACE_ROLES, type WorkspaceRole } from '@/lib/workspaces/permissions'
 import {
@@ -316,6 +317,15 @@ export async function removeMemberAction(
         ? reassignTo
         : null
 
+    /*
+     * ⚠️ NOT TO THE PERSON LEAVING. Their membership is deleted next, so this
+     * would leave every record owned by someone no longer here. The database
+     * refuses it too; this is the message.
+     */
+    if (newOwnerId === membership.user_id) {
+      return fail('Choose someone other than the member being removed.')
+    }
+
     let handover
     try {
       handover = await reassignMemberRecords(ctx.workspace.id, membership.user_id, newOwnerId, ctx.userId)
@@ -332,6 +342,19 @@ export async function removeMemberAction(
     if (error) throw new Error(error.message)
 
     revalidatePath(TEAM_PATH)
+
+    /*
+     * ⚠️ ANNOUNCED AFTER THE RESPONSE, AND AFTER THE MEMBERSHIP IS GONE. One
+     * event per moved contact can be thousands of flow and webhook dispatches.
+     * Awaiting them before the delete let a timeout strand a removal whose
+     * records had already moved. `after()` runs once the response is on its way.
+     */
+    const { assignments } = handover
+    if (assignments.length > 0) {
+      const workspaceId = ctx.workspace.id
+      const fromUserId = membership.user_id
+      after(() => announceHandover(workspaceId, fromUserId, newOwnerId, assignments))
+    }
 
     /*
      * Says what moved. "Member removed" alone leaves an admin wondering what

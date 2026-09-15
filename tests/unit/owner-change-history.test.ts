@@ -38,7 +38,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 }))
 
 const { bulkAssignContacts, NotAMemberError } = await import('@/lib/crm/activities')
-const { reassignMemberRecords } = await import('@/lib/workspaces/handover')
+const { announceHandover, reassignMemberRecords } = await import('@/lib/workspaces/handover')
 
 beforeEach(() => {
   mocks.rpcCalls = []
@@ -137,7 +137,12 @@ describe('reassignMemberRecords', () => {
     ])
   })
 
-  it('returns what moved, and announces each contact that changed hands', async () => {
+  /*
+   * ⚠️ IT DOES NOT ANNOUNCE. The caller deletes the membership first and
+   * announces after the response: awaiting thousands of events here let a
+   * timeout strand a removal whose records had already moved.
+   */
+  it('returns what moved and the contacts to announce, without announcing them', async () => {
     mocks.rpcResult = {
       data: {
         contacts: 5,
@@ -151,16 +156,14 @@ describe('reassignMemberRecords', () => {
 
     const result = await reassignMemberRecords(WS, FROM, null, ACTOR)
 
-    expect(result).toEqual({ contacts: 5, companies: 2, opportunities: 3, tasks: 4 })
-    expect(mocks.events).toEqual([
-      {
-        workspaceId: WS,
-        triggerType: 'contact_assigned',
-        contactId: 'c1',
-        idempotencyKey: 'contact_assigned:a9',
-        payload: { contactId: 'c1', from: FROM, to: null },
-      },
-    ])
+    expect(result).toEqual({
+      contacts: 5,
+      companies: 2,
+      opportunities: 3,
+      tasks: 4,
+      assignments: [{ contactId: 'c1', activityId: 'a9' }],
+    })
+    expect(mocks.events).toEqual([])
   })
 
   it('keeps the message the member-removal flow and its integration test rely on', async () => {
@@ -170,5 +173,39 @@ describe('reassignMemberRecords', () => {
     }
     await expect(reassignMemberRecords(WS, FROM, TO, ACTOR)).rejects.toThrow(/not in this workspace/)
     expect(mocks.events).toEqual([])
+  })
+
+  it('names a handover to the departing member rather than a generic failure', async () => {
+    mocks.rpcResult = {
+      data: null,
+      error: { message: 'crm_handover_member_records: the new owner is the departing member' },
+    }
+    await expect(reassignMemberRecords(WS, FROM, FROM, ACTOR)).rejects.toThrow(/departing member/)
+  })
+})
+
+describe('announceHandover', () => {
+  it('announces each contact that changed hands once, keyed on its activity', async () => {
+    await announceHandover(WS, FROM, null, [
+      { contactId: 'c1', activityId: 'a9' },
+      { contactId: 'c2', activityId: 'a10' },
+    ])
+
+    expect(mocks.events).toEqual([
+      {
+        workspaceId: WS,
+        triggerType: 'contact_assigned',
+        contactId: 'c1',
+        idempotencyKey: 'contact_assigned:a9',
+        payload: { contactId: 'c1', from: FROM, to: null },
+      },
+      {
+        workspaceId: WS,
+        triggerType: 'contact_assigned',
+        contactId: 'c2',
+        idempotencyKey: 'contact_assigned:a10',
+        payload: { contactId: 'c2', from: FROM, to: null },
+      },
+    ])
   })
 })

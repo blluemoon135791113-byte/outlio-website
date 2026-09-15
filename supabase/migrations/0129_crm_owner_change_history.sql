@@ -92,6 +92,11 @@ begin
    * in a selection must not refuse the other 199. Ordered by id so two
    * overlapping bulk assignments lock rows in the same order and cannot
    * deadlock.
+   *
+   * ⚠️ `for update`, SO THE FILTER IS RE-CHECKED ON THE LOCKED ROW. Without it
+   * the loop reads its list once, and a contact soft-deleted by someone else
+   * before its turn still reached crm_assign_contact_owner — which raises for
+   * a deleted row, rolling back the other 199.
    */
   for v_id in
     select c.id
@@ -100,6 +105,7 @@ begin
        and c.deleted_at is null
        and c.id = any (p_contact_ids)
      order by c.id
+       for update
   loop
     v_found := v_found + 1;
     v_result := public.crm_assign_contact_owner(p_workspace_id, v_id, p_new_owner, p_actor_id);
@@ -168,12 +174,14 @@ begin
       using errcode = 'check_violation';
   end if;
 
-  -- Handing a book to the person it already belongs to changes nothing.
-  if p_to_user is not distinct from p_from_user then
-    return jsonb_build_object(
-      'contacts', 0, 'companies', 0, 'opportunities', 0, 'tasks', 0,
-      'assignments', '[]'::jsonb
-    );
+  /*
+   * ⚠️ REFUSED, NOT A NO-OP. The caller deletes the departing membership next,
+   * so "handing" the book to that same person would leave every record owned
+   * by someone no longer in the workspace — the orphaning this exists to stop.
+   */
+  if p_to_user = p_from_user then
+    raise exception 'crm_handover_member_records: the new owner is the departing member'
+      using errcode = 'invalid_parameter_value';
   end if;
 
   /*
@@ -230,7 +238,15 @@ begin
     end if;
   end loop;
 
-  -- Live contacts, one at a time through the function that writes their history.
+  /*
+   * Live contacts, one at a time through the function that writes their history.
+   *
+   * ⚠️ `for update`, SO "STILL THE LEAVER'S, STILL LIVE" IS RE-CHECKED ON THE
+   * LOCKED ROW. crm_assign_contact_owner locks and re-reads a contact but never
+   * asks who owns it. Without this, a contact someone reassigned to a third
+   * person while a long handover ran was moved on to the successor anyway, and
+   * one soft-deleted mid-run made crm_assign_contact_owner raise.
+   */
   for v_contact_id in
     select c.id
       from public.crm_contacts c
@@ -238,6 +254,7 @@ begin
        and c.owner_user_id = p_from_user
        and c.deleted_at is null
      order by c.id
+       for update
   loop
     v_result := public.crm_assign_contact_owner(p_workspace_id, v_contact_id, p_to_user, p_actor_id);
     if coalesce((v_result ->> 'changed')::boolean, false) then

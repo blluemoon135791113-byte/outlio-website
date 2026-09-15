@@ -242,6 +242,26 @@ begin
            and (select owner_user_id from public.crm_companies where id = 'c0c00000-0000-4000-8000-000000000001') = '00000000-0000-4000-8000-0000000000a1';
 end $$;
 
+-- The caller deletes the membership next; "handing" the book to the leaver would orphan it.
+do $$
+declare v boolean := false;
+begin
+  begin
+    perform public.crm_handover_member_records(
+      'aaaaaaaa-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-0000000000a1',
+      '00000000-0000-4000-8000-0000000000a1',
+      '00000000-0000-4000-8000-00000000000a'
+    );
+  exception when invalid_parameter_value then v := true;
+  end;
+  insert into smoke_checks (label, ok)
+  select 'handover: to the departing member themselves is refused, and nothing moves',
+         coalesce(v
+           and (select owner_user_id from public.crm_contacts where id = 'c0000000-0000-4000-8000-000000000001') = '00000000-0000-4000-8000-0000000000a1'
+           and (select assigned_to_user_id from public.crm_tasks where id = '7a500000-0000-4000-8000-000000000001') = '00000000-0000-4000-8000-0000000000a1', false);
+end $$;
+
 do $$
 declare v jsonb;
 begin
@@ -399,7 +419,7 @@ select n, ok, label from smoke_checks order by n;
 
 do $$
 declare
-  v_expected constant integer := 19;
+  v_expected constant integer := 20;
   v_total    integer;
   v_failed   text;
 begin
