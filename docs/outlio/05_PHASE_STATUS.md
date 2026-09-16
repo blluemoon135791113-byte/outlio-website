@@ -116,7 +116,7 @@ Its own phase numbering, not §9's:
 | 2 | Contact-level stop at email dispatch | **COMPLETE** — found a live defect; `enqueueEmail` matched suppression on address alone |
 | 3 | Contact DNC + `crm_contacts.timezone` | **COMPLETE** — migration `0121`, **applied** |
 | 4 | Sender identity and account policy | **COMPLETE** — `0122` applied; `/dashboard/settings/linkedin` links accounts, records owner review and reports warnings. ⚠️ Budgets read a ledger nothing wrote until phase 10 landed, so the panel showed a full cap that could never fall |
-| 5 | Enrollment / task / conversation state split | **COMPLETE** — migration `0125` (applied) built `linkedin_enrollments` and `linkedin_tasks`. ⚠️ It also added `crm_contacts.version`, which `preflight()` had always required and which **did not exist** — §4.7's durable cancellation was inert. `0126` then corrected which columns bump it |
+| 5 | Enrollment / task / conversation state split | **COMPLETE** — migration `0132` (applied) built `linkedin_enrollments` and `linkedin_tasks`. ⚠️ It also added `crm_contacts.version`, which `preflight()` had always required and which **did not exist** — §4.7's durable cancellation was inert. `0133` then corrected which columns bump it |
 | 6 | LinkedIn action types | **DEFERRED** — they land with their handlers, not before |
 | 7 | Action Inbox decision layer | **COMPLETE** — `/linkedin` renders the draft and its result form; `releaseTask` runs preflight + budget and reserves a ledger slot, `recordOutcome` resolves it. An Observation is refused by the enum AND by the service |
 | 8 | Message set (§4.9) | **COMPLETE** — `lib/linkedin/{templates,variables,render}.ts` |
@@ -135,7 +135,7 @@ those — the card imports `allowedOutcomes`, the release path imports
 ✅ **Both owner questions answered and verified live (2026-09-14).**
 [`LINKEDIN_PHASE_4_SENDER_DESIGN.md`](LINKEDIN_PHASE_4_SENDER_DESIGN.md)'s two
 questions are closed: entitled on **trial, professional, custom**; caps **2 / 10
-/ 20** senders per workspace. Migration `0127`, applied to both projects and
+/ 20** senders per workspace. Migration `0134`, applied to both projects and
 confirmed by reading back `plans.limits` — `linkedin_enabled = true` with the
 matching cap on those three, and both keys absent on `starter` and `agency` by
 decision.
@@ -150,7 +150,7 @@ record that this one was meant to exist, and a fresh project would have replayed
 `0002..0126` into a database with LinkedIn off for everyone — correctly,
 permanently and silently.
 
-`0127` sets both keys in one statement per plan and raises if it ever finds them
+`0134` sets both keys in one statement per plan and raises if it ever finds them
 split. `tests/unit/entitlement-migrations.test.ts` reads the module map from
 `entitlements.ts`, so a module added later is covered the day it is added.
 
@@ -158,9 +158,9 @@ split. `tests/unit/entitlement-migrations.test.ts` reads the module map from
 the enum `public.plan_key`; the harness scaffolded it as `text`, which accepts
 every expression the enum accepts *and* every one it rejects — so
 `string_agg(key, …)` looked fine locally and failed in the editor. Its
-prerequisite list had also stopped at `0106`, giving `0124` and `0125` false
+prerequisite list had also stopped at `0106`, giving `0131` and `0132` false
 failures about columns their own predecessors create. A harness that cries wolf
-gets ignored, which is why `0127` reached the editor unvalidated at all. Both
+gets ignored, which is why `0134` reached the editor unvalidated at all. Both
 repaired, and `tests/unit/migration-harness-coverage.test.ts` now checks the
 harness.
 

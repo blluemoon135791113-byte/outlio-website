@@ -197,7 +197,7 @@ export type OutcomeResult = { ok: true } | { ok: false; error: string }
  * ║  and belongs to the contact, not to the completion of a task. Collapsing   ║
  * ║  them sends a message into a connection that was never made.              ║
  * ║                                                                           ║
- * ║  0125's enum rejects an Observation too. Both, because a constraint says   ║
+ * ║  0132's enum rejects an Observation too. Both, because a constraint says   ║
  * ║  what the database will store and this says what the product means.       ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */

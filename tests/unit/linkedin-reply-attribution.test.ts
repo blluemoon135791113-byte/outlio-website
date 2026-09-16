@@ -159,7 +159,7 @@ describe('the refusal, and what it does not do', () => {
 describe('an observation is not a task outcome', () => {
   it('the recorder writes to linkedin_observations, never linkedin_tasks', () => {
     /*
-     * 0125 refuses an Observation as a task outcome in the enum AND in the
+     * 0132 refuses an Observation as a task outcome in the enum AND in the
      * service, because "mark request sent" must not be able to mark acceptance
      * — and acceptance gates the first DM, so the collapse sends a message into
      * a connection that was never made.
@@ -178,7 +178,7 @@ describe('an observation is not a task outcome', () => {
      * pinned here so the two files cannot diverge afterwards.
      */
     const migration = readFileSync(
-      join(ROOT, 'supabase/migrations/0129_linkedin_observations.sql'),
+      join(ROOT, 'supabase/migrations/0136_linkedin_observations.sql'),
       'utf8',
     )
     const outcomes = readFileSync(join(ROOT, 'lib/linkedin/outcomes.ts'), 'utf8')

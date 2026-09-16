@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- 0130 — The customer's own campaign workflow. Linear. Phase 20.
+-- 0137 — The customer's own campaign workflow. Linear. Phase 20.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
 -- ║  Owner decision, 2026-09-15: "keep it manual but the user can create own  ║
@@ -250,7 +250,7 @@ create trigger linkedin_workflow_steps_set_updated_at
 
 comment on table public.linkedin_workflow_steps is
   'The steps a customer built for one campaign, in order. Linear by decision '
-  '(0130) — branching is additive later. Outlio performs none of these: each '
+  '(0137) — branching is additive later. Outlio performs none of these: each '
   'step describes what a human will do in LinkedIn themselves.';
 
 comment on column public.linkedin_enrollments.current_step_id is

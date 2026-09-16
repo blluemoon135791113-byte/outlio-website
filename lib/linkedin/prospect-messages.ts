@@ -104,7 +104,7 @@ export async function prospectMessages(
  * that refusal into the last write winning rather than into an error the rep
  * cannot act on.
  *
- * ⚠️ `authored_by` IS THE PERSON WRITING NOW, not the contact's owner. 0133
+ * ⚠️ `authored_by` IS THE PERSON WRITING NOW, not the contact's owner. 0140
  * says why: deriving it later would attribute a message to whoever owns the
  * contact today, so reassigning a book of leads would silently rewrite every
  * past author — and the per-rep report the owner asked for is exactly that

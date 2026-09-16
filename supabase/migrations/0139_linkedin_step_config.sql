@@ -1,10 +1,10 @@
 -- ---------------------------------------------------------------------------
--- 0132 — step settings, and the hole 0130 left in ADD_TAG.
+-- 0139 — step settings, and the hole 0137 left in ADD_TAG.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
 -- ║  ⚠️ `ADD_TAG` COULD NOT SAY WHICH TAG.                                    ║
 -- ║                                                                           ║
--- ║  0130 gave every step a `body`, then forbade one on `ADD_TAG` via          ║
+-- ║  0137 gave every step a `body`, then forbade one on `ADD_TAG` via          ║
 -- ║  `linkedin_workflow_steps_bodyless` — correctly, since a tag name is not a ║
 -- ║  message. But that left the step with nowhere to record its only setting,  ║
 -- ║  so a workflow could contain an `ADD_TAG` that named no tag.               ║
@@ -32,7 +32,7 @@ alter table public.linkedin_workflow_steps
 
 /*
  * ⚠️ THE DATABASE REFUSES A TAGLESS `ADD_TAG`, rather than trusting the
- * validator. 0130 established the pattern for the owner's comment-draft rule and
+ * validator. 0137 established the pattern for the owner's comment-draft rule and
  * it is the same argument: a constraint in TypeScript alone is a constraint that
  * holds until somebody writes a row another way — a backfill, a support script,
  * a future importer.
@@ -57,7 +57,7 @@ end $$;
  * ⚠️ AND EVERY OTHER ACTION MUST CARRY AN EMPTY CONFIG. Without this the column
  * accepts anything on any step, and a setting written against the wrong action
  * would sit there looking meaningful — the same failure mode as a `wait_days` on
- * a message step, which 0130 refuses for the same reason.
+ * a message step, which 0137 refuses for the same reason.
  *
  * This constraint is expected to be RELAXED when the voice-note step lands. That
  * is the correct direction: a new action arrives with its settings declared,
@@ -78,4 +78,4 @@ end $$;
 comment on column public.linkedin_workflow_steps.config is
   'Per-action settings. Only ADD_TAG uses it today ({"tag": "..."}), and the '
   'CHECK constraints keep it empty everywhere else so a setting cannot sit on '
-  'an action that ignores it (0132).';
+  'an action that ignores it (0139).';

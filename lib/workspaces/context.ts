@@ -47,7 +47,7 @@ export type WorkspaceSummary = {
   role: WorkspaceRole
   isOwner: boolean
   /**
-   * What this workspace reports money in (0123).
+   * What this workspace reports money in (0130).
    *
    * ⚠️ CARRIED HERE SO NOTHING HARDCODES 'USD' DOWNSTREAM. Every screen that
    * shows or collects an amount needs it, and a per-page lookup is how one page

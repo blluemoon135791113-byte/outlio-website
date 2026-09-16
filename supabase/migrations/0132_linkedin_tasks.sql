@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- 0125 — The LinkedIn release pipeline: enrollments, tasks, and the version
+-- 0132 — The LinkedIn release pipeline: enrollments, tasks, and the version
 -- that makes a cancellation durable.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -78,7 +78,7 @@ create trigger crm_contacts_bump_version
 
 comment on column public.crm_contacts.version is
   'Bumped when the contact''s own state changes. A LinkedIn task approved at a '
-  'different version fails preflight — §4.7 durable cancellation (0125).';
+  'different version fails preflight — §4.7 durable cancellation (0132).';
 
 -- ---------------------------------------------------------------------------
 -- 2. Enumerations, mirroring lib/linkedin/ exactly.
@@ -336,8 +336,8 @@ grant select, insert, update, delete on table public.linkedin_tasks to service_r
 comment on table public.linkedin_tasks is
   'One Action Inbox card. Outlio prepares it; a human performs the action in '
   'LinkedIn and records what they did. `outcome` is what they DID; an '
-  'Observation is what was later seen and is not stored here (0125).';
+  'Observation is what was later seen and is not stored here (0132).';
 
 comment on column public.linkedin_tasks.approved_at_contact_version is
   'crm_contacts.version when this content was approved. preflight() refuses '
-  'when it no longer matches — §4.7 durable cancellation (0125).';
+  'when it no longer matches — §4.7 durable cancellation (0132).';

@@ -282,7 +282,7 @@ export function taskKindFor(action: StepAction): TaskKindValue | null {
 
 /**
  * ⚠️ THE GENERATED DATABASE TYPE, NOT A HAND-WRITTEN UNION. `outcomes.ts`
- * declares its own `TaskKind` by hand and 0130 has just widened the real enum;
+ * declares its own `TaskKind` by hand and 0137 has just widened the real enum;
  * importing the generated type means `taskKindFor` stops compiling if the two
  * ever drift, rather than failing on write.
  */

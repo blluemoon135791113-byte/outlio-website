@@ -398,7 +398,7 @@ export type ContactDetail = {
   location: string | null
   linkedInUrl: string | null
   /*
-   * ⚠️ A SECOND, SEPARATE ADDRESS — NOT A FALLBACK FOR THE FIRST. 0131 split
+   * ⚠️ A SECOND, SEPARATE ADDRESS — NOT A FALLBACK FOR THE FIRST. 0138 split
    * these because §4.5 forbids deriving a public profile slug from a Sales
    * Navigator identifier: they are two addresses for the same person and
    * neither implies the other. A reader with only one of them has less, not

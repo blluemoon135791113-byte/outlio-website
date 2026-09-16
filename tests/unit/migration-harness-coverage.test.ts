@@ -5,14 +5,14 @@
  * ║  ⚠️ ITS PREREQUISITE LIST STOPPED AT 0106 AND THE PLATFORM DID NOT.       ║
  * ║                                                                           ║
  * ║  Twenty migrations later, anything depending on 0107..0126 got a FALSE     ║
- * ║  FAILURE: 0124 reported "column o.value_amount_base does not exist" (0123  ║
- * ║  creates it) and 0125 reported "relation public.linkedin_senders does not  ║
+ * ║  FAILURE: 0131 reported "column o.value_amount_base does not exist" (0130  ║
+ * ║  creates it) and 0132 reported "relation public.linkedin_senders does not  ║
  * ║  exist" (0122). Both apply perfectly to the real database.                ║
  * ║                                                                           ║
  * ║  ⚠️ A SKIPPED PREREQUISITE DOES NOT WEAKEN THE CHECK — IT INVERTS IT. The  ║
  * ║  migration under test fails for a reason that has nothing to do with the   ║
  * ║  migration, and the only rational response to a tool that cries wolf is to ║
- * ║  stop running it. Which is what happened: 0127 went to the SQL editor      ║
+ * ║  stop running it. Which is what happened: 0134 went to the SQL editor      ║
  * ║  unvalidated and failed there on `string_agg(plan_key, unknown)` — an      ║
  * ║  error this harness exists to catch and now does.                         ║
  * ║                                                                           ║
@@ -42,7 +42,7 @@ const ALL = readdirSync(join(ROOT, 'supabase', 'migrations'))
  * The prerequisite list, read from the `for m in ... ; do` loop.
  *
  * ⚠️ SCOPED TO THE LOOP HEADER. The script's comments name migrations while
- * explaining the skips — 0118, 0119, 0123 and 0125 all appear in prose right
+ * explaining the skips — 0118, 0119, 0130 and 0132 all appear in prose right
  * beside the list. Matching the whole file would count those as replayed and
  * report coverage the harness does not have.
  */
@@ -112,7 +112,7 @@ describe('the prerequisite list keeps up with the platform', () => {
       'These migrations are not replayed before the one under test, so any ' +
         'migration depending on them fails here for a reason unrelated to ' +
         'itself. That false failure is worse than no harness: it trains ' +
-        'everyone to skip the check, which is how 0127 reached the SQL editor ' +
+        'everyone to skip the check, which is how 0134 reached the SQL editor ' +
         'unvalidated. Add them to the `for m in ...` list, or to UNREPLAYABLE ' +
         'with the specific reason stock postgres:16 cannot run them.',
     ).toEqual([])

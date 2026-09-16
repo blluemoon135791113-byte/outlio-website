@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- 0128 — LinkedIn campaigns, and the honest partial.
+-- 0135 — LinkedIn campaigns, and the honest partial.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
 -- ║  §7.5 PHASE 18: "campaigns on an async operation ledger, reconciled — a   ║
@@ -56,7 +56,7 @@ create table if not exists public.linkedin_campaigns (
 
   /*
    * ⚠️ THE SENDER IS ON THE ENROLLMENT, NOT HERE, AND THAT IS DELIBERATE.
-   * 0125 fixes a sender per enrollment because §4.10's budgets are per account
+   * 0132 fixes a sender per enrollment because §4.10's budgets are per account
    * and "moving mid-sequence would make a conversation arrive from two
    * different people". A campaign-level sender would either duplicate that or
    * contradict it; a campaign may legitimately span several senders.
@@ -130,7 +130,7 @@ create trigger linkedin_campaigns_set_updated_at
 comment on table public.linkedin_campaigns is
   'Groups LinkedIn enrollments. Holds NO counts: progress is derived from '
   'linkedin_enrollments and linkedin_tasks on read, because a stored total can '
-  'disagree with the rows an operator actually changed (0128).';
+  'disagree with the rows an operator actually changed (0135).';
 
 comment on column public.linkedin_campaigns.reconciled_at is
   'When progress was last computed, never what it said. A cached verdict would '

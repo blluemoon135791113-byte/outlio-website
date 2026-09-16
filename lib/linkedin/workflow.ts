@@ -58,9 +58,9 @@ export type WorkflowStep = {
    */
   waitDays: number | null
   /**
-   * Per-action settings (0132). Only `ADD_TAG` uses it today: `{ tag }`.
+   * Per-action settings (0139). Only `ADD_TAG` uses it today: `{ tag }`.
    *
-   * ⚠️ IT EXISTS BECAUSE `ADD_TAG` COULD NOT SAY WHICH TAG. 0130 gave every step
+   * ⚠️ IT EXISTS BECAUSE `ADD_TAG` COULD NOT SAY WHICH TAG. 0137 gave every step
    * a `body` and then correctly forbade one on `ADD_TAG` — a tag name is not a
    * message — which left the step with nowhere to record its only setting. The
    * walker then had nothing to execute: it would either skip silently, so a step
@@ -148,7 +148,7 @@ export function compileWorkflow(steps: readonly WorkflowStep[]): CompiledWorkflo
        * ⚠️ A TRAILING WAIT IS REFUSED RATHER THAN IGNORED. It holds people in
        * the campaign, doing nothing, until somebody notices — and what they see
        * meanwhile is an enrolment that is neither finished nor working, which is
-       * exactly the "silent partial" 0128 exists to keep visible.
+       * exactly the "silent partial" 0135 exists to keep visible.
        */
       if (index === ordered.length - 1) {
         problems.push({
@@ -244,7 +244,7 @@ export function compileWorkflow(steps: readonly WorkflowStep[]): CompiledWorkflo
        * walker performs `ADD_TAG` itself, so an unconfigured one would either be
        * skipped — silently excluding people from whatever the tag segments — or
        * fail mid-sequence on a workflow that had already been saved as valid.
-       * 0132's CHECK refuses it in the database too; this is the message a
+       * 0139's CHECK refuses it in the database too; this is the message a
        * person can act on.
        */
       const tag = typeof step.config.tag === 'string' ? step.config.tag.trim() : ''

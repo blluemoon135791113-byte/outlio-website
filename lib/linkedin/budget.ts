@@ -92,7 +92,7 @@ export const KIND_FOR_TASK: Readonly<Record<TaskKind, ActionKind>> = {
    * ║  TWO KINDS ARE THEREFORE UNRELEASABLE UNTIL SOMEBODY RAISES IT.       ║
    * ║                                                                       ║
    * ║  That is §4.10's existing decision ("disabled in starters. Enabling it ║
-   * ║  is a deliberate act"), made before 0130 gave the customer a way to    ║
+   * ║  is a deliberate act"), made before 0137 gave the customer a way to    ║
    * ║  put a like or a comment in a workflow. Mapping them anywhere else —   ║
    * ║  `profile_review` is the tempting one, since it is also cheap — would  ║
    * ║  spend a budget sized for a different act and quietly overturn a       ║

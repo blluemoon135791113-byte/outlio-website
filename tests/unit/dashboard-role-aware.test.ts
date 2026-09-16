@@ -155,7 +155,7 @@ describe('the two panels cannot be confused for each other', () => {
 describe('the money warning is shared, not copied', () => {
   it('the team panel carries the unconvertible-deals warning', () => {
     /*
-     * ⚠️ WITHOUT IT THE TWO FIGURES LIE TOGETHER. 0124 sums
+     * ⚠️ WITHOUT IT THE TWO FIGURES LIE TOGETHER. 0131 sums
      * `value_amount_base`, NULL without a rate, and `sum()` skips NULLs — so an
      * unconvertible deal is counted in "Open deals" and absent from "Open
      * pipeline", and dividing one by the other gives an average deal size that

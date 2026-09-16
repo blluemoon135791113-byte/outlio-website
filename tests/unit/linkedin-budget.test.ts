@@ -181,7 +181,7 @@ describe('a stage never advances on a timer', () => {
 describe('every manual task kind spends a budget', () => {
   /*
    * ⚠️ THE HARDCODED LIST IS THE POINT, NOT AN OVERSIGHT — BUT IT HAS TO BE
-   * MAINTAINED, AND 0130 IS WHY THIS TEST WAS RENAMED FROM "maps all four".
+   * MAINTAINED, AND 0137 IS WHY THIS TEST WAS RENAMED FROM "maps all four".
    *
    * Deriving the expectation from `KIND_FOR_TASK`'s own keys would make the test
    * vacuous: it would pass whatever the map contained, including a map missing
@@ -197,7 +197,7 @@ describe('every manual task kind spends a budget', () => {
         'DIRECT_MESSAGE',
         'INMAIL',
         'REVIEW_PROFILE',
-        // 0130 — the customer-built workflow's engagement steps.
+        // 0137 — the customer-built workflow's engagement steps.
         'LIKE_POST',
         'COMMENT_POST',
       ].sort(),

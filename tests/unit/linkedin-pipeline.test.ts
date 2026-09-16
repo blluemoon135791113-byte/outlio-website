@@ -124,7 +124,7 @@ describe('a card is only released when every gate passes', () => {
   it('refuses when the contact changed since the content was approved', async () => {
     /*
      * ╔═══════════════════════════════════════════════════════════════════════╗
-     * ║  ⚠️ §4.7's DURABLE CANCELLATION, AND THE WHOLE REASON 0125 ADDED       ║
+     * ║  ⚠️ §4.7's DURABLE CANCELLATION, AND THE WHOLE REASON 0132 ADDED       ║
      * ║  `crm_contacts.version`.                                              ║
      * ║                                                                       ║
      * ║  "Lost UI notifications must not restore action permission." A         ║
@@ -208,7 +208,7 @@ describe('an outcome is what the operator did, never what they later saw', () =>
      * ║  Acceptance gates the first direct message. Recording it as the        ║
      * ║  OUTCOME of sending a request would send a message into a connection   ║
      * ║  that was never made — to a stranger, from a customer's real account.  ║
-     * ║  0125's enum refuses it too; both, because one says what the database  ║
+     * ║  0132's enum refuses it too; both, because one says what the database  ║
      * ║  stores and the other says what the product means.                     ║
      * ╚═══════════════════════════════════════════════════════════════════════╝
      */
@@ -306,7 +306,7 @@ describe('an outcome is what the operator did, never what they later saw', () =>
 
 describe('the version invalidates exactly what could make a draft wrong', () => {
   const VERSION_FN = readFileSync(
-    join(ROOT, 'supabase/migrations/0126_contact_version_columns.sql'),
+    join(ROOT, 'supabase/migrations/0133_contact_version_columns.sql'),
     'utf8',
   )
 
@@ -318,7 +318,7 @@ describe('the version invalidates exactly what could make a draft wrong', () => 
   it('covers every field the drafted message is built from', () => {
     /*
      * ╔═══════════════════════════════════════════════════════════════════════╗
-     * ║  ⚠️ 0125 MISSED `first_name`, WHICH IS THE GREETING.                  ║
+     * ║  ⚠️ 0132 MISSED `first_name`, WHICH IS THE GREETING.                  ║
      * ║                                                                       ║
      * ║  A contact corrected from "Ada" to "Adaeze" left a pending card        ║
      * ║  reading "Hi Ada," and nothing invalidated it — the exact failure the  ║
@@ -348,7 +348,7 @@ describe('the version invalidates exactly what could make a draft wrong', () => 
 
   it('does NOT invalidate on things a draft never contains', () => {
     /*
-     * ⚠️ OVER-INVALIDATING IS NOT THE SAFE SIDE. 0125 bumped on
+     * ⚠️ OVER-INVALIDATING IS NOT THE SAFE SIDE. 0132 bumped on
      * `owner_user_id`, so a routine bulk reassignment of 200 contacts silently
      * staled every pending card for them — and the operator saw "the contact
      * changed" about a contact that had not changed in any way they could see.
@@ -370,7 +370,7 @@ describe('the version invalidates exactly what could make a draft wrong', () => 
      * action, because the account is fixed at enrollment.
      */
     const migration = readFileSync(
-      join(ROOT, 'supabase/migrations/0125_linkedin_tasks.sql'),
+      join(ROOT, 'supabase/migrations/0132_linkedin_tasks.sql'),
       'utf8',
     )
     expect(migration).toMatch(/sender_id\s+uuid not null references public\.linkedin_senders/)
@@ -379,7 +379,7 @@ describe('the version invalidates exactly what could make a draft wrong', () => 
 
 describe('the schema and the code agree on every vocabulary', () => {
   const MIGRATION = readFileSync(
-    join(ROOT, 'supabase/migrations/0125_linkedin_tasks.sql'),
+    join(ROOT, 'supabase/migrations/0132_linkedin_tasks.sql'),
     'utf8',
   )
 

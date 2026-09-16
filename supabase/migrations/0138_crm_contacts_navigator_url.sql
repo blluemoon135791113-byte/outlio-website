@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- 0131 — A contact has two LinkedIn addresses, and Outlio was keeping one.
+-- 0138 — A contact has two LinkedIn addresses, and Outlio was keeping one.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
 -- ║  Owner, 2026-09-15: "right now outlio on crm is giving linkedin Sales     ║
@@ -49,8 +49,8 @@ alter table public.crm_contacts
 comment on column public.crm_contacts.sales_navigator_url is
   'The /sales/lead/… address, kept SEPARATE from linkedin_url. §4.5 forbids '
   'deriving a public slug from a Navigator identifier, so neither column can '
-  'stand in for the other (0131).';
+  'stand in for the other (0138).';
 
 comment on column public.crm_contacts.linkedin_url is
-  'The public /in/… address. Before 0131 this column also received Navigator '
+  'The public /in/… address. Before 0138 this column also received Navigator '
   'URLs via a coalesce in ingest, so historic rows may hold either.';

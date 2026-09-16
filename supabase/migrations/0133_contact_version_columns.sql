@@ -1,8 +1,8 @@
 -- ---------------------------------------------------------------------------
--- 0126 — Correcting which columns invalidate approved outreach content.
+-- 0133 — Correcting which columns invalidate approved outreach content.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
--- ║  0125's TRIGGER WAS WRONG IN BOTH DIRECTIONS, WHICH IS THE WORST SHAPE    ║
+-- ║  0132's TRIGGER WAS WRONG IN BOTH DIRECTIONS, WHICH IS THE WORST SHAPE    ║
 -- ║  FOR THIS PARTICULAR MECHANISM.                                           ║
 -- ║                                                                           ║
 -- ║  §4.7's version exists to invalidate APPROVED CONTENT: a drafted message   ║
@@ -83,4 +83,4 @@ $$;
 comment on function public.crm_contact_bump_version() is
   'Bumps crm_contacts.version when a change could invalidate approved outreach '
   'content. NOT on owner or timezone: neither appears in a draft, and '
-  'over-invalidating trains operators to re-approve without reading (0126).';
+  'over-invalidating trains operators to re-approve without reading (0133).';

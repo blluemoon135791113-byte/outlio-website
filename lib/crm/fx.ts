@@ -8,7 +8,7 @@ import 'server-only'
  * ║                                                                           ║
  * ║  §5.6 wants `fx_rate_to_workspace_currency` + `fx_rate_date` captured at   ║
  * ║  create and at close, so a deal's reported value settles when it closes    ║
- * ║  and never moves again. Migration 0123 built the columns and the           ║
+ * ║  and never moves again. Migration 0130 built the columns and the           ║
  * ║  invariant; this is the source of the numbers that go in them.            ║
  * ║                                                                           ║
  * ║  ⚠️ NULL IS A REAL ANSWER AND IT IS LOAD-BEARING. A deal with no rate is   ║
@@ -167,7 +167,7 @@ export async function resolveFxRate(input: {
    * ║  it would make creating an ordinary deal depend on their uptime, and    ║
    * ║  today every deal in the product is this case.                          ║
    * ║                                                                        ║
-   * ║  Migration 0123's trigger writes the same value independently, so the   ║
+   * ║  Migration 0130's trigger writes the same value independently, so the   ║
    * ║  invariant holds even against a caller that forgets to ask.            ║
    * ╚═══════════════════════════════════════════════════════════════════════╝
    */
@@ -189,7 +189,7 @@ export async function resolveFxRate(input: {
     const quoted = await provider.rateOn(from, to, onDate)
     /*
      * Re-checked here rather than trusted: a provider is external code, and a
-     * zero or negative rate would pass 0123's constraint check only by
+     * zero or negative rate would pass 0130's constraint check only by
      * erroring at write time, after the deal is half created.
      */
     if (quoted && Number.isFinite(quoted.rate) && quoted.rate > 0) {

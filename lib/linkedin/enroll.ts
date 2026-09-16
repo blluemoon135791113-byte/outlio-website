@@ -234,7 +234,7 @@ export async function enrollContact(input: {
     /*
      * ⚠️ THE UNIQUE INDEX IS THE CONTROL, NOT A PRIOR LOOKUP. Two people
      * enrolling the same contact at once both pass a check-then-insert; only
-     * the database can refuse the second, and 0125's partial index does.
+     * the database can refuse the second, and 0132's partial index does.
      */
     const duplicate = enrollError?.code === '23505'
     if (!duplicate) console.error('linkedin enrollment failed', { error: enrollError })
@@ -287,7 +287,7 @@ export async function enrollContact(input: {
 /**
  * Ends an enrollment.
  *
- * ⚠️ A TERMINAL STATE ALWAYS CARRIES A REASON — 0125 enforces the pair, and
+ * ⚠️ A TERMINAL STATE ALWAYS CARRIES A REASON — 0132 enforces the pair, and
  * `reasonMeansSuccess()` treats only `GOAL_MET` as success. §4.18 wants
  * qualified conversations and held meetings as separate denominators precisely
  * so a wall of "replied" cannot be presented as the thing having worked.

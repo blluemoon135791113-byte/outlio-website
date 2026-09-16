@@ -245,7 +245,7 @@ function of the campaign rather than a constant. It does **not** relax the
 `TaskOutcome` / `Observation` separation (§4.13), which stays: what you did and
 what you later saw remain different questions.
 
-### ✅ BUILT 2026-09-15 — Phase 20, linear. Migrations 0130 and 0131 applied.
+### ✅ BUILT 2026-09-15 — Phase 20, linear. Migrations 0137 and 0138 applied.
 
 The owner supplied screenshots of a reference tool and answered the open
 questions. What follows is what was decided and what shipped.
@@ -269,7 +269,7 @@ what a step contains.
 > "outlio does not prepares the comment draft it would just be marked as
 > comments/engagement done"
 
-`COMMENT_POST` prepares **nothing** — and 0130's `linkedin_workflow_steps_bodyless`
+`COMMENT_POST` prepares **nothing** — and 0137's `linkedin_workflow_steps_bodyless`
 CHECK makes that physically true, not merely intended. Which is the right answer
 on the evidence: a comment has to respond to what the post actually says, and
 Outlio has never seen the post.
@@ -342,7 +342,7 @@ Cause: one line in `lib/crm/ingest.ts` — `lead.linkedin_url ?? lead.sales_navi
 in a column named `linkedin_url` and the other was discarded. §4.5 forbids
 deriving either from the other, so it was gone for good.
 
-0131 adds the column; ingest writes both, filling a gap and never overwriting.
+0138 adds the column; ingest writes both, filling a gap and never overwriting.
 **No backfill** — the data to split existing rows exists only for lead-engine
 contacts, and a fix covering some rows while leaving others, with nobody able to
 tell which, is worse than one covering none. The contact page therefore buckets
@@ -386,4 +386,4 @@ own comment said exactly that, about the other link. Both now go through
   that gap, since no account may send 824 of anything.
 - **Task generation from the workflow**: enrolment at a chosen step, and the
   worker that releases the next step when a wait elapses. The schema for it
-  landed in 0130; nothing walks it yet.
+  landed in 0137; nothing walks it yet.

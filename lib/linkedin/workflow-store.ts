@@ -53,8 +53,8 @@ export async function getWorkflow(
       waitDays: row.wait_days,
       /*
        * ⚠️ COERCED TO AN OBJECT. `jsonb` can legally hold a string, a number or
-       * `null`, and 0132's default is `'{}'` only for rows written after it —
-       * every step created by 0130 has whatever the column defaulted to. A
+       * `null`, and 0139's default is `'{}'` only for rows written after it —
+       * every step created by 0137 has whatever the column defaulted to. A
        * caller doing `config.tag` on a non-object gets `undefined` at best and
        * throws at worst.
        */
@@ -71,7 +71,7 @@ export type DraftStep = {
   action: string
   body: string | null
   waitDays: number | null
-  /** Per-action settings (0132). `{}` for every action but `ADD_TAG`. */
+  /** Per-action settings (0139). `{}` for every action but `ADD_TAG`. */
   config: Record<string, unknown>
 }
 
@@ -84,7 +84,7 @@ export type DraftStep = {
  * ║  Deleting every row and re-inserting would be four lines and would         ║
  * ║  destroy the product: `linkedin_enrollments.current_step_id` points at     ║
  * ║  these ids. New ids mean every person standing in the campaign is either   ║
- * ║  orphaned or silently moved. 0130's `on delete restrict` would refuse the  ║
+ * ║  orphaned or silently moved. 0137's `on delete restrict` would refuse the  ║
  * ║  delete outright for anyone live, so the save would simply fail — but for  ║
  * ║  a campaign whose people had all finished, it would succeed and quietly    ║
  * ║  detach the history.                                                       ║

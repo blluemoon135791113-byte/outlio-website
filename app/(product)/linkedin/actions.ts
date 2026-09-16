@@ -129,7 +129,7 @@ export type CampaignActionState =
  * ║  on creation would put real people in a queue because somebody typed a    ║
  * ║  name and pressed a button.                                              ║
  * ║                                                                           ║
- * ║  DRAFT with no enrollments is the only safe starting state, and 0128's    ║
+ * ║  DRAFT with no enrollments is the only safe starting state, and 0135's    ║
  * ║  column default says so independently of this code.                      ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */

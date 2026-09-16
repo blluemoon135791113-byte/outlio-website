@@ -36,7 +36,7 @@ export function TeamRow({
    * ⚠️ DEALS LEFT OUT OF `openValue` FOR WANT OF AN EXCHANGE RATE, and the
    * reason this component cannot just show the two figures side by side.
    *
-   * 0124 sums `value_amount_base`, which is NULL without a rate, and `sum()`
+   * 0131 sums `value_amount_base`, which is NULL without a rate, and `sum()`
    * skips NULLs — so an unconvertible deal is COUNTED in "Open deals" and
    * ABSENT from "Open pipeline". Anyone dividing one by the other gets an
    * average deal size that is wrong, and nothing on screen would say so.
@@ -76,7 +76,7 @@ export function TeamRow({
            * ⚠️ `formatMoney`, NOT A LOCAL FORMATTER — four of those existed
            * before they were consolidated and they disagreed.
            *
-           * ⚠️ 'USD' IS THE BASE CURRENCY, NOT AN ASSUMPTION MADE HERE. 0124
+           * ⚠️ 'USD' IS THE BASE CURRENCY, NOT AN ASSUMPTION MADE HERE. 0131
            * stores `value_amount_base` already converted, and `/crm/reports`
            * formats the same totals the same way. Passing a per-deal currency
            * would label a converted total with one deal's currency.

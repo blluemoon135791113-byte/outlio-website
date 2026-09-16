@@ -251,7 +251,7 @@ export async function createOpportunity(
    * amount to the total at face value — the bug §5.6 exists to prevent.
    *
    * ⚠️ A MISSING WORKSPACE ROW MEANS NO SNAPSHOT, NOT A GUESSED ONE. Migration
-   * 0123's trigger writes the identity rate independently, so the invariant
+   * 0130's trigger writes the identity rate independently, so the invariant
    * survives this returning null for any reason.
    */
   const fx = workspace?.default_currency
@@ -271,7 +271,7 @@ export async function createOpportunity(
       value_amount: input.valueAmount ?? null,
       currency,
       /*
-       * Both or neither — 0123's check constraint refuses a half pair, and
+       * Both or neither — 0130's check constraint refuses a half pair, and
        * `value_amount_base` is GENERATED, so it is never written here.
        */
       fx_rate_to_workspace_currency: fx?.rate ?? null,

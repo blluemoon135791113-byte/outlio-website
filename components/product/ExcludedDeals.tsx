@@ -13,7 +13,7 @@
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║  ⚠️ THE DEAL COUNT AND THE MONEY DISAGREE, AND WITHOUT THIS NOBODY KNOWS. ║
  * ║                                                                           ║
- * ║  0124 sums `value_amount_base`, which is NULL when a deal has no exchange  ║
+ * ║  0131 sums `value_amount_base`, which is NULL when a deal has no exchange  ║
  * ║  rate, and `sum()` skips NULLs. So an unconvertible deal is counted in     ║
  * ║  "Open deals" and absent from "Open value" — a reader dividing one by the  ║
  * ║  other gets an average deal size that is wrong.                           ║

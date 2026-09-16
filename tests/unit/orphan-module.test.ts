@@ -177,7 +177,7 @@ const KNOWN_ORPHANS = new Set(
      * ║                                                                    ║
      * ║  The condition was: "they leave when the Action Inbox renders a     ║
      * ║  draft and its result form... and `preflight.ts` additionally when  ║
-     * ║  the release job calls it." 0125 built the task tables,             ║
+     * ║  the release job calls it." 0132 built the task tables,             ║
      * ║  `lib/linkedin/tasks.ts` calls `preflight` before releasing, and    ║
      * ║  `components/linkedin/ActionInbox.tsx` renders the draft and offers ║
      * ║  `allowedOutcomes(kind)`.                                          ║

@@ -306,7 +306,7 @@ describe('entry at any step', () => {
 })
 
 // ---------------------------------------------------------------------------
-// ADD_TAG's setting — the hole 0132 fills
+// ADD_TAG's setting — the hole 0139 fills
 // ---------------------------------------------------------------------------
 
 const step = (over: Partial<WorkflowStep> & { action: StepAction }): WorkflowStep => ({
@@ -367,10 +367,10 @@ describe('a tag step must say which tag', () => {
     /*
      * A constraint in TypeScript alone holds until somebody writes a row another
      * way — a backfill, a support script, a future importer. Verified against
-     * real Postgres before 0132 was applied; pinned here so removing it is a
+     * real Postgres before 0139 was applied; pinned here so removing it is a
      * visible change.
      */
-    const sql = read('supabase/migrations/0132_linkedin_step_config.sql')
+    const sql = read('supabase/migrations/0139_linkedin_step_config.sql')
     expect(sql).toMatch(/linkedin_workflow_steps_tag_configured/)
     expect(sql).toMatch(/btrim\(coalesce\(config ->> 'tag', ''\)\) <> ''/)
     expect(sql).toMatch(/linkedin_workflow_steps_config_shape/)

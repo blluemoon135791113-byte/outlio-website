@@ -28,7 +28,7 @@ type Card = {
   action: StepAction
   body: string
   waitDays: number | null
-  /** Per-action settings (0132). Only `ADD_TAG` reads one, as `tag`. */
+  /** Per-action settings (0139). Only `ADD_TAG` reads one, as `tag`. */
   config: Record<string, unknown>
 }
 
@@ -118,7 +118,7 @@ export function WorkflowBuilder({
       body: STEPS[card.action].body === 'none' ? null : card.body.trim() || null,
       waitDays: card.action === 'WAIT' ? card.waitDays : null,
       /*
-       * ⚠️ SENT ONLY FOR `ADD_TAG`. 0132's `config_shape` CHECK refuses a
+       * ⚠️ SENT ONLY FOR `ADD_TAG`. 0139's `config_shape` CHECK refuses a
        * non-empty config on any other action, so forwarding a stale one left
        * behind by switching a card's action would fail the save with a
        * database error rather than a sentence.
@@ -271,7 +271,7 @@ function StepCard({
               cost one click per day, so "wait 30 days" is thirty clicks; typing
               is the fast path and the input's own controls still give the
               nudge. `min`/`max` mirror the database CHECK rather than replacing
-              it — this is a hint, and 0130 is the rule.
+              it — this is a hint, and 0137 is the rule.
             */}
             <Input
               type="number"
@@ -336,7 +336,7 @@ function StepCard({
 
       {/*
         ⚠️ `ADD_TAG` IS THE ONE STEP WITH A SETTING, AND IT IS REQUIRED.
-        0132 exists because the step previously had nowhere to say WHICH tag,
+        0139 exists because the step previously had nowhere to say WHICH tag,
         which left the walker with nothing to execute — it would either skip
         silently, so a step the customer added does nothing forever, or fail
         mid-sequence on a workflow that had already saved as valid.
@@ -426,7 +426,7 @@ function StepCard({
 }
 
 /**
- * ⚠️ IT WARNS BEFORE THE DELETE RATHER THAN AFTER THE FAILURE. 0130's
+ * ⚠️ IT WARNS BEFORE THE DELETE RATHER THAN AFTER THE FAILURE. 0137's
  * `on delete restrict` is what actually protects the enrolment, and this count
  * is a stale read — but a customer who can see that four people are standing on
  * a card is not the customer who presses save and gets a refusal.

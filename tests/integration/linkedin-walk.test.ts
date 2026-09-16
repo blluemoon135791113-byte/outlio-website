@@ -159,7 +159,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   /*
-   * ⚠️ DEPENDENCY ORDER, AND THE STEPS COME LAST. 0130's `on delete restrict`
+   * ⚠️ DEPENDENCY ORDER, AND THE STEPS COME LAST. 0137's `on delete restrict`
    * refuses to delete a step an enrolment points at — which is the safety
    * property this very suite asserts, so the teardown has to respect it rather
    * than work around it. Enrolments first, then steps.
@@ -228,7 +228,7 @@ describe('a workflow the database actually stored', () => {
   it('refuses a tagless ADD_TAG at the database, not only at the validator', async () => {
     /*
      * ⚠️ BYPASSES `saveWorkflow` ON PURPOSE. The validator already refuses this
-     * and a unit test already proves that. What is unproven is 0132's CHECK —
+     * and a unit test already proves that. What is unproven is 0139's CHECK —
      * the wall that holds when a row is written some other way: a backfill, a
      * support script, a future importer.
      */
@@ -429,7 +429,7 @@ describe('the step somebody is standing on', () => {
      * ⚠️ NO ESCAPE HATCH HERE, AND REMOVING IT WAS A DELIBERATE CORRECTION.
      *
      * My first version returned early if this insert was refused, "because
-     * 0125's unique index might reject a second enrolment". That would have let
+     * 0132's unique index might reject a second enrolment". That would have let
      * the whole `restrict` assertion below be skipped silently — a test that
      * reports green while proving nothing, which is this project's most
      * expensive recurring failure.

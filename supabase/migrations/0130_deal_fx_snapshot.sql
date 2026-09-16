@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- 0123 — §5.6's fx snapshot, and the rule that stops a rate being invented.
+-- 0130 — §5.6's fx snapshot, and the rule that stops a rate being invented.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
 -- ║  THE RATE IS SNAPSHOTTED ON THE DEAL, AND ONLY EVER WHEN IT IS OBSERVED.  ║
@@ -239,7 +239,7 @@ comment on column public.crm_opportunities.fx_rate_to_workspace_currency is
 
 comment on column public.crm_opportunities.value_amount_base is
   'value_amount converted at the snapshotted rate. NULL when the rate is '
-  'unknown, so sum() drops it rather than adding a foreign amount (0123).';
+  'unknown, so sum() drops it rather than adding a foreign amount (0130).';
 
 comment on function public.crm_unconvertible_deals(uuid, text) is
-  'How many priced deals a total had to leave out for want of a rate (0123).';
+  'How many priced deals a total had to leave out for want of a rate (0130).';

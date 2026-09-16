@@ -140,7 +140,7 @@ export default async function ContactDetailPage({
   /*
    * ⚠️ BUCKETED BY WHAT THE URL *IS*, NOT BY WHICH COLUMN IT CAME FROM.
    *
-   * 0131's own comment records why: before it, `lib/crm/ingest.ts` coalesced the
+   * 0138's own comment records why: before it, `lib/crm/ingest.ts` coalesced the
    * two addresses into `linkedin_url`, so historic rows hold either kind there —
    * and on a Sales Navigator save, which is Outlio's primary input, it is
    * usually the Navigator one. Trusting the column name would label a
@@ -349,7 +349,7 @@ export default async function ContactDetailPage({
               ║  ⚠️ BOTH ADDRESSES, AND BOTH THROUGH THE ALLOWLIST.           ║
               ║                                                               ║
               ║  Two fixes in one block. The first is the owner's request:     ║
-              ║  0131 gave a contact a `sales_navigator_url` of its own, and   ║
+              ║  0138 gave a contact a `sales_navigator_url` of its own, and   ║
               ║  §4.5 forbids deriving either address from the other, so       ║
               ║  showing one and hiding the other loses information that       ║
               ║  cannot be recomputed.                                        ║
@@ -568,7 +568,7 @@ export default async function ContactDetailPage({
                 `linkedin_tasks.body` is what was actually prepared for one card.
                 These two are what THIS rep decided to say to THIS person — and
                 the difference between two reps' openers is most of what the
-                strategy analysis reads (0133).
+                strategy analysis reads (0140).
               */}
               <div className="border-t border-border pt-3">
                 <ProspectMessages contactId={contact.id} messages={prospectDrafts} />

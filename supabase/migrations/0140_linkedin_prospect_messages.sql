@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- 0133 — the opener and the pitch a rep writes for one prospect.
+-- 0140 — the opener and the pitch a rep writes for one prospect.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
 -- ║  Owner, 2026-09-15: "the user or the assigned person can add his or her   ║
@@ -138,7 +138,7 @@ create trigger linkedin_prospect_messages_set_updated_at
 comment on table public.linkedin_prospect_messages is
   'The opener and pitch one rep wrote for one prospect. Distinct from a '
   'workflow step body (campaign-wide copy) and from linkedin_tasks.body (what '
-  'was actually prepared) — the analysis compares all three (0133).';
+  'was actually prepared) — the analysis compares all three (0140).';
 
 comment on column public.linkedin_prospect_messages.authored_by is
   'Stored at write time, never derived from the contact owner: reassigning a '

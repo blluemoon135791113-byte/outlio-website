@@ -174,13 +174,13 @@ SQL
 #
 # ⚠️ IT STOPPED AT 0106 AND THE PLATFORM DID NOT. Twenty migrations later,
 # anything depending on 0107..0126 got a FALSE FAILURE here — 0124 reported
-# "column o.value_amount_base does not exist" (it is created by 0123) and 0125
+# "column o.value_amount_base does not exist" (it is created by 0130) and 0132
 # reported "relation public.linkedin_senders does not exist" (0122). Both apply
 # perfectly to the real database.
 #
 # This is the exact outcome the scaffold comment above warns about: "a harness
 # that reports a false failure gets ignored, which is worse than not having
-# one." It was ignored, and 0127 went to the SQL editor unvalidated and failed
+# one." It was ignored, and 0134 went to the SQL editor unvalidated and failed
 # there on an enum cast this harness is built to catch.
 #
 # ⚠️ SO EXTENDING THIS LIST IS NOT HOUSEKEEPING. A skipped prerequisite does
@@ -204,12 +204,12 @@ for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_inge
           `# letting it report a green it did not earn.` \
           0120_suppress_by_contact \
           0121_contact_dnc_and_timezone 0122_linkedin_senders \
-          0123_deal_fx_snapshot 0124_rollups_convert_currency \
-          0125_linkedin_tasks 0126_contact_version_columns \
-          0127_linkedin_plan_entitlement 0128_linkedin_campaigns \
-          0129_linkedin_observations 0130_linkedin_workflows \
-          0131_crm_contacts_navigator_url 0132_linkedin_step_config \
-          0133_linkedin_prospect_messages 0134_linkedin_analysis_entitlement; do
+          0130_deal_fx_snapshot 0131_rollups_convert_currency \
+          0132_linkedin_tasks 0133_contact_version_columns \
+          0134_linkedin_plan_entitlement 0135_linkedin_campaigns \
+          0136_linkedin_observations 0137_linkedin_workflows \
+          0138_crm_contacts_navigator_url 0139_linkedin_step_config \
+          0140_linkedin_prospect_messages 0141_linkedin_analysis_entitlement; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break

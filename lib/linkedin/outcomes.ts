@@ -29,7 +29,7 @@ import type { Database } from '@/types/database'
  * The kinds of manual task an operator can be handed (§4.6).
  *
  * ⚠️ THE GENERATED ENUM, NOT A HAND-WRITTEN UNION. Both of these were declared
- * by hand until 0130 widened the real enums, and the drift was silent until a
+ * by hand until 0137 widened the real enums, and the drift was silent until a
  * caller happened to pass a new value through — `campaignProgress` failed to
  * compile on `ENGAGEMENT_RECORDED`, which was luck rather than design. Anchoring
  * on the generated type means `npm run db:types` is what reveals a divergence,
@@ -47,7 +47,7 @@ export type TaskKind = Database['public']['Enums']['linkedin_task_kind']
  * because the thing we cannot rule out is that a stranger already received it.
  * `releasesQuota` below is where that is enforced.
  *
- * ⚠️ `ENGAGEMENT_RECORDED` (0130) COVERS BOTH LIKING AND COMMENTING. Which act
+ * ⚠️ `ENGAGEMENT_RECORDED` (0137) COVERS BOTH LIKING AND COMMENTING. Which act
  * it was is already on the task's `kind`; a second outcome would be a second
  * thing every metric counting engagement has to remember to include.
  */
@@ -78,7 +78,7 @@ export const POSITIVE: Readonly<Record<TaskKind, TaskOutcome>> = {
   DIRECT_MESSAGE: 'MESSAGE_MARKED_SENT',
   INMAIL: 'MESSAGE_MARKED_SENT',
   /*
-   * ⚠️ BOTH ENGAGEMENT KINDS LAND ON ONE OUTCOME, matching 0130's enum comment.
+   * ⚠️ BOTH ENGAGEMENT KINDS LAND ON ONE OUTCOME, matching 0137's enum comment.
    * `Record<TaskKind, …>` is what forced these two entries to be written: adding
    * a value to the database enum now breaks this object until somebody decides
    * what "done" means for it, rather than defaulting to `undefined` and

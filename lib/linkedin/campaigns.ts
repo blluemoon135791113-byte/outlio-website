@@ -6,7 +6,7 @@ import 'server-only'
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║  ⚠️ A CAMPAIGN GROUPS ENROLLMENTS. IT DOES NOT OWN THEIR STATE.           ║
  * ║                                                                           ║
- * ║  0128 stores no counters deliberately: a cached total can disagree with    ║
+ * ║  0135 stores no counters deliberately: a cached total can disagree with    ║
  * ║  the rows an operator actually changed, and the rows are the only thing    ║
  * ║  that moved. Progress is derived on read by `campaignProgress`, which      ║
  * ║  keeps the unconfirmed bucket separate rather than folding it into a       ║

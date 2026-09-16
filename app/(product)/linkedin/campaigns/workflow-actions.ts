@@ -51,7 +51,7 @@ const StepSchema = z.object({
    * ⚠️ `record(unknown)` AND NOT `any`, AND THE KEYS ARE BOUNDED. Per-action
    * settings are validated per action by `compileWorkflow`, which knows what
    * each one takes; this schema's job is only to prove the shape is an object
-   * and is not large enough to be a payload attack. 0132's CHECK is the third
+   * and is not large enough to be a payload attack. 0139's CHECK is the third
    * wall, and it is the one that holds when a row is written another way.
    */
   config: z.record(z.string().max(100), z.unknown()).default({}),

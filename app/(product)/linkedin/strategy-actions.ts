@@ -98,7 +98,7 @@ export async function saveProspectMessageAction(
     contactId: parsed.data.contactId,
     kind: parsed.data.kind as ProspectMessageKind,
     body: parsed.data.body,
-    // ⚠️ The person writing NOW, never the contact's owner. 0133 says why.
+    // ⚠️ The person writing NOW, never the contact's owner. 0140 says why.
     actorUserId: ctx.userId!,
   })
 

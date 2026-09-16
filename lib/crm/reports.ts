@@ -22,7 +22,7 @@ export type PipelineTotals = {
    *
    * ⚠️ THE COUNT AND THE VALUE DISAGREE ON PURPOSE, AND THIS IS WHAT EXPLAINS
    * IT. `openDeals` counts every open deal; `openValue` sums only the ones
-   * that could be converted (0124 sums `value_amount_base`, and `sum()` skips
+   * that could be converted (0131 sums `value_amount_base`, and `sum()` skips
    * the NULLs). So a workspace with one USD and one EUR deal reads 2 deals and
    * one deal's worth of money, and anybody dividing the two gets an average
    * deal size wrong by half.

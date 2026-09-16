@@ -33,7 +33,7 @@ const MIGRATIONS_DIR = join(ROOT, 'supabase', 'migrations')
 
 /**
  * ⚠️ COMMENTS STRIPPED BEFORE MATCHING. These migrations quote the rules they
- * obey, at length — 0127's own header names every key it sets and several it
+ * obey, at length — 0134's own header names every key it sets and several it
  * deliberately does not. Searching the raw text finds the PROSE and reports a
  * grant that no statement performs. This trap has now been hit five times in
  * this codebase; it is not hypothetical.
@@ -84,9 +84,9 @@ describe('the scanner sees what it polices', () => {
     expect(stripped).not.toContain('bar_enabled')
     expect(stripped).toContain('select 1;')
 
-    // And the real 0127 header talks about `starter` and `agency` WITHOUT
+    // And the real 0134 header talks about `starter` and `agency` WITHOUT
     // granting them anything — the precise way prose-matching would lie here.
-    const raw = readFileSync(join(MIGRATIONS_DIR, '0127_linkedin_plan_entitlement.sql'), 'utf8')
+    const raw = readFileSync(join(MIGRATIONS_DIR, '0134_linkedin_plan_entitlement.sql'), 'utf8')
     expect(raw, 'the header no longer explains the exclusions').toContain('agency')
     const body = sqlBody(raw)
     expect(body, "prose about `agency` is being read as a grant").not.toMatch(
@@ -112,7 +112,7 @@ describe('no entitlement exists only in production', () => {
   })
 
   it('0103 still carries the six it always did', () => {
-    // ⚠️ NAMED SEPARATELY so that deleting 0103 cannot be masked by 0127
+    // ⚠️ NAMED SEPARATELY so that deleting 0103 cannot be masked by 0134
     // happening to mention a key in passing.
     const m0103 = MIGRATIONS.find((m) => m.name.startsWith('0103'))
     expect(m0103, '0103 moved').toBeDefined()
@@ -144,7 +144,7 @@ describe('the entitlement and its cap cannot be set apart', () => {
      * ╔═══════════════════════════════════════════════════════════════════════╗
      * ║  ⚠️ IT ASKS WHAT A MIGRATION *WRITES*, NOT WHAT IT MENTIONS.           ║
      * ║                                                                       ║
-     * ║  This was a plain `body.includes(...)` over the whole file, and 0134   ║
+     * ║  This was a plain `body.includes(...)` over the whole file, and 0141   ║
      * ║  broke it by being correct: that migration grants                      ║
      * ║  `linkedin_analysis_enabled` and READS `linkedin_enabled` in a guard    ║
      * ║  that refuses to entitle the analysis on a plan without the module.     ║
@@ -180,7 +180,7 @@ describe('the entitlement and its cap cannot be set apart', () => {
     /*
      * ⚠️ THE NARROWED MATCHER IS PROVED AGAINST A SYNTHETIC OFFENDER, because a
      * check that was just made more specific is a check that might now match
-     * nothing. 0127 is the real shape it has to keep catching.
+     * nothing. 0134 is the real shape it has to keep catching.
      */
     const written = (body: string): string =>
       [...body.matchAll(/jsonb_build_object\(([\s\S]*?)\)/g)].map((m) => m[1]).join('\n')
@@ -195,9 +195,9 @@ describe('the entitlement and its cap cannot be set apart', () => {
     expect(ok.includes(CAP) !== ok.includes(ENABLED)).toBe(false)
   })
 
-  it('0127 sets both, per plan, in one statement each', () => {
-    const m = MIGRATIONS.find((x) => x.name.startsWith('0127'))
-    expect(m, '0127 moved').toBeDefined()
+  it('0134 sets both, per plan, in one statement each', () => {
+    const m = MIGRATIONS.find((x) => x.name.startsWith('0134'))
+    expect(m, '0134 moved').toBeDefined()
 
     for (const [plan, cap] of [
       ['trial', '2'],
@@ -214,7 +214,7 @@ describe('the entitlement and its cap cannot be set apart', () => {
       const statement = m!.body
         .split(/;\s*/)
         .find((s) => s.includes(`where key = '${plan}'`) && s.includes(ENABLED))
-      expect(statement, `0127 no longer grants LinkedIn to ${plan}`).toBeDefined()
+      expect(statement, `0134 no longer grants LinkedIn to ${plan}`).toBeDefined()
       expect(statement!, `${plan} is entitled without a cap`).toContain(CAP)
       expect(statement!, `${plan}'s cap is not ${cap}`).toMatch(
         new RegExp(`'${CAP}',\\s*${cap}\\b`),
@@ -229,7 +229,7 @@ describe('the entitlement and its cap cannot be set apart', () => {
      * leave; agency's blob is already malformed (`plan-limits-blob.test.ts`)
      * and adding keys to it would make it look more complete than it is.
      */
-    const m = MIGRATIONS.find((x) => x.name.startsWith('0127'))!
+    const m = MIGRATIONS.find((x) => x.name.startsWith('0134'))!
     expect(m.body, 'starter was quietly entitled').not.toMatch(/where key = 'starter'/)
     expect(m.body, 'agency was quietly entitled').not.toMatch(/where key = 'agency'/)
   })
@@ -245,7 +245,7 @@ describe('the entitlement and its cap cannot be set apart', () => {
      * replaces the blob wholesale, and every entitlement added after it
      * survives only because it happens to run later in file order.
      */
-    const m = MIGRATIONS.find((x) => x.name.startsWith('0127'))!
+    const m = MIGRATIONS.find((x) => x.name.startsWith('0134'))!
     expect(m.body).toMatch(/\)\s*\|\|\s*limits/)
     expect(m.body, 'the merge direction was flipped; overrides will be reset').not.toMatch(
       /set limits = limits \|\| jsonb_build_object/,
@@ -257,7 +257,7 @@ describe('the entitlement and its cap cannot be set apart', () => {
     // afternoon becomes an error with a name rather than a quiet NULL in a
     // SELECT. Verified against Postgres 16: it rejects `starter` given a cap
     // and no entitlement.
-    const m = MIGRATIONS.find((x) => x.name.startsWith('0127'))!
+    const m = MIGRATIONS.find((x) => x.name.startsWith('0134'))!
     expect(m.body).toMatch(/raise exception/)
     expect(m.body).toMatch(/\(limits \? 'linkedin_enabled'\) <> \(limits \? 'linkedin_senders_max'\)/)
   })

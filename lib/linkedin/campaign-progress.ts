@@ -24,7 +24,7 @@
  * lies: counted as done it overstates what was achieved, counted as outstanding
  * it implies work that may already have been performed on a real person.
  *
- * ⚠️ AND NOTHING HERE IS STORED. 0128 deliberately holds no counters — a cached
+ * ⚠️ AND NOTHING HERE IS STORED. 0135 deliberately holds no counters — a cached
  * total can disagree with the rows an operator actually changed, and the rows
  * are the only thing that moved.
  */
@@ -114,7 +114,7 @@ export function campaignProgress(
     if (isTerminal(enrollment.state)) {
       /*
        * ⚠️ A TERMINAL STATE WITH NO REASON IS NOT A SUCCESS. `terminal_reason`
-       * is set only when the state is terminal (0125), so a null here is a row
+       * is set only when the state is terminal (0132), so a null here is a row
        * that ended without recording how. Counting it as succeeded would
        * invent the one fact it is missing.
        */

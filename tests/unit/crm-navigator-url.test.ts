@@ -1,5 +1,5 @@
 /**
- * A contact has two LinkedIn addresses — 0131, and the XSS found beside it.
+ * A contact has two LinkedIn addresses — 0138, and the XSS found beside it.
  *
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║  Owner, 2026-09-15: "right now outlio on crm is giving linkedin Sales     ║
@@ -72,8 +72,8 @@ describe('the scanner sees what it polices', () => {
 })
 
 describe('both addresses are carried, and neither is derived from the other', () => {
-  it('0131 adds the column without a backfill', () => {
-    const sql = read('supabase/migrations/0131_crm_contacts_navigator_url.sql')
+  it('0138 adds the column without a backfill', () => {
+    const sql = read('supabase/migrations/0138_crm_contacts_navigator_url.sql')
     expect(sql).toMatch(/add column if not exists sales_navigator_url/)
     /*
      * ⚠️ NO BACKFILL, DELIBERATELY. The data to split existing rows exists only
@@ -167,7 +167,7 @@ describe('the contact page cannot be made to run a javascript: url', () => {
 
   it('buckets by what the URL IS, not which column held it', () => {
     /*
-     * ⚠️ BECAUSE HISTORIC ROWS ARE MIXED. Before 0131, ingest coalesced both
+     * ⚠️ BECAUSE HISTORIC ROWS ARE MIXED. Before 0138, ingest coalesced both
      * addresses into `linkedin_url`, and on a Sales Navigator save — Outlio's
      * primary input — it is usually the Navigator one. Trusting the column name
      * would label a `/sales/lead/…` address "LinkedIn profile" on every contact
@@ -197,8 +197,8 @@ describe('the contact page cannot be made to run a javascript: url', () => {
   })
 })
 
-describe('0130 puts the owner’s decisions in the database, not only in comments', () => {
-  const sql = read('supabase/migrations/0130_linkedin_workflows.sql')
+describe('0137 puts the owner’s decisions in the database, not only in comments', () => {
+  const sql = read('supabase/migrations/0137_linkedin_workflows.sql')
 
   it('physically cannot store a comment draft', () => {
     /*

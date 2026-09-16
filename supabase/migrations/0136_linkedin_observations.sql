@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- 0129 — What was later seen to happen, recorded against a person.
+-- 0136 — What was later seen to happen, recorded against a person.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
 -- ║  §7.5 PHASE 19: "reuse the Phase 9 lesson — an inbound message is only a  ║
@@ -18,7 +18,7 @@
 -- ║  about somebody we never messaged.                                        ║
 -- ╚═══════════════════════════════════════════════════════════════════════════╝
 --
--- ⚠️ SEPARATE FROM `linkedin_tasks`, AND THAT SEPARATION IS THE POINT. 0125
+-- ⚠️ SEPARATE FROM `linkedin_tasks`, AND THAT SEPARATION IS THE POINT. 0132
 -- already refuses an Observation as a task outcome, in the enum AND in the
 -- service: `TaskOutcome` is what the operator DID, an Observation is what they
 -- later SAW. Collapsing them lets "mark request sent" mark acceptance — and
@@ -111,8 +111,8 @@ end $$;
 
 comment on table public.linkedin_observations is
   'What was later SEEN to happen to a contact on LinkedIn, recorded by a person. '
-  'Never a task outcome: 0125 refuses Observations there because "mark request '
-  'sent" must not be able to mark acceptance (0129).';
+  'Never a task outcome: 0132 refuses Observations there because "mark request '
+  'sent" must not be able to mark acceptance (0136).';
 
 comment on column public.linkedin_observations.evidence_was_unconfirmed is
   'True when the only outreach that could have reached this person had '

@@ -20,7 +20,7 @@ export const metadata: Metadata = {
  * ║  action is performed by a person in LinkedIn's own interface, and this    ║
  * ║  screen only says who a push is aimed at and what is known about it.      ║
  * ║                                                                           ║
- * ║  ⚠️ EVERY NUMBER ON IT IS DERIVED ON READ. 0128 stores no counters —      ║
+ * ║  ⚠️ EVERY NUMBER ON IT IS DERIVED ON READ. 0135 stores no counters —      ║
  * ║  a cached total can disagree with the rows an operator actually changed.  ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
@@ -47,7 +47,7 @@ export default async function LinkedInCampaignsPage() {
    * `listCampaigns` deliberately returns no progress, because deriving it is
    * two queries each. Here that is 2N round trips for N campaigns — acceptable
    * while a workspace has a handful, and the first thing to fix if this page
-   * ever feels slow. The alternative — a stored counter — is the thing 0128
+   * ever feels slow. The alternative — a stored counter — is the thing 0135
    * refuses, because a number that disagrees with its rows is worse than a
    * page that takes a moment.
    */

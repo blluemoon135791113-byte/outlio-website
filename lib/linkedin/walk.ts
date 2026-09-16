@@ -20,7 +20,7 @@ import 'server-only'
  * knowing, which is precisely the honesty the outcome exists to make safe.
  *
  * ⚠️ IDEMPOTENCE IS THE DATABASE'S JOB. `linkedin_tasks.logical_action_id` is
- * `unique` (0125), and the key is workspace + enrolment + STEP ID + occurrence.
+ * `unique` (0132), and the key is workspace + enrolment + STEP ID + occurrence.
  * Two ticks racing on the same enrolment both try to insert; one gets 23505 and
  * treats it as success, because the task it wanted already exists. Nothing here
  * checks-then-inserts, because that is the pattern that produces a second
@@ -129,7 +129,7 @@ async function walkFrom(input: {
          * ⚠️ A FAILED TAG STOPS THE WALK RATHER THAN BEING SKIPPED. The customer
          * put the step there; a tag silently not applied is a segment that
          * quietly excludes people, and segments decide who gets messaged next.
-         * 0132's CHECK makes the "no tag configured" case unstorable, so
+         * 0139's CHECK makes the "no tag configured" case unstorable, so
          * reaching here means a genuine write failure worth retrying.
          */
         if (!tagged.ok) return { kind: 'failed', message: tagged.message }
@@ -386,7 +386,7 @@ export async function enrollInCampaign(input: {
     /*
      * ⚠️ THE UNIQUE INDEX IS THE CONTROL, NOT A PRIOR LOOKUP. Two people
      * enrolling the same contact at once both pass a check-then-insert; only
-     * 0125's partial index can refuse the second.
+     * 0132's partial index can refuse the second.
      */
     return {
       kind: 'failed',
@@ -452,7 +452,7 @@ export async function advanceAfterTask(input: {
 
   if (after.kind === 'deleted') {
     /*
-     * ⚠️ THE STEP THEY STOOD ON IS GONE. 0130's `on delete restrict` is supposed
+     * ⚠️ THE STEP THEY STOOD ON IS GONE. 0137's `on delete restrict` is supposed
      * to make this impossible, so reaching it means the row was removed some
      * other way. It is reported rather than guessed at: advancing skips a
      * message the customer meant them to get, and ending drops a live

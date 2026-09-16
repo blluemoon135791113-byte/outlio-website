@@ -231,7 +231,7 @@ describe('the ratchet: nobody builds their own money formatter', () => {
       'app/(product)/crm/reports/page.tsx',
       'components/crm/PipelineBoard.tsx',
       // Phase 22's team row on the home dashboard, added 2026-09-14. It renders
-      // `value_amount_base`, already converted in Postgres by 0124 — so it
+      // `value_amount_base`, already converted in Postgres by 0131 — so it
       // formats one total and never adds two money values together.
       'components/product/TeamRow.tsx',
       'components/reports/Widget.tsx',

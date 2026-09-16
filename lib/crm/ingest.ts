@@ -476,7 +476,7 @@ export async function ingestExtractionJob(
         jobTitle: lead.job_title,
         /*
          * ⚠️ THE COALESCE IS FOR IDENTITY ONLY, AND IT USED TO BE FOR STORAGE
-         * TOO — which is the defect 0131 fixes.
+         * TOO — which is the defect 0138 fixes.
          *
          * `linkedin_url` feeds `linkedin_identity_key`, the column the ingest
          * RPC matches people on, and either address resolves into that key

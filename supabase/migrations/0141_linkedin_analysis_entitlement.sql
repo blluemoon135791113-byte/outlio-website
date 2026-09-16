@@ -1,11 +1,11 @@
 -- ---------------------------------------------------------------------------
--- 0134 — the strategy-analysis entitlement, as a migration.
+-- 0141 — the strategy-analysis entitlement, as a migration.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
 -- ║  Owner, 2026-09-15: "that analysis feature would be for premium users     ║
 -- ║  only and admin".                                                         ║
 -- ║                                                                           ║
--- ║  ⚠️ A MIGRATION AND NOT A SCRATCH `UPDATE`, WHICH IS 0127'S ENTIRE LESSON. ║
+-- ║  ⚠️ A MIGRATION AND NOT A SCRATCH `UPDATE`, WHICH IS 0134'S ENTIRE LESSON. ║
 -- ║  `linkedin_enabled` was applied by hand, never written down, and later     ║
 -- ║  found missing — with a sender CAP sitting on a plan that was not          ║
 -- ║  entitled to the module at all. Nothing could detect it, because there     ║
@@ -17,7 +17,7 @@
 -- here, and the reason for each:
 --
 --   professional, custom — YES. They are the paid tiers that carry
---     `linkedin_enabled` (0127), and a report about a TEAM's messaging needs a
+--     `linkedin_enabled` (0134), and a report about a TEAM's messaging needs a
 --     team, which is what those tiers sell.
 --
 --   trial — NO, and this is the one worth arguing about. Trial DOES carry
@@ -27,7 +27,7 @@
 --     been recorded, too few to compute a reply rate". Shipping the premium
 --     feature's worst possible showing as its first impression sells it badly.
 --
---   starter — NO, matching 0127: LinkedIn is the reason to move up a tier.
+--   starter — NO, matching 0134: LinkedIn is the reason to move up a tier.
 --
 --   agency — NO. `is_active = false` and its limits blob is already malformed
 --     (missing `credits_per_month`, which makes `getPlanById` throw). Adding a
@@ -37,7 +37,7 @@
 -- ⚠️ IF THAT READING IS WRONG, THE FIX IS ANOTHER MIGRATION, NOT AN UPDATE
 -- TYPED INTO THE EDITOR. That is how the last one was lost.
 --
--- ⚠️ `|| limits` PUTS THE EXISTING BLOB ON THE RIGHT, matching 0103 and 0127:
+-- ⚠️ `|| limits` PUTS THE EXISTING BLOB ON THE RIGHT, matching 0103 and 0134:
 -- the right-hand side wins, so a value already set in production is PRESERVED
 -- and this only fills a gap. Reversing it would silently reset a per-plan
 -- override made since.
@@ -51,7 +51,7 @@ where key in ('professional', 'custom');
  * ⚠️ THE ENTITLEMENT MUST NOT OUTLIVE THE MODULE IT REPORTS ON. A plan with
  * `linkedin_analysis_enabled` and no `linkedin_enabled` would show a manager a
  * premium analysis screen for a channel their workspace cannot use — the same
- * mismatched shape 0127 found in production, where a sender cap sat on a plan
+ * mismatched shape 0134 found in production, where a sender cap sat on a plan
  * with no entitlement.
  *
  * Raised rather than silently corrected: which of the two keys is wrong is a
@@ -70,7 +70,7 @@ begin
   if broken is not null then
     raise exception
       'Plans entitled to LinkedIn analysis but not to LinkedIn itself: %. '
-      'Fix the pair in one statement — 0127 exists because they were split.',
+      'Fix the pair in one statement — 0134 exists because they were split.',
       broken;
   end if;
 end $$;
@@ -79,6 +79,6 @@ end $$;
  * ⚠️ `key::text` IN THE `string_agg` ABOVE. `plans.key` is the enum
  * `public.plan_key`, and `string_agg(key, ', ')` fails with
  * "function string_agg(plan_key, unknown) does not exist" — which is exactly
- * how 0127 reached the SQL editor broken. `0059:199` was the prior art nobody
+ * how 0134 reached the SQL editor broken. `0059:199` was the prior art nobody
  * followed.
  */

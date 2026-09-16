@@ -88,7 +88,7 @@ describe('the picker reaches a user, and the server does not trust it', () => {
 
   it('renders a select over the offered list', () => {
     /*
-     * The server half of multi-currency has been correct since 0123 and could
+     * The server half of multi-currency has been correct since 0130 and could
      * not be reached by anybody — the defect this session kept finding. This is
      * the line that makes it reachable.
      */

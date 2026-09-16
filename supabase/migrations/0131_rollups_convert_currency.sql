@@ -1,8 +1,8 @@
 -- ---------------------------------------------------------------------------
--- 0124 — The rollups convert, instead of adding currencies together.
+-- 0131 — The rollups convert, instead of adding currencies together.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗
--- ║  0123 GAVE EVERY DEAL A CONVERTED AMOUNT. NOTHING READ IT.                ║
+-- ║  0130 GAVE EVERY DEAL A CONVERTED AMOUNT. NOTHING READ IT.                ║
 -- ║                                                                           ║
 -- ║  Eight `sum(o.value_amount)` sites across 0082, 0083 and 0084 added raw    ║
 -- ║  amounts across currencies: a $10,000 deal and a €10,000 deal summed to    ║
@@ -12,7 +12,7 @@
 -- ║  ⚠️ NULL IS WHY THIS IS SAFE. `value_amount_base` is NULL when the rate    ║
 -- ║  is unknown, and `sum()` skips NULLs — so an unconvertible deal DROPS OUT  ║
 -- ║  of the total instead of being added at face value in the wrong currency.  ║
--- ║  It drops out visibly: `crm_unconvertible_deals()` (0123) counts exactly   ║
+-- ║  It drops out visibly: `crm_unconvertible_deals()` (0130) counts exactly   ║
 -- ║  those rows, so a screen can say how many a total left out.               ║
 -- ║                                                                           ║
 -- ║  ⚠️ TODAY THIS CHANGES NO NUMBER. Every deal is the workspace currency, so ║

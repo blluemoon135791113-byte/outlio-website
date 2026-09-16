@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- 0127 — The LinkedIn module entitlement, as a migration rather than a scratch
+-- 0134 — The LinkedIn module entitlement, as a migration rather than a scratch
 --        UPDATE typed into the SQL editor.
 --
 -- ╔═══════════════════════════════════════════════════════════════════════════╗

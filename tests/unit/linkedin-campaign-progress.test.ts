@@ -67,7 +67,7 @@ describe('the buckets are what the rows say, not a guess', () => {
 
   it('a terminal state with no reason is not a success', () => {
     /*
-     * `terminal_reason` is set only when the state is terminal (0125), so a
+     * `terminal_reason` is set only when the state is terminal (0132), so a
      * null here is a row that ended without recording how. Counting it as
      * succeeded would invent the one fact it is missing.
      */

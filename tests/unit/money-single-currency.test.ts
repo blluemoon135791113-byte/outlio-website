@@ -109,7 +109,7 @@ describe('a currency may now be supplied, because the snapshot is written', () =
      * ║                                                                       ║
      * ║  The reason was real: 0082 summed `value_amount` with no conversion,   ║
      * ║  so a €10,000 and a $10,000 deal added to 20,000 with nothing          ║
-     * ║  erroring. That reason is gone — 0123 snapshots a rate, 0124 converts  ║
+     * ║  erroring. That reason is gone — 0130 snapshots a rate, 0131 converts  ║
      * ║  in all eight sum sites, and an unrated deal is excluded and counted.  ║
      * ║                                                                       ║
      * ║  So the assertion is no longer "nobody may" but "if anybody does, the  ║
@@ -150,7 +150,7 @@ describe('a currency may now be supplied, because the snapshot is written', () =
 
 describe('§5.6 is half built, and the half that is missing is named', () => {
   const FX = readFileSync(
-    join(ROOT, 'supabase', 'migrations', '0123_deal_fx_snapshot.sql'),
+    join(ROOT, 'supabase', 'migrations', '0130_deal_fx_snapshot.sql'),
     'utf8',
   )
 
@@ -162,11 +162,11 @@ describe('§5.6 is half built, and the half that is missing is named', () => {
      * genuinely implemented". §5.6 is now genuinely HALF implemented, which is
      * neither case it anticipated, so the file stays and says which half.
      *
-     * Built (0123): the columns, the both-or-neither constraint, the identity
+     * Built (0130): the columns, the both-or-neither constraint, the identity
      * rule, the converted column, the unconvertible count.
      * Not built: a rate vendor, and therefore the close-time re-snapshot.
      */
-    expect(hasFxSnapshot, '0123 is gone — the snapshot columns were dropped').toBe(true)
+    expect(hasFxSnapshot, '0130 is gone — the snapshot columns were dropped').toBe(true)
     expect(FX).toMatch(/fx_rate_to_workspace_currency\s+numeric/)
     expect(FX).toMatch(/fx_rate_date\s+date/)
   })
@@ -220,7 +220,7 @@ describe('§5.6 is half built, and the half that is missing is named', () => {
   it('the rollups convert, and every sum site moved together', () => {
     /*
      * ╔═══════════════════════════════════════════════════════════════════════╗
-     * ║  0124 SWITCHED ALL EIGHT SUM SITES TO `value_amount_base`.            ║
+     * ║  0131 SWITCHED ALL EIGHT SUM SITES TO `value_amount_base`.            ║
      * ║                                                                       ║
      * ║  Proven against a throwaway Postgres with mixed currencies: a $5,000   ║
      * ║  won deal plus a £10,000 won deal at 1.35 reported 15,000 before and   ║
@@ -233,11 +233,11 @@ describe('§5.6 is half built, and the half that is missing is named', () => {
      * ╚═══════════════════════════════════════════════════════════════════════╝
      */
     const converted = readFileSync(
-      join(ROOT, 'supabase', 'migrations', '0124_rollups_convert_currency.sql'),
+      join(ROOT, 'supabase', 'migrations', '0131_rollups_convert_currency.sql'),
       'utf8',
     )
     /*
-     * ⚠️ COUNTED ON THE COMMENT-STRIPPED BODY. The header of 0124 documents the
+     * ⚠️ COUNTED ON THE COMMENT-STRIPPED BODY. The header of 0131 documents the
      * substitution by quoting both spellings, so counting the raw file finds
      * nine and the guard fails for the most annoying possible reason. This is
      * the trap `outlio-verification-habits` records — files here quote the
@@ -246,10 +246,10 @@ describe('§5.6 is half built, and the half that is missing is named', () => {
     const body = converted.replace(/^--.*$/gm, '')
     const sites = body.match(/sum\(o\.value_amount_base\b/g) ?? []
     expect(sites.length, 'a sum site was left on the raw amount').toBe(8)
-    expect(body, 'an unconverted sum survives in 0124').not.toMatch(/sum\(o\.value_amount\)/)
+    expect(body, 'an unconverted sum survives in 0131').not.toMatch(/sum\(o\.value_amount\)/)
   })
 
-  it('0124 replaces every function that had a sum, and nothing else', () => {
+  it('0131 replaces every function that had a sum, and nothing else', () => {
     /*
      * ⚠️ THE BODIES ARE COPIED VERBATIM FROM 0082/0083/0084 with one
      * mechanical substitution. Retyping a reporting function from memory is how
@@ -257,7 +257,7 @@ describe('§5.6 is half built, and the half that is missing is named', () => {
      * produced a wrong `claim_email_messages` signature earlier in this build.
      */
     const converted = readFileSync(
-      join(ROOT, 'supabase', 'migrations', '0124_rollups_convert_currency.sql'),
+      join(ROOT, 'supabase', 'migrations', '0131_rollups_convert_currency.sql'),
       'utf8',
     )
     const replaced = (converted.match(/create or replace function public\.(\w+)/g) ?? []).map(
@@ -277,7 +277,7 @@ describe('§5.6 is half built, and the half that is missing is named', () => {
      * ╔═══════════════════════════════════════════════════════════════════════╗
      * ║  ⚠️ `crm_unconvertible_deals()` SHIPPED WITH ZERO CALLERS.            ║
      * ║                                                                       ║
-     * ║  Written in 0123, referenced only from comments — the same shape as    ║
+     * ║  Written in 0130, referenced only from comments — the same shape as    ║
      * ║  `suppressContact`, in code written the same day by someone who had    ║
      * ║  spent the session fixing exactly that defect.                         ║
      * ║                                                                       ║
@@ -321,7 +321,7 @@ describe('§5.6 is half built, and the half that is missing is named', () => {
      * `crm_unconvertible_deals()` is what makes that legible, so it must exist.
      */
     const fx = readFileSync(
-      join(ROOT, 'supabase', 'migrations', '0123_deal_fx_snapshot.sql'),
+      join(ROOT, 'supabase', 'migrations', '0130_deal_fx_snapshot.sql'),
       'utf8',
     )
     expect(fx).toMatch(/create or replace function public\.crm_unconvertible_deals/)
