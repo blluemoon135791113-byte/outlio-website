@@ -179,10 +179,43 @@ describe('a stage never advances on a timer', () => {
 })
 
 describe('every manual task kind spends a budget', () => {
-  it('maps all four', () => {
+  /*
+   * ⚠️ THE HARDCODED LIST IS THE POINT, NOT AN OVERSIGHT — BUT IT HAS TO BE
+   * MAINTAINED, AND 0137 IS WHY THIS TEST WAS RENAMED FROM "maps all four".
+   *
+   * Deriving the expectation from `KIND_FOR_TASK`'s own keys would make the test
+   * vacuous: it would pass whatever the map contained, including a map missing
+   * the kind that was just added. Listing them here means adding a task kind
+   * fails this test until somebody decides which budget it spends — which is
+   * exactly what happened when `LIKE_POST` and `COMMENT_POST` arrived.
+   */
+  it('maps every kind the database enum allows', () => {
     // A task whose budget nobody keeps is a task with no limit.
     expect(Object.keys(KIND_FOR_TASK).sort()).toEqual(
-      ['CONNECTION_REQUEST', 'DIRECT_MESSAGE', 'INMAIL', 'REVIEW_PROFILE'].sort(),
+      [
+        'CONNECTION_REQUEST',
+        'DIRECT_MESSAGE',
+        'INMAIL',
+        'REVIEW_PROFILE',
+        // 0137 — the customer-built workflow's engagement steps.
+        'LIKE_POST',
+        'COMMENT_POST',
+      ].sort(),
     )
+  })
+
+  it('does not quietly route engagement into a cheaper bucket', () => {
+    /*
+     * ⚠️ §4.10 CAPS `engagement` AT ZERO ON EVERY STAGE, so these two produce
+     * tasks that cannot release until somebody raises it deliberately. Mapping
+     * them to `profile_review` — also cheap, also read-ish — would overturn that
+     * limit by choosing a bucket rather than by deciding to, and nothing would
+     * report it.
+     */
+    expect(KIND_FOR_TASK.LIKE_POST).toBe('engagement')
+    expect(KIND_FOR_TASK.COMMENT_POST).toBe('engagement')
+    for (const stage of STAGES) {
+      expect(stage.engagement.perDay, 'the engagement cap was widened').toBe(0)
+    }
   })
 })

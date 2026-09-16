@@ -47,7 +47,17 @@ export function AuthShell({
         </header>
 
         <div className="my-auto grid items-center gap-8 py-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,1fr)] lg:gap-16">
-          <section className="max-w-lg">
+          {/*
+            ⚠️ SECOND ON A PHONE, FIRST ON A DESKTOP. Measured at 375×812 before
+            this: the email field started at y=726 and the SIGN IN BUTTON SAT AT
+            920 — below the fold on a 1142px page. A returning user on a phone
+            landed on the pitch and had to scroll past it to submit, every time.
+
+            The pitch still belongs here: someone arriving at /sign-up has not
+            decided yet. But it is the second thing they need, and stacking
+            order is the only thing that was deciding otherwise.
+          */}
+          <section className="order-2 max-w-lg lg:order-1">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
               Outlio Lead Engine
             </p>
@@ -106,7 +116,10 @@ export function AuthShell({
             </dl>
           </section>
 
-          <section className="clay-raised w-full p-6 sm:p-8" aria-labelledby="auth-title">
+          <section
+            className="order-1 w-full clay-raised p-6 sm:p-8 lg:order-2"
+            aria-labelledby="auth-title"
+          >
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
               Outlio workspace
             </p>

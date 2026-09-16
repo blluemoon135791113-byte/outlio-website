@@ -66,9 +66,18 @@ export async function listUsersWithUnlinkedLeads(
       .from('extracted_leads')
       .select('user_id')
       .is('company_id', null)
-      // Ordered so paging is stable; without it Postgres may return rows in a
-      // different order per page and skip some entirely.
+      /*
+       * ⚠️ THE COMMENT HERE WAS RIGHT AND THE CODE DID NOT SATISFY IT. It said
+       * "ordered so paging is stable; without it Postgres may return rows in a
+       * different order per page and skip some entirely" — and then ordered by
+       * `user_id`, which is not unique: one user has many unlinked leads, so
+       * the whole tie group is one user's rows.
+       *
+       * Inside a tie group the order is undefined, so a user whose rows all
+       * land on a page boundary can be missed entirely and never backfilled.
+       */
       .order('user_id', { ascending: true })
+      .order('id', { ascending: true })
       .range(from, from + pageSize - 1)
 
     if (error) throw new Error(`listUsersWithUnlinkedLeads failed: ${error.message}`)

@@ -51,6 +51,7 @@ const PIPELINE: PipelineTotals = {
   weightedValue: 0,
   wonDeals: 0,
   wonValue: 0,
+  unconvertible: 0,
 }
 
 const row = (over: Partial<LeaderboardRow> = {}): LeaderboardRow => ({

@@ -56,7 +56,7 @@ function Step({ step, blocker }: { step: FirstRunStep; blocker: FirstRunStep | u
         ) : !step.done ? (
           <Link
             href={step.href}
-            className="mt-2 inline-block rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+            className="mt-2 inline-block rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
           >
             {step.cta}
           </Link>

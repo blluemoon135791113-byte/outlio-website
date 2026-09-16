@@ -309,7 +309,10 @@ export function CommandPaletteTrigger() {
           new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }),
         )
       }}
-      className="flex h-9 items-center gap-2 rounded-[var(--radius-md)] border border-border px-3 text-sm text-muted transition-colors duration-150 hover:border-border-strong hover:text-ink"
+      // Same 4px touch inset as the nav toggle. On a phone the label is hidden
+      // (`hidden sm:inline`), so this collapses to a 36×42 icon button — the
+      // second-smallest target in the shell.
+      className="relative flex h-9 items-center gap-2 rounded-[var(--radius-md)] border border-border px-3 text-sm text-muted transition-colors duration-150 before:absolute before:-inset-1 before:content-[''] hover:border-border-strong hover:text-ink"
     >
       <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4">
         <path

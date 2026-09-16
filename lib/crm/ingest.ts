@@ -228,6 +228,85 @@ async function runIngest(
  * which a bulk upsert cannot target, and a single conflict would otherwise
  * fail the whole insert.
  */
+/**
+ * Stores each contact's Sales Navigator address alongside their public one.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ IT FILLS A GAP AND NEVER OVERWRITES A VALUE.                          ║
+ * ║                                                                           ║
+ * ║  Ingestion is re-runnable — `ingestExtractionJob` has an explicit `reRun`  ║
+ * ║  path — and the same person arrives from several sources. A blind update   ║
+ * ║  would let a later batch with a thinner record replace a good Navigator    ║
+ * ║  link, and nothing downstream could tell that it had happened, because     ║
+ * ║  both values look equally plausible.                                      ║
+ * ║                                                                           ║
+ * ║  §4.5 makes that unrecoverable rather than merely annoying: the two URLs   ║
+ * ║  cannot be derived from each other, so a clobbered one is gone.           ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+async function recordNavigatorUrls(
+  workspaceId: string,
+  pairs: { contactId: string; url: string }[],
+): Promise<void> {
+  if (pairs.length === 0) return
+  const db = createAdminClient()
+
+  const contactIds = [...new Set(pairs.map((p) => p.contactId))]
+
+  /*
+   * ⚠️ READ FIRST, AND FILTER TO THE ONES THAT ARE ACTUALLY EMPTY. The
+   * alternative — one UPDATE with `.is('sales_navigator_url', null)` in the
+   * predicate — would be a single round trip and is what I reached for first.
+   * It cannot work here: each contact needs a DIFFERENT url, so it would be one
+   * statement per contact anyway, and the version trigger would fire on every
+   * one of them whether or not anything changed.
+   */
+  const { data: existing, error } = await db
+    .from('crm_contacts')
+    .select('id, sales_navigator_url')
+    // Service role bypasses RLS — scoping by workspace is mandatory.
+    .eq('workspace_id', workspaceId)
+    .in('id', contactIds)
+    .is('deleted_at', null)
+
+  if (error) throw new Error(`recordNavigatorUrls failed: ${error.message}`)
+
+  const empty = new Set(
+    (existing ?? []).filter((row) => !row.sales_navigator_url).map((row) => row.id),
+  )
+
+  const seen = new Set<string>()
+  for (const pair of pairs) {
+    if (!empty.has(pair.contactId) || seen.has(pair.contactId)) continue
+    seen.add(pair.contactId)
+
+    const { error: updateError } = await db
+      .from('crm_contacts')
+      .update({ sales_navigator_url: pair.url })
+      .eq('workspace_id', workspaceId)
+      .eq('id', pair.contactId)
+      /*
+       * ⚠️ THE NULL CHECK IS REPEATED IN THE WHERE CLAUSE, not just relied on
+       * from the read above. Two ingests running at once both see it empty;
+       * only the predicate stops the second from overwriting the first.
+       */
+      .is('sales_navigator_url', null)
+
+    /*
+     * ⚠️ A FAILURE HERE DOES NOT COST US THE PEOPLE, matching `resolveCompanies`
+     * directly below: the contact is ingested and canonical either way. A
+     * missing second URL is a degraded record; a thrown error would discard a
+     * whole successful batch over a supplementary field.
+     */
+    if (updateError) {
+      console.error('recordNavigatorUrls: update failed', {
+        contactId: pair.contactId,
+        error: updateError.message,
+      })
+    }
+  }
+}
+
 async function linkCompanies(
   workspaceId: string,
   pairs: { contactId: string; companyId: string }[],
@@ -395,8 +474,24 @@ export async function ingestExtractionJob(
       {
         fullName: lead.full_name,
         jobTitle: lead.job_title,
-        // The public profile URL is preferred; the Sales Navigator link is the
-        // fallback, and both resolve into the same key space.
+        /*
+         * ⚠️ THE COALESCE IS FOR IDENTITY ONLY, AND IT USED TO BE FOR STORAGE
+         * TOO — which is the defect 0138 fixes.
+         *
+         * `linkedin_url` feeds `linkedin_identity_key`, the column the ingest
+         * RPC matches people on, and either address resolves into that key
+         * space. So preferring the public URL here is correct for MATCHING.
+         *
+         * What was wrong was that the loser of this `??` then vanished:
+         * `crm_contacts` had one column, so a Sales Navigator save — where
+         * `linkedin_url` is usually NULL because Navigator does not expose the
+         * public slug — stored a `/sales/lead/…` address under `linkedin_url`
+         * and discarded nothing only because there was nothing else to keep.
+         * The reverse case silently dropped the Navigator link entirely.
+         *
+         * §4.5 forbids deriving one from the other, so the lost one was lost for
+         * good. Both are now carried; see `navigatorUrls` below.
+         */
         linkedInUrl: lead.linkedin_url ?? lead.sales_navigator_url,
         location: lead.location,
         headline: lead.person_blurb,
@@ -418,6 +513,25 @@ export async function ingestExtractionJob(
     payload
       .filter((row) => row.company_id && returned.has(row.ref))
       .map((row) => ({ contactId: returned.get(row.ref)!, companyId: row.company_id! })),
+  )
+
+  /*
+   * ⚠️ AFTER THE RPC RATHER THAN INSIDE IT, DELIBERATELY. `crm_ingest_contacts`
+   * is "one implementation of what is this person's identity" — it matches,
+   * creates and merges. A Sales Navigator URL is an ATTRIBUTE, not an identity:
+   * it never decides who somebody is. Widening a 200-line identity function to
+   * carry it would put attribute handling inside the one place that must stay
+   * about matching, and `linkCompanies` directly above already establishes the
+   * post-ingest attribute write against the same `returned` map.
+   */
+  await recordNavigatorUrls(
+    workspaceId,
+    (leads ?? [])
+      .filter((lead) => lead.sales_navigator_url && returned.has(lead.id))
+      .map((lead) => ({
+        contactId: returned.get(lead.id)!,
+        url: lead.sales_navigator_url!,
+      })),
   )
 
   const result: IngestResult = {

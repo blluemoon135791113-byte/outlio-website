@@ -173,12 +173,33 @@ const stepIdSchema = z
   // Referenced by `next`/`branches`, so it must be safe to compare and print.
   .regex(/^[a-zA-Z0-9_-]+$/, 'A step id may contain only letters, numbers, _ and -.')
 
+/**
+ * Every comparison a BRANCH may make.
+ *
+ * ⚠️ EXPORTED SO THERE IS ONE LIST, NOT THREE. It was inlined in the schema
+ * below while `FlowBuilder.tsx` kept its own `BRANCH_OPERATORS` for labels —
+ * typed `{ key: string }`, so a typo there would compile, render a dropdown
+ * entry, and produce a condition the schema rejects at publish. They match
+ * today; nothing was keeping them matched. A generated definition needs the
+ * same list a third time, which is the point at which duplicating it stops
+ * being survivable.
+ */
+export const CONDITION_OPERATORS = [
+  'equals', 'not_equals', 'contains', 'not_contains',
+  'is_empty', 'is_not_empty', 'greater_than', 'less_than', 'in', 'not_in',
+] as const
+
+export type ConditionOperator = (typeof CONDITION_OPERATORS)[number]
+
 const conditionSchema = z.object({
+  /**
+   * ⚠️ DELIBERATELY AN OPEN STRING, WHICH MATTERS FOR GENERATED INPUT. A
+   * stored flow may reference a fact key that has since been removed, and it
+   * must still LOAD so its author can open and repair it. So the parser cannot
+   * close this set — `lib/flows/generated.ts` does, for model output only.
+   */
   field: z.string().min(1).max(120),
-  operator: z.enum([
-    'equals', 'not_equals', 'contains', 'not_contains',
-    'is_empty', 'is_not_empty', 'greater_than', 'less_than', 'in', 'not_in',
-  ]),
+  operator: z.enum(CONDITION_OPERATORS),
   value: z.unknown().optional(),
 })
 
@@ -494,6 +515,45 @@ export function publishProblems(definition: FlowDefinition): string[] {
   for (const step of definition.steps) {
     if (step.type !== 'ACTION') continue
 
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ `actionIsImplemented` WAS ENFORCED IN ONE PLACE: A DROPDOWN.      ║
+     * ║                                                                       ║
+     * ║  Its only callers were `FlowBuilder.tsx`'s two action pickers, which   ║
+     * ║  filter an unimplemented action out of the menu. CLAUDE.md rule 8 —    ║
+     * ║  "hiding a button is not access control" — and a server action is a    ║
+     * ║  public HTTP endpoint, so the definition can arrive without ever       ║
+     * ║  passing a dropdown.                                                  ║
+     * ║                                                                       ║
+     * ║  ⚠️ LATENT TODAY, NOT LIVE. `UNIMPLEMENTED_ACTIONS` is empty, so       ║
+     * ║  nothing can currently slip through, and `flow-action-coverage.test`   ║
+     * ║  fails if an action is added without a runner. But that guard protects ║
+     * ║  the REPO at CI time, which is a different guarantee from refusing a   ║
+     * ║  REQUEST — and the list's own comment exists precisely because the     ║
+     * ║  next action added is expected to sit in it for a while.              ║
+     * ║                                                                       ║
+     * ║  ⚠️ AND PHASE 13 MAKES IT LOAD-BEARING. A model emitting a definition  ║
+     * ║  never touches the picker, so UI-only enforcement is worth nothing to  ║
+     * ║  it. §5.10 requires an unavailable capability be a validation failure, ║
+     * ║  not a repair opportunity, and a step that publishes and then dies at  ║
+     * ║  execution is the two-candidate-causes problem PHASE_13's deferral was ║
+     * ║  written to avoid.                                                     ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     *
+     * ⚠️ HERE AND NOT IN `validateFlowDefinition`, for the reason that
+     * function's own header gives: `advanceRun` parses every STORED definition
+     * on every run, so tightening the parser retroactively invalidates
+     * published flows. If an action is ever retired, a flow already using it
+     * must still LOAD — so that its author can open it and repair it — while
+     * being refused the next time it is published.
+     */
+    if (!actionIsImplemented(step.action)) {
+      const name = step.label?.trim() || step.id
+      problems.push(
+        `“${name}” uses ${step.action}, which Outlio cannot run yet. Remove the step or choose another action.`,
+      )
+    }
+
     const required = REQUIRED_ACTION_CONFIG[step.action]
     if (!required) continue
 
@@ -634,7 +694,18 @@ function pathProblems(definition: FlowDefinition): string[] {
  * entry can only fail to catch a bad publish; a wrong entry would refuse a
  * good one. `tests/unit/flow-required-config.test.ts` keeps the two in step.
  */
-const REQUIRED_ACTION_CONFIG: Partial<Record<string, readonly string[]>> = {
+/**
+ * ⚠️ EXPORTED SO THE GENERATOR CAN BE TOLD, rather than left to guess.
+ *
+ * The first real eval run failed almost every case on "needs tag set before
+ * this flow can be published". The prompt said "fill every config value the
+ * action needs" and then listed only action NAMES — so the model was being
+ * marked wrong for not knowing something nobody had told it.
+ *
+ * §5.10's snapshot is meant to be the closed world handed to the model. A world
+ * that names the verbs but not their arguments is not closed, it is just small.
+ */
+export const REQUIRED_ACTION_CONFIG: Partial<Record<string, readonly string[]>> = {
   ASSIGN_OWNER: ['userId'],
   ROUND_ROBIN: ['userIds'],
   CREATE_TASK: ['title'],

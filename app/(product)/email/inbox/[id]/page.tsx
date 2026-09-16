@@ -137,6 +137,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
           <NewOpportunityForm
             pipelineId={pipeline.id}
             stages={pipeline.stages}
+            workspaceCurrency={ctx.workspace.defaultCurrency}
             fixedContact={{
               id: detail.thread.contactId,
               name: detail.thread.contactName ?? 'this contact',

@@ -51,25 +51,17 @@ const ROOT = join(__dirname, '..', '..')
  * ⚠️ EMPTYING THIS LIST IS THE POINT. Each entry is a thing the history cannot
  * rebuild; the entry is a record of the debt, not permission to keep it.
  */
-const KNOWN_MISSING = new Map<string, string>([
-  [
-    'linkedin_enrollments',
-    'Applied by hand alongside the LinkedIn logic layer. 0122 created ' +
-      'linkedin_senders / _sender_links / _sender_actions and stopped there — ' +
-      'module-reachability.test.ts already records that the release pipeline ' +
-      'was never built. Present in production and staging.',
-  ],
-  [
-    'linkedin_tasks',
-    'Same origin as linkedin_enrollments, which it references. Present in ' +
-      'production and staging.',
-  ],
-  [
-    'crm_unconvertible_deals',
-    'A function, not a table — (p_workspace_id uuid, p_status text) returns ' +
-      'integer. Present in production and staging; created by no migration.',
-  ],
-])
+/*
+ * ⚠️ EMPTY, AND THAT IS THE POINT. All three entries here -- linkedin_enrollments,
+ * linkedin_tasks and crm_unconvertible_deals -- described objects that existed in
+ * production and staging because they had been applied by hand, with no migration
+ * that creates them. The LinkedIn and FX migrations on this branch create all
+ * three, so the history can now rebuild them and the exemptions are obsolete.
+ *
+ * The test below fails if an entry here is quietly fixed, which is how these were
+ * found. Add one only with the reason a migration cannot create the object.
+ */
+const KNOWN_MISSING = new Map<string, string>([])
 
 // ---------------------------------------------------------------------------
 // What the live database has, according to the generated types.
@@ -213,16 +205,21 @@ describe('the scan is real, not an artefact of a broken parse', () => {
     expect(createsFunction('not_a_real_function')).toBe(false)
   })
 
-  it('still reports the three objects this guard was written for', () => {
+  it('now creates the three objects this guard was written for', () => {
     /*
-     * ⚠️ THE REGRESSION THIS GUARD MOST NEEDS TO SURVIVE is somebody "fixing"
-     * it by loosening the matcher until the list is empty. If these three ever
-     * start looking created, the matcher became wrong before the schema became
-     * right.
+     * ⚠️ THESE THREE ARE WHY THIS GUARD EXISTS. They were applied by hand and no
+     * migration created them, so the history could not rebuild a live database.
+     * The LinkedIn and FX migrations create all three, which is why KNOWN_MISSING
+     * is now empty.
+     *
+     * ⚠️ THE REGRESSION THIS GUARD MOST NEEDS TO SURVIVE is somebody "fixing" it
+     * by loosening the matcher until the missing list is empty. `does not
+     * recognise a create statement that is not there` above is the negative
+     * control for exactly that; these are the positive one.
      */
-    expect(createsTable('linkedin_enrollments')).toBe(false)
-    expect(createsTable('linkedin_tasks')).toBe(false)
-    expect(createsFunction('crm_unconvertible_deals')).toBe(false)
+    expect(createsTable('linkedin_enrollments')).toBe(true)
+    expect(createsTable('linkedin_tasks')).toBe(true)
+    expect(createsFunction('crm_unconvertible_deals')).toBe(true)
 
     expect(liveTables).toContain('linkedin_enrollments')
     expect(liveTables).toContain('linkedin_tasks')

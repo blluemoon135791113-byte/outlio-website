@@ -16,6 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { verifyWebhookSignature } from '@/lib/api/signing'
 import { deliverPendingWebhooks, publishEvent } from '@/lib/api/webhooks'
+import { sealWebhookSecret } from '@/lib/api/webhook-secret'
 import { adminClient, createAuthUser, deleteTestUser, hasSupabaseEnv } from './helpers'
 
 const RUN = Date.now().toString(36)
@@ -73,7 +74,22 @@ beforeAll(async () => {
       // The check constraint requires https; localhost is fine for the test
       // because `deliverPendingWebhooks` does not inspect the scheme.
       url: `http://127.0.0.1:${port}/hook`,
-      signing_secret: SECRET,
+      /*
+       * ╔═══════════════════════════════════════════════════════════════════════╗
+       * ║  ⚠️ SEALED, BECAUSE A RAW SECRET HERE TESTED THE LEGACY PATH ONLY.   ║
+       * ║                                                                       ║
+       * ║  `openWebhookSecret` TOLERATES plaintext on purpose — a subscription   ║
+       * ║  created before the encryption change must keep delivering — and logs  ║
+       * ║  when it finds one. Seeding a raw secret meant every delivery test     ║
+       * ║  took that legacy branch, printing "[webhooks] signing secret is not   ║
+       * ║  encrypted" on each run, and the decrypt-then-sign path that EVERY     ║
+       * ║  production row takes was never exercised end to end.                 ║
+       * ║                                                                       ║
+       * ║  Unit tests cover seal/open round-trips; they cannot cover "the        ║
+       * ║  delivered signature verifies after a decrypt". That gap is this.      ║
+       * ╚═══════════════════════════════════════════════════════════════════════╝
+       */
+      signing_secret: sealWebhookSecret(SECRET),
       events: [],
       created_by: user.id,
     })
@@ -179,9 +195,60 @@ describeIf('CRITERION 8 — signed, retried, idempotent, logged', () => {
     // ⚠️ BACKOFF, not a fixed interval: each wait is longer than the last.
     expect(delays[1]).toBeGreaterThan(delays[0]!)
     expect(delays[2]).toBeGreaterThan(delays[1]!)
-    // Roughly 30s, 2m, 8m.
-    expect(delays[0]).toBeGreaterThan(25_000)
-    expect(delays[2]).toBeGreaterThan(7 * 60_000)
+
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THE JITTER RANGE, NOT THE BASE SCHEDULE. THIS TEST USED TO FAIL   ║
+     * ║  ROUGHLY NINE RUNS IN TEN, AND THE CODE WAS ALWAYS RIGHT.             ║
+     * ║                                                                       ║
+     * ║  It asserted `delays[0] > 25s` and `delays[2] > 7m` against a comment  ║
+     * ║  reading "roughly 30s, 2m, 8m" — the BASE schedule. But                ║
+     * ║  `backoffSecondsWithJitter` deliberately returns `[base/2, base)`, so  ║
+     * ║  the real windows are 15-30s and 4-8m. The first assertion passed      ║
+     * ║  about a third of the time, the third about a quarter; together        ║
+     * ║  roughly 8%.                                                          ║
+     * ║                                                                       ║
+     * ║  The run that surfaced it measured 23,544ms — squarely inside the      ║
+     * ║  documented window and reported as a defect.                          ║
+     * ║                                                                       ║
+     * ║  ⚠️ AND THE JITTER IS THE POINT, NOT AN IMPRECISION. §5.13 asks for    ║
+     * ║  "exponential backoff + jitter" because `publishEvent` fans one event  ║
+     * ║  to every subscriber in the same instant; without spread they all      ║
+     * ║  retry in lockstep. A test that demands the undithered number is       ║
+     * ║  asking for the bug back.                                             ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     *
+     * ⚠️ BOUNDS ONLY, AND THEY CANNOT SEE A JITTER THAT STOPPED DITHERING.
+     * Proven by mutation: making `backoffSecondsWithJitter` return the base
+     * exactly still passes here, because the base is inside the window. That is
+     * correct for a bounds check and worth stating, because the obvious comment
+     * to write — "this catches a jitter that stopped" — would be false.
+     *
+     * The dithering itself belongs to `api-signing.test.ts`, which injects
+     * `random` and can therefore pin it: `backoffSecondsWithJitter(1, () => 0)`
+     * is exactly 15, and a separate case asserts two deliveries failing in the
+     * same instant come out spread. Deterministic, free, and in the fast loop.
+     *
+     * What THIS test owns is the part a unit test cannot reach: that the
+     * computed delay actually arrives in `next_attempt_at` in the database,
+     * within the documented window. An overshoot fails here — mutation
+     * confirmed.
+     */
+    const windows = [
+      { label: '30s', base: 30_000 },
+      { label: '2m', base: 120_000 },
+      { label: '8m', base: 480_000 },
+    ]
+    windows.forEach(({ label, base }, index) => {
+      const delay = delays[index]!
+      // A little slack for the round trip between `before` and the DB write.
+      expect(delay, `attempt ${index + 1} (${label}) below the jitter floor`).toBeGreaterThan(
+        base / 2 - 2_000,
+      )
+      expect(delay, `attempt ${index + 1} (${label}) above the documented ceiling`).toBeLessThan(
+        base + 2_000,
+      )
+    })
 
     /*
      * ⚠️ THE CRITERION'S HARDEST PART. Three attempts, ONE event id — which is
@@ -203,11 +270,18 @@ describeIf('CRITERION 8 — signed, retried, idempotent, logged', () => {
     received = []
     respondWith = 500
 
-    await publishEvent(workspaceId, 'meeting.booked', { id: 'meeting-1' })
+    /*
+     * ⚠️ ANY WIRED EVENT WILL DO — what is under test is retry mechanics, not
+     * this event. It used to be `meeting.booked`, which was WITHDRAWN from the
+     * catalogue on 2026-09-13 (DECISION-18) because nothing publishes it.
+     * `crm.task.completed` is unused elsewhere in this file, so the
+     * `.single()` lookup below still matches exactly one row.
+     */
+    await publishEvent(workspaceId, 'crm.task.completed', { id: 'task-1' })
     const db = adminClient()
     const { data: pending } = await db
       .from('webhook_deliveries')
-      .select('id').eq('event_type', 'meeting.booked').single()
+      .select('id').eq('event_type', 'crm.task.completed').single()
 
     await makeDue(pending!.id)
     await deliverPendingWebhooks()
@@ -293,7 +367,7 @@ describeIf('subscription filtering', () => {
         workspace_id: workspaceId,
         name: `Narrow ${RUN}`,
         url: `http://127.0.0.1:${port}/narrow`,
-        signing_secret: SECRET,
+        signing_secret: sealWebhookSecret(SECRET),
         events: ['crm.contact.created'],
         created_by: user!.id,
       })

@@ -11,6 +11,7 @@ import 'server-only'
  * reach across tenants (CLAUDE.md).
  */
 import { recordActivity } from '@/lib/crm/activities'
+import { ensureTagAttached } from '@/lib/crm/tags'
 import { createOpportunity, moveStage } from '@/lib/crm/opportunities'
 import { emitDomainEvent } from '@/lib/events/emit'
 import { registerAction, type ActionHandler, type ActionResult } from '@/lib/flows/engine'
@@ -241,68 +242,26 @@ const addTag: ActionHandler = async (ctx, config) => {
   const name = str(config, 'tag')
   if (!name) return fail('NO_TAG', 'This step has no tag configured.')
 
-  const db = createAdminClient()
-  // Tags are normalised so "Hot Lead" and "hot lead" cannot become two tags
-  // that render identically (the rule 0071 already encodes).
-  const normalized = name.toLowerCase().replace(/\s+/g, ' ').trim()
-
   /*
-   * ⚠️ SELECT-THEN-INSERT, NOT UPSERT. `crm_tags_name_uniq` is a PARTIAL unique
-   * index (`where deleted_at is null`), and `ON CONFLICT (workspace_id,
-   * normalized_name)` cannot use a partial index unless the statement repeats
-   * its predicate — Postgres answers "no unique or exclusion constraint
-   * matching the ON CONFLICT specification" and the whole action fails.
-   *
-   * The insert can still lose a race with another flow tagging the same
-   * contact, so a unique violation falls back to reading the winner's row
-   * rather than failing.
+   * ⚠️ DELEGATED TO `lib/crm/tags.ts` RATHER THAN IMPLEMENTED HERE. Phase 20's
+   * `ADD_TAG` workflow step needs exactly this, and the partial-unique-index
+   * handling plus its race fallback is the part two copies would get wrong
+   * differently. The behaviour is unchanged; it now lives in one place.
    */
-  const existing = await db
-    .from('crm_tags')
-    .select('id')
-    .eq('workspace_id', ctx.workspaceId)
-    .eq('normalized_name', normalized)
-    .is('deleted_at', null)
-    .maybeSingle()
+  const result = await ensureTagAttached({
+    workspaceId: ctx.workspaceId,
+    contactId: ctx.contactId,
+    name,
+  })
 
-  let tag = existing.data
-
-  if (!tag) {
-    const created = await db
-      .from('crm_tags')
-      .insert({ workspace_id: ctx.workspaceId, name, normalized_name: normalized })
-      .select('id')
-      .single()
-
-    if (created.error) {
-      if (created.error.code !== '23505') {
-        return fail('TAG_FAILED', 'Could not create the tag.', true)
-      }
-      // Someone else created it between the read and the write.
-      const raced = await db
-        .from('crm_tags')
-        .select('id')
-        .eq('workspace_id', ctx.workspaceId)
-        .eq('normalized_name', normalized)
-        .is('deleted_at', null)
-        .maybeSingle()
-      if (!raced.data) return fail('TAG_FAILED', 'Could not create the tag.', true)
-      tag = raced.data
-    } else {
-      tag = created.data
-    }
+  if (!result.ok) {
+    // Retryable for a transient write failure; a missing tag name is not.
+    return result.reason === 'no_tag'
+      ? fail('NO_TAG', result.message)
+      : fail('TAG_FAILED', result.message, true)
   }
 
-  const { error: linkError } = await db
-    .from('crm_contact_tags')
-    .upsert(
-      { workspace_id: ctx.workspaceId, contact_id: ctx.contactId, tag_id: tag.id },
-      // Already tagged is success, not an error — the desired state holds.
-      { onConflict: 'contact_id,tag_id', ignoreDuplicates: true },
-    )
-
-  if (linkError) return fail('TAG_FAILED', 'Could not tag this contact.', true)
-  return ok({ tagId: tag.id, tag: name })
+  return ok({ tagId: result.tagId, tag: result.name })
 }
 
 const removeTag: ActionHandler = async (ctx, config) => {

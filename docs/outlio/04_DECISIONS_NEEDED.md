@@ -653,20 +653,33 @@ to hand a lawyer.
 
 ---
 
-## DECISION-18 — What is the payload contract for the three `meeting.*` webhook events? · `NEEDS CLARIFICATION`
+## DECISION-18 — What is the payload contract for the three `meeting.*` webhook events? · `ANSWERED 2026-09-13, DONE`
 
-**Owner answered "no" on 2026-09-12, and that is genuinely ambiguous between two
-of the options** — so nothing has been done and this is recorded rather than
-guessed at.
+**Owner: WITHDRAW.** Option 3. The three events are removed from Settings →
+Developers rather than left listed and dark.
 
-- Read as option 3, it means **withdraw** the three events from Settings →
-  Developers: do not offer what does not exist.
-- Read as "not now", it means leave them listed and dark, which is option 2
-  deferred.
+Implemented 2026-09-13:
 
-Those differ in what a customer sees. The register's own standard applies —
-inventing a body to close a checkbox is the webhook equivalent of rule 4 — and
-the same reasoning says not to invent an interpretation of the answer either.
+- `meeting.booked` / `.cancelled` / `.rescheduled` removed from `WEBHOOK_EVENTS`.
+- `meeting.booked` / `.cancelled` also removed from `NOTIFIABLE_EVENTS` — they
+  were offered as Slack checkboxes too, and fixing the dead promise on one
+  surface while leaving it on another is not a fix.
+- `describeEvent` still renders them: it is a formatter, not an offer, and a
+  flow step may pass an arbitrary event name.
+- `KNOWN_UNSOURCED` in `domain-event-boundary.test.ts` is now EMPTY, and the
+  guard asserts it stays empty. Its old comment assumed the only exit was
+  building the events; withdrawing was the other exit.
+- `api-signing.test.ts` previously REQUIRED a `meeting` domain, which is how a
+  domain that never fired kept a test defending it. It now asserts the domain
+  is absent.
+
+**What made this safe to decide rather than defer:** production had **zero
+webhook subscriptions and zero deliveries, ever** — checked, not assumed. The
+cost of removal was literally zero and will never be lower.
+
+**Re-adding is one array entry plus the payload design that was always
+required.** The guards send the next person to the contract rather than to the
+array.
 
 
 Raised 2026-09-09 while sourcing the last webhook events (Phase 23, second

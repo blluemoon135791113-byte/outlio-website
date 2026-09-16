@@ -96,6 +96,7 @@ export default async function PipelinePage({
             {can({ role: ctx.role, modules: ctx.modules }, 'crm.opportunity.create') ? (
               <NewOpportunityButton
                 pipelineId={pipelineId}
+                workspaceCurrency={ctx.workspace.defaultCurrency}
                 stages={pipeline.stages.map((s) => ({
                   id: s.id,
                   name: s.name,

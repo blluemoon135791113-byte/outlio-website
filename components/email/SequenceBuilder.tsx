@@ -104,7 +104,7 @@ function StepEditor({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
         >
           {pending ? 'Saving…' : step ? 'Save step' : 'Add step'}
         </button>
@@ -271,7 +271,7 @@ export function SequenceBuilder({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
           >
             Add step
           </button>

@@ -17,6 +17,7 @@
  */
 import { revalidatePath } from 'next/cache'
 
+import { isOfferedCurrency } from '@/lib/crm/currencies'
 import { createOpportunity } from '@/lib/crm/opportunities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
@@ -57,6 +58,22 @@ export async function createOpportunityAction(
     return { ok: false, error: 'The value must be a number, or left blank.' }
   }
 
+  /*
+   * ⚠️ VALIDATED AGAINST THE OFFERED SET, NOT JUST THE SHAPE. A server action is
+   * a public HTTP endpoint, so `^[A-Z]{3}$` alone would accept any three
+   * letters — and a code the rate feed cannot quote does not fail loudly: the
+   * deal saves with a NULL rate and quietly drops out of every total.
+   *
+   * ⚠️ BLANK MEANS "THE WORKSPACE'S", NOT "USD". `createOpportunity` resolves
+   * that; hardcoding a fallback here would put the decision in two places and
+   * let them disagree.
+   */
+  const rawCurrency = String(formData.get('currency') ?? '').trim()
+  if (rawCurrency && !isOfferedCurrency(rawCurrency)) {
+    return { ok: false, error: 'Choose a currency from the list.' }
+  }
+  const currency = rawCurrency ? rawCurrency.toUpperCase() : undefined
+
   const expectedClose = String(formData.get('expectedCloseDate') ?? '').trim() || null
 
   const db = createAdminClient()
@@ -96,6 +113,7 @@ export async function createOpportunityAction(
          */
         ownerUserId: ctx.userId,
         valueAmount,
+        currency,
         expectedCloseDate: expectedClose,
       },
       ctx.userId,

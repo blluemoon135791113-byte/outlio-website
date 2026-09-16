@@ -54,6 +54,15 @@ export type WorkspaceEntitlements = {
   modules: ReadonlySet<Module>
   /** Seats including the owner. `null` means unlimited. */
   memberLimit: number | null
+  /**
+   * LinkedIn accounts this workspace may link. `null` means unlimited.
+   *
+   * ⚠️ `resolveSenderLimit` EXISTED WITH ZERO CALLERS until this was added —
+   * schema, type, zod entry and a carefully-reasoned resolver, and nothing ever
+   * asked it anything. §4.10's cap on borrowed accounts was written down and
+   * not enforced.
+   */
+  senderLimit: number | null
 }
 
 /**
@@ -180,7 +189,7 @@ export async function getWorkspaceEntitlements(
   if (workspaceError) {
     throw new Error(`getWorkspaceEntitlements: ${workspaceError.message}`)
   }
-  if (!workspace) return { modules: new Set(), memberLimit: 0 }
+  if (!workspace) return { modules: new Set(), memberLimit: 0, senderLimit: 0 }
 
   const { data: owner, error: ownerError } = await db
     .from('profiles')
@@ -211,5 +220,15 @@ export async function getWorkspaceEntitlements(
     memberLimit: resolveMemberLimit(plan?.limits ?? null, workspace.member_limit_override, {
       platformAdmin,
     }),
+    /*
+     * ⚠️ MEASURED AGAINST THE SEAT COUNT, NOT THE PLAN'S OWN OVERRIDE. A
+     * support-widened seat count is about how many PEOPLE may use the
+     * workspace; the sender cap is about how many LinkedIn accounts one team
+     * may operate by hand, and §4.10 treats those as different questions.
+     */
+    senderLimit: resolveSenderLimit(
+      plan?.limits ?? null,
+      resolveMemberLimit(plan?.limits ?? null, null, { platformAdmin }),
+    ),
   }
 }
