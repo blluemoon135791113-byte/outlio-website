@@ -11,6 +11,7 @@ import 'server-only'
  * ⚠️ THE SERVICE ROLE BYPASSES RLS. Every query is scoped by `workspace_id`.
  */
 import { emitDomainEvent } from '@/lib/events/emit'
+import { resolveFxRate } from '@/lib/crm/fx'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database'
 
@@ -261,6 +262,41 @@ export async function createOpportunity(
     probability = data.default_probability
   }
 
+  /*
+   * ⚠️ THE WORKSPACE'S CURRENCY IS THE DEFAULT, NOT 'USD'.
+   *
+   * This read `input.currency ?? 'USD'`, which was harmless while every
+   * workspace reported in dollars. Once one reports in GBP, a deal created
+   * without an explicit currency would be stored as USD, get a real GBP rate
+   * from the feed, and convert — arriving at a number that is right by
+   * arithmetic and wrong by intent. Somebody entering "50000" in a GBP
+   * workspace means fifty thousand pounds.
+   */
+  const { data: workspace } = await db
+    .from('workspaces')
+    .select('default_currency')
+    .eq('id', workspaceId)
+    .maybeSingle()
+
+  const currency = (input.currency ?? workspace?.default_currency ?? 'USD').toUpperCase()
+
+  /*
+   * ⚠️ THE RATE IS SNAPSHOTTED AT CREATE (§5.6) AND MAY LEGITIMATELY BE NULL.
+   *
+   * `resolveFxRate` answers the identity case without touching the network and
+   * asks Frankfurter for anything else. A null means the deal is UNCONVERTIBLE:
+   * `value_amount_base` stays NULL, totals drop it, and
+   * `crm_unconvertible_deals()` counts it. Defaulting to 1 would add a foreign
+   * amount to the total at face value — the bug §5.6 exists to prevent.
+   *
+   * ⚠️ A MISSING WORKSPACE ROW MEANS NO SNAPSHOT, NOT A GUESSED ONE. Migration
+   * 0130's trigger writes the identity rate independently, so the invariant
+   * survives this returning null for any reason.
+   */
+  const fx = workspace?.default_currency
+    ? await resolveFxRate({ from: currency, to: workspace.default_currency })
+    : null
+
   const { data, error } = await db
     .from('crm_opportunities')
     .insert({
@@ -272,7 +308,13 @@ export async function createOpportunity(
       company_id: input.companyId ?? null,
       owner_user_id: input.ownerUserId ?? null,
       value_amount: input.valueAmount ?? null,
-      currency: (input.currency ?? 'USD').toUpperCase(),
+      currency,
+      /*
+       * Both or neither — 0130's check constraint refuses a half pair, and
+       * `value_amount_base` is GENERATED, so it is never written here.
+       */
+      fx_rate_to_workspace_currency: fx?.rate ?? null,
+      fx_rate_date: fx?.date ?? null,
       probability,
       expected_close_date: input.expectedCloseDate ?? null,
       created_by: actorUserId,

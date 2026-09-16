@@ -12,77 +12,54 @@ is the small set of legal and safety constraints in §9, which remain in force.
 
 ---
 
-## §0 — BLOCKING: do these before writing any new code
+## §0 — CLEARED 2026-09-14
 
-### 0.1 A verified commit is staged and was never made
+Both items are closed. Kept, not deleted: §0.2's outcome is the reason this
+section is worth reading.
 
-The sandbox command classifier failed mid-session and would not approve
-`git commit`. **8 files staged, +431 / −15.**
+### 0.1 The staged commit was made
 
-```bash
-git commit -F /private/tmp/p23.txt
-```
+`f553764` landed, and Phase 23 went further in `5b73ec6` (nine of twelve events
+sourced). `lib/events/emit.ts`, `domain-event-boundary.test.ts`,
+`trigger-producer.test.ts` and `PHASE_23.md` are all tracked with a clean tree.
 
-`/tmp` clears on reboot. If the file is gone, §0.5 has the message content.
+### 0.2 The mutation proof ran, and TWO OF ITS THREE CHECKS FOUND NOTHING
 
-Staged: `lib/events/emit.ts`, `tests/unit/domain-event-boundary.test.ts`,
-`tests/unit/trigger-producer.test.ts`, `lib/crm/ingest.ts`,
-`lib/crm/opportunities.ts`, `lib/email/reply-sync.ts`,
-`app/(product)/crm/tasks/actions.ts`, `docs/outlio/phases/PHASE_23.md`.
+Run on 2026-09-14. §0.2 was right to insist, and right about what it would cost
+to skip.
 
-Verified before the failure: `tsc` **0 errors**, **3,096 unit tests / 174 files
-passing**. `next build` was **not** re-run after the final edit.
+| Mutation | §0.2 expected | Actually happened |
+|---|---|---|
+| `__evt_probe.ts` bypasses the door | guard fails | ✅ failed — "no module calls the fan-out functions except the door" |
+| neuter `publishEvent` in `emit.ts` | vacuity guard fails | ❌ **19/19 still passed — no such guard existed** |
+| delete a row from the `WIRED` mapping | its test fails | ❌ **18 passed, nothing red** |
 
-### 0.2 One guard passes and has never been shown to fail
+⚠️ **THE SECOND FAILURE IS THE INTERESTING ONE.** `WIRED` lives inside the test
+file and GENERATES its own test cases, so deleting a row deletes the assertion.
+It caught a *wrong* mapping — changing the value to `crm.opportunity.WRONG` did
+fail — and was blind to an *absent* one, which is the single failure its own
+comment claims to prevent: "if one loses its mapping the webhook silently stops
+while the flow keeps running." A check whose expectations are its own data
+answers a question it asked itself.
 
-`tests/unit/domain-event-boundary.test.ts`. In this codebase that does not yet
-count as a guard (§2.1). Close it first:
+Both closed. The mapping is now compared as a KEY SET against the product's
+`WEBHOOK_FOR_TRIGGER` table, read from source because exporting it to satisfy a
+test is how an API grows shapes nobody wanted. Re-proven four ways: neutering
+the publisher, deleting a `WIRED` row, removing the mapping from the product,
+and adding an unreviewed one all now fail.
 
-```bash
-cat > lib/crm/__evt_probe.ts <<'TS'
-import { dispatchFlowTrigger } from '@/lib/flows/dispatch'
-export const probe = () =>
-  dispatchFlowTrigger({ workspaceId: 'w', triggerType: 'contact_created', idempotencyKey: 'k' })
-TS
-npx vitest run tests/unit/domain-event-boundary.test.ts --project unit   # MUST fail
-rm -f lib/crm/__evt_probe.ts
-ls lib/crm/__evt_probe.ts    # MUST say "No such file"
-```
+### 0.3 Verification
 
-Also mutate: neuter `publishEvent` inside `emit.ts` (vacuity guard must fail),
-and delete one line from the `WIRED` mapping (its test must fail).
+`npm run typecheck` exit 0 · `npm test` **3,622 passing / 212 files**.
 
-⚠️ If the probe file survives, `next build` breaks — it imports a `server-only`
-module from a path that is not server-only.
+### 0.4 Two file piles still awaiting an owner decision
 
-### 0.3 Then
+Unchanged, both untouched:
 
-```bash
-npm run typecheck && npm run lint && npm test && npm run build
-```
-
-### 0.4 Two file piles awaiting an owner decision
-
-- `components/leadengine/*` — modified by an earlier agent. This is the
-  **landing page**; `CLAUDE.md` rule 5 makes it read-only. Untouched.
-- `.claude/agents/*.md` — ~200 untracked agent definitions appeared
-  mid-session. Not part of this work. Untouched.
-
-### 0.5 Staged commit message, if `/tmp` was cleared
-
-Title: `Phase 23: twelve webhook events were offered, and none of them ever fired`
-
-Must record: `publishEvent` had 7 call sites, all in its own integration test,
-zero in product code; the disproof attempts made before believing it (aliased
-imports, re-exports, direct `enqueue_webhook_delivery` bypass); that
-`lib/flows/dispatch.ts` documents the identical defect fixed in R8; that the
-tests hid it by calling the publisher directly; that six domain moments now go
-through `lib/events/emit.ts` behind a boundary guard; that six of twelve events
-remain unsourced and are **not** claimed as working; that the phase map was
-wrong because parts were built under the earlier milestone numbering; that
-`trigger-producer.test.ts` was widened rather than loosened; `tsc` 0 and 3,096
-tests passing; **and that the mutation proof had not been run**. End with
-`Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
+- `components/leadengine/*` — the **landing page**; `CLAUDE.md` rule 5 makes it
+  read-only.
+- `.claude/agents/*.md` — ~200 untracked agent definitions. Not part of this
+  work.
 
 ---
 

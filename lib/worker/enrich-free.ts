@@ -87,6 +87,16 @@ export async function enrichJobFree(
         .eq('extraction_job_id', jobId)
         .eq('is_duplicate', false)
         .order('created_at', { ascending: false })
+        /*
+         * ⚠️ A STABLE TIEBREAKER, AND THIS IS THE WORST PLACE TO LACK ONE.
+         * Every lead in an extraction job is inserted in ONE transaction, so
+         * `created_at` is identical across the whole batch — the tie group is
+         * the entire job. Without a second key, paging through it returns some
+         * rows twice and NEVER returns others, and the ones never returned are
+         * simply never enriched. Silently, with no error and no gap in the
+         * count.
+         */
+        .order('id', { ascending: true })
         .range(from, from + 999)
       if (error) return outcome
       if (!data?.length) break

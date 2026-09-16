@@ -65,9 +65,26 @@ export async function linkSenderAction(
     ownerUserId: ctx.userId,
     profileUrl,
     displayLabel,
+    // The plan's cap, already resolved on the context — not re-read here.
+    senderLimit: ctx.senderLimit,
   })
 
   if (!result.ok) {
+    /*
+     * ⚠️ THE CAP IS STATED PLAINLY, unlike the deliberately vague `unavailable`.
+     * There is nothing to disclose here — the number is the customer's own plan
+     * limit — and "contact support" for a limit they can read on their billing
+     * page would be obstruction rather than discretion.
+     */
+    if (result.reason === 'sender_limit') {
+      return {
+        ok: false,
+        error:
+          result.limit === 0
+            ? 'Your plan does not include linked LinkedIn accounts.'
+            : `Your plan covers ${result.limit} linked account${result.limit === 1 ? '' : 's'}. Remove one first, or upgrade.`,
+      }
+    }
     if (result.reason === 'invalid_profile_url') {
       return {
         ok: false,

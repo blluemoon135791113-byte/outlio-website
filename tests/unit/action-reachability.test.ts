@@ -74,6 +74,22 @@ const stripComments = (s: string) =>
   // stripped nothing, and every comment stayed in the "code" being scanned.
   s.replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\r?\n/gm, '').replace(/^[ \t]*\/\/.*\r?\n/gm, '')
 
+/*
+ * ⚠️ AND IMPORTS, FOR THE SAME REASON COMMENTS GO. An `import { fooAction }`
+ * that nothing then calls satisfied this guard exactly as a comment once did:
+ * the name is present, the capability is not. Importing something is a
+ * statement of intent, and intent is what this file exists to stop counting.
+ *
+ * Nothing is currently hiding in that gap — all 120 actions survive this
+ * stripper today — which is precisely why it is a cheap change to make now
+ * rather than after something does.
+ *
+ * ⚠️ RE-EXPORTS ARE NOT TOUCHED. `export { x } from './y'` is how an action is
+ * legitimately surfaced elsewhere, and it does not match this pattern.
+ */
+const stripImports = (s: string) =>
+  s.replace(/^[ \t]*import\s[\s\S]*?\sfrom\s*['"][^'"]+['"];?[ \t]*$/gm, '')
+
 /** Every file that could plausibly reference an action. */
 function callSites(): Map<string, string> {
   const files = [
@@ -84,7 +100,7 @@ function callSites(): Map<string, string> {
   return new Map(
     files.map((f) => [
       f.split('\\').join('/'),
-      stripComments(readFileSync(join(ROOT, f), 'utf8')),
+      stripImports(stripComments(readFileSync(join(ROOT, f), 'utf8'))),
     ]),
   )
 }

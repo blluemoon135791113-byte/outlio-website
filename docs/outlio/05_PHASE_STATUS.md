@@ -20,13 +20,61 @@ A phase is `COMPLETE` only when every DoD item in §10 is `VERIFIED` and
 | 10 | Flow fact expansion | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_10.md`](phases/PHASE_10.md) — already built as "M7 Phase 10"; 33 fact keys across 7 domains, picker and builder pinned key-for-key by `flow-fact-coverage.test.ts` (20 tests, mutation-proven 2026-09-09) |
 | 11 | Manual Flow builder UX | **COMPLETE** | `platform-m1-workspaces` | `components/flows/FlowBuilder.tsx` (1,879 lines) — both pickers filter on `actionIsImplemented`, credit quote shown before publish, fact keys read from the registry. Guarded by `flow-action-coverage.test.ts` + `flow-fact-coverage.test.ts` |
 | 12 | Capability registry + entitlement checks | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_12.md`](phases/PHASE_12.md) — item 4 delivered 2026-09-08; DECISION-16 answered with its starting point (meter at 0) |
-| 13 | Gemini Flow Copilot | **NOT_STARTED** | `platform-m1-workspaces` | [`PHASE_13.md`](phases/PHASE_13.md) — ⚠️ its deferral reason ("an engine with 0 runs") was disproved by DECISION-15 on 2026-09-08. The engine has run. Re-assess before building; the §5.10 registry prerequisite already exists |
+| 13 | Gemini Flow Copilot | **COMPLETE — and measured against a real model** | `platform-m1-workspaces` | [`PHASE_13.md`](phases/PHASE_13.md) — all four slices, 2026-09-14/15. Deferral premise refuted by DECISION-15; ⚠️ `flow_runs` deliberately NOT re-read, being 0 by construction after probe cleanup. ⚠️ **THE EVAL FOUND THAT THE COPILOT COULD NEVER HAVE WORKED**: `config: { type: 'object' }` with no declared properties meant structured output returned `config: {}` every time, so `publishProblems` refused every ACTION step — shipped, reachable, and incapable of drafting one usable flow. No unit test could see it; they all feed the compiler hand-written JSON, the one input the schema never touches. Score by run as causes were found: **2/42 → 30 → 23 → 37 → 39 → 41 → 42**. Along the way: the eval project had no setup file so `.env.local` was never read; the eval scored a dead vendor as a correct refusal; the prompt instructed silent substitution; the generated tier was strict in the wrong dimension and discarded drafts over an unknowable `listId`; one failure was the **corpus being wrong** (`NOTIFY` does reach Slack). Resolved by the test that matters — **the outcome and the recipient, not the literal words**. ⚠️ **42/42 measured ONCE, 41/42 once** (that failure a vendor outage); both vendor keys then hit quota, so not averaged. Re-run when they reset |
 | 14 | Reporting foundation | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_14.md`](phases/PHASE_14.md) — rollup table, rollup + reconcile functions and a live `/crm/reports` page all exist (migration `0082`). §5.14's metric registry + formula AST closed 2026-09-12 (`lib/reporting/registry.ts`). ⚠️ And the rollup had NO TRIGGER until 2026-09-12 — `rollupWorkspace` was called only by its integration test, so `crm_reporting_daily` was never written in production and every report read zero. Wired into `runTick`. ⚠️ The brief's "12,700% reply rate" warning was wrong about the mechanism — corrected in place |
 | 15 | LinkedIn capability matrix + RISK_REGISTER | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_15.md`](phases/PHASE_15.md) · [`RISK_REGISTER.md`](RISK_REGISTER.md) |
 | 16–20 | LinkedIn channel | **IN PROGRESS** | `platform-m1-workspaces` | DECISION-17 answered 2026-09-12: **build it, manual execution only.** See [`LINKEDIN_CAPABILITY_MAP.md`](LINKEDIN_CAPABILITY_MAP.md) and the table below |
-| 23 | Integrations + webhooks | **MOSTLY COMPLETE** | `platform-m1-workspaces` | [`PHASE_23.md`](phases/PHASE_23.md) — 9 of 12 webhook events sourced (6 on 2026-09-08, 3 on 2026-09-09); 3 `meeting.*` blocked on DECISION-18 (payload contract); Slack/Teams delivery unverified |
-| 21–22, 24–25 | see §9 | NOT_STARTED | — | ⚠️ Phase 22's substance exists in `/crm/reports` (`dataScope(ctx.role)`, leaderboard behind `report.team.view`) |
+| 23 | Integrations + webhooks | **COMPLETE** | `platform-m1-workspaces` | [`PHASE_23.md`](phases/PHASE_23.md) — DECISION-18 answered 2026-09-13: **withdraw**. The three `meeting.*` events are removed from `WEBHOOK_EVENTS` and from `NOTIFIABLE_EVENTS`, so every event the catalogue offers now actually fires. `KNOWN_UNSOURCED` is empty and asserted to stay empty. Slack/Teams delivery still unverified |
+| 22 | Role-aware home dashboards | **COMPLETE** | `platform-m1-workspaces` | Delivered 2026-09-14. ⚠️ The access-control half was **already correct and was verified rather than rebuilt**: `/crm/reports` gates `getLeaderboard` on the FETCH, `getOverviewPerformance` is not called without `crm.contact.view`, the nav takes server-resolved props and every route refuses independently. What was missing was role-*awareness*: a manager's home was identical to a setter's. `TeamRow` now renders workspace pipeline and overdue tasks behind `report.team.view`, gated on the fetch so the figures never reach the RSC payload — §8.1's "hiding a card is not access control, and a layout is not a boundary". It sits **beside** "Your activity", never replacing it, and the two headings are asserted distinct because two panels of similar figures is how a manager reads their own pipeline as the company's. ⚠️ `ExcludedDeals` was **extracted rather than copied** — without it "Open deals" and "Open pipeline" disagree silently whenever a deal has no exchange rate |
+| 24 | UI refinement | **IN PROGRESS** | `platform-m1-workspaces` | Groundwork + four defects, 2026-09-15. The design guards covered **five surfaces of fourteen**; widening was free (nine directories, 61 files, already zero literal colours). Found by RENDERING, not reading: the **sign-in button sat below the fold on every phone** (button at y=920 on an 812 viewport — fine on desktop, which is why it survived); `LeadModal` at `duration-200` over the 150ms cap, unseen because `components/intelligence` was unpoliced; the **mobile nav button 36×36** (hit area now 44×44 via `before:-inset-1`, visible box unchanged, proven by a hit test 3px outside the border); **29 admin links at 17px**, the only controls under WCAG 2.5.8 AA. ⚠️ Across 13 authenticated routes on a phone there was **no horizontal overflow anywhere**. Remaining: visual refinement of authenticated surfaces, and **error states cannot be verified without a safe way to force a failure** |
+| 21, 25 | see §9 | NOT_STARTED | — | 21 depends on 18–20 (campaigns, reply sync, multichannel), none started. 25's named items are done or owner-blocked: §6.4 DELIVERED, webhook circuit breakers **already built** (20 consecutive exhausted deliveries → disabled, reason surfaced in Settings → Developers), and the `agency` plan blob needs a pricing number only the owner can give |
 | §6.4 | Data subject rights | **DELIVERED** | `platform-m1-workspaces` | Erasure was built in `0075` and **unreachable its whole life** — no action, no UI, only its own integration test called it. Now gated + reachable, and the missing half (per-contact access export) built. Invariant: the export covers what the erasure destroys, exclusions asserted both ways. `tests/unit/data-subject-rights.test.ts` |
+
+## Model vendors — what is actually reachable (2026-09-15)
+
+⚠️ **`LLM_ALLOWED_VENDORS` WAS `gemini` ALONE, AND IT IS LOAD-BEARING.** Five
+vendor keys are configured and the allowlist confined the product to one, so a
+single Gemini quota outage took the whole AI surface down while four working
+keys sat idle. Proven live: with Gemini rate-limited, a call now falls through
+to OpenRouter and succeeds.
+
+Now `gemini,openrouter` in `.env.local`. ⚠️ **That does NOT reach production** —
+`.env.local` is gitignored and Vercel holds its own copy. Until it is set there,
+deployed Outlio is still Gemini-only.
+
+| Vendor | Model configured | Status |
+|---|---|---|
+| gemini | `gemini-3.6-flash` | works (quota-limited) |
+| openrouter | `openai/gpt-4o-mini` | works |
+| groq | `qwen/qwen3.6-27b` | **rejected by the API** |
+| cerebras | `gpt-oss-120b` | **rejected by the API** |
+| backboard | `gpt-4o` | **returns non-JSON** |
+
+Three paid keys do nothing. Fixing them needs to know which models those
+accounts actually have access to.
+
+⚠️ **AN ENUM IN THE RESPONSE SCHEMA IS ADVISORY WITH THESE PROVIDERS.**
+`supportsStrictSchema` requires every property to appear in `required`, and a
+flow step cannot manage that — an ACTION has no `hours`, a WAIT has no `action`.
+So the schema narrows what arrives and `compileGeneratedDefinition` remains the
+only real gate. When the model drifts anyway, the repair message names the valid
+actions rather than passing on zod's "Invalid option", which states the fault
+and withholds the remedy.
+
+## ⚠️ `npm run test:integration` targets STAGING, not production (2026-09-15)
+
+CLAUDE.md's command table says it "hits the real Supabase project". **That line
+predates ADR-005 and is now wrong.** `tests/setup.integration.ts` picks
+`.env.staging` whenever the file exists, and it does:
+
+```
+envFile = !wantsProduction && stagingExists ? '.env.staging' : '.env.local'
+```
+
+Production is reached only with `OUTLIO_TEST_TARGET=production`, and the setup
+file warns on every such run. The suite creates and deletes its own throwaway
+users, so against staging it is safe — **and it has still never been run since
+the `worker-tick` roster fix.**
 
 ## Things the migration history does not know (2026-09-13)
 
@@ -67,23 +115,58 @@ Its own phase numbering, not §9's:
 | 1 | Capability audit | **COMPLETE** — [`LINKEDIN_CAPABILITY_MAP.md`](LINKEDIN_CAPABILITY_MAP.md) |
 | 2 | Contact-level stop at email dispatch | **COMPLETE** — found a live defect; `enqueueEmail` matched suppression on address alone |
 | 3 | Contact DNC + `crm_contacts.timezone` | **COMPLETE** — migration `0121`, **applied** |
-| 4 | Sender identity and account policy | **COMPLETE (server side)** — `0122` **applied**; schema, stage ladder, budget arithmetic and `lib/linkedin/senders.ts`. No UI yet |
-| 5 | Enrollment / task / conversation state split | **COMPLETE** (logic) — tables deferred |
+| 4 | Sender identity and account policy | **COMPLETE** — `0122` applied; `/dashboard/settings/linkedin` links accounts, records owner review and reports warnings. ⚠️ Budgets read a ledger nothing wrote until phase 10 landed, so the panel showed a full cap that could never fall |
+| 5 | Enrollment / task / conversation state split | **COMPLETE** — migration `0132` (applied) built `linkedin_enrollments` and `linkedin_tasks`. ⚠️ It also added `crm_contacts.version`, which `preflight()` had always required and which **did not exist** — §4.7's durable cancellation was inert. `0133` then corrected which columns bump it |
 | 6 | LinkedIn action types | **DEFERRED** — they land with their handlers, not before |
-| 7 | Action Inbox decision layer | **PARTIAL** — outcome vocabulary and profile-link safety built; the card needs 4 and 5 |
+| 7 | Action Inbox decision layer | **COMPLETE** — `/linkedin` renders the draft and its result form; `releaseTask` runs preflight + budget and reserves a ledger slot, `recordOutcome` resolves it. An Observation is refused by the enum AND by the service |
 | 8 | Message set (§4.9) | **COMPLETE** — `lib/linkedin/{templates,variables,render}.ts` |
-| 9 | Metrics (§4.18) | **COMPLETE** — `lib/linkedin/metrics.ts` |
+| 9 | Metrics (§4.18) | **COMPLETE (logic), UNREACHABLE** — `lib/linkedin/metrics.ts` is the last module in the reachability allowlist. It leaves when something REPORTS on LinkedIn outcomes; there is no outcome history to measure yet |
+| 10 | Release pipeline + evidence mapper | **COMPLETE** — `lib/linkedin/{tasks,enroll,context}.ts`, `/linkedin`, enrolment from the contact page. ⚠️ `buildLinkedInContext` is mostly refusals: it will not split a full name, derive `role_area` from a job title, or invent `connection_context`, so T01 usually routes to `manual_rewrite` and a human writes the note — §4.9's stated outcome |
 
-⚠️ **Six `lib/linkedin/*` modules are in `KNOWN_ORPHANS`** (`outcomes` and
-`budget` have since left it by gaining importers) with named exit
-conditions. They leave when the Action Inbox renders a draft and its result
-form. If it ever ships while they remain, the card built its own renderer,
-outcome vocabulary, profile-link check or idea of a valid approval — which is
-what that list exists to surface.
+✅ **The orphan list is down to one.** Six `lib/linkedin/*` modules were in
+`KNOWN_ORPHANS` with the named exit condition "they leave when the Action Inbox
+renders a draft and its result form", plus the warning that an inbox shipping
+while they remained would mean the card "built its own renderer, outcome
+vocabulary, profile-link check or idea of a valid approval". It has none of
+those — the card imports `allowedOutcomes`, the release path imports
+`preflight`, `enroll` imports the renderer and the link allowlist. Only
+`metrics.ts` remains, on a different condition.
 
-**Blocked on the owner:** apply `0122`, then `npm run db:types`; and two of the
-four questions in [`LINKEDIN_PHASE_4_SENDER_DESIGN.md`](LINKEDIN_PHASE_4_SENDER_DESIGN.md)
-(`linkedin_enabled` tiers, sender cap per workspace) before any UI ships.
+✅ **Both owner questions answered and verified live (2026-09-14).**
+[`LINKEDIN_PHASE_4_SENDER_DESIGN.md`](LINKEDIN_PHASE_4_SENDER_DESIGN.md)'s two
+questions are closed: entitled on **trial, professional, custom**; caps **2 / 10
+/ 20** senders per workspace. Migration `0134`, applied to both projects and
+confirmed by reading back `plans.limits` — `linkedin_enabled = true` with the
+matching cap on those three, and both keys absent on `starter` and `agency` by
+decision.
+
+⚠️ **THE ENTITLEMENT WAS SET, LOST, AND SET AGAIN, AND THE MIDDLE STEP IS THE
+LESSON.** It was first applied as an ad-hoc `UPDATE` in the SQL editor and never
+written to a migration, then a second hand-applied statement set
+`linkedin_senders_max` from a scratch file that had been overwritten in between.
+Production carried a sender cap for a module no plan was entitled to. Nothing
+could detect it: every other module entitlement is in `0103`, so there was no
+record that this one was meant to exist, and a fresh project would have replayed
+`0002..0126` into a database with LinkedIn off for everyone — correctly,
+permanently and silently.
+
+`0134` sets both keys in one statement per plan and raises if it ever finds them
+split. `tests/unit/entitlement-migrations.test.ts` reads the module map from
+`entitlements.ts`, so a module added later is covered the day it is added.
+
+⚠️ **AND `check-migration.sh` PASSED THE BROKEN MIGRATION TOO.** `plans.key` is
+the enum `public.plan_key`; the harness scaffolded it as `text`, which accepts
+every expression the enum accepts *and* every one it rejects — so
+`string_agg(key, …)` looked fine locally and failed in the editor. Its
+prerequisite list had also stopped at `0106`, giving `0131` and `0132` false
+failures about columns their own predecessors create. A harness that cries wolf
+gets ignored, which is why `0134` reached the editor unvalidated at all. Both
+repaired, and `tests/unit/migration-harness-coverage.test.ts` now checks the
+harness.
+
+⚠️ **Nothing in the LinkedIn channel has been exercised against a real contact.**
+Every guard is unit-level or mutation-proved; no enrolment, release or outcome
+has run end to end with live data.
 
 ## Phase 0 result (2026-09-04)
 

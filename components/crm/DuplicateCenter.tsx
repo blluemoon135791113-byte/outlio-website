@@ -95,7 +95,7 @@ function Pair({ row, canMerge }: { row: DuplicateRow; canMerge: boolean }) {
             <button
               type="submit"
               disabled={merging}
-              className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+              className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
             >
               Keep {row.nameA}
             </button>
@@ -107,7 +107,7 @@ function Pair({ row, canMerge }: { row: DuplicateRow; canMerge: boolean }) {
             <button
               type="submit"
               disabled={merging}
-              className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+              className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
             >
               Keep {row.nameB}
             </button>

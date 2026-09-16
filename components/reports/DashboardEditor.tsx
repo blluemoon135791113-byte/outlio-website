@@ -43,7 +43,7 @@ export function CreateDashboard() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+        className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
       >
         New dashboard
       </button>
@@ -79,7 +79,7 @@ export function CreateDashboard() {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
         >
           {pending ? 'Creating…' : 'Create dashboard'}
         </button>
@@ -126,7 +126,7 @@ export function AddWidget({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+        className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
       >
         Add widget
       </button>
@@ -196,7 +196,7 @@ export function AddWidget({
         <button
           type="submit"
           disabled={pending || !metricKey}
-          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
         >
           {pending ? 'Adding…' : 'Add widget'}
         </button>

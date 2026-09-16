@@ -61,6 +61,13 @@ export default async function CompaniesPage({
     .eq('workspace_id', ctx.workspace.id)
     .is('deleted_at', null)
     .order('name')
+    /*
+     * ⚠️ A STABLE TIEBREAKER. Two companies can share a name — different
+     * entities, or the same one ingested twice before a merge — and without a
+     * second key they swap places between pages, so one is shown twice and
+     * another never appears. Same reasoning as `lib/crm/contacts-list.ts`.
+     */
+    .order('id', { ascending: true })
     .range(from, from + PAGE_SIZE - 1)
 
   if (scopedToSelf) query = query.eq('owner_user_id', ctx.userId)
@@ -127,7 +134,7 @@ export default async function CompaniesPage({
           </p>
           <Link
             href={reason === 'past_end' ? '/crm/companies' : '/crm/contacts'}
-            className="mt-3 inline-block rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+            className="mt-3 inline-block rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
           >
             {reason === 'past_end' ? 'Back to the first page' : 'Go to contacts'}
           </Link>

@@ -12,7 +12,7 @@
  * ║  until this file existed.                                                 ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -68,9 +68,63 @@ describe('one user cannot claim another user’s profile', () => {
      */
     const conflictReasons = SENDERS.match(/reason: '([a-z_]+)'/g) ?? []
     const distinct = new Set(conflictReasons)
-    // Only two failure reasons exist at all, and neither names the cause.
-    expect(distinct).toEqual(new Set(["reason: 'unavailable'", "reason: 'invalid_profile_url'"]))
+    /*
+     * ⚠️ `sender_limit` IS THE ONE SPECIFIC REASON, AND IT DISCLOSES NOTHING.
+     * The other two are deliberately vague because the alternative — telling
+     * somebody their link failed because this profile is ALREADY on Outlio —
+     * is a disclosure about a person who never signed up here. The cap is
+     * about the workspace's own plan, a number the customer can read on their
+     * billing page, so vagueness there would be obstruction rather than
+     * discretion.
+     *
+     * ⚠️ AND IT IS CHECKED BEFORE THE PROFILE LOOKUP, which is what keeps it
+     * from becoming a probe: a workspace at its cap gets the same answer for
+     * every URL, so it cannot learn which profiles exist by watching which
+     * error comes back. The assertion below pins that order.
+     */
+    expect(distinct).toEqual(
+      new Set([
+        "reason: 'unavailable'",
+        "reason: 'invalid_profile_url'",
+        "reason: 'sender_limit'",
+      ]),
+    )
     expect(SENDERS).not.toMatch(/already_claimed|belongs_to|taken/)
+  })
+
+  it('checks the cap BEFORE looking the profile up, so it cannot be a probe', () => {
+    /*
+     * ⚠️ SCOPED TO `linkSender`'s BODY. Searching the whole file found
+     * `from('linkedin_senders')` inside an EARLIER function, so the comparison
+     * was against the wrong occurrence and passed while the cap sat after the
+     * lookup. Caught by mutation — the same anchoring mistake as
+     * `suppressContact` inside `unsuppressContact`.
+     */
+    const body = SENDERS.slice(
+      SENDERS.indexOf('export async function linkSender'),
+      SENDERS.indexOf('export type SenderBudget'),
+    )
+    expect(body.length).toBeGreaterThan(400)
+
+    const capAt = body.indexOf("reason: 'sender_limit'")
+    const lookupAt = body.indexOf("from('linkedin_senders')")
+    expect(capAt).toBeGreaterThan(-1)
+    expect(lookupAt).toBeGreaterThan(-1)
+    expect(
+      capAt,
+      'the cap is checked after the lookup, so a workspace at its limit could ' +
+        'still learn whether a given profile is on Outlio',
+    ).toBeLessThan(lookupAt)
+  })
+
+  it('a failed count refuses rather than reading as "none linked"', () => {
+    /*
+     * ⚠️ SAME FAIL-CLOSED ASYMMETRY AS `senderBudget`, on the same table.
+     * Coalescing a failed count to 0 would hand out a sender past the cap
+     * precisely when the database is already unhappy.
+     */
+    expect(SENDERS).toMatch(/countError \|\| \(count \?\? Number\.MAX_SAFE_INTEGER\) >= limit/)
+    expect(SENDERS, 'a failed count falls back to zero').not.toMatch(/count \?\? 0\) >= limit/)
   })
 
   it('treats a second workspace for the SAME user as a link, not a conflict', () => {
@@ -106,6 +160,101 @@ describe('a new sender starts at stage zero', () => {
     // status". A freshly linked account is unreviewed, not presumed fine.
     expect(SENDERS).toMatch(/stage: 0/)
     expect(SENDERS).toMatch(/status: 'unknown'/)
+  })
+})
+
+describe('the budget says what it does not know', () => {
+  const PANEL = strip(
+    readFileSync(join(ROOT, 'components/linkedin/SenderSettings.tsx'), 'utf8'),
+  )
+  const LEDGER_WRITERS = (() => {
+    const dirs = ['lib', 'app']
+    const out: string[] = []
+    const walk = (d: string) => {
+      let names: string[]
+      try {
+        names = readdirSync(d)
+      } catch {
+        return
+      }
+      for (const name of names) {
+        if (name === 'node_modules' || name.startsWith('.')) continue
+        const full = join(d, name)
+        if (statSync(full).isDirectory()) walk(full)
+        else if (/\.tsx?$/.test(full)) {
+          const code = strip(readFileSync(full, 'utf8'))
+          if (/from\('linkedin_sender_actions'\)[\s\S]{0,120}?\.(insert|upsert)\(/.test(code)) {
+            out.push(full)
+          }
+        }
+      }
+    }
+    for (const d of dirs) walk(join(ROOT, d))
+    return out
+  })()
+
+  it('the ledger now has exactly one writer, and it is the release path', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THIS ASSERTION IS INVERTED, AND THAT IS HOW IT WAS MEANT TO END.  ║
+     * ║                                                                       ║
+     * ║  It used to require `linkedin_sender_actions` to have NO writer, with ║
+     * ║  the note: "when the release path lands it fails, and the fix is to    ║
+     * ║  come back and re-read the caption rather than delete the test."       ║
+     * ║  The release path landed the same day. This is that return.           ║
+     * ║                                                                       ║
+     * ║  Budgets are now real: `releaseTask` reserves a slot when a card is    ║
+     * ║  released and `recordOutcome` resolves it, so the figures on the       ║
+     * ║  settings panel can finally fall.                                     ║
+     * ║                                                                       ║
+     * ║  ⚠️ ONE WRITER, NOT "AT LEAST ONE". A second module inserting ledger   ║
+     * ║  rows would be a second opinion about what spends an account's quota,  ║
+     * ║  and this repository's most expensive defects are all two opinions of  ║
+     * ║  one question.                                                        ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    expect(LEDGER_WRITERS.map((f) => f.split('/').slice(-2).join('/'))).toEqual([
+      'linkedin/tasks.ts',
+    ])
+  })
+
+  it('a reservation is made at RELEASE, not at completion', () => {
+    /*
+     * ⚠️ §4.10's BUDGET COUNTS `reserved` ROWS. A card sitting in somebody's
+     * inbox already holds its slot; reserving only when the work is confirmed
+     * done would let a whole day of cards be released against a cap of twenty,
+     * and the cap would exist only on paper.
+     */
+    const TASKS = strip(readFileSync(join(ROOT, 'lib/linkedin/tasks.ts'), 'utf8'))
+    expect(TASKS).toMatch(/lifecycle: 'reserved'/)
+    // Written BEFORE the task moves, so a failed reservation leaves the card
+    // releasable rather than released with no slot.
+    expect(TASKS.indexOf("lifecycle: 'reserved'")).toBeLessThan(
+      TASKS.indexOf("state: 'RELEASED'"),
+    )
+  })
+
+  it('an unknown outcome keeps its slot; only a definite non-action frees it', () => {
+    /*
+     * ⚠️ §4.17, AND THE ASYMMETRY IS THE POINT. An action we cannot rule out
+     * having happened has to keep counting, because the cost of being wrong is
+     * a restriction on somebody's real LinkedIn account. `OUTCOME_UNKNOWN`
+     * therefore maps to `unknown` — which `linkedin_sender_used()` counts —
+     * and never to `skipped`.
+     */
+    const TASKS = strip(readFileSync(join(ROOT, 'lib/linkedin/tasks.ts'), 'utf8'))
+    expect(TASKS).toMatch(/releasesQuota\(outcome\) \? 'skipped'/)
+    expect(TASKS).toMatch(/outcome === 'OUTCOME_UNKNOWN' \? 'unknown'/)
+    expect(TASKS, 'an unknown outcome is being treated as a non-action').not.toMatch(
+      /OUTCOME_UNKNOWN' \? 'skipped'/,
+    )
+  })
+
+  it('the panel does not present the figure as monitoring', () => {
+    // The caption stays true after the pipeline lands too: manual LinkedIn
+    // activity is never visible to Outlio, which is what the reserve is for.
+    expect(PANEL).toMatch(/Counts what Outlio has prepared for you/)
+    expect(PANEL).toMatch(/not counted/)
   })
 })
 

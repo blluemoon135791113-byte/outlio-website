@@ -46,6 +46,16 @@ export type WorkspaceSummary = {
   name: string
   role: WorkspaceRole
   isOwner: boolean
+  /**
+   * What this workspace reports money in (0130).
+   *
+   * ⚠️ CARRIED HERE SO NOTHING HARDCODES 'USD' DOWNSTREAM. Every screen that
+   * shows or collects an amount needs it, and a per-page lookup is how one page
+   * ends up defaulting differently from another. The column is `not null
+   * default 'USD'`, so the fallback below is for a row shaped by an older
+   * migration, not a real absence.
+   */
+  defaultCurrency: string
 }
 
 export type WorkspaceContext = {
@@ -58,6 +68,8 @@ export type WorkspaceContext = {
   modules: ReadonlySet<Module>
   /** Seats including the owner. `null` means unlimited. */
   memberLimit: number | null
+  /** LinkedIn accounts this workspace may link. `null` means unlimited. */
+  senderLimit: number | null
   memberCount: number
   /**
    * The tenant scope for this request.
@@ -77,7 +89,7 @@ export async function listMemberships(userId: string): Promise<WorkspaceSummary[
 
   const { data, error } = await db
     .from('workspace_memberships')
-    .select('workspace_id, role, created_at, workspaces!inner(id, name, owner_user_id, deleted_at)')
+    .select('workspace_id, role, created_at, workspaces!inner(id, name, owner_user_id, deleted_at, default_currency)')
     .eq('user_id', userId)
     .order('created_at', { ascending: true })
 
@@ -90,6 +102,7 @@ export async function listMemberships(userId: string): Promise<WorkspaceSummary[
       name: row.workspaces.name,
       role: row.role,
       isOwner: row.workspaces.owner_user_id === userId,
+      defaultCurrency: row.workspaces.default_currency ?? 'USD',
     }))
 }
 
@@ -143,6 +156,7 @@ async function resolve(userId: string, email: string | null): Promise<WorkspaceC
     role: active.role,
     modules: entitlements.modules,
     memberLimit: entitlements.memberLimit,
+    senderLimit: entitlements.senderLimit,
     memberCount,
     scope: { workspaceId: active.id, userId },
   }

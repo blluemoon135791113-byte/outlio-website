@@ -86,6 +86,27 @@ export const KIND_FOR_TASK: Readonly<Record<TaskKind, ActionKind>> = {
   DIRECT_MESSAGE: 'direct_message',
   INMAIL: 'inmail',
   REVIEW_PROFILE: 'profile_review',
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ `engagement` IS CAPPED AT ZERO AT EVERY STAGE ABOVE, AND THESE     ║
+   * ║  TWO KINDS ARE THEREFORE UNRELEASABLE UNTIL SOMEBODY RAISES IT.       ║
+   * ║                                                                       ║
+   * ║  That is §4.10's existing decision ("disabled in starters. Enabling it ║
+   * ║  is a deliberate act"), made before 0137 gave the customer a way to    ║
+   * ║  put a like or a comment in a workflow. Mapping them anywhere else —   ║
+   * ║  `profile_review` is the tempting one, since it is also cheap — would  ║
+   * ║  spend a budget sized for a different act and quietly overturn a       ║
+   * ║  safety limit by picking a bucket.                                    ║
+   * ║                                                                       ║
+   * ║  The consequence is real and must not be discovered as a mystery: a    ║
+   * ║  workflow containing these steps produces tasks that never release.    ║
+   * ║  The builder says so on the card at the moment the step is added       ║
+   * ║  (`components/linkedin/WorkflowBuilder.tsx`), rather than leaving an   ║
+   * ║  operator to wonder why nothing appeared.                             ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   */
+  LIKE_POST: 'engagement',
+  COMMENT_POST: 'engagement',
 }
 
 export type BudgetInput = {

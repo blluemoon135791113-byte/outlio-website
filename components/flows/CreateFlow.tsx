@@ -15,7 +15,7 @@ export function CreateFlow() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+        className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
       >
         New flow
       </button>
@@ -109,7 +109,7 @@ export function CreateFlow() {
       <div className="flex items-center gap-2">
         <button
           type="submit" disabled={pending}
-          className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+          className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
         >
           {pending ? 'Creating…' : 'Create draft'}
         </button>

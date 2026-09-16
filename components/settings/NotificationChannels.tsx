@@ -112,7 +112,7 @@ function AddChannel() {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
         >
           {pending ? 'Adding…' : 'Add channel'}
         </button>

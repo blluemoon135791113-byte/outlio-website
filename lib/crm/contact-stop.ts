@@ -142,6 +142,33 @@ export async function contactIsStopped(input: {
 }
 
 /**
+ * PostgREST puts `.in(...)` values in the URL, so a long list becomes a long URL.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ MEASURED AGAINST THE REAL SERVICE, NOT GUESSED:                       ║
+ * ║                                                                           ║
+ * ║      500 ids  (~18.5 KB URL)  → 200 OK                                    ║
+ * ║     1000 ids  (~37 KB)        → 400                                       ║
+ * ║     2000 ids  (~74 KB)        → connection dropped                        ║
+ * ║                                                                           ║
+ * ║  `contact-export.ts` caps a marketing export at MAX_EXPORT_ROWS = 5_000   ║
+ * ║  and asks about all of them at once, which is far past that cliff. And    ║
+ * ║  because this module fails CLOSED, the failure did not look like a        ║
+ * ║  failure: every contact read as stopped and the export came back EMPTY,   ║
+ * ║  with nothing on screen to say why.                                       ║
+ * ║                                                                           ║
+ * ║  Chunked here rather than at each call site, so a caller cannot forget.   ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+const IN_CHUNK = 250
+
+function chunked<T>(values: readonly T[]): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < values.length; i += IN_CHUNK) out.push(values.slice(i, i + IN_CHUNK))
+  return out
+}
+
+/**
  * The same question, asked about many people at once.
  *
  * ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -187,25 +214,37 @@ export async function contactsStopped(input: {
     const db = createAdminClient()
 
     const [byContact, byAddress] = await Promise.all([
-      db
-        .from('crm_contact_suppressions')
-        .select('contact_id, reason')
-        // Service role bypasses RLS — scoping by workspace is mandatory.
-        .eq('workspace_id', input.workspaceId)
-        .in('contact_id', contactIds)
-        .in('scope', ['all', input.channel]),
-      addresses.length > 0
-        ? db
+      Promise.all(
+        chunked(contactIds).map((batch) =>
+          db
+            .from('crm_contact_suppressions')
+            .select('contact_id, reason')
+            // Service role bypasses RLS — scoping by workspace is mandatory.
+            .eq('workspace_id', input.workspaceId)
+            .in('contact_id', batch)
+            .in('scope', ['all', input.channel]),
+        ),
+      ),
+      Promise.all(
+        chunked(addresses).map((batch) =>
+          db
             .from('email_suppressions')
             .select('email, reason')
             .eq('workspace_id', input.workspaceId)
-            .in('email', addresses)
-        : Promise.resolve({ data: [], error: null }),
+            .in('email', batch),
+        ),
+      ),
     ])
 
-    if (byContact.error || byAddress.error) return allStopped()
+    /*
+     * ⚠️ ANY CHUNK FAILING FAILS THE WHOLE ANSWER. A partial result would be
+     * the worst outcome available: the contacts in the failed batch would read
+     * as NOT stopped, which is the one direction this module must never fail
+     * in.
+     */
+    if (byContact.some((r) => r.error) || byAddress.some((r) => r.error)) return allStopped()
 
-    for (const row of byContact.data ?? []) {
+    for (const row of byContact.flatMap((r) => r.data ?? [])) {
       stops.set(row.contact_id, { stopped: true, via: 'contact', reason: row.reason })
     }
 
@@ -215,9 +254,10 @@ export async function contactsStopped(input: {
      * person-level stop already recorded above is not overwritten by it,
      * because `via: 'contact'` is the more specific fact.
      */
-    if (input.channel === 'email' && (byAddress.data ?? []).length > 0) {
+    const addressRows = byAddress.flatMap((r) => r.data ?? [])
+    if (input.channel === 'email' && addressRows.length > 0) {
       const suppressedAddresses = new Map(
-        (byAddress.data ?? []).map((r) => [r.email, r.reason as string]),
+        addressRows.map((r) => [r.email, r.reason as string]),
       )
       for (const [contactId, email] of emailOf) {
         if (stops.has(contactId) || email === null) continue

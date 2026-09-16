@@ -81,7 +81,7 @@ export default async function CampaignsPage() {
           </p>
           <Link
             href="/email"
-            className="mt-4 inline-block rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+            className="mt-4 inline-block rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
           >
             Go to mailboxes
           </Link>

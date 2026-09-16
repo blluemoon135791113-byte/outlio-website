@@ -294,7 +294,7 @@ export function FlowBuilder({
         <button
           type="submit"
           disabled={publishing || problems.length > 0}
-          className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-50"
+          className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-50"
         >
           {publishing ? 'Publishing…' : 'Publish new version'}
         </button>
@@ -403,7 +403,7 @@ function AddHere({
                 key={action}
                 type="button"
                 onClick={() => onAction(action)}
-                className="rounded-[var(--radius-md)] border border-accent bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition-colors duration-150 hover:opacity-90"
+                className="rounded-[var(--radius-md)] border border-accent bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition-colors duration-150 hover:bg-accent-deep"
               >
                 {ACTION_LABEL[action]}
                 {task ? (

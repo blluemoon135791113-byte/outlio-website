@@ -113,6 +113,55 @@ describe('the double is wired, so a pass means something', () => {
   })
 })
 
+describe('a long list is split, because the URL is not', () => {
+  it('chunks rather than sending one enormous .in()', async () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ MEASURED AGAINST THE REAL SERVICE: 500 ids is fine, 1000 returns   ║
+     * ║  400, 2000 drops the connection. PostgREST puts `.in(...)` values in   ║
+     * ║  the URL.                                                             ║
+     * ║                                                                       ║
+     * ║  `contact-export.ts` caps a marketing export at 5,000 rows and asked   ║
+     * ║  about all of them at once. And because this module fails CLOSED, the  ║
+     * ║  failure did not look like one: every contact read as stopped and the  ║
+     * ║  export came back EMPTY, with nothing on screen to say why.           ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const many = Array.from({ length: 1200 }, (_, i) => ({
+      contactId: `c-${i}`,
+      email: `p${i}@example.com`,
+    }))
+    await contactsStopped({ workspaceId: 'w1', channel: 'email', contacts: many })
+
+    const contactCalls = asked.filter((a) => a.table === 'crm_contact_suppressions')
+    expect(contactCalls.length, '1200 ids were not split').toBeGreaterThan(1)
+    for (const call of contactCalls) {
+      expect((call.filters.contact_id as string[]).length).toBeLessThanOrEqual(250)
+    }
+    // Every id is still asked about — chunking must not drop the tail.
+    const covered = contactCalls.flatMap((c) => c.filters.contact_id as string[])
+    expect(covered).toHaveLength(1200)
+  })
+
+  it('fails CLOSED when any single chunk fails', async () => {
+    /*
+     * ⚠️ A PARTIAL ANSWER IS THE WORST OUTCOME AVAILABLE. Contacts in a failed
+     * batch would read as NOT stopped — the one direction this module must
+     * never fail in — so one bad chunk fails the whole answer.
+     */
+    replies.set('crm_contact_suppressions', { data: null, error: { message: 'boom' } })
+    const many = Array.from({ length: 600 }, (_, i) => ({ contactId: `c-${i}`, email: null }))
+    const stops = await contactsStopped({ workspaceId: 'w1', channel: 'email', contacts: many })
+
+    expect(stops.size).toBe(600)
+    expect(stops.get('c-599')).toEqual({
+      stopped: true,
+      via: 'unknown',
+      reason: 'lookup_failed',
+    })
+  })
+})
+
 describe('a person-level stop is found', () => {
   it('stops a contact who has no email address at all', async () => {
     /*
@@ -392,9 +441,11 @@ describe('the do-not-contact chain is complete end to end', () => {
 
   it('the panel calls the actions rather than importing them', () => {
     /*
-     * ⚠️ `action-reachability` IS SATISFIED BY AN IMPORT ALONE — it matches the
-     * name anywhere in another file. An imported-but-never-invoked action would
-     * pass it while being exactly as unreachable, so this checks the call.
+     * ⚠️ THIS CHECKS THE CALL, NOT THE IMPORT. `action-reachability` used to be
+     * satisfied by an import alone — it matched the name anywhere in another
+     * file, so an imported-but-never-invoked action passed it while being
+     * exactly as unreachable. That hole is closed now (it strips imports as
+     * well as comments), and this stays as the specific check for these two.
      */
     const panel = find('components/crm/ContactPanels.tsx')!.code
     expect(panel).toMatch(/useActionState\(markDoNotContactAction,/)

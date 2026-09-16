@@ -6,6 +6,7 @@ import { FirstRun } from '@/components/onboarding/FirstRun'
 import { LiveCapture } from '@/components/extension/LiveCapture'
 import { CreditsSummary } from '@/components/product/CreditsSummary'
 import { PerformanceRow } from '@/components/product/PerformanceRow'
+import { TeamRow } from '@/components/product/TeamRow'
 import { LocalTime } from '@/components/ui/LocalTime'
 import { ReferralCard } from '@/components/product/ReferralCard'
 import { requireAccess } from '@/lib/auth/access'
@@ -18,6 +19,7 @@ import { referralLink } from '@/lib/referrals/constants'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveUploadLimits } from '@/lib/upload/limits'
 import { getWorkspaceContext } from '@/lib/workspaces/context'
+import { countOverdueTasks, getPipelineTotals } from '@/lib/crm/reports'
 import { can } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
@@ -66,11 +68,40 @@ export default async function DashboardPage() {
    * account has no workspace at all, and neither that nor a reporting outage
    * may take the upload path down with it.
    */
-  const [firstRun, performance] = await Promise.all([
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THE TEAM ROW IS GATED ON THE FETCH, NOT ON THE RENDER.               ║
+   * ║                                                                           ║
+   * ║  §8.1: "the home surface must be server-side filtered — hiding a card is  ║
+   * ║  not access control, and a layout is not a boundary". So a viewer without ║
+   * ║  `report.team.view` does not merely fail to see these figures; they are   ║
+   * ║  never read, and never reach the RSC payload where a devtools panel would ║
+   * ║  show them.                                                              ║
+   * ║                                                                           ║
+   * ║  Same shape `/crm/reports` already uses for its leaderboard, deliberately ║
+   * ║  — two surfaces answering one question ("may this person see the team's   ║
+   * ║  numbers") must not answer it two different ways.                        ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   *
+   * ⚠️ `minRole: 'manager'`, so an owner, admin and manager see it and a setter
+   * or viewer does not. A setter's own figures are already beside this in "Your
+   * activity", which is the panel that answers their question.
+   */
+  const canSeeTeam = Boolean(workspace && policy && can(policy, 'report.team.view'))
+
+  const [firstRun, performance, teamPipeline, teamOverdue] = await Promise.all([
     workspace && policy ? loadFirstRun(workspace.workspace.id, policy) : null,
     workspace && policy && can(policy, 'crm.contact.view')
       ? getOverviewPerformance(workspace.workspace.id, ctx.userId!)
       : null,
+    /*
+     * `null` as the owner means "the whole workspace" in both of these — the
+     * same argument `/crm/reports` passes for its team panels. Passing
+     * `ctx.userId` here would silently render one person's pipeline under a
+     * heading that says "Team activity".
+     */
+    canSeeTeam && workspace ? getPipelineTotals(workspace.workspace.id, null) : null,
+    canSeeTeam && workspace ? countOverdueTasks(workspace.workspace.id, null) : null,
   ])
 
   const checklist =
@@ -168,6 +199,19 @@ export default async function DashboardPage() {
       */}
       {checklistFirst ? checklist : null}
       {performance ? <PerformanceRow data={performance} /> : null}
+
+      {/*
+        Below "Your activity", never instead of it: a manager still has their
+        own work and still wants to see it. The two answer different questions.
+      */}
+      {canSeeTeam ? (
+        <TeamRow
+          openValue={teamPipeline?.openValue ?? null}
+          openCount={teamPipeline?.openDeals ?? null}
+          unconvertible={teamPipeline?.unconvertible ?? null}
+          overdueTasks={teamOverdue}
+        />
+      ) : null}
       {checklistFirst ? null : checklist}
 
       <section aria-label="Usage this period" className="space-y-3">

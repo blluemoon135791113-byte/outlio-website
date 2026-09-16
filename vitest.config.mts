@@ -60,6 +60,38 @@ export default defineConfig({
       {
         resolve: { alias: { '@': resolve(rootDir, '.'), 'server-only': resolve(rootDir, 'tests/stubs/server-only.ts') } },
         test: {
+          name: 'eval',
+          environment: 'node',
+          include: ['tests/eval/**/*.eval.ts'],
+          /*
+           * ⚠️ WITHOUT THIS THE EVAL CANNOT RUN AND DOES NOT SAY SO. Vitest does
+           * not read `.env` files; the integration project has always had a
+           * setup file doing it and this one shipped without. Five model keys
+           * were set in `.env.local` and the run still reported "41 skipped".
+           */
+          setupFiles: ['tests/setup.eval.ts'],
+          /*
+           * ⚠️ A THIRD PROJECT BECAUSE IT HAS A THIRD CONSTRAINT: it SPENDS
+           * MONEY. Unit must be fast, integration must be serial, and this must
+           * be neither automatic nor accidental — it calls a real model once per
+           * corpus case and writes a `hubble_calls` row for each.
+           *
+           * It is excluded from `npm test` and from `npm run test:all` by
+           * living behind its own name. Run it deliberately:
+           * `npm run eval:copilot`.
+           *
+           * Serial for the same reason integration is: the calls share one
+           * workspace's credit ledger, and vendor rate limits turn parallel
+           * requests into failures that read as model inaccuracy.
+           */
+          fileParallelism: false,
+          testTimeout: 120_000,
+          hookTimeout: 60_000,
+        },
+      },
+      {
+        resolve: { alias: { '@': resolve(rootDir, '.'), 'server-only': resolve(rootDir, 'tests/stubs/server-only.ts') } },
+        test: {
           name: 'integration',
           environment: 'node',
           include: ['tests/integration/**/*.test.ts'],

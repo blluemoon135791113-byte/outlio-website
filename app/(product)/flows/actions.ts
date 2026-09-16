@@ -11,6 +11,7 @@
  */
 import { revalidatePath } from 'next/cache'
 
+import { generateFlowDefinition } from '@/lib/flows/copilot'
 import {
   FlowDefinitionError,
   definitionSendsEmail,
@@ -18,6 +19,7 @@ import {
   stampBillingUser,
   stampSendAuthority,
   validateFlowDefinition,
+  type FlowDefinition,
 } from '@/lib/flows/definition'
 import { startRun } from '@/lib/flows/engine'
 import { simulateFlow, type SimulationResult } from '@/lib/flows/simulate'
@@ -462,4 +464,128 @@ export async function simulateFlowAction(
   })
 
   return { ok: true, result, contactName }
+}
+
+/* -------------------------------------------------------------------------- */
+
+export type CopilotState =
+  | {
+      ok: true
+      definition: FlowDefinition
+      attempts: number
+      flowId: string
+      name: string
+    }
+  | { ok: false; error: string }
+  | null
+
+/**
+ * Turns a description into a flow definition for the author to review.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ IT RETURNS A DEFINITION. IT DOES NOT CREATE OR PUBLISH ONE.           ║
+ * ║                                                                           ║
+ * ║  Nothing here writes `flows` or `flow_versions`. The author reads what     ║
+ * ║  came back in the builder they already have, edits it, and publishes it    ║
+ * ║  through `publishFlow` — which is where send authority is stamped and      ║
+ * ║  `publishProblems` refuses. Generating straight into a published flow      ║
+ * ║  would route a machine's output around the one gate a human stands at.    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ GATED ON `flow.manage`, THE SAME PERMISSION `flows.copilot` NAMES IN THE
+ * REGISTRY. A server action is a public HTTP endpoint, so the registry entry's
+ * permission is a statement of intent until something enforces it — this is the
+ * enforcement, and `capability-registry.test.ts` keeps the two names in step.
+ */
+export async function generateFlowAction(
+  _previous: CopilotState,
+  formData: FormData,
+): Promise<CopilotState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('flow.manage')
+  } catch {
+    return { ok: false, error: 'You do not have permission to build flows.' }
+  }
+
+  const description = String(formData.get('description') ?? '').trim()
+
+  /*
+   * ⚠️ REFUSED BEFORE THE DOOR, SO AN EMPTY BOX COSTS NOTHING. `hubbleExecute`
+   * writes a `hubble_calls` row for every call including refusals, and a ledger
+   * full of blank-prompt rows would make the eventual pricing decision read a
+   * worse number than reality.
+   */
+  if (description.length < 10) {
+    return { ok: false, error: 'Describe what the flow should do in a sentence or two.' }
+  }
+  if (description.length > 2_000) {
+    return { ok: false, error: 'That description is too long. Describe one flow in a few sentences.' }
+  }
+
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) return { ok: false, error: 'Give the flow a name.' }
+
+  const result = await generateFlowDefinition({
+    workspaceId: ctx.workspace.id,
+    userId: ctx.userId,
+    description,
+  })
+
+  if (!result.ok) return { ok: false, error: result.message }
+
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ A DRAFT, NEVER A PUBLISHED FLOW — THE SAME RULE THE TEMPLATE PATH     ║
+   * ║  OBEYS, AND FOR A STRONGER REASON HERE.                                   ║
+   * ║                                                                           ║
+   * ║  `createFlow` says a template "must not start it running: someone picking  ║
+   * ║  'Handle a reply' to see what it looks like has not agreed to automate     ║
+   * ║  their inbox". Someone who typed a sentence to see what Outlio would       ║
+   * ║  build has agreed to even less. `published_at` stays null, so this sits    ║
+   * ║  exactly like a flow built by hand and runs nothing until a person reads   ║
+   * ║  it and publishes it.                                                     ║
+   * ║                                                                           ║
+   * ║  ⚠️ `publishFlow` IS THEREFORE STILL THE ONLY GATE THAT MATTERS. It stamps ║
+   * ║  send authority from the PUBLISHER's permissions and runs                 ║
+   * ║  `publishProblems`. Writing a published version here would route a         ║
+   * ║  machine's output around the one gate a human stands at.                  ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const db = createAdminClient()
+
+  const { data: flow, error } = await db
+    .from('flows')
+    .insert({
+      workspace_id: ctx.workspace.id,
+      name,
+      description,
+      created_by: ctx.userId,
+    })
+    .select('id')
+    .single()
+
+  if (error || !flow) return { ok: false, error: 'Could not create that flow.' }
+
+  const { error: versionError } = await db.from('flow_versions').insert({
+    workspace_id: ctx.workspace.id,
+    flow_id: flow.id,
+    version: 1,
+    definition: result.definition as never,
+    created_by: ctx.userId,
+  })
+
+  if (versionError) {
+    return { ok: false, error: 'The flow was created but its steps could not be saved.' }
+  }
+
+  revalidatePath('/flows')
+
+  return {
+    ok: true,
+    definition: result.definition,
+    attempts: result.attempts.length,
+    flowId: flow.id,
+    name,
+  }
 }

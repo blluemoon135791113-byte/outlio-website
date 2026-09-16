@@ -37,7 +37,7 @@ import { isAppHost } from '@/lib/site'
  * carrying the invitee back to the invitation after they sign in. Letting the
  * page redirect instead would drop the token and strand them on the dashboard.
  */
-const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/join', '/crm', '/email', '/flows']
+const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/join', '/crm', '/email', '/flows', '/linkedin']
 
 /**
  * ⚠️ AUTH COOKIES ARE PER-HOST, DELIBERATELY.
@@ -115,6 +115,11 @@ const APP_SUBDOMAIN_PATHS = [
    */
   '/email',
   '/flows',
+  // The LinkedIn Action Inbox (§4.13). Added WITH the route rather than after
+  // it — `app-subdomain-proxy.test.ts` reads the routes off the filesystem and
+  // caught this within a minute of the page existing, which is the difference
+  // between this and how /email and /flows shipped.
+  '/linkedin',
   '/extension',
   '/sign-in',
   '/sign-up',
