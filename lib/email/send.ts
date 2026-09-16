@@ -29,6 +29,7 @@ import { applyCompliance } from '@/lib/email/compliance'
 import { type CampaignType } from '@/lib/email/campaign-policy'
 import { providerFor } from '@/lib/email/providers/registry'
 import { checkRampAllowance } from '@/lib/email/ramp'
+import { applySignature } from '@/lib/email/signature'
 import { isAccountSendable, rampSettingsOf, todayIn } from '@/lib/email/readiness-runner'
 import { contactIsStopped } from '@/lib/crm/contact-stop'
 import { resolveSendTimezone } from '@/lib/email/send-timezone'
@@ -451,6 +452,23 @@ export async function runSendWorker(
          * message that leaves is always built from the CURRENT settings.
          */
         const ctx = context.get(message.message_id)
+
+        /*
+         * ⚠️ SIGNATURE FIRST, COMPLIANCE SECOND. A sign-off printed below the
+         * unsubscribe line reads as legal boilerplate rather than as a person,
+         * and `applySignature` deliberately avoids the RFC 3676 `-- ` marker
+         * so that the footer added next cannot be collapsed with it.
+         *
+         * Read from the account on every send for the same reason the footer
+         * is: editing a signature must fix the mail still sitting in the queue.
+         */
+        const signed = applySignature({
+          signatureText: account.signatureText,
+          signatureHtml: account.signatureHtml,
+          bodyText: message.body_text,
+          bodyHtml: message.body_html,
+        })
+
         const compliant = applyCompliance({
           subject: {
             workspaceId: message.workspace_id,
@@ -460,8 +478,8 @@ export async function runSendWorker(
           campaignType: ctx?.campaignType ?? 'manual',
           baseUrl: siteUrl(),
           postalAddress: ctx?.postalAddress ?? null,
-          bodyText: message.body_text,
-          bodyHtml: message.body_html,
+          bodyText: signed.bodyText,
+          bodyHtml: signed.bodyHtml,
         })
 
         return {
