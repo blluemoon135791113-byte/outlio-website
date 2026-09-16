@@ -41,7 +41,7 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
         <button
           type="button"
           onClick={() => router.push(`/crm/contacts/${state.contactId}`)}
-          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
         >
           Open contact
         </button>
@@ -118,7 +118,7 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
         >
           {pending ? 'Adding…' : 'Add contact'}
         </button>
@@ -151,7 +151,7 @@ export function NewContactButton() {
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+      className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
     >
       Add contact
     </button>

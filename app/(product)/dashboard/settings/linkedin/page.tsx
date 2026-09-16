@@ -23,8 +23,37 @@ export const metadata: Metadata = {
  */
 export default async function LinkedInSettingsPage() {
   const ctx = await workspaceContextIfPermitted('crm.contact.view')
-  // The layout renders the reason; this only stops the page computing.
-  if (!ctx) return null
+
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THIS PAGE RENDERS ITS OWN REFUSAL, UNLIKE EVERY OTHER PAGE USING     ║
+   * ║  THIS PERMISSION CHECK.                                                   ║
+   * ║                                                                           ║
+   * ║  It used to read `// The layout renders the reason` and `return null`.    ║
+   * ║  That sentence is true under `crm/`, `email/`, `flows/` and `linkedin/`,  ║
+   * ║  whose layouts call `decidePermission`. It was NOT true here:             ║
+   * ║  `dashboard/settings/layout.tsx` is presentation only — an `<h1>` and     ║
+   * ║  `{children}` — so `return null` left the settings shell with an empty    ║
+   * ║  panel and no explanation.                                               ║
+   * ║                                                                           ║
+   * ║  ⚠️ AND THE FIX IS NOT TO GATE THAT LAYOUT. Settings pages need           ║
+   * ║  DIFFERENT permissions — billing is not members is not LinkedIn — so one  ║
+   * ║  check above all of them would refuse people who should be let in, which  ║
+   * ║  is a worse bug than the one being fixed.                                ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  if (!ctx) {
+    return (
+      <div className="clay mx-auto max-w-lg p-8 text-center">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">
+          You do not have access to LinkedIn settings
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          Ask an admin in your workspace to give you access.
+        </p>
+      </div>
+    )
+  }
 
   const enabled = ctx.modules.has('linkedin')
   const senders = await listWorkspaceSenders(ctx.workspace.id)

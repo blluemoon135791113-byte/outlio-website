@@ -46,7 +46,7 @@ export function CampaignControls({
             <button
               type="submit"
               disabled={launching}
-              className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+              className="rounded-[var(--radius-md)] bg-accent px-4 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
             >
               {launching ? 'Launching…' : status === 'paused' ? 'Resume' : 'Launch'}
             </button>

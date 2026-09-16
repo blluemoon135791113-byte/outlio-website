@@ -159,6 +159,47 @@ const PRODUCT_SURFACES = [
   'components/crm',
   'components/email',
   'components/admin',
+  /*
+   * ⚠️ WIDENED 2026-09-14, AND THE OMISSION HAD COST SOMETHING. The list above
+   * covered five surfaces and left out most of the authenticated product —
+   * `components/product` (the shell, nav and dashboard rows),
+   * `components/intelligence` (Hubble), `components/settings`,
+   * `components/flows`, `components/linkedin`, and `app/(auth)`.
+   *
+   * That is why `LeadModal`'s `duration-200` sat over the 150ms cap unseen:
+   * `components/intelligence` was not a surface any design guard looked at.
+   *
+   * ⚠️ WIDENING WAS FREE, WHICH IS THE ARGUMENT FOR DOING IT. Every one of
+   * these directories already had ZERO literal colours when measured — 61
+   * files across nine directories. So this ratchets what the product already
+   * does rather than declaring a goal, which is the only kind of rule that
+   * survives.
+   */
+  'components/product',
+  'components/intelligence',
+  'components/settings',
+  'components/flows',
+  'components/linkedin',
+  'components/reports',
+  'components/jobs',
+  'app/(auth)',
+]
+
+/**
+ * Marketing files that live under a shared directory.
+ *
+ * ⚠️ NAMED INDIVIDUALLY, NEVER BY EXCLUDING `components/ui` WHOLESALE. That
+ * directory also holds `LocalTime.tsx`, which every product surface renders
+ * dates through — excluding the folder to spare two hero components would
+ * quietly stop policing a genuinely shared one.
+ *
+ * `singularity-hero-scene.tsx` is imported only by `components/leadengine`
+ * (the landing page, read-only under rule 5). `orbital-hero-section.tsx` has
+ * NO importer at all and is a hand-tuned gradient.
+ */
+const MARKETING_FILES = [
+  'components/ui/singularity-hero-scene.tsx',
+  'components/ui/orbital-hero-section.tsx',
 ]
 
 describe('design — the product uses tokens, not literal colours', () => {
@@ -305,13 +346,51 @@ describe('design — the product has loading and error states', () => {
     expect(source, 'error.tsx renders a stack').not.toContain('error.stack')
   })
 
-  it('the loading state respects prefers-reduced-motion', () => {
+  /**
+   * ⚠️ EVERY `loading.tsx` IN THE PRODUCT, NOT JUST THE GROUP'S.
+   *
+   * These assertions used to name `app/(product)/loading.tsx` alone, which was
+   * correct while it was the only one. Adding `crm/loading.tsx` created a second
+   * skeleton that no guard looked at — the same shape as the design rules being
+   * enforced on five surfaces out of fourteen, and as `Reveal` being policed in
+   * two components.
+   *
+   * A skeleton is exactly where an unguarded `animate-pulse` hides: it is
+   * decorative, it renders for a fraction of a second, and nobody reviewing a
+   * page ever sees it running.
+   */
+  const loadingFiles = () =>
+    sourceFiles(join(ROOT, 'app/(product)'))
+      .filter((f) => f.endsWith('loading.tsx'))
+      .map((f) => ({ file: relative(ROOT, f).split('\\').join('/'), code: code(f) }))
+
+  it('finds every loading state', () => {
+    // Vacuity: if the glob stops matching, every assertion below passes over
+    // nothing — which is how the second skeleton went unchecked to begin with.
+    expect(loadingFiles().length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('every loading state respects prefers-reduced-motion', () => {
     // House convention, matching ExtractionDashboard's live indicator.
-    const source = code(join(GROUP, 'loading.tsx'))
-    expect(source).toContain('motion-safe:animate-pulse')
-    expect(source, 'an unguarded animate-pulse ignores reduced-motion').not.toMatch(
-      /className="[^"]*[^:]animate-pulse/,
-    )
+    for (const { file, code: source } of loadingFiles()) {
+      expect(source, `${file} has no motion-safe pulse`).toContain('motion-safe:animate-pulse')
+      expect(source, `${file}: an unguarded animate-pulse ignores reduced-motion`).not.toMatch(
+        /className="[^"]*[^:]animate-pulse/,
+      )
+    }
+  })
+
+  it('every loading state announces itself once', () => {
+    /*
+     * A screen reader should say "Loading" once, not narrate a dozen decorative
+     * blocks — which is why every bar carries `aria-hidden`. Asserted per file
+     * because the second skeleton could have shipped without either.
+     */
+    for (const { file, code: source } of loadingFiles()) {
+      expect(source, `${file} is not announced`).toContain('aria-busy')
+      expect(source, `${file} has no sr-only announcement`).toContain('sr-only')
+      expect(source, `${file} does not hide its decorative bars`).toContain('aria-hidden')
+    }
   })
 
   it('announces loading once, not a dozen decorative bars', () => {
@@ -322,5 +401,204 @@ describe('design — the product has loading and error states', () => {
     const bars = source.match(/rounded-\[var\(--radius/g) ?? []
     const hidden = source.match(/aria-hidden/g) ?? []
     expect(hidden.length).toBeGreaterThanOrEqual(bars.length - 2)
+  })
+})
+
+/**
+ * Motion, product-wide.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ BOTH OF THESE RULES WERE ENFORCED ON EXACTLY TWO COMPONENTS.          ║
+ * ║                                                                           ║
+ * ║  `overview-performance.test.ts` asserts "never animates in and never uses ║
+ * ║  Reveal" — over `PerformanceRow` and one card. Nothing else in the        ║
+ * ║  product was checked, so the rules held by habit rather than by anything. ║
+ * ║                                                                           ║
+ * ║  `LeadModal` is what habit missed: `duration-200`, over the 150ms cap,    ║
+ * ║  shipped and unnoticed because `components/intelligence` was not a        ║
+ * ║  surface any design guard looked at.                                     ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('design — product motion stays within 150ms and never animates in', () => {
+  const surfaces = () =>
+    PRODUCT_SURFACES.flatMap((surface) => sourceFiles(join(ROOT, surface)))
+      .concat(
+        sourceFiles(join(ROOT, 'components/ui')).filter(
+          (f) => !MARKETING_FILES.includes(relative(ROOT, f).split('\\').join('/')),
+        ),
+      )
+      .map((f) => ({ file: relative(ROOT, f).split('\\').join('/'), code: code(f) }))
+
+  it('scans a believable number of files', () => {
+    // Vacuity: an empty sweep passes every assertion below over nothing, which
+    // is precisely the state the two-component version was already in.
+    expect(surfaces().length).toBeGreaterThan(60)
+  })
+
+  it('no transition or animation runs longer than 150ms', () => {
+    /*
+     * ⚠️ MATCHES TAILWIND'S SCALE AND ARBITRARY VALUES BOTH. `duration-200` and
+     * `duration-[300ms]` are the same violation written two ways, and checking
+     * only the named scale would miss the one somebody reaches for precisely
+     * because it is not on the scale.
+     */
+    const TOO_SLOW = /duration-(?:200|300|500|700|1000)\b|duration-\[(\d+)ms\]/g
+    const offenders: string[] = []
+
+    for (const { file, code: source } of surfaces()) {
+      for (const match of source.matchAll(TOO_SLOW)) {
+        const arbitrary = match[1] ? Number(match[1]) : null
+        if (arbitrary !== null && arbitrary <= 150) continue
+        offenders.push(`${file}: ${match[0]}`)
+      }
+    }
+
+    expect(
+      offenders,
+      'CLAUDE.md caps product motion at 150ms. Anything slower reads as the ' +
+        'interface thinking, on a surface somebody uses all day.',
+    ).toEqual([])
+  })
+
+  it('nothing in the product animates in', () => {
+    /*
+     * ⚠️ `Reveal` MATCHED AS A WHOLE WORD. `SecretReveal` in DeveloperSettings
+     * and a `revealed` state in `PasswordField` are unrelated and legitimate —
+     * a substring match would report both and get this rule deleted.
+     */
+    const offenders: string[] = []
+    for (const { file, code: source } of surfaces()) {
+      if (/\bReveal\b(?!ed)/.test(source.replace(/SecretReveal/g, ''))) {
+        offenders.push(`${file}: Reveal`)
+      }
+      const entrance = source.match(/animate-(?:in|fade|slide)[\w-]*/g)
+      if (entrance) offenders.push(`${file}: ${entrance.join(', ')}`)
+    }
+
+    expect(
+      offenders,
+      'No entrance animations in the product, and never `Reveal.tsx`. Content ' +
+        'that fades in is content somebody is waiting for twice — once for the ' +
+        'request and once for the animation.',
+    ).toEqual([])
+  })
+
+  it('the marketing exclusions are individual files, not a directory', () => {
+    /*
+     * Excluding `components/ui` wholesale would stop policing `LocalTime.tsx`,
+     * which every product surface renders dates through. Asserted so the
+     * shortcut is not taken later.
+     */
+    for (const file of MARKETING_FILES) {
+      expect(existsSync(join(ROOT, file)), `${file} moved`).toBe(true)
+      expect(file.endsWith('.tsx'), 'an exclusion became a directory').toBe(true)
+    }
+    const ui = sourceFiles(join(ROOT, 'components/ui')).map((f) =>
+      relative(ROOT, f).split('\\').join('/'),
+    )
+    expect(ui.some((f) => !MARKETING_FILES.includes(f)), 'components/ui is unpoliced').toBe(
+      true,
+    )
+  })
+})
+
+/**
+ * Touch targets in the product shell.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ MEASURED ON A REAL PHONE VIEWPORT, NOT INFERRED FROM THE CLASSES.     ║
+ * ║                                                                           ║
+ * ║  At 375×812 every authenticated route reported exactly five controls       ║
+ * ║  under 44px — the same five, because they live in the shell rather than    ║
+ * ║  the pages. Three are 36×240 and easy to hit. Two were not:               ║
+ * ║                                                                           ║
+ * ║      Open navigation   36×36   ← the primary nav control on a phone       ║
+ * ║      Search leads ⌘K   36×42   (the label is `hidden sm:inline`)          ║
+ * ║                                                                           ║
+ * ║  Both clear WCAG 2.5.8's 24px floor and miss the 44px that Apple's HIG    ║
+ * ║  and WCAG 2.5.5 ask for.                                                  ║
+ * ║                                                                           ║
+ * ║  ⚠️ THE FIX GROWS THE HIT AREA, NOT THE BOX. `h-11 w-11` would have       ║
+ * ║  changed the header's rhythm to solve a touch problem. A `before:-inset-1`║
+ * ║  pseudo-element adds 4px a side, leaving the visible border identical —   ║
+ * ║  verified in the browser: visual 36×36, touch 44×44, and a hit test 3px   ║
+ * ║  outside the border resolves to the button.                              ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe('design — the shell’s small controls carry an extended touch target', () => {
+  const TOUCH_INSET = /before:absolute before:-inset-1 before:content-\[''\]/
+
+  it('the mobile navigation toggle', () => {
+    const shell = code(join(ROOT, 'components/product/ProductShell.tsx'))
+    const marker = shell.indexOf('aria-label="Open navigation"')
+    expect(marker, 'the nav toggle lost its label').toBeGreaterThan(-1)
+
+    /*
+     * ⚠️ SCOPED TO THIS BUTTON'S OWN TAG. The file has many buttons; matching
+     * the inset anywhere in it would pass while the toggle itself stayed 36px.
+     */
+    const tagStart = shell.lastIndexOf('<button', marker)
+    const opening = shell.slice(tagStart, shell.indexOf('>', marker) + 1)
+    expect(opening).toMatch(TOUCH_INSET)
+    expect(opening, 'the pseudo-element needs a positioned parent').toMatch(/\brelative\b/)
+    // The visible box is deliberately unchanged.
+    expect(opening).toMatch(/\bh-9 w-9\b/)
+  })
+
+  it('the command palette trigger', () => {
+    const palette = code(join(ROOT, 'components/product/CommandPalette.tsx'))
+
+    /*
+     * ⚠️ ANCHORED ON THE CLASSNAME, NOT ON "Search leads". That string appears
+     * FOUR times in this file and the first is an `aria-label` on the modal,
+     * 127 lines before the trigger — so searching backwards from it found
+     * nothing and the test failed on correct code. Third time this shape of
+     * anchoring bug has appeared in this session.
+     */
+    const tagStart = palette.indexOf('className="relative flex h-9')
+    expect(tagStart, 'the trigger no longer carries the touch inset').toBeGreaterThan(-1)
+    const opening = palette.slice(tagStart, palette.indexOf('>', tagStart) + 1)
+    expect(opening).toMatch(TOUCH_INSET)
+
+    // And it really is the trigger: the label follows within the same element.
+    expect(palette.slice(tagStart, tagStart + 900)).toContain('Search leads')
+  })
+
+  it('the admin row’s external link clears the 24px floor', () => {
+    /*
+     * ⚠️ THE ONLY CONTROL IN THE PRODUCT THAT FAILED WCAG 2.5.8 AA, and there
+     * were 29 of them on one screen: an inline text link whose height was just
+     * the `text-sm` line box, 17px. Every other small target measures 34px or
+     * more — those clear AA and only miss the 44px AAA figure.
+     *
+     * ⚠️ `inline-block` IS HALF THE FIX AND THE HALF THAT IS EASY TO DROP.
+     * Vertical padding does not apply to an inline element, so `py-1` alone
+     * would change nothing while looking like a fix. Measured after: the page
+     * went from 29 controls under 24px to zero.
+     */
+    const row = code(join(ROOT, 'components/admin/UserRow.tsx'))
+    const marker = row.indexOf('text-accent hover:underline')
+    expect(marker, 'the admin external link moved').toBeGreaterThan(-1)
+    const cls = row.slice(row.lastIndexOf('className="', marker), marker)
+    expect(cls, 'py-1 on an inline element does nothing').toContain('inline-block')
+    expect(cls).toContain('py-1')
+  })
+
+  it('records the measurement, so the inset is not read as decoration', () => {
+    /*
+     * `before:-inset-1` on a button looks like a stray utility. Without the
+     * numbers beside it, removing it is a tidy-up that silently returns the
+     * primary mobile nav control to 36×36.
+     */
+    /*
+     * ⚠️ READ RAW, NOT THROUGH `code()`. That helper strips comments — it says
+     * so on the tin, "comments are prose about the rule, not uses of it" — so
+     * asserting comment text through it checks a string that has already been
+     * deleted, and passes only when the expectation is inverted. My first
+     * version did exactly that.
+     */
+    const shellRaw = readFileSync(join(ROOT, 'components/product/ProductShell.tsx'), 'utf8')
+    expect(shellRaw).toMatch(/36px OF BORDER, 44px OF TOUCH/)
+    expect(shellRaw).toMatch(/WCAG 2\.5\.8/)
   })
 })

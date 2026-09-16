@@ -70,28 +70,50 @@ export function StatCard({
      * slightly the wrong shape.
      */
     <article className={`clay ${large ? 'p-5' : 'p-4'}`}>
-      <div className="flex items-start justify-between gap-3">
-        <p
-          className={`font-semibold uppercase text-muted ${
-            large ? 'text-[11px] tracking-[0.14em]' : 'text-[10px] tracking-[0.12em]'
-          }`}
-        >
-          {label}
-        </p>
-        {delta ? <DeltaChip delta={delta} value={value} /> : null}
-      </div>
+      {/*
+        ╔═══════════════════════════════════════════════════════════════════════╗
+        ║  ⚠️ THE DELTA CHIP SITS BESIDE THE NUMBER, NOT BESIDE THE LABEL — AND ║
+        ║  THAT CHANGED BECAUSE OF WHAT THESE CARDS BECAME.                     ║
+        ║                                                                       ║
+        ║  They used to be one per row on a phone, so a label and a chip shared ║
+        ║  a line comfortably. Going two-up dropped them to ~152px, where        ║
+        ║  "CONTACTS ADDED" wraps — and with `justify-between` the chip landed   ║
+        ║  in the gap BETWEEN the two label lines, reading as part of the label  ║
+        ║  text. Measured, not guessed: the chip's box sat at the end of line 1  ║
+        ║  of a two-line label.                                                 ║
+        ║                                                                       ║
+        ║  Beside the number is also the more honest place. "New" describes the  ║
+        ║  FIGURE's movement, not the metric's name, and the number is short     ║
+        ║  enough to leave room at any width these cards reach.                  ║
+        ╚═══════════════════════════════════════════════════════════════════════╝
+      */}
+      <p
+        className={`font-semibold uppercase text-muted ${
+          large ? 'text-[11px] tracking-[0.14em]' : 'text-[10px] tracking-[0.12em]'
+        }`}
+      >
+        {label}
+      </p>
 
       {/*
         `tabular-nums` so figures in a row sit on the same vertical rails and a
         number changing on refresh cannot shift its own card's width.
       */}
-      <p
-        className={`font-heading font-semibold leading-none tracking-[-0.045em] tabular-nums text-ink ${
-          large ? 'mt-3 text-[30px]' : 'mt-2.5 text-[22px]'
-        }`}
-      >
-        {typeof value === 'number' ? value.toLocaleString() : value}
-      </p>
+      {/*
+        ⚠️ `items-baseline`, so the chip's text sits on the figure's baseline
+        rather than centred against a 30px number — centring leaves it floating
+        visibly above the digits' feet.
+      */}
+      <div className={`flex flex-wrap items-baseline gap-2 ${large ? 'mt-3' : 'mt-2.5'}`}>
+        <p
+          className={`font-heading font-semibold leading-none tracking-[-0.045em] tabular-nums text-ink ${
+            large ? 'text-[30px]' : 'text-[22px]'
+          }`}
+        >
+          {typeof value === 'number' ? value.toLocaleString() : value}
+        </p>
+        {delta ? <DeltaChip delta={delta} value={value} /> : null}
+      </div>
 
       {hint ? (
         <p className={`text-[11px] leading-4 text-muted ${large ? 'mt-2.5' : 'mt-2'}`}>{hint}</p>

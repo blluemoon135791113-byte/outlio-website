@@ -10,6 +10,12 @@ import { threadsForContact } from '@/lib/email/inbox'
 import { listContactTimeline } from '@/lib/crm/activities'
 import { checkCollision } from '@/lib/crm/collision'
 import { contactStopRecord } from '@/lib/crm/contact-stop'
+import { EnrollContact } from '@/components/linkedin/EnrollContact'
+import { ProspectMessages, type ProspectMessageCard } from '@/components/linkedin/ProspectMessages'
+import { RecordObservation } from '@/components/linkedin/RecordObservation'
+import { profileReference } from '@/lib/linkedin/profile-reference'
+import { prospectMessages } from '@/lib/linkedin/prospect-messages'
+import { listWorkspaceSenders } from '@/lib/linkedin/senders'
 import { MoreDetails } from '@/components/crm/MoreDetails'
 import { ValueProvenance } from '@/components/crm/ValueProvenance'
 import { companyDetails, companyWebsite } from '@/lib/crm/company-details'
@@ -98,6 +104,30 @@ export default async function ContactDetailPage({
   const stopRecord = await contactStopRecord(ctx.workspace.id, contact.id)
 
   /*
+   * ⚠️ ONLY WHEN THE MODULE IS ON. Reading senders for a workspace that cannot
+   * use them is a query nobody needs, and the panel below is hidden anyway.
+   */
+  const linkedInSenders = ctx.modules.has('linkedin')
+    ? (await listWorkspaceSenders(ctx.workspace.id)).map((sender) => ({
+        id: sender.senderId,
+        label: sender.displayLabel,
+      }))
+    : []
+
+  /*
+   * ⚠️ ONLY WHEN THE MODULE IS ON, matching the senders read above. The panel
+   * below is hidden anyway, and a query nobody needs is still a round trip on
+   * every contact page in a workspace that does not use LinkedIn.
+   */
+  const prospectDrafts: ProspectMessageCard[] = ctx.modules.has('linkedin')
+    ? (await prospectMessages(ctx.workspace.id, id)).map((message) => ({
+        kind: message.kind,
+        body: message.body,
+        authorName: message.authorName,
+        updatedAt: message.updatedAt,
+      }))
+    : []
+  /*
    * ⚠️ NARROWED TO THIS PERSON'S DEALS, unlike the tasks page's workspace-wide
    * list. A task created from a contact is almost always about one of that
    * contact's own deals, and offering every open deal in the workspace here
@@ -123,6 +153,27 @@ export default async function ContactDetailPage({
    */
   const companyUrl = companyWebsite(contact.company?.domain ?? null)
   const companyLinkedIn = safeSourceUrl(contact.company?.linkedInUrl ?? null)
+
+  /*
+   * ⚠️ BUCKETED BY WHAT THE URL *IS*, NOT BY WHICH COLUMN IT CAME FROM.
+   *
+   * 0138's own comment records why: before it, `lib/crm/ingest.ts` coalesced the
+   * two addresses into `linkedin_url`, so historic rows hold either kind there —
+   * and on a Sales Navigator save, which is Outlio's primary input, it is
+   * usually the Navigator one. Trusting the column name would label a
+   * `/sales/lead/…` address "LinkedIn profile" on every contact created before
+   * today.
+   *
+   * `profileReference` already distinguishes them (`kind: 'public' |
+   * 'sales_navigator'`) because §4.5 forbids conflating them, so the classifier
+   * exists and is the one to ask.
+   */
+  const references = [contact.linkedInUrl, contact.salesNavigatorUrl]
+    .map((raw) => profileReference(raw))
+    .filter((ref): ref is NonNullable<typeof ref> => ref !== null)
+
+  const publicProfile = references.find((ref) => ref.kind === 'public') ?? null
+  const navigatorProfile = references.find((ref) => ref.kind === 'sales_navigator') ?? null
 
   // The researched micro detail — funding, tech stack, socials, news — for the
   // company this person works at. Empty (and renders nothing) when unresearched.
@@ -310,15 +361,55 @@ export default async function ContactDetailPage({
               </Field>
             </dl>
 
-            {contact.linkedInUrl ? (
-              <a
-                href={contact.linkedInUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="mt-4 inline-flex text-sm font-semibold text-accent hover:underline"
-              >
-                LinkedIn profile
-              </a>
+            {/*
+              ╔═══════════════════════════════════════════════════════════════╗
+              ║  ⚠️ BOTH ADDRESSES, AND BOTH THROUGH THE ALLOWLIST.           ║
+              ║                                                               ║
+              ║  Two fixes in one block. The first is the owner's request:     ║
+              ║  0138 gave a contact a `sales_navigator_url` of its own, and   ║
+              ║  §4.5 forbids deriving either address from the other, so       ║
+              ║  showing one and hiding the other loses information that       ║
+              ║  cannot be recomputed.                                        ║
+              ║                                                               ║
+              ║  The second is that this link was previously rendered as       ║
+              ║  `href={contact.linkedInUrl}` — the raw column, straight into  ║
+              ║  an href. This file's own comment 190 lines above says why     ║
+              ║  that is wrong: "a `linkedin_url` was written by an importer   ║
+              ║  and is attacker-influenced, so a `javascript:` value there is ║
+              ║  stored XSS on a page every rep opens." The company URL beside ║
+              ║  it was validated; the contact's was not.                      ║
+              ║                                                               ║
+              ║  `profileReference` rather than `safeSourceUrl`, because it is ║
+              ║  the stricter of the two: an allowlist of READ-ONLY LinkedIn   ║
+              ║  profile paths, which is what §4.13 requires — "opening a      ║
+              ║  reference never performs a LinkedIn action". LinkedIn has     ║
+              ║  URLs that invite, message and follow, and this page is one    ║
+              ║  click for an operator's real account.                        ║
+              ╚═══════════════════════════════════════════════════════════════╝
+            */}
+            {publicProfile || navigatorProfile ? (
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                {publicProfile ? (
+                  <a
+                    href={publicProfile.href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex text-sm font-semibold text-accent hover:underline"
+                  >
+                    LinkedIn profile
+                  </a>
+                ) : null}
+                {navigatorProfile ? (
+                  <a
+                    href={navigatorProfile.href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex text-sm font-semibold text-accent hover:underline"
+                  >
+                    Sales Navigator
+                  </a>
+                ) : null}
+              </div>
             ) : null}
 
             {contact.tags.length > 0 ? (
@@ -466,6 +557,43 @@ export default async function ContactDetailPage({
             GDPR heading is how a request that must be honoured today waits for
             somebody to go looking.
           */}
+          {can(policy, 'crm.contact.edit') && ctx.modules.has('linkedin') ? (
+            <section className="clay space-y-3 p-4">
+              <h3 className="text-sm font-semibold text-ink">LinkedIn</h3>
+              {/*
+                ⚠️ THE SENDER LIST IS READ THROUGH `listWorkspaceSenders`, which
+                never returns `identity_key` — the global join key that would let
+                two workspaces correlate a sender between them (§4.10).
+              */}
+              <EnrollContact contactId={contact.id} senders={linkedInSenders} />
+
+              {/*
+                ⚠️ BESIDE THE ENROLMENT, NOT INSIDE THE TASK RESULT FORM.
+                `outcomes.ts`: "a result form offers the first and can never
+                offer the second, because an observation is not the outcome of
+                doing anything". A reply can also arrive weeks after an
+                enrolment ended, which is why it hangs off the CONTACT.
+              */}
+              <div className="border-t border-border pt-3">
+                <RecordObservation contactId={contact.id} />
+              </div>
+
+              {/*
+                ⚠️ THE REP'S OWN STRATEGY, KEPT SEPARATE FROM THE CAMPAIGN'S COPY
+                AND FROM WHAT WAS SENT.
+
+                A workflow step's body goes to everybody in that campaign.
+                `linkedin_tasks.body` is what was actually prepared for one card.
+                These two are what THIS rep decided to say to THIS person — and
+                the difference between two reps' openers is most of what the
+                strategy analysis reads (0140).
+              */}
+              <div className="border-t border-border pt-3">
+                <ProspectMessages contactId={contact.id} messages={prospectDrafts} />
+              </div>
+            </section>
+          ) : null}
+
           {can(policy, 'crm.contact.edit') ? (
             <section className="clay space-y-3 p-4">
               <h3 className="text-sm font-semibold text-ink">Contact permission</h3>

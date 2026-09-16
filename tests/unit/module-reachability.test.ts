@@ -139,27 +139,44 @@ const KNOWN_UNREACHABLE = new Map<string, string>([
       'access. Uncalled ON PURPOSE and must not be deleted.',
   ],
 
-  /* ── LinkedIn: built ahead of the pipeline that will call it. ───────────── */
-  ...(
-    [
-      'enrollment',
-      'metrics',
-      'preflight',
-      'profile-reference',
-      'render',
-      'templates',
-      'variables',
-    ] as const
-  ).map(
-    (name) =>
-      [
-        `lib/linkedin/${name}.ts`,
-        'The LinkedIn logic layer is complete; the task table and release ' +
-          'pipeline that call it are not built yet (no linkedin_tasks migration ' +
-          'exists — 0122 created linkedin_senders only). Remove this entry when ' +
-          'the release path lands.',
-      ] as [string, string],
-  ),
+  /* ── LinkedIn: the island is mostly gone. ───────────────────────────────── */
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  SEVEN ENTRIES BECAME THREE, AND THAT IS THIS GUARD PAYING FOR ITSELF. ║
+   * ║                                                                       ║
+   * ║  `enrollment`, `preflight`, `render`, `profile-reference` are now      ║
+   * ║  reachable from /linkedin through `tasks.ts` and `enroll.ts`. The      ║
+   * ║  entries below are the ones the release path genuinely does not call   ║
+   * ║  YET — kept honest rather than removed early.                         ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   */
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  THE LINKEDIN ISLAND IS GONE. Seven entries, then four, now none.      ║
+   * ║                                                                       ║
+   * ║  The last four said they were waiting on "a LinkedInContext builder    ║
+   * ║  that maps a contact's verified evidence into §4.9 variables", and     ║
+   * ║  that wiring them to invented values "would fabricate familiarity,     ║
+   * ║  which the brief forbids by name". `lib/linkedin/context.ts` is that   ║
+   * ║  builder, and it is mostly a list of refusals — it will not split a    ║
+   * ║  full name, will not derive `role_area` from a job title, and holds no ║
+   * ║  relationship data to ground `connection_context` in.                  ║
+   * ║                                                                       ║
+   * ║  Which means the honest context usually CANNOT render a grounded       ║
+   * ║  opener, and §4.9's own remedy — a human writes the note — is what     ║
+   * ║  makes the path reachable. The allowlist emptied because the code      ║
+   * ║  changed, not because anybody tidied it.                              ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   *
+   * `metrics.ts` alone remains: it leaves when something REPORTS on LinkedIn
+   * outcomes, and there is no outcome history to measure yet.
+   */
+  [
+    'lib/linkedin/metrics.ts',
+    'Acceptance and reply rates (§4.18). Nothing reports on LinkedIn outcomes ' +
+      'yet — enrollments can only be created from today, so a report would be a ' +
+      'screen of zeroes pretending to be a finding.',
+  ],
 
   /* ── Genuinely dead, and newly surfaced by this guard. ──────────────────── */
   [

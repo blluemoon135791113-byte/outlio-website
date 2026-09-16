@@ -252,9 +252,28 @@ create table public.profiles (
  * the real database. A harness that reports a false failure gets ignored, which
  * is worse than not having one.
  */
+/*
+ * ⚠️ `key` IS THE ENUM, NOT text. It was scaffolded as `text` and the harness
+ * therefore reported "applies cleanly" for a migration that failed in the
+ * Supabase editor with:
+ *
+ *   ERROR: function string_agg(plan_key, unknown) does not exist
+ *
+ * A scaffold looser than production is not a conservative approximation — it
+ * is a harness that passes what the real database rejects, which is the one
+ * failure mode a pre-flight check must not have. `text` accepts every
+ * expression the enum does AND every one it does not, so the entire class of
+ * enum-type errors on `plans.key` was invisible here.
+ *
+ * The comment above about a fuller replica "giving false confidence" still
+ * stands for columns nothing references. It does not license modelling a
+ * column LOOSER than production, which is the opposite mistake.
+ */
+create type public.plan_key as enum (
+  'trial', 'starter', 'professional', 'agency', 'custom');
 create table public.plans (
   id uuid primary key default gen_random_uuid(),
-  key text,
+  key public.plan_key unique,
   name text,
   limits jsonb not null default '{}'::jsonb);
 create table public.usage_counters (
@@ -273,54 +292,63 @@ create table public.rate_limits (
   blocked_until timestamptz,
   primary key (bucket, subject, window_start));
 create table public.extraction_jobs (id uuid primary key default gen_random_uuid());
-/*
- * ⚠️ `user_id` IS NOT DECORATION. 0114's backfill joins
- * `research_evidence.user_id = extracted_leads.user_id` — the seam between the
- * user-keyed Lead Engine and the workspace-keyed CRM. Without the column the
- * migration fails here while working perfectly on the real database, which is
- * the false-failure this scaffold's header warns about.
- */
+-- `user_id` is needed by 0114's backfill, which joins evidence to the lead it
+-- came from and scopes the join by owner. Real type and FK from 0006.
 create table public.extracted_leads (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade);
+  id      uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade);
 create table public.companies (id uuid primary key default gen_random_uuid());
 /*
- * From 0044, which this harness does not replay. 0113 adds an `evidence_id` FK
- * pointing here and then VERIFIES the constraint resolves, so a stub with only
- * an id is not enough — 0114 reads entity_type, entity_id, field, value_json
- * and user_id to decide which citation belongs to which address.
+ * 0113 adds `evidence_id` FKs pointing here and then ASSERTS the constraint
+ * resolves to this exact relname; 0114 backfills through it. Created by 0044,
+ * which this harness does not replay.
+ *
+ * ⚠️ TYPES AND CHECKS COPIED FROM 0044, NOT APPROXIMATED. `entity_type` and
+ * `source_confidence` carry CHECK constraints in production, and a scaffold
+ * that dropped them would accept a backfill the real database rejects — the
+ * same too-permissive mistake that let `plans.key` hide an enum error. Only
+ * the columns 0113/0114 touch are modelled, which is the scaffold's rule.
  */
 create table public.research_evidence (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references auth.users(id) on delete cascade,
-  entity_type  text not null,
-  entity_id    uuid not null,
-  field        text not null,
-  value_json   jsonb not null default '{}'::jsonb,
-  -- 0114 ranks candidate citations newest-first, so this one is load-bearing
-  -- rather than descriptive.
-  retrieved_at timestamptz not null default now());
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references auth.users(id) on delete cascade,
+  entity_type       text not null check (entity_type in ('company', 'person')),
+  entity_id         uuid not null,
+  field             text not null,
+  value_json        jsonb not null,
+  source_provider   text not null,
+  source_url        text,
+  source_confidence text not null check (source_confidence in ('high', 'medium', 'low')),
+  retrieved_at      timestamptz not null default now(),
+  expires_at        timestamptz,
+  created_at        timestamptz not null default now());
 SQL
 
 # ---------------------------------------------------------------------------
 # Prerequisites, in order. Extend this list as the platform grows.
 #
-# ⚠️ A MIGRATION MISSING FROM HERE IS NOT NEUTRAL — IT VALIDATES THE ONE UNDER
-# TEST AGAINST A SCHEMA NOBODY RUNS. This list stopped at 0106 while the
-# repository reached 0123, so seventeen migrations' worth of tables, columns and
-# constraints were absent from every check. 0123 passed anyway, but only because
-# it happened to touch nothing newer than 0075 — luck, not coverage.
+# A MIGRATION MISSING FROM HERE IS NOT NEUTRAL - IT VALIDATES THE ONE UNDER
+# TEST AGAINST A SCHEMA NOBODY RUNS. This list once stopped at 0106 while the
+# repository reached 0123, so seventeen migrations worth of tables, columns and
+# constraints were absent from every check.
 #
-# ⚠️ 0118_pg_cron_tick IS DELIBERATELY EXCLUDED, AND THAT IS DIFFERENT FROM
-# BEING FORGOTTEN. It does `create extension pg_cron`, which is not available in
-# a stock postgres image — verified: "extension pg_cron is not available". A
-# migration that CANNOT replay locally belongs here as a named exclusion, so the
-# next person knows the gap is understood rather than overlooked.
+# SO EXTENDING THIS LIST IS NOT HOUSEKEEPING. A skipped prerequisite does not
+# weaken the check, it INVERTS it: the migration under test fails for a reason
+# that has nothing to do with the migration, and the only rational response to
+# a tool that cries wolf is to stop running it. That already happened: 0131
+# reported "column o.value_amount_base does not exist" (created by 0130) and
+# 0139 reported "relation public.linkedin_senders does not exist" (0122), both
+# of which apply perfectly to the real database.
+#
+# 0118_pg_cron_tick IS DELIBERATELY EXCLUDED, AND THAT IS DIFFERENT FROM BEING
+# FORGOTTEN. It does `create extension pg_cron`, not available in a stock
+# postgres image. A migration that CANNOT replay locally belongs here as a
+# named exclusion, so the next person knows the gap is understood.
 #
 # 0119_scheduler_diagnostics is included and passes: it reads cron.job through
 # a guard that tolerates the schema being absent.
 # ---------------------------------------------------------------------------
-for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api 0098_webhook_url_loopback 0099_notification_channels 0100_unified_inbox 0101_inbound_optional_args 0102_onboarding_state 0103_plan_module_entitlements 0104_email_reply_threading 0105_fix_claim_column_name 0106_restore_claim_safety 0107_dashboards 0108_flow_run_variables 0109_fix_user_fk_append_only 0110_restore_signup_gate 0111_sender_postal_address 0112_contact_list_sort_indexes 0113_contact_value_citations 0114_backfill_contact_citations 0115_rls_membership_setmembership 0116_due_webhook_deliveries 0117_worker_runs 0119_scheduler_diagnostics 0120_suppress_by_contact 0121_contact_dnc_and_timezone 0122_linkedin_senders 0123_crm_assign_contact_owner 0124_crm_tasks_opportunity 0125_crm_round_robin_assign 0126_crm_task_actions 0127_crm_intake_routing 0128_crm_routing_retry; do
+for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api 0098_webhook_url_loopback 0099_notification_channels 0100_unified_inbox 0101_inbound_optional_args 0102_onboarding_state 0103_plan_module_entitlements 0104_email_reply_threading 0105_fix_claim_column_name 0106_restore_claim_safety 0107_dashboards 0108_flow_run_variables 0109_fix_user_fk_append_only 0110_restore_signup_gate 0111_sender_postal_address 0112_contact_list_sort_indexes 0113_contact_value_citations 0114_backfill_contact_citations 0115_rls_membership_setmembership 0116_due_webhook_deliveries 0117_worker_runs 0119_scheduler_diagnostics 0120_suppress_by_contact 0121_contact_dnc_and_timezone 0122_linkedin_senders 0123_crm_assign_contact_owner 0124_crm_tasks_opportunity 0125_crm_round_robin_assign 0126_crm_task_actions 0127_crm_intake_routing 0128_crm_routing_retry 0129_crm_owner_change_history 0130_deal_fx_snapshot 0131_rollups_convert_currency 0132_linkedin_tasks 0133_contact_version_columns 0134_linkedin_plan_entitlement 0135_linkedin_campaigns 0136_linkedin_observations 0137_linkedin_workflows 0138_crm_contacts_navigator_url 0139_linkedin_step_config 0140_linkedin_prospect_messages 0141_linkedin_analysis_entitlement; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break

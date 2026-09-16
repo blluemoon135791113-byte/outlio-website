@@ -342,6 +342,14 @@ export async function listDuplicateCandidates(
   const { data, error } = await query
     .order('score', { ascending: false })
     .order('detected_at', { ascending: false })
+    /*
+     * ⚠️ A STABLE TIEBREAKER. Duplicate candidates are detected in one pass, so
+     * a whole batch shares `detected_at`, and `score` is a small integer that
+     * ties constantly by design. Without a unique key the same pair can appear
+     * on two pages while another is never shown — on the one screen whose job
+     * is to make sure every duplicate gets looked at.
+     */
+    .order('id', { ascending: true })
     .range(offset, offset + limit - 1)
 
   if (error) throw new Error(`listDuplicateCandidates failed: ${error.message}`)

@@ -81,7 +81,7 @@ function SecretReveal({ secret, onDismiss }: { secret: string; onDismiss: () => 
             await navigator.clipboard.writeText(secret)
             setCopied(true)
           }}
-          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+          className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
         >
           {copied ? 'Copied' : 'Copy'}
         </button>
@@ -134,7 +134,7 @@ export function ApiKeys({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
           >
             New key
           </button>
@@ -189,7 +189,7 @@ export function ApiKeys({
           <div className="flex items-center gap-2">
             <button
               type="submit" disabled={pending}
-              className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+              className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
             >
               {pending ? 'Creating…' : 'Create key'}
             </button>
@@ -321,7 +321,7 @@ export function Webhooks({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90"
+            className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
           >
             Add endpoint
           </button>
@@ -375,7 +375,7 @@ export function Webhooks({
           <div className="flex items-center gap-2">
             <button
               type="submit" disabled={pending}
-              className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
+              className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
             >
               {pending ? 'Saving…' : 'Add endpoint'}
             </button>

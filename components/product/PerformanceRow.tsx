@@ -63,7 +63,7 @@ export function PerformanceRow({ data }: { data: OverviewPerformance }) {
           </span>
         ) : null}
       </Heading>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {data.cards.map((entry) => (
           <StatCard
             key={entry.key}

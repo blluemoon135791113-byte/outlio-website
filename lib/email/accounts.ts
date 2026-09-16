@@ -204,7 +204,7 @@ export function normalizeSendingAddress(input: string): { email: string; domain:
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║  ⚠️ `ACCOUNT_COLUMNS` IS ONE LITERAL STRING, SO A SINGLE MISSING COLUMN   ║
  * ║  FAILS THE WHOLE READ — and `getEmailAccount` runs once per claimed       ║
- * ║  message inside the send loop. Deploying this code before 0130 is applied ║
+ * ║  message inside the send loop. Deploying this code before 0142 is applied ║
  * ║  therefore stops ALL outbound mail for EVERY workspace, not just the      ║
  * ║  mailbox someone was editing.                                            ║
  * ║                                                                           ║
@@ -215,7 +215,7 @@ export function normalizeSendingAddress(input: string): { email: string; domain:
  */
 function migrationHint(message: string): string {
   return /signature_(text|html)/.test(message)
-    ? `${message}. If this says the column does not exist, apply migration 0130.`
+    ? `${message}. If this says the column does not exist, apply migration 0142.`
     : message
 }
 

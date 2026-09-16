@@ -6,8 +6,9 @@ Append-only log. Read this before writing any code.
 
 ## 2026-09-16 — Mailbox signatures, and an HTML body that could not be written
 
-⚠️ **Migration 0130 is NOT applied. Apply it BEFORE this code deploys** — see the
-deploy-ordering note at the end, which is the one blocking condition.
+⚠️ **Migration 0142 is applied.** It was written as 0130 and renumbered on merge:
+`main` had already taken 0130 through 0141. The SQL is unchanged and does not need
+re-running — only the filename moved.
 
 ### The two gaps
 
@@ -24,7 +25,7 @@ ever wrote it. Sequences were plain text only and the column was permanently NUL
 
 ### What was built
 
-- `supabase/migrations/0130_email_signatures.sql` — `signature_text` (≤5000) and
+- `supabase/migrations/0142_email_signatures.sql` — `signature_text` (≤5000) and
   `signature_html` (≤20000) on `email_accounts`, plus a table constraint refusing
   HTML without text.
 - `lib/email/signature.ts` — `applySignature`, called from `send.ts` **before**
@@ -83,12 +84,98 @@ run anywhere.
 `ACCOUNT_COLUMNS` in `lib/email/accounts.ts` is **one literal string** (it must be
 — building it from variables degrades every column to `GenericStringError`), and
 `getEmailAccount` runs once per claimed message inside the send loop. So deploying
-this code before 0130 is applied stops **all outbound mail for every workspace**,
+this code before 0142 is applied stops **all outbound mail for every workspace**,
 not just the mailbox being edited.
 
-`migrationHint()` in `lib/email/accounts.ts` now names migration 0130 in that
+`migrationHint()` in `lib/email/accounts.ts` now names migration 0142 in that
 error, following the 0111 guard in `send.ts`. That makes the outage diagnosable in
-seconds; it does not prevent it. **Apply 0130 first, confirm it, then deploy.**
+seconds; it does not prevent it. **0142 is applied; the ordering condition is met.**
+
+---
+
+## 2026-09-16 — Four defects in the owner-change history, and Vercel was blocking every deploy (#36)
+
+A review of #36 before merge. Four real defects, fixed in the same PR (0bdbc84,
+merged as 59c9c60). 0129 changed, so it was re-applied by hand; both functions
+are `create or replace`.
+
+### What the review found
+
+- **A handover moved contacts away from people who were not leaving.**
+  `crm_handover_member_records` read its contact list once, then assigned each
+  through `crm_assign_contact_owner` — which locks and re-reads the row but
+  never asks who owns it. A contact someone reassigned to a third person while
+  a long handover ran was moved on to the successor anyway, writing
+  OWNER_ASSIGNED from an owner who never left. The set-based `update … where
+  owner_user_id = p_from_user` it replaced re-checked the predicate on the
+  locked row, so the rewrite lost a guarantee nobody noticed.
+- **One deleted contact cancelled a whole bulk assignment.** Same shape:
+  `crm_bulk_assign_contacts` filtered `deleted_at is null` in an unlocked read,
+  so a contact soft-deleted before its turn reached
+  `crm_assign_contact_owner`, which raises for deleted rows — rolling back the
+  other 199, against the function's own stated skip-don't-refuse contract.
+- **Handing a book to the departing member orphaned it.** `p_to_user =
+  p_from_user` returned all-zero counts; `removeMemberAction` then deleted the
+  membership and reported "They owned no records." Every record stayed owned by
+  someone no longer in the workspace — the exact state the handover exists to
+  prevent.
+- **A large handover could time out between committing and removing.**
+  Announcements (one `contact_assigned` per moved contact) were awaited between
+  the committed handover and the membership delete. A timeout there left the
+  member in place with their book already moved; a retry moved nothing, so the
+  remaining events were never emitted at all.
+
+### Fixed
+
+- Both contact loops are now `for update`. Postgres re-checks "still the
+  leaver's, still live" against the current row version, so a contact changed
+  mid-run is skipped instead of being swept up or aborting the batch.
+- A handover to the departing member raises `invalid_parameter_value`, and the
+  action refuses it first with its own message.
+- `reassignMemberRecords` returns `assignments` instead of announcing;
+  `removeMemberAction` deletes the membership, then announces with `after()`,
+  once the response is on its way.
+
+### ⚠️ A race cannot be proven inside one smoke file
+
+The smoke files run in one session, inside one transaction. Neither race is
+visible there: both need a second connection committing mid-loop. The proof ran
+through the harness as a scratch file with **committed** seed rows (no `begin`),
+using `dblink` to hold a row lock from a second backend for three seconds while
+the function ran. Against the original 0129 all five race checks fail; against
+the fixed one they pass. Kept out of the repo: it depends on `dblink` and on
+sleeping, so it does not belong in the per-migration smoke.
+
+### Verified
+
+- 0129's smoke is now 20 checks and passes; its new self-handover check fails
+  against the original 0129.
+- Unit tests 10/10, eslint clean, `tsc --noEmit` clean. ⚠️ The typecheck needs
+  `next-env.d.ts`, which is gitignored and absent in a fresh worktree — without
+  it, two image imports fail and look like a real error.
+
+### Vercel was blocking every deployment, and had been since 2026-09-13
+
+⚠️ **Production was stale for three days and nothing said so.** The last
+successful deploy was `45ad798` (2026-09-13). Every merge after it —
+#28 through #41 — was blocked with "Deployment was blocked", because the commit
+author was `Abdulsaboor2004`, who is not on the Vercel team. It never blocked a
+merge, so it read as preview noise.
+
+- **The repo is already public, and that does not help.** Vercel's bot suggests
+  it; the truth is in the redeploy dialog: *Hobby teams do not support
+  collaboration*. Adding a member needs Pro.
+- **The free fix is to author commits as the account that owns the project.**
+  `git config user.email 256972641+blluemoon135791113-byte@users.noreply.github.com`,
+  repo-local. Nothing else changes: pushes still use the existing credentials,
+  because a commit's author is text, not a login.
+- Proven with an empty commit on a throwaway branch: it deployed successfully,
+  where every earlier commit by the other account was refused outright.
+- Production was then promoted to deployment `6470695985`, serving a tree
+  identical to main's tip.
+
+⚠️ **Commits must stay authored by `blluemoon135791113-byte`** or their
+deployments are refused again — including production deploys from main.
 
 ---
 
@@ -232,6 +319,159 @@ sessions' runs, after confirming no postgres was using them.
   that account is given access.
 - **`rehearse-migration.mjs` was not run end to end in this session,** because
   it connects to the real Supabase database.
+## 2026-09-15 — The Flow Copilot met a real model for the first time
+
+⚠️ **This log had gone two weeks stale.** The newest entry below is
+2026-08-30 while the work went into `docs/outlio/05_PHASE_STATUS.md` and the
+phase docs instead. Phases 13, 22 and part of 24 landed in that gap. Recorded
+here because CLAUDE.md points every new session at THIS file first, and a
+session that reads it would have believed nothing had happened since August.
+
+### Phase 13 — Gemini Flow Copilot: delivered, then actually measured
+
+Unblocked and built in one session. Its deferral premise — "it generates
+definitions for an engine that has never executed one" — had been refuted by
+DECISION-15 with production evidence.
+
+⚠️ **`flow_runs` was deliberately not re-read.** It is 0, and that number is
+uninformative: `startRun` writes a row even when it HALTS, so zero once looked
+like "nothing reached the insert", but the rows existed and were tidied away
+after the owner's verification sessions. A counter that reads zero both for
+"never ran" and "ran, then cleaned up" cannot tell them apart. The
+`OWNER_ASSIGNED` activity trail is the evidence.
+
+Four slices:
+
+1. **Already built.** `validateFlowDefinition` already took `unknown`, already
+   rejected unknown capability IDs, already pinned `registryVersion`. What was
+   missing: `actionIsImplemented` had exactly one caller — a dropdown.
+2. `lib/flows/generated.ts` — a **third validation tier** (parse → publish →
+   generated), strictest because nobody is present.
+3. `lib/flows/copilot.ts` + `generateFlowAction` + `FlowCopilot` on `/flows`.
+4. A 42-case eval corpus, nine of them requests that must be REFUSED.
+
+### ⚠️ The copilot could never have produced a publishable flow
+
+The single most important finding of the session, and no unit test could have
+seen it.
+
+`config: { type: 'object' }` in the response schema, with no properties
+declared. Structured output strips whatever the schema does not declare, so
+`config` came back `{}` **every time**. `publishProblems` then refused every
+ACTION step for missing required config, on both attempts, for every prompt.
+
+It was shipped, reachable on `/flows`, and incapable of drafting one usable
+flow for anybody. Every test fed the compiler hand-written JSON — the one input
+that never passes through the schema.
+
+Score by run as the causes were found: **2/42 → 30 → 23 → 37 → 39 → 41 → 42**.
+
+Each step was a real defect, not tuning:
+
+- The eval project had **no setup file**, so vitest never read `.env.local`.
+  Five model keys were set and it still reported "41 skipped" — and the skip
+  logic hid it, treating "nothing configured" as a deliberate opt-out.
+- The snapshot named actions but **not their required config**, so the prompt
+  said "fill every value the action needs" while never saying what they were.
+- ⚠️ **The eval scored a dead vendor as a correct refusal.** `unusable` covers
+  both "answered badly" and "never answered", so with the vendor rate-limited
+  all nine refusal cases PASSED — perfect judgement from a model never reached.
+  That is the exact failure the corpus exists to catch, inside the thing built
+  to catch it.
+- It **substituted silently, because the prompt told it to**: "build the closest
+  flow" turned "text the contact" into a task for the operator.
+- Then it **over-refused**, which exposed a worse error: the generated tier was
+  strict in the wrong dimension. It ran `publishProblems` and threw whole drafts
+  away over a missing `listId` — which the model cannot know and which appears
+  in the builder as an empty dropdown beside the step that needs it.
+- A **refusal never got the second attempt** while a malformed answer did.
+- ⚠️ **One failure was the corpus being wrong.** `refuse-slack-dm` penalised
+  `NOTIFY`, but `ChannelProvider` is `'slack' | 'teams'` — it genuinely reaches
+  Slack.
+
+⚠️ **The test that resolved the last two cases: the OUTCOME and the RECIPIENT,
+not the literal words.** Telling someone on Slack rather than by DM is the same
+person and the same news — build it. A task for the operator instead of a text
+to the contact is a different person — refuse.
+
+**42/42 measured once, 41/42 once** (that failure a vendor outage, not the
+copilot). Both vendor keys then hit quota. Not averaged over many runs — worth
+re-running when they reset.
+
+### How to run the eval
+
+```bash
+npm run eval:copilot
+```
+
+Needs a model key plus `EVAL_WORKSPACE_ID` and `EVAL_USER_ID` in `.env.local`.
+Never runs in `npm test` or `npm run test:all` — it is a third vitest project
+because it has a third constraint: **it spends money**. Its `hubble_calls` rows
+are tagged `source: 'eval:flow-copilot'`; anything reading spend should exclude
+`source like 'eval:%'`, or the pricing evidence becomes mostly the test.
+
+### Phase 22 — role-aware home dashboards
+
+Most of it was already correct and verifying that was the work: `/crm/reports`
+gates `getLeaderboard` on the FETCH rather than the render, and the nav takes
+server-resolved props while every route refuses independently.
+
+What was missing was role-awareness itself — every role got the same home.
+`TeamRow` now shows workspace pipeline and overdue tasks behind
+`report.team.view`, **gated on the fetch**, because a page that fetches and then
+declines to render has still serialised those figures into the RSC payload.
+
+`ExcludedDeals` was extracted rather than copied: without it "Open deals" and
+"Open pipeline" disagree silently whenever a deal has no exchange rate.
+
+### Phase 24 — groundwork, and four real defects found by looking
+
+The design guards covered **five surfaces out of fourteen**. Widening was free —
+all nine added directories already had zero literal colours across 61 files.
+
+Found by rendering and measuring, not reading:
+
+| Defect | Detail |
+|---|---|
+| Sign-in button below the fold on every phone | 375×812: email at y=726, button at **920**, on an 812 viewport. Fixed with `order-1 lg:order-2`; it looked fine on desktop, which is why it survived |
+| `LeadModal` at `duration-200` | Over the 150ms cap. The only violation, unseen because `components/intelligence` was not a policed surface |
+| Mobile nav button 36×36 | Hit area extended to 44×44 via `before:-inset-1`, visible box unchanged. Verified by a hit test 3px outside the border |
+| 29 admin links at 17px | Below WCAG 2.5.8's 24px floor — the only controls in the product under AA |
+
+Across 13 authenticated routes on a phone there was **no horizontal overflow
+anywhere**, which for a CRM with wide tables is a genuinely good result.
+
+### ⚠️ Two pages deferred their refusal to a layout that did not exist
+
+Twenty-two pages carry `// The layout renders the reason` and `return null`.
+True under `crm/`, `email/` and `flows/`. **False in two places**: `/linkedin`
+had no layout at all, and `dashboard/settings/layout.tsx` is presentation only.
+Both fell through to a blank panel for anyone without the permission.
+
+It looked correct in review, because the comment asserts the very thing that
+was missing. Only the filesystem could tell.
+
+### Environment findings, for whoever reads this next
+
+- ⚠️ **`LLM_ALLOWED_VENDORS` was `gemini` alone.** One quota outage took the
+  whole AI surface down while four configured keys sat idle. Now
+  `gemini,openrouter` in `.env.local` — **which does NOT reach production**;
+  Vercel needs setting separately.
+- **`GROQ_MODEL` and `CEREBRAS_MODEL` name models their APIs reject**
+  (`qwen/qwen3.6-27b`, `gpt-oss-120b`), and `BACKBOARD_MODEL` returns non-JSON.
+  Three paid keys doing nothing.
+- ⚠️ **CLAUDE.md says `npm run test:integration` "hits the real Supabase
+  project". That is stale.** `tests/setup.integration.ts` prefers `.env.staging`
+  when it exists, and it does — so it targets STAGING unless
+  `OUTLIO_TEST_TARGET=production`.
+- The machine ran out of disk mid-session (127 MiB free). `.next` was 3.7 GB and
+  is regenerable; `.claude` is 1.4 GB and was left alone.
+
+### Still never exercised
+
+**Nothing in the LinkedIn channel has run against a real contact.** Every guard
+is unit-level or mutation-proved. That is unchanged and remains the widest gap
+between "built" and "works".
 
 ---
 
@@ -10742,3 +10982,238 @@ and it sent the owner to recreate a token that was already correct.
 Supabase and real SMTP/IMAP; typecheck 0; lint 0 errors; build clean.
 Scheduler holding at 299-301s across 11 consecutive gaps, read from
 `worker_runs` rather than assumed. `main` refuses a direct push.
+
+---
+
+## Phase 20 — the customer's own campaign workflow (2026-09-15)
+
+Owner decision, after seeing that Phases 18/19 sat on a channel with no
+sequence: **keep it manual, and let the customer build their own workflow per
+campaign.** Linear, by their choice ("OK ship lenier").
+
+Migrations **0130** (`linkedin_workflow_steps`, enrolment pointer, two task
+kinds, `ENGAGEMENT_RECORDED`) and **0131** (`crm_contacts.sales_navigator_url`)
+applied by hand to both projects; `types/database.ts` regenerated and matched.
+
+### The two decisions that carry the phase
+
+**Outlio composes nothing.** "outlio does not prepare the note text or the
+message it will be written manually." The eight templates remain as a paste-and-
+edit starting point, but a step holds the operator's own words plus three
+placeholders — `first_name`, `company`, `location` — resolved from literally
+observed CRM values. A missing value **blocks the task**; it never renders a gap.
+An unknown placeholder is refused **at save**, because at send the only options
+are to leak `{{firstname}}` to a stranger or silently alter the sentence.
+
+**The enrolment pointer is a step ID, never a position.** People enter at
+different points, so a live campaign has people standing on several steps at
+once, and positions renumber on insert. An integer pointer would move them
+silently onto the wrong step — no error, just the wrong message from a real
+account. `on delete restrict` turns the one remaining unsafe edit, deleting an
+occupied step, into a refusal that names how many people are affected.
+
+### Defects found and fixed while building
+
+- **`lib/crm/ingest.ts` discarded one of every contact's two LinkedIn URLs** via
+  a coalesce. §4.5 forbids deriving either from the other, so it was gone for
+  good. Now both are written; no backfill, because the source data exists only
+  for lead-engine contacts and a partial fix nobody can audit is worse than none.
+- **The contact page rendered `href={contact.linkedInUrl}` raw** — an
+  importer-written, attacker-influenced column straight into an href, i.e.
+  stored XSS, while the company URL 190 lines above *was* validated. The file's
+  own comment described the risk, about the other link.
+- **`steps.ts` shipped a second copy of `POSITIVE`** keyed by step action — one
+  question, two implementations. Collapsed to one chain: action → kind → outcome.
+- **A guard-ordering bug, twice in one function.** `compileWorkflow` indexed
+  `STEPS[action]` before checking the action was known; fixing the loop left the
+  identical bug in the aggregate check one line below. A test asserting only that
+  the unknown action is *reported* would still have passed — the throw happens
+  after the problem is pushed.
+
+⚠️ **Switching `TaskKind`/`TaskOutcome` to the generated enums is what found
+three of these.** Both were hand-written unions, so 0130 widened the database
+without breaking any code. Anchoring on the generated type made three exhaustive
+`Record<TaskKind, …>` maps fail to compile until somebody decided what the new
+kinds mean — including which budget they spend.
+
+⚠️ **Engagement is capped at 0/day on every stage (§4.10), so `LIKE_POST` and
+`COMMENT_POST` produce tasks that cannot release.** They map to `engagement`
+rather than the cheaper `profile_review`, because picking a bucket is not a way
+to overturn a safety limit. The builder says so on the card.
+
+### Not built, deliberately
+
+Opener/pitch DM per prospect; the premium DM & strategy analysis; AI drafting
+from the user's own instruction; voice notes (owner: "KEEP IT FOR LATER"); and
+the worker that walks the workflow. 0130 carries the schema for the last of
+these — nothing traverses it yet, and no stub pretends to.
+
+### Verified
+
+3,830 unit tests across 223 files; typecheck 0; lint 0 errors; build clean.
+Migrations validated against a real Postgres 16 before being applied — every
+CHECK exercised in both directions, and `on delete restrict` proven to refuse an
+occupied step and permit an empty one. Eight mutations applied to the new guards;
+all eight were caught. Builder exercised in the browser: an empty required
+message was refused by name, a valid two-step workflow saved and survived a full
+reload with placeholders intact, and a pre-0131 contact holding a Navigator URL
+in `linkedin_url` now renders correctly labelled "Sales Navigator".
+
+---
+
+## Phase 20b — the walker (2026-09-16)
+
+The builder saved a workflow that produced nothing. `lib/workers/tick.ts` had
+**zero LinkedIn references**, so an enrolment reaching a wait parked and was
+never moved again — indistinguishable from the outside from a sequence that had
+quietly stopped. Same shape as the reporting rollup with no trigger (fixed
+2026-09-12) and the erasure function that was unreachable its whole life.
+
+Migration **0132** applied: `linkedin_workflow_steps.config jsonb`.
+
+### The hole 0130 left, found by writing the executor
+
+`ADD_TAG` had **nowhere to say which tag**. 0130 gave every step a `body` and
+then correctly forbade one on `ADD_TAG` — a tag name is not a message — which
+left the step with no place for its only setting. The walker then had nothing to
+execute: skip silently, so a step the customer added does nothing forever, or
+fail mid-sequence on a workflow already saved as valid. Two CHECK constraints now
+make a tagless `ADD_TAG` unstorable and keep `config` empty on every other
+action.
+
+⚠️ **This was only visible from the consumer side.** The schema, the validator
+and the builder all looked complete. Writing the code that had to *perform* the
+step is what exposed it — the argument for building the executor early rather
+than last.
+
+### Decisions worth re-reading before changing them
+
+- **The pointer is claimed before the walk.** Two overlapping ticks would
+  otherwise both advance the same person. The task insert's unique key stops a
+  duplicate *card*, but `ADD_TAG` has no such key and would be applied twice.
+- **`recordOutcome` advances the sequence, and a failure to advance never undoes
+  the outcome.** The operator has already performed a real action against a real
+  person; returning an error invites them to record it again, which is how one
+  connection request becomes two. A missing next card is recoverable — the worker
+  picks it up. A duplicated action is not.
+- **Reaching the end completes as `NO_REPLY`, not `GOAL_MET`.** Every step
+  performed with nothing coming back is not success, and §4.18 keeps those
+  denominators apart so a wall of completed sequences cannot read as things
+  working.
+- **The do-not-contact check re-runs at every hop.** Days pass between steps; a
+  check that ran only at enrolment answers a question from last week.
+- **A placeholder that cannot be filled leaves the body null and still creates
+  the task.** Refusing strands the person on a step nobody can see; the operator,
+  looking at the profile, is exactly who can fix the record or write the line.
+- **`lib/crm/tags.ts` was extracted, not written twice.** The flow engine already
+  had `addTag`, and the part two copies get wrong differently is real:
+  `crm_tags_name_uniq` is a PARTIAL unique index, so the obvious `upsert` fails
+  outright and the select-then-insert it forces can lose a race.
+
+⚠️ **I claimed the tick was wired before it was.** The previous report said wait
+releases "go through the tick" while `tick.ts` still had no LinkedIn reference —
+`releaseDue` existed and nothing called it. Caught by grepping rather than by
+recalling, and `tests/unit/linkedin-walk.test.ts` now asserts the import AND the
+invocation, because an import alone passes on a file that never runs it.
+
+⚠️ **`tick-job-roster.test.ts` caught the new job immediately**, as designed: the
+integration suite's expectation list did not know about `release_linkedin_waits`.
+
+### Verified
+
+3,861 unit tests across 224 files; typecheck 0; lint 0 errors (no warnings in
+any file touched); build clean. 0132 validated against real Postgres 16 with all
+three migrations replayed in order — eight constraint cases, both directions.
+Five mutations on the walker's guards, all five caught. Exercised in the browser:
+a tagless `ADD_TAG` refused by name, then saved and round-tripped through a full
+reload with `{tag: "Warm — replied"}` on that step and `{}` on every other.
+
+⚠️ **Still not exercised against a real contact.** No enrolment has been walked
+end to end with live data — the walker is unit- and mutation-proved only. That
+line has stood since Phase 10 and this is what finally makes clearing it
+possible.
+
+---
+
+## Phase 20c — prospect strategy, drafting, and the analysis (2026-09-16)
+
+Everything the owner asked for except voice notes, which they deferred.
+Migrations **0133** (`linkedin_prospect_messages`) and **0134** (the analysis
+entitlement) applied.
+
+### The analysis: the arithmetic is the dangerous part, not the model
+
+`email_events` still holds 254 false `replied` rows — a whole mailbox counted as
+prospect replies against two messages ever sent, rendering 12,700%. A model
+handed numbers like those writes a confident, well-argued report about a rep who
+is doing brilliantly, and nobody reading it can tell. So every number a manager
+acts on is computed in `gatherStats`, and the prompt forbids the model from
+computing, restating or estimating a rate.
+
+- **No rate below 20 actions.** Two sends and one reply is not a 50% reply rate.
+- **`null` is rendered as "not enough data", never as 0%.** Zero means thirty
+  were sent and nobody answered — a finding. Null means we have not sent enough
+  to say — not a finding. Telling a rep the wrong one says their approach failed
+  when it has not been tried.
+- **A rate above 100 is refused.** That is the 12,700% shape; printing it either
+  looks broken or hides a data fault.
+- **`OUTCOME_UNKNOWN` sits in the denominator AND is reported separately.**
+  Excluding it inflates every rate; including it silently asserts what nobody can
+  support.
+- **The caveat is computed, not asked for.** A model told "add a caveat if the
+  data is thin" adds one when it *feels* uncertain, which is neither the same
+  thing nor checkable. It shares `RATE_FLOOR` with `rateOf`, so the sentence and
+  the missing percentage cannot disagree.
+
+### The drafting model is never shown the recipient
+
+Not a privacy gesture — the anti-fabrication control. A model shown "VP
+Engineering at Acme, Berlin" writes "loved what you're building on the payments
+side": plausible, specific, invented. Rule 4 forbids exactly that, and no prompt
+instruction reliably stops a model using a fact it can see, so it cannot see one.
+It writes a TEMPLATE; `resolveBody` fills it from what Outlio literally observed
+and refuses when it did not. The absence is stated as a fact it can act on
+("YOU HAVE NOT BEEN GIVEN ANY INFORMATION ABOUT THE RECIPIENT") rather than as a
+rule to obey.
+
+The draft lands in the textarea, never in the record. The rep is the author and
+the analysis groups by author.
+
+### Defects found while building
+
+- ⚠️ **I did not build "and admin", which the owner stated explicitly.**
+  `analysisEntitled` read `plans.limits` and returned false with no plan, while
+  `resolveModules` has a documented platform-admin bypass. The symptom was
+  immediate and measurable: **27 of 33 workspace owners in production carry no
+  `plan_id`**, so they hold every module through that bypass and were refused the
+  analysis — a workspace with the LinkedIn module and no way to analyse it. The
+  same bypass exists in `decideAccess` and `hasHubbleEntitlement`; this is now the
+  fourth place and it agrees with the other three.
+- ⚠️ **A real payload leak, caught by `module-page-guard.test.ts`.** Gating the
+  analysis page only on `report.team.view` meant a manager on a plan with reports
+  but without CRM got the layout's rendered refusal while the page still computed
+  and shipped a colleague's numbers in the RSC payload. The two permissions do
+  not nest.
+- **Campaigns was never in the nav.** The only way to reach a workflow was to
+  know the URL. Both it and the analysis are now linked.
+- **The flow engine's `addTag` was duplicated** rather than shared. Extracted to
+  `lib/crm/tags.ts` — the partial unique index handling and its race fallback is
+  exactly the part two copies get wrong differently.
+
+### Verified
+
+3,894 unit tests across 226 files; 10 integration tests walking one enrolment end
+to end against real staging Supabase; typecheck 0; lint 0 errors. 0133 and 0134
+validated against real Postgres 16 — every constraint both ways, and 0134's
+split guard proven to fire. Eight mutations on the analysis arithmetic and the
+prompt guards, eight caught.
+
+Exercised against production with a real model: the caveat fired first, the reply
+rate read "not enough data" rather than 0%, the per-person breakdown rendered,
+and three findings came back commenting on the copy without inventing a single
+number. Test data removed afterwards.
+
+### Not built
+
+Voice notes — deferred by the owner. Design settled (paperclip delivery,
+`prepares: 'asset'`, render on release); nothing stubbed.

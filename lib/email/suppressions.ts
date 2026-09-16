@@ -31,26 +31,66 @@ import type { Suppression, SuppressionReason } from '@/lib/email/suppression-cop
  * ⚠️ SCOPED IN CODE. The service role bypasses RLS, so the `workspace_id`
  * filter here is the only thing between one tenant's opt-outs and another's.
  */
+export type SuppressionPage = {
+  rows: Suppression[]
+  /** Every suppression in the workspace, not just the ones returned. */
+  total: number
+  /**
+   * A single address the caller asked about, when it was not in `rows`.
+   *
+   * ⚠️ THE SCREEN'S ACTUAL QUESTION IS "IS THIS ONE ADDRESS SUPPRESSED?" and
+   * scrolling a list is a bad way to answer it. This module's own banner says
+   * the feature exists because "a customer asking 'did you remove me?' got no
+   * answer from any screen" — a list that stops at 500 gives a WRONG answer to
+   * the same question, which is worse than none.
+   */
+  match: Suppression | null
+}
+
+const PAGE = 500
+
 export async function listSuppressions(
   workspaceId: string,
-  limit = 500,
-): Promise<Suppression[]> {
-  const { data, error } = await createAdminClient()
+  options: { search?: string | null } = {},
+): Promise<SuppressionPage> {
+  const db = createAdminClient()
+  const search = options.search?.trim().toLowerCase() || null
+
+  let query = db
     .from('email_suppressions')
-    .select('id, email, reason, source, created_at')
+    // ⚠️ `count: 'exact'` — without it the screen cannot say the list is short,
+    // and a truncated compliance list presented as complete is the defect.
+    .select('id, email, reason, source, created_at', { count: 'exact' })
     .eq('workspace_id', workspaceId)
+
+  /*
+   * ⚠️ SEARCH IS AN EQUALITY, NOT A PATTERN. The column has a `= lower(email)`
+   * check so the stored side is folded, and an exact lookup answers the
+   * question a person is actually asking. A `like` would also match
+   * `not-ada@example.com` when asked about `ada@example.com`, which on a
+   * compliance screen is an answer that is confidently wrong.
+   */
+  if (search) query = query.eq('email', search)
+
+  const { data, error, count } = await query
     .order('created_at', { ascending: false })
-    .limit(limit)
+    .limit(PAGE)
 
   if (error) throw new Error(`listSuppressions failed: ${error.message}`)
 
-  return (data ?? []).map((row) => ({
+  const rows = (data ?? []).map((row) => ({
     id: row.id,
     email: row.email,
     reason: row.reason as SuppressionReason,
     source: row.source,
     createdAt: row.created_at,
   }))
+
+  return {
+    rows,
+    total: count ?? rows.length,
+    match: search ? (rows[0] ?? null) : null,
+  }
 }
 
 /**

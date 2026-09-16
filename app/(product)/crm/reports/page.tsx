@@ -19,6 +19,7 @@ import {
 } from '@/lib/crm/reports'
 import { StatCard } from '@/components/product/StatCard'
 import { LocalTime } from '@/components/ui/LocalTime'
+import { ExcludedDeals } from '@/components/product/ExcludedDeals'
 import { formatMoney } from '@/lib/format/money'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
@@ -148,7 +149,7 @@ export default async function ReportsPage({
               already see on this page. */}
           <ExportLink kind="my_activity" range={range.key} label="Export mine" />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Stat
             label="Contacts created"
             value={mine.contactsCreated}
@@ -193,12 +194,13 @@ export default async function ReportsPage({
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-ink">Your pipeline</h3>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Stat label="Open deals" value={myPipeline.openDeals} />
           <Stat label="Open value" value={money(myPipeline.openValue)} />
           <Stat label="Weighted forecast" value={money(myPipeline.weightedValue)} />
           <Stat label="Won revenue" value={money(myPipeline.wonValue)} />
         </div>
+        <ExcludedDeals count={myPipeline.unconvertible} />
         <p className="text-xs text-muted">
           Overdue tasks: <span className="font-semibold text-ink">{overdue}</span>
         </p>
@@ -278,12 +280,13 @@ export default async function ReportsPage({
         <>
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-ink">Workspace</h3>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <Stat label="Open deals" value={teamPipeline.openDeals} />
               <Stat label="Open value" value={money(teamPipeline.openValue)} />
               <Stat label="Weighted forecast" value={money(teamPipeline.weightedValue)} />
               <Stat label="Won revenue" value={money(teamPipeline.wonValue)} />
             </div>
+            <ExcludedDeals count={teamPipeline.unconvertible} />
           </section>
 
           <section className="space-y-3">
@@ -520,6 +523,7 @@ function monthLabel(period: string | null): string {
 function total(rows: ForecastPeriod[], key: 'openDeals' | 'openValue' | 'weightedValue'): number {
   return rows.reduce((sum, row) => sum + row[key], 0)
 }
+
 
 /**
  * ⚠️ FORMATS ONE ALREADY-TOTALLED VALUE. Every sum reaching this page was

@@ -128,8 +128,48 @@ describe('the list is reachable', () => {
   it('is rendered by the email page behind the manage permission', () => {
     const page = code('app/(product)/email/page.tsx')
     expect(page).toContain('<SuppressionList')
-    expect(page).toContain('listSuppressions(ctx.workspace.id)')
+    expect(page).toMatch(/listSuppressions\(ctx\.workspace\.id,/)
     // Hidden for a setter — presentation, on top of the server-side gate above.
     expect(page).toMatch(/canManage \? \(/)
+  })
+
+  it('says when the list is short instead of implying it is complete', () => {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ CAPPED AT 500, ORDERED NEWEST FIRST — SO THE OLDEST SUPPRESSIONS  ║
+     * ║  ARE THE ONES CUT OFF, AND THOSE ARE THE ONES PEOPLE ASK ABOUT.       ║
+     * ║                                                                       ║
+     * ║  This module exists because "a customer asking 'did you remove me?'    ║
+     * ║  got no answer from any screen". A list that silently stops at 500     ║
+     * ║  gives a WRONG answer to the same question, which is worse than none:  ║
+     * ║  an operator scrolls, does not find them, and says so.                 ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const lib = code('lib/email/suppressions.ts')
+    expect(lib).toMatch(/count: 'exact'/)
+    expect(lib).toMatch(/total: count \?\? rows\.length/)
+
+    const ui = code('components/email/SuppressionList.tsx')
+    expect(ui).toMatch(/const truncated = !search && total > shown/)
+    expect(ui).toMatch(/Showing the \{shown\} most recent of \{total\}/)
+  })
+
+  it('can answer the question about ONE address, whatever the list size', () => {
+    const ui = code('components/email/SuppressionList.tsx')
+    expect(ui).toMatch(/name="suppressed"/)
+    // A "not on the list" answer has to be explicit: somebody is about to tell
+    // a real person whether they were removed.
+    expect(ui).toMatch(/is not on the suppression/)
+  })
+
+  it('looks up an exact address rather than a pattern', () => {
+    /*
+     * ⚠️ A `like` WOULD MATCH `not-ada@example.com` WHEN ASKED ABOUT
+     * `ada@example.com`. On a compliance screen that is an answer which is
+     * confidently wrong, which is the only kind worth guarding against here.
+     */
+    const lib = code('lib/email/suppressions.ts')
+    expect(lib).toMatch(/query\.eq\('email', search\)/)
+    expect(lib, 'the lookup became a pattern match').not.toMatch(/\.i?like\(/)
   })
 })

@@ -576,7 +576,7 @@ export async function updateSendingSettings(
 }
 
 // ---------------------------------------------------------------------------
-// Mailbox signature — migration 0130
+// Mailbox signature — migration 0142
 // ---------------------------------------------------------------------------
 
 export type SignatureState =
@@ -584,7 +584,7 @@ export type SignatureState =
   | { ok: false; error: string }
   | null
 
-/** Mirrors the CHECK constraints in migration 0130. */
+/** Mirrors the CHECK constraints in migration 0142. */
 const MAX_SIGNATURE_TEXT = 5000
 const MAX_SIGNATURE_HTML = 20000
 

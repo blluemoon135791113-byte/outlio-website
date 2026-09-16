@@ -1472,13 +1472,13 @@ no authoring controls — which looks exactly like a missing feature.
 
 ### 16.2 Email — what genuinely is missing
 
-> **✅ ① and ② were fixed on 2026-09-16** (migration `0130`, `lib/email/signature.ts`).
+> **✅ ① and ② were fixed on 2026-09-16** (migration `0142`, `lib/email/signature.ts`).
 > They are kept here with their original diagnosis because the reasoning explains
 > the design that replaced them. See `docs/PROGRESS.md` for the full entry.
 >
-> ⚠️ **Migration 0130 must be applied before that code deploys** — `ACCOUNT_COLUMNS`
+> ⚠️ **Migration 0142 must be applied before that code deploys** — `ACCOUNT_COLUMNS`
 > is one literal string, so a missing column fails every account read and stops all
-> outbound mail. `migrationHint()` names the migration in the error.
+> outbound mail. `migrationHint()` names the migration in the error. (It is applied.)
 
 **① ~~No sender signature. Anywhere.~~ — FIXED**
 

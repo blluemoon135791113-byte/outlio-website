@@ -31,6 +31,16 @@ function pageLabel(pathname: string) {
    */
   if (pathname.startsWith('/email')) return 'Email'
   if (pathname.startsWith('/flows')) return 'Flows'
+  /*
+   * ⚠️ THE WHOLE LINKEDIN SECTION HAD NO ENTRY, so `/linkedin` fell through to
+   * the "Overview" fallback and the header contradicted the page under it.
+   * Pre-existing, not new: the section was built after this map, the same way
+   * it was built without a layout. Longest match first, matching `/crm/reports`
+   * above.
+   */
+  if (pathname.startsWith('/linkedin/campaigns')) return 'Campaigns'
+  if (pathname.startsWith('/linkedin/analysis')) return 'Strategy analysis'
+  if (pathname.startsWith('/linkedin')) return 'LinkedIn'
   if (pathname.startsWith('/extension')) return 'Extension'
   return 'Overview'
 }
@@ -46,6 +56,7 @@ function SidebarContent({
   canUseScraper,
   showCrm,
   showEmail,
+  showLinkedIn,
   showFlows,
   referralLink,
   onNavigate,
@@ -54,6 +65,7 @@ function SidebarContent({
   canUseScraper: boolean
   showCrm: boolean
   showEmail: boolean
+  showLinkedIn: boolean
   showFlows: boolean
   /** `null` until a profile has a code allocated. */
   referralLink: string | null
@@ -88,6 +100,7 @@ function SidebarContent({
           canUseScraper={canUseScraper}
           showCrm={showCrm}
           showEmail={showEmail}
+          showLinkedIn={showLinkedIn}
           showFlows={showFlows}
           onNavigate={onNavigate}
         />
@@ -122,6 +135,7 @@ export function ProductShell({
   canUseScraper,
   showCrm = false,
   showEmail = false,
+  showLinkedIn = false,
   showFlows = false,
   avatarUrl,
   referralLink = null,
@@ -134,6 +148,7 @@ export function ProductShell({
   canUseScraper: boolean
   showCrm?: boolean
   showEmail?: boolean
+  showLinkedIn?: boolean
   showFlows?: boolean
   avatarUrl?: string | null
   referralLink?: string | null
@@ -151,6 +166,7 @@ export function ProductShell({
           canUseScraper={canUseScraper}
           showCrm={showCrm}
           showEmail={showEmail}
+          showLinkedIn={showLinkedIn}
           showFlows={showFlows}
           referralLink={referralLink}
         />
@@ -178,6 +194,7 @@ export function ProductShell({
               canUseScraper={canUseScraper}
               showCrm={showCrm}
               showEmail={showEmail}
+          showLinkedIn={showLinkedIn}
           showFlows={showFlows}
               referralLink={referralLink}
               onNavigate={() => setMobileOpen(false)}
@@ -200,7 +217,19 @@ export function ProductShell({
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted transition-[background-color,color,transform] duration-150 hover:bg-surface-muted hover:text-ink active:scale-[0.96] lg:hidden"
+                /*
+                 * ⚠️ 36px OF BORDER, 44px OF TOUCH. Measured on a real phone
+                 * viewport (375×812): this was 36×36 — the primary navigation
+                 * control on mobile, and the smallest square target in the
+                 * shell. It clears WCAG 2.5.8's 24px floor but misses the 44px
+                 * both Apple's HIG and WCAG 2.5.5 ask for.
+                 *
+                 * The pseudo-element grows the HIT AREA by 4px on every side
+                 * without moving a pixel of the visible box, so this is an
+                 * ergonomics fix and not a redesign — `h-11 w-11` would have
+                 * changed the header's rhythm to solve a touch problem.
+                 */
+                className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted transition-[background-color,color,transform] duration-150 before:absolute before:-inset-1 before:content-[''] hover:bg-surface-muted hover:text-ink active:scale-[0.96] lg:hidden"
                 aria-label="Open navigation"
                 aria-expanded={mobileOpen}
               >
