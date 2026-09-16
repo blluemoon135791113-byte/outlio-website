@@ -31,6 +31,45 @@ export type StageInput = {
   staleAfterDays?: number | null
 }
 
+/**
+ * A stage probability as typed into the setup form. `null` means the field did
+ * not contain a usable number.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ BLANK IS NOT ZERO, AND THE SCHEMA CANNOT HOLD THE DIFFERENCE.         ║
+ * ║                                                                           ║
+ * ║  The form used `Number(value) || 0`, so clearing the field — the natural  ║
+ * ║  way to say "I don't know yet" — stored a deliberate 0%. Every deal in    ║
+ * ║  that stage then contributed nothing to the weighted forecast, which      ║
+ * ║  reads as "these deals are worthless" rather than "nobody said".          ║
+ * ║                                                                           ║
+ * ║  `default_probability` is `not null default 0`, so unknown genuinely has  ║
+ * ║  nowhere to live. Until §8's nullable probability exists, the honest      ║
+ * ║  response is to REFUSE the blank rather than invent a number for it: a    ║
+ * ║  person who is asked returns a figure they meant, and a forecast built    ║
+ * ║  from figures people meant is the only kind worth showing.                ║
+ * ║                                                                           ║
+ * ║  ⚠️ 0 ITSELF STAYS VALID. "Lost" is legitimately 0%, and the suggested    ║
+ * ║  stages ship it. Rejecting 0 would break the default pipeline.            ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export function parseStageProbability(raw: string): number | null {
+  const text = raw.trim()
+
+  /*
+   * ⚠️ DIGITS, NOT `Number()`. A shape test rather than a coercion, because
+   * `Number` accepts far more than a percentage: '1e2' is 100, '0x10' is 16,
+   * '' is 0 and '  ' is 0. Deciding validity from what JavaScript is willing
+   * to parse means the rule is whatever that function happens to do, which
+   * nobody can read off this line. The column is `integer`, so a percentage
+   * here is one to three digits and nothing else.
+   */
+  if (!/^\d{1,3}$/.test(text)) return null
+
+  const value = Number(text)
+  return value <= 100 ? value : null
+}
+
 export type Pipeline = {
   id: string
   name: string
@@ -433,6 +472,15 @@ export type BoardCard = {
   ownerUserId: string | null
   contactId: string | null
   updatedAt: string
+  /**
+   * When this deal most recently entered its current stage.
+   *
+   * ⚠️ NOT `updatedAt`. Staleness is about how long a deal has sat in a stage,
+   * and `updated_at` moves for every edit — so renaming a deal, or changing its
+   * owner, used to clear the Stale badge on a deal that had not moved in
+   * months. §8 says an edit resets neither.
+   */
+  stageEnteredAt: string
   /** True when the deal has sat here longer than the stage allows. */
   isStale: boolean
 }
@@ -476,7 +524,7 @@ export async function getBoard(
     let query = db
       .from('crm_opportunities')
       .select(
-        'id, title, version, value_amount, currency, owner_user_id, contact_id, updated_at',
+        'id, title, version, value_amount, currency, owner_user_id, contact_id, updated_at, created_at',
         { count: 'exact' },
       )
       .eq('workspace_id', workspaceId)
@@ -494,27 +542,97 @@ export async function getBoard(
     if (error) throw new Error(`getBoard failed: ${error.message}`)
 
     const staleBefore = await staleCutoff(workspaceId, stage.id)
+    const enteredAt = await stageEntryTimes(
+      workspaceId,
+      stage.id,
+      (data ?? []).map((row) => row.id),
+    )
 
     columns.push({
       stageId: stage.id,
       stageName: stage.name,
       kind: stage.kind,
       totalCards: count ?? 0,
-      cards: (data ?? []).map((row) => ({
-        id: row.id,
-        title: row.title,
-        version: row.version,
-        valueAmount: row.value_amount,
-        currency: row.currency,
-        ownerUserId: row.owner_user_id,
-        contactId: row.contact_id,
-        updatedAt: row.updated_at,
-        isStale: staleBefore !== null && row.updated_at < staleBefore,
-      })),
+      cards: (data ?? []).map((row) => {
+        /*
+         * ⚠️ STAGE ENTRY, NOT `updated_at`. A deal that has sat in Proposal
+         * since March is stale whether or not somebody fixed a typo in its
+         * title this morning.
+         *
+         * A deal that has never moved has no history row — `createOpportunity`
+         * sets the first stage directly rather than through
+         * `crm_move_opportunity_stage` — so its creation IS its stage entry.
+         */
+        const stageEnteredAt = enteredAt.get(row.id) ?? row.created_at
+
+        return {
+          id: row.id,
+          title: row.title,
+          version: row.version,
+          valueAmount: row.value_amount,
+          currency: row.currency,
+          ownerUserId: row.owner_user_id,
+          contactId: row.contact_id,
+          updatedAt: row.updated_at,
+          stageEnteredAt,
+          isStale: staleBefore !== null && stageEnteredAt < staleBefore,
+        }
+      }),
     })
   }
 
   return columns
+}
+
+/**
+ * When each of these deals most recently entered `stageId`.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ NEWEST ENTRY WINS, WHICH IS WHAT MAKES A→B→A CORRECT.                 ║
+ * ║                                                                           ║
+ * ║  A deal that went Proposal → Negotiation → Proposal has been in Proposal  ║
+ * ║  since the SECOND move. Ordering `occurred_at desc` and keeping the first ║
+ * ║  row per deal is what picks the return rather than the first visit.       ║
+ * ║                                                                           ║
+ * ║  ⚠️ `to_stage_id` IS A NARROWING, NOT A CORRECTNESS CONDITION, and saying  ║
+ * ║  otherwise would be a comment that sounds like a reason. A deal sitting in ║
+ * ║  a stage got there by entering it, so its newest history row is already   ║
+ * ║  that entry — removing this filter changes no answer, which a mutation    ║
+ * ║  test confirmed. It stays because it reads `crm_osh_stage_idx`            ║
+ * ║  (workspace_id, to_stage_id, occurred_at desc) and returns one stage's    ║
+ * ║  rows instead of every move these deals have ever made.                   ║
+ * ║                                                                           ║
+ * ║  One query per stage, not per card. No migration — the history has        ║
+ * ║  recorded `occurred_at` since 0076.                                       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * A deal absent from the result has never moved into this stage: it was
+ * created here. The caller falls back to `created_at`.
+ */
+async function stageEntryTimes(
+  workspaceId: string,
+  stageId: string,
+  opportunityIds: string[],
+): Promise<Map<string, string>> {
+  const entered = new Map<string, string>()
+  if (opportunityIds.length === 0) return entered
+
+  const { data, error } = await createAdminClient()
+    .from('crm_opportunity_stage_history')
+    .select('opportunity_id, occurred_at')
+    .eq('workspace_id', workspaceId)
+    .eq('to_stage_id', stageId)
+    .in('opportunity_id', opportunityIds)
+    .order('occurred_at', { ascending: false })
+
+  if (error) throw new Error(`stageEntryTimes failed: ${error.message}`)
+
+  // Newest first, so the first row seen for a deal is its latest entry.
+  for (const row of data ?? []) {
+    if (!entered.has(row.opportunity_id)) entered.set(row.opportunity_id, row.occurred_at)
+  }
+
+  return entered
 }
 
 /** ISO timestamp before which a card in this stage counts as rotting. */

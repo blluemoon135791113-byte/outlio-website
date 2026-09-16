@@ -4,6 +4,232 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-09-16 — Four defects in the owner-change history, and Vercel was blocking every deploy (#36)
+
+A review of #36 before merge. Four real defects, fixed in the same PR (0bdbc84,
+merged as 59c9c60). 0129 changed, so it was re-applied by hand; both functions
+are `create or replace`.
+
+### What the review found
+
+- **A handover moved contacts away from people who were not leaving.**
+  `crm_handover_member_records` read its contact list once, then assigned each
+  through `crm_assign_contact_owner` — which locks and re-reads the row but
+  never asks who owns it. A contact someone reassigned to a third person while
+  a long handover ran was moved on to the successor anyway, writing
+  OWNER_ASSIGNED from an owner who never left. The set-based `update … where
+  owner_user_id = p_from_user` it replaced re-checked the predicate on the
+  locked row, so the rewrite lost a guarantee nobody noticed.
+- **One deleted contact cancelled a whole bulk assignment.** Same shape:
+  `crm_bulk_assign_contacts` filtered `deleted_at is null` in an unlocked read,
+  so a contact soft-deleted before its turn reached
+  `crm_assign_contact_owner`, which raises for deleted rows — rolling back the
+  other 199, against the function's own stated skip-don't-refuse contract.
+- **Handing a book to the departing member orphaned it.** `p_to_user =
+  p_from_user` returned all-zero counts; `removeMemberAction` then deleted the
+  membership and reported "They owned no records." Every record stayed owned by
+  someone no longer in the workspace — the exact state the handover exists to
+  prevent.
+- **A large handover could time out between committing and removing.**
+  Announcements (one `contact_assigned` per moved contact) were awaited between
+  the committed handover and the membership delete. A timeout there left the
+  member in place with their book already moved; a retry moved nothing, so the
+  remaining events were never emitted at all.
+
+### Fixed
+
+- Both contact loops are now `for update`. Postgres re-checks "still the
+  leaver's, still live" against the current row version, so a contact changed
+  mid-run is skipped instead of being swept up or aborting the batch.
+- A handover to the departing member raises `invalid_parameter_value`, and the
+  action refuses it first with its own message.
+- `reassignMemberRecords` returns `assignments` instead of announcing;
+  `removeMemberAction` deletes the membership, then announces with `after()`,
+  once the response is on its way.
+
+### ⚠️ A race cannot be proven inside one smoke file
+
+The smoke files run in one session, inside one transaction. Neither race is
+visible there: both need a second connection committing mid-loop. The proof ran
+through the harness as a scratch file with **committed** seed rows (no `begin`),
+using `dblink` to hold a row lock from a second backend for three seconds while
+the function ran. Against the original 0129 all five race checks fail; against
+the fixed one they pass. Kept out of the repo: it depends on `dblink` and on
+sleeping, so it does not belong in the per-migration smoke.
+
+### Verified
+
+- 0129's smoke is now 20 checks and passes; its new self-handover check fails
+  against the original 0129.
+- Unit tests 10/10, eslint clean, `tsc --noEmit` clean. ⚠️ The typecheck needs
+  `next-env.d.ts`, which is gitignored and absent in a fresh worktree — without
+  it, two image imports fail and look like a real error.
+
+### Vercel was blocking every deployment, and had been since 2026-09-13
+
+⚠️ **Production was stale for three days and nothing said so.** The last
+successful deploy was `45ad798` (2026-09-13). Every merge after it —
+#28 through #41 — was blocked with "Deployment was blocked", because the commit
+author was `Abdulsaboor2004`, who is not on the Vercel team. It never blocked a
+merge, so it read as preview noise.
+
+- **The repo is already public, and that does not help.** Vercel's bot suggests
+  it; the truth is in the redeploy dialog: *Hobby teams do not support
+  collaboration*. Adding a member needs Pro.
+- **The free fix is to author commits as the account that owns the project.**
+  `git config user.email 256972641+blluemoon135791113-byte@users.noreply.github.com`,
+  repo-local. Nothing else changes: pushes still use the existing credentials,
+  because a commit's author is text, not a login.
+- Proven with an empty commit on a throwaway branch: it deployed successfully,
+  where every earlier commit by the other account was refused outright.
+- Production was then promoted to deployment `6470695985`, serving a tree
+  identical to main's tip.
+
+⚠️ **Commits must stay authored by `blluemoon135791113-byte`** or their
+deployments are refused again — including production deploys from main.
+
+---
+
+## 2026-09-16 — The 17 older smoke files now gate every check (#40)
+
+⚠️ **Supersedes the 2026-09-15 warning below that `supabase/smoke/` (0074–0093)
+is refused.** All 17 files now use the gated pattern, and both harness scripts
+accept them. Nothing was applied to either Supabase project.
+
+### Why none of them could fail
+
+- Nine files only printed values for a person to read.
+- The must-fail statements ran with `ON_ERROR_STOP` lifted, so a statement that
+  wrongly succeeded passed silently.
+- The `select … as pass` rows failed nothing, and a few were `select … true as
+  ok`, which could not print anything else.
+
+### How they were converted
+
+- **Printed values** became explicit checks. Expected values came from each
+  file's comments and test data, cross-checked against a baseline run of the
+  original files on the unmodified migrations.
+- **Must-fail statements** became `do` blocks catching the specific error the
+  migration raises (`check_violation`, `restrict_violation`, `unique_violation`,
+  `serialization_failure`, `foreign_key_violation`), not any error. The
+  exception is 0091's erasure and teardown paths, which already caught
+  everything.
+- **Role-scoped checks** (0085) switch role inside the block and record after
+  switching back: `authenticated` cannot write to `smoke_checks`.
+- **psql-only syntax** (`\gset`, `:'var'`, `\echo`) was replaced with plain SQL,
+  so the files also run under `rehearse-migration.mjs`.
+
+⚠️ **0076 expects `serialization_failure` for a stale version.** 0077 changes it
+to `check_violation`, but 0076's smoke file runs against 0076 alone.
+
+### Verified
+
+- All 17 pass against their real migrations: 227 checks.
+- Each migration was broken once, in a copy outside the repo, with the edit
+  asserted before running. Every run exits 1 naming the failing check; the full
+  table is in #40.
+- ⚠️ **A break that errors before the gate proves nothing.** 0090's first break
+  made the migration's own `ON CONFLICT` invalid, so the run died on a SQL error
+  before any check ran. It was replaced with a break the checks catch
+  (auto-replies counted as replies).
+
+---
+
+## 2026-09-15 — The migration harness could pass a failing smoke test
+
+Two fixes to the tooling that validates migrations before the owner applies
+them by hand. Nothing was applied to either Supabase project.
+
+### A smoke check that printed false still passed (#37)
+
+Found while mutation-testing the 0126 smoke file. Four ways a broken migration
+got through:
+
+- `scripts/check-migration.sh` exited 0 unless psql hit a SQL error. A check row
+  reading `ok = f` is not an error: seven false checks, exit 0.
+- `scripts/rehearse-migration.mjs` counted a NULL `ok` as a pass.
+- `fn(...) ->> 'reason' = 'stale'` is NULL, not false, exactly when a broken
+  function succeeds, because there is no `reason` key.
+- A check whose `where` matched no rows printed nothing, which looks the same as
+  a check that was never written.
+
+**Fixed:**
+
+- Smoke files 0120, 0122, 0123, 0124 and 0125 now use the gated pattern from
+  0126:
+  - every check is inserted into `smoke_checks` through `coalesce(…, false)`
+  - a final block raises unless exactly the expected number of checks were
+    recorded (3, 3, 15, 5, 8) and every one is true
+  - there is no 0121 smoke file
+- Both scripts require the gate's `SMOKE PASSED` notice. A smoke file without a
+  gate is refused rather than passed, because nothing in it can fail.
+- rehearse passes only `ok === true`.
+
+⚠️ **The 17 older files in `supabase/smoke/` (0074–0093) have no gate, so both
+scripts now refuse them.** That is deliberate: none of them could fail as
+written. Convert one before relying on it.
+
+⚠️ **Parsing psql's `t`/`f` output was rejected as the fix.** A NULL prints
+blank and a missing row prints nothing, so there is nothing to parse. The gate's
+count is what catches an absent check.
+
+**Also fixed: concurrent runs shared port 55432.** A second run's postgres failed
+to bind, but its readiness loop only asked whether *something* answered, so it
+scaffolded into the first run's cluster. Now:
+
+- each cluster gets a unique `cluster_name` and is trusted only when the
+  answering server reports it
+- a lost bind moves on to the next port (55432–55471)
+- `PGCONNECT_TIMEOUT=5` stops a port that accepts connections but never answers
+  from hanging the scan
+
+**Verified.** Each migration was broken in a copy outside the repo:
+
+| Break | Failing check |
+|---|---|
+| 0120: contact-level suppression removed | suppressed contact's second address |
+| 0122: membership check disabled | a user with no link is denied the budget |
+| 0123: `owner_user_id_at_event` read from the new owner | at_event is the old owner |
+| 0124: FK no longer includes `workspace_id` | a task in A cannot link to B's deal |
+| 0125: `deleted_at` filter removed | a deleted contact is not load |
+
+- Every broken run now exits 1 and names its failing check.
+- The old harness exited 0 on the same 0125 break.
+- After rebasing, 0120–0128 all pass under the new gate.
+- Two concurrent runs got ports 55432 and 55433, and both passed.
+
+### Every local run left an empty temp directory (#38)
+
+`cleanup()` sent `kill` to the postmaster and ran `rm -rf` straight away. On
+Windows postgres was still exiting and holding `data/` open: the files were
+deleted, the directory was not. 148 empty `outlio-sqlcheck.*` directories had
+built up in the temp root.
+
+**Fixed:**
+
+- A new `stop_cluster` stops the cluster with `pg_ctl -m immediate -w`, falls
+  back to `kill`, then `wait`s for the process.
+- Directory removal retries for up to 10 seconds, and warns if the directory
+  survives.
+- The port-retry path uses the same stop.
+
+**Verified.**
+
+- Reproduced with the previous script: exit 0, an empty `data/` left behind.
+- With the fix, a passing run (exit 0) and a failing smoke run (exit 1) both
+  leave no directory and no postgres process.
+
+The 148 leftovers were removed, along with two populated clusters left by other
+sessions' runs, after confirming no postgres was using them.
+
+### ⚠️ Waiting on the owner
+
+- **Vercel fails on every commit, main included:** "Deployment was blocked".
+  The Git author `Abdulsaboor2004` is not a member of the Vercel team. It is not
+  a required check, so it does not block merging, but no previews deploy until
+  that account is given access.
+- **`rehearse-migration.mjs` was not run end to end in this session,** because
+  it connects to the real Supabase database.
 ## 2026-09-15 — The Flow Copilot met a real model for the first time
 
 ⚠️ **This log had gone two weeks stale.** The newest entry below is

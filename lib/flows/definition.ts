@@ -213,6 +213,36 @@ const baseStep = { id: stepIdSchema, label: z.string().max(200).optional() }
  */
 const MAX_WAIT_HOURS = 24 * 90
 
+/**
+ * How long a single run may live before the engine halts it — CRM-DN-04.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THIS IS A BACKSTOP, NOT A BUSINESS RULE ABOUT NURTURE LENGTH.         ║
+ * ║                                                                           ║
+ * ║  Nothing expired a run before this. `MAX_WAIT_HOURS` bounds a single      ║
+ * ║  wait, but a graph may chain waits, and a legal cycle — one containing a  ║
+ * ║  wait — can be re-entered forever. Such a run sits in `waiting`, is       ║
+ * ║  re-claimed by every tick, and holds a contact enrolled indefinitely.     ║
+ * ║                                                                           ║
+ * ║  ⚠️ IT MUST EXCEED `MAX_WAIT_HOURS`, or a flow with one legal 90-day wait ║
+ * ║  would be halted at the exact moment that wait resumed. The spec proposes ║
+ * ║  90 days for both, which cannot hold at once; CRM-DN-04 kept the 90-day   ║
+ * ║  wait, so the lifetime is the number that had to move.                    ║
+ * ║  `tests/unit/flow-run-lifetime.test.ts` pins the ordering.                 ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export const MAX_RUN_LIFETIME_HOURS = 24 * 365
+
+/**
+ * Irreversible actions permitted on one path through a graph — CRM-DN-04.
+ *
+ * ⚠️ COUNTED PER PATH, NOT PER GRAPH. A graph whose branches each send one
+ * email is fine however many branches it has; what this refuses is a single
+ * contact walking through ten sends. Reversible steps are unlimited — undoing
+ * a tag is free, and unsending an email is not.
+ */
+export const MAX_SIDE_EFFECTS_PER_PATH = 10
+
 export const flowStepSchema = z.discriminatedUnion('type', [
   z.object({
     ...baseStep,
@@ -540,6 +570,113 @@ export function publishProblems(definition: FlowDefinition): string[] {
         problems.push(`“${name}” needs ${key} set before this flow can be published.`)
       }
     }
+  }
+
+  problems.push(...pathProblems(definition))
+
+  return problems
+}
+
+/**
+ * The two per-path limits from CRM-DN-04.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THIS LIVES AT PUBLISH TIME, NOT IN `validateFlowDefinition`, AND THE  ║
+ * ║  DISTINCTION IS LOAD-BEARING.                                             ║
+ * ║                                                                           ║
+ * ║  `advanceRun` parses the run's PINNED version on every advance. A limit   ║
+ * ║  added to the parser would make every already-published flow that exceeds ║
+ * ║  it fail to load — halting live runs mid-sequence for a rule that did not ║
+ * ║  exist when they were published. This repo has already made that mistake  ║
+ * ║  once; see the note above `publishProblems`. Retroactively invalidating   ║
+ * ║  stored data is a migration, not a validation.                            ║
+ * ║                                                                           ║
+ * ║  So: existing flows keep running, and the limit applies the next time     ║
+ * ║  somebody publishes.                                                      ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+function pathProblems(definition: FlowDefinition): string[] {
+  const byId = new Map(definition.steps.map((s) => [s.id, s]))
+  if (!byId.has(definition.entryStepId)) return []
+
+  let worstSideEffects = 0
+  let worstWaitHours = 0
+  let cycleReached = false
+
+  /*
+   * ⚠️ SIMPLE PATHS, AND A BUDGET.
+   *
+   * "Most side effects on any path" is longest-path, which is NP-hard once the
+   * graph has cycles — there is no cheap exact answer. So this walks simple
+   * paths (a node already on the current path is not re-entered) under an
+   * expansion budget, and REFUSES a graph it could not finish checking rather
+   * than passing it. Failing closed on an unverifiable graph is the only safe
+   * direction for a limit whose job is to bound damage.
+   *
+   * 20,000 expansions is far beyond any real flow; the step cap is 200 and
+   * real graphs are near-linear.
+   */
+  let budget = 20_000
+  const onPath = new Set<string>()
+
+  const walk = (id: string, sideEffects: number, waitHours: number): void => {
+    if (budget-- <= 0) return
+
+    if (onPath.has(id)) {
+      // A legal cycle (it contains a wait, or validateFlowDefinition refused
+      // it). Total wait past this point is unbounded, so the static wait check
+      // cannot speak for it — the runtime lifetime cap is what covers it.
+      cycleReached = true
+      return
+    }
+
+    const step = byId.get(id)
+    if (!step) return
+
+    let nextSideEffects = sideEffects
+    let nextWaitHours = waitHours
+
+    if (step.type === 'ACTION' && !actionIsReversible(step.action)) nextSideEffects += 1
+    if (step.type === 'WAIT') nextWaitHours += step.hours
+
+    if (nextSideEffects > worstSideEffects) worstSideEffects = nextSideEffects
+    if (nextWaitHours > worstWaitHours) worstWaitHours = nextWaitHours
+
+    onPath.add(id)
+    for (const target of outgoing(step)) {
+      if (target !== null) walk(target, nextSideEffects, nextWaitHours)
+    }
+    onPath.delete(id)
+  }
+
+  walk(definition.entryStepId, 0, 0)
+
+  const problems: string[] = []
+
+  if (budget <= 0) {
+    problems.push(
+      'This flow has too many distinct paths to check its limits. Simplify the branching before publishing.',
+    )
+    return problems
+  }
+
+  if (worstSideEffects > MAX_SIDE_EFFECTS_PER_PATH) {
+    problems.push(
+      `One route through this flow performs ${worstSideEffects} irreversible actions — sends, notifications or webhooks. ` +
+        `The limit is ${MAX_SIDE_EFFECTS_PER_PATH} for a single contact. Split it, or branch so no one person receives them all.`,
+    )
+  }
+
+  /*
+   * Only meaningful on an acyclic graph. With a cycle present the longest wait
+   * is unbounded by construction, and saying "this exceeds a year" about a
+   * nurture loop that is SUPPOSED to run indefinitely would be wrong.
+   */
+  if (!cycleReached && worstWaitHours >= MAX_RUN_LIFETIME_HOURS) {
+    problems.push(
+      `One route through this flow waits ${Math.round(worstWaitHours / 24)} days in total, but a run is halted after ` +
+        `${Math.round(MAX_RUN_LIFETIME_HOURS / 24)}. It would be stopped before reaching the end. Shorten the waits.`,
+    )
   }
 
   return problems

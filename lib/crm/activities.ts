@@ -147,9 +147,24 @@ export async function listContactTimeline(
 /**
  * Assigns a contact, recording the change as an event.
  *
- * ⚠️ THE ACTIVITY IS WRITTEN BEFORE THE OWNER CHANGES, deliberately. The event
- * belongs to the owner it is leaving; recording it afterwards would credit the
- * handover to the person receiving the book.
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ ONE TRANSACTION, IN THE DATABASE. THIS USED TO BE TWO STATEMENTS.     ║
+ * ║                                                                           ║
+ * ║  It read the owner, inserted OWNER_ASSIGNED, then updated the contact.    ║
+ * ║  When the update failed the insert had already committed — and            ║
+ * ║  `crm_activities` is append-only, so the false row could never be         ║
+ * ║  deleted or corrected. The timeline permanently claimed a handover that   ║
+ * ║  never happened while the contact still belonged to its old owner.        ║
+ * ║                                                                           ║
+ * ║  Reordering would only have traded a false audit row for a missing one.   ║
+ * ║  `crm_assign_contact_owner` (0123) does the locked read, the insert and   ║
+ * ║  the update together, so either both land or neither does.                ║
+ * ║                                                                           ║
+ * ║  The activity is still written BEFORE the owner changes, inside that      ║
+ * ║  transaction: the event belongs to the owner it is leaving, and           ║
+ * ║  `owner_user_id_at_event` is read from the locked row rather than from    ║
+ * ║  the value about to be written.                                           ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * There is no separate `assignment_events` table — see Ledger D23. All metrics
  * derive from this one stream.
@@ -162,40 +177,33 @@ export async function assignContact(
 ): Promise<void> {
   const db = createAdminClient()
 
-  const { data: current, error: readError } = await db
-    .from('crm_contacts')
-    .select('owner_user_id')
-    .eq('workspace_id', workspaceId)
-    .eq('id', contactId)
-    .maybeSingle()
-
-  if (readError) throw new Error(`assignContact failed: ${readError.message}`)
-  if (!current) throw new Error('assignContact: no such contact in this workspace')
-  if (current.owner_user_id === newOwnerUserId) return
-
-  /*
-   * ⚠️ THE ACTIVITY ID IS THE OCCURRENCE. One assignment produces one
-   * OWNER_ASSIGNED row; using its id as the idempotency key means a retried
-   * business operation (this function is called from a server action a browser
-   * may resubmit) cannot fire the assignment twice, while A→B→A fires twice,
-   * as it should — each move is its own activity.
-   */
-  const activityId = await recordActivity(workspaceId, {
-    contactId,
-    activityType: 'OWNER_ASSIGNED',
-    channel: 'system',
-    actorUserId,
-    ownerUserIdAtEvent: current.owner_user_id,
-    metadata: { from: current.owner_user_id, to: newOwnerUserId },
+  const { data, error } = await db.rpc('crm_assign_contact_owner', {
+    p_workspace_id: workspaceId,
+    p_contact_id: contactId,
+    /*
+     * ⚠️ NULL IS A LEGITIMATE OWNER — it is what unassigned means — and the
+     * generated types cannot express that a `uuid` PARAMETER accepts null.
+     * The cast documents the gap rather than hiding it, exactly as
+     * `lib/flows/engine.ts` does for `flow_check_loop_protection`.
+     */
+    p_new_owner: (newOwnerUserId ?? null) as unknown as string,
+    p_actor_id: (actorUserId ?? null) as unknown as string,
   })
 
-  const { error } = await db
-    .from('crm_contacts')
-    .update({ owner_user_id: newOwnerUserId })
-    .eq('workspace_id', workspaceId)
-    .eq('id', contactId)
+  if (error) {
+    // The function raises `no_data_found` for a contact that is not in this
+    // workspace; the message is preserved so callers read the same thing they
+    // did before.
+    if (error.code === 'P0002' || /no such contact/i.test(error.message)) {
+      throw new Error('assignContact: no such contact in this workspace')
+    }
+    throw new Error(`assignContact failed: ${error.message}`)
+  }
 
-  if (error) throw new Error(`assignContact failed: ${error.message}`)
+  const result = data as { changed: boolean; activity_id: string | null; from: string | null }
+
+  // Already theirs. No activity was written, so there is nothing to announce.
+  if (!result.changed) return
 
   /*
    * `crm.contact.assigned` — the one shared manual path (the single-contact
@@ -203,13 +211,112 @@ export async function assignContact(
    * ASSIGN_OWNER and ROUND_ROBIN emit their own; this is not in a flow's
    * step runner, so the same event cannot feed itself within one run.
    */
+  /*
+   * ⚠️ THE ACTIVITY ID IS STILL THE OCCURRENCE, now returned by the function
+   * rather than by a separate insert. One assignment produces one
+   * OWNER_ASSIGNED row, so a retried business operation — this is called from
+   * a server action a browser may resubmit — cannot fire the assignment twice,
+   * while A→B→A fires twice, as it should.
+   *
+   * Emitted AFTER the transaction commits: an event announcing a handover that
+   * then rolled back is worse than a late one.
+   */
   await emitDomainEvent({
     workspaceId,
     triggerType: 'contact_assigned',
     contactId,
-    idempotencyKey: `contact_assigned:${activityId}`,
-    payload: { contactId, from: current.owner_user_id, to: newOwnerUserId },
+    idempotencyKey: `contact_assigned:${result.activity_id}`,
+    payload: { contactId, from: result.from, to: newOwnerUserId },
   })
+}
+
+/** The new owner named for a bulk assignment is not in the workspace. */
+export class NotAMemberError extends Error {}
+
+export type BulkAssignResult = {
+  /** Moved to the new owner; each wrote OWNER_ASSIGNED. */
+  changed: number
+  /** Already theirs. Nothing written. */
+  unchanged: number
+  /** Not this workspace's, or deleted. */
+  skipped: number
+}
+
+/**
+ * Announcements go out in small groups: a handover can move thousands of
+ * contacts, and each event fans out to flows, webhooks and notifications.
+ */
+const EVENT_CONCURRENCY = 20
+
+/**
+ * Announces assignments the database already committed — one
+ * `contact_assigned` per OWNER_ASSIGNED row, keyed on it, like `assignContact`.
+ */
+export async function announceAssignments(
+  workspaceId: string,
+  assignments: { contactId: string; from: string | null; to: string | null; activityId: string }[],
+): Promise<void> {
+  for (let i = 0; i < assignments.length; i += EVENT_CONCURRENCY) {
+    await Promise.all(
+      assignments.slice(i, i + EVENT_CONCURRENCY).map((a) =>
+        emitDomainEvent({
+          workspaceId,
+          triggerType: 'contact_assigned',
+          contactId: a.contactId,
+          idempotencyKey: `contact_assigned:${a.activityId}`,
+          payload: { contactId: a.contactId, from: a.from, to: a.to },
+        }),
+      ),
+    )
+  }
+}
+
+/**
+ * Assigns many contacts, each with its history.
+ *
+ * ⚠️ THIS USED TO BE ONE `update ... set owner_user_id`. Every contact changed
+ * hands with no OWNER_ASSIGNED row, so its timeline never showed the move,
+ * assignment reports missed it, and "on assigned" flows never fired.
+ * `crm_bulk_assign_contacts` (0129) routes each one through the same function
+ * as a single assignment.
+ */
+export async function bulkAssignContacts(
+  workspaceId: string,
+  contactIds: string[],
+  newOwnerUserId: string | null,
+  actorUserId: string,
+): Promise<BulkAssignResult> {
+  const { data, error } = await createAdminClient().rpc('crm_bulk_assign_contacts', {
+    p_workspace_id: workspaceId,
+    p_contact_ids: contactIds,
+    // NULL means unassign; see `assignContact` for why the cast is needed.
+    p_new_owner: (newOwnerUserId ?? null) as unknown as string,
+    p_actor_id: actorUserId,
+  })
+
+  if (error) {
+    if (/not a member/i.test(error.message)) throw new NotAMemberError('That person is not in this workspace.')
+    throw new Error(`bulkAssignContacts failed: ${error.message}`)
+  }
+
+  const result = data as {
+    changed: number
+    unchanged: number
+    skipped: number
+    assignments: { contact_id: string; from: string | null; activity_id: string }[]
+  }
+
+  await announceAssignments(
+    workspaceId,
+    (result.assignments ?? []).map((a) => ({
+      contactId: a.contact_id,
+      from: a.from,
+      to: newOwnerUserId,
+      activityId: a.activity_id,
+    })),
+  )
+
+  return { changed: result.changed, unchanged: result.unchanged, skipped: result.skipped }
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +326,20 @@ export async function assignContact(
 export type CreateTaskInput = {
   contactId?: string | null
   companyId?: string | null
+  /**
+   * The deal this task advances.
+   *
+   * ⚠️ §8 DEFINES THE NEXT ACTION AS "the earliest permitted open activity
+   * linked to THAT DEAL", and until 0124 there was nowhere to put the link —
+   * so the next-action indicator, next-action coverage in reporting, and the
+   * "deals without a next action" row of My Work were all unanswerable for
+   * want of a column rather than for want of logic.
+   *
+   * The composite FK is on `(opportunity_id, workspace_id)`, so a deal from
+   * another workspace cannot be named here: the row it would reference does
+   * not exist.
+   */
+  opportunityId?: string | null
   title: string
   body?: string | null
   dueAt?: Date | string | null
@@ -236,6 +357,7 @@ export async function createTask(
       workspace_id: workspaceId,
       contact_id: input.contactId ?? null,
       company_id: input.companyId ?? null,
+      opportunity_id: input.opportunityId ?? null,
       title: input.title.trim(),
       body: input.body?.trim() || null,
       due_at: toIso(input.dueAt),

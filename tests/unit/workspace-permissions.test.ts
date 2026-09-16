@@ -66,6 +66,9 @@ const EXPECTED_MIN_ROLE: Record<Permission, WorkspaceRole> = {
   'crm.opportunity.edit': 'setter',
   'crm.opportunity.delete': 'manager',
   'crm.pipeline.manage': 'admin',
+  // Routing rules decide who receives every imported lead: workspace
+  // configuration, like pipelines. Managers may view them; admins change them.
+  'crm.routing.manage': 'admin',
   'crm.task.view': 'viewer',
   'crm.task.manage': 'setter',
 

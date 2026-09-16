@@ -66,6 +66,12 @@ const EXPECTED_JOBS = [
    * zeroes, and a zero there reads as "you did nothing this week" rather than
    * "not computed".
    */
+  /*
+   * ⚠️ ADDED WITH THE ROUTING RETRY. Only leads whose workspace changed since
+   * their last decision are selected, so most ticks find none -- which is
+   * exactly the shape of job that goes unnoticed when it stops running.
+   */
+  'retry_routing',
   'drain_extraction_queue',
   'rollup_reporting',
 ] as const

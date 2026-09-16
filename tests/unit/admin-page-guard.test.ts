@@ -25,6 +25,16 @@ import { describe, expect, it } from 'vitest'
 const ROOT = join(__dirname, '..', '..')
 const ADMIN = join(ROOT, 'app/admin')
 
+/**
+ * Repo-relative path with POSIX separators.
+ *
+ * ⚠️ path.relative returns backslashes on Windows, so a bare
+ * `toContain('app/admin/page.tsx')` misses and this guard fails for an
+ * environmental reason — training the reader to ignore the one test that would
+ * catch an ungated admin surface.
+ */
+const rel = (p: string) => relative(ROOT, p).replace(/\\/g, '/')
+
 /** Every page and route handler beneath app/admin, however deeply nested. */
 function entryPoints(dir: string): string[] {
   const out: string[] = []
@@ -55,11 +65,11 @@ describe('admin surfaces gate themselves', () => {
     // A test that silently walks an empty directory proves nothing. If /admin
     // moves, this must fail rather than pass vacuously.
     expect(pages.length).toBeGreaterThan(0)
-    expect(pages.map((p) => relative(ROOT, p))).toContain('app/admin/page.tsx')
+    expect(pages.map(rel)).toContain('app/admin/page.tsx')
   })
 
   for (const page of pages) {
-    const name = relative(ROOT, page)
+    const name = rel(page)
 
     it(`${name} calls an admin gate in its own body`, () => {
       const source = code(page)

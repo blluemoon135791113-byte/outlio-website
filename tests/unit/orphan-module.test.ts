@@ -108,7 +108,14 @@ const IMPORTERS = (() => {
  * precisely the thing being detected.
  */
 function importersOf(file: string): { production: string[]; tests: string[] } {
-  return IMPORTERS.get(file) ?? { production: [], tests: [] }
+  /*
+   * ⚠️ The key is normalised, because callers pass BOTH forms — some a POSIX
+   * literal ('lib/crm/contacts-list.ts'), some a path.join. IMPORTERS is keyed
+   * in the platform separator, so on Windows the literal form missed and
+   * returned "no importers" — indistinguishable from a real orphan, in the one
+   * test whose job is to prove the scanner can still see an importer at all.
+   */
+  return IMPORTERS.get(file.replace(/\//g, sep)) ?? { production: [], tests: [] }
 }
 
 /**

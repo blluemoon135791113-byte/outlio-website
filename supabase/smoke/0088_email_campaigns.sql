@@ -4,10 +4,21 @@
 -- lives on the ENROLLMENT, so one real person can be in several sequences at
 -- once without being duplicated — and a reply stops all of them AND cancels
 -- their queued mail in a single call.
+--
+-- ⚠️ EVERY CHECK IS RECORDED, THEN GATED. The `select … as pass` rows here used
+-- to fail nothing: an `f` printed and the harness exited 0. Each check now goes
+-- into `smoke_checks` through `coalesce(…, false)`, and the gate at the end
+-- raises unless exactly the expected number were recorded and every one is true.
 
 \set ON_ERROR_STOP on
 
 begin;
+
+create temp table smoke_checks (
+  n     serial primary key,
+  label text not null,
+  ok    boolean not null
+);
 
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'owner@example.com')
@@ -64,28 +75,38 @@ values
    'ca000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000001',
    'dana@buyer.example', 0, now() + interval '2 days');
 
-select 'ONE contact row despite three enrollments' as check,
-       count(*) = 1 as pass
+insert into smoke_checks (label, ok)
+select 'ONE contact row despite three enrollments', coalesce(count(*) = 1, false)
 from public.crm_contacts
 where workspace_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
-select 'THREE independent step pointers for one person' as check,
-       count(*) = 3 as pass,
-       count(distinct current_step) = 2 as steps_differ
+insert into smoke_checks (label, ok)
+select 'THREE enrollments for one person', coalesce(count(*) = 3, false)
+from public.email_enrollments
+where contact_id = 'c0000000-0000-0000-0000-000000000001';
+
+insert into smoke_checks (label, ok)
+select 'THREE independent step pointers (they differ)', coalesce(count(distinct current_step) = 2, false)
 from public.email_enrollments
 where contact_id = 'c0000000-0000-0000-0000-000000000001';
 
 -- ...and the same person cannot be enrolled twice in one campaign.
 do $$
+declare
+  v_rejected boolean := false;
 begin
-  insert into public.email_enrollments
-    (workspace_id, campaign_id, contact_id, to_email)
-  values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','ca000000-0000-0000-0000-000000000001',
-          'c0000000-0000-0000-0000-000000000001','dana@buyer.example');
-  raise exception 'FAIL: a second active enrollment was accepted';
-exception
-  when unique_violation then
-    raise notice 'PASS duplicate active enrollment rejected';
+  begin
+    insert into public.email_enrollments
+      (workspace_id, campaign_id, contact_id, to_email)
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','ca000000-0000-0000-0000-000000000001',
+            'c0000000-0000-0000-0000-000000000001','dana@buyer.example');
+  exception
+    when unique_violation then
+      v_rejected := true;
+  end;
+
+  insert into smoke_checks (label, ok)
+  values ('DUPLICATE active enrollment rejected', v_rejected);
 end
 $$;
 
@@ -94,14 +115,20 @@ $$;
 -- ---------------------------------------------------------------------------
 
 do $$
+declare
+  v_rejected boolean := false;
 begin
-  update public.email_enrollments
-     set status = 'stopped', stopped_at = now()
-   where id = 'eb000000-0000-0000-0000-000000000002';
-  raise exception 'FAIL: an enrollment was stopped with no reason';
-exception
-  when check_violation then
-    raise notice 'PASS a stop without a reason is rejected';
+  begin
+    update public.email_enrollments
+       set status = 'stopped', stopped_at = now()
+     where id = 'eb000000-0000-0000-0000-000000000002';
+  exception
+    when check_violation then
+      v_rejected := true;
+  end;
+
+  insert into smoke_checks (label, ok)
+  values ('A STOP without a reason is rejected', v_rejected);
 end
 $$;
 
@@ -128,12 +155,13 @@ values
    'eb000000-0000-0000-0000-000000000001','dana@buyer.example','Hello','b',
    'q-3','sent', now() - interval '3 days', now() - interval '3 days');
 
-select 'REPLY stops every live sales enrollment' as check,
-       public.stop_enrollments_for_email(
-         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'dana@buyer.example', 'replied') = 3 as pass;
+insert into smoke_checks (label, ok)
+values ('REPLY stops every live sales enrollment',
+        coalesce(public.stop_enrollments_for_email(
+          'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'dana@buyer.example', 'replied') = 3, false));
 
-select 'STOPPED enrollments record the reason and the time' as check,
-       count(*) = 3 as pass
+insert into smoke_checks (label, ok)
+select 'STOPPED enrollments record the reason and the time', coalesce(count(*) = 3, false)
 from public.email_enrollments
 where contact_id = 'c0000000-0000-0000-0000-000000000001'
   and status = 'stopped'
@@ -141,15 +169,16 @@ where contact_id = 'c0000000-0000-0000-0000-000000000001'
   and replied_at is not null
   and next_action_at is null;
 
-select 'QUEUED mail for those enrollments is cancelled' as check,
-       count(*) = 2 as pass
+insert into smoke_checks (label, ok)
+select 'QUEUED mail for those enrollments is cancelled', coalesce(count(*) = 2, false)
 from public.email_messages
 where status = 'cancelled'
   and error_code = 'ENROLLMENT_STOPPED';
 
-select 'ALREADY-SENT mail is untouched by a stop' as check,
-       status = 'sent' as pass
-from public.email_messages where idempotency_key = 'q-3';
+insert into smoke_checks (label, ok)
+values ('ALREADY-SENT mail is untouched by a stop',
+        coalesce((select status = 'sent' from public.email_messages
+                   where idempotency_key = 'q-3'), false));
 
 -- ---------------------------------------------------------------------------
 -- Scoping: a stop aimed at one campaign leaves the others alone.
@@ -164,16 +193,17 @@ insert into public.email_enrollments (workspace_id, campaign_id, contact_id, to_
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','ca000000-0000-0000-0000-000000000003',
    'c0000000-0000-0000-0000-000000000002','sam@buyer.example');
 
-select 'A CAMPAIGN-SCOPED stop touches only that campaign' as check,
-       public.stop_enrollments_for_email(
-         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','sam@buyer.example','unsubscribed',
-         'ca000000-0000-0000-0000-000000000003') = 1 as pass;
+insert into smoke_checks (label, ok)
+values ('A CAMPAIGN-SCOPED stop touches only that campaign',
+        coalesce(public.stop_enrollments_for_email(
+          'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','sam@buyer.example','unsubscribed',
+          'ca000000-0000-0000-0000-000000000003') = 1, false));
 
-select 'The other campaign’s enrollment survives' as check,
-       status = 'active' as pass
-from public.email_enrollments
-where contact_id = 'c0000000-0000-0000-0000-000000000002'
-  and campaign_id = 'ca000000-0000-0000-0000-000000000001';
+insert into smoke_checks (label, ok)
+values ('The other campaign’s enrollment survives',
+        coalesce((select status = 'active' from public.email_enrollments
+                   where contact_id = 'c0000000-0000-0000-0000-000000000002'
+                     and campaign_id = 'ca000000-0000-0000-0000-000000000001'), false));
 
 -- ---------------------------------------------------------------------------
 -- Re-enrollment after an enrollment has ended is allowed.
@@ -183,8 +213,8 @@ insert into public.email_enrollments (workspace_id, campaign_id, contact_id, to_
 values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','ca000000-0000-0000-0000-000000000001',
         'c0000000-0000-0000-0000-000000000001','dana@buyer.example');
 
-select 'RE-ENROLLMENT is allowed once the previous one ended' as check,
-       count(*) = 2 as pass
+insert into smoke_checks (label, ok)
+select 'RE-ENROLLMENT is allowed once the previous one ended', coalesce(count(*) = 2, false)
 from public.email_enrollments
 where contact_id = 'c0000000-0000-0000-0000-000000000001'
   and campaign_id = 'ca000000-0000-0000-0000-000000000001';
@@ -194,16 +224,52 @@ where contact_id = 'c0000000-0000-0000-0000-000000000001'
 -- ---------------------------------------------------------------------------
 
 do $$
+declare
+  v_rejected boolean := false;
 begin
-  insert into public.email_sequence_steps
-    (workspace_id, campaign_id, step_index, subject, body_text)
-  values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','ca000000-0000-0000-0000-000000000001',
-          1,'Duplicate position','b');
-  raise exception 'FAIL: two steps took the same position';
-exception
-  when unique_violation then
-    raise notice 'PASS duplicate step index rejected';
+  begin
+    insert into public.email_sequence_steps
+      (workspace_id, campaign_id, step_index, subject, body_text)
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','ca000000-0000-0000-0000-000000000001',
+            1,'Duplicate position','b');
+  exception
+    when unique_violation then
+      v_rejected := true;
+  end;
+
+  insert into smoke_checks (label, ok)
+  values ('DUPLICATE step index rejected', v_rejected);
 end
 $$;
+
+-- ---------------------------------------------------------------------------
+-- The gate.
+-- ---------------------------------------------------------------------------
+select n, ok, label from smoke_checks order by n;
+
+do $$
+declare
+  v_expected constant integer := 13;
+  v_total    integer;
+  v_failed   text;
+begin
+  select count(*),
+         string_agg(label, '; ' order by n) filter (where ok is not true)
+    into v_total, v_failed
+    from smoke_checks;
+
+  -- ⚠️ THE COUNT IS PART OF THE TEST. A check that never ran records nothing,
+  -- so it would pass by being absent. Adding or removing a check means
+  -- changing this number, on purpose.
+  if v_total <> v_expected then
+    raise exception 'SMOKE FAILED: expected % checks, recorded %', v_expected, v_total;
+  end if;
+
+  if v_failed is not null then
+    raise exception 'SMOKE FAILED: %', v_failed;
+  end if;
+
+  raise notice 'SMOKE PASSED: % of % checks', v_total, v_expected;
+end $$;
 
 rollback;

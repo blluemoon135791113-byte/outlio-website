@@ -76,11 +76,23 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
     error_code: string | null
     error_message: string | null
     credits_used: number
+    output: unknown
+  }
+
+  /*
+   * ⚠️ A SKIPPED STEP READS ITS REASON FROM `output`, NOT `error_message`. The
+   * engine keeps skips out of the error columns on purpose: anything in
+   * `error_message` renders as a failure, and a step that correctly left an
+   * owned contact alone is not one.
+   */
+  const skipReason = (output: unknown): string => {
+    const skipped = (output as { skipped?: { message?: unknown } } | null)?.skipped
+    return typeof skipped?.message === 'string' ? skipped.message : 'Skipped.'
   }
 
   const { data: stepRuns } = runIds.length
     ? await db.from('flow_step_runs')
-        .select('run_id, step_id, step_type, status, duration_ms, error_code, error_message, credits_used')
+        .select('run_id, step_id, step_type, status, duration_ms, error_code, error_message, credits_used, output')
         .in('run_id', runIds).order('started_at')
     : { data: [] as StepRow[] }
 
@@ -330,7 +342,9 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
                             ? 'h-1.5 w-1.5 shrink-0 rounded-full bg-success'
                             : step.status === 'failed'
                               ? 'h-1.5 w-1.5 shrink-0 rounded-full bg-danger'
-                              : 'h-1.5 w-1.5 shrink-0 rounded-full bg-muted'
+                              : step.status === 'skipped'
+                                ? 'h-1.5 w-1.5 shrink-0 rounded-full bg-warning'
+                                : 'h-1.5 w-1.5 shrink-0 rounded-full bg-muted'
                         }
                       />
                       <span className="font-semibold text-ink">{step.step_id}</span>
@@ -345,6 +359,9 @@ export default async function FlowPage({ params }: { params: Promise<{ id: strin
                       ) : null}
                       {step.error_message ? (
                         <span className="w-full text-danger">{step.error_message}</span>
+                      ) : null}
+                      {step.status === 'skipped' ? (
+                        <span className="w-full text-muted">Skipped — {skipReason(step.output)}</span>
                       ) : null}
                     </li>
                   ))}

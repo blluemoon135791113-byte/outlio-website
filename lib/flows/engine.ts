@@ -24,6 +24,7 @@ import 'server-only'
  */
 import {
   actionCostsCredits,
+  MAX_RUN_LIFETIME_HOURS,
   validateFlowDefinition,
   type ActionType,
   type FlowStep,
@@ -49,12 +50,41 @@ export type FlowContext = {
   workspaceId: string
   runId: string
   contactId: string | null
+  /**
+   * Who published the version this run is executing — `flow_versions.created_by`.
+   *
+   * ⚠️ THE RUN ACTS WITH THIS PERSON'S AUTHORITY, SO IT MUST BE RE-CHECKED,
+   * NOT ASSUMED. A published version froze `actorAuthorized` at publish time,
+   * which meant a member who left in March was still sending mail in
+   * September. Handlers that act on somebody's behalf ask
+   * `memberMayNow(workspaceId, publisherUserId, …)` rather than trusting a
+   * stamped boolean.
+   *
+   * Null when the version predates the column or the publisher's auth row was
+   * deleted. Both must fail closed.
+   */
+  publisherUserId: string | null
   /** Values the branch conditions read. Populated per run. */
   facts: Record<string, unknown>
 }
 
 export type ActionResult =
-  | { ok: true; output?: JsonObject; creditsUsed?: number }
+  | {
+      ok: true
+      output?: JsonObject
+      creditsUsed?: number
+      /**
+       * The step deliberately did nothing, and says why.
+       *
+       * ⚠️ A SKIP IS NOT A SUCCESS AND NOT A FAILURE. §10: "SKIP is an explicit
+       * branch outcome, not a swallowed error." Reported as success, a step that
+       * left an owned contact alone reads as "assigned" in the run trace;
+       * reported as failure, it halts a run that did exactly what it should.
+       * `flow_step_status` has had a `skipped` value all along and nothing ever
+       * wrote it. The run continues to the next step.
+       */
+      skipped?: { code: string; message: string }
+    }
   | { ok: false; code: string; message: string; retryable: boolean }
 
 export type ActionHandler = (
@@ -298,7 +328,13 @@ export async function startRun(input: StartRunInput): Promise<StartRunResult> {
 }
 
 export type AdvanceResult = {
-  status: 'completed' | 'waiting' | 'failed' | 'running'
+  /*
+   * `halted` was always reachable — the early return casts `run.status`, which
+   * the database enum already allowed — but it was missing from this union, so
+   * a caller matching on the result could not see it. The lifetime cap now
+   * returns it deliberately.
+   */
+  status: 'completed' | 'waiting' | 'failed' | 'running' | 'halted'
   stepsExecuted: number
   /** Set when the run stopped because a step failed. */
   error?: { stepId: string | null; code: string; message: string }
@@ -321,7 +357,7 @@ export async function advanceRun(
 
   const { data: run, error } = await db
     .from('flow_runs')
-    .select('id, flow_id, version_id, contact_id, current_step, status, variables')
+    .select('id, flow_id, version_id, contact_id, current_step, status, variables, started_at')
     .eq('workspace_id', workspaceId)
     .eq('id', runId)
     .single()
@@ -332,17 +368,58 @@ export async function advanceRun(
   }
 
   /*
+   * ╔═════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THE LIFETIME CAP, CHECKED BEFORE ANY STEP RUNS — CRM-DN-04.         ║
+   * ║                                                                         ║
+   * ║  Nothing expired a run before this. A chain of waits, or a legal cycle  ║
+   * ║  (one containing a wait), kept a run in `waiting` forever: re-claimed   ║
+   * ║  by every tick, holding a contact enrolled, and still able to send.     ║
+   * ║                                                                         ║
+   * ║  Placed HERE, above the version load and the fact gather, because the   ║
+   * ║  point of a cap is that an expired run performs no further side         ║
+   * ║  effects. A check after the step dispatch would expire runs that had    ║
+   * ║  just sent one more email.                                              ║
+   * ║                                                                         ║
+   * ║  `halted` already exists and already requires a reason, so an operator  ║
+   * ║  reading the run sees which rule stopped it rather than a run that      ║
+   * ║  simply stopped.                                                        ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   */
+  const ageHours = (Date.now() - new Date(run.started_at).getTime()) / 3_600_000
+  if (ageHours > MAX_RUN_LIFETIME_HOURS) {
+    const haltReason = `run_lifetime_exceeded: started ${Math.round(ageHours / 24)} days ago, limit ${Math.round(MAX_RUN_LIFETIME_HOURS / 24)}`
+
+    await db
+      .from('flow_runs')
+      .update({
+        status: 'halted',
+        halt_reason: haltReason,
+        current_step: null,
+        resume_at: null,
+        finished_at: new Date().toISOString(),
+      })
+      .eq('id', runId)
+
+    return { status: 'halted', stepsExecuted: 0 }
+  }
+
+  /*
    * ⚠️ THE DEFINITION COMES FROM THE RUN'S PINNED VERSION, never from the
    * flow's current pointer. This is criterion 3 at the point it actually
    * matters — one line away from being wrong.
    */
+  /*
+   * `created_by` rides along on the query that was already being made, so
+   * knowing whose authority this run carries costs nothing.
+   */
   const { data: version } = await db
     .from('flow_versions')
-    .select('definition')
+    .select('definition, created_by')
     .eq('id', run.version_id)
     .single()
 
   const definition = validateFlowDefinition(version!.definition)
+  const publisherUserId = version!.created_by
   const byId = new Map(definition.steps.map((s) => [s.id, s]))
 
   /*
@@ -441,7 +518,10 @@ export async function advanceRun(
     const handler = handlerFor(step.action)
 
     const result: ActionResult = handler
-      ? await handler({ workspaceId, runId, contactId: run.contact_id, facts }, step.config)
+      ? await handler(
+          { workspaceId, runId, contactId: run.contact_id, publisherUserId, facts },
+          step.config,
+        )
       : {
           ok: false,
           code: 'ACTION_NOT_AVAILABLE',
@@ -451,11 +531,17 @@ export async function advanceRun(
 
     const duration = Date.now() - startedAt
 
+    // The skip reason rides in `output`, not `error_message`: the run trace
+    // renders an error message as a failure.
+    const skipped = result.ok ? result.skipped : undefined
+
     await db
       .from('flow_step_runs')
       .update({
-        status: result.ok ? 'succeeded' : 'failed',
-        output: result.ok ? ((result.output ?? {}) as Json) : {},
+        status: !result.ok ? 'failed' : skipped ? 'skipped' : 'succeeded',
+        output: result.ok
+          ? ((skipped ? { ...(result.output ?? {}), skipped } : (result.output ?? {})) as Json)
+          : {},
         error_code: result.ok ? null : result.code,
         error_message: result.ok ? null : result.message,
         credits_used: result.ok ? (result.creditsUsed ?? 0) : 0,

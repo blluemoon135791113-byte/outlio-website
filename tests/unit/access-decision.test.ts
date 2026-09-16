@@ -4,6 +4,8 @@
  * Covers: every role, expiry, suspension, unverified email, and each plan limit
  * independently. Suspended and expired must produce DISTINCT reasons.
  */
+import { readdirSync, readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 
 import { decideAccess, decideLimits, withinLimit, type DecisionInput } from '@/lib/auth/decide'
@@ -267,17 +269,33 @@ describe('an admin is not subject to the plan half of the decision', () => {
 describe('nothing outside lib/auth decides access', () => {
   // CLAUDE.md: "All access decisions go through lib/auth/access.ts. Nothing
   // else decides access." A surface that recomputes it will drift from it.
-  it('no page or component imports the raw decision functions', async () => {
-    const { execSync } = await import('node:child_process')
+  /*
+   * ⚠️ WALKED IN NODE, NOT SHELLED OUT TO grep.
+   *
+   * This was `execSync("grep -rln ... || true")`, which runs under cmd.exe on
+   * Windows where neither `grep` nor `|| true` exists. The guard did not report
+   * a violation there — it failed outright, and a guard that cannot run is one
+   * more red test to scroll past.
+   */
+  const sourceFiles = (dir: string, out: string[] = []): string[] => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
+      const full = `${dir}/${entry.name}`
+      if (entry.isDirectory()) sourceFiles(full, out)
+      else if (/\.tsx?$/.test(entry.name)) out.push(full)
+    }
+    return out
+  }
+
+  it('no page or component imports the raw decision functions', () => {
+    const files = [...sourceFiles('app'), ...sourceFiles('components')]
+
+    // Guards the scanner: an empty sweep would pass against nothing.
+    expect(files.length, 'scanned no files — have app/ or components/ moved?').toBeGreaterThan(100)
 
     // The import is the violation, not the word — this file's own explanation
     // of the bug names those functions in prose, and so may a comment there.
-    const hits = execSync(
-      `grep -rln "from '@/lib/auth/decide'" app components || true`,
-      { encoding: 'utf8' },
-    )
-      .split('\n')
-      .filter(Boolean)
+    const hits = files.filter((f) => readFileSync(f, 'utf8').includes("from '@/lib/auth/decide'"))
 
     expect(
       hits,

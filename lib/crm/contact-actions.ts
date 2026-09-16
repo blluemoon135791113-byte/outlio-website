@@ -11,7 +11,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
-import { addNote, assignContact, eraseContact } from '@/lib/crm/activities'
+import { addNote, assignContact, bulkAssignContacts, eraseContact, NotAMemberError } from '@/lib/crm/activities'
 import { createContactManually } from '@/lib/crm/ingest'
 import {
   STOP_REASONS,
@@ -29,6 +29,7 @@ import {
 } from '@/lib/crm/collision'
 import { isAppError } from '@/lib/errors/catalog'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
+import { dataScope } from '@/lib/workspaces/permissions'
 
 export type ContactActionState =
   | { status: 'idle' }
@@ -161,6 +162,14 @@ export async function addNoteAction(
 
 export type CreateContactState =
   | { ok: true; message: string; contactId: string; created: boolean }
+  /**
+   * §4's fourth create-time outcome: a PRIVATE ADMIN-REVIEW CONFLICT.
+   *
+   * The entry matched somebody this caller may not read. No id, no name, no
+   * owner and no count crosses back — `held` carries no payload on purpose,
+   * because every field it could carry is one T04 forbids.
+   */
+  | { ok: true; held: true; message: string }
   | { ok: false; error: string }
   | null
 
@@ -208,6 +217,51 @@ export async function createContactAction(
       },
       ctx.userId,
     )
+
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  A MATCH THE CALLER CANNOT READ IS NOT AN ANSWER THEY GET.            ║
+     * ║                                                                       ║
+     * ║  Dedup runs on the service role, so it matches across the whole        ║
+     * ║  workspace — including records a setter's `assigned` scope hides.      ║
+     * ║  Returning that contact's id told them the person exists, who they     ║
+     * ║  are, and gave them the id to navigate to: an enumeration oracle for   ║
+     * ║  the entire contact list, one guessed email at a time.                 ║
+     * ║                                                                       ║
+     * ║  T04: no owner, name, id or count disclosure — and the admin review    ║
+     * ║  path must still prevent the unsafe duplicate. So the record is not    ║
+     * ║  created, nothing identifying is returned, and the existing            ║
+     * ║  reassignment queue carries the conflict to someone who may act on it. ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    const matchedSomeoneElses =
+      !result.created &&
+      dataScope(ctx.role) !== 'all' &&
+      result.ownerUserId !== ctx.userId
+
+    if (matchedSomeoneElses) {
+      try {
+        await requestReassignment(
+          ctx.workspace.id,
+          result.contactId,
+          ctx.userId,
+          'Opened automatically: tried to add a contact the workspace already has.',
+        )
+      } catch (error) {
+        // Already asked. The review path is open, which is all this needs — and
+        // the requester must not learn that a second attempt behaved
+        // differently from the first.
+        if (!(error instanceof DuplicateRequestError)) throw error
+      }
+
+      return {
+        ok: true,
+        held: true,
+        message:
+          'That contact needs an administrator to review it before it can be added. ' +
+          'They have been asked.',
+      }
+    }
 
     revalidatePath('/crm/contacts')
 
@@ -277,37 +331,21 @@ export async function bulkAssignAction(
   const raw = String(formData.get('ownerUserId') ?? '')
   const ownerUserId = raw === 'none' ? null : raw
 
-  const db = createAdminClient()
-
   /*
-   * ⚠️ THE NEW OWNER MUST BE A MEMBER OF THIS WORKSPACE. The id comes from a
-   * form and the service role bypasses RLS, so without this a crafted request
-   * hands contacts to an outsider, who then owns them legitimately. Same check
-   * as the departing-member handover in R3.
+   * ⚠️ THE WORKSPACE AND MEMBERSHIP CHECKS NOW LIVE IN THE DATABASE, where the
+   * write happens. `crm_bulk_assign_contacts` (0129) only touches this
+   * workspace's live contacts — an id from a form is a claim — and refuses a
+   * new owner who is not a member, so a crafted request cannot hand contacts
+   * to an outsider. Each change goes through the single-assignment function,
+   * so each writes its OWNER_ASSIGNED history.
    */
-  if (ownerUserId) {
-    const { data: member } = await db
-      .from('workspace_memberships')
-      .select('user_id')
-      .eq('workspace_id', ctx.workspace.id)
-      .eq('user_id', ownerUserId)
-      .maybeSingle()
-
-    if (!member) return { ok: false, error: 'That person is not in this workspace.' }
+  let result
+  try {
+    result = await bulkAssignContacts(ctx.workspace.id, ids, ownerUserId, ctx.userId)
+  } catch (error) {
+    if (error instanceof NotAMemberError) return { ok: false, error: error.message }
+    return { ok: false, error: 'Could not assign those contacts.' }
   }
-
-  const { data, error } = await db
-    .from('crm_contacts')
-    .update({ owner_user_id: ownerUserId })
-    // Scoped by workspace in code, and by the id list — an id from a form is a
-    // claim, and this is what stops it reaching another tenant's contact.
-    .eq('workspace_id', ctx.workspace.id)
-    .in('id', ids)
-    .select('id')
-
-  if (error) return { ok: false, error: 'Could not assign those contacts.' }
-
-  const moved = data?.length ?? 0
 
   revalidatePath('/crm/contacts')
 
@@ -316,11 +354,12 @@ export async function bulkAssignAction(
    * differ when a selection spans a page someone no longer has access to, and
    * silently claiming the larger number would hide that.
    */
+  const { changed, unchanged } = result
+  const verb = ownerUserId ? 'assigned' : 'unassigned'
+  const already = unchanged > 0 ? ` ${unchanged} already ${ownerUserId ? 'theirs' : 'unassigned'}.` : ''
   return {
     ok: true,
-    message: ownerUserId
-      ? `${moved} contact${moved === 1 ? '' : 's'} assigned.`
-      : `${moved} contact${moved === 1 ? '' : 's'} unassigned.`,
+    message: `${changed} contact${changed === 1 ? '' : 's'} ${verb}.${already}`,
   }
 }
 

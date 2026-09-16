@@ -14,6 +14,12 @@ export type TaskRow = {
   done: boolean
   contactId: string | null
   contactName: string | null
+  /**
+   * The version this screen loaded. ⚠️ Sent back with the toggle so a
+   * completion from a stale list — one loaded before somebody reassigned or
+   * snoozed the task — is refused instead of overwriting their change.
+   */
+  version: number
 }
 
 function dueLabel(dueAt: string | null): { overdue: boolean } {
@@ -33,6 +39,7 @@ function Task({ row, canManage }: { row: TaskRow; canManage: boolean }) {
         <form action={toggle} className="pt-0.5">
           <input type="hidden" name="taskId" value={row.id} />
           <input type="hidden" name="done" value={row.done ? 'false' : 'true'} />
+          <input type="hidden" name="version" value={row.version} />
           <button
             type="submit"
             disabled={pending}

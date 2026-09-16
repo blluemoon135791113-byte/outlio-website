@@ -18,14 +18,22 @@
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-/** Every .ts/.tsx file under a directory, recursively. */
+/**
+ * Every .ts/.tsx file under a directory, recursively.
+ *
+ * ⚠️ Paths are joined with '/' rather than path.join, because the results are
+ * COMPARED AGAINST POSIX LITERALS below ('lib/email/send.ts'). path.join emits
+ * backslashes on Windows, every such comparison silently misses, and this guard
+ * reports "no caller" for code that has one — failing OPEN on exactly the dead-
+ * code question it exists to answer. Node accepts forward slashes on Windows,
+ * so readFileSync is unaffected.
+ */
 function sourceFiles(dir: string): string[] {
   const out: string[] = []
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name)
+    const path = `${dir}/${entry.name}`
     if (entry.isDirectory()) {
       if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
       out.push(...sourceFiles(path))
@@ -95,6 +103,11 @@ describe('every background worker has a trigger', () => {
       name: 'rollupWorkspace',
       definedIn: 'lib/crm/metrics.ts',
       breaks: 'crm_reporting_daily is never written and every report reads zero',
+    },
+    {
+      name: 'retryWaitingLeads',
+      definedIn: 'lib/crm/routing.ts',
+      breaks: 'a lead left unassigned waits forever after the rule that covers it is published',
     },
     /*
      * ⚠️ FOUND THE SAME WAY, AND EASY TO MISTAKE FOR COVERED. The TARGETED

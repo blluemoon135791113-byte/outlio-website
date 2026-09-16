@@ -62,6 +62,27 @@ export function ImportContacts() {
               or email
             </li>
           ) : null}
+          {/*
+            ⚠️ ROUTING IS REPORTED SEPARATELY FROM THE IMPORT. The contacts are
+            in either way; what differs is whether they already have an owner.
+            "Waiting for an owner" names the outcome rather than calling it a
+            failure — nobody a rule named was free, which is information, and
+            the lead is not lost.
+          */}
+          {state.created > 0 && state.routing === null ? (
+            <li>Routing did not run — new contacts are unassigned. Assign them from Contacts.</li>
+          ) : null}
+          {state.routing && state.routing.assigned > 0 ? (
+            <li>
+              <strong className="text-ink">{state.routing.assigned}</strong> routed to an owner
+            </li>
+          ) : null}
+          {state.routing && state.routing.unassigned > 0 ? (
+            <li>
+              <strong className="text-ink">{state.routing.unassigned}</strong> waiting for an
+              owner — no routing rule had anyone available
+            </li>
+          ) : null}
         </ul>
 
         <div className="flex flex-wrap items-center gap-2 pt-1">

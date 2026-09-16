@@ -31,10 +31,18 @@ import { tenantColumn } from '@/lib/auth/scope'
 
 const ROOT = join(__dirname, '..', '..')
 
+/*
+ * ⚠️ Relative paths are built with '/', not path.join, because they are KEYS:
+ * `ALLOWED` below is written 'lib/workers/tick.ts'. path.join emits backslashes
+ * on Windows, so no allowlist entry would match and the worker claim paths —
+ * which genuinely do sweep every tenant — would be reported as cross-tenant
+ * leaks. Latent rather than visible: it only bites once an allowlisted file
+ * actually produces a finding.
+ */
 function walk(dir: string): string[] {
   const out: string[] = []
   for (const entry of readdirSync(join(ROOT, dir))) {
-    const rel = join(dir, entry)
+    const rel = `${dir}/${entry}`
     if (statSync(join(ROOT, rel)).isDirectory()) {
       if (entry === 'node_modules' || entry === '.next') continue
       out.push(...walk(rel))
@@ -55,9 +63,24 @@ function walk(dir: string): string[] {
  *
  * The effect was perfectly perverse: **the better-documented a query's scoping
  * was, the more likely this scan was to report it as unscoped.**
+ *
+ * ⚠️ `\r?\n` IS THE THIRD VERSION OF THAT SAME REGRESSION, and it arrived by a
+ * different door. `.` does not match `\r` in JavaScript, so against a CRLF
+ * working tree — Git for Windows' default — `//.*\n` matched NOTHING. Every
+ * comment survived into the "code", and `chainAfter` then ended the chain at
+ * the first `;` in COMMENT PROSE.
+ *
+ * Observed on `lib/crm/ingest.ts`, whose comment reads "…to infer the row
+ * shape; `'a, b' + 'c'` is not a literal type". The chain was cut three lines
+ * before the `.eq('user_id', …)` that scopes the query, and a read filtered
+ * three ways was reported as a cross-tenant leak.
+ *
+ * `.gitattributes` pins LF now, so this should not arise — but one file checked
+ * out before those attributes applied re-arms it silently, which is exactly how
+ * it was found. Two characters, and the scan no longer depends on that holding.
  */
 const stripComments = (s: string) =>
-  s.replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\n/gm, '').replace(/^[ \t]*\/\/.*\n/gm, '')
+  s.replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\r?\n/gm, '').replace(/^[ \t]*\/\/.*\r?\n/gm, '')
 
 /**
  * The full method chain starting at `.from('x')`, to its real end.
@@ -200,6 +223,28 @@ describe('the scanner itself', () => {
       `.update({ a: b })\n    // Scoped by workspace in code.\n    // Second line.\n    .eq('workspace_id', id)\n`,
     )
     expect(chainAfter(withComment, 0)).toContain("eq('workspace_id'")
+  })
+
+  it('survives that comment on a CRLF checkout too', () => {
+    /*
+     * ⚠️ THE THIRD VERSION OF THE SAME REGRESSION, found on Windows.
+     *
+     * `.` does not match `\r`, so `//.*\n` stripped NOTHING against a CRLF
+     * working tree. The comments stayed in the "code", and `chainAfter` then
+     * ended the chain at the first `;` in COMMENT PROSE — here, the one inside
+     * "the row shape;", three lines before the filter it was describing.
+     *
+     * Taken verbatim from `lib/crm/ingest.ts`, which this scan reported as an
+     * unscoped read of `extracted_leads` while it was filtered three ways.
+     */
+    const crlf = stripComments(
+      `.select('id')\r\n    // ONE STRING LITERAL. supabase-js parses this at\r\n` +
+        `    // the TYPE level to infer the row shape; not a literal type.\r\n` +
+        `    .eq('user_id', id)\r\n`,
+    )
+
+    expect(crlf, 'comments survived, so the scan is reading prose as code').not.toContain('//')
+    expect(chainAfter(crlf, 0)).toContain("eq('user_id'")
   })
 
   it('ignores storage buckets', () => {

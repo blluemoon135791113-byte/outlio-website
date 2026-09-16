@@ -17,6 +17,7 @@ import {
   archivePipeline,
   createPipeline,
   LastPipelineError,
+  parseStageProbability,
   renamePipeline,
   setDefaultPipeline,
   type StageInput,
@@ -85,17 +86,44 @@ export async function createPipelineAction(
   const kinds = formData.getAll('stageKind').map(String)
   const probabilities = formData.getAll('stageProbability').map(String)
 
-  const stages: StageInput[] = names
-    .map((stageName, i) => ({
-      name: stageName.trim(),
-      kind: (kinds[i] === 'won' || kinds[i] === 'lost' ? kinds[i] : 'open') as StageInput['kind'],
-      defaultProbability: Math.min(Math.max(Number(probabilities[i] ?? 0) || 0, 0), 100),
-    }))
+  /*
+   * ⚠️ REFUSED, NOT COERCED. This was `Number(probabilities[i] ?? 0) || 0`, so
+   * a blank field — the natural way to say "I have not decided" — became a
+   * deliberate 0%, and every deal in that stage silently contributed nothing
+   * to the weighted forecast. `default_probability` is `not null default 0`
+   * and cannot hold "unknown", so the honest move is to ask rather than to
+   * guess on somebody's behalf.
+   *
+   * ⚠️ AND IT IS CHECKED HERE, not only in the form. A server action is a
+   * public HTTP endpoint; the client-side check is a convenience, and this is
+   * the one that binds.
+   */
+  const named = names
+    .map((stageName, i) => ({ name: stageName.trim(), index: i }))
     .filter((s) => s.name.length > 0)
 
-  if (stages.length === 0) {
+  if (named.length === 0) {
     return { ok: false, error: 'A pipeline needs at least one stage.' }
   }
+
+  const unset = named.filter((s) => parseStageProbability(probabilities[s.index] ?? '') === null)
+  if (unset.length > 0) {
+    return {
+      ok: false,
+      error:
+        `Give ${unset.map((s) => `“${s.name}”`).join(', ')} a probability between 0 and 100. ` +
+        'A blank one would be stored as 0%, which reads as "this deal will not close" ' +
+        'rather than "not decided yet".',
+    }
+  }
+
+  const stages: StageInput[] = named.map((s) => ({
+    name: s.name,
+    kind: (kinds[s.index] === 'won' || kinds[s.index] === 'lost'
+      ? kinds[s.index]
+      : 'open') as StageInput['kind'],
+    defaultProbability: parseStageProbability(probabilities[s.index] ?? '')!,
+  }))
 
   /*
    * ⚠️ A BOARD WITH NO CLOSING STAGE CAN NEVER RECORD A WON DEAL, and every

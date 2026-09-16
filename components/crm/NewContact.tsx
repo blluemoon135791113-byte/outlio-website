@@ -20,6 +20,20 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
     null,
   )
 
+  /*
+   * ⚠️ NO "OPEN CONTACT" ON A HELD RESULT. The entry matched somebody this
+   * viewer may not read, so there is no id to route to — and offering the
+   * button would disclose, by its presence alone, that a matching record
+   * exists. The message stands on its own.
+   */
+  if (state?.ok && 'held' in state) {
+    return (
+      <div className="clay space-y-3 p-4">
+        <p role="status" aria-live="polite" className="text-sm text-ink">{state.message}</p>
+      </div>
+    )
+  }
+
   if (state?.ok) {
     return (
       <div className="clay space-y-3 p-4">
