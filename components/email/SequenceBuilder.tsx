@@ -15,6 +15,8 @@ export type SequenceStep = {
   waitHours: number
   subject: string
   bodyText: string
+  /** Null when the step sends plain text only, which is the common case. */
+  bodyHtml: string | null
 }
 
 /** Turns hours into the words someone actually thinks in. */
@@ -66,6 +68,34 @@ function StepEditor({
           className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 font-mono text-xs text-ink"
         />
       </label>
+
+      {/*
+        ⚠️ OPTIONAL, AND COLLAPSED BY DEFAULT. Most sequences should be plain
+        text — it deliverability-tests better and reads as a person typing. The
+        field exists because `email_sequence_steps.body_html` and the runner
+        have supported an HTML part since M6 with no way to author one, so the
+        column was permanently NULL.
+      */}
+      <details className="group">
+        <summary className="cursor-pointer text-xs font-medium text-ink">
+          HTML version (optional)
+        </summary>
+        <label className="mt-2 block">
+          <textarea
+            name="bodyHtml"
+            defaultValue={step?.bodyHtml ?? ''}
+            rows={6}
+            maxLength={40000}
+            placeholder="<p>Hi {{first_name|there}},</p>"
+            className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 font-mono text-xs text-ink"
+          />
+          <span className="mt-1 block text-xs text-muted">
+            Leave empty to send plain text only. The same variables work here, and
+            values are escaped so a name containing a{' '}
+            <code className="text-ink">&lt;</code> cannot break the markup.
+          </span>
+        </label>
+      </details>
 
       {/*
         ⚠️ THE VARIABLE LIST IS SHOWN, NOT LEFT TO MEMORY. An unknown variable

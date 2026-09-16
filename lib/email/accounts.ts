@@ -80,6 +80,12 @@ export type EmailAccount = {
   lastError: string | null
   connectedAt: string | null
   secretReference: string
+  /**
+   * The sender's sign-off. Appended at send time by `lib/email/signature.ts`,
+   * never at enqueue — see that module for why.
+   */
+  signatureText: string | null
+  signatureHtml: string | null
   capabilities: EmailCapabilities
 }
 
@@ -93,7 +99,7 @@ export type EmailAccount = {
  * there is no join here that could pull it in.
  */
 const ACCOUNT_COLUMNS =
-  'id, workspace_id, provider, scope, owner_user_id, display_name, from_email, from_name, reply_to_email, from_domain, status, configuration, daily_send_limit, hourly_send_limit, min_delay_seconds, timezone, send_window_start, send_window_end, send_days, health_score, health_checked_at, last_sync_at, last_send_at, last_error, connected_at, secret_reference, ramp_enabled, ramp_started_on, ramp_initial_daily, ramp_daily_increment, ramp_target_daily'
+  'id, workspace_id, provider, scope, owner_user_id, display_name, from_email, from_name, reply_to_email, from_domain, status, configuration, daily_send_limit, hourly_send_limit, min_delay_seconds, timezone, send_window_start, send_window_end, send_days, health_score, health_checked_at, last_sync_at, last_send_at, last_error, connected_at, secret_reference, ramp_enabled, ramp_started_on, ramp_initial_daily, ramp_daily_increment, ramp_target_daily, signature_text, signature_html'
 
 type AccountRow = {
   id: string
@@ -127,6 +133,8 @@ type AccountRow = {
   last_error: string | null
   connected_at: string | null
   secret_reference: string
+  signature_text: string | null
+  signature_html: string | null
 }
 
 function toAccount(row: AccountRow): EmailAccount {
@@ -163,6 +171,8 @@ function toAccount(row: AccountRow): EmailAccount {
     lastError: row.last_error,
     connectedAt: row.connected_at,
     secretReference: row.secret_reference,
+    signatureText: row.signature_text,
+    signatureHtml: row.signature_html,
     // Derived, never stored — a stored capability set goes stale the moment
     // someone adds IMAP settings.
     capabilities: capabilitiesFor(row.provider, configuration),
@@ -188,6 +198,27 @@ export function normalizeSendingAddress(input: string): { email: string; domain:
   return { email, domain }
 }
 
+/**
+ * Names the migration when the failure is a column this code expects to exist.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ `ACCOUNT_COLUMNS` IS ONE LITERAL STRING, SO A SINGLE MISSING COLUMN   ║
+ * ║  FAILS THE WHOLE READ — and `getEmailAccount` runs once per claimed       ║
+ * ║  message inside the send loop. Deploying this code before 0130 is applied ║
+ * ║  therefore stops ALL outbound mail for EVERY workspace, not just the      ║
+ * ║  mailbox someone was editing.                                            ║
+ * ║                                                                           ║
+ * ║  This does not prevent that; it makes it diagnosable in seconds instead   ║
+ * ║  of hours. Same pattern, and same reasoning, as the 0111 guard in         ║
+ * ║  `lib/email/send.ts`. Apply the migration BEFORE deploying.               ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+function migrationHint(message: string): string {
+  return /signature_(text|html)/.test(message)
+    ? `${message}. If this says the column does not exist, apply migration 0130.`
+    : message
+}
+
 /** Every live account in a workspace. RLS narrows this further for the caller. */
 export async function listEmailAccounts(workspaceId: string): Promise<EmailAccount[]> {
   const { data, error } = await createAdminClient()
@@ -197,7 +228,7 @@ export async function listEmailAccounts(workspaceId: string): Promise<EmailAccou
     .is('deleted_at', null)
     .order('created_at', { ascending: true })
 
-  if (error) throw new Error(`listEmailAccounts failed: ${error.message}`)
+  if (error) throw new Error(`listEmailAccounts failed: ${migrationHint(error.message)}`)
   return (data as AccountRow[]).map(toAccount)
 }
 
@@ -215,7 +246,7 @@ export async function getEmailAccount(
     .is('deleted_at', null)
     .maybeSingle()
 
-  if (error) throw new Error(`getEmailAccount failed: ${error.message}`)
+  if (error) throw new Error(`getEmailAccount failed: ${migrationHint(error.message)}`)
   return data ? toAccount(data as AccountRow) : null
 }
 

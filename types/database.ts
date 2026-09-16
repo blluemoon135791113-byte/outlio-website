@@ -3826,6 +3826,8 @@ export type Database = {
           send_days: number[]
           send_window_end: string
           send_window_start: string
+          signature_html: string | null
+          signature_text: string | null
           status: Database["public"]["Enums"]["email_account_status"]
           timezone: string
           updated_at: string
@@ -3862,6 +3864,8 @@ export type Database = {
           send_days?: number[]
           send_window_end?: string
           send_window_start?: string
+          signature_html?: string | null
+          signature_text?: string | null
           status?: Database["public"]["Enums"]["email_account_status"]
           timezone?: string
           updated_at?: string
@@ -3898,6 +3902,8 @@ export type Database = {
           send_days?: number[]
           send_window_end?: string
           send_window_start?: string
+          signature_html?: string | null
+          signature_text?: string | null
           status?: Database["public"]["Enums"]["email_account_status"]
           timezone?: string
           updated_at?: string

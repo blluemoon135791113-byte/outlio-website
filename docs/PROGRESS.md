@@ -4,6 +4,94 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-09-16 — Mailbox signatures, and an HTML body that could not be written
+
+⚠️ **Migration 0130 is NOT applied. Apply it BEFORE this code deploys** — see the
+deploy-ordering note at the end, which is the one blocking condition.
+
+### The two gaps
+
+**No signature existed anywhere.** Every "signature" in the codebase was
+cryptographic — HMAC tokens, webhook verification, session guards. No column, no
+field, no send-time step. So a sequence email left without a sign-off unless the
+author retyped one into the body of every step, and changing a job title meant
+editing every step of every campaign with no way to tell which were missed.
+
+**`body_html` had been unreachable since M6.** The column existed on
+`email_sequence_steps` and `sequence-runner.ts` rendered it through the template
+engine — but `bodyHtml` appeared nowhere in `app/` or `components/`, so nothing
+ever wrote it. Sequences were plain text only and the column was permanently NULL.
+
+### What was built
+
+- `supabase/migrations/0130_email_signatures.sql` — `signature_text` (≤5000) and
+  `signature_html` (≤20000) on `email_accounts`, plus a table constraint refusing
+  HTML without text.
+- `lib/email/signature.ts` — `applySignature`, called from `send.ts` **before**
+  `applyCompliance`.
+- `updateSignature` action + `components/email/SignatureSettings.tsx`, on the
+  mailbox card, gated `email.account.manage` (same gate as the schedule).
+- An optional HTML body in `SequenceBuilder`, validated by the same
+  `validateTemplate` rules and persisted on both the insert and update branches.
+
+### Decisions worth not re-litigating
+
+- **Applied at send time, never at enqueue.** The same reasoning `compliance.ts`
+  records for the postal address: a signature baked into `email_messages` means
+  mail queued before it was set sends unsigned forever, and someone who changes
+  job title still signs with the old one for every message already waiting —
+  which for a sequence is days of mail.
+- **The signature is literal text; template variables are NOT rendered.** This
+  runs after the message is claimed, where refusing on a missing value is no
+  longer possible — and refusing is exactly what makes `renderTemplate` safe
+  everywhere else. A signature describes the sender, who is fixed per mailbox, so
+  it has nothing to interpolate.
+- **No RFC 3676 `-- ` delimiter, and the reason is not cosmetic.** That marker
+  tells clients everything after it is a signature and several collapse that
+  region. The compliance footer is appended *after* the signature, so the
+  conventional delimiter would hide the unsubscribe mechanism CAN-SPAM
+  §7704(a)(3) requires the recipient to be able to see.
+- **Signature applies to every campaign type including `manual`**, unlike the
+  unsubscribe footer. A one-to-one reply is the message that most wants a
+  sign-off and the one that must not say "unsubscribe from this list".
+- **A text-only message is never promoted to multipart**, and a text-only
+  signature is escaped and converted for the HTML part rather than dropped — a
+  signature missing from only some clients is harder to notice than one missing
+  everywhere.
+- **Blank stores NULL, not `''`.** `sequence-runner` branches on
+  `step.body_html ? … : null`, so an empty string would send a multipart message
+  with an empty HTML part — a blank email in any client preferring HTML.
+
+### Verified
+
+`npm run typecheck` clean · `npm run lint` 0 errors · `npm run build` succeeds ·
+`tests/unit/email-signature.test.ts` 17/17 · action-reachability, email-accounts,
+email-template all pass.
+
+⚠️ **`tests/unit/email-compliance.test.ts` fails 7 tests locally** with
+`UNSUBSCRIBE_TOKEN_SECRET is not configured`. **Confirmed pre-existing** — stashed
+the change and reproduced the identical failure on a clean tree. It is a missing
+local env var, not a regression.
+
+⚠️ **The migration was NOT machine-validated.** `scripts/check-migration.sh`
+reports no local Postgres or Docker. It is plain DDL with no plpgsql body, so the
+name-resolution risk that script exists for does not apply — but it has not been
+run anywhere.
+
+### ⚠️ Deploy ordering — the blocking condition
+
+`ACCOUNT_COLUMNS` in `lib/email/accounts.ts` is **one literal string** (it must be
+— building it from variables degrades every column to `GenericStringError`), and
+`getEmailAccount` runs once per claimed message inside the send loop. So deploying
+this code before 0130 is applied stops **all outbound mail for every workspace**,
+not just the mailbox being edited.
+
+`migrationHint()` in `lib/email/accounts.ts` now names migration 0130 in that
+error, following the 0111 guard in `send.ts`. That makes the outage diagnosable in
+seconds; it does not prevent it. **Apply 0130 first, confirm it, then deploy.**
+
+---
+
 ## 2026-09-16 — The 17 older smoke files now gate every check (#40)
 
 ⚠️ **Supersedes the 2026-09-15 warning below that `supabase/smoke/` (0074–0093)
