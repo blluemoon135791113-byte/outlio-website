@@ -61,6 +61,8 @@ describe('Google integrations', () => {
         expect(String(init?.body)).toContain('Sales Navigator URL')
         return Response.json({ updatedRows: 2 })
       }
+      // The link pass — covered in detail by export-links.test.ts.
+      if (String(url).endsWith(':batchUpdate')) return Response.json({ replies: [] })
       expect(String(init?.body)).toContain('LinkedIn Profile')
       return Response.json({ id: 'drive-id', webViewLink: 'https://drive.google.com/open?id=drive-id' })
     })

@@ -3,6 +3,11 @@ import type { RateLimitRule } from '@/lib/auth/rate-limit'
 export const ACTION_LIMITS = {
   upload: { bucket: 'action:upload', maxAttempts: 30, windowSeconds: 10 * 60, blockSeconds: 15 * 60 },
   export: { bucket: 'action:export', maxAttempts: 60, windowSeconds: 10 * 60, blockSeconds: 15 * 60 },
+  // The Excel download rebuilds the whole job from the database and assembles
+  // the workbook in memory on every request — O(rows), where every other
+  // `export` action is O(1) (signing a URL, flagging a row). Its own tighter
+  // bucket, so a script cannot spend sixty full rebuilds in ten minutes.
+  workbook: { bucket: 'action:workbook', maxAttempts: 15, windowSeconds: 10 * 60, blockSeconds: 15 * 60 },
   integration: { bucket: 'action:integration', maxAttempts: 20, windowSeconds: 10 * 60, blockSeconds: 15 * 60 },
   profile: { bucket: 'action:profile', maxAttempts: 20, windowSeconds: 60 * 60, blockSeconds: 30 * 60 },
   passwordChange: { bucket: 'auth:password-change', maxAttempts: 5, windowSeconds: 15 * 60, blockSeconds: 30 * 60 },

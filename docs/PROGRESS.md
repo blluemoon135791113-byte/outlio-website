@@ -4,6 +4,82 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-09-19 — Exported links are clickable: Google Sheets, and a new Excel download
+
+Owner request: links in exported leads (Sales Navigator lead/company URLs,
+LinkedIn profiles, websites) should open on click, not sit there as text.
+
+### The constraint that shaped it
+
+**A CSV cannot hold a link.** The only way to make a CSV cell clickable in Excel
+is `=HYPERLINK(...)`, which SCRAPER_AUDIT §H2 forbids: lead text is
+attacker-controlled, and `sanitizeCell` deliberately neuters a leading `=`. The
+approved §H2 resolution was always "plain URL in its own column, link recreated
+by the writer's own link API". The owner was offered formulas-in-CSV, an Excel
+download, or leaving CSV plain, and **chose the Excel download**. CSV is
+unchanged and stays plain text — it is what CRMs import.
+
+### What was built
+
+- **Google Sheets** (`lib/integrations/google-exports.ts`): rows are still
+  written with `valueInputOption=RAW` (the formula defence), then one
+  `batchUpdate` sets `userEnteredFormat.textFormat.link` on URL cells — one
+  request per URL column, never the header, never the value.
+- **Excel download**: `Download Excel` in the job export menu →
+  `GET /api/exports/xlsx?job=` → `lib/export/job-workbook.ts` →
+  `lib/export/xlsx.ts` (exceljs 4.4.0). Links are external hyperlink
+  relationships; a generated file was unzipped to confirm 12 `<hyperlink>`
+  elements and **zero** `<f>` formula elements. Lead search and account lists.
+- **`linkableUrl`** (`lib/export/links.ts`) decides which cells link: the whole
+  trimmed value must be one http(s) URL, and the target is exactly the text shown
+  — so a cell cannot say one thing and open another. Other schemes, embedded
+  credentials, and prose containing a URL are refused.
+- **`toTable`** extracted from `toCsv` in `sanitize.ts`: one shaping step (column
+  dropping, `N/A`, `sanitizeCell`) for both writers, so the CSV and workbook of a
+  job cannot disagree. A test proves `toCsv` is byte-for-byte `toTable`.
+  `loadJobLeads` / `leadExportShape` / `accountExportShape` extracted so the
+  workbook reuses the CSV's own row builders.
+
+### Decisions worth not re-litigating
+
+- **Built on demand, not stored.** Works for every existing job immediately, no
+  worker change, and no XLSX MIME type needed on the `exports` bucket.
+- **A failed Sheets link pass does not fail the export.** The rows have landed;
+  calling it a failure would claim leads are missing and invite a duplicate
+  export. Logged with the status code only — never a URL.
+- **Same gate as the CSV download** (`assertAccess`), not a bare session check
+  as some older export routes use.
+- **Own rate bucket**, `action:workbook`, 15 per 10 min — it is the only
+  O(rows) operation among the `export` actions, which are otherwise O(1).
+- **`MAX_WORKBOOK_ROWS = 10,000`.** Measured on one dev machine: 2,500 rows ≈ 1 s,
+  10,000 ≈ 4 s (~85% zipping), but 25,000 took ~8 s alone and ~40 s under test
+  suite contention. The ceiling was first set at 25,000 and lowered after that
+  measurement. Real jobs top out near 2,500 (100 pages × ~25 rows). Above the
+  ceiling the route answers 413 and points at the CSV. Re-measure before raising.
+- **The link colour is Office theme slot 10** ("hlink"), not a colour literal.
+
+### Verified
+
+typecheck clean · lint 0 errors (13 warnings, unchanged from main) · build
+succeeds and lists `/api/exports/xlsx` · `npm test` 4,155 pass, +26 new ·
+independent verification passed all 9 criteria · risk review "ship with
+conditions", both conditions (row ceiling, own bucket) since addressed.
+
+⚠️ `npm test` still fails 8 locally, **both pre-existing on main**:
+`email-compliance` (7, missing local `UNSUBSCRIBE_TOKEN_SECRET`) and
+`linkedin-senders` (1, splits paths on `/`, which fails on Windows only).
+
+⚠️ **Not verified in a browser** — there is no `.env.local` on this machine, so
+the menu entry and live download were not clicked through. Covered instead by
+unit tests on the route's builder, the menu wiring, and a real generated file.
+
+⚠️ **exceljs adds two moderate `npm audit` advisories** via `uuid` (buffer bounds
+in v3/v5/v6 when a buffer is passed; exceljs only generates v4 ids). Separately,
+`main` already carries a **critical** Next.js advisory and highs in `nodemailer`
+and `sharp`, unrelated to this change.
+
+---
+
 ## 2026-09-16 — Four defects in the owner-change history, and Vercel was blocking every deploy (#36)
 
 A review of #36 before merge. Four real defects, fixed in the same PR (0bdbc84,

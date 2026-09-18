@@ -8,6 +8,7 @@ import {
   toCanonicalExportRecord,
   type ExportLead,
 } from '@/lib/export/leads'
+import { linkableUrl } from '@/lib/export/links'
 import type { ExportResult } from '@/lib/integrations/types'
 
 const REQUEST_TIMEOUT_MS = 30_000
@@ -26,6 +27,44 @@ function columnsFor(leads: readonly ExportLead[]): string[] {
 function rowValues(lead: ExportLead, columns: readonly string[]): string[] {
   const record = toCanonicalExportRecord(lead)
   return columns.map((column) => record[column] ?? '')
+}
+
+/**
+ * The `batchUpdate` requests that make URL cells clickable.
+ *
+ * ⚠️ A FORMATTING PASS OVER CELLS ALREADY WRITTEN, NOT A FORMULA IN THEM. The
+ * rows go in with `valueInputOption=RAW`, which stores every value as literal
+ * text — that is what keeps a lead named `=cmd|'/c calc'!A1` inert. The link is
+ * then set on the cell's text format, which is Sheets' own link API: the cell
+ * still holds the plain URL, and nothing is ever evaluated. (docs/SCRAPER_AUDIT.md
+ * §H2 — the approved way to keep links without reintroducing `=HYPERLINK`.)
+ *
+ * One request per column that contains a link, not one per cell, so a
+ * thousand-lead export is a handful of requests rather than thousands. Row 0 is
+ * the header and is never linked.
+ */
+function linkRequestsFor(values: readonly (readonly string[])[], sheetId: number): object[] {
+  const [header, ...rows] = values
+  if (!header || rows.length === 0) return []
+
+  const requests: object[] = []
+  for (let column = 0; column < header.length; column += 1) {
+    const cells = rows.map((row) => {
+      const uri = linkableUrl(row[column])
+      return { values: [uri ? { userEnteredFormat: { textFormat: { link: { uri } } } } : {}] }
+    })
+    if (!cells.some((cell) => Object.keys(cell.values[0]).length > 0)) continue
+
+    requests.push({
+      updateCells: {
+        start: { sheetId, rowIndex: 1, columnIndex: column },
+        rows: cells,
+        // Only the link is touched. The value written above is left exactly as is.
+        fields: 'userEnteredFormat.textFormat.link',
+      },
+    })
+  }
+  return requests
 }
 
 function safeTitle(value: string | undefined, suffix: string): string {
@@ -65,7 +104,11 @@ export async function exportLeadsToGoogleSheet(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ properties: { title: safeTitle(title, '') } }),
     })
-    const created = await createResponse.json().catch(() => null) as { spreadsheetId?: string; spreadsheetUrl?: string } | null
+    const created = await createResponse.json().catch(() => null) as {
+      spreadsheetId?: string
+      spreadsheetUrl?: string
+      sheets?: { properties?: { sheetId?: number } }[]
+    } | null
     if (createResponse.status === 401) return failure(leads, 'GOOGLE_AUTH_REJECTED', 'Google authorization expired. Reconnect Google.')
     if (!createResponse.ok || !created?.spreadsheetId) return failure(leads, 'GOOGLE_SHEETS_CREATE_FAILED', 'Google Sheets could not create this spreadsheet.')
 
@@ -82,6 +125,39 @@ export async function exportLeadsToGoogleSheet(
     )
     if (updateResponse.status === 401) return failure(leads, 'GOOGLE_AUTH_REJECTED', 'Google authorization expired. Reconnect Google.')
     if (!updateResponse.ok) return failure(leads, 'GOOGLE_SHEETS_WRITE_FAILED', 'Google Sheets created the file but could not write the lead rows.')
+
+    /*
+     * ⚠️ THE ROWS HAVE LANDED; FROM HERE NOTHING MAY REPORT THE EXPORT AS FAILED.
+     * Every lead is in the sheet as readable text. If the link pass fails, the
+     * customer has a complete sheet whose URLs are not clickable — calling that
+     * a failed export would tell them their leads are missing when they are not,
+     * and invite a second export that duplicates the file. So it is caught here,
+     * separately from the outer catch, and only logged — with the status code and
+     * never a URL, since those are lead data.
+     *
+     * A new spreadsheet's first sheet is id 0; the create response is read in
+     * case Google ever says otherwise.
+     */
+    const linkRequests = linkRequestsFor(values, created.sheets?.[0]?.properties?.sheetId ?? 0)
+    if (linkRequests.length > 0) {
+      try {
+        const linkResponse = await googleRequest(
+          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(created.spreadsheetId)}:batchUpdate`,
+          accessToken,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requests: linkRequests }),
+          },
+        )
+        if (!linkResponse.ok) {
+          console.warn(`[google-exports] rows written, links not applied (HTTP ${linkResponse.status})`)
+        }
+      } catch {
+        console.warn('[google-exports] rows written, links not applied (request failed)')
+      }
+    }
+
     return {
       successfulCount: leads.length,
       failedCount: 0,

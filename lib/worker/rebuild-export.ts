@@ -36,13 +36,15 @@ const PAGE = 1000
 type Row = Record<(typeof EXPORT_COLUMN_ORDER)[number], string | null>
 
 /**
- * Rebuilds and re-uploads the CSV.
+ * Every kept lead in a job, in source order, or null when the read failed.
  *
- * Returns false rather than throwing: this runs after a successful extraction,
- * and a storage hiccup must not make a completed job look failed. The rows are
- * already correct in the database either way.
+ * ⚠️ NULL, NOT A SHORT LIST. A partial read would silently write a SHORTER file
+ * over the good one, which is worse than leaving the original in place.
  */
-export async function rebuildJobExport(jobId: string, userId: string): Promise<boolean> {
+export async function loadJobLeads(
+  jobId: string,
+  userId: string,
+): Promise<ExportLeadSource[] | null> {
   const supabase = createAdminClient()
   const leads: ExportLeadSource[] = []
 
@@ -57,17 +59,24 @@ export async function rebuildJobExport(jobId: string, userId: string): Promise<b
       .order('source_row_index', { ascending: true })
       .range(from, from + PAGE - 1)
 
-    // A partial read would silently write a SHORTER CSV over the good one,
-    // which is worse than leaving the original in place.
-    if (error) return false
+    if (error) return null
 
     const rows = (data ?? []) as unknown as ExportLeadSource[]
     leads.push(...rows)
     if (rows.length < PAGE) break
   }
 
-  if (leads.length === 0) return false
+  return leads
+}
 
+/**
+ * The records and columns of a lead export — shared by the CSV and the workbook,
+ * so the two files always carry the same columns in the same order.
+ */
+export function leadExportShape(leads: readonly ExportLeadSource[]): {
+  records: Row[]
+  columns: CsvColumn<Row>[]
+} {
   const records = leads.map((lead) => toCanonicalExportRecord(normalizeExportLead(lead)) as Row)
 
   /*
@@ -93,7 +102,23 @@ export async function rebuildJobExport(jobId: string, userId: string): Promise<b
     })),
   ]
 
-  const { error: uploadError } = await supabase.storage
+  return { records, columns }
+}
+
+/**
+ * Rebuilds and re-uploads the CSV.
+ *
+ * Returns false rather than throwing: this runs after a successful extraction,
+ * and a storage hiccup must not make a completed job look failed. The rows are
+ * already correct in the database either way.
+ */
+export async function rebuildJobExport(jobId: string, userId: string): Promise<boolean> {
+  const leads = await loadJobLeads(jobId, userId)
+  if (!leads || leads.length === 0) return false
+
+  const { records, columns } = leadExportShape(leads)
+
+  const { error: uploadError } = await createAdminClient().storage
     .from(EXPORT_BUCKET)
     .upload(`${userId}/${jobId}/leads.csv`, new TextEncoder().encode(toCsv(records, columns, { alwaysKeep: ALWAYS_EXPORTED })), {
       // No `; charset=utf-8`: Supabase matches the content type against the

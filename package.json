@@ -34,6 +34,7 @@
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",
     "country-list": "^2.4.1",
+    "exceljs": "4.4.0",
     "geist": "^1.7.2",
     "imapflow": "^1.7.6",
     "libphonenumber-js": "^1.13.10",

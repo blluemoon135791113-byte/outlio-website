@@ -80,11 +80,26 @@ export type CsvColumn<T> = {
  *   instead of mojibake
  * - every cell passes through `sanitizeCell`
  */
-export function toCsv<T>(
+/** A sanitized, shaped export: exactly the header and cells a writer emits. */
+export type ExportTable = {
+  headers: (string | number)[]
+  rows: (string | number)[][]
+}
+
+/**
+ * Shapes rows into the table every spreadsheet writer emits.
+ *
+ * ⚠️ ONE SHAPING FUNCTION, SO THE CSV AND THE WORKBOOK CANNOT DISAGREE. Which
+ * columns are dropped, what an empty cell says and how each value is sanitized
+ * are decided here once; `toCsv` and the XLSX writer only serialise the result.
+ * Two copies of this logic would drift, and a customer comparing the two files
+ * would find a column in one and not the other.
+ */
+export function toTable<T>(
   rows: readonly T[],
   columns: readonly CsvColumn<T>[],
-  options: { bom?: boolean; emptyValue?: string; alwaysKeep?: readonly string[] } = {},
-): string {
+  options: { emptyValue?: string; alwaysKeep?: readonly string[] } = {},
+): ExportTable {
   /*
    * ⚠️ AN EMPTY CELL IS AMBIGUOUS. It reads as "this person has no job title"
    * as easily as "we could not find one", and a spreadsheet gives the reader no
@@ -93,7 +108,7 @@ export function toCsv<T>(
    * Applied here rather than per column so no export path can forget it, and
    * overridable because a machine-read file may want a true empty.
    */
-  const { bom = true, emptyValue = 'N/A', alwaysKeep } = options
+  const { emptyValue = 'N/A', alwaysKeep } = options
 
   /*
    * ⚠️ A COLUMN THAT IS EMPTY ON EVERY ROW IS DROPPED.
@@ -119,20 +134,30 @@ export function toCsv<T>(
     })
   })
 
-  const lines: string[] = []
-  lines.push(kept.map((c) => csvField(sanitizeCell(c.header))).join(','))
-
-  for (const row of rows) {
-    lines.push(
-      kept
-        .map((column) => {
-          const cell = sanitizeCell(column.value(row))
-          // `0` and `false` are values, not absences.
-          return csvField(cell === null || cell === '' ? emptyValue : cell)
-        })
-        .join(','),
-    )
+  return {
+    headers: kept.map((c) => sanitizeCell(c.header) ?? ''),
+    rows: rows.map((row) =>
+      kept.map((column) => {
+        const cell = sanitizeCell(column.value(row))
+        // `0` and `false` are values, not absences.
+        return cell === null || cell === '' ? emptyValue : cell
+      }),
+    ),
   }
+}
+
+export function toCsv<T>(
+  rows: readonly T[],
+  columns: readonly CsvColumn<T>[],
+  options: { bom?: boolean; emptyValue?: string; alwaysKeep?: readonly string[] } = {},
+): string {
+  const { bom = true, ...shaping } = options
+  const table = toTable(rows, columns, shaping)
+
+  const lines = [
+    table.headers.map(csvField).join(','),
+    ...table.rows.map((row) => row.map(csvField).join(',')),
+  ]
 
   const body = lines.join('\r\n') + '\r\n'
   return bom ? `\uFEFF${body}` : body

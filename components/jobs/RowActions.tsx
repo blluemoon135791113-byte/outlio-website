@@ -25,13 +25,77 @@ import {
 const INITIAL: JobActionState = { status: 'idle' }
 const EXPORT_INITIAL: LeadExportActionState = { status: 'idle' }
 
+const MENU_ITEM =
+  'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-ink transition-[background-color,transform] duration-150 hover:bg-accent-soft/70 active:scale-[0.98] disabled:opacity-50'
+
+const EXCEL_FAILED = "We couldn't build your export. Please try again."
+
+/**
+ * Downloads the job as an Excel workbook whose links are clickable.
+ *
+ * ⚠️ WHY EXCEL AS WELL AS CSV. A CSV cannot hold a hyperlink without writing a
+ * formula into the cell, which SCRAPER_AUDIT §H2 forbids — lead text is
+ * attacker-controlled. The workbook carries real links instead (Ctrl+click in
+ * Excel), set through the file format's own link feature.
+ *
+ * Fetched rather than linked so a refusal — not ready, rate-limited — appears as
+ * a sentence in the menu instead of a broken download in the browser's tray.
+ */
+function DownloadExcel({ jobId, onError }: { jobId: string; onError: (message: string | null) => void }) {
+  const [pending, setPending] = useState(false)
+
+  async function download() {
+    setPending(true)
+    onError(null)
+    try {
+      const response = await fetch(`/api/exports/xlsx?job=${encodeURIComponent(jobId)}`, { cache: 'no-store' })
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null
+        onError(body?.error?.message ?? EXCEL_FAILED)
+        return
+      }
+
+      const blob = await response.blob()
+      const name =
+        /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1] ??
+        'outlio-export.xlsx'
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      // Released after the click has handed the blob to the browser's download.
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      onError(EXCEL_FAILED)
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={download}
+      disabled={pending}
+      title="Every link opens with Ctrl+click (Cmd+click on a Mac)"
+      className={MENU_ITEM}
+    >
+      <ConnectorLogo name="csv" className="size-5" />
+      <span>{pending ? 'Preparing Excel…' : 'Download Excel'}</span>
+    </button>
+  )
+}
+
 function MenuSubmit({ logo, label }: { logo: ConnectorLogoName; label: string }) {
   const { pending } = useFormStatus()
   return (
     <button
       type="submit"
       disabled={pending}
-      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-ink transition-[background-color,transform] duration-150 hover:bg-accent-soft/70 active:scale-[0.98] disabled:opacity-50"
+      className={MENU_ITEM}
     >
       <ConnectorLogo name={logo} className="size-5" />
       <span>{pending ? `Exporting to ${label}…` : label}</span>
@@ -70,6 +134,7 @@ export function RowExportMenu({
   const [clay, clayAction] = useActionState(exportSelectedLeadsToClayAction, EXPORT_INITIAL)
   const [google, googleAction] = useActionState(exportSelectedLeadsToGoogleAction, EXPORT_INITIAL)
   const [ghl, ghlAction] = useActionState(exportSelectedLeadsToGhlAction, EXPORT_INITIAL)
+  const [excelError, setExcelError] = useState<string | null>(null)
   const exportFeedback = [clay, google, ghl].find((state) => state.status !== 'idle')
 
   // Signed URLs expire in ~60s: download immediately rather than rendering a
@@ -94,6 +159,7 @@ export function RowExportMenu({
               <input type="hidden" name="job_id" value={jobId} />
               <MenuSubmit logo="csv" label="Download CSV" />
             </form>
+            <DownloadExcel jobId={jobId} onError={setExcelError} />
             {recordCount > 0 ? (
               <>
                 <div className="my-1 border-t border-border" />
@@ -122,6 +188,7 @@ export function RowExportMenu({
       ) : null}
 
       {download.status === 'error' ? <p role="alert" className="text-xs text-danger">{download.message}</p> : null}
+      {excelError ? <p role="alert" className="max-w-xs text-xs text-danger">{excelError}</p> : null}
       {exportFeedback?.status === 'error' ? <p role="alert" className="max-w-xs text-xs text-danger">{exportFeedback.message}</p> : null}
       {exportFeedback?.status === 'success' ? (
         <p role="status" className="max-w-xs text-xs text-success">

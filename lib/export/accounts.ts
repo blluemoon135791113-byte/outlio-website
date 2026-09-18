@@ -124,14 +124,26 @@ function parsedAccount(account: ParsedAccount, index: number): ExportLead {
   })
 }
 
-/** Serialises normalized Account List rows using the canonical export schema. */
-export function buildAccountRecordCsv(accounts: readonly ExportLead[]): string {
+/**
+ * The records and columns of an Account List export — shared by the CSV and the
+ * workbook, so the two files always carry the same columns in the same order.
+ */
+export function accountExportShape(accounts: readonly ExportLead[]): {
+  records: Record<string, string | null>[]
+  columns: CsvColumn<Record<string, string | null>>[]
+} {
   const records = accounts.map(toCanonicalExportRecord)
   const columns = [...EXPORT_COLUMN_ORDER, ...enrichmentHeaders(accounts)].map((header) => ({
     header,
     value: (row: Record<string, string | null>) => row[header] ?? null,
   })) satisfies CsvColumn<Record<string, string | null>>[]
 
+  return { records, columns }
+}
+
+/** Serialises normalized Account List rows using the canonical export schema. */
+export function buildAccountRecordCsv(accounts: readonly ExportLead[]): string {
+  const { records, columns } = accountExportShape(accounts)
   return toCsv(records, columns, { alwaysKeep: ALWAYS_EXPORTED_ACCOUNT_COLUMNS })
 }
 
