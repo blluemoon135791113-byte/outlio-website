@@ -12,6 +12,7 @@ import { z } from 'zod'
 
 import { isAppError } from '@/lib/errors/catalog'
 import { moveStage, StaleOpportunityError } from '@/lib/crm/opportunities'
+import { captureServerEvent } from '@/lib/posthog-server'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 import { dataScope } from '@/lib/workspaces/permissions'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -72,6 +73,13 @@ export async function moveCardAction(
       version.data,
       { actorUserId: ctx.userId, ...(lostReason ? { lostReason } : {}) },
     )
+
+    await captureServerEvent(ctx.userId, 'crm_opportunity_stage_changed', {
+      workspace_id: ctx.workspace.id,
+      result: result.status,
+      is_terminal: result.status === 'won' || result.status === 'lost',
+      seconds_in_previous_stage: result.secondsInPreviousStage,
+    })
 
     revalidatePath('/crm/pipeline')
     return { status: 'success', opportunityId: result.opportunityId, version: result.version }

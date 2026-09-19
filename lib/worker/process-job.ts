@@ -21,6 +21,7 @@ import { ALWAYS_EXPORTED, EXPORT_COLUMN_HEADERS } from '@/lib/export/leads'
 import { dedupeLeads, type DedupeMode, type KeyedLead } from '@/lib/leads/dedupe'
 import { ParseError, parseSearchResults } from '@/lib/leads/parse'
 import { detectSavedPageType } from '@/lib/leads/page-type'
+import { captureServerEvent } from '@/lib/posthog-server'
 import { AccountListParseError, parseAccountList, type ParsedAccount } from '@/lib/companies/parse-account-list'
 import { ingestAccounts } from '@/lib/companies/ingest-accounts'
 import { persistAccountList } from '@/lib/companies/account-list-store'
@@ -136,6 +137,13 @@ function concise(message: string): string {
   const first = message.split('\n')[0]?.trim() ?? ''
   const stripped = first.startsWith('<') ? 'upstream returned HTML' : first
   return stripped.length > 160 ? `${stripped.slice(0, 160)}…` : stripped
+}
+
+function extractorFinishedEventId(jobId: string): string {
+  const hash = createHash('sha256')
+    .update(`posthog:extractor_job_finished:${jobId}`)
+    .digest('hex')
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`
 }
 
 /**
@@ -782,7 +790,27 @@ async function processClaim(
   const supabase = createAdminClient()
 
   try {
-    return await processJob(claim.job_id, claim.user_id)
+    const outcome = await processJob(claim.job_id, claim.user_id)
+    await captureServerEvent(
+      claim.user_id,
+      'extractor_job_finished',
+      {
+        result: outcome.status,
+        ...(outcome.leadsParsed > 0
+          ? {
+              records_parsed: outcome.leadsParsed,
+              records_kept: outcome.leadsKept,
+            }
+          : {}),
+        files_processed: outcome.filesProcessed,
+        files_failed: outcome.filesFailed,
+      },
+      {
+        eventId: extractorFinishedEventId(claim.job_id),
+        delivery: 'immediate',
+      },
+    )
+    return outcome
   } catch (e) {
     const message = concise(e instanceof Error ? e.message : 'processing failed')
     const { data: queue } = await supabase
@@ -812,6 +840,18 @@ async function processClaim(
         last_error: message,
       })
       .eq('job_id', claim.job_id)
+
+    if (exhausted) {
+      await captureServerEvent(
+        claim.user_id,
+        'extractor_job_finished',
+        { result: 'failed' },
+        {
+          eventId: extractorFinishedEventId(claim.job_id),
+          delivery: 'immediate',
+        },
+      )
+    }
 
     throw e
   }

@@ -25,6 +25,7 @@ import {
 } from '@/lib/crm/csv-import'
 import { ingestExtractionJob, runCsvImport, undoBatch } from '@/lib/crm/ingest'
 import { routeBatch, type RoutingSummary } from '@/lib/crm/routing'
+import { captureServerEvent } from '@/lib/posthog-server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
@@ -231,6 +232,17 @@ export async function commitImport(
 
     const routing = await routeImportedBatch(ctx.workspace.id, result.batchId)
 
+    await captureServerEvent(
+      ctx.userId,
+      'leads_imported',
+      {
+        workspace_id: ctx.workspace.id,
+        records_succeeded: result.contactsCreated,
+        records_matched: result.contactsMatched,
+        records_failed: result.rowsSkipped,
+      },
+      { eventId: result.batchId },
+    )
     revalidatePath('/crm/contacts')
     revalidatePath('/dashboard')
 

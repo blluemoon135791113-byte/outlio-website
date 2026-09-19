@@ -81,6 +81,8 @@ const INTERNAL_PATHS: Record<string, string> = Object.fromEntries(
  * response header or added to the visitor-facing URL.
  */
 const INTERNAL_REWRITE_HEADER = 'x-outlio-internal-rewrite'
+const REQUEST_ID_HEADER = 'x-request-id'
+const VALID_REQUEST_ID = /^[A-Za-z0-9._:-]{8,128}$/
 
 /**
  * The complete surface of the software domain.
@@ -129,11 +131,18 @@ const APP_SUBDOMAIN_PATHS = [
   '/mfa',
   '/auth',
   '/api',
+  // Same-origin PostHog reverse proxy. Proxy executes before next.config
+  // rewrites, so this must survive the app-subdomain surface guard.
+  '/ingest',
 ]
 
 export async function proxy(request: NextRequest) {
   const host = request.headers.get('host')?.split(':')[0]?.toLowerCase() ?? ''
   const { pathname: rawPath } = request.nextUrl
+  const incomingRequestId = request.headers.get(REQUEST_ID_HEADER)
+  const requestId = incomingRequestId && VALID_REQUEST_ID.test(incomingRequestId)
+    ? incomingRequestId
+    : crypto.randomUUID()
   const isInternalRewrite = request.headers.get(INTERNAL_REWRITE_HEADER) === '1'
   const shouldClearRedirectCache =
     process.env.NODE_ENV === 'development' &&
@@ -156,6 +165,7 @@ export async function proxy(request: NextRequest) {
     // Preserve content negotiation without a second deprecated middleware
     // file. One Next 16 Proxy is the only supported project-level boundary.
     result.headers.set('Vary', 'Accept, Accept-Encoding')
+    result.headers.set('X-Request-Id', requestId)
 
     // A Proxy bug must not leave localhost permanently unusable after it is
     // fixed. Chrome caches 308 responses aggressively, including the old
@@ -236,14 +246,17 @@ export async function proxy(request: NextRequest) {
    * place is what keeps the session-refresh path from silently dropping it and
    * serving the agency homepage on app.outlio.io.
    */
-  const baseResponse = () =>
-    rewriteTo
-      ? (() => {
-          const headers = new Headers(request.headers)
-          headers.set(INTERNAL_REWRITE_HEADER, '1')
-          return NextResponse.rewrite(rewriteTo, { request: { headers } })
-        })()
-      : NextResponse.next({ request })
+  const baseResponse = () => {
+    const forwardedHeaders = new Headers(request.headers)
+    forwardedHeaders.set(REQUEST_ID_HEADER, requestId)
+
+    if (rewriteTo) {
+      forwardedHeaders.set(INTERNAL_REWRITE_HEADER, '1')
+      return NextResponse.rewrite(rewriteTo, { request: { headers: forwardedHeaders } })
+    }
+
+    return NextResponse.next({ request: { headers: forwardedHeaders } })
+  }
 
   let response = baseResponse()
 

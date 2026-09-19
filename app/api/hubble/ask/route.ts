@@ -8,6 +8,7 @@ import { toClientError } from '@/lib/errors/catalog'
 import { askHubble, type AskSubject } from '@/lib/hubble/ask'
 import { getWorkspaceContext } from '@/lib/workspaces/context'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { captureServerEvent } from '@/lib/posthog-server'
 
 /**
  * Ask Hubble anything about one lead.
@@ -158,6 +159,7 @@ export async function POST(request: NextRequest) {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      const startedAt = Date.now()
       const send = (value: unknown) => {
         try {
           controller.enqueue(encoder.encode(`${JSON.stringify(value)}\n`))
@@ -187,9 +189,27 @@ export async function POST(request: NextRequest) {
           fromCache: result.fromCache,
           synthesis: result.synthesis,
         })
+        await captureServerEvent(userId, 'hubble_query_completed', {
+          workspace_id: workspaceId,
+          feature: 'hubble_ask',
+          result: result.status,
+          duration_ms: result.usage.elapsedMs,
+          from_cache: result.fromCache,
+          searches: result.usage.searches,
+          pages_fetched: result.usage.pagesFetched,
+          browser_fetches: result.usage.browserFetches,
+          llm_calls: result.usage.llmCalls,
+        })
       } catch {
-        // Never leak a stack, a query, or a storage path to the client.
+        // Tell the user first; analytics flushes while the stream is still open.
         send({ type: 'error', error: 'RESEARCH_FAILED' })
+        await captureServerEvent(userId, 'hubble_query_failed', {
+          workspace_id: workspaceId,
+          feature: 'hubble_ask',
+          error_code: 'RESEARCH_FAILED',
+          duration_ms: Date.now() - startedAt,
+        })
+        // Never leak a stack, a query, or a storage path to the client.
       } finally {
         controller.close()
       }

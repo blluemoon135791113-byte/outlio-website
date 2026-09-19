@@ -24,6 +24,7 @@ import {
 import { startRun } from '@/lib/flows/engine'
 import { simulateFlow, type SimulationResult } from '@/lib/flows/simulate'
 import { flowTemplate } from '@/lib/flows/templates'
+import { captureServerEvent } from '@/lib/posthog-server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
@@ -81,6 +82,11 @@ export async function createFlow(
         }
       }
 
+      await captureServerEvent(ctx.userId, 'flow_created', {
+        workspace_id: ctx.workspace.id,
+        used_template: true,
+        template_key: templateKey,
+      })
       revalidatePath('/flows')
       return {
         ok: true,
@@ -88,6 +94,10 @@ export async function createFlow(
       }
     }
 
+    await captureServerEvent(ctx.userId, 'flow_created', {
+      workspace_id: ctx.workspace.id,
+      used_template: false,
+    })
     revalidatePath('/flows')
     return { ok: true, message: `${name} created as a draft. Nothing runs until you publish it.` }
   } catch {
@@ -222,6 +232,10 @@ export async function publishFlow(
 
   if (error || !version) return { ok: false, error: 'Could not publish that flow.' }
 
+  await captureServerEvent(ctx.userId, 'flow_published', {
+    workspace_id: ctx.workspace.id,
+    sends_email: definitionSendsEmail(definition),
+  })
   revalidatePath(`/flows/${flowId}`)
   return { ok: true, message: 'Published. Runs already in progress finish on the old version.' }
 }

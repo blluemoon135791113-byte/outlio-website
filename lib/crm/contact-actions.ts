@@ -12,6 +12,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { addNote, assignContact, bulkAssignContacts, eraseContact, NotAMemberError } from '@/lib/crm/activities'
+import { captureServerEvent } from '@/lib/posthog-server'
 import { createContactManually } from '@/lib/crm/ingest'
 import {
   STOP_REASONS,
@@ -102,6 +103,11 @@ export async function assignContactAction(
     }
 
     await assignContact(ctx.workspace.id, contactId.data, newOwner, ctx.userId)
+    await captureServerEvent(ctx.userId, 'crm_contact_assignment_updated', {
+      workspace_id: ctx.workspace.id,
+      assignment_state: newOwner ? 'assigned' : 'unassigned',
+      override_used: collision.hasCollision && acknowledged,
+    })
 
     revalidatePath(`/crm/contacts/${contactId.data}`)
     return ok(newOwner ? 'Owner updated.' : 'Owner cleared.')
@@ -261,6 +267,13 @@ export async function createContactAction(
           'That contact needs an administrator to review it before it can be added. ' +
           'They have been asked.',
       }
+    }
+
+    if (result.created) {
+      await captureServerEvent(ctx.userId, 'crm_contact_created', {
+        workspace_id: ctx.workspace.id,
+        source: 'manual',
+      })
     }
 
     revalidatePath('/crm/contacts')

@@ -28,6 +28,7 @@ import {
   signupSecurityClaims,
 } from '@/lib/auth/signup-gate'
 import { isAppError } from '@/lib/errors/catalog'
+import { captureServerEvent, identifyServerUser } from '@/lib/posthog-server'
 import { normalizeReferralCode } from '@/lib/referrals/constants'
 import { recordSecurityEvent } from '@/lib/security/events'
 import { SESSION_GUARD_COOKIE } from '@/lib/auth/session-guard'
@@ -163,6 +164,7 @@ export async function signUpAction(
   }
 
   const { reservation } = reservationResult
+  let signedUpUserId: string | null = null
 
   try {
     const supabase = await createClient()
@@ -219,6 +221,8 @@ export async function signUpAction(
       })
       return reject('We could not complete sign-up. Please check your details and try again.')
     }
+
+    signedUpUserId = data.user.id
   } catch (error) {
     await releaseSignupAttempt(reservation)
     await recordSecurityEvent({
@@ -233,6 +237,13 @@ export async function signUpAction(
   }
 
   await recordSecurityEvent({ event: 'auth.sign_up_succeeded', subject: email })
+
+  if (signedUpUserId) {
+    await identifyServerUser(signedUpUserId, {})
+    await captureServerEvent(signedUpUserId, 'account_signed_up', {
+      has_referral_code: Boolean(formData.get('referral_code')),
+    })
+  }
 
   redirect('/verify-email?sent=1')
 }
@@ -279,6 +290,10 @@ export async function signInAction(
   }
 
   await recordSecurityEvent({ event: 'auth.sign_in_succeeded', userId: data.user.id })
+  await identifyServerUser(data.user.id, {})
+  await captureServerEvent(data.user.id, 'account_signed_in', {
+    requires_mfa: data.user.factors?.length ? true : false,
+  })
 
   const destination = safeRedirectPath(next)
   const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
