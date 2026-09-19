@@ -20,6 +20,11 @@
  * up-pointing triangle", which is worse than silence.
  */
 
+import Link from 'next/link'
+
+import { Sparkline, StatGlyph } from '@/components/product/Sparkline'
+import type { StatIcon } from '@/lib/crm/overview'
+
 export type StatDelta = {
   /**
    * Change as a fraction, or `null` when there is no honest one — `trend()`
@@ -42,6 +47,10 @@ export function StatCard({
   delta,
   hint,
   size = 'sm',
+  icon,
+  series,
+  href,
+  linkLabel,
 }: {
   label: string
   /** A string for money and other pre-formatted values. */
@@ -51,6 +60,20 @@ export function StatCard({
   hint?: string
   /** `lg` leads a screen; `sm` sits in a dense grid. */
   size?: 'sm' | 'lg'
+  /** Drawn in a tinted tile beside the label. */
+  icon?: StatIcon
+  /**
+   * Real per-day values.
+   *
+   * ⚠️ `Sparkline` RENDERS NOTHING when this is empty, flat, or a single
+   * point. The card must therefore look finished without it — which is why the
+   * figure, the delta and the hint carry the meaning and the line is
+   * decoration. See the note in `Sparkline`.
+   */
+  series?: number[]
+  /** Where the figure can be checked in full. */
+  href?: string
+  linkLabel?: string
 }) {
   const large = size === 'lg'
 
@@ -87,13 +110,35 @@ export function StatCard({
         ║  enough to leave room at any width these cards reach.                  ║
         ╚═══════════════════════════════════════════════════════════════════════╝
       */}
-      <p
-        className={`font-semibold uppercase text-muted ${
-          large ? 'text-[11px] tracking-[0.14em]' : 'text-[10px] tracking-[0.12em]'
-        }`}
-      >
-        {label}
-      </p>
+      {/*
+        ⚠️ THE TILE AND THE LABEL SHARE A ROW, and the tile is `shrink-0`. At
+        two-up on a phone these cards reach ~152px, where a label wraps to two
+        lines — a tile allowed to shrink would go oval as the text pushed back.
+      */}
+      <div className="flex items-center gap-2.5">
+        {icon ? (
+          <span
+            /*
+              ⚠️ `bg-accent-soft` AND `text-accent`, NOT A PER-CARD COLOUR.
+              The reference design tints each tile differently, and picking
+              those tints would mean eight new colour values in a codebase whose
+              design rules say "zero hardcoded colors" and whose accent was
+              contrast-measured in 66 places. One accent tile is the version
+              that stays correct when the palette moves.
+            */
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-accent-soft text-accent"
+          >
+            <StatGlyph name={icon} />
+          </span>
+        ) : null}
+        <p
+          className={`min-w-0 font-semibold uppercase text-muted ${
+            large ? 'text-[11px] tracking-[0.14em]' : 'text-[10px] tracking-[0.12em]'
+          }`}
+        >
+          {label}
+        </p>
+      </div>
 
       {/*
         `tabular-nums` so figures in a row sit on the same vertical rails and a
@@ -117,6 +162,47 @@ export function StatCard({
 
       {hint ? (
         <p className={`text-[11px] leading-4 text-muted ${large ? 'mt-2.5' : 'mt-2'}`}>{hint}</p>
+      ) : null}
+
+      {series && series.length > 0 ? (
+        <div className="mt-3">
+          <Sparkline
+            values={series}
+            /*
+              ⚠️ THE TONE FOLLOWS THE DELTA, WHICH ALREADY KNOWS THE DIRECTION.
+              Reading it off the series here would mean deciding again whether
+              up is good — and `higherIsBetter` exists precisely because that
+              answer is per-metric. A card with no delta gets the neutral
+              accent rather than a guess.
+            */
+            tone={
+              delta?.change == null || delta.change === 0
+                ? 'accent'
+                : delta.change > 0 === (delta.higherIsBetter ?? true)
+                  ? 'success'
+                  : 'danger'
+            }
+          />
+        </div>
+      ) : null}
+
+      {href ? (
+        /*
+          ⚠️ A LINK IN THE FOOTER, NOT THE WHOLE CARD MADE CLICKABLE. A card
+          wrapped in an anchor swallows text selection, and the delta chip
+          carries an `sr-only` sentence that would be read as part of the link
+          name — "Replies 892 up 18 percent from 752 in the previous period,
+          link". The footer says where it goes.
+        */
+        <Link
+          href={href}
+          className={`mt-3 flex items-center justify-between gap-2 border-t border-border pt-2.5 text-[11px] font-medium text-muted transition-colors duration-150 hover:text-ink ${
+            large ? '' : 'text-[10px]'
+          }`}
+        >
+          <span>{linkLabel ?? 'View'}</span>
+          <span aria-hidden>→</span>
+        </Link>
       ) : null}
     </article>
   )

@@ -14,6 +14,12 @@
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 
+import {
+  audienceFromFormData,
+  AudienceNotFoundError,
+  AUDIENCE_LIMIT,
+  resolveAudience,
+} from '@/lib/crm/audience'
 import { createEmailAccount, disconnectEmailAccount, getEmailAccount, normalizeSendingAddress } from '@/lib/email/accounts'
 import { formatDiagnostics, type MailboxDiagnostics } from '@/lib/email/diagnostics'
 import { assertLaunchable, type CampaignType } from '@/lib/email/campaign-policy'
@@ -21,10 +27,12 @@ import { bulkEnroll, summarize } from '@/lib/email/enrollment'
 import { assessAccount } from '@/lib/email/readiness-runner'
 import { suppressEmail } from '@/lib/email/send'
 import { removeSuppression } from '@/lib/email/suppressions'
+import { captureServerEvent } from '@/lib/posthog-server'
 import { runTick } from '@/lib/workers/tick'
 import { requireProvider } from '@/lib/email/providers/registry'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
+import { dataScope } from '@/lib/workspaces/permissions'
 
 /**
  * ⚠️ `values` ECHOES BACK WHAT WAS TYPED, AND THE PASSWORD IS NEVER IN IT.
@@ -139,6 +147,11 @@ export async function connectSmtpAccount(
       // A failed first assessment must not undo a working connection.
     })
 
+    await captureServerEvent(ctx.userId, 'integration_connected', {
+      workspace_id: ctx.workspace.id,
+      integration_type: 'smtp',
+      supports_inbound: Boolean(imapHost),
+    })
     revalidatePath('/email')
     return { ok: true, message: `${displayName} is connected and ramping up.` }
   } catch (error) {
@@ -306,6 +319,10 @@ export async function createCampaign(
 
     if (error) return { ok: false, error: 'Could not create that campaign.' }
 
+    await captureServerEvent(ctx.userId, 'campaign_created', {
+      workspace_id: ctx.workspace.id,
+      campaign_type: type,
+    })
     revalidatePath('/email/campaigns')
     return { ok: true, message: `${name} created as a draft.` }
   } catch {
@@ -411,6 +428,12 @@ export async function launchCampaign(
     }
   })
 
+  await captureServerEvent(ctx.userId, 'campaign_launched', {
+    workspace_id: ctx.workspace.id,
+    campaign_type: campaign.type,
+    sequence_step_count: stepCount ?? 0,
+    enrollment_count: enrollmentCount ?? 0,
+  })
   revalidatePath('/email/campaigns')
   return { ok: true, message: `${campaign.name} is running. The first emails go out now.` }
 }
@@ -442,43 +465,91 @@ export async function pauseCampaign(
  * ⚠️ REPORTS EVERY SKIP. `summarize` names why each contact was left out —
  * "28 enrolled" of 40 selected is a lie by omission the customer builds a
  * forecast on.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ THE AUDIENCE IS A SOURCE NOW, NOT ONLY A TICKED SELECTION.           ║
+ * ║                                                                           ║
+ * ║  The only way into a campaign used to be the bulk bar on the contacts     ║
+ * ║  screen, so filling a campaign meant leaving it, finding the right        ║
+ * ║  people, and knowing that a dropdown in a selection toolbar was the       ║
+ * ║  answer. The campaign page itself listed "Contacts enrolled" as a launch  ║
+ * ║  requirement and offered no way to meet it.                              ║
+ * ║                                                                           ║
+ * ║  `resolveAudience` accepts the selection, a list, a pipeline, a stage or  ║
+ * ║  an import batch and returns contact ids. Everything below this line is   ║
+ * ║  unchanged, which is the point: one enrolment path, five ways to reach    ║
+ * ║  it.                                                                     ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ `audienceFromFormData` still reads repeated `contactId` fields for the
+ * `contacts` kind, MATCHING EVERY OTHER BULK ACTION. This action originally
+ * read a comma-separated `contactIds` string that no form in the product
+ * produced, which is almost certainly why it had no caller for a whole
+ * milestone — it could not be dropped into the existing selection bar.
  */
 export async function enrolContacts(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  let ctx
   try {
-    const ctx = await assertWorkspacePermission('email.campaign.create')
+    ctx = await assertWorkspacePermission('email.campaign.create')
+  } catch {
+    return { ok: false, error: 'You do not have permission to enrol contacts.' }
+  }
 
-    const campaignId = String(formData.get('campaignId') ?? '')
+  const campaignId = String(formData.get('campaignId') ?? '')
+  if (!campaignId) return { ok: false, error: 'Choose a campaign first.' }
 
-    /*
-     * ⚠️ `getAll('contactId')`, MATCHING EVERY OTHER BULK ACTION. This used to
-     * read a comma-separated `contactIds` string, which no bulk form in the
-     * product produces — `bulkAssignAction`, `bulkTagAction`,
-     * `bulkAddToListAction` and `bulkDeleteAction` all use repeated
-     * `contactId` fields.
-     *
-     * That mismatch is almost certainly WHY this action had no caller: it could
-     * not be dropped into the existing selection bar, so a user could author a
-     * sequence, launch it, and never put anybody in it.
-     */
-    const contactIds = formData.getAll('contactId').map(String).filter(Boolean)
+  /*
+   * ⚠️ DEFAULTS TO THE TICKED SELECTION when no kind is named, so the existing
+   * bulk bar on the contacts screen keeps working untouched.
+   */
+  const source =
+    audienceFromFormData(formData)
+    ?? (() => {
+      const ids = formData.getAll('contactId').map(String).filter(Boolean)
+      return ids.length > 0 ? ({ kind: 'contacts', contactIds: ids } as const) : null
+    })()
 
-    if (contactIds.length === 0) return { ok: false, error: 'Select some contacts first.' }
-    if (!campaignId) return { ok: false, error: 'Choose a campaign first.' }
+  if (!source) return { ok: false, error: 'Choose who to add.' }
+
+  try {
+    const audience = await resolveAudience(ctx.workspace.id, source, {
+      // A setter enrols their own people only — the same rule every other CRM
+      // read applies. RLS does not narrow this; the query has to.
+      ownerUserId: dataScope(ctx.role) === 'assigned' ? ctx.userId : null,
+    })
+
+    if (audience.contactIds.length === 0) {
+      /*
+       * ⚠️ NOT AN ERROR, AND NOT A SILENT SUCCESS. Picking an empty list or a
+       * stage whose deals carry no contacts is an ordinary thing to do, and
+       * "0 enrolled" with no explanation reads as a broken button.
+       */
+      return { ok: false, error: 'Nobody matched that — it has no contacts in it.' }
+    }
 
     const result = await bulkEnroll({
       workspaceId: ctx.workspace.id,
       campaignId,
-      contactIds,
+      contactIds: audience.contactIds,
       actorUserId: ctx.userId,
       acknowledgeCollisions: formData.get('acknowledgeCollisions') === 'on',
     })
 
     revalidatePath('/email/campaigns')
-    return { ok: true, message: summarize(result) }
-  } catch {
+    revalidatePath(`/email/campaigns/${campaignId}`)
+
+    return {
+      ok: true,
+      // The cap is stated rather than hidden. See `AUDIENCE_LIMIT`.
+      message: audience.truncated
+        ? `${summarize(result)} Only the first ${AUDIENCE_LIMIT.toLocaleString()} were taken — add the rest in a second pass.`
+        : summarize(result),
+    }
+  } catch (error) {
+    if (error instanceof AudienceNotFoundError) return { ok: false, error: error.message }
     return { ok: false, error: 'Could not enrol those contacts.' }
   }
 }

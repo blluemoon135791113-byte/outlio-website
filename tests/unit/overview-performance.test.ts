@@ -16,12 +16,24 @@ import { join } from 'node:path'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+/*
+ * ⚠️ EVERY FUNCTION THE MODULE CALLS MUST BE HERE, and the failure of an
+ * omission is silent in the worst way: an undefined import inside the
+ * `Promise.all` throws, `getOverviewPerformance` catches it, and the row
+ * reports `unavailable` — so a missing mock looks exactly like the read-failure
+ * state these tests exist to check.
+ */
 vi.mock('@/lib/crm/metrics', () => ({
   getSetterDashboard: vi.fn(),
   getLastRollupRun: vi.fn(),
+  getMetricSeries: vi.fn(),
+  getMetricTotals: vi.fn(),
+  replyRate: vi.fn(() => null),
 }))
 
-const { getSetterDashboard, getLastRollupRun } = await import('@/lib/crm/metrics')
+const { getSetterDashboard, getLastRollupRun, getMetricSeries } = await import(
+  '@/lib/crm/metrics'
+)
 const { getOverviewPerformance } = await import('@/lib/crm/overview')
 
 const ROOT = join(__dirname, '..', '..')
@@ -59,6 +71,13 @@ const RUN = { finishedAt: '2026-01-30T10:00:00.000Z', rowsWritten: 12, discrepan
 beforeEach(() => {
   vi.mocked(getLastRollupRun).mockReset()
   vi.mocked(getSetterDashboard).mockReset()
+  /*
+   * Sparklines are decoration and every assertion below is about the figures,
+   * so the default is an empty series — which is also the honest shape when a
+   * metric has no stored rows, and renders no line at all.
+   */
+  vi.mocked(getMetricSeries).mockReset()
+  vi.mocked(getMetricSeries).mockResolvedValue({})
 })
 
 /** Current period first, prior period second — the order the loader awaits them. */

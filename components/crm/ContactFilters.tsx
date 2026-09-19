@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
-import { contactsHref, type ContactsTableQuery } from '@/components/crm/ContactsTable'
+import { AutoApplyFilters } from '@/components/crm/AutoApplyFilters'
+import type { ContactsTableQuery } from '@/components/crm/ContactsTable'
 import { CONTACT_SOURCES } from '@/lib/crm/contacts-list'
 
 export type FilterOption = { id: string; name: string }
@@ -16,9 +17,16 @@ export type FilterOption = { id: string; name: string }
  * ║  Holding them in React state instead would make every one of those a      ║
  * ║  separate feature, and the back button would stop working.                ║
  * ║                                                                           ║
- * ║  It also means this component needs no `'use client'` and ships no        ║
- * ║  JavaScript — the filters work before hydration, and would keep working   ║
- * ║  if hydration failed, which this project has seen happen silently.        ║
+ * ║  It also means this component needs no `'use client'` — the filters work  ║
+ * ║  before hydration, and would keep working if hydration failed, which this ║
+ * ║  project has seen happen silently.                                        ║
+ * ║                                                                           ║
+ * ║  ⚠️ APPLYING IS NOW AUTOMATIC, AND THAT CHANGED NOTHING ABOVE.           ║
+ * ║  `AutoApplyFilters` is a sibling in the button row, not a rewrite: it     ║
+ * ║  reads this form's own `FormData` and navigates to the URL the Apply      ║
+ * ║  button would have produced. Every field below stays uncontrolled,        ║
+ * ║  server-rendered and listed exactly once, so a new filter needs no second ║
+ * ║  registration to be picked up.                                            ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 export function ContactFilters({
@@ -151,12 +159,21 @@ export function ContactFilters({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          className="rounded-clay bg-accent px-3 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
-        >
-          Apply filters
-        </button>
+        {/*
+          ⚠️ THE BUTTON IS NOW THE NO-JAVASCRIPT PATH, NOT THE NORMAL ONE.
+          `AutoApplyFilters` navigates as soon as a filter changes and renders
+          a status line in this slot instead; it falls back to rendering this
+          button verbatim until it is listening, so the form above is
+          unchanged and still works on its own.
+        */}
+        <AutoApplyFilters action="/crm/contacts">
+          <button
+            type="submit"
+            className="rounded-clay bg-accent px-3 py-2 text-sm font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
+          >
+            Apply filters
+          </button>
+        </AutoApplyFilters>
 
         {activeCount > 0 && (
           <>

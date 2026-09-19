@@ -46,6 +46,7 @@ function definitionToQuery(definition: ViewDefinition): ContactsTableQuery {
     sort: definition.sort ?? 'created',
     direction: definition.direction ?? 'desc',
     tagIds: definition.tagIds ?? [],
+    list: definition.listId ?? '',
     company: definition.companyId ?? '',
     createdAfter: definition.createdAfter ?? '',
     createdBefore: definition.createdBefore ?? '',
@@ -130,6 +131,7 @@ export function SavedViews({
           ) : (
             <input type="hidden" name="owner" value={query.owner} />
           )}
+          <input type="hidden" name="listId" value={query.list} />
           <input type="hidden" name="company" value={query.company} />
           <input type="hidden" name="createdAfter" value={query.createdAfter} />
           <input type="hidden" name="createdBefore" value={query.createdBefore} />

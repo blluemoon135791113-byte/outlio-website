@@ -104,9 +104,15 @@ function parsedAccount(account: ParsedAccount, index: number): ExportLead {
     alert: account.alert,
     recommendedName: recommendation?.fullName ?? null,
     recommendedJobTitle: recommendation?.jobTitle ?? null,
-    recommendedLinkedInUrl: recommendation
-      ? `https://www.linkedin.com/in/${recommendation.memberId}`
-      : null,
+    /*
+     * ⚠️ NOT BUILT FROM `memberId`. That id comes from `/sales/lead/…` and is
+     * a Sales Navigator identifier, which `/in/` does not resolve — see
+     * `lib/companies/account-list-store.ts`. The Sales Navigator URL on the
+     * next line is the address that actually works; an empty cell here is an
+     * honest "not on the page", and exporting a dead link is worse than
+     * exporting a blank.
+     */
+    recommendedLinkedInUrl: null,
     recommendedSalesNavigatorUrl: recommendation?.salesNavUrl ?? null,
     recommendedConnectionDegree: recommendation?.connectionDegree ?? null,
     companyDomain: null,

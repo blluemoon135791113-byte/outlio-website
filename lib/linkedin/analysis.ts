@@ -37,6 +37,13 @@ import 'server-only'
  */
 import { hubbleExecute, type HubbleTools } from '@/lib/hubble/execute'
 import { allProspectMessages, type ProspectMessageKind } from '@/lib/linkedin/prospect-messages'
+import {
+  bounds,
+  isFiltered,
+  WHOLE_HISTORY,
+  within,
+  type AnalysisWindow,
+} from '@/lib/analysis/window'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
@@ -78,11 +85,29 @@ export type AnalysisReport = {
   /** Said out loud whenever the evidence is too thin to support the findings. */
   caveat: string | null
   generatedAt: string
+  /**
+   * The period and people this report covers.
+   *
+   * ⚠️ RETURNED WITH THE REPORT, NOT LEFT TO THE FORM. The form's inputs can be
+   * changed after a run, so a report headed by whatever the boxes currently say
+   * would relabel itself — the numbers from March sitting under a heading that
+   * now reads April. A report states its own scope.
+   */
+  window: AnalysisWindow
 }
 
 export type AnalysisResult =
   | { ok: true; report: AnalysisReport }
   | { ok: false; reason: 'not_entitled' | 'no_data' | 'unusable' | 'no_credits'; message: string }
+
+/*
+ * ⚠️ RE-EXPORTED, NOT REDEFINED. The window moved to `lib/analysis/window.ts`
+ * when the email analysis started asking the same question — the two must
+ * agree on where a day begins and ends, and on an empty selection meaning
+ * everyone. Existing importers keep working through this line.
+ */
+export type { AnalysisWindow }
+export { WHOLE_HISTORY }
 
 const SENT_OUTCOMES = ['REQUEST_MARKED_SENT', 'MESSAGE_MARKED_SENT'] as const
 
@@ -93,15 +118,23 @@ const SENT_OUTCOMES = ['REQUEST_MARKED_SENT', 'MESSAGE_MARKED_SENT'] as const
  * a reader will act on numerically is computed here; the model's job is to read
  * the message TEXT and say something useful about the writing.
  */
-export async function gatherStats(workspaceId: string): Promise<{
+export async function gatherStats(
+  workspaceId: string,
+  window: AnalysisWindow = WHOLE_HISTORY,
+): Promise<{
   overall: RepStats
   perRep: RepStats[]
 }> {
   const db = createAdminClient()
+  const { fromIso, toIso } = bounds(window)
+  const selected = new Set(window.userIds)
+  // Empty means the whole team. See the note on `AnalysisWindow`.
+  const includes = (userId: string | null): boolean =>
+    selected.size === 0 || (userId !== null && selected.has(userId))
 
   const { data: tasks, error } = await db
     .from('linkedin_tasks')
-    .select('id, outcome, completed_by, contact_id')
+    .select('id, outcome, completed_by, contact_id, completed_at')
     .eq('workspace_id', workspaceId)
     .not('outcome', 'is', null)
 
@@ -109,12 +142,33 @@ export async function gatherStats(workspaceId: string): Promise<{
 
   const { data: observations, error: obsError } = await db
     .from('linkedin_observations')
-    .select('kind, contact_id, evidence_was_unconfirmed')
+    .select('kind, contact_id, evidence_was_unconfirmed, observed_at')
     .eq('workspace_id', workspaceId)
 
   if (obsError) throw new Error(`gatherStats failed: ${obsError.message}`)
 
-  const messages = await allProspectMessages(workspaceId, 400)
+  /*
+   * ⚠️ THE MESSAGES ARE FILTERED, THE TWO READS ABOVE ARE NOT — AND THAT IS
+   * DELIBERATE, NOT AN OVERSIGHT.
+   *
+   * Both reads feed TWO different things: the counters, which must respect the
+   * window, and `repOfContact`, which must not. Attribution answers "whose
+   * outreach was this", and that fact does not change because a manager picked
+   * a narrower month — an observation in March belongs to whoever did the
+   * outreach, even if that outreach was in February.
+   *
+   * Pushing the date filter into these queries would build the attribution map
+   * from in-window tasks only, so every reply to earlier outreach would fall
+   * through to the `null` rep and be reported as "Unattributed". A plausible
+   * number, silently wrong, and worse the narrower the window — which is
+   * exactly when somebody is looking closely.
+   *
+   * So the window is applied per row below, at the point of COUNTING.
+   * ⚠️ These reads were already unbounded before this filter existed; the cost
+   * is unchanged, and it is the first thing to fix if this page ever feels
+   * slow.
+   */
+  const messages = await allProspectMessages(workspaceId, 400, window)
 
   /*
    * ⚠️ ATTRIBUTED TO WHO COMPLETED THE TASK, NOT WHO OWNS THE CONTACT. The
@@ -150,12 +204,25 @@ export async function gatherStats(workspaceId: string): Promise<{
    */
   const repOfContact = new Map<string, string | null>()
 
+  /*
+   * ⚠️ ATTRIBUTION IS BUILT FROM EVERY TASK, BEFORE ANY FILTERING. See the long
+   * note above the reads: who did the outreach is a fixed fact, and rebuilding
+   * this map from a filtered set turns replies to earlier work into
+   * "Unattributed".
+   */
   for (const task of tasks ?? []) {
     if (!task.outcome) continue
+    if (!repOfContact.has(task.contact_id)) repOfContact.set(task.contact_id, task.completed_by)
+  }
+
+  for (const task of tasks ?? []) {
+    if (!task.outcome) continue
+    if (!includes(task.completed_by)) continue
+    if (!within(task.completed_at, fromIso, toIso)) continue
+
     if ((SENT_OUTCOMES as readonly string[]).includes(task.outcome)) {
       const r = rep(task.completed_by)
       r.sent += 1
-      if (!repOfContact.has(task.contact_id)) repOfContact.set(task.contact_id, task.completed_by)
     } else if (task.outcome === 'OUTCOME_UNKNOWN') {
       /*
        * ⚠️ COUNTED, AND COUNTED SEPARATELY. §4.17 treats an unknown outcome as
@@ -166,12 +233,21 @@ export async function gatherStats(workspaceId: string): Promise<{
       const r = rep(task.completed_by)
       r.sent += 1
       r.unconfirmed += 1
-      if (!repOfContact.has(task.contact_id)) repOfContact.set(task.contact_id, task.completed_by)
     }
   }
 
   for (const observation of observations ?? []) {
+    if (!within(observation.observed_at, fromIso, toIso)) continue
+
     const owner = repOfContact.get(observation.contact_id) ?? null
+    /*
+     * ⚠️ DROPPED, NOT RE-CREDITED TO "Unattributed". When a manager picks three
+     * people, a reply to a fourth person's prospect is not part of the answer —
+     * and folding it into the unattributed row would add replies with no sends
+     * behind them, which is the shape that produces an impossible reply rate.
+     */
+    if (!includes(owner)) continue
+
     const r = rep(owner)
     if (observation.kind === 'REPLY_RECORDED') r.replies += 1
     if (observation.kind === 'MEETING_BOOKED_RECORDED' || observation.kind === 'MEETING_HELD_RECORDED') {
@@ -179,6 +255,7 @@ export async function gatherStats(workspaceId: string): Promise<{
     }
   }
 
+  // Already filtered by `allProspectMessages`, which applies the same window.
   for (const message of messages) {
     const r = rep(message.authoredBy)
     if (message.kind === 'OPENER') r.openers += 1
@@ -309,6 +386,7 @@ export async function analysisEntitled(workspaceId: string): Promise<boolean> {
 export async function analyseStrategy(input: {
   workspaceId: string
   userId: string
+  window?: AnalysisWindow
 }): Promise<AnalysisResult> {
   if (!(await analysisEntitled(input.workspaceId))) {
     return {
@@ -318,21 +396,30 @@ export async function analyseStrategy(input: {
     }
   }
 
-  const { overall, perRep } = await gatherStats(input.workspaceId)
-  const messages = await allProspectMessages(input.workspaceId, 200)
+  const window = input.window ?? WHOLE_HISTORY
+
+  const { overall, perRep } = await gatherStats(input.workspaceId, window)
+  const messages = await allProspectMessages(input.workspaceId, 200, window)
 
   /*
    * ⚠️ REFUSED WHEN THERE IS NOTHING TO READ, rather than asking a model to
    * write a report about nothing. It will happily produce one, and it will be
    * entirely invented — which is the failure this whole module is arranged
    * against.
+   *
+   * ⚠️ AND THE REFUSAL NAMES THE FILTER WHEN ONE IS SET. "Nothing to analyse
+   * yet" is a statement about the whole workspace; said to somebody who just
+   * picked one week and one person, it reads as "this product has no data"
+   * rather than "try a wider period", and the difference is whether they know
+   * what to do next.
    */
   if (messages.length === 0 && overall.sent === 0) {
     return {
       ok: false,
       reason: 'no_data',
-      message:
-        'There is nothing to analyse yet — no messages written and no outreach recorded.',
+      message: isFiltered(window)
+        ? 'Nothing was recorded in that period for the people selected. Try a wider range, or select everyone.'
+        : 'There is nothing to analyse yet — no messages written and no outreach recorded.',
     }
   }
 
@@ -342,7 +429,7 @@ export async function analyseStrategy(input: {
     async (tools: HubbleTools) => {
       const result = await tools.llm.generateJson({
         system: systemPrompt(),
-        user: promptFor(overall, perRep, messages),
+        user: promptFor(overall, perRep, messages, window),
         schema: findingsSchema() as unknown as Record<string, unknown>,
         // Judgement about prose, not structure. See `draft.ts` for the contrast.
         temperature: 0.4,
@@ -403,6 +490,7 @@ export async function analyseStrategy(input: {
       findings,
       caveat: caveatFor(overall),
       generatedAt: new Date().toISOString(),
+      window,
     },
   }
 }
@@ -483,8 +571,29 @@ function promptFor(
   overall: RepStats,
   perRep: RepStats[],
   messages: { kind: ProspectMessageKind; body: string; authoredBy: string }[],
+  window: AnalysisWindow,
 ): string {
   const lines: string[] = []
+
+  /*
+   * ⚠️ THE MODEL IS TOLD THE PERIOD, so it does not write "activity has dropped
+   * off recently" about a deliberately narrow slice. It is given the dates
+   * only — never the names of the people selected, matching the rule below
+   * that reps are numbered rather than named in a prompt.
+   */
+  if (window.from || window.to) {
+    lines.push(
+      `PERIOD: ${window.from ?? 'the beginning'} to ${window.to ?? 'today'} (inclusive, UTC). ` +
+        'Everything below is from this period only — do not describe it as a complete history.',
+      '',
+    )
+  }
+  if (window.userIds.length > 0) {
+    lines.push(
+      `SELECTION: ${window.userIds.length} of the team were selected. Do not comment on team size or on who is missing.`,
+      '',
+    )
+  }
 
   lines.push('COUNTS (already computed — do not recompute):')
   lines.push(

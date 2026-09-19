@@ -14,10 +14,54 @@ describe('parseSearchResults URL mapping', () => {
       </ol>`
 
     const lead = parseSearchResults(html).leads[0]!
-    expect(lead.linkedinUrl).toBe('https://www.linkedin.com/in/ACwAA123')
+    /*
+     * ⚠️ THIS ASSERTION USED TO READ
+     *   expect(lead.linkedinUrl).toBe('https://www.linkedin.com/in/ACwAA123')
+     * and it passed for two milestones while EVERY public profile link in the
+     * product was dead.
+     *
+     * `ACwAA123` is a `fs_salesProfile` urn. `/in/` resolves MEMBER urns
+     * (`ACoAAA…`), a different entity type, so the URL addressed nothing. The
+     * test only ever checked that the parser did what the parser did — it
+     * restated the implementation instead of stating what a user needs, which
+     * is a link that opens a profile.
+     *
+     * The urn is not lost: it is in `salesNavUrl`, in the path it belongs to.
+     */
+    expect(lead.linkedinUrl).toBeNull()
     expect(lead.salesNavUrl).toBe('https://www.linkedin.com/sales/lead/ACwAA123,NAME_SEARCH,x')
     expect(lead.companyUrl).toBe('https://www.linkedin.com/sales/company/456')
     expect(lead.companyWebsiteUrl).toBe('https://example.com/')
+  })
+
+  /*
+   * The regression guard, stated as the rule rather than as one example: no
+   * Sales Navigator identifier may ever reach the `/in/` path, whichever
+   * element it was read from.
+   */
+  it('never mints a public profile URL out of a Sales Navigator identifier', () => {
+    const shapes = [
+      // The urn on the scroll attribute, no public anchor anywhere.
+      `<li class="artdeco-list__item" data-scroll-into-view="urn:li:fs_salesProfile:(ACwAAURN001,NAME_SEARCH,x)">
+         <a href="/sales/lead/ACwAAURN001,NAME_SEARCH,x"><span data-anonymize="person-name">A</span></a>
+       </li>`,
+      // Only the Sales Navigator href.
+      `<li class="artdeco-list__item">
+         <a href="/sales/lead/ACwAAURN002,NAME_SEARCH,y"><span data-anonymize="person-name">B</span></a>
+       </li>`,
+      // A headshot link as the only identity carrier.
+      `<li class="artdeco-list__item">
+         <span data-anonymize="person-name">C</span>
+         <a href="/sales/lead/ACwAAURN003,NAME_SEARCH,z"><span data-anonymize="headshot-photo"></span></a>
+       </li>`,
+    ]
+
+    for (const shape of shapes) {
+      const lead = parseSearchResults(`<ol class="artdeco-list">${shape}</ol>`).leads[0]!
+      expect(lead.linkedinUrl).toBeNull()
+      // …and the person is still reachable by the address that does resolve.
+      expect(lead.salesNavUrl).toContain('/sales/lead/')
+    }
   })
 
   it('prefers an exact public profile URL when LinkedIn exposes one', () => {
