@@ -4,8 +4,13 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
+import {
+  identifyAnalyticsUser,
+  resetAnalyticsIdentity,
+  syncSessionReplayForPath,
+} from '@/lib/analytics/client'
 import { ProductIcon, ProductNav } from '@/components/product/ProductNav'
 import { NavigationProgress } from '@/components/product/NavigationProgress'
 import { SidebarReferral } from '@/components/product/SidebarReferral'
@@ -128,9 +133,13 @@ function SidebarContent({
 
 export function ProductShell({
   children,
+  userId,
   email,
   fullName,
   planName,
+  workspaceId = null,
+  workspaceRole = null,
+  workspaceMemberCount = null,
   isAdmin,
   canUseScraper,
   showCrm = false,
@@ -141,9 +150,13 @@ export function ProductShell({
   referralLink = null,
 }: {
   children: ReactNode
+  userId: string
   email: string
   fullName: string | null
   planName: string | null
+  workspaceId?: string | null
+  workspaceRole?: string | null
+  workspaceMemberCount?: number | null
   isAdmin: boolean
   canUseScraper: boolean
   showCrm?: boolean
@@ -157,6 +170,22 @@ export function ProductShell({
   const [mobileOpen, setMobileOpen] = useState(false)
   const userInitials = useMemo(() => initials(fullName, email), [email, fullName])
   const displayName = fullName?.trim() || email.split('@')[0] || 'Outlio user'
+
+  useEffect(() => {
+    identifyAnalyticsUser({
+      userId,
+      plan: planName,
+      isAdmin,
+      workspaceId,
+      workspaceRole,
+      workspaceMemberCount,
+    })
+  }, [isAdmin, planName, userId, workspaceId, workspaceMemberCount, workspaceRole])
+
+  useEffect(() => {
+    syncSessionReplayForPath(pathname, userId)
+  }, [pathname, userId])
+
   return (
     <div className="app-shell product-clay hubble-shell min-h-dvh bg-app text-ink">
       <NavigationProgress />
@@ -287,7 +316,7 @@ export function ProductShell({
                 >
                   Visit Outlio website
                 </Link>
-                <form action={signOutAction}>
+                <form action={signOutAction} onSubmit={resetAnalyticsIdentity}>
                   <button
                     type="submit"
                     className="flex h-9 w-full items-center rounded-lg px-2 text-left text-sm font-medium text-muted transition-colors duration-150 hover:bg-danger-soft hover:text-danger"

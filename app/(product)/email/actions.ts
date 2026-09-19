@@ -21,6 +21,7 @@ import { bulkEnroll, summarize } from '@/lib/email/enrollment'
 import { assessAccount } from '@/lib/email/readiness-runner'
 import { suppressEmail } from '@/lib/email/send'
 import { removeSuppression } from '@/lib/email/suppressions'
+import { captureServerEvent } from '@/lib/posthog-server'
 import { runTick } from '@/lib/workers/tick'
 import { requireProvider } from '@/lib/email/providers/registry'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -139,6 +140,11 @@ export async function connectSmtpAccount(
       // A failed first assessment must not undo a working connection.
     })
 
+    await captureServerEvent(ctx.userId, 'integration_connected', {
+      workspace_id: ctx.workspace.id,
+      integration_type: 'smtp',
+      supports_inbound: Boolean(imapHost),
+    })
     revalidatePath('/email')
     return { ok: true, message: `${displayName} is connected and ramping up.` }
   } catch (error) {
@@ -306,6 +312,10 @@ export async function createCampaign(
 
     if (error) return { ok: false, error: 'Could not create that campaign.' }
 
+    await captureServerEvent(ctx.userId, 'campaign_created', {
+      workspace_id: ctx.workspace.id,
+      campaign_type: type,
+    })
     revalidatePath('/email/campaigns')
     return { ok: true, message: `${name} created as a draft.` }
   } catch {
@@ -411,6 +421,12 @@ export async function launchCampaign(
     }
   })
 
+  await captureServerEvent(ctx.userId, 'campaign_launched', {
+    workspace_id: ctx.workspace.id,
+    campaign_type: campaign.type,
+    sequence_step_count: stepCount ?? 0,
+    enrollment_count: enrollmentCount ?? 0,
+  })
   revalidatePath('/email/campaigns')
   return { ok: true, message: `${campaign.name} is running. The first emails go out now.` }
 }

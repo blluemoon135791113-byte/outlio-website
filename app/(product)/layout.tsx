@@ -31,9 +31,13 @@ export default async function ProductLayout({ children }: { children: ReactNode 
 
   return (
     <ProductShell
+      userId={ctx.userId!}
       email={ctx.email ?? ''}
       fullName={ctx.profile?.full_name ?? null}
       planName={ctx.plan?.name ?? null}
+      workspaceId={workspace?.workspace.id ?? null}
+      workspaceRole={workspace?.role ?? null}
+      workspaceMemberCount={workspace?.memberCount ?? null}
       isAdmin={ctx.isAdmin}
       canUseScraper={ctx.canUseScraper}
       showCrm={workspace?.modules.has('crm') ?? false}
