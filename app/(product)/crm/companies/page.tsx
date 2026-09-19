@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { CompanyPeople, type CompanyPerson } from '@/components/crm/CompanyPeople'
 import { emptyReason } from '@/lib/crm/empty-reason'
 
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -13,6 +14,16 @@ export const metadata: Metadata = {
 }
 
 const PAGE_SIZE = 25
+
+/**
+ * Names kept per company for the People hover.
+ *
+ * ⚠️ A DISPLAY CAP, NOT A QUERY LIMIT. The count beside it is computed from
+ * every row and stays exact; this only decides how many names a 64-row popover
+ * shows before it says "N more". Eight fills the panel without making it
+ * scroll, which is the point of a preview.
+ */
+const PEOPLE_PREVIEW = 8
 
 /**
  * Companies — M9, the route the CRM navigation has named since M2.
@@ -76,18 +87,47 @@ export default async function CompaniesPage({
 
   const rows = companies ?? []
   const counts = new Map<string, number>()
+  const people = new Map<string, CompanyPerson[]>()
 
   if (rows.length > 0) {
+    /*
+     * ⚠️ STILL ONE QUERY, AND STILL UNBOUNDED — unchanged from when this only
+     * counted. Three more columns are selected so the People cell can name the
+     * people rather than only tallying them, which is the whole point of the
+     * hover; a second query for the names would either need a per-company
+     * LIMIT that PostgREST cannot express, or a global one that lets a single
+     * 300-person company eat the entire budget and leave every other row
+     * without a preview.
+     *
+     * The COUNT is computed from every row, so it stays exact; only the number
+     * of NAMES kept in memory is capped. The payload grows with the workspace,
+     * which is the same shape of cost this query already had — recorded here
+     * as the thing to fix if this page ever feels slow, alongside the `total:
+     * null` note above.
+     */
     const { data: links } = await db
       .from('crm_contacts')
-      .select('primary_company_id')
+      .select('id, full_name, job_title, primary_company_id')
       .eq('workspace_id', ctx.workspace.id)
       .is('deleted_at', null)
       .in('primary_company_id', rows.map((r) => r.id))
+      .order('full_name', { ascending: true, nullsFirst: false })
 
     for (const link of links ?? []) {
-      if (!link.primary_company_id) continue
-      counts.set(link.primary_company_id, (counts.get(link.primary_company_id) ?? 0) + 1)
+      const companyId = link.primary_company_id
+      if (!companyId) continue
+
+      counts.set(companyId, (counts.get(companyId) ?? 0) + 1)
+
+      const named = people.get(companyId) ?? []
+      if (named.length < PEOPLE_PREVIEW) {
+        named.push({
+          id: link.id,
+          name: link.full_name,
+          jobTitle: link.job_title,
+        })
+        people.set(companyId, named)
+      }
     }
   }
 
@@ -107,6 +147,19 @@ export default async function CompaniesPage({
           {scopedToSelf
             ? 'The companies you own, matched on registrable domain.'
             : 'Created automatically from the people you bring in, matched on registrable domain.'}
+        </p>
+        {/*
+          ⚠️ SAYS WHY A CELL IS EMPTY. A table of dashes with no explanation
+          reads as a broken feature, and the honest answer is specific: a Sales
+          Navigator SEARCH page carries a company NAME and nothing else, so the
+          industry and headcount only arrive from a source that saw the company
+          page itself. Naming that is the difference between "this is broken"
+          and "I know what to do next".
+        */}
+        <p className="mt-1 text-xs leading-relaxed text-muted">
+          Domain, industry and headcount fill in from an account extraction or an
+          enriched company — a search-results save only carries the name. They are
+          recorded as they are observed and never guessed.
         </p>
       </div>
 
@@ -148,6 +201,14 @@ export default async function CompaniesPage({
                   <th scope="col" className="px-4 py-3 font-semibold">Company</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Domain</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Industry</th>
+                  {/*
+                    ⚠️ TWO DIFFERENT NUMBERS, NAMED DIFFERENTLY. "Employees" is
+                    how big the company is, observed on its LinkedIn page;
+                    "People" is how many of them are in YOUR CRM. One header
+                    covering both would make a 4,000-person company with two
+                    contacts unreadable either way round.
+                  */}
+                  <th scope="col" className="px-4 py-3 font-semibold">Employees</th>
                   <th scope="col" className="px-4 py-3 font-semibold">People</th>
                 </tr>
               </thead>
@@ -176,7 +237,19 @@ export default async function CompaniesPage({
                     */}
                     <td className="px-4 py-3 text-muted">{company.domain ?? '—'}</td>
                     <td className="px-4 py-3 text-muted">{company.industry ?? '—'}</td>
-                    <td className="px-4 py-3 text-muted">{counts.get(company.id) ?? 0}</td>
+                    <td className="px-4 py-3 text-muted">
+                      {company.employee_count === null
+                        ? '—'
+                        : company.employee_count.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-muted">
+                      <CompanyPeople
+                        companyId={company.id}
+                        companyName={company.name ?? 'this company'}
+                        count={counts.get(company.id) ?? 0}
+                        preview={people.get(company.id) ?? []}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

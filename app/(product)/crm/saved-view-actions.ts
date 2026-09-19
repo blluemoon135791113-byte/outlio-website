@@ -56,6 +56,10 @@ export async function saveViewAction(
     ownerUserId: value('owner'),
     unassignedOnly: formData.get('unassigned') === 'on' ? true : undefined,
     tagIds: tagIds.length > 0 ? tagIds : undefined,
+    // ⚠️ `listId`, not `list`. See the header note: the form field names here
+    // are the ACTION's vocabulary, not the URL's, and a mismatch saves a view
+    // that silently restores a wider list than the one that was saved.
+    listId: value('listId'),
     companyId: value('company'),
     createdAfter: value('createdAfter'),
     createdBefore: value('createdBefore'),

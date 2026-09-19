@@ -243,13 +243,45 @@ export type ProspectMessageRow = {
 export async function allProspectMessages(
   workspaceId: string,
   limit = 400,
+  /**
+   * Which period and whose writing.
+   *
+   * ⚠️ FILTERED IN THE QUERY, unlike the two reads in `gatherStats`. Nothing
+   * downstream needs a message outside the window for attribution — a message
+   * carries its own author — so there is no reason to fetch it. `gatherStats`
+   * explains why the other two reads cannot do the same.
+   *
+   * ⚠️ AND THE `limit` APPLIES AFTER THE FILTER, which is the point. Ordered by
+   * recency and capped at 400, an unfiltered read of a busy workspace would
+   * return 400 messages from last month and none from the window the manager
+   * asked about — a report about the wrong period, with no sign anything was
+   * missing.
+   */
+  window: { from: string | null; to: string | null; userIds: string[] } = {
+    from: null,
+    to: null,
+    userIds: [],
+  },
 ): Promise<ProspectMessageRow[]> {
   const db = createAdminClient()
 
-  const { data, error } = await db
+  let query = db
     .from('linkedin_prospect_messages')
     .select('contact_id, kind, body, authored_by, crm_contacts!inner(full_name, owner_user_id)')
     .eq('workspace_id', workspaceId)
+
+  /*
+   * ⚠️ `updated_at`, MATCHING THE COLUMN THE ORDER ALREADY USES. A message is
+   * edited in place rather than versioned, so its latest text is what the
+   * analysis reads — and dating that text by when it was first created would
+   * put a pitch rewritten yesterday outside a window covering yesterday.
+   */
+  if (window.from) query = query.gte('updated_at', `${window.from}T00:00:00.000Z`)
+  if (window.to) query = query.lte('updated_at', `${window.to}T23:59:59.999Z`)
+  // Empty means the whole team, never nobody.
+  if (window.userIds.length > 0) query = query.in('authored_by', window.userIds)
+
+  const { data, error } = await query
     .order('updated_at', { ascending: false })
     .limit(limit)
 

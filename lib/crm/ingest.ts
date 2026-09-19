@@ -71,6 +71,44 @@ type CompanySeed = {
   name: string | null
   websiteUrl: string | null
   linkedInUrl: string | null
+  /*
+   * ⚠️ OPTIONAL, BECAUSE MOST SOURCES GENUINELY DO NOT CARRY THEM. A Sales
+   * Navigator search row gives a company NAME; the industry, headcount and
+   * headquarters only exist when the extension also captured the company page,
+   * and a CSV has no column for them at all.
+   *
+   * They are carried anyway because `upsertCrmCompany` can now fill a gap on a
+   * row that already exists — so the one capture that does hold the industry
+   * populates a company created months earlier by a name-only extraction.
+   * Before that, these were observed, stored on `extracted_leads`, and then
+   * dropped on the floor at the CRM boundary.
+   */
+  industry?: string | null
+  employeeCount?: number | null
+  headquarters?: string | null
+  /**
+   * The Lead Engine `companies` row this account came from.
+   *
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ NOTHING IN THE PRODUCT HAD EVER SET THIS, AND IT IS LOAD-BEARING.    ║
+   * ║                                                                           ║
+   * ║  `upsertCrmCompany` has accepted `sourceCompanyId` since 0071 and no      ║
+   * ║  caller passed one, so `crm_companies.source_company_id` was NULL on      ║
+   * ║  every row in every workspace. Two features read it and both returned    ║
+   * ║  empty for everyone:                                                     ║
+   * ║                                                                           ║
+   * ║    `lib/crm/company-details.ts`  — funding, tech stack, news, socials,   ║
+   * ║        revenue and hiring signals. It early-returns on a null id, so the ║
+   * ║        section rendered nothing while the evidence sat in the database.  ║
+   * ║        Its own header says 952 of 1,000 sampled evidence rows are        ║
+   * ║        company-level.                                                    ║
+   * ║    `lib/crm/provenance.ts`      — the citation chain for those values.   ║
+   * ║                                                                           ║
+   * ║  Neither failed. Both correctly reported having nothing, because the     ║
+   * ║  structural link they needed was never written.                          ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  sourceCompanyId?: string | null
 }
 
 /**
@@ -101,6 +139,10 @@ async function resolveCompanies(
           name: seed.name,
           websiteUrl: seed.websiteUrl,
           linkedInUrl: seed.linkedInUrl,
+          industry: seed.industry ?? null,
+          employeeCount: seed.employeeCount ?? null,
+          headquarters: seed.headquarters ?? null,
+          sourceCompanyId: seed.sourceCompanyId ?? null,
           source,
         },
         actorUserId,
@@ -123,6 +165,74 @@ async function resolveCompanies(
  * domain, then LinkedIn page, then name. Name is the last resort and never
  * groups a seed that carries something stronger.
  */
+type ResearchedCompany = {
+  domain: string | null
+  linkedinUrl: string | null
+  industry: string | null
+  employeeCount: number | null
+  headquarters: string | null
+}
+
+/**
+ * The Lead Engine's own row for each company a batch mentions.
+ *
+ * ⚠️ BATCHED, AND CHUNKED. One `.in()` per 200 ids rather than one query per
+ * lead — the same cost control `resolveCompanies` applies — and chunked because
+ * a batch can mention more companies than a URL-encoded `in` list can carry.
+ */
+async function researchedCompanies(
+  db: ReturnType<typeof createAdminClient>,
+  userId: string,
+  companyIds: string[],
+): Promise<Map<string, ResearchedCompany>> {
+  const found = new Map<string, ResearchedCompany>()
+  if (companyIds.length === 0) return found
+
+  const CHUNK = 200
+  for (let index = 0; index < companyIds.length; index += CHUNK) {
+    const { data, error } = await db
+      .from('companies')
+      .select('id, domain, linkedin_url, industry, employee_count, headquarters')
+      // `companies` is user-keyed, not workspace-keyed. See the caller's note.
+      .eq('user_id', userId)
+      .in('id', companyIds.slice(index, index + CHUNK))
+
+    /*
+     * ⚠️ A FAILURE HERE COSTS ENRICHMENT, NEVER THE INGEST. These are
+     * projections onto a contact's employer; if the read fails the batch must
+     * still import its PEOPLE, with the company details simply absent — the
+     * same rule `resolveCompanies` follows for a company it cannot resolve.
+     */
+    if (error) break
+
+    for (const row of data ?? []) {
+      found.set(row.id, {
+        domain: row.domain,
+        linkedinUrl: row.linkedin_url,
+        industry: row.industry,
+        employeeCount: row.employee_count,
+        headquarters: row.headquarters,
+      })
+    }
+  }
+
+  return found
+}
+
+/**
+ * How many facts a seed carries beyond its identity.
+ *
+ * ⚠️ A COUNT, NOT A RANKING OF SOURCES. Every field here was literally observed
+ * on the page the seed came from, so "more fields" is the only ordering that
+ * does not require deciding one source is more truthful than another — which is
+ * a judgement this code has no basis for making.
+ */
+function seedDetail(seed: CompanySeed): number {
+  return [seed.industry, seed.employeeCount, seed.headquarters, seed.websiteUrl].filter(
+    (value) => value !== null && value !== undefined && value !== '',
+  ).length
+}
+
 function companyKey(seed: CompanySeed): string | null {
   const domain = normalizeDomain(seed.websiteUrl)
   if (domain) return `domain:${domain}`
@@ -433,7 +543,7 @@ export async function ingestExtractionJob(
     // ⚠️ ONE STRING LITERAL, NOT A CONCATENATION. supabase-js parses this at
     // the TYPE level to infer the row shape; `'a, b' + 'c'` is not a literal
     // type, so every column silently degrades to GenericStringError.
-    .select('id, full_name, job_title, linkedin_url, sales_navigator_url, location, person_blurb, work_email, mobile_phone, company_name, company_website_url, company_url, company_public_linkedin_url')
+    .select('id, full_name, job_title, linkedin_url, sales_navigator_url, location, person_blurb, work_email, mobile_phone, company_name, company_website_url, company_url, company_public_linkedin_url, company_industry, company_employee_count, company_headquarters, company_id')
     .eq('extraction_job_id', extractionJobId)
     .eq('user_id', job.user_id)
     .eq('is_duplicate', false)
@@ -442,19 +552,67 @@ export async function ingestExtractionJob(
 
   const rowsSeen = leads?.length ?? 0
 
+  /*
+   * ⚠️ THE RESEARCHED ROW, READ ONCE FOR THE WHOLE BATCH. `extracted_leads`
+   * carries what was on the Sales Navigator page; `companies` carries what
+   * enrichment later established, with `research_evidence` behind it as the
+   * citation. Both are observed — neither is inferred — and the CRM should
+   * have whichever exists, so they are merged into one seed below.
+   *
+   * ⚠️ `user_id`-KEYED, NOT `workspace_id`-KEYED. `companies` belongs to the
+   * Lead Engine's tenancy model (see the two-models note in CLAUDE.md), so it
+   * is scoped by the job's owner. Scoping it by workspace would silently match
+   * nothing and every projection would quietly stay null.
+   */
+  const researched = await researchedCompanies(
+    db,
+    job.user_id,
+    [...new Set((leads ?? []).map((lead) => lead.company_id).filter((id): id is string => Boolean(id)))],
+  )
+
   // ---- companies, once each ----------------------------------------------
   const seeds = new Map<string, CompanySeed>()
   const leadCompanyKey = new Map<string, string>()
 
   for (const lead of leads ?? []) {
+    const research = lead.company_id ? researched.get(lead.company_id) : undefined
+
     const seed: CompanySeed = {
       name: lead.company_name,
-      websiteUrl: lead.company_website_url,
-      linkedInUrl: lead.company_public_linkedin_url ?? lead.company_url,
+      /*
+       * ⚠️ THE PAGE FIRST, THE RESEARCH SECOND — and `??`, so an absent value
+       * falls through rather than winning. Both were observed; the page is
+       * what the customer themselves saw, so when the two disagree the one
+       * they can verify is preferred.
+       */
+      websiteUrl: lead.company_website_url ?? research?.domain ?? null,
+      linkedInUrl:
+        lead.company_public_linkedin_url ?? lead.company_url ?? research?.linkedinUrl ?? null,
+      sourceCompanyId: lead.company_id,
+      /*
+       * ⚠️ `company_employee_count`, NOT `company_size`. 0054 keeps them apart
+       * on purpose: `company_size` is the hover card's RANGE ("11-50
+       * employees") and this column is the exact headcount off the company
+       * page. `crm_companies.employee_count` is an integer, and turning
+       * "11-50" into a number means picking one — which is inference, and
+       * rule 4 forbids it. A range with no column stays unstored rather than
+       * becoming a plausible number nobody can check.
+       */
+      industry: lead.company_industry ?? research?.industry ?? null,
+      employeeCount: lead.company_employee_count ?? research?.employeeCount ?? null,
+      headquarters: lead.company_headquarters ?? research?.headquarters ?? null,
     }
     const key = companyKey(seed)
     if (!key) continue
-    if (!seeds.has(key)) seeds.set(key, seed)
+    /*
+     * ⚠️ THE RICHEST SEED WINS WITHIN A BATCH, not the first one seen. Five
+     * hundred employees of one company are one upsert (see `resolveCompanies`),
+     * and only the rows whose company page the extension captured carry an
+     * industry — so keeping the first would usually keep a bare one and throw
+     * away the only sighting in the batch that had anything in it.
+     */
+    const seen = seeds.get(key)
+    if (!seen || seedDetail(seed) > seedDetail(seen)) seeds.set(key, seed)
     leadCompanyKey.set(lead.id, key)
   }
 

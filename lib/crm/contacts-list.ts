@@ -71,6 +71,15 @@ export type ListContactsOptions = {
    * than "no tags allowed" — the two are opposite and the second is useless.
    */
   tagIds?: string[]
+  /**
+   * Contacts on this list.
+   *
+   * ⚠️ ONE LIST, NOT AN ARRAY — deliberately unlike `tagIds`. Tags describe a
+   * contact, so intersecting them is a segment. A list is a working set someone
+   * curated, so "on both of these lists" is a question nobody asks, and
+   * offering it would invite the same AND/OR confusion for no gain.
+   */
+  listId?: string | null
   /** Contacts at this company. */
   companyId?: string | null
   /** ISO date; contacts created on or after it. */
@@ -280,6 +289,24 @@ export async function listContacts(
     // No match must return nothing, NOT "no filter". `.in()` with an empty
     // array is the correct expression of that and PostgREST honours it.
     query = query.in('id', ids)
+  }
+
+  /*
+   * Membership, resolved first and applied as `.in()` — the same two-step as
+   * the tag filter directly above, and for the same PostgREST reason.
+   */
+  if (options.listId) {
+    const { data: members, error: memberError } = await db
+      .from('crm_list_members')
+      .select('contact_id')
+      // Scoped by workspace in code — the service role bypasses RLS, and a
+      // list id from the query string is a user-supplied value.
+      .eq('workspace_id', workspaceId)
+      .eq('list_id', options.listId)
+
+    if (memberError) throw new Error(`list filter failed: ${memberError.message}`)
+    // An empty list must show nothing, not everything.
+    query = query.in('id', (members ?? []).map((m) => m.contact_id))
   }
 
   if (options.hasEmail !== undefined) {

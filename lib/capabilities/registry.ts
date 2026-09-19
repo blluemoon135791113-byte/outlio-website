@@ -41,10 +41,24 @@ import type { Permission } from '@/lib/workspaces/permissions'
  * pin at all, and absent is not stale, so none of them starts warning.
  */
 /*
- * ⚠️ 4 SINCE 2026-09-16, when `linkedin.draft` and `linkedin.analysis` landed.
- * A published flow definition pins this number, so it only ever grows.
+ * ⚠️ 5 SINCE 2026-09-19, when `email.analysis` landed. (4 was 2026-09-16, for
+ * `linkedin.draft` and `linkedin.analysis`.) A published flow definition pins
+ * this number, so it only ever grows.
+ *
+ * ⚠️ WHAT THIS BUMP DOES TO EXISTING FLOWS, STATED RATHER THAN ASSUMED. Any
+ * stored definition pinned at v4 now raises a `registry_drift` WARNING — "re-
+ * check the steps before publishing again". That is the designed response to a
+ * new capability existing, not a failure: nothing stops running and nothing
+ * refuses to publish. `compileGeneratedDefinition` is the strict one, and it
+ * only sees input generated against the current version.
+ *
+ * ⚠️ UNVERIFIED AGAINST PRODUCTION THIS TIME. The v4 note recorded that the
+ * five `flow_versions` rows in production carried no pin at all, so none of
+ * them warned. That check needed the production database and was not repeated
+ * for this bump — any flow published since then and pinned at 4 will show the
+ * warning until it is re-saved.
  */
-export const CAPABILITY_REGISTRY_VERSION = 4
+export const CAPABILITY_REGISTRY_VERSION = 5
 
 export type CapabilityStatus = 'active' | 'deprecated'
 
@@ -189,6 +203,25 @@ export const CAPABILITIES = {
    * paid for.
    */
   'linkedin.analysis': { isAi: true, credits: 0, label: 'Analyse LinkedIn messaging strategy', permission: 'report.team.view', status: 'active', since: 4 },
+
+  /*
+   * ⚠️ `email.campaign.view`, NOT `report.team.view` — AND THE DIFFERENCE FROM
+   * `linkedin.analysis` DIRECTLY ABOVE IS DELIBERATE, NOT AN INCONSISTENCY.
+   *
+   * The LinkedIn analysis reports PER PERSON: one rep's reply rate and a
+   * summary of their private messages, shown to somebody else. That is a
+   * disclosure about a colleague, so it takes a manager permission.
+   *
+   * This one reports per SEQUENCE. A campaign is a shared workspace artefact
+   * and its copy was written to be sent to strangers — nothing here says
+   * anything about an individual member of staff. Requiring a manager to see
+   * which of the team's own sequences performs better would gate ordinary work
+   * behind a permission that answers a different question.
+   *
+   * Priced 0 on DECISION-16's standing rule: meter it, charge nothing, let
+   * `hubble_calls` fill with real rows before a number is chosen.
+   */
+  'email.analysis': { isAi: true, credits: 0, label: 'Analyse email sequence performance', permission: 'email.campaign.view', status: 'active', since: 5 },
 } as const satisfies Record<string, Capability>
 
 export type CapabilityId = keyof typeof CAPABILITIES

@@ -22,15 +22,31 @@ import 'server-only'
  */
 import {
   getLastRollupRun,
+  getMetricSeries,
+  getMetricTotals,
   getSetterDashboard,
+  replyRate,
+  type MetricTotals,
   type SetterDashboard,
 } from '@/lib/crm/metrics'
-import { previousRange, resolveRange, trend, type RangeKey } from '@/lib/crm/reports'
+import {
+  previousRange,
+  RANGES,
+  resolveRange,
+  trend,
+  type RangeKey,
+} from '@/lib/crm/reports'
 
 export type PerformanceCard = {
   key: string
   label: string
-  value: number
+  /**
+   * ⚠️ A STRING WHEN THE FIGURE IS NOT A PLAIN COUNT — a percentage, or money
+   * already formatted. Forcing those into a number would lose the one
+   * distinction that matters: a reply rate of `null` renders as "—", and a
+   * numeric 0 would say "we were ignored" instead of "we have not started".
+   */
+  value: number | string
   previous: number
   /**
    * Change as a fraction, or `null` when there is no honest one to show —
@@ -49,7 +65,34 @@ export type PerformanceCard = {
   higherIsBetter: boolean
   /** A second fact, not a restatement of the first. */
   hint: string
+  /**
+   * One stored value per day across the selected range.
+   *
+   * ⚠️ REAL ROWS OR AN EMPTY ARRAY — NEVER A PLACEHOLDER CURVE. An empty array
+   * renders no sparkline at all, which is the honest output when the series
+   * could not be read. See `getMetricSeries`.
+   */
+  series: number[]
+  /** Where the figure can be checked in full. */
+  href: string
+  /** Which glyph `StatCard` draws. A name, never markup. */
+  icon: StatIcon
 }
+
+/**
+ * ⚠️ A CLOSED SET, NOT A FREE STRING. The icon is chosen from a vocabulary
+ * `StatCard` can actually draw, so a typo is a compile error rather than a card
+ * that silently renders no glyph and sits a few pixels shorter than its row.
+ */
+export type StatIcon =
+  | 'target'
+  | 'trend'
+  | 'people'
+  | 'money'
+  | 'mail'
+  | 'reply'
+  | 'phone'
+  | 'calendar'
 
 export type OverviewPerformance =
   | {
@@ -81,7 +124,16 @@ export type OverviewPerformance =
  * `pending` and `unavailable` both answer false: neither is a figure.
  */
 export function hasRealActivity(data: OverviewPerformance): boolean {
-  return data.kind === 'ready' && data.cards.some((c) => c.value > 0)
+  /*
+   * ⚠️ NUMBERS ONLY. A card whose value is a string is a rate or a formatted
+   * sum, and `'—' > 0` is `false` while `'12%' > 0` is also `false` — so a
+   * loose comparison would quietly answer "no activity" for a workspace whose
+   * only non-zero figures happened to be the formatted ones.
+   */
+  return (
+    data.kind === 'ready'
+    && data.cards.some((c) => typeof c.value === 'number' && c.value > 0)
+  )
 }
 
 function percentText(rate: number | null): string {
@@ -96,6 +148,7 @@ function card(
   now: number,
   before: number,
   hint: string,
+  extra: { series?: number[]; href: string; icon: StatIcon },
 ): PerformanceCard {
   return {
     key,
@@ -106,6 +159,11 @@ function card(
     isNew: before === 0 && now > 0,
     higherIsBetter: true,
     hint,
+    // Absent means "not read", and renders as no sparkline rather than a flat
+    // line — a flat line is a claim that nothing happened.
+    series: extra.series ?? [],
+    href: extra.href,
+    icon: extra.icon,
   }
 }
 
@@ -133,12 +191,26 @@ export async function getOverviewPerformance(
   let now: SetterDashboard
   let before: SetterDashboard
   let lastRun: Awaited<ReturnType<typeof getLastRollupRun>>
+  let series: Record<string, number[]>
 
   try {
-    ;[now, before, lastRun] = await Promise.all([
+    ;[now, before, lastRun, series] = await Promise.all([
       getSetterDashboard(workspaceId, userId, range.fromDay, range.toDay),
       getSetterDashboard(workspaceId, userId, prior.fromDay, prior.toDay),
       getLastRollupRun(workspaceId),
+      /*
+       * ⚠️ THE SAME BASIS AND USER AS THE TOTALS ABOVE. A sparkline drawn from
+       * workspace rows under a figure computed from one setter's rows would be
+       * a picture of somebody else's month sitting beneath this person's
+       * number — and it would look entirely plausible.
+       */
+      getMetricSeries(workspaceId, {
+        fromDay: range.fromDay,
+        toDay: range.toDay,
+        basis: 'actor',
+        userId,
+        metrics: ['contacts_created', 'emails_sent', 'replies', 'calls_booked'],
+      }),
     ])
   } catch {
     /*
@@ -180,6 +252,7 @@ export async function getOverviewPerformance(
         now.contactsCreated,
         before.contactsCreated,
         `${before.contactsCreated.toLocaleString()} in the previous period`,
+        { series: series.contacts_created, href: '/crm/contacts', icon: 'people' },
       ),
       card(
         'emails_sent',
@@ -189,15 +262,190 @@ export async function getOverviewPerformance(
         `${now.contactsEmailed.toLocaleString()} ${
           now.contactsEmailed === 1 ? 'person' : 'people'
         } reached`,
+        { series: series.emails_sent, href: '/email/analytics', icon: 'mail' },
       ),
-      card('replies', 'Replies', now.replies, before.replies, percentText(now.replyRate)),
+      card('replies', 'Replies', now.replies, before.replies, percentText(now.replyRate), {
+        series: series.replies,
+        href: '/email/inbox',
+        icon: 'reply',
+      }),
       card(
         'calls_booked',
         'Calls booked',
         now.callsBooked,
         before.callsBooked,
         `${now.callsHeld.toLocaleString()} held`,
+        { series: series.calls_booked, href: '/crm/tasks', icon: 'phone' },
       ),
     ],
   }
+}
+
+/* -------------------------------------------------------------------------- *
+ * The headline row — the workspace, not one person
+ * -------------------------------------------------------------------------- */
+
+/**
+ * The four figures at the top of the overview.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ WORKSPACE BASIS, AND THE HEADING MUST SAY SO.                        ║
+ * ║                                                                           ║
+ * ║  "Your activity" directly below is one setter's own work on the `actor`   ║
+ * ║  basis. This row is the whole workspace. Rendering the two under headings ║
+ * ║  that do not distinguish them is the defect the reports page records as   ║
+ * ║  D24: the number is right and the sentence above it is wrong.            ║
+ * ║                                                                           ║
+ * ║  The `workspace` rows are stored by the rollup rather than summed on read ║
+ * ║  (migration 0082), so this is one lookup, not a scan across every member. ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ EVERY LABEL NAMES WHAT IS ACTUALLY COUNTED. The obvious headline set for
+ * a sales product is "Total Leads / Conversion Rate / Total Customers / Monthly
+ * Revenue", and three of those four would be a claim this product cannot
+ * support: nothing here knows what a customer is, "conversion" has no agreed
+ * denominator, and revenue is won-deal value rather than money received. So the
+ * cards keep the shape and take the names of the figures that exist — CLAUDE.md
+ * rule 4 governs a label exactly as it governs a stored value.
+ */
+export type HeadlineKpis =
+  | { kind: 'ready'; cards: PerformanceCard[]; rangeLabel: string }
+  | { kind: 'pending' }
+  | { kind: 'unavailable' }
+
+export async function getHeadlineKpis(
+  workspaceId: string,
+  rangeKey: RangeKey = '30d',
+): Promise<HeadlineKpis> {
+  const range = resolveRange(rangeKey)
+  const prior = previousRange(range)
+
+  let now: MetricTotals
+  let before: MetricTotals
+  let lastRun: Awaited<ReturnType<typeof getLastRollupRun>>
+  let series: Record<string, number[]>
+
+  try {
+    ;[now, before, lastRun, series] = await Promise.all([
+      getMetricTotals(workspaceId, { ...range, basis: 'workspace' }),
+      getMetricTotals(workspaceId, { ...prior, basis: 'workspace' }),
+      getLastRollupRun(workspaceId),
+      getMetricSeries(workspaceId, {
+        fromDay: range.fromDay,
+        toDay: range.toDay,
+        basis: 'workspace',
+        metrics: ['contacts_created', 'contacts_emailed', 'replies', 'won_deals'],
+      }),
+    ])
+  } catch {
+    // Reported as a state, never as zeroes. Same reasoning as the row below.
+    return { kind: 'unavailable' }
+  }
+
+  if (lastRun === null) return { kind: 'pending' }
+
+  const count = (metric: string, totals: MetricTotals) => totals[metric]?.count ?? 0
+  const amount = (metric: string, totals: MetricTotals) => totals[metric]?.amount ?? 0
+
+  /*
+   * ⚠️ REPLY RATE IS COMPUTED BY THE REGISTRY, NOT HERE. `evaluateDerived`
+   * owns the formula — contacts replied over contacts EMAILED, and `null`
+   * rather than 0 when nobody was emailed. A second copy of that division is
+   * how two screens of one product come to disagree about a percentage.
+   */
+  const rateNow = replyRate(now)
+  const ratePrior = replyRate(before)
+
+  const wonNow = amount('won_deals', now)
+  const wonBefore = amount('won_deals', before)
+
+  return {
+    kind: 'ready',
+    rangeLabel: RANGES[range.key].label,
+    cards: [
+      card(
+        'leads',
+        'Leads added',
+        count('contacts_created', now),
+        count('contacts_created', before),
+        'Everyone the workspace brought in',
+        { series: series.contacts_created, href: '/crm/contacts', icon: 'target' },
+      ),
+      {
+        key: 'reply_rate',
+        label: 'Reply rate',
+        /*
+         * ⚠️ A STRING, BECAUSE `null` IS NOT ZERO. Nobody emailed has no reply
+         * rate, and 0% reads as "we were ignored" rather than "we have not
+         * started". `StatCard` renders a string verbatim.
+         */
+        value: rateNow === null ? '—' : `${Math.round(rateNow * 100)}%`,
+        previous: ratePrior === null ? 0 : Math.round(ratePrior * 100),
+        /*
+         * ⚠️ NO PERCENTAGE MOVEMENT ON A PERCENTAGE. "Up 3% from 24%" is
+         * ambiguous between points and proportion, and both readings are
+         * defensible — so the delta is the POINT difference, and it is only
+         * offered when both periods produced a real rate.
+         */
+        delta:
+          rateNow === null || ratePrior === null || ratePrior === 0
+            ? null
+            : (rateNow - ratePrior) / ratePrior,
+        isNew: ratePrior === null && rateNow !== null,
+        higherIsBetter: true,
+        hint:
+          rateNow === null
+            ? 'Nobody emailed in this period'
+            : `${count('contacts_emailed', now).toLocaleString()} emailed, ${count('replies', now).toLocaleString()} replied`,
+        series: series.replies ?? [],
+        href: '/crm/reports',
+        icon: 'trend',
+      },
+      card(
+        'won_deals',
+        'Deals won',
+        count('won_deals', now),
+        count('won_deals', before),
+        'Closed in this period',
+        { series: series.won_deals, href: '/crm/pipeline', icon: 'people' },
+      ),
+      {
+        key: 'won_value',
+        label: 'Won revenue',
+        /*
+         * ⚠️ FORMATTED HERE AND PASSED AS A STRING, so `StatCard` never has to
+         * know a currency. 0124 sums `value_amount_base`, so a deal priced in a
+         * currency with no rate is EXCLUDED from this figure while still being
+         * counted in "Deals won" beside it — which is why the two cards can
+         * legitimately disagree, and why the pipeline page carries the
+         * `unconvertible` warning.
+         */
+        value: formatBaseMoney(wonNow),
+        previous: wonBefore,
+        delta: trend(wonNow, wonBefore),
+        isNew: wonBefore === 0 && wonNow > 0,
+        higherIsBetter: true,
+        hint: 'Value of deals marked won',
+        // Money has no stored daily count column; `count_value` on `won_deals`
+        // is the number of deals, which is the card above. Drawing it here
+        // would label a count as revenue.
+        series: [],
+        href: '/crm/reports',
+        icon: 'money',
+      },
+    ],
+  }
+}
+
+/**
+ * ⚠️ THE WORKSPACE'S BASE CURRENCY, WITHOUT NAMING IT. `amount_value` is
+ * already converted to base (0124), and this function has no workspace row to
+ * read a symbol from — printing "$" would be a guess. The compact form keeps a
+ * six-figure sum inside a card that also holds a delta chip.
+ */
+function formatBaseMoney(value: number): string {
+  if (value === 0) return '0'
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+  if (value >= 10_000) return `${Math.round(value / 1_000)}K`
+  return Math.round(value).toLocaleString()
 }

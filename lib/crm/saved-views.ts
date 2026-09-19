@@ -60,6 +60,7 @@ export type ViewDefinition = {
   ownerUserId?: string
   unassignedOnly?: boolean
   tagIds?: string[]
+  listId?: string
   companyId?: string
   createdAfter?: string
   createdBefore?: string
@@ -83,6 +84,7 @@ const definitionSchema = z.object({
   ownerUserId: uuid.optional().catch(undefined),
   unassignedOnly: z.boolean().optional().catch(undefined),
   tagIds: z.array(uuid).max(20).optional().catch(undefined),
+  listId: uuid.optional().catch(undefined),
   companyId: uuid.optional().catch(undefined),
   createdAfter: isoDate.optional().catch(undefined),
   createdBefore: isoDate.optional().catch(undefined),

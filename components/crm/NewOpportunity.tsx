@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from 'react'
 
+import { FormDialog } from '@/components/crm/FormDialog'
 import { CURRENCIES } from '@/lib/crm/currencies'
 import {
   createOpportunityAction,
@@ -210,7 +211,19 @@ export function NewOpportunityButton(props: {
 }) {
   const [open, setOpen] = useState(false)
 
-  if (open) return <NewOpportunityForm {...props} onCancel={() => setOpen(false)} />
+  /*
+   * ⚠️ IN A LAYER, NOT IN PLACE — the same fix as `NewPipelineButton`, for the
+   * same reason: rendered here the form became a flex item in the board's
+   * header strip, squeezing itself and displacing the "Manage" menu's anchor.
+   * See `components/crm/FormDialog.tsx`.
+   */
+  if (open) {
+    return (
+      <FormDialog label={props.label ?? 'New deal'} onClose={() => setOpen(false)}>
+        <NewOpportunityForm {...props} onCancel={() => setOpen(false)} />
+      </FormDialog>
+    )
+  }
 
   return (
     <button
