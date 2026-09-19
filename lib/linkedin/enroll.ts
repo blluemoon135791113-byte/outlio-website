@@ -150,7 +150,7 @@ export async function enrollContact(input: {
    * ║  Outlio's primary input — and reading it alone would refuse almost every  ║
    * ║  extracted contact with `no_profile`.                                    ║
    * ║                                                                           ║
-   * ║  Migration 0131 added `sales_navigator_url` for exactly this reason and   ║
+   * ║  Migration 0138 added `sales_navigator_url` for exactly this reason and   ║
    * ║  keeps the two apart: §4.5 forbids converting one into the other. Both    ║
    * ║  are real, observed addresses for the same person, `profileReference`     ║
    * ║  already allows both paths, and the operator is a Sales Navigator user.  ║

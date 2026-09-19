@@ -414,7 +414,7 @@ export async function getHeadlineKpis(
         label: 'Won revenue',
         /*
          * ⚠️ FORMATTED HERE AND PASSED AS A STRING, so `StatCard` never has to
-         * know a currency. 0124 sums `value_amount_base`, so a deal priced in a
+         * know a currency. 0131 sums `value_amount_base`, so a deal priced in a
          * currency with no rate is EXCLUDED from this figure while still being
          * counted in "Deals won" beside it — which is why the two cards can
          * legitimately disagree, and why the pipeline page carries the
@@ -439,7 +439,7 @@ export async function getHeadlineKpis(
 
 /**
  * ⚠️ THE WORKSPACE'S BASE CURRENCY, WITHOUT NAMING IT. `amount_value` is
- * already converted to base (0124), and this function has no workspace row to
+ * already converted to base (0131), and this function has no workspace row to
  * read a symbol from — printing "$" would be a guess. The compact form keeps a
  * six-figure sum inside a card that also holds a delta chip.
  */
