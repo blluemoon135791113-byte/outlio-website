@@ -483,7 +483,27 @@ export async function upsertCrmCompany(
   }
 
   const existing = await find()
-  if (existing) return { id: existing.id, created: false, matchedBy: existing.matchedBy }
+  if (existing) {
+    /*
+     * ╔═══════════════════════════════════════════════════════════════════════╗
+     * ║  ⚠️ THIS USED TO RETURN IMMEDIATELY, AND THAT IS WHY THE COMPANIES    ║
+     * ║  SCREEN WAS A COLUMN OF DASHES.                                       ║
+     * ║                                                                       ║
+     * ║  A company is almost always first created by a LEAD extraction, which ║
+     * ║  observes a NAME and nothing else. Every later sighting of the same   ║
+     * ║  company — an extension capture carrying the industry and headcount   ║
+     * ║  off the company page, an account extraction, a CSV with a domain —   ║
+     * ║  matched that row and returned here, discarding everything it knew.   ║
+     * ║                                                                       ║
+     * ║  So the first, thinnest observation won permanently, and no amount of ║
+     * ║  richer data afterwards could ever fill the row in. `CompanyInput`    ║
+     * ║  has carried `industry`, `employeeCount` and `headquarters` since     ║
+     * ║  0071 and only the INSERT below had ever read them.                   ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    await fillCompanyGaps(db, workspaceId, existing.id, input)
+    return { id: existing.id, created: false, matchedBy: existing.matchedBy }
+  }
 
   const { data, error } = await db
     .from('crm_companies')
@@ -515,6 +535,114 @@ export async function upsertCrmCompany(
   }
 
   return { id: data.id, created: true, matchedBy: null }
+}
+
+/**
+ * Fills in facts an existing company row does not have yet.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ FILLS NULLS. NEVER OVERWRITES, NEVER NULLS ANYTHING OUT.             ║
+ * ║                                                                           ║
+ * ║  Two different mistakes are being avoided, and they pull in opposite      ║
+ * ║  directions:                                                              ║
+ * ║                                                                           ║
+ * ║   1. A blind UPDATE with the whole input would ERASE a value on every     ║
+ * ║      ingest that happened not to carry it — and a lead extraction carries ║
+ * ║      a name and nothing else, so importing one CSV would wipe the         ║
+ * ║      industry off every company in it. Silent, and invisible until        ║
+ * ║      somebody noticed the screen had gone blank again.                    ║
+ * ║                                                                           ║
+ * ║   2. Preferring the NEWEST observation would let a thin source overwrite  ║
+ * ║      a richer one, and would silently discard a value a human typed.      ║
+ * ║                                                                           ║
+ * ║  First observation wins; later ones may only fill a gap. Every value      ║
+ * ║  stored was literally observed somewhere (CLAUDE.md rule 4) — nothing     ║
+ * ║  here infers, averages or reconciles.                                     ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ IDENTITY COLUMNS ARE INCLUDED AND THEIR NORMALIZED PAIRS MOVE WITH THEM.
+ * A company matched by name can later be seen with a domain, and that domain is
+ * what every future match should use — but `domain` without `normalized_domain`
+ * would be displayed and never matched on, which is worse than not storing it.
+ */
+async function fillCompanyGaps(
+  db: ReturnType<typeof createAdminClient>,
+  workspaceId: string,
+  companyId: string,
+  input: CompanyInput,
+): Promise<void> {
+  const identity = resolveCrmCompanyIdentity(input)
+
+  const { data: current } = await db
+    .from('crm_companies')
+    .select(
+      'domain, normalized_domain, linkedin_url, normalized_linkedin_url, industry, employee_count, headquarters, source_company_id',
+    )
+    // The service role bypasses RLS — scoping by workspace is mandatory.
+    .eq('workspace_id', workspaceId)
+    .eq('id', companyId)
+    .maybeSingle()
+
+  if (!current) return
+
+  /*
+   * ⚠️ THE GENERATED UPDATE TYPE, NOT `Record<string, unknown>`. A loose index
+   * signature would let a misspelled column through to PostgREST, which
+   * ignores unknown keys silently — so the gap would simply never fill and
+   * nothing would report why.
+   */
+  const patch: Database['public']['Tables']['crm_companies']['Update'] = {}
+
+  if (!current.industry && input.industry?.trim()) {
+    patch.industry = input.industry.trim()
+  }
+  if (current.employee_count === null && typeof input.employeeCount === 'number') {
+    patch.employee_count = input.employeeCount
+  }
+  if (!current.headquarters && input.headquarters?.trim()) {
+    patch.headquarters = input.headquarters.trim()
+  }
+  /*
+   * ⚠️ THIS ONE MATTERS MOST FOR ROWS THAT ALREADY EXIST. Nothing had ever set
+   * `source_company_id`, so every company in every workspace has it NULL — and
+   * `companyDetails` early-returns on a null id, which is why funding, tech
+   * stack, news and socials render empty everywhere. Filling it on the next
+   * ingest is what lights those up for companies created before today, without
+   * a backfill migration.
+   */
+  if (!current.source_company_id && input.sourceCompanyId) {
+    patch.source_company_id = input.sourceCompanyId
+  }
+  if (!current.normalized_domain && identity.normalizedDomain && identity.domain) {
+    patch.domain = identity.domain
+    patch.normalized_domain = identity.normalizedDomain
+  }
+  if (
+    !current.normalized_linkedin_url
+    && identity.normalizedLinkedInUrl
+    && identity.linkedInUrl
+  ) {
+    patch.linkedin_url = identity.linkedInUrl
+    patch.normalized_linkedin_url = identity.normalizedLinkedInUrl
+  }
+
+  // Nothing new. Skipped rather than written, because every batch re-resolves
+  // every company it mentions and a no-op UPDATE per company per import is a
+  // write amplification nobody asked for.
+  if (Object.keys(patch).length === 0) return
+
+  /*
+   * ⚠️ A FAILURE HERE MUST NOT COST THE CALLER ITS COMPANY. `resolveCompanies`
+   * treats a throw as "this contact has no employer", so letting a unique
+   * violation on `normalized_domain` — two name-matched rows converging on one
+   * domain, which is a real race — escape would unlink people from a company
+   * that resolved perfectly well. The gap simply stays a gap.
+   */
+  await db
+    .from('crm_companies')
+    .update(patch)
+    .eq('workspace_id', workspaceId)
+    .eq('id', companyId)
 }
 
 /**

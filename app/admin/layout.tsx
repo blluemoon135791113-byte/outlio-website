@@ -18,6 +18,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   return (
     <ProductShell
+      userId={ctx.userId!}
       email={ctx.email ?? ''}
       fullName={ctx.profile?.full_name ?? null}
       planName={ctx.plan?.name ?? null}

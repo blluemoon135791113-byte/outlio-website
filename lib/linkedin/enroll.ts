@@ -119,7 +119,7 @@ export async function enrollContact(input: {
 
   const { data: contact } = await db
     .from('crm_contacts')
-    .select('id, full_name, linkedin_url, version')
+    .select('id, full_name, linkedin_url, sales_navigator_url, version')
     // Service role bypasses RLS — scoping by workspace is mandatory.
     .eq('workspace_id', input.workspaceId)
     .eq('id', input.contactId)
@@ -135,8 +135,30 @@ export async function enrollContact(input: {
    * a reference never performs a LinkedIn action." The URL came out of uploaded
    * HTML, so `profileReference` permits only read-only profile paths rather
    * than trying to blocklist the ones that do things.
+   *
+   * ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ `sales_navigator_url` IS A FALLBACK, NOT A SECOND-CLASS ADDRESS.     ║
+   * ║                                                                           ║
+   * ║  This read `linkedin_url` alone. That was survivable only while the       ║
+   * ║  parser fabricated a `/in/{urn}` for every extracted lead — so the        ║
+   * ║  column was always populated, and always populated with a DEAD link. An   ║
+   * ║  operator opened it, landed nowhere, and the enrolment was useless in a   ║
+   * ║  way no refusal reported.                                                ║
+   * ║                                                                           ║
+   * ║  Now that the parser records a missing public profile as missing          ║
+   * ║  (rule 4), `linkedin_url` is NULL for a Sales Navigator lead — which is   ║
+   * ║  Outlio's primary input — and reading it alone would refuse almost every  ║
+   * ║  extracted contact with `no_profile`.                                    ║
+   * ║                                                                           ║
+   * ║  Migration 0131 added `sales_navigator_url` for exactly this reason and   ║
+   * ║  keeps the two apart: §4.5 forbids converting one into the other. Both    ║
+   * ║  are real, observed addresses for the same person, `profileReference`     ║
+   * ║  already allows both paths, and the operator is a Sales Navigator user.  ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
    */
-  const reference = profileReference(contact.linkedin_url)
+  const reference =
+    profileReference(contact.linkedin_url) ?? profileReference(contact.sales_navigator_url)
+
   if (!reference) {
     return {
       ok: false,

@@ -1,0 +1,97 @@
+[
+  {
+    "event_name": "account_signed_up",
+    "event_description": "A user successfully created an account and entered the email verification flow.",
+    "file": "lib/auth/actions.ts"
+  },
+  {
+    "event_name": "account_signed_in",
+    "event_description": "An authenticated user successfully signed in.",
+    "file": "lib/auth/actions.ts"
+  },
+  {
+    "event_name": "checkout_started",
+    "event_description": "A user opened checkout for a selected plan and billing interval.",
+    "file": "components/leadengine/FastSpringPricing.tsx"
+  },
+  {
+    "event_name": "extractor_job_started",
+    "event_description": "An authenticated browser-extension capture was accepted and queued for processing.",
+    "file": "app/api/extension/capture/route.ts"
+  },
+  {
+    "event_name": "extractor_job_finished",
+    "event_description": "An extraction job reached a completed, partially completed, or failed terminal state.",
+    "file": "lib/worker/process-job.ts"
+  },
+  {
+    "event_name": "leads_imported",
+    "event_description": "A user completed a CSV import into the CRM.",
+    "file": "app/(product)/crm/import/actions.ts"
+  },
+  {
+    "event_name": "records_exported",
+    "event_description": "A persisted export job reached a completed, partial, or failed provider outcome.",
+    "file": "lib/export/actions.ts"
+  },
+  {
+    "event_name": "crm_contact_created",
+    "event_description": "A new manual CRM contact was successfully created after deduplication.",
+    "file": "lib/crm/contact-actions.ts"
+  },
+  {
+    "event_name": "crm_contact_assignment_updated",
+    "event_description": "A CRM contact owner assignment was successfully changed or cleared.",
+    "file": "lib/crm/contact-actions.ts"
+  },
+  {
+    "event_name": "crm_opportunity_created",
+    "event_description": "A new CRM opportunity was successfully created.",
+    "file": "app/(product)/crm/opportunities-actions.ts"
+  },
+  {
+    "event_name": "crm_opportunity_stage_changed",
+    "event_description": "A CRM opportunity successfully moved to another stage.",
+    "file": "lib/crm/board-actions.ts"
+  },
+  {
+    "event_name": "integration_connected",
+    "event_description": "A user successfully connected and validated an SMTP mailbox integration.",
+    "file": "app/(product)/email/actions.ts"
+  },
+  {
+    "event_name": "flow_created",
+    "event_description": "A user created a new automation flow draft.",
+    "file": "app/(product)/flows/actions.ts"
+  },
+  {
+    "event_name": "flow_published",
+    "event_description": "A user successfully published an automation flow.",
+    "file": "app/(product)/flows/actions.ts"
+  },
+  {
+    "event_name": "campaign_created",
+    "event_description": "A user created a new email campaign draft.",
+    "file": "app/(product)/email/actions.ts"
+  },
+  {
+    "event_name": "campaign_launched",
+    "event_description": "A user successfully launched an email campaign.",
+    "file": "app/(product)/email/actions.ts"
+  },
+  {
+    "event_name": "hubble_query_completed",
+    "event_description": "A Hubble query completed; only operational metadata is captured.",
+    "file": "app/api/hubble/ask/route.ts"
+  },
+  {
+    "event_name": "hubble_query_failed",
+    "event_description": "A Hubble query failed; only a bounded error code and duration are captured.",
+    "file": "app/api/hubble/ask/route.ts"
+  },
+  {
+    "event_name": "analytics_validation_completed",
+    "event_description": "A development-only synthetic browser or server delivery check completed.",
+    "file": "app/(product)/dashboard/analytics-validation/actions.ts"
+  }
+]

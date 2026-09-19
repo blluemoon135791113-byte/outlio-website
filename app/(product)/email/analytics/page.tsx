@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { SequenceComparison } from '@/components/email/SequenceComparison'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { rateOf, THRESHOLDS } from '@/lib/email/readiness'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
@@ -233,6 +234,15 @@ export default async function EmailAnalyticsPage({
           </p>
         </section>
       ) : null}
+
+      {/*
+        ⚠️ ABOVE "By mailbox", BECAUSE IT ANSWERS THE QUESTION PEOPLE COME HERE
+        WITH. The mailbox table is a deliverability health check — "is this
+        address in trouble" — while "which sequence is working" is the one the
+        owner asked for, and the two measure different denominators. Their
+        headings now say which.
+      */}
+      <SequenceComparison />
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold text-ink">By mailbox</h3>

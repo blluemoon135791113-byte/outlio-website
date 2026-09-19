@@ -1,7 +1,9 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useActionState, useEffect, useState } from 'react'
 
+import { FormDialog } from '@/components/crm/FormDialog'
 import {
   createPipelineAction,
   type PipelineActionState,
@@ -36,12 +38,43 @@ export function PipelineSetup({
   isFirstPipeline: boolean
   onCancel?: () => void
 }) {
+  const router = useRouter()
   const [name, setName] = useState(isFirstPipeline ? 'Sales' : '')
   const [stages, setStages] = useState<StageDraft[]>(SUGGESTED)
   const [state, action, pending] = useActionState<PipelineActionState, FormData>(
     createPipelineAction,
     null,
   )
+
+  /*
+   * ╔═════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️ THIS IS THE "NEW PIPELINE JUST WON'T CREATE" BUG. IT ALWAYS DID.   ║
+   * ║                                                                         ║
+   * ║  The row WAS written every time. Nothing then moved: the form stayed    ║
+   * ║  open with the same values, and the board behind it kept rendering the  ║
+   * ║  pipeline from `?pipeline=` / the workspace default — never the new one ║
+   * ║  — so the only feedback was one line of small text under the button.    ║
+   * ║                                                                         ║
+   * ║  Indistinguishable from a no-op, so people pressed it again. The        ║
+   * ║  duplicate pipelines stacked up in the Manage menu (seven, all "6       ║
+   * ║  stages") are the receipts, and they are also why this needs a NAVIGATE ║
+   * ║  rather than a `router.refresh()`: refreshing re-renders the same board ║
+   * ║  and looks identical to the failure.                                    ║
+   * ║                                                                         ║
+   * ║  `createPipelineAction` already returned `pipelineId` for exactly this  ║
+   * ║  and no caller had ever read it.                                        ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   */
+  useEffect(() => {
+    if (!state?.ok) return
+    onCancel?.()
+    router.push(
+      state.pipelineId ? `/crm/pipeline?pipeline=${state.pipelineId}` : '/crm/pipeline',
+    )
+    // The board is a Server Component; without this it renders from cache and
+    // the new pipeline's empty columns arrive one interaction late.
+    router.refresh()
+  }, [state, router, onCancel])
 
   const update = (index: number, patch: Partial<StageDraft>) =>
     setStages((current) => current.map((s, i) => (i === index ? { ...s, ...patch } : s)))
@@ -228,7 +261,18 @@ export function PipelineSetup({
 export function NewPipelineButton() {
   const [open, setOpen] = useState(false)
 
-  if (open) return <PipelineSetup isFirstPipeline={false} onCancel={() => setOpen(false)} />
+  /*
+   * ⚠️ IN A LAYER, NOT IN PLACE. Returning the form here used to drop a
+   * six-row editor into the board's header strip, which squeezed it and shoved
+   * the "Manage" menu off the edge of the content column. See `FormDialog`.
+   */
+  if (open) {
+    return (
+      <FormDialog label="New pipeline" onClose={() => setOpen(false)}>
+        <PipelineSetup isFirstPipeline={false} onCancel={() => setOpen(false)} />
+      </FormDialog>
+    )
+  }
 
   return (
     <button

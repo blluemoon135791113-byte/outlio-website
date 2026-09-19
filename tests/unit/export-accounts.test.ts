@@ -71,9 +71,21 @@ describe('buildAccountCsv', () => {
 
     expect(header).toContain('Name')
     expect(header).toContain('Job Title')
-    expect(header).toContain('LinkedIn Profile')
+    /*
+     * ⚠️ THE SALES NAVIGATOR URL, NOT "LinkedIn Profile". The Account Hub row
+     * carries only a `/sales/lead/…` address for the recommended person; the
+     * export used to mint `/in/{memberId}` from that Sales Navigator id, which
+     * resolves no public profile (see `lib/companies/account-list-store.ts`).
+     *
+     * With nothing to put in it, "LinkedIn Profile" drops out of the header —
+     * `toCsv` omits all-null columns. That is the intended outcome: a column
+     * that only ever existed because it was full of dead links.
+     */
+    expect(header).toContain('Sales Navigator URL')
+    expect(header).not.toContain('LinkedIn Profile')
     expect(lines(csv)[1]).toContain('Fabricated Person')
     expect(lines(csv)[1]).toContain('Head of Operations')
+    expect(lines(csv)[1]).toContain('https://www.linkedin.com/sales/lead/fabricated-1')
   })
 
   it('keeps company and decision-maker contacts distinct', () => {

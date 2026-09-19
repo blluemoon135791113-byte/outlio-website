@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 
 import { analyseAction, type AnalysisState } from '@/app/(product)/linkedin/strategy-actions'
 import { Button } from '@/components/ui/Button'
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button'
  * copy is deleted rather than kept "just for this screen".
  */
 import { FormMessage, Stat } from '@/components/ui/Feedback'
-import type { RepStats } from '@/lib/linkedin/analysis'
+import type { AnalysisReport, RepStats } from '@/lib/linkedin/analysis'
 
 /**
  * The strategy analysis — Phase 20, premium.
@@ -31,8 +31,20 @@ import type { RepStats } from '@/lib/linkedin/analysis'
  * ║  the rep it is about.                                                     ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-export function StrategyAnalysis() {
+export type AnalysisPerson = { userId: string; name: string }
+
+export function StrategyAnalysis({ people }: { people: AnalysisPerson[] }) {
   const [state, run, pending] = useActionState<AnalysisState, FormData>(analyseAction, null)
+  /*
+   * ⚠️ THE SELECTION IS THE FORM, matching `BulkAssign`. Each checkbox is a
+   * real `<input name="userId">`, so what is submitted is by definition what is
+   * ticked on screen. Mirroring it into React state is how a form ends up
+   * analysing somebody who was unticked.
+   *
+   * Only `everyone` is state, because it controls whether the list is shown at
+   * all — and it is a genuinely different question from "which of them".
+   */
+  const [everyone, setEveryone] = useState(true)
 
   return (
     <div className="space-y-4">
@@ -43,7 +55,84 @@ export function StrategyAnalysis() {
           as sent and replied, and says what is working. The counts come from your own records;
           the AI comments on the writing only.
         </p>
-        <form action={run} className="mt-3">
+
+        <form action={run} className="mt-4 space-y-4">
+          <fieldset>
+            <legend className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+              Period
+            </legend>
+            <div className="mt-1.5 flex flex-wrap items-end gap-3">
+              <label className="text-xs font-medium text-ink">
+                <span className="block">From</span>
+                <input
+                  type="date"
+                  name="from"
+                  className="mt-1 rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
+                />
+              </label>
+              <label className="text-xs font-medium text-ink">
+                <span className="block">To</span>
+                <input
+                  type="date"
+                  name="to"
+                  className="mt-1 rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
+                />
+              </label>
+            </div>
+            {/*
+              ⚠️ SAYS BOTH THINGS THAT WOULD OTHERWISE SURPRISE SOMEBODY.
+              Leaving the dates empty reads the whole history, and the range is
+              inclusive at both ends in UTC — a manager checking "the 31st"
+              against their own records needs to know which day each boundary
+              actually caught.
+            */}
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              Both dates are included. Leave them empty to read everything recorded so far.
+              Days are counted in UTC.
+            </p>
+          </fieldset>
+
+          <fieldset>
+            <legend className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+              Whose work
+            </legend>
+
+            <label className="mt-1.5 flex items-center gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={everyone}
+                onChange={(event) => setEveryone(event.target.checked)}
+              />
+              Everyone on the team
+            </label>
+
+            {/*
+              ⚠️ THE CHECKBOXES ARE UNMOUNTED, NOT HIDDEN, WHEN "everyone" IS
+              ON. A hidden-but-present `<input name="userId">` still submits,
+              so a stale tick from before the toggle would silently narrow a
+              report that says it covers the whole team.
+            */}
+            {!everyone ? (
+              people.length === 0 ? (
+                <p className="mt-2 text-xs text-muted">
+                  Nobody else is in this workspace yet.
+                </p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {people.map((person) => (
+                    <label
+                      key={person.userId}
+                      className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-line bg-panel px-2.5 py-1.5 text-sm text-ink"
+                    >
+                      <input type="checkbox" name="userId" value={person.userId} />
+                      {person.name}
+                    </label>
+                  ))}
+                </div>
+              )
+            ) : null}
+          </fieldset>
+
           <Button type="submit" pending={pending} pendingLabel="Analysing…">
             Run analysis
           </Button>
@@ -74,14 +163,28 @@ export function StrategyAnalysis() {
         </div>
       ) : null}
 
-      {state?.ok ? <Report report={state.report} /> : null}
+      {state?.ok ? <Report report={state.report} people={people} /> : null}
     </div>
   )
 }
 
-function Report({ report }: { report: NonNullable<Extract<AnalysisState, { ok: true }>>['report'] }) {
+function Report({
+  report,
+  people,
+}: {
+  report: NonNullable<Extract<AnalysisState, { ok: true }>>['report']
+  people: AnalysisPerson[]
+}) {
   return (
     <div className="space-y-4">
+      {/*
+        ⚠️ THE REPORT STATES ITS OWN SCOPE, read from `report.window` rather
+        than from the form. The inputs above can be changed after a run, so a
+        heading built from them would relabel a finished report — March's
+        numbers under a heading that now says April.
+      */}
+      <ScopeLine window={report.window} people={people} />
+
       {/*
         ⚠️ THE CAVEAT SITS ABOVE THE FINDINGS, NOT BELOW THEM. It is the sentence
         that says whether any of this is evidence, and a reader who has already
@@ -149,6 +252,50 @@ function Report({ report }: { report: NonNullable<Extract<AnalysisState, { ok: t
         </ul>
       </div>
     </div>
+  )
+}
+
+/**
+ * What this report actually covers, in one sentence.
+ *
+ * ⚠️ NAMES THE PEOPLE RATHER THAN COUNTING THEM, up to a point. "3 people
+ * selected" leaves a reader unable to tell whether the person they care about
+ * is in the numbers — which is the first thing anybody asks of a per-person
+ * report.
+ */
+function ScopeLine({
+  window,
+  people,
+}: {
+  window: AnalysisReport['window']
+  people: AnalysisPerson[]
+}) {
+  const period =
+    window.from && window.to
+      ? `${window.from} to ${window.to}`
+      : window.from
+        ? `since ${window.from}`
+        : window.to
+          ? `up to ${window.to}`
+          : 'everything recorded so far'
+
+  const names = window.userIds
+    .map((id) => people.find((p) => p.userId === id)?.name)
+    .filter((name): name is string => Boolean(name))
+
+  const who =
+    window.userIds.length === 0
+      ? 'the whole team'
+      : names.length === 0
+        ? `${window.userIds.length} selected`
+        : names.length <= 4
+          ? names.join(', ')
+          : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`
+
+  return (
+    <p className="text-xs text-muted">
+      Covering <span className="font-medium text-ink">{period}</span> · {who}
+    </p>
   )
 }
 

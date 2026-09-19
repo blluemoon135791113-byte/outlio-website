@@ -25,20 +25,33 @@ describe('parseSearchResults — valid page', () => {
     expect(skippedRows).toBe(0)
   })
 
-  it('builds the public profile URL from the extracted member URN', () => {
+  it('does not build a public profile URL out of the Sales Navigator URN', () => {
     /*
-     * CONSTRUCTION, NOT INFERENCE. The member URN is read from the saved page;
-     * LinkedIn accepts it in the `/in/` path, so the URL is assembled from data
-     * we already hold. Nothing is guessed and no request is made to
-     * linkedin.com — CLAUDE.md rule 1 and rule 4 both hold.
-     *
-     * This reverses the Phase 8 rollback, which nulled these URLs while it was
-     * unconfirmed whether they resolve. Confirmed by the user 2026-08-15.
+     * ╔═════════════════════════════════════════════════════════════════════╗
+     * ║  THIS ASSERTION HAS NOW FLIPPED TWICE. READ BEFORE FLIPPING IT AGAIN.║
+     * ║                                                                     ║
+     * ║  Phase 8 nulled these URLs because it was unconfirmed whether        ║
+     * ║  `/in/{urn}` resolves. That rollback was then REVERSED on            ║
+     * ║  2026-08-15 on the strength of "confirmed by the user", and the      ║
+     * ║  comment here asserted `/in/` accepts the URN.                      ║
+     * ║                                                                     ║
+     * ║  2026-09-19: the owner reports every public profile link in the      ║
+     * ║  product is dead. Phase 8 was right, and the likely reason the       ║
+     * ║  2026-08-15 check passed is that it was made against a MEMBER urn    ║
+     * ║  (`ACoAAA…`), which `/in/` does resolve and which the browser        ║
+     * ║  extension really does capture from a public `/in/` href.           ║
+     * ║                                                                     ║
+     * ║  What this parser holds is different: `urn:li:fs_salesProfile:(…)`,  ║
+     * ║  prefixed `ACwAAA…` — a SALES PROFILE, a different entity type. Note ║
+     * ║  the fixture below is an `ACw` urn, so this test never exercised the ║
+     * ║  case the confirmation was about.                                   ║
+     * ║                                                                     ║
+     * ║  ⚠️ Before flipping this back, check the PREFIX of the urn you       ║
+     * ║  tested with. `ACo` working says nothing about `ACw`.               ║
+     * ╚═════════════════════════════════════════════════════════════════════╝
      */
     expect(leads[0]?.memberUrn).toBe('ACwAAFAKE0001AAAAAAAAAAAAAAAAAAAAAAAAAAA')
-    expect(leads[0]?.linkedinUrl).toBe(
-      'https://www.linkedin.com/in/ACwAAFAKE0001AAAAAAAAAAAAAAAAAAAAAAAAAAA',
-    )
+    expect(leads[0]?.linkedinUrl).toBeNull()
   })
 
   it('keeps the Sales Navigator URL separately', () => {

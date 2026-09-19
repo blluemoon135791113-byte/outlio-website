@@ -48,7 +48,16 @@ export function PerformanceRow({ data }: { data: OverviewPerformance }) {
           unstated baseline is a number the reader has to trust; printing the
           dates makes it one they can check.
         */}
-        <span>Last 30 days · vs {dayRange(data.priorFromDay, data.priorToDay)}</span>
+        {/*
+          ⚠️ THE SELECTED RANGE, READ OFF THE DATA. This said "Last 30 days"
+          unconditionally, which became a lie the moment the period could be
+          changed — the figures would follow the picker and the caption would
+          not.
+        */}
+        <span>
+          {dayRange(data.fromDay, data.toDay)} · vs{' '}
+          {dayRange(data.priorFromDay, data.priorToDay)}
+        </span>
         {data.computedAt ? (
           <span className="hidden sm:inline">
             {' · computed '}
@@ -70,7 +79,17 @@ export function PerformanceRow({ data }: { data: OverviewPerformance }) {
             label={entry.label}
             value={entry.value}
             hint={entry.hint}
-            size="lg"
+            /*
+              ⚠️ `sm`, WHERE THE HEADLINE ROW ABOVE IS `lg`. The two rows are
+              deliberately not peers: the workspace figures lead the screen and
+              one person's own work sits under them. Rendering both at the same
+              weight is what made the old overview read as eight equal numbers
+              with no way to tell which was about whom.
+            */
+            size="sm"
+            icon={entry.icon}
+            series={entry.series}
+            href={entry.href}
             delta={{
               change: entry.delta,
               previous: entry.previous,

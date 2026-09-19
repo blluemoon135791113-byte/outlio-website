@@ -30,9 +30,19 @@ function recommendedLead(account: ParsedAccount): ParsedLead | null {
 
   return {
     fullName: recommendation.fullName,
-    // This is the same stable member-id fallback used by the lead parser when
-    // a captured Sales Navigator row carries no public /in/ slug.
-    linkedinUrl: `https://www.linkedin.com/in/${recommendation.memberId}`,
+    /*
+     * ⚠️ NULL, NOT `/in/{memberId}`. The comment here used to call this "the
+     * same stable member-id fallback used by the lead parser" — and it was,
+     * which is how one wrong idea produced dead links in two subsystems.
+     *
+     * `memberId` is parsed out of `/sales/lead/…` (see
+     * `parse-account-list.ts`), so it is a Sales Navigator identifier. `/in/`
+     * resolves MEMBER urns, a different entity type, so every URL built this
+     * way was dead. `salesNavUrl` below is the real, observed address for this
+     * person; the public profile was never on the page, so it is missing —
+     * and missing is recorded as missing (CLAUDE.md rule 4).
+     */
+    linkedinUrl: null,
     salesNavUrl: recommendation.salesNavUrl,
     memberUrn: recommendation.memberId,
     jobTitle: recommendation.jobTitle,

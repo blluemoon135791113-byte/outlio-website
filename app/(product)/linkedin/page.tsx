@@ -1,8 +1,12 @@
 import type { Metadata } from 'next'
 
 import { ActionInbox } from '@/components/linkedin/ActionInbox'
+import { BulkEnroll } from '@/components/linkedin/BulkEnroll'
+import { loadAudienceCatalogue } from '@/lib/crm/audience-catalogue'
+import { listWorkspaceSenders } from '@/lib/linkedin/senders'
 import { listInbox } from '@/lib/linkedin/tasks'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
+import { can, dataScope } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
   title: 'LinkedIn tasks | Outlio',
@@ -42,7 +46,28 @@ export default async function LinkedInInboxPage() {
     )
   }
 
-  const tasks = await listInbox(ctx.workspace.id)
+  /*
+   * ⚠️ THE BULK PANEL IS GATED ON `crm.contact.edit`, which is what
+   * `bulkEnrollContactsAction` itself enforces — not on the view permission
+   * that gates this page. Offering it more widely renders a form that always
+   * refuses.
+   */
+  const canEnrol = can({ role: ctx.role, modules: ctx.modules }, 'crm.contact.edit')
+
+  const [tasks, senders, catalogue] = await Promise.all([
+    listInbox(ctx.workspace.id),
+    canEnrol
+      ? listWorkspaceSenders(ctx.workspace.id).then((rows) =>
+          rows.map((sender) => ({ id: sender.senderId, label: sender.displayLabel })),
+        )
+      : Promise.resolve([]),
+    canEnrol
+      ? loadAudienceCatalogue(ctx.workspace.id, {
+          // A setter enrols their own records only.
+          ownerUserId: dataScope(ctx.role) === 'assigned' ? ctx.userId : null,
+        })
+      : Promise.resolve({ lists: [], stages: [], pipelines: [], batches: [] }),
+  ])
 
   return (
     <div className="space-y-5">
@@ -52,6 +77,13 @@ export default async function LinkedInInboxPage() {
           Outlio prepares each one. You perform it in LinkedIn and record what happened.
         </p>
       </div>
+
+      {/*
+        ⚠️ THE ONLY BULK ENTRANCE THE CHANNEL HAS. `enrollContactAction` takes
+        one contact and lives on that contact's detail page, so a sequence of
+        two hundred people meant opening two hundred pages.
+      */}
+      {canEnrol ? <BulkEnroll catalogue={catalogue} senders={senders} /> : null}
 
       <ActionInbox tasks={tasks} />
     </div>
