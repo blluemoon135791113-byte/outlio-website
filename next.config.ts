@@ -98,6 +98,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // PostHog's ingestion proxy uses trailing-slash endpoints such as `/e/`.
+  // Redirecting those requests strips or delays event delivery.
+  skipTrailingSlashRedirect: true,
+
   turbopack: {
     root: projectRoot,
   },
@@ -152,11 +156,32 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            /* Public filenames are stable rather than content-hashed. Keep
+               them cacheable while allowing replacements to propagate. */
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
           },
         ],
       },
     ];
+  },
+
+  async rewrites() {
+    // Keep analytics first-party and resilient to tracker-blocking DNS rules.
+    // Asset/config routes must precede the ingestion catch-all.
+    return [
+      {
+        source: '/ingest/static/:path*',
+        destination: 'https://us-assets.i.posthog.com/static/:path*',
+      },
+      {
+        source: '/ingest/array/:path*',
+        destination: 'https://us-assets.i.posthog.com/array/:path*',
+      },
+      {
+        source: '/ingest/:path*',
+        destination: 'https://us.i.posthog.com/:path*',
+      },
+    ]
   },
 
   async redirects() {

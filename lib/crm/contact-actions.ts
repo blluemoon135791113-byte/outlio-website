@@ -11,6 +11,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
+import { captureServerEvent } from '@/lib/posthog-server'
 import { addNote, assignContact, eraseContact } from '@/lib/crm/activities'
 import { createContactManually } from '@/lib/crm/ingest'
 import {
@@ -101,6 +102,11 @@ export async function assignContactAction(
     }
 
     await assignContact(ctx.workspace.id, contactId.data, newOwner, ctx.userId)
+    await captureServerEvent(ctx.userId, 'crm_contact_assignment_updated', {
+      workspace_id: ctx.workspace.id,
+      assignment_state: newOwner ? 'assigned' : 'unassigned',
+      override_used: collision.hasCollision && acknowledged,
+    })
 
     revalidatePath(`/crm/contacts/${contactId.data}`)
     return ok(newOwner ? 'Owner updated.' : 'Owner cleared.')
@@ -208,6 +214,13 @@ export async function createContactAction(
       },
       ctx.userId,
     )
+
+    if (result.created) {
+      await captureServerEvent(ctx.userId, 'crm_contact_created', {
+        workspace_id: ctx.workspace.id,
+        source: 'manual',
+      })
+    }
 
     revalidatePath('/crm/contacts')
 

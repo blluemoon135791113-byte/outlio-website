@@ -19,6 +19,7 @@ import { revalidatePath } from 'next/cache'
 
 import { isOfferedCurrency } from '@/lib/crm/currencies'
 import { createOpportunity } from '@/lib/crm/opportunities'
+import { captureServerEvent } from '@/lib/posthog-server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
@@ -117,6 +118,18 @@ export async function createOpportunityAction(
         expectedCloseDate: expectedClose,
       },
       ctx.userId,
+    )
+
+    await captureServerEvent(
+      ctx.userId,
+      'crm_opportunity_created',
+      {
+        workspace_id: ctx.workspace.id,
+        has_person_link: Boolean(contactId),
+        has_company_link: Boolean(companyId),
+        has_value: valueAmount !== null,
+      },
+      { eventId: opportunityId },
     )
 
     /*

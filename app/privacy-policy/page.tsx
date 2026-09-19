@@ -77,14 +77,14 @@ export default function LeadEnginePrivacy() {
   return (
     <>
       <Nav surface="leadengine" />
-      <main className="mx-auto w-full max-w-3xl px-6 py-20 sm:py-28">
+      <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-3xl px-6 py-20 sm:py-28">
         <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
           Outlio &middot; Lead Engine &middot; Legal
         </p>
         <h1 className="mt-4 text-4xl font-bold uppercase tracking-tight sm:text-5xl">
           Lead Engine Privacy Policy
         </h1>
-        <p className="mt-4 text-sm text-muted">Last updated: Monday, 10 August 2026</p>
+        <p className="mt-4 text-sm text-muted">Last updated: Wednesday, 16 September 2026</p>
 
         <div className="mt-10 space-y-4 leading-relaxed text-ink/80">
           <p>
@@ -322,6 +322,14 @@ export default function LeadEnginePrivacy() {
               cookies.
             </li>
             <li>
+              <strong>Privacy-limited product analytics.</strong> We record page visits, feature
+              actions, aggregate counts, and error diagnostics to understand and improve the
+              Service. Form values, rendered text, element attributes, uploaded content, lead
+              records, and customer records are masked or excluded before they leave your browser.
+              Analytics does not create cookies or persistent browser storage, and honours your
+              browser&apos;s Do Not Track preference.
+            </li>
+            <li>
               <strong>Admin audit logs.</strong> Every administrative action on an account is
               recorded, append-only, for accountability.
             </li>
@@ -346,6 +354,11 @@ export default function LeadEnginePrivacy() {
                 "Billing and tax",
                 "Billing data",
                 "Contract; legal obligation (Art. 6(1)(b), (c))",
+              ],
+              [
+                "Improving reliability and product usability",
+                "Privacy-limited usage events and error diagnostics",
+                "Legitimate interests (Art. 6(1)(f))",
               ],
               [
                 "Preventing fraud and trial abuse",
@@ -411,6 +424,10 @@ export default function LeadEnginePrivacy() {
                 "Security and admin audit logs",
                 <>Up to 12 months, or longer where needed for a live investigation.</>,
               ],
+              [
+                "Product analytics and error diagnostics",
+                <>According to our analytics provider&apos;s configured retention period, then deleted.</>,
+              ],
             ]}
           />
         </Section>
@@ -428,6 +445,7 @@ export default function LeadEnginePrivacy() {
               ["Resend", "Transactional email — verification, password reset, notices", "EU / US"],
               ["FastSpring", "Merchant of record and subscription payment processing", "EU / US"],
               ["Calendly", "Scheduling, if you book a call with us", "US"],
+              ["PostHog", "Privacy-limited product analytics and error diagnostics", "US"],
             ]}
           />
           <p>
@@ -562,9 +580,10 @@ export default function LeadEnginePrivacy() {
         <Section title="14. Cookies">
           <p>
             Lead Engine uses <strong>essential cookies only</strong> — to keep you signed in, to
-            protect against cross-site request forgery, and to enforce trial eligibility. There are
-            no third-party analytics, advertising, or tracking cookies in the product. Blocking
-            essential cookies will prevent sign-in from working.
+            protect against cross-site request forgery, and to enforce trial eligibility. Product
+            analytics is sent through our own domain and is configured without analytics cookies
+            or persistent browser storage. We do not use advertising cookies or cross-context
+            behavioural advertising. Blocking essential cookies will prevent sign-in from working.
           </p>
         </Section>
 

@@ -20,6 +20,7 @@ import { RULES, consume } from '@/lib/auth/rate-limit'
 import { claimPage, contentHash, markPageFailed } from '@/lib/extension/capture'
 import { resolveExtensionAuth } from '@/lib/extension/auth'
 import { ingestCapturedPage } from '@/lib/extension/ingest'
+import { captureServerEvent, captureServerException } from '@/lib/posthog-server'
 import { recordSecurityEvent } from '@/lib/security/events'
 import { isAppError } from '@/lib/errors/catalog'
 
@@ -114,6 +115,18 @@ export async function POST(request: Request) {
       pageIdentifier: body.pageIdentifier ?? null,
     })
 
+    await captureServerEvent(
+      userId,
+      'extractor_job_started',
+      {
+        source: 'browser_extension',
+        correlation_id: jobId,
+        has_page_identifier: Boolean(body.pageIdentifier),
+        has_page_name: Boolean(body.pageName),
+      },
+      { eventId: jobId },
+    )
+
     // Counts are not known yet — the worker parses asynchronously and pushes
     // them over Realtime. Returning "queued" keeps the request short instead
     // of holding the connection open while a page is parsed.
@@ -125,6 +138,7 @@ export async function POST(request: Request) {
       pageId: claim.pageId,
     })
   } catch (e) {
+    await captureServerException(e, userId)
     const code = isAppError(e) ? e.code : 'ERR_INTERNAL'
     await markPageFailed(userId, claim.pageId, code)
 

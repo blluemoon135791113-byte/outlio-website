@@ -26,6 +26,8 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 
+import { captureClientException } from '@/lib/analytics/client'
+
 export default function ProductError({
   error,
   reset,
@@ -42,7 +44,8 @@ export default function ProductError({
      * SQL, a storage path or an internal id to the client.
      */
     console.error('[product] render failed', { digest: error.digest ?? 'none' })
-  }, [error.digest])
+    captureClientException(error, { route: window.location.pathname })
+  }, [error])
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4 py-12">

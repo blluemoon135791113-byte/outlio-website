@@ -9,7 +9,9 @@ import {
   exportSelectedLeadsToGoogle,
   exportSelectedLeadsToGhl,
   type ExportSelectionInput,
+  type LeadExportServiceResult,
 } from '@/lib/export/service'
+import { captureServerEvent } from '@/lib/posthog-server'
 import { ACTION_LIMITS } from '@/lib/security/action-limits'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -34,6 +36,26 @@ const jobIdSchema = z.string().uuid()
 function recordNoun(selection: ExportSelectionInput, count: number): string {
   const noun = 'accountListJobId' in selection ? 'account' : 'lead'
   return `${noun}${count === 1 ? '' : 's'}`
+}
+
+async function captureExportResult(
+  userId: string,
+  destination: 'clay' | 'google_sheets' | 'google_drive' | 'highlevel',
+  selection: ExportSelectionInput,
+  result: LeadExportServiceResult,
+): Promise<void> {
+  await captureServerEvent(
+    userId,
+    'records_exported',
+    {
+      destination,
+      record_kind: 'accountListJobId' in selection ? 'account' : 'lead',
+      result: result.status,
+      records_succeeded: result.successfulCount,
+      records_failed: result.failedCount,
+    },
+    { eventId: result.exportJobId },
+  )
 }
 
 async function exportSelectionFromForm(
@@ -91,6 +113,7 @@ export async function exportSelectedLeadsToClayAction(
 
   try {
     const result = await exportSelectedLeadsToClay(selection)
+    await captureExportResult(userId, 'clay', selection, result)
     if (result.status === 'failed') {
       return {
         status: 'error',
@@ -140,6 +163,7 @@ export async function exportSelectedLeadsToGoogleAction(
       destination: destination.data,
       name: String(formData.get('name') ?? '').trim() || undefined,
     })
+    await captureExportResult(userId, destination.data, selection, result)
     if (result.status === 'failed') return { status: 'error', message: 'Google could not create this export. Reconnect Google if the problem continues.' }
     const label = destination.data === 'google_sheets' ? 'Google Sheets' : 'Google Drive'
     return {
@@ -169,6 +193,7 @@ export async function exportSelectedLeadsToGhlAction(
   if (!selection) return { status: 'error', message: 'Select between 1 and 1,000 records to export.' }
   try {
     const result = await exportSelectedLeadsToGhl(selection)
+    await captureExportResult(userId, 'highlevel', selection, result)
     if (result.status === 'failed') return { status: 'error', message: `HighLevel did not accept ${result.failedCount.toLocaleString()} ${recordNoun(selection, result.failedCount)}. Update the token or check its scopes.` }
     return {
       status: 'success',

@@ -5,6 +5,7 @@ import Script from 'next/script'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { BillingInterval, Tier } from '@/lib/fastspring/types'
+import { captureClientEvent, captureClientException } from '@/lib/analytics/client'
 
 import styles from './Pricing.module.css'
 
@@ -119,8 +120,14 @@ export function FastSpringPricing({
               }
             : {}),
         })
+        captureClientEvent('checkout_started', {
+          plan: tier.planKey,
+          billing_interval: billing,
+          is_authenticated: Boolean(customerUserId),
+        })
         builder.checkout()
-      } catch {
+      } catch (error) {
+        captureClientException(error, { route: '/pricing' })
         setOpeningPath(null)
         setError('Checkout could not open. Please refresh or contact support.')
       }
