@@ -4,11 +4,13 @@ import { SequenceBuilder } from '@/components/email/SequenceBuilder'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { AddToCampaign } from '@/components/email/AddToCampaign'
 import { CampaignControls } from '@/components/email/CampaignControls'
+import { loadAudienceCatalogue } from '@/lib/crm/audience-catalogue'
 import { policyFor, type CampaignType } from '@/lib/email/campaign-policy'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
-import { can } from '@/lib/workspaces/permissions'
+import { can, dataScope } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
   title: 'Campaign | Outlio',
@@ -59,6 +61,21 @@ export default async function CampaignPage({
   // write the emails without being the person allowed to send them.
   const canManage = can({ role: ctx.role, modules: ctx.modules }, 'email.template.manage')
 
+  /*
+   * ⚠️ GATED ON THE PERMISSION `enrolContacts` ITSELF ENFORCES, not on a
+   * neighbouring one — the same rule the contacts screen follows. Offering the
+   * panel to anyone else renders a button that always fails.
+   */
+  const canEnrol = can({ role: ctx.role, modules: ctx.modules }, 'email.campaign.create')
+
+  // A setter enrols their own records only, so their picker must only list
+  // sources that will resolve to something for them.
+  const catalogue = canEnrol
+    ? await loadAudienceCatalogue(ctx.workspace.id, {
+        ownerUserId: dataScope(ctx.role) === 'assigned' ? ctx.userId : null,
+      })
+    : { lists: [], stages: [], pipelines: [], batches: [] }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -97,6 +114,20 @@ export default async function CampaignPage({
             </Requirement>
           ) : null}
         </ul>
+      ) : null}
+
+      {/*
+        ⚠️ ABOVE RESULTS, BECAUSE IT IS THE UNBLOCKING ACTION. The requirement
+        list directly above says "Contacts enrolled" and, until now, the page
+        offered no way to meet it — the only enrolment path in the product was
+        a dropdown in the selection toolbar on the contacts screen.
+      */}
+      {canEnrol ? (
+        <AddToCampaign
+          campaignId={id}
+          catalogue={catalogue}
+          enrolledCount={Number(r?.recipients ?? 0)}
+        />
       ) : null}
 
       <section className="space-y-3">

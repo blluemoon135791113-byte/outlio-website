@@ -46,6 +46,7 @@ export default async function ContactsPage({
     dir?: string
     // `tag` may repeat; Next gives an array when it does.
     tag?: string | string[]
+    list?: string
     company?: string
     after?: string
     before?: string
@@ -97,6 +98,8 @@ export default async function ContactsPage({
     // Bounded: an unbounded tag list becomes an unbounded `.in()` clause.
     .slice(0, 20)
 
+  // Validated the same way as every other id here — it reaches a query.
+  const list = isUuid(params.list)
   const company = isUuid(params.company)
   const createdAfter = isDate(params.after)
   const createdBefore = isDate(params.before)
@@ -236,6 +239,7 @@ export default async function ContactsPage({
     sort,
     direction,
     tagIds: tagIds.length > 0 ? tagIds : undefined,
+    listId: list || undefined,
     companyId: company || undefined,
     createdAfter: createdAfter || undefined,
     createdBefore: createdBefore || undefined,
@@ -258,6 +262,7 @@ export default async function ContactsPage({
     sort,
     direction,
     tagIds,
+    list,
     company,
     createdAfter,
     createdBefore,

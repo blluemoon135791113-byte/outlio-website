@@ -11217,3 +11217,688 @@ number. Test data removed afterwards.
 
 Voice notes — deferred by the owner. Design settled (paperclip delivery,
 `prepares: 'asset'`, render on release); nothing stubbed.
+
+---
+
+## R6 — reported defects from the owner's walkthrough (2026-09-19)
+
+An owner walkthrough produced one list covering bugs and gaps across six
+screens. This entry covers the **bugs**; the feature requests in the same list
+are scoped under "Requested, not built" below and are not started.
+
+### Fixed
+
+- ⚠️ **Every public LinkedIn profile URL in the product was dead, and the test
+  suite asserted that it should be.** `publicProfileUrl` fell back to
+  `https://www.linkedin.com/in/${memberUrn}` whenever a Sales Navigator row
+  carried no public `/in/` anchor — which is almost every row. The identifier
+  is read from `urn:li:fs_salesProfile:(ACwAA…)`: a **sales profile** urn,
+  a different entity type from the **member** urn (`ACoAAA…`) that `/in/`
+  resolves. The URL was therefore addressed at nothing.
+
+  Three more sites built the same URL from the Account Hub path, where
+  `memberId` is parsed out of `/sales/lead/…` and has the same problem:
+  `lib/companies/account-list-store.ts`, `lib/export/accounts.ts`,
+  `lib/export/account-loader.ts`.
+
+  **This assertion has now flipped twice.** Phase 8 nulled these URLs as
+  unconfirmed; that rollback was reversed on 2026-08-15 as "confirmed by the
+  user". The likely explanation is that the confirmation used an `ACo` member
+  urn, which does resolve, while the parser only ever holds `ACw`. Both the
+  parse fixture and the export fixture used `ACw` and neither exercised the
+  case the confirmation was about. **Check the urn prefix before flipping it
+  back.**
+
+  Nothing is lost: `salesNavUrl` carries the identifier in the path it belongs
+  to, and the contact screen already renders it. A missing public profile is
+  now recorded as missing (rule 4) rather than as a link that fails on click.
+  In the account CSV the "LinkedIn Profile" column now drops out entirely
+  rather than shipping a column of dead links.
+
+- **The sidebar could not scroll.** `fixed inset-y-0` column, `flex-1` child,
+  no `min-h-0` — so the nav's flex base size was its content height and it
+  refused to shrink, putting Settings, User admin and the referral card off the
+  bottom of the screen with no way to reach them.
+
+- **"New pipeline" appeared to do nothing, and always had.** The row was
+  written every time; the form stayed open with the same values and the board
+  behind it kept rendering the previous pipeline, so the only feedback was one
+  line of small text. People pressed it again — the duplicate pipelines in the
+  Manage menu are the receipts. `createPipelineAction` had returned
+  `pipelineId` for exactly this since it was written and no caller read it.
+
+- **The Manage menu was clipped, and its own CSS was never wrong.**
+  `NewPipelineButton` and `NewOpportunityButton` both replaced themselves in
+  place, dropping a multi-row form into the board's `flex flex-wrap` header
+  strip. That squeezed the form *and* displaced the Manage button, dragging its
+  `absolute right-0` menu off the edge of the content column. Both now open in
+  `components/crm/FormDialog.tsx`.
+
+- **Contact filters no longer need "Apply".** `AutoApplyFilters` is an
+  enhancement to the existing GET form, not a rewrite: it reads the form's own
+  `FormData` and navigates to the URL the button would have produced, so every
+  field stays uncontrolled and server-rendered and no filter is registered in a
+  second place. The button is still rendered until the component is listening,
+  so a session whose JavaScript never arrives keeps a working filter bar.
+
+- **Lists was a closed loop, not a dead feature.** The tables, the bulk "add to
+  list" action, the flow-engine actions, the page and the API all shipped, and
+  **nothing anywhere created a list**. `BulkAssign` gates its picker on
+  `lists.length > 0`, so the one control that consumes lists was hidden
+  precisely because there were none, and the empty state told people to create
+  one in two places that offered no such control. Added create/rename/delete,
+  a `?list=` filter on contacts (threaded through `contactsHref`, the saved-view
+  round trip and its two guard tests), and each list now opens its contacts.
+
+### Assessed, not removed
+
+- **Automations (`/flows`) is the most heavily wired subsystem in the product,
+  not a dead feature.** Contact ingest, deal stage changes, activities, email
+  sends, reply sync, unsubscribes and task actions all reach it through
+  `emitDomainEvent` → `dispatchFlowTrigger` → `startRun`, and three test files
+  exist solely to stop a producer becoming disconnected from it. The reported
+  problem is that its role is not legible from the UI — a naming and onboarding
+  question, not a deletion one.
+
+### Requested, not built
+
+Not started, and nothing stubbed. Sequenced in the R6 plan:
+
+1. Adding contacts to an email campaign and to a LinkedIn sequence — from a
+   local file, from a pipeline, and from a contact selection.
+2. Company detail: domain, industry and employee count are empty because lead
+   extraction only ever observes a company NAME. Populating them means the
+   account-extraction path, which already parses industry and a recommended
+   contact. Plus the hover-to-see-people affordance on the People column.
+3. Strategy analysis: date range, and a choice between named people and
+   everyone.
+4. The same analysis for email, including capturing the pitch that was used.
+5. Sequence comparison over a chosen date range in email marketing.
+
+### Verified
+
+3,921 unit tests across 227 files; typecheck 0; lint 0; `next build` clean.
+The new parser guard was mutation-tested — reintroducing the fabricated URL
+fails 3 assertions across 2 files.
+
+**Not verified in a browser.** These screens are behind sign-in and this session
+holds no credentials; the sidebar, dialog and auto-filter changes are checked by
+build, types and lint only, and need an authenticated pass.
+
+### Data repair still owed
+
+Rows already written carry the dead `/in/{ACw…}` URLs in `leads.linkedin_url`
+and `crm_contacts.linkedin_url`. The parser no longer produces them; it does not
+retract them. Clearing them is a migration the owner has to run by hand and it
+has not been written or proposed yet.
+
+---
+
+## R7 — putting contacts into campaigns and sequences (2026-09-19)
+
+Item 1 of the R6 backlog. Both channels could send and neither had a usable way
+to decide who to.
+
+### What was actually wrong
+
+- **Email could enrol, from one screen, by accident of discovery.**
+  `enrolContacts` worked, and the only route to it was a dropdown inside the
+  selection toolbar on `/crm/contacts`. The campaign page listed "Contacts
+  enrolled" as a launch requirement and offered no way to meet it — the page
+  that named the problem was not the page that could fix it.
+- **LinkedIn had no bulk path at all.** `enrollContactAction` takes ONE contact
+  and lives on that contact's detail page, so a sequence of two hundred people
+  meant opening two hundred pages and retyping the same topic on each.
+
+### Built
+
+- **`lib/crm/audience.ts`** — one resolver, five sources: an explicit
+  selection, a CRM list, a pipeline stage, a whole pipeline, or an import /
+  extraction batch. Both channels use it, so the owner scope, the 5,000 cap and
+  the de-duplication cannot drift apart between them.
+
+  It resolves identity only. Suppression, unsubscribes, bounces, do-not-contact
+  and duplicate enrolment stay with the enroller — `bulkEnroll` already refuses
+  each with a named reason, and a second opinion here could disagree with the
+  first.
+
+- **`components/crm/AudiencePicker.tsx`** — shared by both channels; renders
+  fields, not a form, because LinkedIn needs a sender and a topic around it and
+  email needs neither.
+
+- **`AddToCampaign`** on the email campaign page, and **`BulkEnroll`** on the
+  LinkedIn hub. Both report every skip: `summarizeEnrollment` names
+  `needs_manual_rewrite` separately because it is a **worklist**, not a failure
+  — those are the people §4.9 requires a hand-written note for.
+
+- **Local-drive upload is a LINK to `/crm/import`, not a second file field.**
+  A picker in the panel would have to reimplement header mapping, the
+  content-hash re-upload check, contact-level de-duplication, the batch row and
+  undo — and the part that would get skipped is the canonical-contact rule, so
+  a person already in the CRM would be added a second time. One extra step, one
+  ingestion path.
+
+### A regression in R6, found and fixed here
+
+⚠️ **Nulling the fabricated `/in/` URLs would have refused almost every
+LinkedIn enrolment.** `lib/linkedin/enroll.ts` read `crm_contacts.linkedin_url`
+alone. That was survivable only while the parser fabricated a URL for every
+extracted lead — the column was always populated, and always with a dead link,
+so an operator opened it, landed nowhere, and no refusal ever reported it.
+
+With the parser now recording a missing public profile as missing, a Sales
+Navigator lead has no `linkedin_url`, and enrolment would have returned
+`no_profile` for Outlio's primary input. It now falls back to
+`sales_navigator_url` (migration 0131), which `profileReference` already allows
+and which is a real observed address. §4.5 still holds: the two are kept
+separate and neither is derived from the other.
+
+The contact detail page needed no change — it already buckets by **what the URL
+is** rather than which column it came from, so the dead "LinkedIn profile" link
+disappears on its own and only the working Sales Navigator link remains.
+
+### Verified
+
+3,948 unit tests across 228 files (27 new, covering the resolver); typecheck 0;
+lint 0; `next build` clean.
+
+Two mutations, both caught:
+- dropping `.eq('workspace_id')` from one branch of the resolver → the tenancy
+  test fails and names the offending table
+- the batch label formatted a date → `reader-clock.test.ts` refused it as a
+  server-timezone bug. It now shows the batch SIZE instead, which cannot be
+  wrong across timezones and is the better disambiguator between two imports.
+
+**Not verified in a browser.** Still behind sign-in with no credentials in this
+session.
+
+### Deliberately not built
+
+- A contact-by-contact picker inside the campaign panel. The contacts screen
+  already does this well, with filters and search; the panel links to it.
+- A shared manual connection note for a LinkedIn group. §4.9's remedy for thin
+  evidence is the operator's own words about **that** person — one sentence
+  pasted onto two hundred strangers is the fabricated familiarity the rule
+  exists to prevent. Those contacts are refused and listed to do individually.
+
+---
+
+## R8 — company details (2026-09-19)
+
+Item 2 of the R6 backlog: "in the companies there is no details about the
+company". Three separate causes, none of which was a missing feature.
+
+### Why every column was a dash
+
+1. **`upsertCrmCompany` returned the instant it recognised a row.** A company is
+   almost always created first by a LEAD extraction, which observes a NAME and
+   nothing else. Every richer sighting afterwards — an extension capture
+   carrying the industry and headcount off the company page, an account
+   extraction, a CSV with a domain — matched that row and returned, discarding
+   everything it knew. The thinnest possible observation won permanently.
+   `CompanyInput` has carried `industry`, `employeeCount` and `headquarters`
+   since 0071 and **only the INSERT had ever read them**.
+
+2. **The ingest never passed them anyway.** `CompanySeed` held name, website and
+   LinkedIn URL only, while `extracted_leads` has stored `company_industry`,
+   `company_employee_count` and `company_headquarters` since 0052/0054. The
+   values were parsed, stored, and dropped on the floor at the CRM boundary.
+
+3. ⚠️ **`source_company_id` was NULL on every company row in every workspace,**
+   because nothing in the product had ever set it. Two features read it and both
+   correctly reported having nothing:
+   - `lib/crm/company-details.ts` — funding, tech stack, news, socials, revenue
+     and hiring signals. It early-returns on a null id, so the section rendered
+     empty while the evidence sat in the database. Its own header records that
+     952 of 1,000 sampled evidence rows are company-level.
+   - `lib/crm/provenance.ts` — the citation chain for those values.
+
+   Neither was broken. The structural link they needed was never written.
+
+### Built
+
+- **`fillCompanyGaps`** — a matched company now gains facts it did not have.
+  ⚠️ **Fills gaps; never overwrites, never nulls out.** The obvious fix is worse
+  than the bug: a blind UPDATE with the whole input would erase a value on every
+  ingest that did not carry it, and a lead extraction carries almost nothing —
+  so importing one CSV would blank the industry on every company in it, silently.
+  First observation wins; later ones may only fill a hole. Normalized pairs move
+  with their display value, or a domain would be shown and never matched on.
+
+- **The seed now carries what was observed**, including `sourceCompanyId`, and
+  merges in the researched `companies` row (page first, research second, `??`
+  so an absent value falls through). Within a batch the RICHEST seed wins rather
+  than the first — 500 employees of one company are one upsert, and only the
+  rows whose company page was captured carry an industry.
+
+  ⚠️ `company_employee_count`, never `company_size`. 0054 keeps them apart:
+  `company_size` is the hover card's RANGE ("11-50 employees") and turning that
+  into an integer means picking one, which is inference (rule 4). A range with
+  no column stays unstored rather than becoming a plausible number.
+
+- **An Employees column and a People hover.** Two different numbers, named
+  differently: "Employees" is how big the company is; "People" is how many of
+  them are in your CRM. The hover is a real `<button>` — hover for a mouse,
+  focus for a keyboard, tap to pin — because a hover-only disclosure does not
+  exist on a phone and is unreachable by tab. It names up to 8 people, links
+  each to their contact, and states the overflow, because a count of 40 showing
+  8 names would otherwise read as a company with 8 people.
+
+  No `backdrop-filter`: CLAUDE.md permits glass on a floating popover, and its
+  condition is a surface that is neither large nor frequently repainted. This
+  one floats over a scrolling table — the case the original rule was written for
+  — and re-measuring needs a browser.
+
+- **The page now says why a cell is empty.** A table of dashes reads as a broken
+  feature; the honest answer is that a search-results save carries only a name.
+
+### Existing data
+
+⚠️ **The 69 companies already in the owner's workspace stay empty until an
+ingest runs again.** `fillCompanyGaps` fires on ingest and does not retroact.
+No migration is needed and none was written: **Lead sources → "Add N to CRM"**
+on a past extraction is re-runnable and idempotent — the batch carries a unique
+index so a re-run repairs rather than duplicates, and contacts are matched, not
+copied. That run will fill the gaps and set `source_company_id`, which also
+lights up the researched detail on the contact and company pages.
+
+### Verified
+
+3,957 unit tests across 229 files (9 new on gap-filling); typecheck 0; lint 0;
+`next build` clean.
+
+Mutation-tested the guard that matters: making the industry a blind assignment
+fails 4 assertions, including the one that proves a name-only ingest cannot
+erase a recorded industry. A recorded headcount of `0` is covered separately —
+testing it by falsiness would treat it as unknown and let a later source
+overwrite it.
+
+**Not verified in a browser.** Still behind sign-in with no credentials in this
+session; the hover's pointer, focus and pin behaviour needs an authenticated
+pass, and so does scroll performance on the companies table.
+
+---
+
+## R9 — strategy analysis: period and people (2026-09-19)
+
+Item 3 of the R6 backlog. The analysis read the whole history for the whole
+team and offered no way to narrow either.
+
+### Built
+
+- **`AnalysisWindow`** — `from`, `to`, `userIds` — threaded through
+  `gatherStats`, `allProspectMessages` and `analyseStrategy`, and returned on
+  the report.
+- **A date range and a person picker** on the analysis form. "Everyone on the
+  team" is a checkbox; unticking it reveals the members, taken from
+  `listAssignableMembers` — the same list the contacts screen assigns from,
+  which is the superset of everyone who can complete a task or author a message.
+- **The report states its own scope**, read from `report.window` rather than
+  from the form. The inputs can be changed after a run, so a heading built from
+  them would relabel a finished report — March's numbers under a heading that
+  now says April.
+
+### The part that was easy to get silently wrong
+
+⚠️ **The window must not be pushed into the task and observation reads**, even
+though that is the obvious optimisation and would cut the payload.
+
+Those rows feed two different things: the counters, which must respect the
+window, and `repOfContact`, which must not. Attribution answers "whose outreach
+was this", and that does not change because a manager picked a narrower month —
+a reply in March belongs to whoever did the outreach, even if that was in
+February.
+
+Filtering the read rebuilds the attribution map from in-window tasks only, so
+every reply to earlier outreach falls through to the `null` rep and is reported
+as **"Unattributed"**. Plausible, silent, and worse the narrower the window —
+precisely when somebody is looking closely. So the window is applied per row, at
+the point of counting. Those reads were already unbounded; the cost is unchanged.
+
+Three related traps, each with a test:
+- **An empty `userIds` means everyone, never nobody** — the same three-state
+  trap as `hasEmail` on the contacts list, and it is the form's default state.
+  Backwards, it renders a team who did no work.
+- **An excluded person's reply is dropped, not moved to "Unattributed"** —
+  folding it in adds replies with no sends behind them, which is the shape that
+  yields a rate above 100%; `rateOf` then refuses it, so a rep with plenty of
+  data shows "not enough data".
+- **`to` covers the whole of its last day.** A naive `<= '2026-03-31'` compares
+  against midnight and silently discards that day's work.
+
+`allProspectMessages` **is** filtered in SQL, and that asymmetry is deliberate:
+a message carries its own author so nothing downstream needs an out-of-window
+one, and the query is ordered by recency and capped at 400 — unfiltered on a
+busy workspace it would return 400 messages from outside the period and none
+from inside it.
+
+### Stated, not guessed
+
+Dates are **UTC**, said out loud on the form. An `<input type="date">` yields a
+bare calendar date and the rows are `timestamptz`; the workspace stores no
+timezone, so inferring "probably the reader's" would silently move every
+boundary. `reader-clock.test.ts` governs the reverse direction (rendering), not
+this one.
+
+The model is told the period so it does not write "activity has dropped off
+recently" about a deliberately narrow slice, and told only the COUNT of people
+selected — never their names, matching the existing rule that reps are numbered
+rather than named in a prompt.
+
+A no-data refusal now names the filter when one is set: "nothing recorded in
+that period for the people selected" rather than "there is nothing to analyse
+yet", which said to somebody who just picked one week reads as a broken product.
+
+### Verified
+
+3,969 unit tests across 230 files (12 new); typecheck 0; lint 0; `next build`
+clean.
+
+Mutation-tested the one that matters: scoping the attribution loop to the window
+fails the February-outreach/March-reply test with the reply landing on nobody —
+the exact "Unattributed" bug, caught.
+
+**Not verified in a browser.** Still behind sign-in with no credentials.
+
+### Still open from R6
+
+4. Email analysis, and capturing the pitch used for email.
+5. Sequence comparison over a chosen date range in email marketing.
+
+Both were named alongside this one and neither is started. The window type and
+the picker are channel-agnostic enough to reuse; `email_events` is the source,
+and its 254 known-false `replied` rows are the reason the LinkedIn version keeps
+all arithmetic out of the model.
+
+---
+
+## R10 — email analysis and sequence comparison (2026-09-19)
+
+Items 4 and 5 of the R6 backlog, closing that list.
+
+### Built
+
+- **`lib/analysis/window.ts`** — `AnalysisWindow`, `bounds`, `within`,
+  `isFiltered`, extracted from `lib/linkedin/analysis.ts` now that a second
+  analysis asks the same question. The parts worth sharing are the two that are
+  silently wrong when they disagree: where a day begins and ends, and what an
+  empty selection means. The LinkedIn module re-exports the type, so no importer
+  changed and `analysis-window.test.ts` passes untouched.
+
+- **`lib/email/analysis.ts`** — per-sequence counts from `email_events`, plus an
+  AI reading of the copy in `email_sequence_steps`.
+
+- **`compareSequencesAction` and `analyseEmailAction`**, rendered on
+  `/email/analytics` above the mailbox table.
+
+### The decision that makes this feature worth anything
+
+⚠️ **The sequence reply rate is per PERSON contacted, not per message sent.**
+
+`/email/analytics` measures per message, and that is right for a mailbox health
+screen — "what does this mailbox get back per message it sends". Ranking
+SEQUENCES by that number punishes following up: a four-step sequence reaches the
+same people four times and quarters its own rate against a one-step blast, so the
+blast wins a comparison it should lose and a manager deletes the sequence that
+was working.
+
+`lib/crm/metrics.ts` already made this call for the reports page — using the
+event count "would punish doing the job properly". The two figures now sit two
+clicks apart on adjacent screens, so both headers say which denominator they
+use, and the choice is mutation-tested: switching to per-message turns an
+identical pair of sequences from 25%/25% into 25%/6%.
+
+### Two buttons, not one
+
+"Compare" is arithmetic over the customer's own rows — instant, free, works when
+the model is down. "Analyse the copy" spends a credit and takes seconds. Folding
+them together would make the reliable half of the screen depend on the
+unreliable half, and charge somebody for a model they did not ask for.
+
+### No "record your email pitch" box, deliberately
+
+The owner asked for somewhere to "put in the pitch they did for email". The
+LinkedIn analysis reads `linkedin_prospect_messages` — what an operator SAYS
+they would write — because nothing on LinkedIn passes through Outlio. Email is
+the opposite: `email_sequence_steps` already holds the subject and body that
+were actually sent. A typed recollection would be a second, weaker account of
+something recorded exactly, and when the two disagreed the analysis would be
+reading the wrong one with no way to tell.
+
+A free-text pitch field for email sent OUTSIDE Outlio is a real gap and is not
+built — it needs a table, which is a migration the owner has to run.
+
+### The 254 false replies are surfaced, not filtered
+
+Before 2026-09-07 every message in a connected mailbox counted as a prospect
+reply. Those rows are still in `email_events`, so any window reaching back past
+that date overstates replies. `caveatFor` says so in words and names the date.
+
+It is not filtered out: excluding real events on a date guess would discard
+genuine replies too, and that is the owner's data to decide about. `rateOf` also
+refuses any rate above 100 — the shape those rows produce — rather than printing
+an impossible number.
+
+### ⚠️ `CAPABILITY_REGISTRY_VERSION` bumped 4 → 5
+
+`email.analysis` is a new AI capability and the registry version pins it. Any
+stored flow definition pinned at v4 now raises a `registry_drift` WARNING —
+"re-check the steps before publishing again". Nothing stops running and nothing
+refuses to publish; that warning is the designed response to a new capability
+existing.
+
+**The v4 bump verified against production that no flow carried a pin. That check
+needs the production database and was NOT repeated here** — any flow published
+since and pinned at 4 will show the warning until it is re-saved.
+
+`email.analysis` takes `email.campaign.view`, not `report.team.view` like its
+LinkedIn sibling: that one reports per PERSON (a colleague's reply rate and a
+summary of their private messages), while this one reports per SEQUENCE — a
+shared artefact whose copy was written to be sent to strangers.
+
+### Verified
+
+3,984 unit tests across 231 files (15 new); typecheck 0; lint 0; `next build`
+clean. Three of the repo's own guards fired during this work and were satisfied
+rather than suppressed: `capability-registry` (twice) and `module-reachability`.
+
+**Not verified in a browser.** Still behind sign-in with no credentials — the
+two-buttons-one-form wiring (`form=` plus `formAction`) in particular is the
+kind of thing that should be clicked before it is trusted.
+
+---
+
+## R11 — the overview, rebuilt on computed figures (2026-09-19)
+
+The owner supplied a reference design — stat cards with an icon tile, a delta
+chip, a sparkline and a "View →" footer, plus a period selector — and one
+condition: *"make sure this UI and the metrics and the KPIs are being tracked
+and nicely displayed after full calculation not just random static number."*
+
+### Built
+
+- **`getMetricSeries`** (`lib/crm/metrics.ts`) — one stored value per day, from
+  `crm_reporting_daily`, for the sparklines.
+- **`getHeadlineKpis`** (`lib/crm/overview.ts`) — the four workspace figures, on
+  the `workspace` basis the rollup already stores (migration 0082), with the
+  same previous-period comparison the activity row uses.
+- **`Sparkline` / `StatGlyph`**, **`HeadlineRow`**, and a URL-driven period
+  picker. `StatCard` gained the tile, the line and the footer link; its delta
+  logic was already correct and is untouched.
+
+### ⚠️ The reference labels were not used, and that is the main decision here
+
+The mockup's headline row reads **Total Leads / Conversion Rate / Total
+Customers / Monthly Revenue**. Three of those four would be claims this product
+cannot support:
+
+- nothing in Outlio knows what a **customer** is — there is no such entity
+- **conversion rate** has no agreed denominator here; the product measures reply
+  rate, which is defined in the registry and defended
+- **revenue** is won-deal *value*, not money received
+
+So the cards keep the reference's shape and take the names of figures that
+exist: **Leads added · Reply rate · Deals won · Won revenue**. CLAUDE.md rule 4
+governs a label exactly as it governs a stored value — a card headed "Total
+Customers" over a won-deal count is a fabrication with a number attached.
+
+### Every point is a stored row
+
+`Sparkline` refuses to draw in three cases rather than producing a shape:
+fewer than two points, every value identical (**including all-zero**, where a
+flat line at the baseline reads as *measured and steady* rather than as nothing
+happening), and an empty array — which is what `getMetricSeries` returns when a
+series could not be read. The card looks finished without it; the figure and the
+delta carry the meaning.
+
+Two things the tests pin that would otherwise be invisible:
+
+- **The x-axis comes from the RANGE, not from the returned rows.** Built from
+  rows, a quiet metric would be drawn across fewer points than a busy one — so
+  the same movement looks steeper, and two lines side by side are on different
+  horizontal scales with nothing to say so.
+- **SVG's y-axis points down.** Written the natural way round, every trend on
+  the dashboard renders upside down — a rise drawn as a fall, and nothing about
+  the picture looking wrong.
+
+Both are mutation-tested: removing the flat-line guard fails 2 assertions,
+inverting the axis fails 1.
+
+### Two rows that look alike and are not
+
+The headline row is the **workspace**; "Your activity" below it is **one
+person** on the `actor` basis. That is exactly the defect the reports page
+records as D24 — the number is right and the sentence above it is wrong — so
+each row states its scope in its own heading, the headline row is `lg` and the
+activity row is `sm`, and the per-user sparklines are read on the `actor` basis
+with the user id. A workspace-basis line under a personal figure would be a
+picture of somebody else's month, and entirely plausible.
+
+### Smaller calls worth recording
+
+- **One accent tile, not eight tinted ones.** The reference tints each icon
+  differently; matching it means eight new colour values in a codebase whose
+  design rules say "zero hardcoded colors" and whose accent was contrast-measured
+  in 66 places.
+- **The reply-rate delta is a point difference, not a percentage of a
+  percentage.** "Up 3% from 24%" is ambiguous between points and proportion, and
+  both readings are defensible.
+- **"Won revenue" carries no sparkline.** `count_value` on `won_deals` is the
+  number of deals — the card beside it — so drawing it under a money figure
+  would label a count as revenue.
+- **The period picker is links, not a `<select>`.** The range lives in the URL,
+  so it survives a reload, is shareable, and the back button undoes it; the
+  picker ships no JavaScript.
+- **`PerformanceRow`'s caption said "Last 30 days" unconditionally**, which
+  became a lie the moment the period could change. It now reads its own dates.
+
+### Verified
+
+4,001 unit tests across 233 files (16 new); typecheck 0; lint 0; `next build`
+clean.
+
+⚠️ `overview-performance.test.ts` failed on the first run for an instructive
+reason: it mocks `@/lib/crm/metrics`, and a function missing from the mock
+throws inside the `Promise.all`, which `getOverviewPerformance` catches and
+reports as `unavailable` — so an incomplete mock is indistinguishable from the
+read-failure state those tests exist to check. The mock now names every function
+the module calls, with that noted above it.
+
+**Not verified in a browser.** The cards, the tile alignment at two-up on a
+phone, and the sparkline against a real series all need an authenticated pass.
+
+---
+
+## R12 — dashboard UI refinement (2026-09-19)
+
+A refinement pass over `/dashboard`, run through the `impeccable` skill in
+Operate mode as the owner's tooling note asks (skills invoked before writing UI,
+not as a review afterwards). Narrow refinement, so the incumbent visual world is
+authority and is preserved.
+
+### ⚠️ One of these was a fabricated visual, not a style defect
+
+`UsageCard` drew a **hardcoded 28% progress bar whenever `limit` was null** —
+that is, for an UNLIMITED allowance, where there is no proportion to draw. The
+bar sat directly under the words "Unlimited allowance", telling the reader they
+were roughly a quarter of the way through it.
+
+Same class as a sparkline drawn through no data: CLAUDE.md rule 4 governs a
+drawn shape exactly as it governs a stored field. Unknown and unlimited now
+render no track at all and the sentence carries the fact alone.
+
+### Two cards that disagreed about nothing
+
+"Account / Current access" and "Subscription" sat stacked in the right rail and
+between them printed the plan name **twice** and the word "Active" **twice**, in
+two different badge styles. Merged into one card.
+
+⚠️ **The "Active" badge is gone rather than deduplicated.** It was a literal
+string on both cards — it read "Active" for a lapsed account, a cancelled
+subscription and a trial alike, because nothing computed it.
+`subscription.status` is the real field and is now shown as itself, with
+"Manual access" for the workspaces that have no subscription row.
+
+Also dropped the second filled button beside the upgrade: a sidebar card
+carrying two things asking to be pressed. Billing is now a text link.
+
+### Hierarchy
+
+- **The duplicate "Overview" heading was mine, from R11.** `HeadlineRow`
+  rendered `<h2>Overview</h2>` directly under the page's `<h1>Overview</h1>` —
+  the same word twice, six pixels apart. It now carries one micro-label naming
+  its scope ("Workspace"), matching "Your activity", "Team" and "Usage this
+  period", so all four figure sections read at one weight and what separates
+  them is the scope each states.
+- **Two banned eyebrows removed.** Both right-rail cards opened with a
+  micro-label above a larger heading. The craft floor bans this outright: the
+  heading carries its own weight.
+- **The period picker moved to the page header.** It sat inside the workspace
+  row, where it looked like that row's own control while silently re-scoping
+  "Your activity" underneath it — a control whose effect reached outside the box
+  it was drawn in.
+
+### Deliberately not changed
+
+- **`product-gradient` on the "Credits remaining" card stays.** It is the
+  incumbent world's accent doing emphasis on the number that gates all work, not
+  decoration — and refinement preserves identity rather than substituting taste.
+
+### The promo panel — raised, then made conditional on the owner's answer
+
+**The charcoal "Build your lead list" panel** was a large, permanent,
+Persuade-mode block on an Operate surface whose two actions both existed
+elsewhere on the same screen. Raised as a content decision rather than changed
+unasked; the owner chose **first-run only**.
+
+- **Gated on "has this person EVER extracted", not on a period counter.**
+  `ctx.usage` already carries `extractionsToday` and `extractionsThisMonth` and
+  either would have been free — and both are period counts, so a customer of two
+  years who happened not to extract in January would be taught the feature
+  again. Existence check (`head: true`), any status: a failed extraction still
+  means they found the feature.
+- ⚠️ **The failure direction is chosen, not defaulted.** A count that cannot be
+  read arrives as `null`, which is not zero — the distinction this file already
+  insists on for the credit balance. Unknown SHOWS the panel: a redundant CTA in
+  front of a veteran is a smaller failure than hiding the only guidance a
+  brand-new customer has. The test is "known to have extracted", never "not
+  known to have".
+- **"Open workspace" removed.** It pointed at `/dashboard/jobs` — the history of
+  a thing this person has never done, on the one panel that renders only when
+  they have never done it.
+- **`LiveCapture` moved from the right rail into the main column.** Hiding a
+  block is not finished until the layout it leaves behind still balances: the
+  left column would otherwise hold one card beside a four-card rail. It also
+  belongs there — a live capture session is the extension doing something, and
+  `ExtensionCard` is where the extension is set up; the rail is plan, credits
+  and referral, which this is not.
+
+### Verified
+
+4,001 unit tests across 233 files; typecheck 0; lint 0; `next build` clean. The
+impeccable design hook is enabled and reported no findings on these edits.
+
+⚠️ **Not verified in a browser, and for a UI task that gap matters more than it
+did for the previous six.** Spacing, contrast and responsive composition are
+checks on a rendered result, and the skill's own floor says so. The dashboard is
+behind sign-in and this session holds no credentials.

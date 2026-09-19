@@ -74,6 +74,7 @@ const SHIPPED_IDS = [
   // Phase 20 — registry version 4.
   'linkedin.draft',
   'linkedin.analysis',
+  'email.analysis',
 ] as const
 
 describe('the registry may only grow', () => {

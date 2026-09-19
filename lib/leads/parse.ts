@@ -101,35 +101,49 @@ function extractMemberUrn(salesNavHref: string | null, scrollUrn: string | null)
 }
 
 /**
- * Builds the public profile URL from the member URN.
+ * The public profile URL — ONLY when one was actually observed.
  *
- * LinkedIn accepts a member URN in the `/in/` path and redirects to the
- * person's vanity URL. The saved HTML contains NO `publicIdentifier` or
- * `vanityName` field — verified zero occurrences across two real pages — so
- * this is the only way to reach a real profile without contacting LinkedIn,
- * which is prohibited.
- *
- * This is construction from an extracted identifier, not inference: no part of
- * the URL is guessed.
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ NEVER BUILD `/in/{urn}` FROM THE SALES NAVIGATOR URN.                ║
+ * ║                                                                           ║
+ * ║  This function used to fall back to                                       ║
+ * ║  `https://www.linkedin.com/in/${memberUrn}` and every lead extracted from ║
+ * ║  a Sales Navigator page got one. Every one of those links was dead.       ║
+ * ║                                                                           ║
+ * ║  The identifier comes from `urn:li:fs_salesProfile:(ACwAA…)`. That is a   ║
+ * ║  SALES PROFILE urn, a different entity type from the MEMBER urn           ║
+ * ║  (`ACoAAA…`) that `/in/` resolves. Pasting a sales-profile id into the    ║
+ * ║  member path addresses nothing, which is why the failure was total rather ║
+ * ║  than occasional — a useful tell: a constructed URL fails uniformly, a    ║
+ * ║  real one fails per-record.                                              ║
+ * ║                                                                           ║
+ * ║  The old comment claimed "no part of the URL is guessed". The identifier  ║
+ * ║  was real; the CLAIM THAT IT ADDRESSES A PUBLIC PROFILE was the guess,    ║
+ * ║  and that is what CLAUDE.md rule 4 forbids — a value that looks right,    ║
+ * ║  is often-enough right-shaped to pass review, and that nobody can tell is ║
+ * ║  wrong without clicking it.                                              ║
+ * ║                                                                           ║
+ * ║  The person is NOT unreachable when this returns null: `salesNavUrl`      ║
+ * ║  carries the identifier in the path it actually belongs to, and the       ║
+ * ║  contact screen renders it. A missing public profile is a missing field,  ║
+ * ║  shown as missing (docs/UNSUPPORTED_FIELDS.md), not a broken link.        ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-function publicProfileUrl(
-  href: string | null | undefined,
-  memberUrn: string | null,
-): string | null {
+function publicProfileUrl(href: string | null | undefined): string | null {
   const absolute = absolutize(href)
-  if (absolute) {
-    try {
-      const parsed = new URL(absolute)
-      if (
-        /(^|\.)linkedin\.com$/i.test(parsed.hostname)
-        && /^\/in\/[^/?#]+/i.test(parsed.pathname)
-      ) return absolute
-    } catch {
-      // Fall through to the stable member identifier captured from Sales Nav.
-    }
+  if (!absolute) return null
+
+  try {
+    const parsed = new URL(absolute)
+    if (
+      /(^|\.)linkedin\.com$/i.test(parsed.hostname)
+      && /^\/in\/[^/?#]+/i.test(parsed.pathname)
+    ) return absolute
+  } catch {
+    // Not a URL we can vouch for. Missing beats fabricated.
   }
 
-  return memberUrn ? `https://www.linkedin.com/in/${memberUrn}` : null
+  return null
 }
 
 function canonicalSalesNavUrl(href: string | null, memberUrn: string | null): string | null {
@@ -434,7 +448,7 @@ export function parseSearchResults(html: string): ParseResult {
 
     leads.push({
       fullName,
-      linkedinUrl: publicProfileUrl(publicHref, memberUrn),
+      linkedinUrl: publicProfileUrl(publicHref),
       salesNavUrl: canonicalSalesNavUrl(salesNavHref, memberUrn),
       memberUrn,
       jobTitle,

@@ -4,8 +4,13 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
+import {
+  identifyAnalyticsUser,
+  resetAnalyticsIdentity,
+  syncSessionReplayForPath,
+} from '@/lib/analytics/client'
 import { ProductIcon, ProductNav } from '@/components/product/ProductNav'
 import { NavigationProgress } from '@/components/product/NavigationProgress'
 import { SidebarReferral } from '@/components/product/SidebarReferral'
@@ -94,7 +99,18 @@ function SidebarContent({
         </Link>
       </div>
 
-      <div className="flex-1 px-3">
+      {/*
+        ⚠️ `min-h-0` IS THE FIX, NOT `overflow-y-auto` ALONE. The sidebar is a
+        `fixed inset-y-0` flex column, so this child's flex base size is its
+        CONTENT height, and a flex item's default `min-height: auto` refuses to
+        shrink below that. Without `min-h-0` the column grows past the viewport
+        and `overflow-y-auto` never has anything to scroll — the nav simply runs
+        off the bottom of the screen with no way to reach it.
+        With every module enabled and a group expanded this list is taller than
+        a laptop viewport, so "Settings", "User admin" and the referral card
+        were unreachable.
+      */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3">
         <ProductNav
           isAdmin={isAdmin}
           canUseScraper={canUseScraper}
@@ -128,9 +144,13 @@ function SidebarContent({
 
 export function ProductShell({
   children,
+  userId,
   email,
   fullName,
   planName,
+  workspaceId = null,
+  workspaceRole = null,
+  workspaceMemberCount = null,
   isAdmin,
   canUseScraper,
   showCrm = false,
@@ -141,9 +161,13 @@ export function ProductShell({
   referralLink = null,
 }: {
   children: ReactNode
+  userId: string
   email: string
   fullName: string | null
   planName: string | null
+  workspaceId?: string | null
+  workspaceRole?: string | null
+  workspaceMemberCount?: number | null
   isAdmin: boolean
   canUseScraper: boolean
   showCrm?: boolean
@@ -155,8 +179,66 @@ export function ProductShell({
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const mobileTriggerRef = useRef<HTMLButtonElement>(null)
+  const mobilePanelRef = useRef<HTMLElement>(null)
   const userInitials = useMemo(() => initials(fullName, email), [email, fullName])
   const displayName = fullName?.trim() || email.split('@')[0] || 'Outlio user'
+
+  useEffect(() => {
+    identifyAnalyticsUser({
+      userId,
+      plan: planName,
+      isAdmin,
+      workspaceId,
+      workspaceRole,
+      workspaceMemberCount,
+    })
+  }, [isAdmin, planName, userId, workspaceId, workspaceMemberCount, workspaceRole])
+
+  useEffect(() => {
+    syncSessionReplayForPath(pathname, userId)
+  }, [pathname, userId])
+
+  useEffect(() => {
+    if (!mobileOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    mobilePanelRef.current
+      ?.querySelector<HTMLElement>('button, a[href], [tabindex]:not([tabindex="-1"])')
+      ?.focus()
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMobileOpen(false)
+        requestAnimationFrame(() => mobileTriggerRef.current?.focus())
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const focusable = mobilePanelRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (!focusable?.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last?.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first?.focus()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [mobileOpen])
+
   return (
     <div className="app-shell product-clay hubble-shell min-h-dvh bg-app text-ink">
       <NavigationProgress />
@@ -180,7 +262,13 @@ export function ProductShell({
             onClick={() => setMobileOpen(false)}
             className="absolute inset-0 bg-ink/25"
           />
-          <aside className="hubble-nav-panel relative flex h-full w-[min(86vw,280px)] flex-col border-0 shadow-[var(--shadow-lg)]">
+          <aside
+            ref={mobilePanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Product navigation"
+            className="hubble-nav-panel relative flex h-full w-[min(86vw,280px)] flex-col border-0 shadow-[var(--shadow-lg)]"
+          >
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
@@ -215,6 +303,7 @@ export function ProductShell({
           <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <button
+                ref={mobileTriggerRef}
                 type="button"
                 onClick={() => setMobileOpen(true)}
                 /*
@@ -287,7 +376,10 @@ export function ProductShell({
                 >
                   Visit Outlio website
                 </Link>
-                <form action={signOutAction}>
+                <form
+                  action={signOutAction}
+                  onSubmit={resetAnalyticsIdentity}
+                >
                   <button
                     type="submit"
                     className="flex h-9 w-full items-center rounded-lg px-2 text-left text-sm font-medium text-muted transition-colors duration-150 hover:bg-danger-soft hover:text-danger"
@@ -301,7 +393,7 @@ export function ProductShell({
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
           {children}
         </main>
 

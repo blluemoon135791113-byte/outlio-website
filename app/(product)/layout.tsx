@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 
 import { ProductShell } from '@/components/product/ProductShell'
@@ -6,6 +7,11 @@ import { getWorkspaceContext } from '@/lib/workspaces/context'
 import { appOrigin } from '@/lib/auth/redirects'
 import { signedAvatarUrl } from '@/lib/profile/avatar'
 import { referralLink } from '@/lib/referrals/constants'
+
+/** A safe default for every authenticated page, including future routes. */
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 /**
  * Authenticated shell.
@@ -31,9 +37,13 @@ export default async function ProductLayout({ children }: { children: ReactNode 
 
   return (
     <ProductShell
+      userId={ctx.userId!}
       email={ctx.email ?? ''}
       fullName={ctx.profile?.full_name ?? null}
       planName={ctx.plan?.name ?? null}
+      workspaceId={workspace?.workspace.id ?? null}
+      workspaceRole={workspace?.role ?? null}
+      workspaceMemberCount={workspace?.memberCount ?? null}
       isAdmin={ctx.isAdmin}
       canUseScraper={ctx.canUseScraper}
       showCrm={workspace?.modules.has('crm') ?? false}

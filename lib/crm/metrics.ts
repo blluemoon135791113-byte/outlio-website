@@ -204,6 +204,103 @@ export async function getMetricTotals(
 }
 
 /**
+ * One value per day, for a sparkline.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠️ EVERY POINT IS A STORED ROW. NOTHING IS INTERPOLATED, SMOOTHED OR    ║
+ * ║  INVENTED.                                                                ║
+ * ║                                                                           ║
+ * ║  A sparkline is the easiest place in a product to draw a shape that means ║
+ * ║  nothing — a pleasing curve is the default output of every charting       ║
+ * ║  library whether or not the data supports one. CLAUDE.md rule 4 applies   ║
+ * ║  to a drawn line exactly as it applies to a stored field.                 ║
+ * ║                                                                           ║
+ * ║  ⚠️ A DAY WITH NO ROW IS A REAL ZERO HERE, and that is the one inference  ║
+ * ║  this function makes. The rollup writes a row per (day, metric) only when ║
+ * ║  something happened, so an absent day means "nothing happened", not       ║
+ * ║  "unknown" — the caller already knows the rollup ran, because             ║
+ * ║  `getLastRollupRun` gates the whole panel. Without the zero-fill, a week  ║
+ * ║  with activity on two days would render as a two-point line and read as   ║
+ * ║  a smooth trend.                                                          ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export async function getMetricSeries(
+  workspaceId: string,
+  options: {
+    fromDay: string
+    toDay: string
+    basis: MetricBasis
+    userId?: string | null
+    /** Which metrics to return. One query covers all of them. */
+    metrics: string[]
+  },
+): Promise<Record<string, number[]>> {
+  if (options.metrics.length === 0) return {}
+
+  const db = createAdminClient()
+
+  let query = db
+    .from('crm_reporting_daily')
+    .select('day, metric, count_value')
+    .eq('workspace_id', workspaceId)
+    .eq('basis', options.basis)
+    .in('metric', options.metrics)
+    .gte('day', options.fromDay)
+    .lte('day', options.toDay)
+
+  query = options.basis === 'workspace'
+    ? query.is('user_id', null)
+    : query.eq('user_id', options.userId ?? '')
+
+  const { data, error } = await query
+  if (error) throw new Error(`getMetricSeries failed: ${error.message}`)
+
+  /*
+   * The day axis is built from the RANGE, not from the rows that came back —
+   * so the series length is the same for every metric on the screen and two
+   * sparklines side by side are on the same horizontal scale. Built from rows,
+   * a quiet metric would be drawn across fewer points and its line would look
+   * steeper than a busy one's for the same movement.
+   */
+  const days = daysBetween(options.fromDay, options.toDay)
+  const index = new Map(days.map((day, i) => [day, i]))
+
+  const series: Record<string, number[]> = {}
+  for (const metric of options.metrics) series[metric] = new Array(days.length).fill(0)
+
+  for (const row of data ?? []) {
+    const at = index.get(row.day)
+    if (at === undefined) continue
+    const bucket = series[row.metric]
+    if (bucket) bucket[at] += Number(row.count_value)
+  }
+
+  return series
+}
+
+/**
+ * Every `YYYY-MM-DD` from `from` to `to`, inclusive.
+ *
+ * ⚠️ STEPPED IN UTC MILLISECONDS, NOT BY MUTATING A LOCAL `Date`. Adding one
+ * to `getDate()` lands on the wrong day across a daylight-saving boundary —
+ * twice a year a series would silently drop or repeat a day, which is the kind
+ * of fault nobody notices and nobody can reproduce on demand.
+ */
+function daysBetween(fromDay: string, toDay: string): string[] {
+  const start = Date.parse(`${fromDay}T00:00:00Z`)
+  const end = Date.parse(`${toDay}T00:00:00Z`)
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return []
+
+  const out: string[] = []
+  // A guard, not a limit: 400 days is beyond any range this product offers,
+  // and an unbounded loop on a malformed date would hang the request.
+  for (let at = start; at <= end && out.length < 400; at += 86_400_000) {
+    out.push(new Date(at).toISOString().slice(0, 10))
+  }
+  return out
+}
+
+/**
  * Reply rate, as Ledger §20 defines it.
  *
  * ⚠️ THE DENOMINATOR IS CONTACTS EMAILED, NOT EMAILS SENT. Using the event

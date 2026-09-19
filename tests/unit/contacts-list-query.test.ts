@@ -33,6 +33,7 @@ const DEFAULTS: ContactsTableQuery = {
   sort: 'created',
   direction: 'desc',
   tagIds: [],
+  list: '',
   company: '',
   createdAfter: '',
   createdBefore: '',

@@ -118,9 +118,13 @@ export async function loadAccountExportRecords(
       alert: entry.alert,
       recommendedName: lead?.full_name ?? entry.recommended_contact_name,
       recommendedJobTitle: lead?.job_title ?? entry.recommended_contact_job_title,
-      recommendedLinkedInUrl: lead?.linkedin_url ?? (entry.recommended_contact_member_id
-        ? `https://www.linkedin.com/in/${entry.recommended_contact_member_id}`
-        : null),
+      /*
+       * ⚠️ THE STORED `linkedin_url` OR NOTHING. The fallback here built
+       * `/in/{recommended_contact_member_id}` from a Sales Navigator id, which
+       * addresses no public profile — see `lib/companies/account-list-store.ts`.
+       * `recommendedSalesNavigatorUrl` below is the working link.
+       */
+      recommendedLinkedInUrl: lead?.linkedin_url ?? null,
       recommendedSalesNavigatorUrl: lead?.sales_navigator_url ?? entry.recommended_contact_sales_nav_url,
       recommendedConnectionDegree: lead?.connection_degree ?? entry.recommended_contact_connection,
       companyDomain: company?.normalized_domain ?? null,

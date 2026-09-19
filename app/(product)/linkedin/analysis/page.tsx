@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 
 import { StrategyAnalysis } from '@/components/linkedin/StrategyAnalysis'
+import { listAssignableMembers } from '@/lib/crm/contacts-list'
 import { analysisEntitled } from '@/lib/linkedin/analysis'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can } from '@/lib/workspaces/permissions'
@@ -105,7 +106,14 @@ export default async function StrategyAnalysisPage() {
         </p>
       </div>
 
-      <StrategyAnalysis />
+      {/*
+        ⚠️ WORKSPACE MEMBERS, WHICH IS THE SAME LIST THE CONTACTS SCREEN
+        ASSIGNS FROM. The analysis attributes work to whoever COMPLETED a task
+        or AUTHORED a message, and both are members — so this is the superset,
+        and offering a name with no recorded work simply produces a report
+        saying so, which is a truthful answer to a reasonable question.
+      */}
+      <StrategyAnalysis people={await listAssignableMembers(ctx.workspace.id)} />
     </div>
   )
 }

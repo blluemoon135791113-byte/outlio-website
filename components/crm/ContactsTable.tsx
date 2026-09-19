@@ -32,6 +32,8 @@ export type ContactsTableQuery = {
    * `contacts-href.test.ts` now asserts the two stay in step.
    */
   tagIds: string[]
+  /** A single list id, or `''`. See `listId` in `lib/crm/contacts-list.ts`. */
+  list: string
   company: string
   createdAfter: string
   createdBefore: string
@@ -57,6 +59,7 @@ export function contactsHref(
 
   if (merged.search) params.set('q', merged.search)
   if (merged.owner) params.set('owner', merged.owner)
+  if (merged.list) params.set('list', merged.list)
   if (merged.company) params.set('company', merged.company)
   if (merged.createdAfter) params.set('after', merged.createdAfter)
   if (merged.createdBefore) params.set('before', merged.createdBefore)
