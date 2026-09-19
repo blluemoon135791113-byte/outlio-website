@@ -575,6 +575,90 @@ export async function updateSendingSettings(
   return { ok: true, message: 'Sending settings saved.' }
 }
 
+// ---------------------------------------------------------------------------
+// Mailbox signature — migration 0142
+// ---------------------------------------------------------------------------
+
+export type SignatureState =
+  | { ok: true; message: string }
+  | { ok: false; error: string }
+  | null
+
+/** Mirrors the CHECK constraints in migration 0142. */
+const MAX_SIGNATURE_TEXT = 5000
+const MAX_SIGNATURE_HTML = 20000
+
+/**
+ * Sets the sign-off a mailbox appends to everything it sends.
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║  BEFORE THIS, THE ONLY WAY TO SIGN AN EMAIL WAS TO RETYPE THE SIGNATURE  ║
+ * ║  INTO THE BODY OF EVERY STEP — and changing a job title meant editing    ║
+ * ║  every step of every campaign, with no way to tell which ones you missed.║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ BLANK IS STORED AS NULL, NOT `''`. `applySignature` treats both as "append
+ * nothing", but the column is documented as null-means-none and the CHECK
+ * constraint refuses a zero-length string outright.
+ */
+export async function updateSignature(
+  _previous: SignatureState,
+  formData: FormData,
+): Promise<SignatureState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('email.account.manage')
+  } catch {
+    return { ok: false, error: 'You do not have permission to change this mailbox.' }
+  }
+
+  const accountId = String(formData.get('accountId') ?? '')
+  const text = String(formData.get('signatureText') ?? '').trim()
+  const html = String(formData.get('signatureHtml') ?? '').trim()
+
+  /*
+   * ⚠️ CHECKED HERE SO THE PERSON GETS A SENTENCE rather than a constraint
+   * violation — the same reason `updateSendingSettings` validates its window.
+   */
+  if (text.length > MAX_SIGNATURE_TEXT) {
+    return { ok: false, error: `Keep the signature under ${MAX_SIGNATURE_TEXT} characters.` }
+  }
+  if (html.length > MAX_SIGNATURE_HTML) {
+    return { ok: false, error: `Keep the HTML signature under ${MAX_SIGNATURE_HTML} characters.` }
+  }
+
+  /*
+   * ⚠️ AN HTML SIGNATURE ALONE IS REFUSED. Every message carries a text part;
+   * only some carry an HTML one. Allowing HTML without text would mean a
+   * mailbox that looks signed in the editor and sends unsigned plain-text mail
+   * — the failure nobody notices, because the sender's own client renders HTML.
+   */
+  if (html && !text) {
+    return {
+      ok: false,
+      error: 'Add a plain-text signature too — plain-text emails cannot use the HTML one.',
+    }
+  }
+
+  const { error } = await createAdminClient()
+    .from('email_accounts')
+    .update({
+      signature_text: text || null,
+      signature_html: html || null,
+    })
+    // Scoped by workspace in code — the service role bypasses RLS.
+    .eq('workspace_id', ctx.workspace.id)
+    .eq('id', accountId)
+
+  if (error) return { ok: false, error: 'Could not save that signature.' }
+
+  revalidatePath('/email')
+  return {
+    ok: true,
+    message: text ? 'Signature saved.' : 'Signature removed.',
+  }
+}
+
 export type PostalAddressState =
   | { ok: true; message: string }
   | { ok: false; error: string }

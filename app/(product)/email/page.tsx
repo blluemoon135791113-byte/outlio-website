@@ -227,6 +227,20 @@ export default async function MailboxesPage({
                       }
                     : null
                 }
+                /*
+                  Same gate as the schedule: a signature is a sending identity,
+                  and `updateSignature` asserts `email.account.manage` server-side
+                  regardless of what is rendered here.
+                */
+                signature={
+                  can({ role: ctx.role, modules: ctx.modules }, 'email.account.manage')
+                    ? {
+                        id: account.id,
+                        signatureText: account.signatureText,
+                        signatureHtml: account.signatureHtml,
+                      }
+                    : null
+                }
               />
             ))}
           </section>

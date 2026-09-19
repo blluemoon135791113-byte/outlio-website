@@ -63,6 +63,13 @@ export async function saveStep(
   const stepId = String(formData.get('stepId') ?? '') || null
   const subject = String(formData.get('subject') ?? '').trim()
   const body = String(formData.get('body') ?? '').trim()
+  /*
+   * ⚠️ OPTIONAL, AND BLANK MUST BECOME NULL. `sequence-runner` decides whether
+   * to send a multipart message with `step.body_html ? … : null`, so an empty
+   * string here would promote every message to HTML with an empty HTML part —
+   * which renders as a blank email in any client that prefers HTML.
+   */
+  const bodyHtml = String(formData.get('bodyHtml') ?? '').trim() || null
   const waitHours = Math.max(Number(formData.get('waitHours') ?? 0) || 0, 0)
 
   if (!subject) return { ok: false, error: 'Give the email a subject.' }
@@ -79,6 +86,9 @@ export async function saveStep(
   for (const [field, value] of [
     ['Subject', subject],
     ['Body', body],
+    // The HTML body goes through the SAME check. A typo is no less permanent
+    // for being inside a tag, and `renderTemplate` reads both identically.
+    ...(bodyHtml ? ([['HTML body', bodyHtml]] as const) : []),
   ] as const) {
     const result = validateTemplate(value)
     if (!result.valid) {
@@ -94,7 +104,7 @@ export async function saveStep(
   if (stepId) {
     const { error } = await db
       .from('email_sequence_steps')
-      .update({ subject, body_text: body, wait_hours: waitHours })
+      .update({ subject, body_text: body, body_html: bodyHtml, wait_hours: waitHours })
       .eq('workspace_id', ctx.workspace.id)
       .eq('campaign_id', campaignId)
       .eq('id', stepId)
@@ -131,6 +141,7 @@ export async function saveStep(
     step_index: last ? last.step_index + 1 : 0,
     subject,
     body_text: body,
+    body_html: bodyHtml,
     wait_hours: waitHours,
   })
 

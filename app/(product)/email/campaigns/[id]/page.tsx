@@ -46,7 +46,7 @@ export default async function CampaignPage({
 
   const [{ data: steps }, { data: report }, { data: account }] = await Promise.all([
     db.from('email_sequence_steps')
-      .select('id, step_index, wait_hours, subject, body_text')
+      .select('id, step_index, wait_hours, subject, body_text, body_html')
       .eq('campaign_id', id).order('step_index'),
     db.rpc('email_campaign_report', { p_campaign_id: id }),
     db.from('email_accounts').select('display_name, from_email').eq('id', campaign.account_id ?? '').maybeSingle(),
@@ -148,6 +148,7 @@ export default async function CampaignPage({
             waitHours: step.wait_hours,
             subject: step.subject,
             bodyText: step.body_text,
+            bodyHtml: step.body_html,
           }))}
         />
       ) : (

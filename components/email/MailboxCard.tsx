@@ -6,6 +6,10 @@ import {
   SendingSettings,
   type AccountSchedule,
 } from '@/components/email/SendingSettings'
+import {
+  SignatureSettings,
+  type AccountSignature,
+} from '@/components/email/SignatureSettings'
 
 import {
   disconnectAccount,
@@ -42,12 +46,15 @@ export function MailboxCard({
   checks,
   canManage,
   schedule,
+  signature,
 }: {
   account: Account
   checks: Check[]
   canManage: boolean
   /** Null for anyone who may not change it — see R13. */
   schedule: AccountSchedule | null
+  /** Null for anyone who may not change it, same gate as the schedule. */
+  signature: AccountSignature | null
 }) {
   const [expanded, setExpanded] = useState(false)
   const [recheckState, recheck, rechecking] = useActionState<ActionState, FormData>(
@@ -160,6 +167,8 @@ export function MailboxCard({
         ) : null}
 
         {canManage && schedule ? <SendingSettings account={schedule} /> : null}
+
+        {canManage && signature ? <SignatureSettings account={signature} /> : null}
 
         {canManage ? (
           <>
