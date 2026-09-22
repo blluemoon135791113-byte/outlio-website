@@ -81,6 +81,7 @@ const INTERNAL_PATHS: Record<string, string> = Object.fromEntries(
  * response header or added to the visitor-facing URL.
  */
 const INTERNAL_REWRITE_HEADER = 'x-outlio-internal-rewrite'
+const VALID_REQUEST_ID = /^[A-Za-z0-9._:-]{8,128}$/
 
 /**
  * The complete surface of the software domain.
@@ -134,6 +135,11 @@ const APP_SUBDOMAIN_PATHS = [
 export async function proxy(request: NextRequest) {
   const host = request.headers.get('host')?.split(':')[0]?.toLowerCase() ?? ''
   const { pathname: rawPath } = request.nextUrl
+  const upstreamRequestId = request.headers.get('x-request-id')
+  const requestId =
+    upstreamRequestId && VALID_REQUEST_ID.test(upstreamRequestId)
+      ? upstreamRequestId
+      : crypto.randomUUID()
   const isInternalRewrite = request.headers.get(INTERNAL_REWRITE_HEADER) === '1'
   const shouldClearRedirectCache =
     process.env.NODE_ENV === 'development' &&
@@ -156,6 +162,7 @@ export async function proxy(request: NextRequest) {
     // Preserve content negotiation without a second deprecated middleware
     // file. One Next 16 Proxy is the only supported project-level boundary.
     result.headers.set('Vary', 'Accept, Accept-Encoding')
+    result.headers.set('X-Request-Id', requestId)
 
     // A Proxy bug must not leave localhost permanently unusable after it is
     // fixed. Chrome caches 308 responses aggressively, including the old
