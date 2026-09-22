@@ -12,6 +12,8 @@ import MeteorShower from "./components/MeteorShower";
 import StarFieldCanvas from "./components/StarFieldCanvas";
 import FAQSchema from "./components/FAQSchema";
 import InteractiveGtmHero from "./components/InteractiveGtmHero";
+import { PlatformOverview } from "@/components/leadengine/PlatformOverview";
+import { OutreachAutomation } from "@/components/leadengine/OutreachAutomation";
 import { CALENDLY_URL } from "./lib/constants";
 
 const OUTBOUND_OFFERS = [
@@ -221,6 +223,22 @@ export default function Home() {
         {/* ========== 1. HERO ========== */}
         <InteractiveGtmHero />
 
+        <div className="leadengine-surface leadengine-clay-scale">
+          <div className="leadengine-story-flow">
+            {/* ========== 2. PLATFORM OVERVIEW ========== */}
+            <div className="leadengine-story-panel" data-clay-module="overview">
+              <PlatformOverview />
+            </div>
+
+            {/* ========== 3. OUTREACH AUTOMATION ========== */}
+            <div
+              className="leadengine-story-panel leadengine-story-panel-inner-only"
+              data-clay-module="outbound"
+            >
+              <OutreachAutomation />
+            </div>
+          </div>
+        </div>
 
         {/* ========== 7. RESULTS — full dark galaxy background ========== */}
         <section id="results" className="scroll-mt-24 relative overflow-hidden"
