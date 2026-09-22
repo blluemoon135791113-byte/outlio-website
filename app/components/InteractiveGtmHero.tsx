@@ -10,7 +10,7 @@ export default function InteractiveGtmHero() {
         <div className={styles.backgroundFrame} aria-hidden="true">
           <Image
             className={styles.backgroundImage}
-            src="/hero/hero-sand-texture.png"
+            src="/hero/hero-sand-texture.webp"
             alt=""
             fill
             sizes="100vw"
@@ -45,6 +45,7 @@ export default function InteractiveGtmHero() {
           action={CALENDLY_URL}
           method="get"
           target="_blank"
+          rel="noopener noreferrer"
         >
           <FloatingDotsCta label="Book a Discovery" type="submit" />
         </form>

@@ -217,7 +217,7 @@ export default function Home() {
     <>
       <FAQSchema faqs={FAQS} />
       <Nav />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {/* ========== 1. HERO ========== */}
         <InteractiveGtmHero />
 

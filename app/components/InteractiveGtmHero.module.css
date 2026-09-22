@@ -55,7 +55,7 @@
 .title {
   background-color: #211912;
   background-image:
-    url("/hero/hero-sand-texture.png"),
+    url("/hero/hero-sand-texture.webp"),
     linear-gradient(112deg, #17120e 0%, #4a3523 48%, #1a140f 100%);
   background-position: 34% 42%, center;
   background-size: 7rem auto, 100% 100%;
@@ -66,7 +66,7 @@
   background-color: #11100e;
   background-image:
     linear-gradient(rgb(8 8 7 / 0.9), rgb(20 18 15 / 0.88)),
-    url("/hero/hero-sand-texture.png");
+    url("/hero/hero-sand-texture.webp");
   background-position: center;
   background-size: auto, 18rem auto;
   background-blend-mode: multiply;
