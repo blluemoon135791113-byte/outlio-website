@@ -7,10 +7,10 @@ export type HeroSampleLayout = "editorial" | "centered" | "split";
 
 export default function HeroSample({ layout }: { layout: HeroSampleLayout }) {
   return (
-    <main className={`${styles.hero} ${styles[layout]}`}>
+    <main id="main-content" tabIndex={-1} className={`${styles.hero} ${styles[layout]}`}>
       <Image
         className={styles.background}
-        src="/hero/hero-sand-texture.png"
+        src="/hero/hero-sand-texture.webp"
         alt=""
         fill
         sizes="100vw"

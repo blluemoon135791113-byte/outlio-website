@@ -21,7 +21,7 @@ export function AuthShell({
   footer?: ReactNode
 }) {
   return (
-    <main className="auth-clay min-h-screen bg-app px-4 py-6 text-ink sm:px-6 sm:py-8 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="auth-clay min-h-screen bg-app px-4 py-6 text-ink sm:px-6 sm:py-8 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col sm:min-h-[calc(100vh-4rem)]">
         <header className="flex items-center justify-between gap-4">
           <Link

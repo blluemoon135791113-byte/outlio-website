@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { unstable_cache } from 'next/cache'
+
 import { fastSpringApi } from '@/lib/fastspring/server'
 
 type PriceEntry = { currency?: string; display?: string }
@@ -16,6 +18,21 @@ type ProductPriceResponse = {
 export type PriceDisplayMap = Record<string, string>
 
 /**
+ * Prices are public catalogue data, never user or workspace data. Caching each
+ * product/country pair for 15 minutes removes repeated third-party calls while
+ * keeping checkout itself authoritative for the final amount.
+ */
+const cachedProductPrice = unstable_cache(
+  async (path: string, countryCode?: string) =>
+    fastSpringApi<ProductPriceResponse>(
+      `/products/price/${encodeURIComponent(path)}`,
+      { search: countryCode ? { country: countryCode } : {} },
+    ),
+  ['fastspring-product-price-v1'],
+  { revalidate: 900, tags: ['fastspring-product-prices'] },
+)
+
+/**
  * Localized display prices straight from FastSpring.
  *
  * Only FastSpring's own `display` string is used — never a locally formatted
@@ -30,12 +47,7 @@ export async function getProductPrices(
   const unique = [...new Set(productPaths)]
 
   const results = await Promise.allSettled(
-    unique.map((path) =>
-      fastSpringApi<ProductPriceResponse>(
-        `/products/price/${encodeURIComponent(path)}`,
-        { search: countryCode ? { country: countryCode } : {} },
-      ),
-    ),
+    unique.map((path) => cachedProductPrice(path, countryCode)),
   )
 
   const prices: PriceDisplayMap = {}

@@ -204,7 +204,6 @@ describeIf('flow copilot, against a real model', () => {
      * needs work or the corpus does.
      */
     const passed = scores.filter((s) => s.passed).length
-    // eslint-disable-next-line no-console
     console.log(
       `\n[eval:copilot] ${passed}/${scores.length} passed\n` +
         scores

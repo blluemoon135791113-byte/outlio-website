@@ -14,7 +14,6 @@ import {
 import {
   STOP_REASONS,
   STOP_REASON_LABEL,
-  STOP_SCOPE_LABEL,
 } from '@/lib/crm/contact-stop-copy'
 import type { CollisionReport } from '@/lib/crm/collision'
 import { LocalTime } from '@/components/ui/LocalTime'

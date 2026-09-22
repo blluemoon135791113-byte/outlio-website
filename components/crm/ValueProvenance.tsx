@@ -39,8 +39,6 @@ export function ValueProvenance({ provenance }: { provenance: Provenance }) {
     )
   }
 
-  const retrieved = new Date(provenance.retrievedAt)
-
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5 text-xs text-muted">
       <span>

@@ -48,12 +48,11 @@ export function ExtractionJourney({ artwork }: { artwork?: ReactNode }) {
           {artwork ?? <div className={styles.workflowFrame}>
             <Image
               className={styles.workflowImage}
-              src="/leadengine/extraction-workflow-reference-terra-hq.png"
+              src="/leadengine/extraction-workflow-reference-terra-hq.webp"
               width={3548}
               height={1774}
               alt=""
               draggable={false}
-              unoptimized
             />
           </div>}
         </div>

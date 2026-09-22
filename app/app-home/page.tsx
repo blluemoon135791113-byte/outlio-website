@@ -50,7 +50,7 @@ export default function LeadEnginePage() {
     <div className="leadengine-surface leadengine-clay-scale">
       <Nav surface="leadengine" />
 
-      <main className="leadengine-story">
+      <main id="main-content" tabIndex={-1} className="leadengine-story">
         <LeadEngineHero />
 
         <div className="leadengine-story-flow">

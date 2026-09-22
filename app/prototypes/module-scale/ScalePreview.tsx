@@ -37,11 +37,11 @@ export function ScalePreview({ children, initialVariant }: {
           <summary>Measured reference and scope</summary>
           <p>Clay at 1440px: outer feature card 1280 × 652px; graphic 620 × 620px; card radius 30px; padding 16px vertically / 32px horizontally; headings 44px / 48.4px; body 16px / 22.4px; demo CTA 142 × 42px with 12px corners; top cards approximately 400 × 278px with 16px gaps. Its enclosing feature sections include 96px top and bottom spacing.</p>
           <p>These samples preserve the original content, artwork, surface treatments, and interactions. Only the module dimensions, spacing, typography scale, and CTA proportions change. Hero and navigation remain outside this preview.</p>
-          <a href="https://www.clay.com/use-cases/outbound" target="_blank" rel="noreferrer">View measured Clay reference ↗</a>
-          <a href="https://www.clay.com/use-cases/crm-enrichment" target="_blank" rel="noreferrer">View matte surface reference ↗</a>
+          <a href="https://www.clay.com/use-cases/outbound" target="_blank" rel="noopener noreferrer">View measured Clay reference ↗</a>
+          <a href="https://www.clay.com/use-cases/crm-enrichment" target="_blank" rel="noopener noreferrer">View matte surface reference ↗</a>
         </details>
       </div>
-      <main className={styles.modules}>{children}</main>
+      <main id="main-content" tabIndex={-1} className={styles.modules}>{children}</main>
       <p className={styles.end}>End of sample · No changes applied to the main landing page.</p>
     </div>
   )

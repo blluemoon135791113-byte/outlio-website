@@ -29,7 +29,7 @@ export default function TermsAndConditions() {
     <>
       <Nav />
       <Breadcrumbs />
-      <main className="mx-auto w-full max-w-3xl px-6 py-20 sm:py-28">
+      <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-3xl px-6 py-20 sm:py-28">
         <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">
           Outlio &middot; Legal
         </p>

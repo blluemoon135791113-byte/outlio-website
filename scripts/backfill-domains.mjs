@@ -17,9 +17,6 @@
  *   node --env-file=.env.local scripts/backfill-domains.mjs --limit 200
  */
 import { createClient } from '@supabase/supabase-js'
-import { createRequire } from 'node:module'
-
-const require = createRequire(import.meta.url)
 
 const args = process.argv.slice(2)
 const flag = (name, fallback) => {

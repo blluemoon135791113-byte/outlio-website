@@ -825,19 +825,6 @@ export type SignupIdentityClaimRow = {
 // Supabase client generic
 // ---------------------------------------------------------------------------
 
-/**
- * `Relationships` is required by postgrest-js's `GenericTable`. We declare it
- * empty because we do not use PostgREST's embedded-resource syntax; joins are
- * written explicitly. `npm run db:types` will populate it properly once the
- * migrations are applied.
- */
-type TableShape<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
-  Row: Row
-  Insert: Insert
-  Update: Update
-  Relationships: []
-}
-
 /* ---------------------------------------------------------------------------
  * Browser extension (migration 0032)
  * ------------------------------------------------------------------------- */
@@ -1265,6 +1252,7 @@ export type Database = {
           id: string
           method: string
           path: string
+          request_id: string | null
           status: number
           workspace_id: string | null
         }
@@ -1276,6 +1264,7 @@ export type Database = {
           id?: string
           method: string
           path: string
+          request_id?: string | null
           status: number
           workspace_id?: string | null
         }
@@ -1287,6 +1276,7 @@ export type Database = {
           id?: string
           method?: string
           path?: string
+          request_id?: string | null
           status?: number
           workspace_id?: string | null
         }
@@ -9155,6 +9145,13 @@ export type Database = {
           with_email: number
         }[]
       }
+      email_campaign_enrollment_counts: {
+        Args: { p_campaign_ids: string[]; p_workspace_id: string }
+        Returns: {
+          campaign_id: string
+          recipient_count: number
+        }[]
+      }
       email_campaign_report: {
         Args: { p_campaign_id: string }
         Returns: {
@@ -9291,6 +9288,14 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: string
+      }
+      flow_run_counts: {
+        Args: { p_flow_ids: string[]; p_workspace_id: string }
+        Returns: {
+          flow_id: string
+          halted_count: number
+          run_count: number
+        }[]
       }
       generate_referral_code: { Args: never; Returns: string }
       grant_entitlement: {

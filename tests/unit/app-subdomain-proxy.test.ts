@@ -33,6 +33,19 @@ const appRequest = (path: string) =>
   })
 
 describe('app.outlio.io software surface', () => {
+  it('returns a correlation id and preserves a valid upstream id', async () => {
+    const generated = await proxy(appRequest('/pricing'))
+    expect(generated.headers.get('x-request-id')).toMatch(/^[a-z0-9-]{36}$/i)
+
+    const upstreamId = 'edge-01JREQUESTTRACE'
+    const preserved = await proxy(
+      new NextRequest('https://app.outlio.io/pricing', {
+        headers: { host: 'app.outlio.io', 'x-request-id': upstreamId },
+      }),
+    )
+    expect(preserved.headers.get('x-request-id')).toBe(upstreamId)
+  })
+
   it('serves the Lead Engine homepage at the bare app domain, without redirecting', async () => {
     const response = await proxy(appRequest('/'))
 
