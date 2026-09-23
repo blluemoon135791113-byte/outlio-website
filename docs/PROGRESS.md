@@ -4,6 +4,55 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-09-23 — PostHog could not receive a single browser event, and the hero swapped hands
+
+### PostHog transport
+
+`instrumentation-client.ts` and `lib/posthog-server.ts` were already built, with
+masking, no persistence and a replay allowlist. What was missing was the route:
+the client posts to `NEXT_PUBLIC_POSTHOG_HOST`, the server helper's comment
+referred to an `/ingest` proxy that did not exist, and `connect-src` allows no
+PostHog host. On app.outlio.io the proxy would also have rewritten `/ingest` to
+`/not-found` as an unknown path.
+
+- `proxy.ts` forwards `/ingest/*` to PostHog US (`us.i` for API,
+  `us-assets.i` for `/static` and `/array`) **before any session handling**.
+- **Why not a `next.config` rewrite:** it forwards the request verbatim, and
+  the browser attaches every first-party cookie — the Supabase session
+  included — to a same-origin beacon. The proxy passes an allowlist of six
+  headers. Verified against a local echo upstream on a production build: no
+  cookie, authorization, referer or forwarded-for arrives.
+- `skipTrailingSlashRedirect` is on because PostHog's endpoints end in `/`. The
+  proxy re-applies the 308 strip for every other path, so `/pricing/` behaves
+  exactly as before.
+- Marketing replay: `/`, `/pricing`, `/product`, `/how-it-works`, 10% per page
+  load, no query or hash, same full masking as the product. Read from
+  `window.location`, not `usePathname()` — on the app host `/` is served from
+  `/app-home`. Verified on a production build: `$pageview` and `$snapshot`
+  flow through `/ingest`, no CSP violation, no page copy in any payload.
+
+⚠️ **Owner actions, not done here:** set `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and
+`NEXT_PUBLIC_POSTHOG_HOST=/ingest` in Vercel; enable replay in the PostHog
+project; decide whether the privacy policy names PostHog as a sub-processor
+(its cookie statement stays true — the client sets no cookies or storage).
+
+### Lead Engine hero
+
+The flat `<img>` plate painted first at full opacity, positioned by CSS
+`object-cover`; the WebGL hand is positioned by the scene's own layout. When
+the texture loaded and the plate faded, visitors saw one hand replaced by
+another. The plate is now only the WebGL/texture-failure fallback and the
+canvas fades in once.
+
+### Environment notes
+
+This container exports `NODE_ENV=development`. `npm run build` fails under it
+(`useContext` of null on `/_global-error`), and one proxy test expects 308 but
+gets the dev 307. Run with `NODE_ENV=production` / `NODE_ENV=test`.
+`email-compliance.test.ts` needs `UNSUBSCRIBE_TOKEN_SECRET`.
+
+---
+
 ## 2026-09-16 — Mailbox signatures, and an HTML body that could not be written
 
 ⚠️ **Migration 0142 is applied.** It was written as 0130 and renumbered on merge:

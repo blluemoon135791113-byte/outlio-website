@@ -3,6 +3,7 @@
 import posthog from 'posthog-js'
 
 import {
+  isMarketingReplayRoute,
   isReplaySafeRoute,
   isReplaySampled,
   sanitizeAnalyticsException,
@@ -22,6 +23,14 @@ type Identity = {
 }
 
 let identifiedUserId: string | null = null
+
+/*
+ * Visitors are anonymous and nothing persists between loads (persistence is
+ * disabled in instrumentation-client.ts), so there is no stable ID to sample
+ * on. One draw per page load: a soft navigation keeps the decision.
+ */
+const marketingReplaySampled = typeof window !== 'undefined' && Math.random() < 0.1
+let marketingReplayActive = false
 
 export function captureClientEvent<E extends AnalyticsEventName>(
   event: E,
@@ -77,6 +86,37 @@ export function syncSessionReplayForPath(pathname: string, userId: string): void
       posthog.startSessionRecording()
     }
     else posthog.stopSessionRecording()
+  } catch {
+    // Replay is optional and must fail open.
+  }
+}
+
+/**
+ * Marketing counterpart of syncSessionReplayForPath. It only ever stops a
+ * recording it started itself, so it cannot cut off a product replay that
+ * ProductShell began.
+ *
+ * Reads the browser URL rather than usePathname(): on app.outlio.io the
+ * proxy serves `/` from the internal `/app-home` route, and the allowlist is
+ * about the public address — the one the visitor sees and the replay records.
+ */
+export function syncMarketingReplay(): void {
+  try {
+    const testOverride =
+      process.env.NODE_ENV !== 'production' &&
+      process.env.NEXT_PUBLIC_POSTHOG_REPLAY_TEST_OVERRIDE === 'true'
+    const { pathname, search, hash } = window.location
+    const record =
+      isMarketingReplayRoute(pathname, search, hash) &&
+      (testOverride || marketingReplaySampled)
+
+    if (record && !marketingReplayActive) {
+      posthog.startSessionRecording()
+      marketingReplayActive = true
+    } else if (!record && marketingReplayActive) {
+      posthog.stopSessionRecording()
+      marketingReplayActive = false
+    }
   } catch {
     // Replay is optional and must fail open.
   }
