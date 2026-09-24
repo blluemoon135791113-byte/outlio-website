@@ -36,7 +36,7 @@ export default function PrivacyPolicy() {
         <h1 className="mt-4 text-4xl font-bold uppercase tracking-tight sm:text-5xl">
           Privacy Policy
         </h1>
-        <p className="mt-4 text-sm text-muted">Last updated: Sunday, 9 August 2026</p>
+        <p className="mt-4 text-sm text-muted">Last updated: Thursday, 24 September 2026</p>
 
         <p className="mt-10 leading-relaxed text-ink/80">
           Outlio (&ldquo;we,&rdquo; &ldquo;us,&rdquo; &ldquo;our&rdquo;) respects your privacy. This
@@ -144,7 +144,7 @@ export default function PrivacyPolicy() {
           <ul className="list-disc space-y-2 pl-5">
             <li>
               Tools we use to operate (CRM, email/outreach platforms, automation tools, analytics
-              providers) — bound by their own data protection terms.
+              providers such as PostHog) — bound by their own data protection terms.
             </li>
             <li>
               Our clients, when the data relates to their campaign (e.g., prospect replies, campaign

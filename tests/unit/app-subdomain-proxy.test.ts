@@ -4,11 +4,12 @@ import {
   getRedirectUrl,
   getRewrittenUrl,
   isRewrite,
+  unstable_doesMiddlewareMatch,
 } from 'next/experimental/testing/server'
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { proxy } from '@/proxy'
+import { config as proxyConfig, proxy } from '@/proxy'
 
 const originalUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const originalKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
@@ -187,5 +188,71 @@ describe('outlio.io marketing surface', () => {
       expect(getRedirectUrl(response)).toBeNull()
       expect(isRewrite(response)).toBe(false)
     }
+  })
+})
+
+describe('PostHog /ingest reverse proxy', () => {
+  const ingest = (path: string, init: { method?: string; headers?: Record<string, string> } = {}) =>
+    proxy(
+      new NextRequest(`https://app.outlio.io${path}`, {
+        method: init.method ?? 'POST',
+        headers: { host: 'app.outlio.io', ...init.headers },
+      }),
+    )
+
+  it('runs the proxy on /ingest, where the forwarding and header filtering live', () => {
+    expect(
+      unstable_doesMiddlewareMatch({ config: proxyConfig, url: 'https://app.outlio.io/ingest/e/' }),
+    ).toBe(true)
+  })
+
+  it('forwards to PostHog US exactly, trailing slash and query included', async () => {
+    const cases: Array<[string, string]> = [
+      ['/ingest/e/', 'https://us.i.posthog.com/e/'],
+      ['/ingest/flags/?v=2&compression=base64', 'https://us.i.posthog.com/flags/?v=2&compression=base64'],
+      ['/ingest/s/', 'https://us.i.posthog.com/s/'],
+      ['/ingest/static/1.0.0/lazy-recorder.js', 'https://us-assets.i.posthog.com/static/1.0.0/lazy-recorder.js'],
+      ['/ingest/array/phc_x/config.js', 'https://us-assets.i.posthog.com/array/phc_x/config.js'],
+    ]
+    for (const [path, destination] of cases) {
+      const response = await ingest(path)
+      expect(getRedirectUrl(response)).toBeNull()
+      expect(getRewrittenUrl(response)).toBe(destination)
+    }
+  })
+
+  it('never forwards cookies, auth or forwarding headers to PostHog', async () => {
+    const response = await ingest('/ingest/e/', {
+      headers: {
+        cookie: 'sb-ptewhpmxzenbmxlizxhu-auth-token=secret; outlio_trial_device=x',
+        authorization: 'Bearer secret',
+        'x-forwarded-for': '203.0.113.7',
+        referer: 'https://app.outlio.io/crm/contacts/123',
+        'content-type': 'text/plain',
+        'user-agent': 'Mozilla/5.0',
+      },
+    })
+
+    // Next encodes a request-header override as the full list of headers to
+    // keep; anything not listed is deleted before the upstream fetch.
+    const kept = (response.headers.get('x-middleware-override-headers') ?? '').split(',')
+    expect(kept.sort()).toEqual(['content-type', 'user-agent'])
+    expect(response.headers.get('x-middleware-request-cookie')).toBeNull()
+    expect(response.headers.get('x-middleware-request-authorization')).toBeNull()
+    // No session refresh or trial cookie rides back on an analytics response.
+    expect(response.headers.get('set-cookie')).toBeNull()
+  })
+
+  it('still strips a trailing slash everywhere else, as Next did before', async () => {
+    const response = await proxy(appRequest('/pricing/'))
+    expect(response.status).toBe(308)
+    expect(getRedirectUrl(response)).toBe('https://app.outlio.io/pricing')
+
+    const withQuery = await proxy(
+      new NextRequest('https://outlio.io/terms/?ref=x', { headers: { host: 'outlio.io' } }),
+    )
+    expect(getRedirectUrl(withQuery)).toBe('https://outlio.io/terms?ref=x')
+
+    expect(getRedirectUrl(await proxy(appRequest('/')))).toBeNull()
   })
 })

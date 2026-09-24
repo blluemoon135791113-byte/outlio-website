@@ -117,6 +117,15 @@ const nextConfig: NextConfig = {
   */
   allowedDevOrigins: ['127.0.0.1'],
 
+  /*
+    PostHog's ingestion endpoints end in a slash (`/e/`, `/flags/`, `/s/`).
+    Next's default trailing-slash redirect would bounce every analytics POST
+    through a 308 before proxy.ts could forward it to PostHog, so the redirect
+    is switched off here and re-applied in proxy.ts for every path except
+    `/ingest` — the rest of the site behaves exactly as before.
+  */
+  skipTrailingSlashRedirect: true,
+
   /* config options here */
   images: {
     formats: ['image/avif', 'image/webp'],

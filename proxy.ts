@@ -83,6 +83,50 @@ const INTERNAL_PATHS: Record<string, string> = Object.fromEntries(
 const INTERNAL_REWRITE_HEADER = 'x-outlio-internal-rewrite'
 const VALID_REQUEST_ID = /^[A-Za-z0-9._:-]{8,128}$/
 
+/*
+ * Same-origin reverse proxy to PostHog (US region). The browser client in
+ * instrumentation-client.ts is pointed at `/ingest`, so connect-src and
+ * script-src stay 'self' — no PostHog host is added to the CSP, the lazily
+ * loaded recorder is served same-origin, and content blockers that match
+ * PostHog's domains do not drop the data.
+ *
+ * ⚠️ THIS IS DONE HERE, NOT AS A next.config REWRITE, BECAUSE OF COOKIES.
+ * A config rewrite forwards the browser's request verbatim, and the browser
+ * attaches every first-party cookie to a same-origin call — the Supabase
+ * session token included. That would hand a live session to a third party on
+ * every analytics beacon. Only the headers PostHog needs to read the payload
+ * are passed on; everything else, cookie and authorization first, is dropped.
+ *
+ * Server-side capture (lib/posthog-server.ts) calls PostHog directly.
+ */
+const POSTHOG_INGEST_PREFIX = '/ingest/'
+const POSTHOG_ASSET_HOST = 'https://us-assets.i.posthog.com'
+const POSTHOG_API_HOST = 'https://us.i.posthog.com'
+const POSTHOG_FORWARDED_HEADERS = [
+  'accept',
+  'accept-encoding',
+  'content-encoding',
+  'content-length',
+  'content-type',
+  'user-agent',
+]
+
+function posthogIngest(request: NextRequest): NextResponse {
+  const upstreamPath = request.nextUrl.pathname.slice(POSTHOG_INGEST_PREFIX.length - 1)
+  const upstreamHost =
+    upstreamPath.startsWith('/static/') || upstreamPath.startsWith('/array/')
+      ? POSTHOG_ASSET_HOST
+      : POSTHOG_API_HOST
+  const target = new URL(`${upstreamPath}${request.nextUrl.search}`, upstreamHost)
+
+  const headers = new Headers()
+  for (const name of POSTHOG_FORWARDED_HEADERS) {
+    const value = request.headers.get(name)
+    if (value !== null) headers.set(name, value)
+  }
+  return NextResponse.rewrite(target, { request: { headers } })
+}
+
 /**
  * The complete surface of the software domain.
  *
@@ -133,6 +177,10 @@ const APP_SUBDOMAIN_PATHS = [
 ]
 
 export async function proxy(request: NextRequest) {
+  // First, before any session, cookie or host handling: analytics carries no
+  // session and must never pick one up.
+  if (request.nextUrl.pathname.startsWith(POSTHOG_INGEST_PREFIX)) return posthogIngest(request)
+
   const host = request.headers.get('host')?.split(':')[0]?.toLowerCase() ?? ''
   const { pathname: rawPath } = request.nextUrl
   const upstreamRequestId = request.headers.get('x-request-id')
@@ -189,6 +237,20 @@ export async function proxy(request: NextRequest) {
         : {}),
     })
     return result
+  }
+
+  /*
+   * Next's own trailing-slash redirect is switched off in next.config.ts so
+   * PostHog's `/ingest/e/` endpoints are not bounced. This restores it for
+   * every other path (`/ingest` returned above): `/pricing/` still lands on
+   * `/pricing`, with the status Next used before.
+   */
+  if (rawPath.length > 1 && rawPath.endsWith('/')) {
+    // A plain URL, not nextUrl.clone(): NextURL remembers the incoming
+    // trailing slash and re-appends it on serialisation.
+    const url = new URL(request.url)
+    url.pathname = rawPath.replace(/\/+$/, '') || '/'
+    return finish(NextResponse.redirect(url, 308))
   }
 
   const isAsset = rawPath.startsWith('/_next') || rawPath.includes('.')

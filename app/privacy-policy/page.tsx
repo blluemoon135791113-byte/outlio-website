@@ -84,7 +84,7 @@ export default function LeadEnginePrivacy() {
         <h1 className="mt-4 text-4xl font-bold uppercase tracking-tight sm:text-5xl">
           Lead Engine Privacy Policy
         </h1>
-        <p className="mt-4 text-sm text-muted">Last updated: Monday, 10 August 2026</p>
+        <p className="mt-4 text-sm text-muted">Last updated: Thursday, 24 September 2026</p>
 
         <div className="mt-10 space-y-4 leading-relaxed text-ink/80">
           <p>
@@ -325,6 +325,21 @@ export default function LeadEnginePrivacy() {
               <strong>Admin audit logs.</strong> Every administrative action on an account is
               recorded, append-only, for accountability.
             </li>
+            <li>
+              <strong>Product analytics.</strong> We use PostHog to understand how the Service is
+              used and to find and fix faults. It receives the pages you visit (the address only,
+              never its query string), the kind of link, button or form you use (never its text or
+              anything you type), named product events such as starting an extraction or an
+              export, error reports with their messages removed, and your browser, operating
+              system and screen size. Signed-in events carry your internal account ID, plan,
+              whether you are an admin, workspace ID and role, and a coarse workspace-size band —
+              not your name or email address. On a few pages only, about one in ten accounts and
+              public-page visits is recorded as a session replay, with all on-screen text and form
+              input masked. We do not send PostHog your network
+              address or location, it sets no cookies or browser storage, and it honours your
+              browser&apos;s Do Not Track setting. It never receives uploaded files, extracted
+              records, or cookies.
+            </li>
           </ul>
         </Section>
 
@@ -361,6 +376,11 @@ export default function LeadEnginePrivacy() {
                 "Service and security notices",
                 "Account data",
                 "Contract; legitimate interests (Art. 6(1)(b), (f))",
+              ],
+              [
+                "Understanding use of the Service and fixing faults",
+                "Product analytics (Section 6)",
+                "Legitimate interests (Art. 6(1)(f))",
               ],
             ]}
           />
@@ -411,6 +431,8 @@ export default function LeadEnginePrivacy() {
                 "Security and admin audit logs",
                 <>Up to 12 months, or longer where needed for a live investigation.</>,
               ],
+              ["Product analytics events", <>Up to 12 months.</>],
+              ["Session replays", <>30 days.</>],
             ]}
           />
         </Section>
@@ -428,6 +450,11 @@ export default function LeadEnginePrivacy() {
               ["Resend", "Transactional email — verification, password reset, notices", "EU / US"],
               ["FastSpring", "Merchant of record and subscription payment processing", "EU / US"],
               ["Calendly", "Scheduling, if you book a call with us", "US"],
+              [
+                "PostHog",
+                "Product analytics, error reports and masked session replays (Section 6)",
+                "US",
+              ],
             ]}
           />
           <p>
@@ -563,7 +590,8 @@ export default function LeadEnginePrivacy() {
           <p>
             Lead Engine uses <strong>essential cookies only</strong> — to keep you signed in, to
             protect against cross-site request forgery, and to enforce trial eligibility. There are
-            no third-party analytics, advertising, or tracking cookies in the product. Blocking
+            no third-party analytics, advertising, or tracking cookies in the product. Our product
+            analytics (PostHog, Section 6) runs without cookies or browser storage. Blocking
             essential cookies will prevent sign-in from working.
           </p>
         </Section>

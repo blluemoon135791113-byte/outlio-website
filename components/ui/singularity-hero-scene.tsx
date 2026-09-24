@@ -350,7 +350,16 @@ export function SingularityHeroScene({
     const pixelRatioCap = finePointer.matches ? 1.6 : 1.25
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelRatioCap))
     renderer.setClearColor(0x000000, 0)
-    renderer.domElement.className = 'absolute inset-0 size-full'
+    /*
+     * ⚠️ THE CANVAS STARTS INVISIBLE AND THE PLATE NEVER SHOWS FIRST.
+     * The plate is positioned by CSS object-cover; the WebGL hand by the
+     * layout below. They do not line up, so showing the plate and then
+     * cross-fading to the scene read as one hand being swapped for another.
+     * The canvas now fades in once the texture is on the GPU, and the plate
+     * appears only if WebGL or the texture fails.
+     */
+    renderer.domElement.className =
+      'absolute inset-0 size-full opacity-0 transition-opacity duration-500'
     host.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
@@ -412,9 +421,17 @@ export function SingularityHeroScene({
 
     // ── the hand ─────────────────────────────────────────────────────────────
     const loader = new THREE.TextureLoader()
-    const texture = loader.load('/leadengine/hero-reaching-singularity-dune.png', () => {
-      if (fallback) fallback.style.opacity = '0'
-    })
+    const texture = loader.load(
+      '/leadengine/hero-reaching-singularity-dune.png',
+      () => {
+        renderer.domElement.style.opacity = '1'
+      },
+      undefined,
+      () => {
+        renderer.domElement.remove()
+        if (fallback) fallback.style.opacity = '1'
+      },
+    )
     texture.colorSpace = THREE.SRGBColorSpace
     texture.minFilter = THREE.LinearFilter
     texture.generateMipmaps = false
@@ -747,9 +764,9 @@ export function SingularityHeroScene({
       {...props}
     >
       {/*
-        Held underneath as the first paint and the WebGL fallback. Faded out
-        once the texture reaches the GPU, and left visible for good if the
-        context could not be created at all.
+        The WebGL fallback only. Hidden by default so it is never painted
+        before the scene; shown if the context cannot be created or the
+        texture fails to load.
       */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -758,7 +775,7 @@ export function SingularityHeroScene({
         alt=""
         aria-hidden
         draggable={false}
-        className="pointer-events-none absolute left-1/2 top-1/2 h-full w-auto min-w-full max-w-none -translate-x-1/2 -translate-y-1/2 select-none object-cover transition-opacity duration-500"
+        className="pointer-events-none absolute left-1/2 top-1/2 h-full w-auto min-w-full max-w-none -translate-x-1/2 -translate-y-1/2 select-none object-cover opacity-0 transition-opacity duration-500"
       />
 
       <div

@@ -22,7 +22,7 @@ import 'server-only'
  * ║  the deterministic automation they are still paying for.                  ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-import { hubbleExecute } from '@/lib/hubble/execute'
+import { hubbleExecute, type HubbleTools } from '@/lib/hubble/execute'
 import { memberMayNow } from '@/lib/workspaces/authority'
 import type { HubbleTask } from '@/lib/hubble/pricing'
 import { CAPABILITIES, aiCapabilityIds, hubbleTaskForAction } from '@/lib/capabilities/registry'
@@ -59,7 +59,23 @@ const AI_FLOW_ACTIONS: readonly string[] = aiCapabilityIds().flatMap((id) => {
  * registered, the action fails with a named reason and costs nothing, because
  * `hubbleExecute` refunds a failed call.
  */
-const RUNNERS: Partial<Record<HubbleTask, (input: HubbleInput) => Promise<Record<string, unknown>>>> = {}
+const RUNNERS: Partial<Record<HubbleTask, HubbleTaskRunner>> = {}
+
+/**
+ * What a runner hands back.
+ *
+ * `value` is the one thing a branch can read — the engine stores it under the
+ * step's `storeAs` as `vars.<key>`. `detail` is the decision's metadata for the
+ * run trace and the CRM activity. ⚠️ Neither may carry message text or
+ * personal data: both are persisted.
+ */
+export type HubbleRunnerResult = {
+  value: string | number | boolean | null
+  detail: Record<string, string | number | boolean | null>
+}
+
+/** Receives the metered tools — the only way a runner can reach a model. */
+export type HubbleTaskRunner = (input: HubbleInput, tools: HubbleTools) => Promise<HubbleRunnerResult>
 
 export type HubbleInput = {
   workspaceId: string
@@ -67,10 +83,7 @@ export type HubbleInput = {
   config: Record<string, unknown>
 }
 
-export function registerHubbleRunner(
-  task: HubbleTask,
-  runner: (input: HubbleInput) => Promise<Record<string, unknown>>,
-): void {
+export function registerHubbleRunner(task: HubbleTask, runner: HubbleTaskRunner): void {
   RUNNERS[task] = runner
 }
 
@@ -126,12 +139,12 @@ function hubbleHandler(action: string): ActionHandler {
     const outcome = await hubbleExecute(
       task,
       { workspaceId: ctx.workspaceId, userId, source: 'flow', flowRunId: ctx.runId },
-      async () => {
+      async (tools) => {
         if (!runner) {
           // Not stubbed: an unregistered task fails loudly and is refunded.
           throw new Error(`No runner is registered for the "${task}" task yet.`)
         }
-        return runner({ workspaceId: ctx.workspaceId, contactId: ctx.contactId, config })
+        return runner({ workspaceId: ctx.workspaceId, contactId: ctx.contactId, config }, tools)
       },
     )
 
@@ -143,13 +156,25 @@ function hubbleHandler(action: string): ActionHandler {
           contact_id: ctx.contactId,
           activity_type: 'ENGAGEMENT',
           channel: 'system',
-          metadata: { hubble_task: task, key: config.storeAs, run_id: ctx.runId },
+          metadata: {
+            hubble_task: task,
+            key: config.storeAs,
+            run_id: ctx.runId,
+            value: outcome.result.value,
+            ...outcome.result.detail,
+          },
         })
       }
 
       return {
         ok: true,
-        output: { task, creditsSpent: outcome.creditsSpent, remaining: outcome.remaining },
+        output: {
+          task,
+          creditsSpent: outcome.creditsSpent,
+          remaining: outcome.remaining,
+          value: outcome.result.value,
+          detail: outcome.result.detail,
+        },
         creditsUsed: outcome.creditsSpent,
       }
     }

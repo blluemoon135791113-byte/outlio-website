@@ -13,6 +13,7 @@ import { registerComputeActions } from '@/lib/flows/actions/compute'
 import { registerCrmActions } from '@/lib/flows/actions/crm'
 import { registerEmailActions } from '@/lib/flows/actions/email'
 import { registerHubbleActions } from '@/lib/flows/actions/hubble'
+import { registerJevRunners } from '@/lib/jev/runners'
 import { registerNotifyAction } from '@/lib/flows/actions/notify'
 import { registerWebhookAction } from '@/lib/flows/actions/webhook'
 
@@ -25,6 +26,8 @@ export function registerAllActions(): void {
   registerCrmActions()
   registerEmailActions()
   registerHubbleActions()
+  // The work behind the Hubble actions that Jev answers (a runner, not a new action).
+  registerJevRunners()
   registerNotifyAction()
   registerWebhookAction()
   registered = true

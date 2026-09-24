@@ -33,7 +33,7 @@ beforeAll(async () => {
   registerAllActions()
 
   // A real runner, so a successful call is genuinely a call.
-  registerHubbleRunner('hubble.icp_score', async () => ({ score: 72 }))
+  registerHubbleRunner('hubble.icp_score', async () => ({ value: 72, detail: {} }))
 
   user = await createAuthUser(`hubble-${RUN}`)
   const db = adminClient()

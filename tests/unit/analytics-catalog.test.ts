@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ANALYTICS_SCHEMA_VERSION,
   EVENT_PROPERTY_KEYS,
+  isMarketingReplayRoute,
   isReplaySafeRoute,
   isReplaySampled,
   sanitizeAnalyticsEventUrls,
@@ -208,6 +209,17 @@ describe('analytics privacy helpers', () => {
     expect(isReplaySafeRoute('/email/campaigns')).toBe(false)
     expect(isReplaySafeRoute('/dashboard', '?token=private')).toBe(false)
     expect(isReplaySafeRoute('/dashboard', '', '#private')).toBe(false)
+  })
+
+  it('records only the public marketing pages, and never a URL with a query or hash', () => {
+    for (const path of ['/', '/pricing', '/product', '/how-it-works/']) {
+      expect(isMarketingReplayRoute(path)).toBe(true)
+    }
+    for (const path of ['/sign-up', '/sign-in', '/join', '/terms', '/dashboard', '/admin']) {
+      expect(isMarketingReplayRoute(path)).toBe(false)
+    }
+    expect(isMarketingReplayRoute('/', '?email=a@example.com')).toBe(false)
+    expect(isMarketingReplayRoute('/pricing', '', '#token')).toBe(false)
   })
 
   it('uses coarse workspace size bands', () => {
