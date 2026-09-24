@@ -4,6 +4,30 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-09-24 — Cleanup: one failing test, one lint warning, six dead modules
+
+- `scripts/check-migration.sh` did not replay `0142_email_signatures`, so
+  `migration-harness-coverage` failed. Added to the `for m in` list.
+- Unused `statSync` import in `tests/unit/worker-wiring.test.ts`.
+- Deleted the three modules `module-reachability.test.ts` already listed as
+  "genuinely dead" (`lib/utils.ts`, `lib/companies/domain-probe.ts`,
+  `lib/intelligence/llm/catalog.ts`) and their allowlist entries, plus the
+  `clsx` / `tailwind-merge` deps only `lib/utils.ts` used.
+- Deleted `components/integrations/{OAuthConnectButton,LeadExportMenu,ClayLeadExport}.tsx`.
+  The first died with the HubSpot/Salesforce removal; the other two were
+  superseded by `RowExportMenu` in `components/jobs/RowActions.tsx`, which
+  calls the same three export actions. No feature lost.
+
+**Left alone on purpose:** unreferenced landing components in `app/components/`,
+`components/leadengine/CrmEnrichmentExperience*` and
+`components/ui/orbital-hero-section.tsx` — marketing surface, rule 5.
+
+### Verified
+
+typecheck clean · lint 0 problems · unit 4232/4232 · build succeeds.
+
+---
+
 ## 2026-09-24 — Jev (TypeSafe) decision service, phase 1: provider adapter + reply intent
 
 ⚠️ **OFF BY DEFAULT and NOT verified against the live API** — no TypeSafe key

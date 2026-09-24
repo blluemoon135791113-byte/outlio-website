@@ -27,7 +27,6 @@ import {
   TRIGGER_TYPES,
   actionIsImplemented,
   validateFlowDefinition,
-  type ActionType,
 } from '@/lib/flows/definition'
 import {
   compileGeneratedDefinition,

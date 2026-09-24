@@ -163,6 +163,7 @@ export async function authenticateApiKey(
  * log of successes cannot say it.
  */
 export async function logApiRequest(input: {
+  requestId: string
   workspaceId: string | null
   apiKeyId: string | null
   method: string
@@ -172,6 +173,7 @@ export async function logApiRequest(input: {
   durationMs: number
 }): Promise<void> {
   await createAdminClient().from('api_request_log').insert({
+    request_id: input.requestId,
     workspace_id: input.workspaceId,
     api_key_id: input.apiKeyId,
     method: input.method,

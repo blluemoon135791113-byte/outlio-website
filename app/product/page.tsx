@@ -28,7 +28,7 @@ export default function ProductPage() {
     <div className="leadengine-surface">
       <Nav surface="leadengine" />
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="bg-paper px-4 pb-4 pt-20 sm:pt-28">
           <div className="mx-auto max-w-5xl">
             <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-accent">

@@ -12,7 +12,7 @@ export default async function WelcomePage() {
   const user = await requireUser()
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-app px-5 py-16">
+    <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center bg-app px-5 py-16">
       <section className="w-full max-w-xl rounded-[var(--radius-xl)] bg-panel p-8 text-center shadow-[var(--shadow-lg)] ring-1 ring-border sm:p-12">
         <span className="mx-auto grid size-14 place-items-center rounded-full bg-accent text-2xl font-bold text-white" aria-hidden>
           ✓
@@ -39,4 +39,3 @@ export default async function WelcomePage() {
     </main>
   )
 }
-

@@ -37,16 +37,20 @@ export default async function FlowsPage() {
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
-  // Run counts, so a flow that has never fired is visible as such.
-  const runCounts = new Map<string, { total: number; halted: number }>()
-  for (const flow of flows ?? []) {
-    const [{ count: total }, { count: halted }] = await Promise.all([
-      db.from('flow_runs').select('id', { count: 'exact', head: true }).eq('flow_id', flow.id),
-      db.from('flow_runs').select('id', { count: 'exact', head: true })
-        .eq('flow_id', flow.id).eq('status', 'halted'),
-    ])
-    runCounts.set(flow.id, { total: total ?? 0, halted: halted ?? 0 })
-  }
+  // One grouped query instead of two exact-count requests per flow.
+  const flowIds = (flows ?? []).map((flow) => flow.id)
+  const { data: countRows } = flowIds.length > 0
+    ? await db.rpc('flow_run_counts', {
+        p_workspace_id: ctx.workspace.id,
+        p_flow_ids: flowIds,
+      })
+    : { data: [] }
+  const runCounts = new Map(
+    (countRows ?? []).map((row) => [
+      row.flow_id,
+      { total: Number(row.run_count), halted: Number(row.halted_count) },
+    ]),
+  )
 
   return (
     <div className="space-y-5">

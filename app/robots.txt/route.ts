@@ -41,13 +41,22 @@ const ALLOWED_AGENTS = [
 ]
 
 export async function GET() {
-  const origin = isAppHost((await headers()).get('host')) ? APP_ORIGIN : SITE_ORIGIN
+  const appSurface = isAppHost((await headers()).get('host'))
+  const origin = appSurface ? APP_ORIGIN : SITE_ORIGIN
+  const privatePaths = appSurface
+    ? [
+        '/admin', '/api', '/auth', '/crm', '/dashboard', '/email', '/extension',
+        '/flows', '/join', '/linkedin', '/mfa', '/reset-password', '/sign-in',
+        '/sign-up', '/verify-email', '/welcome',
+      ]
+    : []
 
   const body = [
     '# Outlio - Allow ALL bots (search engines, AI crawlers, trainers)',
     '',
     'User-agent: *',
     'Allow: /',
+    ...privatePaths.map((path) => `Disallow: ${path}`),
     '',
     '# Content signals for AI systems',
     'Content-Signal: search=yes',
@@ -55,7 +64,12 @@ export async function GET() {
     'Content-Signal: ai-train=yes',
     'Content-Signal: use=full',
     '',
-    ...ALLOWED_AGENTS.flatMap((agent) => [`User-agent: ${agent}`, 'Allow: /', '']),
+    ...ALLOWED_AGENTS.flatMap((agent) => [
+      `User-agent: ${agent}`,
+      'Allow: /',
+      ...privatePaths.map((path) => `Disallow: ${path}`),
+      '',
+    ]),
     '# Sitemap',
     `Sitemap: ${origin}/sitemap.xml`,
     '',

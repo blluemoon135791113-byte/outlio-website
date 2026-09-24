@@ -12,7 +12,7 @@
  * ║  These tests make growing the enum FORCE a decision.                      ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {

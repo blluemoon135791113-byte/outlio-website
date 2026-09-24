@@ -177,24 +177,6 @@ const KNOWN_UNREACHABLE = new Map<string, string>([
       'yet — enrollments can only be created from today, so a report would be a ' +
       'screen of zeroes pretending to be a finding.',
   ],
-
-  /* ── Genuinely dead, and newly surfaced by this guard. ──────────────────── */
-  [
-    'lib/utils.ts',
-    'The `cn()` helper from a scaffold. Zero call sites — this codebase builds ' +
-      'class strings with template literals throughout.',
-  ],
-  [
-    'lib/companies/domain-probe.ts',
-    'Superseded by lib/intelligence/providers/domain-probe.ts, which is wired ' +
-      'into the provider registry. Two implementations of "guess a domain from ' +
-      'a company name and verify it"; only the provider one runs.',
-  ],
-  [
-    'lib/intelligence/llm/catalog.ts',
-    'HUBBLE_MODEL_NAME and hubbleModelStatus have no call sites; the model ' +
-      'chain is assembled in lib/intelligence/llm/ elsewhere.',
-  ],
 ])
 
 describe('the graph is real, not an artefact of a broken resolver', () => {
@@ -231,7 +213,7 @@ describe('the graph is real, not an artefact of a broken resolver', () => {
       'lib/intelligence/providers/index.ts',
     )
     // A bare package specifier is not ours to resolve.
-    expect(resolveSpecifier('react', 'lib/utils.ts')).toBeNull()
+    expect(resolveSpecifier('react', 'lib/email/send.ts')).toBeNull()
   })
 
   it('finds modules that are obviously reachable', () => {

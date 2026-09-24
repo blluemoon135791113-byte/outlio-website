@@ -113,7 +113,7 @@ export function CardsFrame({
   mode: 'editorial' | 'ledger' | 'gallery'
 }) {
   return (
-    <main className={`${styles.page} ${styles[`page_${mode}`]}`}>
+    <main id="main-content" tabIndex={-1} className={`${styles.page} ${styles[`page_${mode}`]}`}>
       <section className={styles.module} aria-labelledby="platform-cards-title">
         <PlatformHeader />
         <div className={styles.cards} id="capability-cards">

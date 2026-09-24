@@ -14,49 +14,41 @@ import { APP_ORIGIN, isAppHost, SITE_ORIGIN } from '@/lib/site'
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const host = (await headers()).get('host')
-  const currentDate = new Date().toISOString()
 
   if (isAppHost(host)) {
     return [
       {
         url: APP_ORIGIN,
-        lastModified: currentDate,
         changeFrequency: 'weekly',
         priority: 1,
       },
       {
         url: `${APP_ORIGIN}/pricing`,
-        lastModified: currentDate,
         changeFrequency: 'weekly',
         priority: 0.9,
       },
       {
         url: `${APP_ORIGIN}/product`,
-        lastModified: currentDate,
         changeFrequency: 'weekly',
         priority: 0.8,
       },
       {
         url: `${APP_ORIGIN}/how-it-works`,
-        lastModified: currentDate,
         changeFrequency: 'weekly',
         priority: 0.8,
       },
       {
         url: `${APP_ORIGIN}/terms`,
-        lastModified: currentDate,
         changeFrequency: 'monthly',
         priority: 0.4,
       },
       {
         url: `${APP_ORIGIN}/privacy-policy`,
-        lastModified: currentDate,
         changeFrequency: 'monthly',
         priority: 0.4,
       },
       {
         url: `${APP_ORIGIN}/refund-policy`,
-        lastModified: currentDate,
         changeFrequency: 'monthly',
         priority: 0.4,
       },
@@ -66,25 +58,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     {
       url: SITE_ORIGIN,
-      lastModified: currentDate,
       changeFrequency: 'daily',
       priority: 1,
     },
     {
       url: `${SITE_ORIGIN}/explainers`,
-      lastModified: currentDate,
       changeFrequency: 'weekly',
       priority: 0.9,
     },
     {
       url: `${SITE_ORIGIN}/terms`,
-      lastModified: currentDate,
       changeFrequency: 'monthly',
       priority: 0.3,
     },
     {
       url: `${SITE_ORIGIN}/privacy`,
-      lastModified: currentDate,
       changeFrequency: 'monthly',
       priority: 0.3,
     },

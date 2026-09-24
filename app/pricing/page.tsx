@@ -42,10 +42,11 @@ export default async function PricingPage() {
     return (
       <>
         <Nav surface="leadengine" />
-        <main>
+        <main id="main-content" tabIndex={-1}>
           <Pricing
             ctaHref="/sign-up"
             ctaLabel="Get This"
+            pageHeading
           />
         </main>
         <Footer surface="leadengine" />
@@ -72,7 +73,7 @@ export default async function PricingPage() {
   return (
     <>
       <Nav surface="leadengine" />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <FastSpringPricing
           countryCode={countryCode}
           customerEmail={user?.email}

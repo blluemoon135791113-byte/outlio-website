@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Caveat, DM_Sans } from "next/font/google";
+import Script from "next/script";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { MarketingReplay } from "@/components/analytics/MarketingReplay";
@@ -99,10 +100,6 @@ const agencyMetadata: Metadata = {
   },
   alternates: {
     canonical: 'https://outlio.io',
-  },
-  verification: {
-    google: 'your-google-verification-code',
-    yandex: 'your-yandex-verification-code',
   },
   other: {
     // Meta Business Manager domain verification. Emits:
@@ -285,8 +282,10 @@ export default async function RootLayout({
       lang="en"
       className={`${dmSans.variable} ${caveat.variable} ${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
     >
-      <head>
-        <script
+      <body className="min-h-full flex flex-col">
+        <Script
+          id="google-tag-manager"
+          strategy="afterInteractive"
           dangerouslySetInnerHTML={{
             __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -295,8 +294,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','${GOOGLE_TAG_MANAGER_ID}');`,
           }}
         />
-      </head>
-      <body className="min-h-full flex flex-col">
+        <a className="skip-link" href="#main-content">
+          Skip to main content
+        </a>
         <noscript>
           <iframe
             src={`https://www.googletagmanager.com/ns.html?id=${GOOGLE_TAG_MANAGER_ID}`}

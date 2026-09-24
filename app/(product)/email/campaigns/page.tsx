@@ -40,16 +40,17 @@ export default async function CampaignsPage() {
       .order('created_at', { ascending: false }),
   ])
 
-  // Enrolment counts, so a draft with nobody in it is visible before launch.
-  const counts = new Map<string, number>()
-  for (const campaign of campaigns ?? []) {
-    const { count } = await db
-      .from('email_enrollments')
-      .select('id', { count: 'exact', head: true })
-      .eq('campaign_id', campaign.id)
-      .in('status', ['active', 'paused'])
-    counts.set(campaign.id, count ?? 0)
-  }
+  // One grouped query instead of one exact-count request per campaign.
+  const campaignIds = (campaigns ?? []).map((campaign) => campaign.id)
+  const { data: countRows } = campaignIds.length > 0
+    ? await db.rpc('email_campaign_enrollment_counts', {
+        p_workspace_id: ctx.workspace.id,
+        p_campaign_ids: campaignIds,
+      })
+    : { data: [] }
+  const counts = new Map(
+    (countRows ?? []).map((row) => [row.campaign_id, Number(row.recipient_count)]),
+  )
 
   const sendable = accounts.filter((a) => a.status !== 'disconnected')
 

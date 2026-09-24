@@ -17,7 +17,7 @@
  * ║  that is the point — the defect they catch is the absence of a call.      ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**

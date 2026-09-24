@@ -63,7 +63,7 @@ export default function Explainers() {
     <>
       <Nav surface="motion" />
       <Breadcrumbs />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {/* ========== E1. HERO ========== */}
         <section className="grad-halo relative overflow-hidden">
           <div className="mx-auto max-w-7xl px-6 pb-24 pt-20 sm:px-10 sm:pt-28">

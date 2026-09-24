@@ -76,14 +76,6 @@ const MIGRATIONS = readdirSync(join(ROOT, 'supabase', 'migrations'))
 const hasFxSnapshot =
   /fx_rate_to_workspace_currency/.test(MIGRATIONS) && /fx_rate_date/.test(MIGRATIONS)
 
-/** Callers that hand `createOpportunity` a currency of their own. */
-const currencyCallers = PRODUCT.filter(
-  (f) =>
-    f.file !== OWNER &&
-    /createOpportunity\s*\(/.test(f.code) &&
-    /\bcurrency\s*:/.test(f.code),
-).map((f) => f.file)
-
 describe('the scanner can see what it polices', () => {
   it('finds the opportunities module and its callers', () => {
     /*

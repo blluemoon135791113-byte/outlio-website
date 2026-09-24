@@ -132,7 +132,7 @@ export async function recordObservation(
   let evidence: ContactEvidence
   try {
     evidence = await contactEvidence(input.workspaceId, input.contactId)
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       reason: 'failed',

@@ -28,6 +28,7 @@ export type ApiHandler = (
  */
 export const MAX_PAGE_SIZE = 100
 export const DEFAULT_PAGE_SIZE = 25
+const VALID_REQUEST_ID = /^[A-Za-z0-9._:-]{8,128}$/
 
 export function readPaging(request: Request): { limit: number; offset: number } {
   const url = new URL(request.url)
@@ -47,10 +48,15 @@ export function apiRoute(scope: ApiScope, handler: ApiHandler) {
   return async function route(request: Request): Promise<Response> {
     const startedAt = Date.now()
     const url = new URL(request.url)
+    const forwardedRequestId = request.headers.get('x-request-id')
+    const requestId = forwardedRequestId && VALID_REQUEST_ID.test(forwardedRequestId)
+      ? forwardedRequestId
+      : crypto.randomUUID()
     const auth = await authenticateApiKey(request, scope)
 
     if (!auth.ok) {
       await logApiRequest({
+        requestId,
         workspaceId: null,
         apiKeyId: null,
         method: request.method,
@@ -64,7 +70,10 @@ export function apiRoute(scope: ApiScope, handler: ApiHandler) {
         { error: { code: auth.failure, message: auth.message } },
         {
           status: auth.status,
-          headers: auth.retryAfter ? { 'Retry-After': String(auth.retryAfter) } : undefined,
+          headers: {
+            'X-Request-Id': requestId,
+            ...(auth.retryAfter ? { 'Retry-After': String(auth.retryAfter) } : {}),
+          },
         },
       )
     }
@@ -73,6 +82,7 @@ export function apiRoute(scope: ApiScope, handler: ApiHandler) {
       const result = await handler(request, auth.context)
 
       await logApiRequest({
+        requestId,
         workspaceId: auth.context.workspaceId,
         apiKeyId: auth.context.apiKeyId,
         method: request.method,
@@ -86,6 +96,7 @@ export function apiRoute(scope: ApiScope, handler: ApiHandler) {
         headers: {
           // So a caller can back off before being refused rather than after.
           'X-RateLimit-Limit': String(auth.context.rateLimitPerMinute),
+          'X-Request-Id': requestId,
           'Cache-Control': 'no-store',
         },
       })
@@ -96,12 +107,14 @@ export function apiRoute(scope: ApiScope, handler: ApiHandler) {
        * it (CLAUDE.md). The detail goes to the log; the caller gets a code.
        */
       console.error('[api] handler failed', {
+        requestId,
         path: url.pathname,
         workspaceId: auth.context.workspaceId,
         message: error instanceof Error ? error.message : 'unknown',
       })
 
       await logApiRequest({
+        requestId,
         workspaceId: auth.context.workspaceId,
         apiKeyId: auth.context.apiKeyId,
         method: request.method,
@@ -113,7 +126,7 @@ export function apiRoute(scope: ApiScope, handler: ApiHandler) {
 
       return NextResponse.json(
         { error: { code: 'internal_error', message: 'Something went wrong.' } },
-        { status: 500 },
+        { status: 500, headers: { 'X-Request-Id': requestId } },
       )
     }
   }

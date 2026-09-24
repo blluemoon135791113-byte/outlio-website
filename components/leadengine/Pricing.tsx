@@ -113,13 +113,16 @@ function RichText({ value }: { value: string }) {
 type PricingProps = {
   ctaHref?: string
   ctaLabel?: string
+  pageHeading?: boolean
 }
 
 type PlanPanelProps = Pick<PricingProps, 'ctaHref' | 'ctaLabel'> & {
   tier: Tier
+  pageHeading: boolean
 }
 
-export function Pricing({ ctaHref, ctaLabel }: PricingProps = {}) {
+export function Pricing({ ctaHref, ctaLabel, pageHeading = false }: PricingProps = {}) {
+  const Heading = pageHeading ? 'h1' : 'h2'
   return (
     <section id="pricing" className={styles.section} aria-labelledby="pricing-title">
       <div className={styles.container}>
@@ -127,9 +130,9 @@ export function Pricing({ ctaHref, ctaLabel }: PricingProps = {}) {
           <p className={styles.eyebrow}>
             Pricing
           </p>
-          <h2 id="pricing-title" className={styles.heading}>
+          <Heading id="pricing-title" className={styles.heading}>
             A Model that Fits your Workflow
-          </h2>
+          </Heading>
         </div>
 
         <div className={styles.pricingStrip}>
@@ -140,6 +143,7 @@ export function Pricing({ ctaHref, ctaLabel }: PricingProps = {}) {
                 tier={tier}
                 ctaHref={ctaHref}
                 ctaLabel={ctaLabel}
+                pageHeading={pageHeading}
               />
             ))}
           </div>
@@ -161,7 +165,9 @@ function HoverPlan({
   tier,
   ctaHref,
   ctaLabel,
+  pageHeading,
 }: PlanPanelProps) {
+  const PlanHeading = pageHeading ? 'h2' : 'h3'
   return (
     <article
       className={`${styles.planPanel} ${tier.featured ? styles.featuredPlan : ''}`}
@@ -172,7 +178,7 @@ function HoverPlan({
             {tier.badge ? <span className={styles.badge}>{tier.badge}</span> : null}
             <span className={styles.drawerHint} aria-hidden>→</span>
           </div>
-          <h3 className={styles.planName}>{tier.name}</h3>
+          <PlanHeading className={styles.planName}>{tier.name}</PlanHeading>
           <p className={styles.planBlurb}>{tier.blurb}</p>
         </header>
 
@@ -240,7 +246,7 @@ function PlanLink({
   ctaHref,
   ctaLabel,
   featured = false,
-}: PlanPanelProps & { featured?: boolean }) {
+}: Pick<PricingProps, 'ctaHref' | 'ctaLabel'> & { tier: Tier; featured?: boolean }) {
   return (
     <Link
       href={ctaHref ?? tier.cta.href}

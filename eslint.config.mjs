@@ -30,6 +30,7 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "extensions/dist/**",
     "services/web-research-mcp/dist/**",
     "next-env.d.ts",
 

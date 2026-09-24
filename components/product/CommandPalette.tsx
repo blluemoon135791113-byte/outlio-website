@@ -61,6 +61,7 @@ export function CommandPalette() {
   const [active, setActive] = useState(0)
 
   const inputRef = useRef<HTMLInputElement>(null)
+  const paletteRef = useRef<HTMLDivElement>(null)
   /* Where focus came from, so Escape returns it rather than dropping it. */
   const openerRef = useRef<HTMLElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -162,6 +163,22 @@ export function CommandPalette() {
       close()
       return
     }
+    if (event.key === 'Tab') {
+      const focusable = paletteRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (!focusable?.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last?.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first?.focus()
+      }
+      return
+    }
     if (results.length === 0) return
     if (event.key === 'ArrowDown') {
       event.preventDefault()
@@ -183,6 +200,7 @@ export function CommandPalette() {
       onMouseDown={close}
     >
       <div
+        ref={paletteRef}
         role="dialog"
         aria-modal="true"
         aria-label="Search leads"

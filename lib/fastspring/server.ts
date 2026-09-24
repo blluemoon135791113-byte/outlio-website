@@ -1,6 +1,7 @@
 import 'server-only'
 
 const API_ORIGIN = 'https://api.fastspring.com'
+const REQUEST_TIMEOUT_MS = 15_000
 
 function credentials(): string {
   const username = process.env.FASTSPRING_API_USERNAME?.trim()
@@ -37,7 +38,9 @@ export async function fastSpringApi<T>(
   const response = await fetch(url, {
     headers: { authorization: `Basic ${credentials()}`, accept: 'application/json' },
     cache: 'no-store',
-    signal: init.signal,
+    signal: init.signal
+      ? AbortSignal.any([init.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
+      : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
 
   if (!response.ok) {
