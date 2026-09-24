@@ -281,6 +281,21 @@ export function isReplaySafeRoute(
   )
 }
 
+/*
+ * Public marketing pages, on either host. Recorded under the same masking as
+ * the product (every text node and input masked at init), so a replay shows
+ * layout, motion, scroll and clicks — enough to see a render bug such as the
+ * hero swapping images — and never page copy or anything typed.
+ *
+ * The same query-string/hash refusal applies: campaign links can carry an
+ * email address or token, and a replay records the URL it was taken on.
+ */
+const MARKETING_REPLAY_ROUTES = new Set(['/', '/pricing', '/product', '/how-it-works'])
+
+export function isMarketingReplayRoute(pathname: string, search = '', hash = ''): boolean {
+  return !search && !hash && MARKETING_REPLAY_ROUTES.has(pathname.replace(/\/$/, '') || '/')
+}
+
 /** Stable 10% replay sample: the same account is either always in or always out. */
 export function isReplaySampled(distinctId: string): boolean {
   let hash = 0

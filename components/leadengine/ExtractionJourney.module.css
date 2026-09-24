@@ -23,31 +23,14 @@
 }
 
 .featureLogo {
-  position: relative;
   display: block;
   color: #0d1725;
-  width: clamp(3.45rem, 4.2vw, 4.35rem);
+  width: clamp(3.4rem, 3.9vw, 4rem);
   margin: 0 0 clamp(1.25rem, 1.8vw, 1.65rem) -0.15rem;
   overflow: hidden;
-  mix-blend-mode: multiply;
+  filter: drop-shadow(0 0.35rem 0.5rem rgba(73, 47, 20, 0.11));
   aspect-ratio: 1;
   contain: paint;
-}
-
-/* Frame the approved artwork without its sample caption. */
-.featureLogoImage {
-  /* Neutralize the sample's paper tint; white blends into the module below. */
-  filter: grayscale(1) brightness(1.12) contrast(1.08);
-  position: absolute;
-  width: 145%;
-  max-width: none;
-  height: auto;
-  left: -24.65%;
-  top: -17.45%;
-}
-
-@media (max-width: 30rem) {
-  .featureLogo { width: 3.3rem; }
 }
 
 .featureLogo svg {
