@@ -30,6 +30,8 @@ const ROOT = join(__dirname, '..', '..')
 const PROVIDER_MODULES = [
   'lib/intelligence/llm/provider',
   'lib/hubble/providers/ollama-llm',
+  // Jev (TypeSafe), a hosted decision model. Same rule: only the door may hold it.
+  'lib/hubble/providers/jev',
 ] as const
 
 /**

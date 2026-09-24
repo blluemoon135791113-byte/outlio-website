@@ -34,6 +34,7 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CAPABILITIES, isCapabilityId, type AiCapabilityId } from '@/lib/capabilities/registry'
 import { createHubbleLlm } from '@/lib/hubble/providers/ollama-llm'
+import { createJevDecider, type JevDecider } from '@/lib/hubble/providers/jev'
 import type { LLMProvider } from '@/lib/intelligence/llm/provider'
 
 export { HUBBLE_TASKS, quoteCredits, quoteFlow, type HubbleTask } from '@/lib/hubble/pricing'
@@ -62,6 +63,12 @@ export type HubbleOutcome<T> =
 export type HubbleTools = {
   /** The model Hubble reasons with. Only reachable from inside a metered call. */
   readonly llm: LLMProvider
+  /**
+   * Jev, for bounded decisions (a label, a score, a yes/no). Hosted, and off
+   * unless configured — a disabled decider throws `JEV_DISABLED`, which the
+   * runner turns into "route to a person", and this boundary refunds.
+   */
+  readonly jev: JevDecider
 }
 
 /** The work itself. Receives the tools and nothing else. */
@@ -171,10 +178,15 @@ export async function hubbleExecute<T>(
   // --- 2. RUN. ---
   try {
     let llm: LLMProvider | null = null
+    let jev: JevDecider | null = null
     const tools: HubbleTools = {
       get llm() {
         llm ??= createHubbleLlm()
         return llm
+      },
+      get jev() {
+        jev ??= createJevDecider()
+        return jev
       },
     }
     const result = await runner(tools)

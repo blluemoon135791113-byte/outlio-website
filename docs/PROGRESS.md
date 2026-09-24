@@ -4,6 +4,120 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-09-24 — Jev (TypeSafe) decision service, phase 1: provider adapter + reply intent
+
+⚠️ **OFF BY DEFAULT and NOT verified against the live API** — no TypeSafe key
+was available. Every behaviour below is tested against the documented request
+and response shapes through a fake `fetch`, not against api.typesafe.ai.
+
+### What Jev is, verified from official sources only
+
+- **Jev is the model TypeSafe serves.** `@typesafe-ai/sdk` 0.6.0 (npm, MIT,
+  maintained by typesafe.ai staff) defaults to `jev-latest`; the docs name the
+  current model `jev-1.13.0`.
+- API: `POST https://api.typesafe.ai/v1/systemone`, Bearer auth, question types
+  `noul` (yes/no probability), `choice` (label + confidence + probabilities),
+  `score` (expected score on a rubric). `GET /v1/models`. Source: the npm
+  tarball's type declarations and `https://api.typesafe.ai/openapi.json`.
+- Limits (docs.typesafe.ai/models, "adjusting dynamically"): 1,200 requests/min,
+  250k tokens/s, 64k tokens/request (32k for state + longest question). Text only.
+- Price: $0.042 per million input tokens; output tokens free.
+- Data: "zero data retention for enterprise customers"; "not train models on
+  user data"; a DPA is published at typesafe.ai/legal/data-processing. **The
+  default retention for non-enterprise accounts is not published.**
+- ⚠️ The Hugging Face community post points at `thejevai.com/v1/systemone` with
+  `JEV_API_KEY`. That is a different host and is **not used**.
+
+### Audit — what already existed
+
+| Capability | Status |
+|---|---|
+| Offline Sales Navigator extraction (upload + extension) | Implemented |
+| ~12,000 leads per run | Not verified — no limit by that number found |
+| Enrichment / company research (`lib/intelligence/providers`, 25 providers) | Implemented |
+| Hubble assistant (`lib/hubble`) | Implemented |
+| Hubble **flow actions** (ICP score, research, classify, personalise, reply draft, classify reply, account summary) | **Priced and publishable, but no runner registered for any of them** — every run failed and was refunded |
+| ICP qualification (`lib/qualification`) | Implemented, deterministic by design — but profiles are **user-scoped**, not workspace-scoped |
+| CRM (contacts, companies, opportunities, tasks, activities) | Implemented |
+| Workflow engine (17 triggers, 29 actions, branches, `storeAs` variables) | Implemented |
+| Email campaigns, sequences, reply sync, unified inbox | Implemented |
+| Reply **intent** classification | Missing (only robot/bounce detection at sync) |
+| Written unsubscribe requests in a reply body | **Missing — compliance gap**, see blockers |
+| Integrations: HubSpot, Salesforce, Google, Clay, GoHighLevel, Microsoft, Dropbox | Listed as available in `lib/integrations/catalogue.ts`; not exercised here |
+| Credits (user-scoped, metered through `hubbleExecute`) | Implemented |
+| PostHog | Implemented; production ingestion restored 2026-09-24 (#49) |
+
+### What was built
+
+- `lib/hubble/providers/jev.ts` — the only file that talks to TypeSafe. Off
+  unless `JEV_ENABLED=true` **and** `TYPESAFE_API_KEY` are set. SDK logging off
+  (it does not redact bodies). 10s timeout per attempt, 2 retries on
+  408/429/5xx. Every failure becomes a fixed `JevError` code; no response body
+  or message ever leaves the module.
+- `lib/hubble/execute.ts` — `tools.jev` beside `tools.llm`. Jev is only
+  reachable inside the metered boundary; `model-call-boundary.test.ts` now
+  lists it as a provider, so importing it anywhere else fails the suite.
+- `lib/jev/decision.ts` — versioned question sets, runtime validation of every
+  answer against the question actually asked, untrusted-content framing.
+- `lib/jev/reply.ts` — reply intent, `reply-intent@1`, eight labels. Order:
+  **rule → model → review.** Explicit opt-outs, stored auto-replies and bounces
+  are decided by rule without a model call. The body is minimised first
+  (quoted history dropped, emails/phones masked, 4,000-char cap). Low
+  confidence, "unclear", any unsubscribe, the model's own "a person should
+  read this", or any failure → `needs_review`.
+- `lib/jev/runners.ts` — the first registered Hubble runner:
+  `HUBBLE_CLASSIFY_REPLY`. Reads the contact's latest inbound message (scoped
+  by `workspace_id` on both tables). The step's value, readable by a branch
+  as `vars.<storeAs>`, is the label or `needs_review`. The decision (label,
+  who decided, model confidence, question version, model, tokens) is stored on
+  the step output and the CRM activity. **No message text is persisted.**
+  When Jev fails or is off, the runner throws, so `hubbleExecute` refunds the
+  credit and the step shows as failed. A rule-decided result still succeeds.
+- `lib/flows/actions/hubble.ts` — runners now receive the metered tools, and a
+  step's output carries `value` and `detail` (it was discarded before).
+
+**No database migration.** Decisions are stored in the existing
+`flow_run_steps.output`, `flow_runs.variables` and `crm_activities.metadata`.
+
+### Decisions worth not re-litigating
+
+- **Jev decides, never acts.** A label lands in a variable; a BRANCH authored by
+  the customer chooses the action, through the engine's permission checks.
+- **Opt-outs are rules, not probabilities.** The opt-out list errs broad: a
+  false positive pauses a willing contact, a false negative mails someone who
+  asked to stop, and only the second is a compliance failure.
+- **Model confidence is stored as `model_confidence`**, never presented as a
+  probability that anyone will buy.
+- **The review threshold (0.8) is provisional** and must be replaced from an
+  evaluation against human-reviewed replies.
+
+### Blockers — owner decisions needed
+
+1. **BLOCKER: sending customer data to TypeSafe.** Hubble runs local-first
+   (Ollama) so customer data does not leave Outlio; Jev is hosted. Before
+   `JEV_ENABLED=true` in production: accept TypeSafe's DPA, confirm retention
+   for our account tier (ZDR is enterprise-only), and add TypeSafe to the
+   privacy policy's sub-processors.
+2. **BLOCKER: a written "unsubscribe" in a reply body is not honoured
+   anywhere.** Reply sync only recognises robots and bounces. This PR
+   classifies it and routes it to review; it does not suppress. Automatic
+   suppression on the rule match is a separate decision.
+3. **A rule-decided reply still costs its step's 1 credit**, because the price
+   is charged per step before the runner runs. Refunding rule-only decisions
+   changes billing, so it waits for approval.
+4. **Workspace-level ICP.** Qualification profiles are user-scoped. The brief's
+   lead-qualification pipeline needs them per workspace: a migration.
+5. **No evaluation set.** Thresholds need human-reviewed examples first.
+
+### Next phase (not started)
+
+Lead qualification: deterministic `scoreEntity` first, Jev only for the
+`unknown` criteria and the next permitted enrichment (a `choice` over the
+enrichment actions actually available), stored with evidence. It needs
+blocker 4 resolved first.
+
+---
+
 ## 2026-09-23 — PostHog could not receive a single browser event, and the hero swapped hands
 
 ### PostHog transport
