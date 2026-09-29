@@ -50,9 +50,9 @@
 
 .subtitle {
   margin: 0;
-  max-width: 44ch;
-  font-size: clamp(0.95rem, 1.2vw, 1.05rem);
-  line-height: 1.5;
+  max-width: 52ch;
+  font-size: clamp(1.125rem, 1.5vw, 1.25rem);
+  line-height: 1.55;
   color: rgba(20, 17, 12, 0.6);
   text-wrap: balance;
 }
@@ -275,8 +275,8 @@
 
 .cardDesc {
   margin: 0;
-  font-size: clamp(0.95rem, 1.05vw, 1.02rem);
-  line-height: 1.5;
+  font-size: clamp(1.0625rem, 1.2vw, 1.125rem);
+  line-height: 1.55;
   letter-spacing: -0.005em;
   color: rgba(20, 17, 12, 0.72);
   text-wrap: pretty;

@@ -251,7 +251,7 @@
   background: #ffffff;
   border: none;
   box-shadow: 0 1.8cqw 4cqw -1.4cqw rgba(20, 24, 40, 0.5), 0 0 0 1px rgba(31, 42, 85, 0.08);
-  color: #3a4260;
+  color: #155c5d;
   cursor: ew-resize;
   padding: 0;
 }
@@ -287,6 +287,6 @@
   display: none;
 }
 .handle:focus-visible {
-  outline: 2px solid #2f7df6;
+  outline: 2px solid #155c5d;
   outline-offset: 2px;
 }
