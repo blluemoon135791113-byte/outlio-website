@@ -1,0 +1,78 @@
+.wrap {
+  /* A centered window in the middle of the hero — like the qomplement ticker,
+     which clips to a fixed ~700px band rather than spanning edge to edge. The
+     logo set is wider than this window, so a logo always leaves one side before
+     its copy reaches the other: it reads as a loop, not a visible duplication. */
+  width: 100%;
+  max-width: min(34rem, 84vw);
+  margin-inline: auto;
+  overflow: hidden;
+  /* Dissolve the row into the sand at both ends of the window. */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 15%,
+    #000 85%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 15%,
+    #000 85%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Two identical copies of the set sit end to end. The spacing lives on each
+     item (margin-inline-end) rather than as a flex `gap`, so EVERY item —
+     including the last of each copy — carries a trailing gap. That makes the
+     total width an exact multiple of (slot + gap), so translating by -50%
+     lands copy 2 precisely where copy 1 was: a seamless, jump-free wrap.
+     Keyframes are declared IN this module so CSS-module scoping resolves them. */
+  animation: scroll 16s linear infinite;
+}
+
+.item {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  /* Normalise on HEIGHT, not a fixed-width box: every mark is rendered at the
+     same optical height regardless of aspect ratio, so a wide wordmark and a
+     square icon read as one consistent size. Width follows the mark. */
+  height: clamp(2.1rem, 2.7vw, 2.5rem);
+  /* Equal trailing gap on every item — see the seamless-wrap note above. */
+  margin-inline-end: clamp(3.5rem, 7vw, 6rem);
+}
+
+.logo {
+  /* Fill the slot height; width follows the intrinsic ratio. This is what makes
+     every logo render at the same height. */
+  height: 100%;
+  width: auto;
+  max-width: none;
+  max-height: 100%;
+  /* Ink is baked into the PNG / driven by currentColor at the heading tone. */
+  opacity: 1;
+}
+
+@keyframes scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track {
+    animation: none;
+  }
+}

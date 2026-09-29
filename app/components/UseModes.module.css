@@ -1,0 +1,357 @@
+/* Page-2 "Use modes" / Afflatus section — ditto of the reference template.
+   Font is Manrope (the template's), colours hardcoded like InteractiveGtmHero. */
+
+.section {
+  /* New default = the original style at 80% (0.8x every dimension).
+     The background is per-mode: .bgAgency (hero look) / .bgTech (light ivory). */
+  padding: 4.8rem 1.2rem;
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  color: #000;
+}
+
+/* Creative Agencies — the same ivory canvas texture as the adjoining hero. */
+.bgAgency {
+  background-color: #f8f2e5;
+  background-image:
+    linear-gradient(rgba(252, 248, 238, 0.32), rgba(252, 248, 238, 0.32)),
+    url("/hero/hero-sand-texture.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Tech / SaaS uses the same ivory canvas treatment; only its copy font changes. */
+.bgTech {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  background-color: #f8f2e5;
+  background-image:
+    linear-gradient(rgba(252, 248, 238, 0.32), rgba(252, 248, 238, 0.32)),
+    url("/hero/hero-sand-texture.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.bgTech .h2 {
+  color: #171511;
+  font-weight: 600;
+}
+
+.bgTech .description {
+  color: #6c6256;
+}
+
+.grid {
+  margin: 0 auto;
+  max-width: 70.4rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 1.6rem;
+}
+
+/* ---------- LEFT ---------- */
+.left {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+/* the Outlio For selector — recessed pill (Clay-style depth) */
+.selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: max-content;
+  max-width: 100%;
+  margin-bottom: 0.75rem;
+  padding: 4px 5px 4px 13px;
+  background: #F0E8D5; /* a shade deeper than the ground -> depth */
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.slabel {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+.triggerWrap {
+  position: relative;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #000;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 9px;
+  padding: 0.42rem 0.55rem 0.42rem 0.8rem;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.13), 0 1px 1px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.15s ease;
+}
+
+.trigger:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.16), 0 1px 1px rgba(0, 0, 0, 0.06);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}
+
+.chev {
+  width: 15px;
+  height: 15px;
+  color: rgba(0, 0, 0, 0.45);
+  transition: transform 0.18s ease;
+}
+
+.trigger[aria-expanded="true"] .chev {
+  transform: rotate(180deg);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 216px;
+  z-index: 20;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.24), 0 2px 6px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #000;
+  background: none;
+  border: 0;
+  border-radius: 9px;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.opt:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.opt[aria-selected="true"] {
+  font-weight: 600;
+}
+
+.tick {
+  width: 15px;
+  height: 15px;
+  opacity: 0;
+}
+
+.opt[aria-selected="true"] .tick {
+  opacity: 1;
+}
+
+/* .h2 (A Brushstroke) and .h3 (Afflatus) share one type treatment — same size */
+.h2 {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: #000;
+  text-wrap: balance;
+}
+
+.description {
+  width: 100%;
+  max-width: none;
+  margin: 1.75rem 0 0;
+  color: #282824;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.description p {
+  margin: 0;
+}
+
+.description p + p {
+  margin-top: 1.15rem;
+}
+
+.hint {
+  margin: 1rem 0 0;
+  font-size: 0.8125rem;
+  color: rgba(0, 0, 0, 0.5);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #000;
+}
+
+/* ---------- RIGHT: card ---------- */
+.card {
+  position: relative;
+  aspect-ratio: 1 / 1.02;
+  overflow: hidden;
+  border-radius: 1.2rem;
+}
+
+.cardMedia {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #FCF9F1 0%, #F2EBDB 52%, #E6D8BF 100%);
+}
+
+.cardVideo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.cardOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.7),
+    rgba(255, 255, 255, 0.15) 45%,
+    transparent 75%
+  );
+}
+
+.cardBody {
+  position: relative;
+  z-index: 10;
+  padding: 2rem;
+}
+
+.h3 {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: #000;
+}
+
+/* ---------- Tech / SaaS: Informatik ---------- */
+.cardTeal {
+  align-self: start;
+  isolation: isolate;
+  /* A blank patch of the artwork carries its dark teal grain behind the title. */
+  background: #36636b url("/tech/informatik-dark-teal.png") left top / auto 400% no-repeat;
+}
+
+/* The render starts below the title; the matching texture fills the card behind it. */
+.macFloat {
+  position: absolute;
+  inset: 3.25rem 0 0;
+  z-index: 1;
+}
+
+.macImg {
+  object-fit: contain;
+  object-position: center;
+}
+
+.h3Teal {
+  color: #f3eee3;
+  text-shadow: 0 1px 22px rgba(0, 0, 0, 0.22);
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.6rem;
+  }
+  .left {
+    padding-right: 0;
+    padding-top: 0;
+    /* Raise the selector + heading so the outside heading is level with the
+       card's title (Informatik / Afflatus). */
+    margin-top: -21px;
+  }
+  .h2 {
+    font-size: 2.4rem;
+  }
+  .description {
+    font-size: 1.25rem;
+  }
+  .cardBody {
+    padding: 2.4rem;
+  }
+  .h3 {
+    font-size: 2.4rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .bgTech .grid {
+    align-items: stretch;
+  }
+
+  .bgTech .left {
+    align-self: stretch;
+    margin-top: -0.75rem;
+    justify-content: flex-start;
+  }
+
+  .bgTech .selector {
+    margin-bottom: 0.5rem;
+  }
+
+  .bgTech .h2 {
+    width: 100%;
+    font-size: clamp(2.2rem, 3.7vw, 3.25rem);
+    line-height: 1.08;
+    text-wrap: pretty;
+  }
+
+  .bgTech .description {
+    width: 100%;
+    margin-top: 0.75rem;
+    font-size: clamp(1.125rem, 1.65vw, 1.375rem);
+    line-height: var(--tech-line-height, 2.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chev {
+    transition: none;
+  }
+}

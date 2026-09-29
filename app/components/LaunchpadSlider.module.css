@@ -1,0 +1,292 @@
+/* Launchpad Architecture — an interactive before/after comparison slider.
+   Two calendar states are stacked; a draggable divider clips between them.
+   "Scatter" (warm gray, sparse week) sits on top, clipped to the left of the
+   divider; "Signal Only" (textured blue, green, violet, red and amber events) is the base showing through on the
+   right. Each side's pill + subtitle re-centre within their visible half as the
+   divider moves. Everything is sized in cqw so it scales with the slot.
+   Original artwork — the calendar mark is generic (no third-party branding). */
+
+.stage {
+  --pos: 50;
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+  overflow: hidden;
+  border-radius: inherit;
+  background: #ffffff;
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  touch-action: none;
+  user-select: none;
+  cursor: ew-resize;
+}
+
+/* ---- a full panel (label band + calendar), one per state; no coloured fills:
+   the white calendar is the whole modal, the two states differ by their events
+   and by a fixed corner label. ---- */
+.panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
+.scatter {
+  /* clipped to the left of the divider */
+  clip-path: inset(0 calc((100 - var(--pos)) * 1%) 0 0);
+  z-index: 2;
+}
+.signal {
+  z-index: 1;
+}
+
+/* ---- fixed corner labels: pinned to the stage so the divider never clips them ---- */
+.pill {
+  position: absolute;
+  top: 1.5cqw;
+  z-index: 5;
+  font-size: 2cqw;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: #fff;
+  background: rgba(38, 41, 47, 0.82);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  border-radius: 1.8cqw;
+  padding: 0.85cqw 2.2cqw;
+  white-space: nowrap;
+  box-shadow: 0 1cqw 2.4cqw -1cqw rgba(20, 24, 40, 0.3);
+}
+.pillScatter {
+  left: 3cqw;
+}
+.pillSignal {
+  right: 3cqw;
+}
+
+/* ---- the calendar fills the whole modal (identical in both panels) ---- */
+.cal {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.calHead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.4cqw;
+  padding: 2.4cqw 3cqw 1.2cqw;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 1.8cqw;
+  min-width: 0;
+}
+.mark {
+  width: 3.6cqw;
+  height: 3.6cqw;
+  flex: none;
+  color: #95613c;
+}
+.range {
+  font-size: 2.5cqw;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #29231e;
+  white-space: nowrap;
+}
+.nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1.4cqw;
+}
+.navBtn {
+  display: grid;
+  place-items: center;
+  height: 5.6cqw;
+  min-width: 5.6cqw;
+  padding: 0 1.6cqw;
+  border: 1px solid rgba(31, 42, 85, 0.16);
+  border-radius: 1.8cqw;
+  font-size: 2.7cqw;
+  font-weight: 600;
+  color: #1f2a55;
+  background: #fff;
+}
+.navBtn svg {
+  width: 2.8cqw;
+  height: 2.8cqw;
+}
+.today {
+  color: #2f7df6;
+}
+.week {
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+}
+
+/* grid: time gutter + 7 day columns; header row + 8 time rows */
+.grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 11cqw repeat(7, 1fr);
+  grid-template-rows: 4.5cqw repeat(7, 1fr);
+  border-top: 1px solid rgba(31, 42, 85, 0.08);
+}
+.dayHead {
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.85cqw;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #4d4339;
+  border-bottom: 1px solid rgba(31, 42, 85, 0.09);
+}
+.timeLabel {
+  grid-column: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.6cqw 2cqw 0 1cqw;
+  font-size: 2.7cqw;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #776b5f;
+  transform: translateY(-1.1cqw);
+}
+.cell {
+  border-bottom: 1px solid rgba(63, 49, 38, 0.08);
+  border-left: 1px solid rgba(63, 49, 38, 0.08);
+}
+
+/* Booked events keep their category colors as solid matte fills with a shared grain. */
+.ev {
+  position: relative;
+  isolation: isolate;
+  align-self: stretch;
+  margin: 0.45cqw;
+  border-radius: 1.2cqw;
+  padding: 0.9cqw;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+}
+.evCompact {
+  padding-inline: 0.45cqw;
+}
+.signal .ev::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: url("/textures/pricing-grain.svg") center / 96px 96px repeat;
+  mix-blend-mode: overlay;
+  opacity: 0.22;
+  pointer-events: none;
+}
+.evTitle {
+  position: relative;
+  z-index: 1;
+  font-size: 2.15cqw;
+  font-weight: 600;
+  line-height: 1.16;
+  letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.evTitleCompact {
+  font-size: 2cqw;
+  letter-spacing: -0.015em;
+}
+.blue   { background-color: #a9c5d9; color: #27241f; }
+.green  { background-color: #aed3bd; color: #27241f; }
+.purple { background-color: #c8b8d8; color: #27241f; }
+.yellow { background-color: #e6cb97; color: #27241f; }
+.red    { background-color: #dcafa2; color: #27241f; }
+.mute {
+  background-color: #dad8d2;
+  color: #4a463f;
+}
+
+/* ---- divider + drag handle ---- */
+.divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--pos) * 1%);
+  width: 2px;
+  transform: translateX(-1px);
+  z-index: 3;
+  pointer-events: none;
+  background: transparent;
+  /* a soft depth seam rather than an explicit line */
+  box-shadow: 0 0 2.4cqw 0.3cqw rgba(20, 24, 40, 0.13);
+}
+.handle {
+  position: absolute;
+  top: 50%;
+  left: clamp(4cqw, calc(var(--pos) * 1%), calc(100% - 4cqw));
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4cqw;
+  width: 7.5cqw;
+  height: 7.5cqw;
+  border-radius: 999px;
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 1.8cqw 4cqw -1.4cqw rgba(20, 24, 40, 0.5), 0 0 0 1px rgba(31, 42, 85, 0.08);
+  color: #155c5d;
+  cursor: ew-resize;
+  padding: 0;
+}
+.handle svg {
+  width: 2.6cqw;
+  height: 2.6cqw;
+}
+/* Docked in a corner: a semicircle flush to the edge, showing only the arrow
+   that points back inward (half the footprint, no divider line needed). */
+.handle[data-edge="left"] {
+  left: 0;
+  transform: translate(0, -50%);
+  width: 4cqw;
+  border-radius: 0 999px 999px 0;
+  justify-content: flex-end;
+  padding-right: 0.7cqw;
+  gap: 0;
+}
+.handle[data-edge="right"] {
+  left: auto;
+  right: 0;
+  transform: translate(0, -50%);
+  width: 4cqw;
+  border-radius: 999px 0 0 999px;
+  justify-content: flex-start;
+  padding-left: 0.7cqw;
+  gap: 0;
+}
+.handle[data-edge="left"] .chevL {
+  display: none;
+}
+.handle[data-edge="right"] .chevR {
+  display: none;
+}
+.handle:focus-visible {
+  outline: 2px solid #155c5d;
+  outline-offset: 2px;
+}

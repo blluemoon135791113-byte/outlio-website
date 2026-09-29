@@ -2,14 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { appUrl } from "@/lib/site";
+import styles from "./FooterLanding.module.css";
 
 const FOOTER_NAV = [
   { label: "Offers", href: "/#offers" },
-  { label: "How it works", href: "/#how" },
   { label: "Results", href: "/#results" },
   { label: "Motion Graphic Ads", href: "/explainers" },
   { label: "Lead Engine Pricing", href: appUrl("/pricing") },
-  { label: "About", href: "/#about" },
   { label: "FAQ", href: "/#faq" },
   { label: "Book a call", href: "#book" },
 ];
@@ -52,6 +51,17 @@ const SOCIALS = [
   },
 ];
 
+const MAIN_FOOTER_GROUPS = [
+  { heading: "Outlio", links: FOOTER_NAV.slice(0, 4), external: false },
+  { heading: "More", links: FOOTER_NAV.slice(4), external: false },
+  { heading: "Legal", links: LEGAL_NAV, external: false },
+  {
+    heading: "Social",
+    links: SOCIALS.map(({ network, href }) => ({ label: network, href })),
+    external: true,
+  },
+];
+
 type FooterProps = {
   surface?: "main" | "leadengine";
 };
@@ -68,6 +78,57 @@ export default function Footer({ surface = "main" }: FooterProps) {
   const productLinks = surface === "leadengine" ? LEAD_ENGINE_NAV : FOOTER_NAV.slice(0, 6);
   const moreLinks = surface === "leadengine" ? [] : FOOTER_NAV.slice(6);
   const legalLinks = surface === "leadengine" ? LEAD_ENGINE_LEGAL_NAV : LEGAL_NAV;
+
+  if (surface === "main") {
+    return (
+      <footer className={styles.footer} aria-label="Outlio site footer">
+        <div className={styles.inner}>
+          <div className={styles.grid}>
+            <div className={styles.brand}>
+              <div className={styles.brandMark}>
+                <Image
+                  src="/outlio logo.png"
+                  alt=""
+                  width={58}
+                  height={58}
+                  className={styles.brandImage}
+                />
+                <span className={styles.wordmark}>outlio.</span>
+              </div>
+              <a className={styles.email} href="mailto:husnain@outlio.io">
+                husnain@outlio.io
+              </a>
+              <p className={styles.tagline}>Growth, done by hand.</p>
+            </div>
+
+            {MAIN_FOOTER_GROUPS.map((group) => (
+              <nav key={group.heading} className={styles.linkGroup} aria-label={`${group.heading} links`}>
+                <h3>{group.heading}</h3>
+                <ul>
+                  {group.links.map((link) => (
+                    <li key={link.label}>
+                      {group.external ? (
+                        <a href={link.href} target="_blank" rel="noopener noreferrer">
+                          {link.label}
+                        </a>
+                      ) : (
+                        <Link href={link.href}>{link.label}</Link>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            ))}
+          </div>
+
+          <div className={styles.bottom}>
+            <p>&copy; Outlio. All rights reserved.</p>
+            <p>Human-written outreach since day one. No autopilot.</p>
+          </div>
+        </div>
+      </footer>
+    );
+  }
 
   return (
     <footer className="bg-panel">
@@ -149,20 +210,6 @@ export default function Footer({ surface = "main" }: FooterProps) {
                 : "Human-written outreach since day one. No autopilot."}
             </p>
           </div>
-          {surface === "main" ? <div className="flex gap-2.5">
-            {SOCIALS.map((s) => (
-              <a
-                key={s.network}
-                href={s.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`Outlio on ${s.network}`}
-                className="overflow-hidden rounded-full ring-1 ring-ink/15 transition-transform hover:scale-110 hover:ring-accent"
-              >
-                <Image src={s.icon} alt={`${s.network} icon`} width={40} height={40} className="size-10" />
-              </a>
-            ))}
-          </div> : null}
         </div>
       </div>
     </footer>

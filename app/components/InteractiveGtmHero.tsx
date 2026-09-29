@@ -1,5 +1,6 @@
 import Image from "next/image";
 import FloatingDotsCta from "@/components/ui/floating-dots-cta";
+import CaseStudyMarquee from "./CaseStudyMarquee";
 import { CALENDLY_URL } from "../lib/constants";
 import styles from "./InteractiveGtmHero.module.css";
 
@@ -49,6 +50,10 @@ export default function InteractiveGtmHero() {
         >
           <FloatingDotsCta label="Book a Discovery" type="submit" />
         </form>
+
+        <div className={styles.marqueeSlot}>
+          <CaseStudyMarquee />
+        </div>
       </div>
     </section>
   );

@@ -49,7 +49,6 @@ const SURFACES: Record<NavSurface, SurfaceConfig> = {
   /* The hub. Keeps cross-links to both products. */
   agency: {
     links: [
-      { label: "How it works", href: "/#how" },
       { label: "Results", href: "/#results" },
       { label: "Offers", href: "/#offers" },
       { label: "Motion Graphic Ads", href: "/explainers" },

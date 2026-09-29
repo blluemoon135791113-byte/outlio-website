@@ -1,0 +1,135 @@
+.section {
+  scroll-margin-top: 6rem;
+  display: flex;
+  min-height: 100svh;
+  align-items: center;
+  padding: 6rem 1.5rem;
+  background: #f4ecde url("/hero/hero-sand-texture.png") center top / 100% auto repeat-y;
+  color: #25221e;
+  font-family: var(--font-manrope), Arial, sans-serif;
+}
+
+.inner { width: min(94%, 72rem); margin-inline: auto; }
+.heading {
+  margin: 0 0 2rem;
+  font-size: clamp(2.375rem, 4vw, 3.375rem);
+  font-weight: 500;
+  line-height: 1.07;
+  letter-spacing: -0.055em;
+}
+
+.accordion { display: flex; width: 100%; height: clamp(13rem, 28vw, 23rem); gap: 1.25rem; }
+.person {
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  background: #a9a39a;
+  transition: flex-grow 240ms cubic-bezier(.22,.75,.22,1);
+}
+.hasActive .person { flex-grow: .94; }
+.hasActive .active { flex-grow: 1.12; }
+.photo { display: block; object-fit: cover; }
+.person[data-person="husnain"] .photo { object-position: 62% 55%; }
+.person[data-person="saboor"] .photo { object-position: 50% 40%; }
+.person[data-person="saad"] .photo { object-position: 50% 37%; }
+
+.person::after {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 40%;
+  background: linear-gradient(to top, rgba(8, 10, 12, .62), transparent);
+  content: "";
+  opacity: 1;
+  pointer-events: none;
+}
+
+.hitArea { position: absolute; z-index: 1; inset: 0; width: 100%; border: 0; background: transparent; cursor: pointer; }
+.hitArea:focus-visible { outline: 3px solid #fff; outline-offset: -5px; border-radius: 1.25rem; }
+.caption {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  color: #fff;
+  pointer-events: none;
+}
+.identity { min-width: 0; }
+.identity h3, .identity p {
+  color: inherit;
+  white-space: nowrap;
+  -webkit-text-stroke: .25px rgba(0, 0, 0, .8);
+  text-shadow: 0 1px 2px rgba(0,0,0,.98), 0 2px 7px rgba(0,0,0,.9), 0 0 10px rgba(255,255,255,.45);
+}
+.identity h3 { margin: 0; font-size: 1.5rem; font-weight: 700; line-height: 1.12; letter-spacing: -.045em; }
+.identity p { margin: .375rem 0 0; font-size: .8125rem; font-weight: 700; line-height: 1.3; }
+.socials {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: .125rem;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(.4rem);
+  transition: opacity 200ms ease-out, transform 200ms ease-out, visibility 200ms;
+}
+.active .socials { opacity: 1; visibility: visible; pointer-events: auto; transform: none; }
+.socials a {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  color: inherit;
+  text-decoration: none;
+  transition: opacity 150ms ease-out;
+}
+.socials a:hover { opacity: .72; }
+.socials a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 2px; }
+.socials svg {
+  width: 1.3125rem;
+  height: 1.3125rem;
+  fill: currentColor;
+  stroke: rgba(0, 0, 0, .75);
+  stroke-width: .65px;
+  paint-order: stroke fill;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.98)) drop-shadow(0 0 5px rgba(255,255,255,.45));
+}
+
+@media (max-width: 900px) {
+  .caption { gap: .75rem; padding: .75rem; }
+  .identity h3 { font-size: 1.25rem; }
+  .identity p { font-size: .75rem; }
+  .socials { gap: .625rem; }
+  .socials a { width: 1.375rem; height: 1.375rem; }
+  .socials svg { width: 1.1875rem; height: 1.1875rem; }
+}
+
+@media (max-width: 700px) {
+  .section { padding: 4rem 1.25rem 6rem; }
+  .inner { width: min(96%, 24rem); }
+  .heading { margin-bottom: 1.25rem; font-size: 2.375rem; }
+  .accordion { flex-direction: column; height: auto; gap: .875rem; }
+  .person { flex: none; width: 100%; aspect-ratio: 1; }
+  .person, .hitArea:focus-visible { border-radius: .875rem; }
+  .caption { padding: .875rem; }
+  .identity h3 { font-size: 1.25rem; }
+  .identity p { font-size: .75rem; }
+  .socials { gap: .875rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .person, .socials, .socials a { transition: none; }
+}
