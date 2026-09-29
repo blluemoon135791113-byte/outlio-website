@@ -124,10 +124,10 @@ export default function Explainers() {
             <Reveal>
               <div className="mt-10">
                 <Link
-                  href="/#how"
+                  href="/#offers"
                   className="inline-block rounded-full border-2 border-accent px-8 py-4 text-base font-semibold text-accent transition-all hover:bg-accent hover:text-white"
                 >
-                  See how we do it
+                  Explore outbound plans
                 </Link>
               </div>
             </Reveal>

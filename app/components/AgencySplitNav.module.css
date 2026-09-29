@@ -50,7 +50,7 @@
   padding: 9px 12px;
   border: 1px solid rgba(41, 39, 36, 0.08);
   border-radius: 999px;
-  background: rgba(250, 247, 240, 0.96);
+  background-color: var(--nav-ivory);
   box-shadow: 0 6px 24px rgba(40, 35, 30, 0.07);
   pointer-events: auto;
   transition:
@@ -114,7 +114,7 @@
   padding: 7px 26px;
   border: 1px solid rgba(41, 39, 36, 0.08);
   border-radius: 999px;
-  background: rgba(250, 247, 240, 0.96);
+  background-color: var(--nav-ivory);
   box-shadow: 0 8px 28px rgba(40, 35, 30, 0.09);
 }
 
@@ -230,7 +230,7 @@
   justify-content: center;
   border: 1px solid rgba(41, 39, 36, 0.08);
   border-radius: 10px;
-  background: var(--nav-ivory);
+  background-color: var(--nav-ivory);
   color: var(--nav-charcoal);
   box-shadow: 0 4px 20px rgba(40, 35, 30, 0.06);
   cursor: pointer;
@@ -286,7 +286,7 @@
   padding: 8px;
   border: 1px solid rgba(41, 39, 36, 0.1);
   border-radius: 16px;
-  background: rgba(250, 247, 240, 0.98);
+  background: var(--nav-ivory);
   box-shadow: 0 16px 40px rgba(40, 35, 30, 0.14);
   backdrop-filter: blur(16px);
 }
@@ -397,7 +397,7 @@
     left: 50%;
     width: min(320px, calc(100vw - 24px));
     border-color: rgba(41, 39, 36, 0.1);
-    background: rgba(250, 247, 240, 0.98);
+    background: var(--nav-ivory);
     box-shadow: 0 18px 42px rgba(40, 35, 30, 0.14);
     transform: translateX(-50%);
   }

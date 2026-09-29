@@ -65,35 +65,17 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid #5f8cff;
-  border-radius: 0.55rem;
-  background: #2c66e8;
+  border: 0;
+  border-radius: 1rem;
+  background: linear-gradient(105deg, #356adf 0%, #407eea 52%, #59a0ec 100%);
   padding: 0;
   color: #fff;
-  box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.38) inset,
-    0 0 0 1px rgb(35 70 183 / 0.35) inset,
-    0 14px 28px rgb(33 91 213 / 0.22);
+  box-shadow: 0 10px 24px rgb(38 87 180 / 0.2);
   font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 700;
   line-height: 1;
   transition: transform 180ms ease, box-shadow 180ms ease;
-}
-
-.fdc-button::before {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  border-radius: inherit;
-  background-image:
-    linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 34%),
-    url("/hero/hero-sand-texture.webp"),
-    linear-gradient(180deg, #2f58e3 0%, #2d70ea 52%, #20b9e5 100%);
-  background-position: center;
-  background-size: auto, 13rem auto, auto;
-  background-blend-mode: screen, soft-light, normal;
-  content: "";
 }
 
 .fdc-inner {
@@ -146,10 +128,7 @@
 .fdc-button:hover,
 .fdc-button:focus-visible {
   transform: translateY(-2px);
-  box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.44) inset,
-    0 0 0 1px rgb(35 70 183 / 0.3) inset,
-    0 18px 32px rgb(33 91 213 / 0.28);
+  box-shadow: 0 14px 30px rgb(38 87 180 / 0.27);
 }
 
 .fdc-button:hover .fdc-icon path,
@@ -174,7 +153,7 @@
   }
 
   .fdc-button {
-    border-radius: 0.55rem;
+    border-radius: 1rem;
     font-size: 0.82rem;
   }
 }
@@ -289,11 +268,12 @@
     rgba(255, 255, 255, 0.35) 100%
   );
 
-  /* Use Apple's native SF Pro optical cuts where the OS provides them.
-     The bundled font files may not be redistributed on the web, so Geist and
-     DM Sans remain the metrically stable fallbacks for other platforms. */
-  --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
-  --font-body: "SF Pro Text", -apple-system, BlinkMacSystemFont, var(--font-dm-sans), "Helvetica Neue", Arial, sans-serif;
+  /* Inter is the site-wide face for headings and body (matches the design
+     reference). SF Pro / Geist / DM Sans remain metrically stable fallbacks
+     for the brief window before the web font loads or if it fails. */
+  /* Manrope is the landing-page default; the product resets these to Inter under .app-shell. */
+  --font-display: var(--font-manrope), -apple-system, BlinkMacSystemFont, var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-body: var(--font-manrope), -apple-system, BlinkMacSystemFont, var(--font-dm-sans), "Helvetica Neue", Arial, sans-serif;
   --font-code: var(--font-geist-mono), ui-monospace, monospace;
   --font-handwriting: var(--font-caveat), "Comic Sans MS", cursive;
 
@@ -522,6 +502,9 @@ h6 {
 
 .app-shell {
   --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Keep the authenticated product on Inter — Manrope is the landing-page default only. */
+  --font-display: var(--font-inter), -apple-system, BlinkMacSystemFont, var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-body: var(--font-inter), -apple-system, BlinkMacSystemFont, var(--font-dm-sans), "Helvetica Neue", Arial, sans-serif;
   font-family: var(--font-body);
 
   /* ==========================================================================
@@ -1286,20 +1269,6 @@ data {
   box-shadow: 0 16px 48px 0 color-mix(in srgb, var(--charcoal) 14%, transparent);
   transform: translateY(-3px);
   transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* Outbound offer cards stay transparent and quiet against the white section. */
-.offer-card {
-  transition:
-    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 240ms ease;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .offer-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(124, 92, 231, 0.42);
-  }
 }
 
 /* Dark glassmorphism for team cards */

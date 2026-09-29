@@ -1,0 +1,289 @@
+/* "Building on your Progress" — a continuation of the Use Modes / Tech section.
+   Same ground (ivory + hero canvas texture), Manrope, teal accent. Module
+   descriptions and visuals are placeholder slots for content added later. */
+
+.section {
+  padding-block: clamp(2.25rem, 5vw, 3.75rem);
+  padding-inline: 1.2rem;
+  background-color: #f8f2e5;
+  background-image:
+    linear-gradient(rgba(252, 248, 238, 0.32), rgba(252, 248, 238, 0.32)),
+    url("/hero/hero-sand-texture.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  color: #14110c;
+}
+
+.inner {
+  max-width: 78rem;
+  margin: 0 auto;
+}
+
+/* intro */
+.intro {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: clamp(1.75rem, 4vw, 2.75rem);
+}
+
+.heading {
+  margin: 0;
+  width: 100%;
+  max-width: 68rem;
+  padding: 0.1em 0.25rem;
+  font-size: clamp(2.25rem, 4vw, 3.75rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  background: linear-gradient(rgb(23 21 19 / 0.9), rgb(23 21 19 / 0.9)),
+    url("/textures/pricing-grain.svg") center / 180px 180px repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-wrap: balance;
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 44ch;
+  font-size: clamp(0.95rem, 1.2vw, 1.05rem);
+  line-height: 1.5;
+  color: rgba(20, 17, 12, 0.6);
+  text-wrap: balance;
+}
+
+/* Equal three-across strip: each column is a visual with its description below,
+   top-aligned so any-length descriptions don't force matching card heights. */
+.cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: clamp(1.25rem, 2.4vw, 1.75rem);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  text-align: left;
+}
+
+/* the visual slot — one shared landscape frame for all three modals */
+.viz {
+  aspect-ratio: 1004 / 860;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(0.7rem, 1.4vw, 1rem);
+  background: #f4f0e6;
+  border-radius: 0.5rem;
+}
+
+/* Module 1's slot holds only the extracted composer visual — full-bleed, no
+   padding, the image fills the slot edge-to-edge at its own proportions. */
+.vizPhoto {
+  padding: 0;
+}
+
+.vizRocket {
+  border-radius: 1rem;
+}
+.photo {
+  object-fit: cover;
+  object-position: center;
+}
+
+.vizHint {
+  position: absolute;
+  bottom: 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(20, 17, 12, 0.32);
+}
+
+.scaffold {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  height: 12px;
+  border-radius: 5px;
+  background: rgba(20, 17, 12, 0.07);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.tiles > span {
+  height: 34px;
+  border-radius: 7px;
+  background: rgba(20, 17, 12, 0.07);
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 60px;
+  width: 100%;
+}
+
+.bars > i {
+  flex: 1;
+  border-radius: 5px 5px 0 0;
+  background: rgba(44, 102, 99, 0.22);
+}
+
+.chip {
+  width: 40%;
+  height: 12px;
+  border-radius: 5px;
+  background: rgba(44, 102, 99, 0.28);
+}
+
+/* ---- Module 1: original email-personalization illustration (Outlio style) ---- */
+.emailViz {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.evHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.evHead b {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: rgba(20, 17, 12, 0.5);
+}
+.evBadge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #2c6663;
+  background: rgba(44, 102, 99, 0.12);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.evCard {
+  background: #fff;
+  border: 1px solid rgba(20, 17, 12, 0.08);
+  border-radius: 11px;
+  padding: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 8px 18px -14px rgba(20, 17, 12, 0.35);
+}
+.evLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 5px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: rgba(20, 17, 12, 0.72);
+}
+.evLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(20, 17, 12, 0.36);
+}
+.evRule {
+  height: 1px;
+  background: rgba(20, 17, 12, 0.07);
+  margin: 1px 0;
+}
+.evTok {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #235553;
+  background: rgba(44, 102, 99, 0.1);
+  border: 1px solid rgba(44, 102, 99, 0.22);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+.evTok::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(44, 102, 99, 0.4);
+}
+.evList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.evLead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  color: rgba(20, 17, 12, 0.6);
+}
+.evLead span {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  flex: none;
+  background: rgba(44, 102, 99, 0.16);
+}
+.evLead.on {
+  color: rgba(20, 17, 12, 0.85);
+  font-weight: 600;
+}
+.evLead.on span {
+  background: #2c6663;
+}
+.evSend {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: #2c6663;
+  border-radius: 8px;
+  padding: 6px 13px;
+  margin-top: 1px;
+}
+
+/* description below the visual — readable copy, any length, no headline. */
+
+.cardDesc {
+  margin: 0;
+  font-size: clamp(0.95rem, 1.05vw, 1.02rem);
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  color: rgba(20, 17, 12, 0.72);
+  text-wrap: pretty;
+}
+
+@media (min-width: 760px) {
+  .cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

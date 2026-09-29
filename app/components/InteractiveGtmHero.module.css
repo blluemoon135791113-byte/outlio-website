@@ -3,7 +3,14 @@
   isolation: isolate;
   min-height: max(40rem, 100svh);
   overflow: hidden;
-  background: #f2e7d9;
+  /* Grain lives on the section itself so the ivory canvas always fills the hero
+     edge to edge — the watercolor <img> layer can no longer leave a flat,
+     grainless spot where it fails to cover. */
+  background-color: #f8f2e5;
+  background-image: url("/hero/hero-sand-texture.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .content {
@@ -81,6 +88,24 @@
   transform: translateX(-50%);
 }
 
+/* Case-study marquee: pinned to the hero's bottom band, well below the CTA.
+   z-index sits under the copy/CTA (which are z-index 2 via .content) so it can
+   never occlude them, and the hero's `overflow: hidden` keeps it from bleeding
+   into the section below. */
+.marqueeSlot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(1.5rem, 3.5vh, 2.5rem);
+  z-index: 1;
+}
+
+@media (max-width: 640px) {
+  .marqueeSlot {
+    bottom: 1.5rem;
+  }
+}
+
 .artwork {
   position: absolute;
   inset: 0;
@@ -92,7 +117,18 @@
 .backgroundFrame {
   position: absolute;
   inset: 0;
+  z-index: 0;
+  isolation: isolate;
   overflow: hidden;
+}
+
+.backgroundFrame::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgb(252 248 238 / 0.32);
+  content: "";
+  pointer-events: none;
 }
 
 .backgroundImage {
@@ -101,7 +137,10 @@
 
 .imageFrame {
   position: absolute;
-  top: clamp(9rem, 18vh, 10rem);
+  z-index: 1;
+  /* Nudged up ~1.5rem from clamp(9rem, 18vh, 10rem): lifts the hand off the CTA
+     while the hexagon still clears the header/nav band. */
+  top: clamp(7rem, 15vh, 8rem);
   right: -0.5rem;
   width: min(58vw, 49rem);
   aspect-ratio: 1187 / 625;
@@ -149,13 +188,15 @@
   object-fit: cover;
   object-position: 50% 50%;
   filter:
+    saturate(1.16)
     drop-shadow(0 14px 17px rgb(72 62 52 / 0.11))
     drop-shadow(0 4px 6px rgb(78 103 108 / 0.075));
 }
 
 @media (min-width: 641px) and (max-width: 1100px) {
   .imageFrame {
-    top: clamp(8.75rem, 20vh, 9.5rem);
+    /* Same ~1.5rem upward nudge as the base rule. */
+    top: clamp(6.75rem, 17vh, 7.5rem);
     right: -14vw;
     width: 74vw;
   }

@@ -1,0 +1,95 @@
+.section {
+  scroll-margin-top: 6rem;
+  padding: clamp(1.5rem, 4vw, 4rem) 1.5rem clamp(2rem, 3vw, 2.75rem);
+  background: #f4ecde url("/hero/hero-sand-texture.png") center top / 100% auto repeat-y;
+}
+
+.card {
+  position: relative;
+  isolation: isolate;
+  width: min(100%, 77.5rem);
+  min-height: 26rem;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: 1.75rem;
+  background: #080605;
+}
+
+.artwork {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+.copy {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: clamp(2.5rem, 6.5vw, 6.5rem);
+  width: min(60%, 42rem);
+  transform: translateY(-50%);
+}
+
+.copy h2 {
+  margin: 0;
+  color: #fff8ea;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(3rem, 5vw, 4.75rem);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+}
+
+.cta {
+  position: absolute;
+  z-index: 1;
+  top: 53%;
+  right: clamp(3rem, 9vw, 7.5rem);
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 1.125rem;
+  padding: 0 1.125rem;
+  border-radius: 0.4375rem;
+  background: #171514;
+  color: #fff9ee;
+  font-family: Arial, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transform: translateY(-50%);
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.cta:hover { background: #33251b; transform: translateY(calc(-50% - 2px)); }
+.cta:focus-visible { outline: 3px solid #fff9ee; outline-offset: 4px; }
+.arrow { font-size: 1.0625rem; font-weight: 400; line-height: 1; transition: transform 160ms ease; }
+.cta:hover .arrow { transform: translate(2px, -2px); }
+
+@media (max-width: 900px) {
+  .card { min-height: 23rem; }
+  .copy { left: 2.5rem; width: 62%; }
+  .copy h2 { font-size: clamp(2.625rem, 5.5vw, 4rem); }
+  .cta { right: 2.5rem; }
+}
+
+@media (max-width: 650px) {
+  .section { padding: 1.5rem 0.75rem 1.5rem; }
+  .card { min-height: 0; aspect-ratio: 1.77 / 1; border-radius: 1.25rem; }
+  .copy { top: 31%; left: 1.25rem; width: 62%; }
+  .copy h2 { font-size: clamp(1.875rem, 8vw, 2.5rem); }
+  .cta { top: auto; right: 1rem; bottom: 1rem; min-height: 2.5rem; padding-inline: 0.875rem; font-size: 0.6875rem; transform: none; }
+  .cta:hover { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta, .arrow { transition: none; }
+}

@@ -3,18 +3,20 @@ import Link from "next/link";
 import Nav from "./components/Nav";
 import Footer from "./components/Footer";
 import Reveal from "./components/Reveal";
-import TestimonialFlipCard from "./components/TestimonialFlipCard";
-import InteractiveWorldMap from "./components/InteractiveWorldMap";
-import AnimatedArrow from "./components/AnimatedArrow";
 import OrbitalCaseStudies from "./components/OrbitalCaseStudies";
 import Starfield from "./components/Starfield";
 import MeteorShower from "./components/MeteorShower";
 import StarFieldCanvas from "./components/StarFieldCanvas";
 import FAQSchema from "./components/FAQSchema";
+import FAQAccordion from "./components/FAQAccordion";
+import FinalCta from "./components/FinalCta";
+import TeamAccordion from "./components/TeamAccordion";
 import InteractiveGtmHero from "./components/InteractiveGtmHero";
-import { PlatformOverview } from "@/components/leadengine/PlatformOverview";
-import { OutreachAutomation } from "@/components/leadengine/OutreachAutomation";
+import UseModes from "./components/UseModes";
+import SalesStrategies from "./components/SalesStrategies";
 import { CALENDLY_URL } from "./lib/constants";
+import pricingStyles from "./components/PricingSection.module.css";
+import faqStyles from "./components/FAQSection.module.css";
 
 const OUTBOUND_OFFERS = [
   {
@@ -97,34 +99,6 @@ const OUTBOUND_OFFERS = [
   },
 ];
 
-const STEPS = [
-  {
-    n: "01",
-    title: "The intro call",
-    body: "Fifteen to thirty minutes. We don't pitch, we listen. The only goal is understanding your business well enough to build something real.",
-  },
-  {
-    n: "02",
-    title: "Research",
-    body: "We study your brand, your market, and your competitors. Then we ask ourselves an unfashionable question: can we actually help this company? If the answer is no, we say so.",
-  },
-  {
-    n: "03",
-    title: "The proposal",
-    body: "We walk you through exactly what we'd do and why. You should understand every part of it before a single message goes out.",
-  },
-  {
-    n: "04",
-    title: "Launch",
-    body: "Research is already done, so execution starts immediately. Messaging and targeting get A/B tested; winners get scaled.",
-  },
-  {
-    n: "05",
-    title: "See everything",
-    body: "A live, shared CRM. Every message, reply, and KPI, visible daily, not summarized in a monthly PDF. Plus weekly and monthly check-ins.",
-  },
-];
-
 const FAQS = [
   {
     q: "We've been burned by an agency before.",
@@ -143,74 +117,12 @@ const FAQS = [
     a: "Show up to scheduled check-ins. Review what we deliver at the end of each week. That's it, the whole point is that you stay on your product.",
   },
   {
-    q: "What's in the reporting?",
-    a: "Everything. ICP research, winning outreach angles, response and analytics data, full conversation transcripts, all tracked in the shared CRM, updated daily.",
-  },
-  {
     q: "How do you find our ideal customers?",
     a: "Behavior-based targeting, not just job titles. Industry, company profile, company size, down to the right founder or decision-maker.",
   },
   {
-    q: "Do you use AI to personalize outreach?",
-    a: "No. AI personalization reads like AI personalization. Real people research every prospect and write every message.",
-  },
-  {
     q: "What industries do you work with?",
     a: "B2B services, SaaS and tech startups, agencies, and motion/animation-adjacent businesses. If you're a local blue-collar business, we're not your people, and we'll tell you that on the call.",
-  },
-];
-
-const TEAM = [
-  {
-    name: "Husnain",
-    role: "Founder",
-    photo: "/team/husnain.jpg",
-    // portrait shot, keep the face (upper third) in the square crop
-    photoPosition: "50% 22%",
-    variant: "charcoal" as const,
-    socials: [
-      {
-        network: "Instagram",
-        icon: "/social/instagram.svg",
-        href: "https://www.instagram.com/husnain.outlio/?hl=en",
-      },
-      {
-        network: "LinkedIn",
-        icon: "/social/linkedin.svg",
-        href: "https://www.linkedin.com/in/husnain-rafiq-343179290/",
-      },
-      { network: "X", icon: "/social/x.svg", href: "https://x.com/husnain_rfq" },
-    ],
-  },
-  {
-    name: "Saboor",
-    role: "Co-Founder",
-    photo: "/team/saboor.png",
-    photoPosition: "50% 50%",
-    variant: "beam" as const,
-    socials: [
-      { network: "X", icon: "/social/x.svg", href: "https://x.com/abdulsaboor2004" },
-      {
-        network: "LinkedIn",
-        icon: "/social/linkedin.svg",
-        href: "https://www.linkedin.com/in/abdulsaboor2004/",
-      },
-    ],
-  },
-  {
-    name: "Saad",
-    role: "Operations Manager",
-    photo: "/team/saad.png",
-    photoPosition: "50% 50%",
-    variant: "frost" as const,
-    socials: [
-      { network: "X", icon: "/social/x.svg", href: "https://x.com/SaadRaf22" },
-      {
-        network: "LinkedIn",
-        icon: "/social/linkedin.svg",
-        href: "https://www.linkedin.com/in/saad-rafiq-a57a62335/",
-      },
-    ],
   },
 ];
 
@@ -223,22 +135,12 @@ export default function Home() {
         {/* ========== 1. HERO ========== */}
         <InteractiveGtmHero />
 
-        <div className="leadengine-surface leadengine-clay-scale">
-          <div className="leadengine-story-flow">
-            {/* ========== 2. PLATFORM OVERVIEW ========== */}
-            <div className="leadengine-story-panel" data-clay-module="overview">
-              <PlatformOverview />
-            </div>
+        {/* ========== 2. USE MODES — Afflatus ========== */}
+        <UseModes />
 
-            {/* ========== 3. OUTREACH AUTOMATION ========== */}
-            <div
-              className="leadengine-story-panel leadengine-story-panel-inner-only"
-              data-clay-module="outbound"
-            >
-              <OutreachAutomation />
-            </div>
-          </div>
-        </div>
+        {/* ========== 3. BUILDING ON YOUR PROGRESS — strategy modules ========== */}
+        <SalesStrategies />
+
 
         {/* ========== 7. RESULTS — full dark galaxy background ========== */}
         <section id="results" className="scroll-mt-24 relative overflow-hidden"
@@ -316,175 +218,42 @@ export default function Home() {
 
         </section>
 
-        {/* ========== 2. PROBLEM ========== */}
-        <section className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
-          <Reveal>
-            <h2 className="max-w-3xl text-3xl font-bold uppercase leading-tight tracking-tight sm:text-4xl">
-              You know how to build. <span className="text-accent">Nobody taught you how to sell.</span>
-            </h2>
-          </Reveal>
-          <div className="mt-9 grid items-center gap-8 lg:grid-cols-[1fr_1.05fr]">
-            <div className="space-y-4 text-base leading-relaxed sm:text-lg">
-              {[
-                "You shipped the product. Launched on Product Hunt. Got the upvotes.",
-                "Then, quiet.",
-                "So you start cold-DMing from your own account. It gets flagged.",
-                "You look at ads. At your stage, a few hundred a month on Meta buys you approximately nothing.",
-                "You think about hiring. Now you're paying a salary for a pipeline that still doesn't exist.",
-              ].map((line, i) => (
-                <Reveal key={line} delay={i * 90}>
-                  <p className={line === "Then, quiet." ? "font-semibold text-accent" : ""}>{line}</p>
-                </Reveal>
-              ))}
-            </div>
-            <Reveal delay={200}>
-              <InteractiveWorldMap />
-            </Reveal>
-          </div>
-        </section>
-
-
-        {/* ========== 4. HOW IT WORKS ========== */}
-        <section id="how" className="scroll-mt-24 border-t border-ink/10 bg-panel/50">
-          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
-            <Reveal>
-              <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-4xl">
-                No mystery. <span className="text-accent">No 90-slide deck.</span>
-              </h2>
-            </Reveal>
-            <ol className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {STEPS.map((s, i) => (
-                <Reveal key={s.n} delay={i * 60} className="h-full">
-                  <li className="h-full rounded-2xl border border-ink/10 bg-white/55 p-4">
-                    <span
-                      className="grid size-9 shrink-0 place-items-center rounded-full border border-white/30 text-xs font-bold backdrop-blur-xl transition-all duration-500 hover:border-accent/40 hover:shadow-lg hover:shadow-accent/10"
-                      style={{
-                        background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.4) 100%)',
-                        backdropFilter: 'blur(20px) saturate(180%)',
-                        WebkitBackdropFilter: 'blur(20px) saturate(180%)'
-                      }}
-                    >
-                      {s.n}
-                    </span>
-                    <div className="mt-4">
-                      <h3 className="text-lg font-semibold tracking-tight">{s.title}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-muted">{s.body}</p>
-                    </div>
-                  </li>
-                </Reveal>
-              ))}
-            </ol>
-          </div>
-        </section>
-
         {/* ========== OUTBOUND OFFERS ========== */}
-        <section id="offers" className="scroll-mt-24 border-y border-ink/10 bg-white font-sans text-ink [&_h2]:font-sans [&_h3]:font-sans [&_h4]:font-sans">
-          <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
-            <Reveal>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                Outbound offers
-              </p>
-              <h2 className="mt-3 max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl">
-                Choose the support your team needs.
-              </h2>
-              <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">
-                Three straightforward ways to run outbound with Outlio.
-              </p>
+        <section id="offers" className={pricingStyles.section}>
+          <div className={pricingStyles.container}>
+            <Reveal className={pricingStyles.heading}>
+              <h2>Pick the plan that fits your startup</h2>
+              <p>Three clear ways to build an outbound engine with Outlio.</p>
             </Reveal>
 
-            <div className="mt-9 grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className={pricingStyles.grid}>
               {OUTBOUND_OFFERS.map((offer, index) => (
                 <Reveal
                   key={offer.name}
                   delay={index * 70}
-                  className={`h-full ${index === 2 ? "md:col-span-2 lg:col-span-1" : ""}`}
+                  className={`${pricingStyles.slot} ${pricingStyles[`slot${index + 1}`]}`}
                 >
-                  <article
-                    className={`offer-card flex h-full flex-col rounded-2xl border bg-transparent p-5 sm:p-6 ${
-                      offer.featured
-                        ? "border-accent/35"
-                        : "border-ink/12"
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
-                        {offer.tier}
-                      </p>
-                      {offer.featured && (
-                        <span className="rounded-full border border-accent/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-accent">
-                          Full-service
-                        </span>
-                      )}
+                  <article className={`${pricingStyles.card} ${offer.featured ? pricingStyles.featured : pricingStyles.compact}`}>
+                    <div className={pricingStyles.planInfo}>
+                      <span className={pricingStyles.badge}>
+                        {offer.tier}{offer.featured ? " · Full service" : ""}
+                      </span>
+                      <h3>{offer.name}</h3>
+                      <p className={pricingStyles.description}>{offer.description}</p>
                     </div>
-
-                    <h3 className="mt-4 text-xl font-bold tracking-tight sm:text-2xl">
-                      {offer.name}
-                    </h3>
-                    <p className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-                      {offer.price}
-                    </p>
-                    <p className="mt-3 text-sm leading-relaxed text-muted">
-                      {offer.description}
-                    </p>
-
-                    <div className="mt-5 border-t border-ink/10 pt-5">
-                      <h4 className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
-                        At a glance
-                      </h4>
-                      <ul className="mt-3 space-y-2.5">
-                        {offer.highlights.map((item) => (
-                          <li key={item} className="flex gap-2.5 text-sm leading-snug text-ink/80">
-                            <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-accent" />
-                            <span>{item}</span>
-                          </li>
-                        ))}
+                    <div className={pricingStyles.features}>
+                      <h4>At a glance</h4>
+                      <ul>
+                        {offer.highlights.map((item) => <li key={item}>{item}</li>)}
                       </ul>
                     </div>
-
-                    <details className="group mt-5 border-t border-ink/10 pt-4">
-                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-ink">
-                        Full plan details
-                        <span aria-hidden className="text-lg font-normal text-muted transition-transform group-open:rotate-45">+</span>
-                      </summary>
-                      <div className="pt-4">
-                        {offer.clientProvides.length > 0 && (
-                          <div>
-                            <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
-                              What you provide
-                            </h4>
-                            <ul className="mt-3 space-y-2">
-                              {offer.clientProvides.map((item) => (
-                                <li key={item} className="text-[13px] leading-relaxed text-muted">
-                                  {item}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        <div className={offer.clientProvides.length > 0 ? "mt-5" : ""}>
-                          <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
-                            What&apos;s included
-                          </h4>
-                          <ul className="mt-3 space-y-2">
-                            {offer.included.map((item) => (
-                              <li key={item} className="flex gap-2 text-[13px] leading-relaxed text-muted">
-                                <span aria-hidden className="text-accent">—</span>
-                                <span>{item}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    </details>
-
-                    <div className="mt-auto pt-6">
-                      <Link
-                        href={CALENDLY_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent"
-                      >
-                        Discuss this plan <span aria-hidden className="ml-2">&rarr;</span>
+                    <div className={pricingStyles.purchase}>
+                      <p className={pricingStyles.price}>
+                        {offer.price === "Custom" ? "Custom" : <>{offer.price.replace("/mo", "")}<small>/month</small></>}
+                      </p>
+                      <Link href={CALENDLY_URL} target="_blank" rel="noopener noreferrer" className={pricingStyles.cta}>
+                        <span className={pricingStyles.ctaLabel}>Discuss this plan</span>
+                        <span className={pricingStyles.ctaIcon} aria-hidden>↗</span>
                       </Link>
                     </div>
                   </article>
@@ -493,210 +262,29 @@ export default function Home() {
             </div>
           </div>
         </section>
-        {/* ========== 8. TESTIMONIALS ========== */}
-        <section className="border-t border-ink/10 bg-panel/50">
-          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
-            <Reveal>
-              <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-4xl">
-                Don't take <span className="text-accent">our word</span> for it.
-              </h2>
-            </Reveal>
-            <div className="mt-8 grid gap-4 md:grid-cols-2">
-              {[
-                {
-                  quote: "Liam Ottley closed, alhamdulillah.",
-                  who: "Abdullah, Founder, Addx Studio",
-                  proofImage: "/testimonials/addx-proof.png"
-                },
-                {
-                  quote: "Husnain is one of the best guys in this space.",
-                  who: "Aamir, Founder, Click Labs",
-                  proofImage: "/testimonials/clicklabs-proof.png"
-                },
-              ].map((t, i) => (
-                <Reveal key={t.who} delay={i * 100} className="h-full">
-                  <TestimonialFlipCard
-                    quote={t.quote}
-                    who={t.who}
-                    proofImage={t.proofImage}
-                  />
-                </Reveal>
-              ))}
+        {/* ========== FAQ ========== */}
+        <section id="faq" className={faqStyles.section}>
+          <div className={faqStyles.container}>
+            <div className={faqStyles.left}>
+              <h2>Frequently asked<br />questions</h2>
+              <Image
+                src="/faq/network-pixel.png"
+                alt=""
+                width={160}
+                height={152}
+                unoptimized
+                className={faqStyles.network}
+              />
             </div>
-          </div>
-        </section>
-
-        {/* ========== 9. FAQ ========== */}
-        <section id="faq" className="mx-auto max-w-7xl scroll-mt-24 px-6 py-14 sm:px-10 sm:py-16">
-          <div className="grid gap-8 lg:grid-cols-[1fr_1.4fr]">
-            <Reveal>
-              <h2 className="text-3xl font-bold uppercase leading-tight tracking-tight sm:text-4xl">
-                The questions you're <span className="text-accent">already thinking.</span>
-              </h2>
-              <AnimatedArrow />
-            </Reveal>
-            <div className="divide-y divide-ink/10 border-y border-ink/10">
-              {FAQS.map((f, i) => (
-                <details key={f.q} open={i === 0} className="group">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-5 py-4 text-base font-semibold tracking-tight sm:text-lg">
-                    {f.q}
-                    <span aria-hidden className="faq-mark grid size-9 shrink-0 place-items-center rounded-full border border-ink text-xl leading-none">
-                      +
-                    </span>
-                  </summary>
-                  <p className="max-w-2xl pb-5 text-sm leading-relaxed text-muted sm:text-base">{f.a}</p>
-                </details>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ========== 10. FOUNDER STORY ========== */}
-        <section id="about" className="scroll-mt-24 border-t border-ink/10 bg-panel/50">
-          <div className="mx-auto max-w-7xl px-6 py-14 sm:px-10 sm:py-16">
-            <div className="grid items-center gap-8 lg:grid-cols-[1.1fr_1fr] lg:gap-10">
-              <div>
-                <Reveal>
-                  <h2 className="text-3xl font-bold uppercase tracking-tight sm:text-4xl">
-                    Built <span className="text-accent">the hard way.</span>
-                  </h2>
-                </Reveal>
-                <div className="mt-6 max-w-xl space-y-3 text-base leading-relaxed">
-                  {[
-                    "Our founder started at fifteen with nothing, no money, and at times no stable place to live.",
-                    "E-commerce didn't take off. Trading the markets took a toll, but it taught him how markets, and startups, actually behave.",
-                    "Then came the unglamorous part: a year and a half of studying lead generation, AI, and motion graphics. A bet on the skills that would matter for the next decade.",
-                    "The first real client was Addx Studio. Six months later, it was doing $100K+ a month.",
-                    "His co-founder, Saboor, spent four years doing manual factory work before the two partnered, and worked nights to get this off the ground.",
-                    "Outlio is what came out the other side. Since then: Click Labs, Motionisr, Knowledge City, and more.",
-                  ].map((p, i) => (
-                    <Reveal key={p} delay={i * 60}>
-                      <p>{p}</p>
-                    </Reveal>
-                  ))}
-                </div>
-                <div className="mt-6 space-y-2 text-xl font-semibold tracking-tight sm:text-2xl">
-                  {["Get a life.", "Stay humble, nobody knows everything.", "Say no, including to clients who aren't a fit."].map(
-                    (v, i) => (
-                      <Reveal key={v} delay={i * 80}>
-                        <p>
-                          <span className="text-accent" aria-hidden>
-                            /{" "}
-                          </span>
-                          {v}
-                        </p>
-                      </Reveal>
-                    )
-                  )}
-                </div>
-              </div>
-              <Reveal delay={150}>
-                <div className="relative mx-auto aspect-[4/5] w-full max-w-[390px] overflow-hidden rounded-2xl">
-                  <Image
-                    src="/office picture.png"
-                    alt="Outlio team office"
-                    fill
-                    className="object-cover"
-                    sizes="(min-width: 1024px) 50vw, 100vw"
-                  />
-                </div>
-              </Reveal>
-            </div>
-
+            <FAQAccordion faqs={FAQS} />
           </div>
         </section>
 
         {/* ========== TEAM ========== */}
-        <section id="team" className="relative scroll-mt-24 overflow-hidden border-t border-ink/10 bg-panel/50 py-14 sm:py-16">
-          <div className="relative mx-auto max-w-7xl px-6 sm:px-10">
-            <Reveal>
-              <h2 className="text-3xl font-bold uppercase tracking-tight text-ink sm:text-4xl">
-                The people <span className="text-accent">behind the engine.</span>
-              </h2>
-            </Reveal>
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
-              {TEAM.map((m, i) => {
-                return (
-                  <Reveal key={m.name} delay={i * 120} className="h-full">
-                    <article
-                      className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/30 p-4 backdrop-blur-xl transition-all duration-500 hover:border-accent/40 hover:shadow-xl hover:shadow-accent/10 sm:p-5"
-                      style={{
-                        background: 'linear-gradient(160deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.45) 100%)',
-                        backdropFilter: 'blur(24px) saturate(180%)',
-                        WebkitBackdropFilter: 'blur(24px) saturate(180%)'
-                      }}
-                    >
-                      <div className="relative flex h-full flex-col">
-                        <div className="relative aspect-square overflow-hidden rounded-xl ring-1 ring-white/30 transition-all duration-300 group-hover:scale-[1.02] group-hover:ring-accent/50">
-                          <Image
-                            src={m.photo}
-                            alt={`${m.name}, ${m.role} at Outlio`}
-                            fill
-                            sizes="(min-width: 768px) 33vw, 90vw"
-                            className="object-cover"
-                            style={{ objectPosition: m.photoPosition }}
-                          />
-                        </div>
-                        <div className="mt-4 flex gap-2 px-1">
-                          {m.socials.map((s) => (
-                            <a
-                              key={s.network}
-                              href={s.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label={`${m.name} on ${s.network}`}
-                              className="overflow-hidden rounded-lg ring-1 ring-white/30 backdrop-blur-sm transition-all hover:scale-110 hover:ring-accent"
-                              style={{
-                                background: 'rgba(255, 255, 255, 0.5)'
-                              }}
-                            >
-                              <Image src={s.icon} alt="" width={28} height={28} className="size-[28px]" />
-                            </a>
-                          ))}
-                        </div>
-                        <h3 className="mt-3 px-1 text-xl font-semibold tracking-tight text-ink">{m.name}</h3>
-                        <p className="mb-2 mt-1 px-1 text-sm text-muted">{m.role}</p>
-                      </div>
-                    </article>
-                  </Reveal>
-                );
-              })}
-            </div>
-          </div>
-        </section>
+        <TeamAccordion />
 
-        {/* ========== 11. FINAL CTA — same deep gradient band as "How we start" ========== */}
-        <section id="book" className="grad-band relative scroll-mt-24 overflow-hidden text-cream">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(55% 70% at 50% 0%, rgba(124, 121, 255, 0.2), transparent 70%)",
-            }}
-          />
-          <div className="relative mx-auto max-w-7xl px-6 py-16 text-center sm:px-10 sm:py-20">
-            <Reveal>
-              <h2 className="text-4xl font-bold uppercase tracking-tight sm:text-5xl">
-                You've read enough.
-              </h2>
-              <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-cream/75 sm:text-lg">
-                One call. Fifteen minutes. No pitch, if we can't help you, we'll say so on the call.
-              </p>
-              <Link
-                href={CALENDLY_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-6 inline-block rounded-full bg-cream px-8 py-3.5 text-base font-semibold text-ink transition-all hover:scale-105 hover:bg-white"
-              >
-                Book a call
-              </Link>
-              <p className="mt-4 text-sm text-cream/55">
-                Clear scope, visible execution, and a shared CRM from day one.
-              </p>
-            </Reveal>
-          </div>
-        </section>
+        {/* ========== FINAL CTA ========== */}
+        <FinalCta />
       </main>
       <Footer />
     </>
