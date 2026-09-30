@@ -3,10 +3,7 @@ import Link from "next/link";
 import Nav from "./components/Nav";
 import Footer from "./components/Footer";
 import Reveal from "./components/Reveal";
-import OrbitalCaseStudies from "./components/OrbitalCaseStudies";
-import Starfield from "./components/Starfield";
-import MeteorShower from "./components/MeteorShower";
-import StarFieldCanvas from "./components/StarFieldCanvas";
+import TechCaseStudies from "./components/TechCaseStudies";
 import FAQSchema from "./components/FAQSchema";
 import FAQAccordion from "./components/FAQAccordion";
 import FinalCta from "./components/FinalCta";
@@ -142,81 +139,8 @@ export default function Home() {
         <SalesStrategies />
 
 
-        {/* ========== 7. RESULTS — full dark galaxy background ========== */}
-        <section id="results" className="scroll-mt-24 relative overflow-hidden"
-          style={{
-            background: "radial-gradient(ellipse at 50% 40%, #0d1117 0%, #010409 50%, #000000 100%)",
-          }}
-        >
-          {/* Meteor shower layer */}
-          <MeteorShower />
-
-          {/* Dense concentrated star field across entire section */}
-          <StarFieldCanvas />
-
-          {/* Starfield with hero stars — bottom-left, feathered edges */}
-          <div className="absolute bottom-[15%] left-[3%] hidden pointer-events-none md:block" aria-hidden="true"
-            style={{
-              maskImage: "radial-gradient(ellipse at center, black 30%, transparent 75%)",
-              WebkitMaskImage: "radial-gradient(ellipse at center, black 30%, transparent 75%)",
-            }}
-          >
-            <Starfield />
-          </div>
-
-          {/* Nebula clouds — dim, realistic */}
-          <div className="absolute top-[8%] right-[3%] w-[400px] h-[250px] rounded-full pointer-events-none" aria-hidden="true" style={{
-            background: "radial-gradient(ellipse at 40% 50%, rgba(60,40,100,0.04) 0%, rgba(40,25,80,0.02) 40%, transparent 70%)",
-            transform: "rotate(-12deg)",
-            filter: "blur(30px)",
-          }} />
-          <div className="absolute top-[50%] left-[0%] w-[320px] h-[180px] rounded-full pointer-events-none" aria-hidden="true" style={{
-            background: "radial-gradient(ellipse at 60% 40%, rgba(80,40,90,0.035) 0%, rgba(50,25,70,0.015) 50%, transparent 70%)",
-            transform: "rotate(20deg)",
-            filter: "blur(25px)",
-          }} />
-          <div className="absolute top-[25%] right-[10%] w-[220px] h-[140px] rounded-full pointer-events-none" aria-hidden="true" style={{
-            background: "radial-gradient(ellipse, rgba(30,50,120,0.03) 0%, rgba(20,35,90,0.015) 50%, transparent 70%)",
-            transform: "rotate(8deg)",
-            filter: "blur(20px)",
-          }} />
-          <div className="absolute bottom-[20%] right-[5%] w-[280px] h-[160px] rounded-full pointer-events-none" aria-hidden="true" style={{
-            background: "radial-gradient(ellipse at 30% 60%, rgba(50,30,80,0.03) 0%, rgba(35,20,60,0.015) 45%, transparent 70%)",
-            transform: "rotate(-25deg)",
-            filter: "blur(28px)",
-          }} />
-          <div className="absolute top-[70%] left-[15%] w-[200px] h-[120px] rounded-full pointer-events-none" aria-hidden="true" style={{
-            background: "radial-gradient(ellipse, rgba(70,50,110,0.025) 0%, transparent 60%)",
-            transform: "rotate(35deg)",
-            filter: "blur(22px)",
-          }} />
-
-          {/* Cosmic dust — faint horizontal wisps */}
-          <div className="absolute top-[18%] left-0 w-full h-[2px] pointer-events-none" aria-hidden="true" style={{
-            background: "linear-gradient(to right, transparent 8%, rgba(100,80,140,0.08) 25%, rgba(60,50,100,0.04) 50%, rgba(100,80,140,0.06) 75%, transparent 92%)",
-            filter: "blur(3px)",
-          }} />
-          <div className="absolute top-[60%] left-0 w-full h-[2px] pointer-events-none" aria-hidden="true" style={{
-            background: "linear-gradient(to right, transparent 12%, rgba(80,60,120,0.06) 30%, rgba(50,40,90,0.03) 55%, rgba(80,60,120,0.05) 78%, transparent 90%)",
-            filter: "blur(4px)",
-          }} />
-          <div className="absolute top-[85%] left-0 w-full h-[1px] pointer-events-none" aria-hidden="true" style={{
-            background: "linear-gradient(to right, transparent 5%, rgba(90,70,130,0.05) 20%, rgba(60,45,100,0.03) 60%, transparent 95%)",
-            filter: "blur(2px)",
-          }} />
-
-          <div className="relative z-10 mx-auto max-w-7xl px-6 pb-2 pt-10 sm:px-10 sm:pt-12">
-            <Reveal>
-              <h2 className="max-w-3xl text-3xl font-black uppercase leading-tight tracking-tight text-white sm:text-4xl">
-                You asked for the numbers, and so the numbers have spoken
-              </h2>
-            </Reveal>
-          </div>
-
-          {/* Orbital Case Studies */}
-          <OrbitalCaseStudies />
-
-        </section>
+        {/* ========== TECH CASE STUDIES ========== */}
+        <TechCaseStudies />
 
         {/* ========== OUTBOUND OFFERS ========== */}
         <section id="offers" className={pricingStyles.section}>
