@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./UseModes.module.css";
 
 const MODES = ["Tech / SaaS", "Creative Agencies", "Enterprise"] as const;
@@ -23,8 +23,6 @@ export default function UseModes() {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>(DEFAULT_MODE);
   const selectorRef = useRef<HTMLDivElement>(null);
-  const techDescriptionRef = useRef<HTMLDivElement>(null);
-  const techCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -46,56 +44,6 @@ export default function UseModes() {
 
   const activeMode: Mode = BUILT[mode] ? mode : DEFAULT_MODE;
   const comingSoon = !BUILT[mode];
-
-  useLayoutEffect(() => {
-    if (activeMode !== "Tech / SaaS") return;
-
-    const description = techDescriptionRef.current;
-    const card = techCardRef.current;
-    const paragraph = description?.querySelector("p");
-    if (!description || !card || !paragraph) return;
-
-    let frame = 0;
-    let disposed = false;
-    const fitLines = () => {
-      description.style.removeProperty("--tech-line-height");
-      if (window.innerWidth < 768) return;
-
-      const range = document.createRange();
-      range.selectNodeContents(paragraph);
-      const lineTops = new Set(
-        Array.from(range.getClientRects(), (rect) => Math.round(rect.top)).filter(Number.isFinite),
-      );
-      const lines = lineTops.size;
-      if (!lines) return;
-
-      const fontSize = Number.parseFloat(window.getComputedStyle(paragraph).fontSize);
-      const cardRect = card.getBoundingClientRect();
-      const naturalCardHeight = cardRect.width * 1.02;
-      const available = cardRect.top + naturalCardHeight - description.getBoundingClientRect().top - 8;
-      const lineHeight = Math.min(fontSize * 2.5, Math.max(fontSize * 1.5, available / lines));
-      description.style.setProperty("--tech-line-height", `${lineHeight}px`);
-    };
-    const scheduleFit = () => {
-      if (disposed) return;
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(fitLines);
-    };
-
-    fitLines();
-    const observer = new ResizeObserver(scheduleFit);
-    observer.observe(card);
-    window.addEventListener("resize", scheduleFit);
-    document.fonts.ready.then(scheduleFit);
-
-    return () => {
-      disposed = true;
-      observer.disconnect();
-      window.removeEventListener("resize", scheduleFit);
-      window.cancelAnimationFrame(frame);
-      description.style.removeProperty("--tech-line-height");
-    };
-  }, [activeMode]);
 
   return (
     <section
@@ -166,7 +114,7 @@ export default function UseModes() {
           {activeMode === "Tech / SaaS" ? (
             <>
               <h2 className={styles.h2}>The Sales Infrastructure for your Launch</h2>
-              <div className={styles.description} ref={techDescriptionRef}>
+              <div className={styles.description}>
                 <p>
                   Outlio turns a defined ICP into a working sales pipeline. Target-account research
                   identifies buying teams; personalized email, LinkedIn, and call sequences open
@@ -177,11 +125,20 @@ export default function UseModes() {
               </div>
             </>
           ) : (
-            <h2 className={styles.h2}>
-              Your Tools.
-              <br />
-              Our Canvas.
-            </h2>
+            <>
+              <h2 className={styles.h2}>
+                Your Tools.
+                <br />
+                Our Canvas.
+              </h2>
+              <div className={styles.description}>
+                <p>
+                  Your team should spend its time making the work, not searching for the next project.
+                  Companies with a need for your kind of creative work are researched and contacted with care.
+                  Scope, budget, and timing are checked before a conversation reaches you, so you can focus on briefs that fit.
+                </p>
+              </div>
+            </>
           )}
 
           {comingSoon && (
@@ -193,7 +150,7 @@ export default function UseModes() {
 
         {/* RIGHT: card switches with the selected mode */}
         {activeMode === "Tech / SaaS" ? (
-          <div className={`${styles.card} ${styles.cardTeal}`} ref={techCardRef}>
+          <div className={`${styles.card} ${styles.cardTeal}`}>
             <div className={styles.macFloat}>
               <Image
                 src="/tech/informatik-dark-teal.png"
