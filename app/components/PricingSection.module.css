@@ -1,6 +1,5 @@
 .section {
   scroll-margin-top: 6rem;
-  border-top: 1px solid rgba(53, 51, 45, 0.12);
   background: #f4ecde url("/hero/hero-sand-texture.png") center / cover;
   color: #1d2c2e;
   font-family: var(--font-manrope), sans-serif;

@@ -38,7 +38,9 @@
 }
 
 .bgTech .description {
-  color: #6c6256;
+  color: #4f463d;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
 }
 
 .grid {
@@ -192,7 +194,7 @@
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   font-size: 1.125rem;
   font-weight: 400;
-  line-height: 1.6;
+  line-height: 1.85;
 }
 
 .description p {
@@ -345,8 +347,6 @@
   .bgTech .description {
     width: 100%;
     margin-top: 0.75rem;
-    font-size: clamp(1.125rem, 1.65vw, 1.375rem);
-    line-height: var(--tech-line-height, 2.2);
   }
 }
 
