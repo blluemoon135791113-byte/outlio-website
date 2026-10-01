@@ -1,11 +1,39 @@
 .section {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   scroll-margin-top: 6rem;
-  background: #f4ecde url("/hero/hero-sand-texture.png") center / cover;
+  background: #eff5f5;
   color: #1d2c2e;
   font-family: var(--font-manrope), sans-serif;
 }
 
+/* Sandy + grainy texture over the light cyan-grey field */
+.section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: url("/hero/hero-sand-texture.png") center / cover;
+  mix-blend-mode: multiply;
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+.section::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: url("/textures/pricing-grain.svg") 0 0 / 150px 150px repeat;
+  mix-blend-mode: multiply;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .container {
+  position: relative;
+  z-index: 1;
   width: min(100%, 80rem);
   margin-inline: auto;
   padding: 4rem 2rem 4.5rem;
@@ -141,8 +169,9 @@
 .description {
   max-width: 32ch;
   margin: 0.375rem 0 0;
-  color: #2c4749;
+  color: #0e2a2c;
   font-size: 0.75rem;
+  font-weight: 500;
   line-height: 1.45;
 }
 
@@ -167,9 +196,9 @@
 
 .price small {
   margin-left: 0.125rem;
-  color: #315054;
+  color: #163a3e;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -244,9 +273,9 @@
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
-  color: #243e41;
+  color: #0e2a2c;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.35;
 }
 
