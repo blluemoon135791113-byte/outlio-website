@@ -6,7 +6,7 @@
   /* Top edge carries the case study's green and warps it down into the grey;
      the texture layers below multiply over this, so colour AND grain stay
      continuous across the join. */
-  background: linear-gradient(to bottom, #bdd5ae 0, rgba(189, 213, 174, 0) 15rem), #eef3f3;
+  background: linear-gradient(to bottom, #bdd5ae 0, rgba(189, 213, 174, 0) 11rem), #eef3f3;
   color: #1d2c2e;
   font-family: var(--font-manrope), sans-serif;
 }
@@ -21,8 +21,8 @@
   mix-blend-mode: multiply;
   opacity: 0.34;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 13rem);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 13rem);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 11rem);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 11rem);
 }
 
 .section::after {
@@ -34,8 +34,8 @@
   mix-blend-mode: multiply;
   opacity: 0.5;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 13rem);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 13rem);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 11rem);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 11rem);
 }
 
 .container {
@@ -43,7 +43,7 @@
   z-index: 1;
   width: min(100%, 80rem);
   margin-inline: auto;
-  padding: 4rem 2rem 4.5rem;
+  padding: clamp(11rem, 16vw, 14rem) 2rem 4.5rem;
 }
 
 .heading {
