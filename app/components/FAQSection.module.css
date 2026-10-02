@@ -1,8 +1,8 @@
 .section {
   scroll-margin-top: 6rem;
-  /* Top edge warps the pricing grey down into the cream, no hard seam */
+  /* Pricing now shares this ivory ground, so the two meet with no colour change */
+  margin-top: -0.25rem;
   background:
-    linear-gradient(to bottom, #eef3f3 0, rgba(238, 243, 243, 0) 11rem) top / 100% auto no-repeat,
     url("/hero/hero-sand-texture.png") center top / 100% auto repeat-y,
     #f4ecde;
   color: #363938;
@@ -16,7 +16,7 @@
   column-gap: clamp(3rem, 6vw, 6.25rem);
   width: min(100%, 77.5rem);
   margin-inline: auto;
-  padding: clamp(9rem, 13vw, 12rem) 2.125rem 4.5rem;
+  padding: 4rem 2.125rem 4.5rem;
 }
 
 .left { min-width: 0; }
