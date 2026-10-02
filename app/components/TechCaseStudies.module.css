@@ -6,8 +6,7 @@
    continuous gradient under its texture), so the case study simply ends in
    green here and the two fields meet with no seam. */
 .intro { max-width:82rem; margin:0 auto clamp(2.4rem,4vw,4rem); }
-.intro p { margin:0 0 .7rem; color:#395b45; font-size:.72rem; font-weight:700; letter-spacing:.15em; text-transform:uppercase; }
-.intro h2 { max-width:20ch; margin:0; font-size:clamp(2.1rem,4.4vw,4.4rem); line-height:1.03; font-weight:350; letter-spacing:-.065em; text-wrap:balance; }
+.intro h2 { max-width:20ch; margin:0; font-size:clamp(2.5rem,5.1vw,5.2rem); line-height:1.02; font-weight:350; letter-spacing:-.065em; text-wrap:balance; }
 .compositions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:clamp(1rem,3vw,3.25rem); max-width:82rem; margin:0 auto; }
 
 /* One pair = one glass surface. Lobe fractions match the SVG path in the

@@ -70,7 +70,7 @@ function Zone({ brand, name, place }: { brand: Brand; name: string; place: "tr" 
 
 export default function TechCaseStudies() {
   return <section id="results" className={styles.section} aria-labelledby="results-heading">
-    <div className={styles.intro}><p>Outlio / Connected systems</p><h2 id="results-heading">Four moments, two connected surfaces.</h2></div>
+    <div className={styles.intro}><h2 id="results-heading">Four moments, two connected surfaces.</h2></div>
     <div className={styles.compositions}>
       <div className={styles.pair}><Surface />
         <div className={`${styles.copy} ${styles.tl}`}><h3>Are you an enterprise struggling to secure <span>projected annual ARR?</span></h3></div>
@@ -79,10 +79,10 @@ export default function TechCaseStudies() {
         <div className={`${styles.copy} ${styles.br}`}><h3>Closed your Series A, but need sales to support <span>your valuation?</span></h3></div>
       </div>
       <div className={styles.pair}><Surface />
-        <div className={`${styles.copy} ${styles.tl}`}><h3>Not enough inbound traction to balance <span>outbound revenue?</span></h3></div>
-        <Zone brand="oee" name="EE intellisuite" place="tr" />
-        <Zone brand="hirebexa" name="Hirebexa.ai" place="bl" />
-        <div className={`${styles.copy} ${styles.br}`}><h3>Launching at pre-seed and looking for signups <span>within weeks?</span></h3></div>
+        <div className={`${styles.copy} ${styles.tl}`}><h3>Launching at pre-seed and looking for signups <span>within weeks?</span></h3></div>
+        <Zone brand="hirebexa" name="Hirebexa.ai" place="tr" />
+        <Zone brand="oee" name="EE intellisuite" place="bl" />
+        <div className={`${styles.copy} ${styles.br}`}><h3>Not enough inbound traction to balance <span>outbound revenue?</span></h3></div>
       </div>
     </div>
   </section>;
