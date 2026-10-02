@@ -1,7 +1,7 @@
 @font-face { font-family: CaseStudyManrope; src: url('/fonts/manrope-latin.woff2') format('woff2'); font-style: normal; font-weight: 200 800; font-display: swap; }
-.section { --bg:#bdd5ae; --ink:#17261a; position:relative; isolation:isolate; overflow:hidden; scroll-margin-top:5rem; padding:clamp(3rem,6vw,6rem) clamp(1rem,3vw,3rem) clamp(9rem,12vw,13rem); background:var(--bg); color:var(--ink); font-family:CaseStudyManrope,Arial,sans-serif; }
+.section { --bg:#bdd5ae; --ink:#17261a; position:relative; isolation:isolate; overflow:hidden; scroll-margin-top:5rem; padding:clamp(8rem,12vw,11rem) clamp(1rem,3vw,3rem) clamp(9rem,12vw,13rem); background:linear-gradient(to bottom,#f8f2e5 0,rgba(248,242,229,0) 10rem),var(--bg); color:var(--ink); font-family:CaseStudyManrope,Arial,sans-serif; }
 .section *,.section *::before,.section *::after { box-sizing:border-box; }
-.section::before { content:""; position:absolute; inset:0; z-index:-1; background:url('/textures/pricing-grain.svg') repeat; background-size:175px 175px; mix-blend-mode:multiply; opacity:.42; pointer-events:none; -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 13rem),transparent); mask-image:linear-gradient(to bottom,#000 calc(100% - 13rem),transparent); }
+.section::before { content:""; position:absolute; inset:0; z-index:-1; background:url('/textures/pricing-grain.svg') repeat; background-size:175px 175px; mix-blend-mode:multiply; opacity:.42; pointer-events:none; -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 10rem,#000 calc(100% - 13rem),transparent); mask-image:linear-gradient(to bottom,transparent 0,#000 10rem,#000 calc(100% - 13rem),transparent); }
 /* The green→grey transition lives at the top of the pricing section (one
    continuous gradient under its texture), so the case study simply ends in
    green here and the two fields meet with no seam. */
