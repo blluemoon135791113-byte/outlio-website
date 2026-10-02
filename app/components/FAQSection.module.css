@@ -1,8 +1,11 @@
 .section {
   scroll-margin-top: 6rem;
-  /* Pricing now shares this ivory ground, so the two meet with no colour change */
+  /* Pricing shares this ivory ground; the top gradient keeps the section a
+     plain ivory at the join (covering the sand) to match the pricing section's
+     masked-out bottom, then reveals the sand below — no texture seam. */
   margin-top: -0.25rem;
   background:
+    linear-gradient(to bottom, #f4ecde 0, rgba(244, 236, 222, 0) 8rem) top / 100% auto no-repeat,
     url("/hero/hero-sand-texture.png") center top / 100% auto repeat-y,
     #f4ecde;
   color: #363938;

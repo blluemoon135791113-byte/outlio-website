@@ -8,7 +8,7 @@
      the texture layers below multiply over this, so colour AND grain stay
      continuous across the join. */
   margin-top: -0.25rem;
-  background: linear-gradient(to bottom, #bdd5ae 0, rgba(189, 213, 174, 0) 11rem), #f4ecde;
+  background: linear-gradient(to bottom, #bdd5ae 0, rgba(189, 213, 174, 0) 8rem), #f4ecde;
   color: #1d2c2e;
   font-family: var(--font-manrope), sans-serif;
 }
@@ -23,8 +23,8 @@
   mix-blend-mode: multiply;
   opacity: 0.34;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 11rem);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 11rem);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8rem, #000 calc(100% - 8rem), transparent);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 8rem, #000 calc(100% - 8rem), transparent);
 }
 
 .section::after {
@@ -36,8 +36,8 @@
   mix-blend-mode: multiply;
   opacity: 0.5;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 11rem);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 11rem);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8rem, #000 calc(100% - 8rem), transparent);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 8rem, #000 calc(100% - 8rem), transparent);
 }
 
 .container {
@@ -45,7 +45,7 @@
   z-index: 1;
   width: min(100%, 80rem);
   margin-inline: auto;
-  padding: clamp(11rem, 16vw, 14rem) 2rem 4.5rem;
+  padding: clamp(13rem, 18vw, 16rem) 2rem 4.5rem;
 }
 
 .heading {

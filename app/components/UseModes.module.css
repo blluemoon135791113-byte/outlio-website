@@ -2,6 +2,7 @@
    Font is Manrope (the template's), colours hardcoded like InteractiveGtmHero. */
 
 .section {
+  margin-top: -0.25rem;
   /* New default = the original style at 80% (0.8x every dimension).
      The background is per-mode: .bgAgency (hero look) / .bgTech (light ivory). */
   padding: 4.8rem 1.2rem;
