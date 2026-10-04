@@ -21,7 +21,7 @@
   z-index: 0;
   background: url("/hero/hero-sand-texture.png") center / cover;
   mix-blend-mode: multiply;
-  opacity: 0.34;
+  opacity: 0.1;
   pointer-events: none;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8rem, #000 calc(100% - 8rem), transparent);
   mask-image: linear-gradient(to bottom, transparent 0, #000 8rem, #000 calc(100% - 8rem), transparent);
@@ -34,7 +34,7 @@
   z-index: 0;
   background: url("/textures/pricing-grain.svg") 0 0 / 150px 150px repeat;
   mix-blend-mode: multiply;
-  opacity: 0.5;
+  opacity: 0.2;
   pointer-events: none;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8rem, #000 calc(100% - 8rem), transparent);
   mask-image: linear-gradient(to bottom, transparent 0, #000 8rem, #000 calc(100% - 8rem), transparent);
