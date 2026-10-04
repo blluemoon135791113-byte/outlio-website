@@ -5,6 +5,7 @@ import Image from "next/image";
 import styles from "./TechCaseStudies.module.css";
 
 type Brand = "knowledgecity" | "mentor" | "oee" | "hirebexa";
+type Kpi = { prefix?: string; target: number; suffix?: string; dec?: number; anim?: number; label: string };
 
 // One connected glass surface per pair, drawn at the pair's real pixel size so
 // every corner is a true circular radius (no non-uniform SVG stretching).
@@ -45,43 +46,124 @@ function Surface() {
 }
 
 function Logo({ brand }: { brand: Brand }) {
-  // Official KnowledgeCity brand vector (their own SVG lockup) — sharp at any DPI.
-  if (brand === "knowledgecity") return <Image className={`${styles.logo} ${styles.kcLogo}`} src="/clients/kc-logo-full.svg" alt="KnowledgeCity" width={210} height={44} unoptimized />;
-  // Official Mentor Global artwork, recoloured to its light-background variant
-  // ("global" from white to ink) so it reads on the glass with no backing.
+  // KnowledgeCity shown by its own "kc" badge (the square mark cropped from the
+  // official logo file) so every logo can sit at a matched, larger height.
+  if (brand === "knowledgecity") return <span className={`${styles.logo} ${styles.kcBadge}`} role="img" aria-label="KnowledgeCity"><Image src="/clients/kc-logo-full.svg" alt="" width={210} height={44} unoptimized /></span>;
+  // Official Mentor Global artwork, recoloured to its light-background variant.
   if (brand === "mentor") return <Image className={`${styles.logo} ${styles.mentorLogo}`} src="/clients/mentor-global-ink.png" alt="Mentor Global" width={760} height={351} unoptimized />;
-  // OEE lockup, recentred: the pie mark + "EE" form one group, with
-  // "intellisuite" centred beneath it, both balanced about the viewBox centre.
+  // OEE lockup, recentred about the viewBox centre.
   if (brand === "oee") return <svg className={`${styles.logo} ${styles.oeeLogo}`} viewBox="0 0 400 210" role="img" aria-label="OEE intellisuite"><g transform="translate(36 19) scale(0.82)"><g transform="translate(57,7)"><g fill="none" stroke="currentColor" strokeWidth="7" strokeLinejoin="round" strokeLinecap="round"><path d="M 62 58 L 110.3 70.9 A 50 50 0 1 0 79.1 105 Z" /><path d="M 62 58 L 87 14.7" /><path d="M 68.6 64.1 L 116.9 77 A 50 50 0 0 1 85.7 111.1 Z" /></g><text x="130" y="59" fill="currentColor" fontFamily="Arial, sans-serif" fontSize="104" fontWeight="800" letterSpacing="-3" dominantBaseline="central">EE</text></g><text x="200" y="181" textAnchor="middle" fill="currentColor" fontFamily="Arial, sans-serif" fontSize="66" fontWeight="500" letterSpacing="-2" dominantBaseline="central">intellisuite</text></g></svg>;
-  return <Image className={`${styles.logo} ${styles.hirebexaLogo}`} src="/clients/hirebexa-transparent.png" alt="Bexa by Corebex" width={2014} height={780} unoptimized />;
+  return <Image className={`${styles.logo} ${styles.bexaLogo}`} src="/clients/hirebexa-transparent.png" alt="Bexa by Corebex" width={2014} height={780} unoptimized />;
 }
 
-function Zone({ brand, name, place }: { brand: Brand; name: string; place: "tr" | "bl" }) {
+function Zone({ brand, name, place, kpis }: { brand: Brand; name: string; place: "tr" | "bl"; kpis?: Kpi[] }) {
   return (
-    <div className={`${styles.zone} ${styles[place]}`} aria-label={`${name} case study visual`}>
+    <div className={`${styles.zone} ${styles[place]}`} aria-label={`${name} case study visual`} {...(kpis ? { "data-kpi-zone": "" } : {})}>
       <div className={styles.logoPosition}><Logo brand={brand} /></div>
-      <span className={styles.learnMore}>
-        <span className={styles.linkIcon}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg></span>
-        <span className={styles.learnLabel}>Learn more</span>
-      </span>
+      {kpis && (
+        <div className={styles.kpis}>
+          {kpis.map((k) => (
+            <div className={styles.kpi} key={k.label}>
+              <div
+                className={styles.num}
+                data-num
+                data-prefix={k.prefix ?? ""}
+                data-target={k.target}
+                data-suffix={k.suffix ?? ""}
+                data-dec={k.dec ?? 0}
+                data-anim={k.anim ?? k.dec ?? 0}
+              >{`${k.prefix ?? ""}0${k.suffix ?? ""}`}</div>
+              <div className={styles.lbl}>{k.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
+// Metrics per client, matched to their stage. Input rates are never shown bare;
+// only the outcomes they produced appear here.
+const KC: Kpi[] = [
+  { target: 12, suffix: "+", label: "meetings booked" },
+  { prefix: "$", target: 500, suffix: "K+", label: "expansion revenue" },
+];
+const BEXA: Kpi[] = [
+  { target: 30, suffix: "+", label: "demos booked" },
+  { prefix: "$", target: 6500, suffix: "/m", label: "ROI" },
+];
+const OEE: Kpi[] = [
+  { target: 40, suffix: "+", label: "meetings booked" },
+  { prefix: "$", target: 240, suffix: "K+", label: "qualified pipeline" },
+];
+
 export default function TechCaseStudies() {
-  return <section id="results" className={styles.section} aria-labelledby="results-heading">
+  const rootRef = useRef<HTMLElement>(null);
+
+  // Slot-machine count-up that steps one modal at a time, once it scrolls in.
+  useEffect(() => {
+    const root = rootRef.current;
+    const comp = root?.querySelector<HTMLElement>("[data-compositions]");
+    if (!root || !comp) return;
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+    const fmt = (v: number, dec: number, prefix: string, suffix: string) =>
+      prefix + Number(v).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + suffix;
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    function roll(el: HTMLElement) {
+      const target = parseFloat(el.dataset.target || "0");
+      const dec = +(el.dataset.dec || 0);
+      const animDec = +(el.dataset.anim || dec);
+      const prefix = el.dataset.prefix || "";
+      const suffix = el.dataset.suffix || "";
+      if (reduce) { el.textContent = fmt(target, dec, prefix, suffix); return; }
+      const dur = 1700 + Math.random() * 400;
+      el.textContent = fmt(0, animDec, prefix, suffix);
+      const start = performance.now();
+      const frame = (now: number) => {
+        const p = Math.min(1, (now - start) / dur);
+        el.textContent = p < 1 ? fmt(target * easeOut(p), animDec, prefix, suffix) : fmt(target, dec, prefix, suffix);
+        if (p < 1) requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    }
+
+    const zones = [...root.querySelectorAll<HTMLElement>("[data-kpi-zone]")];
+    let started = false;
+    let cancelled = false;
+    async function cascade() {
+      if (started) return;
+      started = true;
+      for (const z of zones) {
+        if (cancelled) return;
+        z.querySelectorAll<HTMLElement>("[data-num]").forEach((n, i) => setTimeout(() => roll(n), i * 140));
+        await wait(1600);
+      }
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => entries.forEach((e) => { if (e.isIntersecting) cascade(); }),
+      { threshold: 0.2 },
+    );
+    io.observe(comp);
+    return () => { cancelled = true; io.disconnect(); };
+  }, []);
+
+  return <section ref={rootRef} id="results" className={styles.section} aria-labelledby="results-heading">
     <div className={styles.intro}><h2 id="results-heading">Four moments, two connected surfaces.</h2></div>
-    <div className={styles.compositions}>
+    <div className={styles.compositions} data-compositions>
       <div className={styles.pair}><Surface />
         <div className={`${styles.copy} ${styles.tl}`}><h3>Are you an enterprise struggling to secure <span>projected annual ARR?</span></h3></div>
-        <Zone brand="knowledgecity" name="KnowledgeCity" place="tr" />
+        <Zone brand="knowledgecity" name="KnowledgeCity" place="tr" kpis={KC} />
         <Zone brand="mentor" name="Mentor Global" place="bl" />
         <div className={`${styles.copy} ${styles.br}`}><h3>Closed your Series A, but need sales to support <span>your valuation?</span></h3></div>
       </div>
       <div className={styles.pair}><Surface />
         <div className={`${styles.copy} ${styles.tl}`}><h3>Launching at pre-seed and looking for signups <span>within weeks?</span></h3></div>
-        <Zone brand="hirebexa" name="Hirebexa.ai" place="tr" />
-        <Zone brand="oee" name="EE intellisuite" place="bl" />
+        <Zone brand="hirebexa" name="Hirebexa.ai" place="tr" kpis={BEXA} />
+        <Zone brand="oee" name="EE intellisuite" place="bl" kpis={OEE} />
         <div className={`${styles.copy} ${styles.br}`}><h3>Not enough inbound traction to balance <span>outbound revenue?</span></h3></div>
       </div>
     </div>

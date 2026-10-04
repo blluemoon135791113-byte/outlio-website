@@ -1,5 +1,5 @@
 @font-face { font-family: CaseStudyManrope; src: url('/fonts/manrope-latin.woff2') format('woff2'); font-style: normal; font-weight: 200 800; font-display: swap; }
-.section { --bg:#bdd5ae; --ink:#17261a; margin-top:-0.25rem; position:relative; isolation:isolate; overflow:hidden; scroll-margin-top:5rem; padding:clamp(13rem,17vw,15rem) clamp(1rem,3vw,3rem) clamp(9rem,12vw,13rem); background:linear-gradient(to bottom,#f8f2e5 0,rgba(248,242,229,0) 8rem),var(--bg); color:var(--ink); font-family:CaseStudyManrope,Arial,sans-serif; }
+.section { --bg:#bdd5ae; --ink:#17261a; --logoH:clamp(3rem,6.8vw,3.7rem); margin-top:-0.25rem; position:relative; isolation:isolate; overflow:hidden; scroll-margin-top:5rem; padding:clamp(13rem,17vw,15rem) clamp(1rem,3vw,3rem) clamp(9rem,12vw,13rem); background:linear-gradient(to bottom,#f8f2e5 0,rgba(248,242,229,0) 8rem),var(--bg); color:var(--ink); font-family:CaseStudyManrope,Arial,sans-serif; }
 .section *,.section *::before,.section *::after { box-sizing:border-box; }
 .section::before { content:""; position:absolute; inset:0; z-index:-1; background:url('/textures/pricing-grain.svg') repeat; background-size:175px 175px; mix-blend-mode:multiply; opacity:.42; pointer-events:none; -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 8rem,#000 calc(100% - 13rem),transparent); mask-image:linear-gradient(to bottom,transparent 0,#000 8rem,#000 calc(100% - 13rem),transparent); }
 /* The green→grey transition lives at the top of the pricing section (one
@@ -21,16 +21,24 @@
 .copy h3 { margin:0; color:var(--ink); font-size:clamp(1.5rem,2.25vw,2.8rem); font-weight:400; letter-spacing:-.065em; line-height:1.12; text-wrap:balance; }
 .copy h3 span { color:#5c8066; }
 
-.zone { position:absolute; z-index:1; display:grid; place-items:center; cursor:pointer; }
+.zone { position:absolute; z-index:1; display:grid; place-items:center; }
 .tr { left:45.7%; top:0; right:0; height:46.7%; }
 .bl { left:0; top:53%; width:54.3%; bottom:0; }
-.logoPosition { position:relative; z-index:2; display:grid; place-items:center; width:78%; max-height:70%; transition:transform 320ms cubic-bezier(.22,1,.36,1); }
-.zone:hover .logoPosition { transform:translateY(-3px); }
-.logo { display:block; max-width:100%; height:auto; }
-.kcLogo { width:min(92%,15rem); height:auto; }
-.mentorLogo { width:min(74%,12.5rem); height:auto; }
-.oeeLogo { width:min(84%,14rem); color:#204c42; }
-.hirebexaLogo { width:min(86%,15rem); object-fit:contain; }
+.logoPosition { position:relative; z-index:2; display:grid; place-items:center; width:100%; transform:translateY(-6%); }
+/* every logo shares one VISIBLE height (width follows its aspect ratio); the
+   two-line wordmarks get a small optical bump, Bexa a padding compensation */
+.logo { display:block; width:auto; height:var(--logoH); max-width:100%; }
+.kcBadge { display:block; width:var(--logoH); height:var(--logoH); overflow:hidden; }
+.kcBadge img { display:block; height:var(--logoH); width:auto; }
+.mentorLogo { height:calc(var(--logoH) * 1.28); }
+.oeeLogo { color:#204c42; height:calc(var(--logoH) * 1.28 / 1.04); }
+.bexaLogo { height:calc(var(--logoH) / 0.87); }
+
+/* two KPIs pinned below the logo — slot-machine count-up, no lines */
+.kpis { position:absolute; left:7%; right:7%; bottom:9%; z-index:3; display:grid; grid-template-columns:1fr 1fr; gap:.9rem; }
+.kpi { text-align:center; }
+.num { font-family:"Helvetica Neue",Helvetica,Arial,sans-serif; font-size:clamp(1.5rem,2.4vw,2.1rem); font-weight:500; letter-spacing:-.03em; line-height:1; color:var(--ink); font-variant-numeric:tabular-nums; }
+.lbl { margin-top:.36rem; font-family:var(--font-geist-sans),-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size:clamp(.7rem,.95vw,.82rem); font-weight:500; color:#3a5a44; }
 
 /* "Learn more" CTA: a 40px link disc that glides open into a capsule.
    Geist label, opaque white for clear visibility, pointer cursor. */
@@ -43,6 +51,6 @@
 .zone:hover .learnLabel { opacity:1; transform:translateX(0); }
 
 @media(max-width:850px) { .compositions { grid-template-columns:1fr; max-width:42rem; gap:3rem; } .pair { height:calc(2 * max(18rem, 43vw) + .75rem); } .copy h3 { font-size:clamp(1.6rem,4vw,2.5rem); } }
-@media(max-width:490px) { .section { padding-inline:.65rem; } .intro { padding-inline:.35rem; } .pair { height:calc(2 * max(15rem, 65vw) + .25rem); } .copy { padding:.5rem; } .br { padding-left:.75rem; } .copy h3 { font-size:clamp(1.1rem,5vw,1.55rem); } .kcLogo { width:12rem; } .mentorLogo { width:9.5rem; } .learnMore { right:.6rem; bottom:.6rem; } }
+@media(max-width:490px) { .section { padding-inline:.65rem; } .intro { padding-inline:.35rem; } .pair { height:calc(2 * max(15rem, 65vw) + .25rem); } .copy { padding:.5rem; } .br { padding-left:.75rem; } .copy h3 { font-size:clamp(1.1rem,5vw,1.55rem); } .kpis { bottom:7%; gap:.6rem; } .num { font-size:clamp(1.2rem,5vw,1.6rem); } }
 @media(hover:none) { .learnMore { width:124px; } .linkIcon svg { transform:none; } .learnLabel { opacity:1; transform:none; } }
 @media(prefers-reduced-motion:reduce) { .logoPosition,.learnMore,.linkIcon svg,.learnLabel { transition:none; } }
