@@ -16,6 +16,7 @@ import { createOpportunity, moveStage } from '@/lib/crm/opportunities'
 import { emitDomainEvent } from '@/lib/events/emit'
 import { registerAction, type ActionHandler, type ActionResult } from '@/lib/flows/engine'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { applyAutoRolesQuietly } from '@/lib/crm/lead-role-service'
 
 const ok = (output: Record<string, string | number | boolean | null> = {}): ActionResult => ({
   ok: true,
@@ -276,6 +277,10 @@ const removeTag: ActionHandler = async (ctx, config) => {
     .select('id')
     .eq('workspace_id', ctx.workspaceId)
     .eq('normalized_name', name.toLowerCase().replace(/\s+/g, ' ').trim())
+    // Free lead tags only — the set this meant before 0153.
+    .eq('entity', 'contact')
+    .is('group_id', null)
+    .is('deleted_at', null)
     .maybeSingle()
 
   // A tag that was never there is the desired end state, not a failure.
@@ -337,6 +342,8 @@ const updateField: ActionHandler = async (ctx, config) => {
     .eq('id', ctx.contactId)
 
   if (error) return fail('UPDATE_FAILED', 'Could not update this contact.', true)
+  // A new title means new role suggestions — unless a person pinned them (0152).
+  if (field === 'job_title') await applyAutoRolesQuietly(ctx.workspaceId, [ctx.contactId])
   return ok({ field, updated: true })
 }
 

@@ -106,18 +106,36 @@ if (problems.length > 0) {
 
 await mkdir(outDir, { recursive: true })
 
-const zipName = `outlio-lead-capture-${target}-v${manifest.version}.zip`
-const zipPath = join(outDir, zipName)
+// AMO accepts both ZIP and XPI; XPI is just the conventional Firefox suffix.
+// Changing the suffix does NOT fix an incorrectly nested or missing manifest.
+// Build from inside dist and verify the actual archive, not only the sources.
+const archiveExtension = target === 'firefox' ? 'xpi' : 'zip'
+const archiveName = `outlio-lead-capture-${target}-v${manifest.version}.${archiveExtension}`
+const archivePath = join(outDir, archiveName)
 
-execFileSync('zip', ['-r', '-X', '-q', zipPath, '.', '-x', '.*', '__MACOSX/*'], {
+// -FS removes stale entries from a previous build of this version.
+execFileSync('zip', ['-r', '-FS', '-X', '-q', archivePath, '.', '-x', '.*', '__MACOSX/*'], {
   cwd: distDir,
 })
 
-const sizeKb = Math.round(statSync(zipPath).size / 1024)
+execFileSync('unzip', ['-tq', archivePath], { stdio: 'pipe' })
+const entries = execFileSync('unzip', ['-Z1', archivePath], { encoding: 'utf8' }).trim().split('\n')
+if (entries.filter((name) => name === 'manifest.json').length !== 1) {
+  throw new Error('Package must contain exactly one manifest.json at archive root')
+}
+const archivedManifest = JSON.parse(execFileSync('unzip', ['-p', archivePath, 'manifest.json'], { encoding: 'utf8' }))
+if (JSON.stringify(archivedManifest) !== JSON.stringify(manifest)) {
+  throw new Error('Packaged manifest does not match the build')
+}
+
+const sizeKb = Math.round(statSync(archivePath).size / 1024)
 
 console.log(`Packaged ${manifest.name} v${manifest.version}`)
-console.log(`  ${zipPath.replace(`${resolve(root, '..')}/`, '')}  (${sizeKb} KB)`)
+console.log(`  ${archivePath.replace(`${resolve(root, '..')}/`, '')}  (${sizeKb} KB)`)
 for (const warning of warnings) console.log(`  ! ${warning}`)
 console.log('')
-console.log('Upload at https://chrome.google.com/webstore/devconsole → New item.')
+console.log('Verified: archive integrity and manifest.json at root.')
+console.log(target === 'firefox'
+  ? 'Upload this XPI at https://addons.mozilla.org/developers/ — select the archive, not an enclosing folder.'
+  : 'Upload at https://chrome.google.com/webstore/devconsole → New item.')
 console.log('Listing copy and permission justifications: docs/EXTENSION_STORE.md')

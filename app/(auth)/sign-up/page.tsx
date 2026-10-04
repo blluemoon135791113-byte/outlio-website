@@ -26,10 +26,13 @@ export default async function SignUpPage({
   return (
     <AuthShell
       title="Create your workspace"
+      // Default description removed for a cleaner, less crowded form. The
+      // referral notice is kept — it carries real information (bonus credits)
+      // and only appears for someone who arrived from an invite link.
       subtitle={
         referralCode
           ? `You were invited by an Outlio customer. You'll both get ${REFERRAL_REWARD_CREDITS} bonus credits once your access is approved.`
-          : "Access is approved manually. You'll be able to request it once your email is verified."
+          : undefined
       }
       footer={
         <>

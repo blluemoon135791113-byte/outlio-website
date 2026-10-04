@@ -24,15 +24,42 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { load } from 'cheerio'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+
+import { AuthShell } from '@/components/auth/AuthShell'
 
 const ROOT = join(__dirname, '..', '..')
 const SHELL = readFileSync(join(ROOT, 'components/auth/AuthShell.tsx'), 'utf8')
 
-describe('the scanner sees what it polices', () => {
-  it('reads a shell with two stacked sections', () => {
-    expect(SHELL).toContain('aria-labelledby="auth-title"')
-    expect(SHELL).toMatch(/lg:grid-cols-/)
+function renderShell() {
+  const props = {
+    title: 'Sign in',
+    children: createElement('form', { 'data-testid': 'auth-form' }),
+  }
+  const $ = load(renderToStaticMarkup(createElement(AuthShell, props)))
+  const form = $('[aria-labelledby="auth-title"]')
+  const grid = form.parent()
+  // The artwork replaced the old pitch section with a div. Select the other
+  // grid item, not a tag name or the order class this test is meant to police.
+  const brand = form.siblings()
+
+  expect(form).toHaveLength(1)
+  expect(form.find('#auth-title').text()).toBe('Sign in')
+  expect(form.find('form[data-testid="auth-form"]')).toHaveLength(1)
+  expect(grid.hasClass('grid')).toBe(true)
+  expect(grid.children()).toHaveLength(2)
+  expect(brand).toHaveLength(1)
+
+  return { form, grid, brand }
+}
+
+describe('the rendered shell keeps the form and brand in the same grid', () => {
+  it('has two panels and a desktop column layout', () => {
+    const { grid } = renderShell()
+    expect(grid.attr('class')?.split(/\s+/).some((name) => name.startsWith('lg:grid-cols-'))).toBe(true)
   })
 })
 
@@ -43,25 +70,16 @@ describe('the form is first on a phone and second on a desktop', () => {
      * breakpoint, putting it left of the pitch on a desktop — which reverses a
      * layout nobody asked to change and would read as a regression there.
      */
-    /*
-     * ⚠️ ANCHORED BY WALKING BACK TO THE OPENING TAG. My first attempt sliced a
-     * fixed 400 characters before `aria-labelledby` and read to the first `>`,
-     * which landed inside earlier markup and failed on correct code — a test
-     * reporting its own extraction bug as a product defect.
-     */
-    const marker = SHELL.indexOf('aria-labelledby="auth-title"')
-    expect(marker, 'the form panel lost its label').toBeGreaterThan(-1)
-    const tagStart = SHELL.lastIndexOf('<section', marker)
-    const opening = SHELL.slice(tagStart, SHELL.indexOf('>', marker) + 1)
-    expect(opening).toMatch(/order-1\b/)
-    expect(opening).toMatch(/lg:order-2\b/)
+    const { form } = renderShell()
+    // Exact class tokens: lg:order-1 must not satisfy a missing base order-1.
+    expect(form.hasClass('order-1')).toBe(true)
+    expect(form.hasClass('lg:order-2')).toBe(true)
   })
 
-  it('the pitch carries order-2 and lg:order-1', () => {
-    const pitch = SHELL.slice(SHELL.indexOf('<section className="order-2'))
-    const opening = pitch.slice(0, pitch.indexOf('>') + 1)
-    expect(opening).toMatch(/order-2\b/)
-    expect(opening).toMatch(/lg:order-1\b/)
+  it('the brand panel carries order-2 and lg:order-1', () => {
+    const { brand } = renderShell()
+    expect(brand.hasClass('order-2')).toBe(true)
+    expect(brand.hasClass('lg:order-1')).toBe(true)
   })
 
   it('records why, so the next person does not "tidy" it away', () => {

@@ -74,7 +74,9 @@ const CRM_SECTION: NavSection = {
     // before you decide anything, not one you navigate to afterwards.
     { href: '/crm/my-work', label: 'My Work' },
     { href: '/crm/contacts', label: 'People' },
-    { href: '/crm/companies', label: 'Companies' },
+    // Named for the workspace it now is (approved 2026-10-01); the route is
+    // unchanged so every existing link keeps working, and /accounts redirects.
+    { href: '/crm/companies', label: 'Accounts' },
     { href: '/crm/pipeline', label: 'Deals' },
     { href: '/crm/tasks', label: 'Tasks' },
     { href: '/crm/lists', label: 'Lists' },

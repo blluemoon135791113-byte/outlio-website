@@ -1,264 +1,168 @@
-/**
- * Popup UI.
- *
- * Renders whatever the background worker reports and nothing else. It holds no
- * state, makes no API calls and decides no entitlement — a popup that decided
- * for itself whether the user may capture would be trivially bypassed by
- * editing it, and it is public code.
- *
- * DOM is built with createElement rather than innerHTML: extension pages run
- * with elevated privileges, so string-built markup is a habit worth not having.
- */
+/** Shared sidebar/fallback popup. Account and capture state come from the worker. */
 import type { DedupeMode, ExtensionMessage, ExtensionState, SessionTotals } from '../../core/types'
 
-declare const chrome: {
-  runtime: { sendMessage(message: ExtensionMessage): Promise<unknown> }
-}
-
+declare const chrome: { runtime: { sendMessage(message: ExtensionMessage): Promise<unknown> } }
 const root = document.getElementById('root')!
 const connection = document.getElementById('connection')!
+let pending = false
+let refreshing = false
+let rendered = ''
+let dedupeMode: DedupeMode = 'remove_exact'
+let includeCompanyWebsites = false
 
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string,
-): HTMLElementTagNameMap[K] {
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag)
   if (className) node.className = className
   if (text !== undefined) node.textContent = text
   return node
 }
-
-function button(
-  label: string,
-  variant: 'primary' | 'secondary',
-  onClick: () => void,
-): HTMLButtonElement {
+function button(label: string, variant: 'primary' | 'secondary', message: ExtensionMessage): HTMLButtonElement {
   const node = el('button', `btn btn--${variant}`, label)
   node.type = 'button'
-  node.addEventListener('click', onClick)
+  node.id = `action-${message.type.toLowerCase()}`
+  node.addEventListener('click', () => { void act(message) })
   return node
 }
-
-function statusLine(dot: 'ok' | 'idle' | 'live', text: string): HTMLElement {
+function statusLine(dot: 'ok' | 'idle' | 'live', text: string) {
   const wrap = el('p', 'status')
-  wrap.appendChild(el('span', `dot dot--${dot}`))
-  wrap.appendChild(el('span', undefined, text))
+  wrap.append(el('span', `dot dot--${dot}`), el('span', undefined, text))
   return wrap
 }
-
-function companyWebsiteOption(): HTMLLabelElement {
-  const label = el('label', 'capture-option')
-  const input = el('input')
-  input.type = 'checkbox'
-  input.id = 'include-company-websites'
-  label.append(input, el('span', undefined, 'Find company websites (slower)'))
-  return label
-}
-
-function duplicateHandlingOption(): HTMLLabelElement {
+function options() {
   const label = el('label', 'field-option')
-  label.appendChild(el('span', 'field-option__label', 'Duplicate handling'))
+  label.append(el('span', 'field-option__label', 'Lead duplicate handling'))
   const select = el('select', 'field-option__select')
   select.id = 'dedupe-mode'
   for (const [value, text] of [
-    ['remove_exact', 'Remove exact duplicates'],
-    ['remove_likely', 'Remove likely duplicates'],
-    ['review', 'Flag duplicates for review'],
-    ['keep_all', 'Keep everything'],
-  ] as const) {
+    ['remove_exact', 'Remove exact duplicates'], ['remove_likely', 'Remove likely duplicates'],
+    ['review', 'Flag duplicates for review'], ['keep_all', 'Keep everything'],
+  ]) {
     const option = el('option', undefined, text)
-    option.value = value
-    select.appendChild(option)
+    option.value = value; select.append(option)
   }
-  label.appendChild(select)
-  return label
+  select.value = dedupeMode
+  select.addEventListener('change', () => { dedupeMode = select.value as DedupeMode })
+  label.append(select)
+  const websites = el('label', 'capture-option')
+  const input = el('input')
+  input.type = 'checkbox'; input.id = 'include-company-websites'; input.checked = includeCompanyWebsites
+  input.addEventListener('change', () => { includeCompanyWebsites = input.checked })
+  websites.append(input, el('span', undefined, 'Include company details already visible on the page'))
+  root.append(label, websites)
 }
-
-function stats(session: SessionTotals): HTMLElement {
+function stats(session: SessionTotals) {
   const grid = el('div', 'stats')
-
-  const entries: Array<[number, string]> = [
-    [session.pagesProcessed, 'Pages'],
-    [session.leadsImported, 'Leads'],
-    [session.duplicatesSkipped, 'Duplicates'],
-  ]
-
-  for (const [value, label] of entries) {
+  for (const [value, label] of [[session.pagesProcessed, 'Pages'], [session.leadsImported, 'Records'], [session.duplicatesSkipped, 'Skipped']] as const) {
     const cell = el('div', 'stat')
-    cell.appendChild(el('div', 'stat__value', String(value)))
-    cell.appendChild(el('div', 'stat__label', label))
-    grid.appendChild(cell)
+    cell.append(el('div', 'stat__value', String(value)), el('div', 'stat__label', label))
+    grid.append(cell)
   }
-
   return grid
 }
-
-function accountBlock(email: string | null, plan: string | null): HTMLElement {
+function account(email: string | null, plan: string | null) {
   const wrap = el('div', 'account')
-  wrap.appendChild(el('div', 'account__email', email ?? 'Signed in'))
-  wrap.appendChild(el('div', 'account__plan', plan ? `${plan} plan` : 'Active'))
+  wrap.append(el('div', 'account__email', email ?? 'Signed in'), el('div', 'account__plan', plan ? `${plan} plan` : 'Active'))
   return wrap
 }
-
-async function send(message: ExtensionMessage): Promise<unknown> {
-  return chrome.runtime.sendMessage(message)
+async function act(message: ExtensionMessage) {
+  if (pending) return
+  pending = true
+  root.setAttribute('aria-busy', 'true')
+  root.querySelectorAll<HTMLButtonElement>('button').forEach((b) => { b.disabled = true })
+  try {
+    const request = message.type === 'START_CAPTURE' ? { ...message, dedupeMode, includeCompanyWebsites } : message
+    await chrome.runtime.sendMessage(request)
+  } catch {
+    rendered = ''
+    render({ kind: 'error', message: 'The extension was reloaded or is unavailable. Close and reopen Outlio, then refresh your Sales Navigator tab.', retryable: true })
+    return
+  } finally {
+    pending = false; root.removeAttribute('aria-busy')
+    rendered = ''
+  }
+  await refresh()
 }
-
-async function refresh(): Promise<void> {
-  const state = (await send({ type: 'GET_STATE' })) as ExtensionState
-  render(state)
+async function refresh() {
+  if (pending || refreshing) return
+  refreshing = true
+  try {
+    const state = await chrome.runtime.sendMessage({ type: 'GET_STATE' }) as ExtensionState
+    if (!state?.kind) throw new Error('No state')
+    if (!pending) render(state)
+  } catch {
+    if (!pending) render({ kind: 'error', message: 'Cannot reach the extension. Close and reopen the panel, or reload Outlio in your browser extensions page.', retryable: true })
+  } finally { refreshing = false }
 }
-
-function setPill(text: string, variant: 'ok' | 'muted' | 'warn'): void {
-  connection.textContent = text
-  connection.className = `pill pill--${variant}`
+function setPill(text: string, variant: 'ok' | 'muted' | 'warn') {
+  connection.textContent = text; connection.className = `pill pill--${variant}`
 }
-
-function render(state: ExtensionState): void {
+function render(state: ExtensionState) {
+  const signature = JSON.stringify(state)
+  if (signature === rendered) return // Polls must not reset controls, focus or scroll.
+  rendered = signature
+  const focusId = (document.activeElement as HTMLElement | null)?.id
+  const scrollTop = document.documentElement.scrollTop
   root.replaceChildren()
-
+  renderState(state)
+  root.append(el('p', 'privacy-note', 'You browse. Outlio captures only during a session you start. It never opens profiles or turns pages for you.'))
+  if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true })
+  document.documentElement.scrollTop = scrollTop
+}
+function renderState(state: ExtensionState) {
   switch (state.kind) {
-    case 'loading':
-      setPill('Checking…', 'muted')
-      root.appendChild(el('p', 'note', 'Loading…'))
-      return
-
+    case 'loading': setPill('Checking…', 'muted'); root.append(el('p', 'note', 'Loading…')); return
     case 'not_connected':
       setPill('Not connected', 'muted')
-      root.appendChild(
-        el('p', 'note', 'Connect your Outlio account to start capturing leads from search results.'),
-      )
-      root.appendChild(
-        button('Connect Account', 'primary', () => {
-          void send({ type: 'CONNECT' })
-          window.close()
-        }),
-      )
+      root.append(el('h1', 'title', 'Your lists, in Outlio'), el('p', 'note', 'Capture Sales Navigator saved Lead Lists, Account Lists and search results you open yourself.'), button('Connect account', 'primary', { type: 'CONNECT' }))
       return
-
     case 'no_subscription':
-      setPill('Inactive', 'warn')
-      root.appendChild(el('p', 'error', state.message))
-      root.appendChild(
-        el('p', 'note', 'Your account does not currently have access to Lead Capture.'),
-      )
-      root.appendChild(
-        button('Manage Subscription', 'primary', () => {
-          void send({ type: 'OPEN_DASHBOARD' })
-          window.close()
-        }),
-      )
-      return
-
     case 'disabled':
-      setPill('Disabled', 'warn')
-      root.appendChild(el('p', 'error', state.message))
-      root.appendChild(el('p', 'note', 'Contact support if you think this is a mistake.'))
+      setPill('Unavailable', 'warn')
+      root.append(el('p', 'error', state.message), button('Open dashboard', 'secondary', { type: 'OPEN_DASHBOARD' }))
       return
-
     case 'ready': {
       setPill('Connected', 'ok')
-      root.appendChild(accountBlock(state.account.email, state.account.plan))
-      root.appendChild(el('p', 'section-label', 'Current page'))
-
-      if (!state.supported) {
-        root.appendChild(statusLine('idle', 'No supported page detected'))
-        root.appendChild(
-          el('p', 'note', 'Open a lead search-results page to start capturing.'),
-        )
-        const disabled = button('Start Capture', 'primary', () => {})
-        disabled.disabled = true
-        root.appendChild(disabled)
-        return
-      }
-
-      root.appendChild(statusLine('ok', 'Supported page detected'))
-      root.appendChild(duplicateHandlingOption())
-      root.appendChild(companyWebsiteOption())
-      root.appendChild(
-        button('Start Capture', 'primary', () => {
-          const includeCompanyWebsites = (
-            document.getElementById('include-company-websites') as HTMLInputElement | null
-          )?.checked === true
-          const dedupeMode = (
-            document.getElementById('dedupe-mode') as HTMLSelectElement | null
-          )?.value as DedupeMode | undefined
-          void send({
-            type: 'START_CAPTURE',
-            includeCompanyWebsites,
-            dedupeMode: dedupeMode ?? 'remove_exact',
-          }).then(refresh)
-        }),
-      )
+      root.append(account(state.account.email, state.account.plan), el('h1', 'title', 'Capture leads & accounts'), el('p', 'section-label', 'Current tab'))
+      const ready = state.supported && state.ready
+      root.append(statusLine(ready ? 'ok' : 'idle', ready ? 'List ready to capture' : state.supported ? 'Waiting for list rows…' : 'Open a Sales Navigator list'))
+      if (!ready) root.append(el('p', 'note', 'Open a saved Lead List, Account List or search results and wait for the rows to load. Just installed or updated? Refresh that tab once.'))
+      options()
+      const start = button('Start capture', 'primary', { type: 'START_CAPTURE' })
+      start.disabled = !ready
+      root.append(start, el('p', 'after-note', 'Captures the current page, then pages you visit manually. Accounts are matched by company identity.'))
       return
     }
-
     case 'capturing':
-      setPill('Capturing', 'ok')
-      root.appendChild(accountBlock(state.account.email, state.account.plan))
-      root.appendChild(el('p', 'section-label', 'Capture session active'))
-      root.appendChild(stats(state.session))
-      root.appendChild(
-        el(
-          'p',
-          'hint',
-          state.supported
-            ? 'Navigate manually to the next page. Each page is captured as you arrive.'
-            : 'Open a results page to continue capturing. The session stays active.',
-        ),
-      )
-      root.appendChild(
-        button('Finish Capture', 'primary', () => {
-          void send({ type: 'FINISH_CAPTURE' }).then(refresh)
-        }),
-      )
-      root.appendChild(
-        button('Open Dashboard', 'secondary', () => {
-          void send({ type: 'OPEN_DASHBOARD' })
-        }),
-      )
+    case 'processing': {
+      setPill(state.kind === 'processing' ? 'Sending' : 'Capturing', 'ok')
+      root.append(account(state.account.email, state.account.plan), el('h1', 'title', 'Capture is active'), stats(state.session))
+      if (state.kind === 'processing') root.append(statusLine('live', 'Sending this page to Outlio…'))
+      root.append(el('p', 'hint', state.kind === 'capturing' && !state.supported
+        ? 'Open a Sales Navigator lead or account list to continue. Your session stays active.'
+        : 'Open the next page yourself. Outlio captures loaded rows as you browse. Totals update after processing.'))
+      if (state.kind === 'capturing') {
+        const capture = button('Capture this page', 'secondary', { type: 'CAPTURE_PAGE' })
+        capture.disabled = !state.supported || !state.ready
+        root.append(capture)
+      }
+      root.append(button('Finish capture', 'primary', { type: 'FINISH_CAPTURE' }), button('View captures in Outlio', 'secondary', { type: 'OPEN_DASHBOARD' }), el('p', 'after-note', 'Closing this panel does not stop capture. Choose Finish capture to stop. Records may still be processing; add them to CRM from the dashboard.'))
       return
-
-    case 'processing':
-      setPill('Working', 'muted')
-      root.appendChild(statusLine('live', 'Processing page…'))
-      root.appendChild(stats(state.session))
-      return
-
+    }
     case 'complete':
       setPill('Connected', 'ok')
-      root.appendChild(el('p', 'section-label', 'Capture complete'))
-      root.appendChild(stats(state.session))
-      root.appendChild(
-        button('View Leads', 'primary', () => {
-          void send({ type: 'OPEN_DASHBOARD' })
-        }),
-      )
+      root.append(el('h1', 'title', 'Capture finished'), stats(state.session), button('View captures in Outlio', 'primary', { type: 'OPEN_DASHBOARD' }))
       return
-
     case 'error':
-      setPill('Problem', 'warn')
-      root.appendChild(el('p', 'error', state.message))
-      if (state.retryable) {
-        root.appendChild(
-          button('Retry', 'primary', () => {
-            void send({ type: 'RETRY' }).then(refresh)
-          }),
-        )
-      } else {
-        root.appendChild(
-          button('Open Dashboard', 'secondary', () => {
-            void send({ type: 'OPEN_DASHBOARD' })
-          }),
-        )
-      }
-      return
+      setPill('Needs attention', 'warn')
+      root.append(el('p', 'error', state.message))
+      if (state.retryable) root.append(button('Retry', 'primary', { type: 'RETRY' }))
+      else root.append(button('Connect account', 'primary', { type: 'CONNECT' }))
+      if (state.sessionActive) root.append(button('Finish capture', 'secondary', { type: 'FINISH_CAPTURE' }))
+      root.append(button('Open dashboard', 'secondary', { type: 'OPEN_DASHBOARD' }))
   }
 }
-
-// Poll while open so counts move as pages are processed. The popup is only
-// alive for seconds at a time, so this is cheap and stops the moment it closes.
+connection.setAttribute('role', 'status')
 void refresh()
-const timer = setInterval(() => void refresh(), 2000)
+const timer = setInterval(() => { if (!document.hidden) void refresh() }, 2000)
+window.addEventListener('focus', () => { void refresh() })
 window.addEventListener('unload', () => clearInterval(timer))

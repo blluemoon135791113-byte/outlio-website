@@ -10,7 +10,7 @@ export const GET = apiRoute('companies:read', async (request, context) => {
     .from('crm_companies')
     // Explicit columns, never `*`: a public API that selects everything
     // publishes whatever column is added next.
-    .select('id, name, domain, industry, employee_count, linkedin_url, created_at, updated_at', {
+    .select('id, name, domain, industry, employee_count, linkedin_url, sales_navigator_url, created_at, updated_at', {
       count: 'exact',
     })
     .eq('workspace_id', context.workspaceId)
@@ -39,7 +39,17 @@ export const GET = apiRoute('companies:read', async (request, context) => {
   return {
     status: 200,
     body: {
-      data: data ?? [],
+      /*
+       * ⚠️ `linkedin_url` KEEPS ITS OLD MEANING FOR EXISTING INTEGRATIONS. Until
+       * 0145 a Sales Navigator company address was stored in that column, and
+       * integrations have been reading it from there. 0151 moves it to its own
+       * column; falling back to it here means no existing consumer sees a value
+       * disappear. `sales_navigator_url` is new and additive.
+       */
+      data: (data ?? []).map((row) => ({
+        ...row,
+        linkedin_url: row.linkedin_url ?? row.sales_navigator_url,
+      })),
       pagination: { limit, offset, total: count ?? 0, has_more: offset + limit < (count ?? 0) },
     },
   }

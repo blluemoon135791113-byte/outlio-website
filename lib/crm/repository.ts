@@ -62,7 +62,14 @@ export type ContactInput = {
 export type CompanyInput = {
   name?: string | null
   websiteUrl?: string | null
+  /**
+   * A LinkedIn company page. A Sales Navigator address (`/sales/company/{id}`)
+   * passed here is recognised and stored as the Navigator identity, so callers
+   * that only ever had one URL field keep working unchanged.
+   */
   linkedInUrl?: string | null
+  /** The Sales Navigator company page, when the source kept the two apart. */
+  salesNavigatorUrl?: string | null
   industry?: string | null
   employeeCount?: number | null
   headquarters?: string | null
@@ -72,7 +79,7 @@ export type CompanyInput = {
 }
 
 /** How an existing record was recognised. `null` when it was created. */
-export type MatchStrategy = 'linkedin' | 'email' | 'domain' | 'name'
+export type MatchStrategy = 'linkedin' | 'sales_navigator' | 'email' | 'domain' | 'name'
 
 export type UpsertResult = {
   id: string
@@ -401,20 +408,62 @@ export type CompanyIdentity = {
   normalizedDomain: string | null
   linkedInUrl: string | null
   normalizedLinkedInUrl: string | null
+  salesNavigatorUrl: string | null
+  normalizedSalesNavigatorUrl: string | null
 }
 
+const NAVIGATOR_KEY = /^linkedin\.com\/sales\/company\/\d+$/
+
+/**
+ * ⚠️ TWO ADDRESSES, SORTED BY WHAT THEY ARE, NOT BY WHICH FIELD THEY CAME IN.
+ *
+ * `normalizeCompanyLinkedInUrl` accepts both `/company/{slug}` and
+ * `/sales/company/{id}`, and until 0145 both landed in one column. Each input
+ * is classified by its normalized form, so a Navigator address passed as
+ * `linkedInUrl` still lands in the Navigator column. Neither is ever derived
+ * from the other — that would need a request to linkedin.com (rule 1).
+ */
 export function resolveCrmCompanyIdentity(input: CompanyInput): CompanyIdentity {
   const normalizedDomain = normalizeDomain(input.websiteUrl)
-  const normalizedLinkedInUrl = normalizeCompanyLinkedInUrl(input.linkedInUrl)
+
+  let linkedInUrl: string | null = null
+  let normalizedLinkedInUrl: string | null = null
+  let salesNavigatorUrl: string | null = null
+  let normalizedSalesNavigatorUrl: string | null = null
+
+  for (const raw of [input.salesNavigatorUrl, input.linkedInUrl]) {
+    const normalized = normalizeCompanyLinkedInUrl(raw)
+    if (!normalized) continue
+    if (NAVIGATOR_KEY.test(normalized)) {
+      if (!normalizedSalesNavigatorUrl) {
+        normalizedSalesNavigatorUrl = normalized
+        salesNavigatorUrl = raw?.trim() ?? null
+      }
+    } else if (!normalizedLinkedInUrl) {
+      normalizedLinkedInUrl = normalized
+      linkedInUrl = raw?.trim() ?? null
+    }
+  }
 
   return {
     name: input.name?.trim() || null,
     normalizedName: normalizeCompanyName(input.name),
     domain: normalizedDomain ? (input.websiteUrl?.trim() ?? null) : null,
     normalizedDomain,
-    linkedInUrl: normalizedLinkedInUrl ? (input.linkedInUrl?.trim() ?? null) : null,
+    linkedInUrl,
     normalizedLinkedInUrl,
+    salesNavigatorUrl,
+    normalizedSalesNavigatorUrl,
   }
+}
+
+function identifiesNothing(identity: CompanyIdentity): boolean {
+  return (
+    !identity.normalizedDomain
+    && !identity.normalizedLinkedInUrl
+    && !identity.normalizedSalesNavigatorUrl
+    && !identity.normalizedName
+  )
 }
 
 /**
@@ -433,7 +482,7 @@ export async function upsertCrmCompany(
 ): Promise<UpsertResult> {
   const identity = resolveCrmCompanyIdentity(input)
 
-  if (!identity.normalizedDomain && !identity.normalizedLinkedInUrl && !identity.normalizedName) {
+  if (identifiesNothing(identity)) {
     throw new Error('upsertCrmCompany: the input identifies no company')
   }
 
@@ -463,17 +512,34 @@ export async function upsertCrmCompany(
       if (data) return { id: data.id, matchedBy: 'linkedin' }
     }
 
+    /*
+     * ⚠️ AFTER domain and public page, deliberately: that is the order this
+     * path has always matched in, and lead ingestion must resolve the same
+     * company it did yesterday. The account workspace's own order (Navigator
+     * first) is `findCrmCompanyMatches` below, which reports conflicts rather
+     * than choosing — this path must always return one company.
+     */
+    if (identity.normalizedSalesNavigatorUrl) {
+      const { data, error } = await base()
+        .eq('normalized_sales_navigator_url', identity.normalizedSalesNavigatorUrl)
+        .maybeSingle()
+      if (error) throw new Error(`upsertCrmCompany failed: ${error.message}`)
+      if (data) return { id: data.id, matchedBy: 'sales_navigator' }
+    }
+
     // Only when THIS input carries nothing stronger. Matching a domain-bearing
     // input by name would collapse "Apex Systems" onto "Apex Ltd".
     if (
       identity.normalizedName &&
       !identity.normalizedDomain &&
-      !identity.normalizedLinkedInUrl
+      !identity.normalizedLinkedInUrl &&
+      !identity.normalizedSalesNavigatorUrl
     ) {
       const { data, error } = await base()
         .eq('normalized_name', identity.normalizedName)
         .is('normalized_domain', null)
         .is('normalized_linkedin_url', null)
+        .is('normalized_sales_navigator_url', null)
         .maybeSingle()
       if (error) throw new Error(`upsertCrmCompany failed: ${error.message}`)
       if (data) return { id: data.id, matchedBy: 'name' }
@@ -516,6 +582,8 @@ export async function upsertCrmCompany(
       normalized_domain: identity.normalizedDomain,
       linkedin_url: identity.linkedInUrl,
       normalized_linkedin_url: identity.normalizedLinkedInUrl,
+      sales_navigator_url: identity.salesNavigatorUrl,
+      normalized_sales_navigator_url: identity.normalizedSalesNavigatorUrl,
       industry: input.industry?.trim() || null,
       employee_count: input.employeeCount ?? null,
       headquarters: input.headquarters?.trim() || null,
@@ -576,7 +644,7 @@ async function fillCompanyGaps(
   const { data: current } = await db
     .from('crm_companies')
     .select(
-      'domain, normalized_domain, linkedin_url, normalized_linkedin_url, industry, employee_count, headquarters, source_company_id',
+      'domain, normalized_domain, linkedin_url, normalized_linkedin_url, sales_navigator_url, normalized_sales_navigator_url, industry, employee_count, headquarters, source_company_id',
     )
     // The service role bypasses RLS — scoping by workspace is mandatory.
     .eq('workspace_id', workspaceId)
@@ -625,6 +693,14 @@ async function fillCompanyGaps(
     patch.linkedin_url = identity.linkedInUrl
     patch.normalized_linkedin_url = identity.normalizedLinkedInUrl
   }
+  if (
+    !current.normalized_sales_navigator_url
+    && identity.normalizedSalesNavigatorUrl
+    && identity.salesNavigatorUrl
+  ) {
+    patch.sales_navigator_url = identity.salesNavigatorUrl
+    patch.normalized_sales_navigator_url = identity.normalizedSalesNavigatorUrl
+  }
 
   // Nothing new. Skipped rather than written, because every batch re-resolves
   // every company it mentions and a no-op UPDATE per company per import is a
@@ -638,11 +714,182 @@ async function fillCompanyGaps(
    * domain, which is a real race — escape would unlink people from a company
    * that resolved perfectly well. The gap simply stays a gap.
    */
-  await db
+  const { error } = await db
     .from('crm_companies')
     .update(patch)
     .eq('workspace_id', workspaceId)
     .eq('id', companyId)
+
+  /*
+   * ⚠️ AN IDENTITY COLLISION MUST NOT COST THE PLAIN FACTS. Since 0145 a lead
+   * can carry a public page that matches account A and a Navigator id that
+   * already belongs to account B. Filling that id onto A violates the
+   * Navigator index, and — as one UPDATE — took the industry, headcount and
+   * research link down with it. Retried without the identity columns, the
+   * facts land; the conflicting identifier stays where it is.
+   */
+  if (error?.code === UNIQUE_VIOLATION) {
+    const facts = { ...patch }
+    for (const key of [
+      'domain', 'normalized_domain',
+      'linkedin_url', 'normalized_linkedin_url',
+      'sales_navigator_url', 'normalized_sales_navigator_url',
+    ] as const) {
+      delete facts[key]
+    }
+    if (Object.keys(facts).length > 0) {
+      await db.from('crm_companies').update(facts).eq('workspace_id', workspaceId).eq('id', companyId)
+    }
+  }
+}
+
+export type CompanyMatch = {
+  id: string
+  name: string | null
+  matchedBy: Exclude<MatchStrategy, 'email'>
+  /**
+   * The matched account has a domain, public page or Navigator id. Two
+   * name-only accounts with one normalized name cannot coexist (the 0145 name
+   * index), so a name match against a row WITHOUT one is not a warning — the
+   * database will refuse the second.
+   */
+  hasStrongIdentity: boolean
+}
+
+export type CompanyMatchReport = {
+  /** Certain matches: same Navigator id, public page or domain. Distinct accounts. */
+  exact: CompanyMatch[]
+  /** Same normalized name only. A human decides; never merged automatically. */
+  possible: CompanyMatch[]
+  /**
+   * The input names TWO OR MORE different accounts by different identifiers —
+   * e.g. its Navigator id is Acme's and its domain is Globex's. Never resolved
+   * by precedence (decision 2026-10-01): the row is reported, nothing merges.
+   */
+  conflict: boolean
+}
+
+/**
+ * Every account an input could be, without writing anything — the duplicate
+ * check for manual add and account import.
+ *
+ * ORDER (approved 2026-10-01): Sales Navigator id → public LinkedIn page →
+ * website domain → normalized name. The order is the order of `exact`, so a
+ * caller that needs one id takes `exact[0]` — but only when `conflict` is false.
+ *
+ * ⚠️ ONE QUERY, NOT FOUR. Matching each identifier separately would cost four
+ * round trips per import row, and a 2,000-row file would make 8,000.
+ */
+export async function findCrmCompanyMatches(
+  workspaceId: string,
+  input: CompanyInput,
+): Promise<CompanyMatchReport> {
+  const identity = resolveCrmCompanyIdentity(input)
+  if (identifiesNothing(identity)) return { exact: [], possible: [], conflict: false }
+
+  /*
+   * ⚠️ TWO QUERIES, NOT ONE. The exact keys are unique per workspace, so they
+   * return at most three rows; a name can match many. Sharing one LIMIT let a
+   * crowd of same-named accounts push the certain match out of the result —
+   * the duplicate check then passed, and only the unique index caught it.
+   */
+  const clauses: string[] = []
+  if (identity.normalizedSalesNavigatorUrl) {
+    clauses.push(`normalized_sales_navigator_url.eq.${pgrstValue(identity.normalizedSalesNavigatorUrl)}`)
+  }
+  if (identity.normalizedLinkedInUrl) {
+    clauses.push(`normalized_linkedin_url.eq.${pgrstValue(identity.normalizedLinkedInUrl)}`)
+  }
+  if (identity.normalizedDomain) {
+    clauses.push(`normalized_domain.eq.${pgrstValue(identity.normalizedDomain)}`)
+  }
+  // During the 0145 transition a Navigator id may still sit in the LinkedIn column.
+  if (identity.normalizedSalesNavigatorUrl) {
+    clauses.push(`normalized_linkedin_url.eq.${pgrstValue(identity.normalizedSalesNavigatorUrl)}`)
+  }
+
+  const db = createAdminClient()
+  const columns =
+    'id, name, normalized_name, normalized_domain, normalized_linkedin_url, normalized_sales_navigator_url'
+
+  const [exact, byName] = await Promise.all([
+    clauses.length > 0
+      ? db
+          .from('crm_companies')
+          .select(columns)
+          // The service role bypasses RLS — scoping by workspace is mandatory.
+          .eq('workspace_id', workspaceId)
+          .is('deleted_at', null)
+          .or(clauses.join(','))
+      : Promise.resolve({ data: [], error: null }),
+    identity.normalizedName
+      ? db
+          .from('crm_companies')
+          .select(columns)
+          .eq('workspace_id', workspaceId)
+          .is('deleted_at', null)
+          .eq('normalized_name', identity.normalizedName)
+          .order('created_at', { ascending: true })
+          .limit(20)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  if (exact.error) throw new Error(`findCrmCompanyMatches failed: ${exact.error.message}`)
+  if (byName.error) throw new Error(`findCrmCompanyMatches failed: ${byName.error.message}`)
+  return classifyCompanyMatches(identity, [...(exact.data ?? []), ...(byName.data ?? [])])
+}
+
+/** PostgREST `or=` value, quoted so a comma or parenthesis cannot split the filter. */
+function pgrstValue(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+export type CompanyMatchRow = {
+  id: string
+  name: string | null
+  normalized_name: string | null
+  normalized_domain: string | null
+  normalized_linkedin_url: string | null
+  normalized_sales_navigator_url: string | null
+}
+
+/** Pure half of `findCrmCompanyMatches`, exported for its tests. */
+export function classifyCompanyMatches(
+  identity: CompanyIdentity,
+  rows: readonly CompanyMatchRow[],
+): CompanyMatchReport {
+  const exact: CompanyMatch[] = []
+  const seen = new Set<string>()
+  const strong = (r: CompanyMatchRow) =>
+    Boolean(r.normalized_domain || r.normalized_linkedin_url || r.normalized_sales_navigator_url)
+
+  const take = (matchedBy: CompanyMatch['matchedBy'], hit: (r: CompanyMatchRow) => boolean) => {
+    for (const row of rows) {
+      if (seen.has(row.id) || !hit(row)) continue
+      seen.add(row.id)
+      exact.push({ id: row.id, name: row.name, matchedBy, hasStrongIdentity: strong(row) })
+    }
+  }
+
+  const nav = identity.normalizedSalesNavigatorUrl
+  const li = identity.normalizedLinkedInUrl
+  const domain = identity.normalizedDomain
+  if (nav) take('sales_navigator', (r) => r.normalized_sales_navigator_url === nav)
+  // During the 0145 transition a Navigator id can still sit in the LinkedIn column.
+  if (nav) take('sales_navigator', (r) => r.normalized_linkedin_url === nav)
+  if (li) take('linkedin', (r) => r.normalized_linkedin_url === li)
+  if (domain) take('domain', (r) => r.normalized_domain === domain)
+
+  const possible: CompanyMatch[] = []
+  if (identity.normalizedName) {
+    for (const row of rows) {
+      if (seen.has(row.id) || row.normalized_name !== identity.normalizedName) continue
+      seen.add(row.id)
+      possible.push({ id: row.id, name: row.name, matchedBy: 'name', hasStrongIdentity: strong(row) })
+    }
+  }
+
+  return { exact, possible, conflict: exact.length > 1 }
 }
 
 /**
@@ -750,6 +997,9 @@ export async function upsertTag(
         .select('id')
         .eq('workspace_id', workspaceId)
         .eq('normalized_name', tag.normalizedName)
+        // Free lead tags only — the set this meant before 0153.
+        .eq('entity', 'contact')
+        .is('group_id', null)
         .is('deleted_at', null)
         .single()
 

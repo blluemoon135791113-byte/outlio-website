@@ -22,9 +22,12 @@ import {
 export function SendToCrmButton({
   jobId,
   recordCount,
+  noun,
 }: {
   jobId: string
   recordCount: number | null
+  /** "accounts" for an account upload; the server decides by the upload, not this. */
+  noun?: 'accounts'
 }) {
   const [state, action, pending] = useActionState<SendToCrmState, FormData>(
     sendExtractionToCrm,
@@ -50,7 +53,7 @@ export function SendToCrmButton({
           Says the count, so the action is not a leap of faith. Says "Add",
           not "Sync" — this happens once, when asked.
         */}
-        {pending ? 'Adding…' : `Add ${recordCount} to CRM`}
+        {pending ? 'Adding…' : `Add ${recordCount}${noun ? ` ${noun}` : ''} to CRM`}
       </button>
 
       {state && !state.ok ? (

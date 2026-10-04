@@ -70,6 +70,8 @@ export function HeadlineRow({
             linkLabel={LINK_LABELS[entry.key] ?? 'View'}
             delta={{
               change: entry.delta,
+              unit: entry.deltaUnit,
+              isNew: entry.isNew,
               previous: entry.previous,
               higherIsBetter: entry.higherIsBetter,
             }}

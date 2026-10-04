@@ -20,9 +20,8 @@ import { formatMoney } from '@/lib/format/money'
  * ║  exactly how a manager reads their own pipeline as the company's.         ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
- * It renders nothing without data rather than rendering zeroes — a workspace
- * that has not rolled up yet is not a workspace with no pipeline, and a zero
- * here reads as the most discouraging possible interpretation of missing data.
+ * These are live reads. An unavailable figure stays unknown, with a visible
+ * error; it must neither render as zero nor take down the rest of the page.
  */
 export function TeamRow({
   openValue,
@@ -44,8 +43,7 @@ export function TeamRow({
   unconvertible: number | null
   overdueTasks: number | null
 }) {
-  // Nothing observed at all — say nothing rather than invent a zero.
-  if (openValue === null && openCount === null && overdueTasks === null) return null
+  const unavailable = openValue === null || openCount === null || overdueTasks === null
 
   return (
     <section aria-label="Team activity" className="space-y-3">
@@ -60,6 +58,12 @@ export function TeamRow({
           Full reports
         </Link>
       </div>
+
+      {unavailable ? (
+        <p role="alert" className="text-sm text-muted">
+          Some team figures could not be loaded. Refresh to retry.
+        </p>
+      ) : null}
 
       {/*
         ⚠️ TWO-UP ON A PHONE, THREE FROM `sm`. These are stat cards like

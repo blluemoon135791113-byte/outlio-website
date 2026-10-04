@@ -361,3 +361,48 @@ promise.
   `UNIMPLEMENTED_ACTIONS` is empty, so `.filter(actionIsImplemented)` is a
   current no-op that no behavioural test can distinguish. It becomes testable
   the day an action is unimplemented, which is the day it matters.
+
+---
+
+## ADR-007 — The account workspace's schema lands one step ahead of its code
+
+**Status:** accepted, 2026-10-01. Applies ADR-006 to tables.
+
+### Context
+
+The account workspace is built in eight verified steps, and step 1 is
+migrations only (0144–0149). Migrations here are applied by hand, and
+CLAUDE.md requires a migration to be applied **before** the code that calls
+it is merged — so for one step the tables necessarily exist with nothing
+reading them. `schema-without-code.test.ts` flagged seven, correctly.
+
+### Decision
+
+**List them in `KNOWN_UNUSED`, each with the build step that removes it.** The
+guard is two-directional, so each entry fails the suite the moment its code
+lands and must then be deleted — the allowlist shrinks back by itself.
+
+| Entry | Guard | Leaves the list in |
+|---|---|---|
+| `crm_company_products`, `crm_account_permission_overrides` | schema-without-code | step 2 — ✅ **left 2026-10-01** (`crm_company_products` was then dropped by 0153) |
+| `crm_company_sources` | schema-without-code | planned for step 5 — ✅ **left early, step 2**: manual creation records its source |
+| `crm_contact_role_assignments`, `crm_contact_role_state` | schema-without-code | step 4 — ✅ **left 2026-10-02**: `lib/crm/lead-role-service.ts` reads and writes them |
+| `crm_import_mappings` | schema-without-code | step 5 (import/export + extraction settings) |
+| `crm_icp_allocation_targets` → **`crm_tag_allocation_targets`** | schema-without-code | step 6 (allocation view). Renamed by 0153: ICP/Product became workspace tag groups and the old table was dropped with its rows carried over. Same exit. |
+| `lib/crm/account-writes.ts` | orphan-module, module-reachability | step 3 — ✅ **left 2026-10-01**: the Accounts forms call it through `lib/crm/account-actions.ts` |
+
+The other new tables are already named in a SQL function body (seed, trigger
+or assignment function), so the guard counts them as reachable.
+
+**Server actions are not created ahead of their forms.** `action-reachability`
+allows no exceptions, and an action is a public endpoint — so step 2 ships the
+SERVICE layer, which enforces every permission itself
+(`tests/unit/account-writes.test.ts`), and step 3 adds each action together
+with the form that calls it.
+
+### Exit condition
+
+`KNOWN_UNUSED` contains none of the seven after step 6, and
+`lib/crm/account-writes.ts` is in neither module allowlist after step 3. If one is still there,
+either its feature was dropped (then drop the table) or it was built against a
+second table (then that is the defect to fix).

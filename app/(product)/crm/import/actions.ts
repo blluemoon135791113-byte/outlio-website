@@ -23,7 +23,9 @@ import {
   summarizePlan,
   type ImportMapping,
 } from '@/lib/crm/csv-import'
+import { assertAccountPermission, canSeeAccount } from '@/lib/crm/account-access'
 import { ingestExtractionJob, runCsvImport, undoBatch } from '@/lib/crm/ingest'
+import { ingestAccountJob } from '@/lib/crm/ingest-account-job'
 import { routeBatch, type RoutingSummary } from '@/lib/crm/routing'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
@@ -200,6 +202,26 @@ export async function commitImport(
     return { step: 'error', error: 'No row in that file could be imported.' }
   }
 
+  /*
+   * "Import leads" from an account page. The id arrives in the form, so it is
+   * checked like any other input: the caller must be able to see the account.
+   * An id they cannot see is refused outright rather than silently ignored —
+   * importing a whole file to the wrong place is worse than not importing.
+   * Checked BEFORE the import job is recorded, so a refusal leaves nothing
+   * behind to trip "you already imported this" later.
+   */
+  const companyId = String(formData.get('companyId') ?? '') || null
+  if (companyId) {
+    try {
+      const access = await assertAccountPermission(null)
+      if (access.ctx.workspace.id !== ctx.workspace.id || !(await canSeeAccount(access, companyId))) {
+        return { step: 'error', error: 'That account could not be found.' }
+      }
+    } catch {
+      return { step: 'error', error: 'That account could not be found.' }
+    }
+  }
+
   const filename = String(formData.get('filename') ?? 'import.csv')
   const db = createAdminClient()
 
@@ -227,6 +249,7 @@ export async function commitImport(
     const result = await runCsvImport(ctx.workspace.id, job.id, plan, {
       actorUserId: ctx.userId,
       name: filename,
+      companyId,
     })
 
     const routing = await routeImportedBatch(ctx.workspace.id, result.batchId)
@@ -246,7 +269,7 @@ export async function commitImport(
       routing,
     }
   } catch {
-    return { step: 'error', error: 'That import did not finish. Nothing was changed.' }
+    return { step: 'error', error: 'That import did not finish. Some rows may already be saved. Review the CRM before retrying.' }
   }
 }
 
@@ -308,6 +331,40 @@ export async function sendExtractionToCrm(
 
   const jobId = String(formData.get('jobId') ?? '')
   if (!jobId) return { ok: false, error: 'No extraction selected.' }
+
+  /*
+   * An ACCOUNT upload becomes accounts, not contacts — and creating accounts
+   * is the account rule's `accounts.import` on top of `crm.import`. ⚠️ The
+   * kind is read from the UPLOAD, never from the form: a request claiming
+   * "accounts" for a lead upload must not pick the branch. (Tenancy is checked
+   * inside each ingest; this read only chooses which.)
+   */
+  const { data: upload } = await createAdminClient()
+    .from('extraction_jobs')
+    .select('kind')
+    .eq('id', jobId)
+    .maybeSingle()
+  if (upload?.kind === 'account_list') {
+    try {
+      await assertAccountPermission('accounts.import')
+    } catch {
+      return { ok: false, error: 'You do not have permission to add accounts to the CRM.' }
+    }
+    try {
+      const result = await ingestAccountJob(ctx.workspace.id, jobId, ctx.userId)
+      revalidatePath('/crm/companies')
+      revalidatePath('/dashboard/jobs')
+      const parts = [`${result.accountsCreated} ${result.accountsCreated === 1 ? 'account' : 'accounts'} added`]
+      if (result.accountsMatched > 0) parts.push(`${result.accountsMatched} already in your CRM (empty fields filled)`)
+      if (result.accountsSkipped > 0) parts.push(`${result.accountsSkipped} skipped`)
+      return { ok: true, message: `${parts.join(', ')}.` }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (message.includes('no such extraction job')) return { ok: false, error: 'That upload no longer exists.' }
+      if (message.includes('not an account upload')) return { ok: false, error: 'That upload holds leads, not accounts.' }
+      return { ok: false, error: 'That account import did not finish. Some accounts may already be saved; retrying will match them rather than create duplicates.' }
+    }
+  }
 
   try {
     const result = await ingestExtractionJob(ctx.workspace.id, jobId, {

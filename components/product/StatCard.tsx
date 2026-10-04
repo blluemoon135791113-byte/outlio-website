@@ -31,6 +31,10 @@ export type StatDelta = {
    * refuses to divide by a zero previous period.
    */
   change: number | null
+  /** Rate differences are fractions too, but display in percentage points. */
+  unit?: 'percentage-points'
+  /** Explicit for formatted values, which cannot reliably be compared to zero. */
+  isNew?: boolean
   /** The baseline. Shown when no percentage can be, so the reader can judge it. */
   previous: number
   /**
@@ -209,7 +213,7 @@ export function StatCard({
 }
 
 function DeltaChip({ delta, value }: { delta: StatDelta; value: number | string }) {
-  const { change, previous, higherIsBetter = true } = delta
+  const { change, previous, higherIsBetter = true, unit } = delta
 
   /*
    * ⚠️ FOUR OUTCOMES, AND ONLY ONE OF THEM IS A PERCENTAGE.
@@ -220,8 +224,10 @@ function DeltaChip({ delta, value }: { delta: StatDelta; value: number | string 
    * grey "0%" reads as a result rather than an absence.
    */
   if (change === null) {
-    const grew = typeof value === 'number' ? value > 0 : value !== '0'
-    if (previous !== 0 || !grew) return null
+    const isNew = delta.isNew ?? (
+      previous === 0 && (typeof value === 'number' ? value > 0 : value !== '0')
+    )
+    if (!isNew) return null
     return (
       <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
         New
@@ -252,11 +258,12 @@ function DeltaChip({ delta, value }: { delta: StatDelta; value: number | string 
       </svg>
       <span>
         {up ? '+' : '−'}
-        {Math.abs(Math.round(change * 100))}%
+        {Math.abs(Math.round(change * 100))}{unit === 'percentage-points' ? ' pp' : '%'}
       </span>
       {/* The baseline, so a percentage is never the only thing to judge it by. */}
       <span className="sr-only">
-        {up ? 'up' : 'down'} from {previous.toLocaleString()} in the previous period
+        {unit === 'percentage-points' ? 'percentage points; ' : ''}
+        {up ? 'up' : 'down'} from {previous.toLocaleString()}{unit === 'percentage-points' ? '%' : ''} in the previous period
       </span>
     </span>
   )

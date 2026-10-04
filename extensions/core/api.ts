@@ -14,7 +14,7 @@ import { clearAuth, readAuth, writeAuth } from './storage'
 import { ApiError, type ApiErrorCode, type SessionTotals } from './types'
 
 /** Overridden at build time for local development. */
-export const API_BASE = process.env.OUTLIO_API_BASE ?? 'https://outlio.io'
+export const API_BASE = process.env.OUTLIO_API_BASE ?? 'https://app.outlio.io'
 
 type Json = Record<string, unknown>
 
@@ -42,14 +42,24 @@ async function parse(response: Response): Promise<Json | null> {
   }
 }
 
-/** Exchanges the refresh token. Returns false when the device is finished. */
+// The panel and capture can cross token expiry together. Rotating the same
+// refresh token twice revokes the device; share one refresh inside the worker.
+let refreshFlight: Promise<boolean> | null = null
+
 async function refresh(): Promise<boolean> {
+  if (!refreshFlight) refreshFlight = refreshTokens().finally(() => { refreshFlight = null })
+  return refreshFlight
+}
+
+/** Exchanges the refresh token. Returns false when the device is finished. */
+async function refreshTokens(): Promise<boolean> {
   const auth = await readAuth()
   if (!auth) return false
 
   let response: Response
   try {
     response = await fetch(`${API_BASE}/api/extension/refresh`, {
+      signal: AbortSignal.timeout(30_000),
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -90,6 +100,7 @@ async function authed(
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
+      signal: AbortSignal.timeout(30_000),
       headers: {
         ...(init.headers ?? {}),
         'content-type': 'application/json',
@@ -107,7 +118,12 @@ async function authed(
 
   // One refresh, one replay. Anything else is terminal.
   if (allowRetry && (code === 'TOKEN_EXPIRED' || code === 'UNAUTHENTICATED')) {
+    const latest = await readAuth()
+    // Another request may already have refreshed while this response travelled.
+    if (latest && latest.accessToken !== auth.accessToken) return authed(path, init, false)
     if (await refresh()) return authed(path, init, false)
+    // A transient refresh outage must not be mistaken for device revocation.
+    if (await readAuth()) throw new ApiError('NETWORK', 0, 'refresh unavailable')
   }
 
   if (code === 'DEVICE_REVOKED') await clearAuth()
@@ -225,6 +241,7 @@ export async function exchangePairingCode(
   state: string,
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/api/extension/pair`, {
+    signal: AbortSignal.timeout(30_000),
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ code, state }),

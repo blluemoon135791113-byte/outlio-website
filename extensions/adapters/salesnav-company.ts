@@ -24,11 +24,13 @@
  * charging for a page that yields no leads.
  */
 
+import { snapshotUrl } from '../core/page-snapshot'
+
 /** `/sales/company/1035` → `1035`. Numeric ids only; anything else is not one. */
 export function companyIdFromUrl(url: string): string | null {
   try {
     const parsed = new URL(url)
-    if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return null
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || !/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return null
 
     const match = /^\/sales\/company\/(\d{1,20})(?:\/|$)/i.exec(parsed.pathname)
     return match?.[1] ?? null
@@ -77,7 +79,7 @@ export function normaliseWebsite(href: string | null | undefined, base?: string)
     // A bare hostname with no dot is not a public site.
     if (!url.hostname.includes('.')) return null
 
-    return url.toString()
+    return snapshotUrl(url.toString())
   } catch {
     return null
   }
@@ -240,11 +242,8 @@ export function readPeople(card: Doc): CompanyPerson[] {
 }
 
 function absolute(href: string): string | null {
-  try {
-    return new URL(href, 'https://www.linkedin.com').toString()
-  } catch {
-    return null
-  }
+  const safe = snapshotUrl(href)
+  return safe && /(^|\.)linkedin\.com$/i.test(new URL(safe).hostname) ? safe : null
 }
 
 /**

@@ -5,7 +5,7 @@
  * opens a company, or contacts LinkedIn itself.
  */
 import type { CapturedPage, PageAdapter } from '../core/types'
-import { sanitizePageElement, sha256Hex } from '../core/page-snapshot'
+import { sanitizePageElement, sha256Hex, snapshotUrl } from '../core/page-snapshot'
 
 const TABLE = '[data-x--account-hub--table]'
 const ROW = '[data-x--account-hub--table-data-row]'
@@ -22,20 +22,22 @@ export const salesNavAccountListAdapter: PageAdapter = {
   supports(url: string): boolean {
     try {
       const parsed = new URL(url)
-      if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return false
-      return /^\/sales\/(lists\/company|accounts?(?:\/|$)|account-hub(?:\/|$))/i.test(parsed.pathname)
+      if (parsed.protocol !== 'https:' || parsed.username || parsed.password || !/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return false
+      return /^\/sales\/(lists\/company|accounts?|account-hub)(?:\/|$)/i.test(parsed.pathname)
     } catch {
       return false
     }
   },
 
   isReady(): boolean {
-    return document.querySelectorAll(`${TABLE} ${ROW}`).length > 0
+    return Boolean(document.querySelector(`${TABLE} ${ROW} a[data-anonymize="company-name"][href*="/sales/company/"]`))
   },
 
   getPageIdentifier(): string | null {
     const fromUrl = new URL(window.location.href).searchParams.get('page')
-    return fromUrl && /^\d{1,4}$/.test(fromUrl) ? fromUrl : '1'
+    if (fromUrl && /^\d{1,4}$/.test(fromUrl)) return fromUrl
+    const text = document.querySelector('[aria-current="page"], [data-test-pagination-page-btn].active, .artdeco-pagination__indicator--number.active')?.textContent?.trim()
+    return text && /^\d{1,4}$/.test(text) ? text : '1'
   },
 
   getPageName(): string {
@@ -66,7 +68,7 @@ export const salesNavAccountListAdapter: PageAdapter = {
     return {
       sourceType: 'salesnav_account_list',
       html,
-      sourceUrl: window.location.href.split('#')[0]!,
+      sourceUrl: snapshotUrl(window.location.href)!,
       pageName: salesNavAccountListAdapter.getPageName(),
       pageIdentifier: salesNavAccountListAdapter.getPageIdentifier(),
       contentHash: await sha256Hex(html),

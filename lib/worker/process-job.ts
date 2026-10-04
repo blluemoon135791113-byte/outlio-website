@@ -22,11 +22,13 @@ import { dedupeLeads, type DedupeMode, type KeyedLead } from '@/lib/leads/dedupe
 import { ParseError, parseSearchResults } from '@/lib/leads/parse'
 import { detectSavedPageType } from '@/lib/leads/page-type'
 import { AccountListParseError, parseAccountList, type ParsedAccount } from '@/lib/companies/parse-account-list'
+import { parseAccountSearch } from '@/lib/companies/parse-account-search'
 import { ingestAccounts } from '@/lib/companies/ingest-accounts'
 import { persistAccountList } from '@/lib/companies/account-list-store'
 import { buildAccountRecordCsv } from '@/lib/export/accounts'
 import { loadAccountExportRecords } from '@/lib/export/account-loader'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { settleCaptureJob } from '@/lib/extension/capture'
 import { SNIFF_BYTES, sniffHtml } from '@/lib/upload/sniff'
 import { STORAGE_BUCKET } from '@/lib/upload/process'
 import {
@@ -368,6 +370,10 @@ export async function processJob(jobId: string, userId: string): Promise<Process
         // Account membership and CRM export remain available without research.
       })
 
+    if (job.capture_session_id) {
+      await settleCaptureJob({ userId, jobId, found: allAccounts.length, kept: persisted.accountCount, status: 'processed' })
+    }
+
     return {
       jobId,
       status: filesFailed > 0 ? ('partially_completed' as const) : ('completed' as const),
@@ -620,27 +626,10 @@ export async function processJob(jobId: string, userId: string): Promise<Process
    * progress counter must never fail a job whose real work succeeded.
    */
   if (job.capture_session_id) {
-    try {
-      const { data: page } = await supabase
-        .from('capture_pages')
-        .select('id')
-        .eq('extraction_job_id', jobId)
-        .eq('user_id', userId)
-        .maybeSingle()
-
-      if (page) {
-        await supabase.rpc('roll_capture_totals', {
-          p_page_id: page.id,
-          p_user_id: userId,
-          p_job_id: jobId,
-          p_leads_found: report.totalParsed,
-          p_leads_kept: report.uniqueKept,
-          p_status: status === 'failed' ? 'failed' : 'processed',
-        })
-      }
-    } catch {
-      // Counters are cosmetic; the lead data is the product.
-    }
+    await settleCaptureJob({
+      userId, jobId, found: report.totalParsed, kept: report.uniqueKept,
+      status: status === 'failed' ? 'failed' : 'processed',
+    })
   }
 
   return {
@@ -699,36 +688,37 @@ async function parseOne(storagePath: string, fileId: string, userId: string, job
   /*
    * ⚠️ ROUTE BEFORE PARSING, SO A VALID FILE IS NOT CALLED BROKEN.
    *
-   * An Account Hub page fed to the lead parser yields zero leads, which is
+   * A page of ACCOUNTS fed to the lead parser yields zero leads, which is
    * correctly raised as ERR_FILE_FORMAT — and is nonetheless the wrong answer:
-   * the file was fine, we pointed the wrong reader at it. The user then gets
-   * "this page could not be read" for a page we can read, and no hint that
-   * they uploaded the wrong KIND of export.
+   * the file was fine, we pointed the wrong reader at it. Both account page
+   * types (a saved Account Hub list, and account SEARCH results) produce the
+   * same account rows and leave through the account branch of `processJob`.
    *
-   * Account lists are parsed by `lib/companies/parse-account-list.ts`, but
-   * this pipeline persists LEADS — companies have no ingestion path yet — so
-   * for now the file is refused with a message that names what it actually is.
-   * That is a smaller lie than "malformed", and it is the honest state until
-   * company ingestion exists.
+   * ⚠️ `unknown` IS REFUSED BY NAME, NOT HANDED TO THE LEAD PARSER. Every lead
+   * page carries the person-name anchor the detector looks for, so the lead
+   * parser could only ever fail on it — with a message about leads, for a page
+   * that may be something else entirely.
    */
-  /*
-   * ⚠️ ROUTE BEFORE PARSING, SO A VALID FILE IS NOT CALLED BROKEN.
-   *
-   * An Account Hub page fed to the lead parser yields zero leads, which is
-   * correctly raised as ERR_FILE_FORMAT — and is nonetheless the wrong answer:
-   * the file was fine, we pointed the wrong reader at it.
-   */
-  if (detectSavedPageType(html) === 'account_list') {
+  const pageType = detectSavedPageType(html)
+
+  if (pageType === 'account_list' || pageType === 'account_search') {
     try {
-      const result = parseAccountList(html)
+      const result = pageType === 'account_list' ? parseAccountList(html) : parseAccountSearch(html)
       return { kind: 'account_list' as const, accounts: result.accounts }
     } catch (error) {
       // The parser's own error already names what went wrong with the layout.
       throw new ParseError(
         'ERR_FILE_FORMAT',
-        error instanceof AccountListParseError ? error.message : 'account list could not be read',
+        error instanceof AccountListParseError ? error.message : 'account page could not be read',
       )
     }
+  }
+
+  if (pageType === 'unknown') {
+    throw new ParseError(
+      'ERR_FILE_FORMAT',
+      'not a page Outlio can read: expected Sales Navigator lead search, account search or an account list',
+    )
   }
 
   return { kind: 'lead_search' as const, ...parseSearchResults(html) }

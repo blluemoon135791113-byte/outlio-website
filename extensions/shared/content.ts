@@ -1,206 +1,186 @@
-/**
- * Content script for lead-results pages.
- *
- * Two jobs, and deliberately nothing else:
- *
- *   1. Answer the background worker's questions about this page.
- *   2. Say when the USER has navigated to a different results page.
- *
- * It never clicks, never pages, never opens a profile. Navigation is the
- * user's; this only notices that it happened.
- *
- * ---------------------------------------------------------------------------
- * WHY NAVIGATION DETECTION LOOKS LIKE THIS
- * ---------------------------------------------------------------------------
- *
- * Sales Navigator is a single-page app: moving to page 2 swaps the list in
- * place, with no document load. So `load` events are useless and we watch
- * three things instead:
- *
- *   - pushState / replaceState  (patched, because they emit no event)
- *   - popstate                  (back and forward)
- *   - a MutationObserver        (list swapped without a URL change)
- *
- * The observer is the expensive one, so it is scoped to the results container
- * rather than the document, debounced, and told to ignore attribute churn —
- * Ember rewrites attributes constantly and reacting to that would fire on
- * every keystroke. It only reports when the ROW SIGNATURE changes, which is
- * what stops one re-render from being captured twice.
- */
-import { adapterFor } from '../adapters/salesnav'
+/** Passive Sales Navigator observation. Outside an explicit capture session we
+ * register listeners only: no person/company field reads, snapshots or polling.
+ * The document observer survives replaced lists/main elements; URL polling also
+ * sees pushState from LinkedIn's MAIN world (content scripts are isolated). */
+import { adapterFor, pageSignature } from '../adapters/salesnav'
 import { isCompanyPage, readCompanyPage } from '../adapters/salesnav-company'
+import { readSessionId } from '../core/storage'
+import { snapshotUrl } from '../core/page-snapshot'
 import type { ContentMessage, ContentReply } from '../core/types'
 
 declare const chrome: {
   runtime: {
     onMessage: {
-      addListener(
-        fn: (
-          message: ContentMessage,
-          sender: unknown,
-          respond: (reply: ContentReply) => void,
-        ) => boolean | undefined,
-      ): void
+      addListener(fn: (message: ContentMessage, sender: unknown, respond: (reply: ContentReply) => void) => boolean | undefined): void
     }
     sendMessage(message: unknown): Promise<unknown>
+  }
+  storage: {
+    onChanged: {
+      addListener(fn: (changes: Record<string, { newValue?: unknown }>, area: string) => void): void
+    }
   }
 }
 
 const DEBOUNCE_MS = 800
-
+let sessionId: string | null = null
+let sessionEpoch = 0
+let storageRevision = 0
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
-let lastSignature = ''
+let routeTimer: ReturnType<typeof setInterval> | null = null
 let observer: MutationObserver | null = null
-
-/**
- * A cheap fingerprint of what is currently listed.
- *
- * Row count plus the first and last profile links. Enough to tell page 2 from
- * page 3, cheap enough to run on every mutation burst, and — critically —
- * unchanged by a re-render of the same page, so a redraw is not mistaken for
- * navigation.
- */
-function signature(): string {
-  const rows = document.querySelectorAll('li.artdeco-list__item, tr[data-x--people-list--row]')
-  const links = document.querySelectorAll<HTMLAnchorElement>('a[href*="/sales/lead/"]')
-  const first = links[0]?.getAttribute('href')?.split(',')[0] ?? ''
-  const last = links[links.length - 1]?.getAttribute('href')?.split(',')[0] ?? ''
-  return `${rows.length}|${first}|${last}`
-}
-
-/**
- * Company pages the user has already opened in this tab.
- *
- * Sales Navigator is a SPA and re-renders constantly; without this, one visit
- * to a company page would report the same website on every mutation burst.
- */
+let lastSignature = ''
+let observedUrl = window.location.href
 const reportedCompanies = new Set<string>()
 
-/**
- * Reports a website listed on a company page the USER opened.
- *
- * ⚠️ NOTHING HERE NAVIGATES. This fires only because the user is already on the
- * page. The extension does not open company pages and must never learn how —
- * see the header of `extensions/adapters/salesnav-company.ts`.
- */
-function announceCompanyIfSeen(): void {
-  const url = window.location.href
-  if (!isCompanyPage(url)) return
+function setSession(next: string | null): void {
+  if (next === sessionId) return
+  sessionId = next
+  sessionEpoch += 1
+  lastSignature = ''
+  reportedCompanies.clear()
+  if (debounceTimer !== null) clearTimeout(debounceTimer)
+  debounceTimer = null
+  observer?.disconnect()
+  observer = null
+  if (routeTimer !== null) clearInterval(routeTimer)
+  routeTimer = null
+  if (!sessionId) return
 
-  const observation = readCompanyPage(document, url)
-  // No website on the page is not worth a message.
-  if (!observation) return
-
-  if (reportedCompanies.has(observation.companyId)) return
-  reportedCompanies.add(observation.companyId)
-
-  void chrome.runtime.sendMessage({ type: 'COMPANY_SEEN', ...observation })
+  observedUrl = window.location.href
+  observer = new MutationObserver(schedule)
+  observer.observe(document, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    // Ignore Ember IDs, classes and event churn; notice in-place row hydration.
+    attributeFilter: ['href', 'data-anonymize', 'data-x-search-result', 'aria-current'],
+  })
+  routeTimer = setInterval(() => {
+    if (observedUrl === window.location.href) return
+    observedUrl = window.location.href
+    schedule()
+  }, 500)
+  schedule() // A new session on the SAME page must be observed again.
 }
 
-function announceIfChanged(): void {
+/** Ignore a stale get() if storage.onChanged delivered a newer session while
+ * it was in flight. Storage failures close the gate, never fail open. */
+async function refreshSession(): Promise<void> {
+  const revision = storageRevision
+  try {
+    const next = await readSessionId()
+    if (revision === storageRevision) setSession(next || null)
+  } catch {
+    if (revision === storageRevision) setSession(null)
+  }
+}
+
+function announceCompanyIfSeen(): void {
+  if (!sessionId || !isCompanyPage(window.location.href)) return
+  const observation = readCompanyPage(document, window.location.href)
+  if (!observation) return
+  const key = JSON.stringify(observation)
+  if (reportedCompanies.has(key)) return
+  reportedCompanies.add(key)
+  const epoch = sessionEpoch
+  void chrome.runtime.sendMessage({ type: 'COMPANY_SEEN', ...observation }).catch(() => {
+    if (epoch === sessionEpoch) reportedCompanies.delete(key)
+  })
+}
+
+async function announceIfChanged(): Promise<void> {
+  if (!sessionId || document.visibilityState !== 'visible') return
+  const epoch = sessionEpoch
+  await refreshSession()
+  if (!sessionId || epoch !== sessionEpoch || document.visibilityState !== 'visible') return
   announceCompanyIfSeen()
-
   const adapter = adapterFor(window.location.href)
-  if (!adapter || !adapter.isReady()) return
-
-  const next = signature()
+  if (!adapter || !adapter.isReady()) {
+    lastSignature = ''
+    return
+  }
+  const next = pageSignature(adapter)
   if (next === lastSignature) return
   lastSignature = next
-
   void chrome.runtime.sendMessage({
     type: 'PAGE_CHANGED',
-    url: window.location.href,
+    url: snapshotUrl(window.location.href),
     pageIdentifier: adapter.getPageIdentifier(),
+  }).catch(() => {
+    if (epoch === sessionEpoch && lastSignature === next) lastSignature = ''
   })
 }
 
 function schedule(): void {
-  if (debounceTimer) clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(announceIfChanged, DEBOUNCE_MS)
+  if (!sessionId || document.visibilityState !== 'visible') return
+  if (debounceTimer !== null) clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null
+    void announceIfChanged()
+  }, DEBOUNCE_MS)
 }
 
-function watch(): void {
-  if (observer) return
-
-  // Scoped to the list, not the document: observing <body> on a SPA this busy
-  // would fire constantly for no benefit.
-  const target =
-    document.querySelector('ol.artdeco-list')?.parentElement
-    ?? document.querySelector('main')
-    ?? document.body
-
-  observer = new MutationObserver(schedule)
-  observer.observe(target, {
-    childList: true,
-    subtree: true,
-    // Attributes are Ember noise. Ignoring them removes most of the work.
-    attributes: false,
-    characterData: false,
-  })
-
-  const patch = (name: 'pushState' | 'replaceState') => {
-    const original = history[name]
-    history[name] = function patched(this: History, ...args: Parameters<History['pushState']>) {
-      const result = original.apply(this, args)
-      schedule()
-      return result
-    }
+// Hook installation does not inspect the page. It runs even on /sales/home,
+// so later SPA navigation into a list cannot leave capture permanently inert.
+for (const name of ['pushState', 'replaceState'] as const) {
+  const original = history[name]
+  history[name] = function (this: History, ...args: Parameters<History['pushState']>) {
+    const result = original.apply(this, args)
+    observedUrl = window.location.href
+    schedule()
+    return result
   }
-
-  patch('pushState')
-  patch('replaceState')
-  window.addEventListener('popstate', schedule)
 }
+window.addEventListener('popstate', schedule)
+window.addEventListener('hashchange', schedule)
+// Starting in one tab must not import every dormant list tab. Observe a hidden
+// document only when the user actually switches to it during the session.
+document.addEventListener('visibilitychange', schedule)
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !Object.prototype.hasOwnProperty.call(changes, 'outlio.session')) return
+  storageRevision += 1
+  const next = changes['outlio.session']?.newValue
+  setSession(typeof next === 'string' && next ? next : null)
+})
 
 chrome.runtime.onMessage.addListener((message, _sender, respond) => {
-  const adapter = adapterFor(window.location.href)
-
   if (message.type === 'IS_SUPPORTED') {
+    const adapter = adapterFor(window.location.href)
     respond({
       ok: true,
       supported: Boolean(adapter),
+      // Readiness checks element presence only, never person/company values.
       ready: adapter ? adapter.isReady() : false,
       pageIdentifier: adapter ? adapter.getPageIdentifier() : null,
     })
     return true
   }
 
-  if (message.type === 'CAPTURE_NOW') {
-    if (!adapter) {
-      respond({ ok: false, error: 'This page is not a supported results page.' })
-      return true
-    }
-
-    if (!adapter.isReady()) {
-      respond({ ok: false, error: 'The results are still loading. Try again in a moment.' })
-      return true
-    }
-
-    adapter
-      .capture({ includeCompanyWebsites: message.includeCompanyWebsites === true })
-      .then((captured) => {
-        // Adopt the signature we just sent, so the re-render that usually
-        // follows a capture is not treated as a new page.
-        lastSignature = signature()
-        respond({ ok: true, captured })
-      })
-      .catch((e: unknown) => {
-        respond({ ok: false, error: e instanceof Error ? e.message : 'Could not read this page.' })
-      })
-
-    return true // keep the channel open for the async reply
-  }
-
-  return undefined
+  if (message.type !== 'CAPTURE_NOW') return undefined
+  void (async () => {
+    await refreshSession()
+    if (!sessionId) throw new Error('Start a capture session before capturing this page.')
+    if (document.visibilityState !== 'visible') throw new Error('TAB_NOT_VISIBLE')
+    const epoch = sessionEpoch
+    const url = window.location.href
+    const adapter = adapterFor(url)
+    if (!adapter) throw new Error('This page is not a supported results page.')
+    if (!adapter.isReady()) throw new Error('The results are still loading. Try again in a moment.')
+    const signature = pageSignature(adapter)
+    const captured = await adapter.capture({ includeCompanyWebsites: message.includeCompanyWebsites === true })
+    await refreshSession()
+    if (!sessionId || epoch !== sessionEpoch) throw new Error('The capture session ended or changed. Try again in the active session.')
+    if (url !== window.location.href) throw new Error('The page changed during capture. Try again.')
+    // Do not read/adopt the NEW page's signature after hashing an old snapshot.
+    lastSignature = signature
+    respond({ ok: true, captured })
+  })().catch((error: unknown) => {
+    respond({ ok: false, error: error instanceof Error ? error.message : 'Could not read this page.' })
+  })
+  return true
 })
 
-/*
- * Watch results pages AND company pages. A company page has no results list, so
- * `adapterFor` returns null for it — checking only that would mean the observer
- * never starts and a company page visited mid-session goes unnoticed.
- */
-if (adapterFor(window.location.href) || isCompanyPage(window.location.href)) {
-  watch()
-  lastSignature = signature()
-  announceCompanyIfSeen()
-}
+void refreshSession()

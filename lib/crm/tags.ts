@@ -67,6 +67,9 @@ export async function ensureTagAttached(input: {
     .select('id')
     .eq('workspace_id', input.workspaceId)
     .eq('normalized_name', normalized)
+    // Free lead tags only — the set this meant before 0153 added groups and account tags.
+    .eq('entity', 'contact')
+    .is('group_id', null)
     .is('deleted_at', null)
     .maybeSingle()
 
@@ -93,6 +96,8 @@ export async function ensureTagAttached(input: {
         .select('id')
         .eq('workspace_id', input.workspaceId)
         .eq('normalized_name', normalized)
+        .eq('entity', 'contact')
+        .is('group_id', null)
         .is('deleted_at', null)
         .maybeSingle()
       if (!raced.data) {

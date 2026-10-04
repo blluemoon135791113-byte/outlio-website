@@ -20,7 +20,7 @@ import {
  * changing their mind after seeing the preview is exactly what the preview is
  * for.
  */
-export function ImportContacts() {
+export function ImportContacts({ account }: { account?: { id: string; name: string } } = {}) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [filename, setFilename] = useState('')
 
@@ -204,6 +204,7 @@ export function ImportContacts() {
               if (file) formData.set('file', file)
               formData.set('mapping', JSON.stringify(preview.preview.mapping))
               formData.set('filename', filename || 'import.csv')
+              if (account) formData.set('companyId', account.id)
               runCommit(formData)
             }}
           >

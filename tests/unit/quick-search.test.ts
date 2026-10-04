@@ -160,8 +160,9 @@ describe('the palette is reachable and behaves', () => {
     expect(PALETTE).toContain("'ArrowUp'")
     expect(PALETTE).toContain("'Enter'")
     expect(PALETTE).toContain("'Escape'")
-    // Dropping focus on close leaves a keyboard user nowhere.
-    expect(PALETTE).toMatch(/openerRef\.current\?\.focus\(\)/)
+    // Restore focus without moving the page behind the dismissed overlay.
+    // The browser regression also verifies this with the real component.
+    expect(PALETTE).toMatch(/openerRef\.current\?\.focus\(\{\s*preventScroll:\s*true\s*\}\)/)
   })
 
   it('is announced as a dialog', () => {

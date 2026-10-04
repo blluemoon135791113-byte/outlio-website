@@ -4,6 +4,547 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-10-03 — Sales Navigator account SEARCH results: a third saved-page type
+
+**0156 is applied to production** (2026-10-03; types regenerated, the columns
+answer). Code NOT deployed — uploads on outlio.io still use the old reader.
+
+### Why
+
+An owner's upload failed three times with `ERR_FILE_FORMAT`, "0 leads". The
+file (kept locally under `private/`, never committed) was an account SEARCH
+results page (`/sales/search/company`): no people, so the lead reader was
+right to find none — and there was no reader for it. Account uploads also never
+reached CRM Accounts, and dropped headcount and the About text.
+
+### What was built
+
+- **Detection** (`lib/leads/page-type.ts`): `account_search` on
+  `data-x-search-result="ACCOUNT"`, tested after account lists and before
+  leads. An `unknown` page is now refused by name instead of being handed to
+  the lead parser.
+- **Reader** (`lib/companies/parse-account-search.ts`), `data-*` anchors only:
+  name + Sales Navigator link (query stripped), industry, headcount ("253
+  employees" → count; "1.2K+" → range as printed, never converted), location
+  when shown, LinkedIn signals (`search_spotlight_*` keys), and the About text
+  **from the description's `title`** — the visible text is a clipped preview.
+  On the real page: 25/25 rows, 25 summaries (≤1,984 chars), 24 counts + 1
+  range, 19 signals, location blank in all 25 (so NULL).
+- **Storage** (0156): `account_list_entries` gains page_kind, headcount,
+  range, summary, location, signals; one index so an upload cites an account
+  once in `crm_company_sources`.
+- **"Add N accounts to CRM"** on account uploads (`lib/crm/ingest-account-job.ts`,
+  `crm.import` + `accounts.import`; branch chosen by the STORED job kind):
+  create or match by Sales Navigator id through `upsertCrmCompany` (fills
+  NULLs only); summary and range filled only where empty — a range only beside
+  no exact count; one provenance row per account per upload with what the page
+  showed. Owner, status, tags untouched.
+- **Account page**: Summary (existing) and "Sales Navigator signals · seen …"
+  badges from the newest source that had them.
+- `docs/SELECTOR_MAP.md` §7; fabricated fixture
+  `tests/fixtures/html/account-search-valid.html`; migration harness gains an
+  `account_list_entries` scaffold copied from 0067.
+
+### Fixed from review
+
+- A range could sit beside an exact count and contradict it.
+- An upload outside the workspace answered differently from a missing one, and
+  its kind was checked first.
+- Summary/range fill errors were silently ignored; now logged.
+
+### Verified
+
+typecheck clean · lint clean · build succeeds · unit 4569/4571 + 1 new case
+(parse-account-search 18, account-job-to-crm 11). The two failures are
+`auth-shell-layout` and `auth-error-attribution` — concurrent, unrelated edits
+to the sign-in/sign-up pages. 0156 smoke 4/4. verification-reviewer: PASS on
+all 9 criteria. product-risk-reviewer: ship with conditions — fixed above.
+
+### Carried forward
+
+- **Accepted, consistent with lead imports:** an uploaded company that
+  matches an account the importer cannot see still has its empty fields filled,
+  and is counted as "already in your CRM" — which tells a member without
+  `view_all` that it exists.
+- Any member with the permissions can send another member's upload to the CRM
+  if they know its id (same as the lead path).
+- Staging is behind from 0144 onward (verified 2026-10-03); 0156 alone would
+  fail there.
+
+---
+
+## 2026-10-02 — Deals on accounts: "New deal" + bulk "Move to pipeline"
+
+**0155 is applied to production** (2026-10-02; types regenerated, the function
+answers). It only adds `crm_create_account_deals`; nothing deployed calls it.
+
+A deal could always belong to a company with no person on it (0076: both
+`contact_id` and `company_id` nullable) — the product never offered it; the
+only form copied the company from a chosen contact.
+
+### What was built
+
+- **Account page → Deals → "New deal"** (`crm.opportunity.create` + the account
+  rule): name (starts as the account's, editable), "Pipeline › Stage" (OPEN
+  stages of live pipelines only — the pipeline is derived from the stage,
+  never taken from the form), an optional person who must work at THIS
+  account and be visible to the caller, value / currency / close date (blank
+  value = unknown, NULL). The Deals list shows each deal's Pipeline › Stage
+  (linked to the board) and won/lost.
+- **Accounts list → bulk "Move to pipeline"**: one deal per ticked account
+  (≤100), named after the account (else its domain; an account with neither
+  is skipped — nothing invented), no value, the workspace currency, the
+  stage's default probability, owned by the mover. **An account already open
+  in that pipeline is skipped, never duplicated** — checked inside
+  `crm_create_account_deals` under each account's row lock, in id order (no
+  double-up, no deadlock between overlapping runs). Hidden, deleted and
+  foreign accounts are one "not found" count.
+- **Pipeline cards show the account** — only when the viewer may see that
+  account (`visibleAccountIds`, the batch form of `canSeeAccount`); a setter's
+  deal on an account not assigned to them shows no account name.
+
+**Decision recorded:** the single "New deal" allows a second open deal for the
+same account (an upsell or renewal is real; the button is disabled while
+pending). Bulk skips, because "put these accounts in the pipeline" makes a
+second deal an accident.
+
+### Fixed from review
+
+- Pipeline cards disclosed account names past the account rule — now filtered.
+- Bulk visibility was two queries per account — now two in total.
+- The single path wrote no audit row; bulk's carried no ids. Both now do, and
+  an audit failure after the commit is logged instead of reported as a failed
+  add (a retry would have said "already in that pipeline").
+- Pre-existing, closed while here: the pipeline page's "New deal" accepted a
+  deleted contact, or (for a setter) a colleague's.
+- The shared money parser now refuses a value `numeric(14,2)` cannot hold and a
+  malformed close date, with a sentence instead of a database error.
+
+### Verified
+
+typecheck clean · lint clean · build succeeds · unit 4525/4526 (+ account-deals
+20, visible-account-ids 5). The one failure is the unrelated
+`auth-shell-layout`. 0155 smoke 8/8 (one per account, open-deal skip, closed
+deal does not block, other pipeline does not block, name/domain/unnamed,
+missing ids, exact field values incl. identity FX, re-run no-op, refusals,
+grants). verification-reviewer: PASS on all 6 criteria (criterion 2 re-checked
+after the batch-visibility change). product-risk-reviewer: ship with conditions —
+conditions fixed above.
+
+### Carried forward
+
+- No rate limit beyond the 100-per-call cap; dedupe bounds bulk to one open
+  deal per account per pipeline.
+- Rollback leaves created deals as ordinary rows (soft-delete by `created_by`
+  and time if ever needed).
+
+---
+
+## 2026-10-02 — Account workspace, redesign phase B: decision makers + other profiles
+
+**0154 is applied to production** (2026-10-02; types regenerated, the new
+functions answer). The code is NOT deployed yet; the deployed code calls none
+of 0154's functions, so the order is free.
+
+### What was built
+
+- **"Add decision maker"** on the account page (needs `crm.contact.create`
+  and `crm.contact.edit`): name (required), position, email, phone, LinkedIn,
+  Sales Navigator, and any number of other profile links. It is the existing
+  deduplicating add ("Add lead"), then the Decision Maker role set BY HAND
+  (pinned: suggestions never take it away) and the links.
+  - **Everything is validated before anything is written**: the account's
+    visibility, every address (LinkedIn must be `/in/…`, Sales Navigator
+    `/sales/lead/…`), email, phone, every link. A typo keeps the form filled.
+  - A person who already works at another account is not moved and not made
+    a decision maker here. A match the caller may not see is **held**: no
+    role, no links, no typed address written to that record.
+  - Both LinkedIn addresses are kept in their own columns. The identity is the
+    Navigator one (how extracted leads are keyed) — unless a contact is
+    already keyed by the typed public profile, which is then matched instead.
+- **Other profiles** (`crm_contact_links`): X, Facebook, Instagram, GitHub,
+  website, or a labelled link. Only a full address of the right site is
+  accepted — a bare handle is refused, never turned into a guessed URL. The
+  database refuses any non-http(s) scheme and any LinkedIn host; ≤20 per lead;
+  a merge moves them to the survivor. Shown in the account's People table and
+  on the contact page (add / remove with `crm.contact.edit`). Included in the
+  data-subject export; erasure removes them by cascade.
+- **0154 also closes Phase A's carried items**: the tag-value delete is one
+  locked statement (`crm_delete_tag_value` — a concurrent tagging can no
+  longer be silently stripped), and `crm_set_company_tags` itself refuses to
+  add to a disabled group.
+
+### Fixed from review
+
+- Typed LinkedIn addresses were written by `createContactManually` BEFORE the
+  held decision, so a setter's entry could fill blanks on a colleague's
+  contact on a request that was refused. Now recorded only after it
+  (`recordContactProfileUrls`).
+- Typing both addresses for someone already keyed by the public profile made
+  a second copy. Now matched on the public key.
+- Website links folded different pages into one (query and path case
+  dropped); the 500-character limit is checked on the stored, encoded form.
+
+### Verified
+
+typecheck clean · lint clean · build succeeds · unit 4500/4501 (+ social-links
+15, add-decision-maker 14). The one failure is the unrelated
+`auth-shell-layout` (concurrent edit to `components/auth/AuthShell.tsx`).
+0154 smoke 15/15 (links, scheme, LinkedIn, label, cap, cross-workspace, merge,
+role add/pin/"other"/disabled, atomic delete, disabled group, grants).
+verification-reviewer: PASS on all 8 criteria (criteria 3–4 re-checked after the
+held-order fix). product-risk-reviewer: ship with conditions — all four fixed
+above.
+
+**Not browser-verified by the agent** (behind production sign-in).
+
+### Carried forward
+
+- Pre-existing: a manual add that matches a contact the caller cannot see
+  still runs the ingest merge on it (fill-blanks), and "held" vs "added" tells
+  a setter whether an email exists in the workspace. Not introduced here.
+- The data-subject export omits emails, phones, tags and roles (pre-existing;
+  spun off as its own task).
+- Role assignments do not follow a contact merge (pre-existing since step 4).
+
+---
+
+## 2026-10-02 — Account workspace, redesign phase A: workspace tag groups
+
+**0153 is applied to production** (2026-10-02; types regenerated). The code
+is NOT deployed yet — see "Deploy now" below.
+
+Owner redesign (2026-10-02): Outlio serves 100+ industries, so the fixed
+healthcare ICP/Product lists were the wrong model. Each workspace now defines
+its own **tag groups** (a chip row each) for accounts and, separately, leads.
+
+### What was built
+
+- **0153** `crm_tag_groups` (entity `company` | `contact`, optional
+  "primary" for account groups); `crm_tags` gains entity, group, slug,
+  description, aliases, order, enabled; `crm_company_tags` (with `source`
+  manual | rule | ai | import, `confidence`, `evidence` — rule/ai reserved for
+  phase D); `crm_tag_allocation_targets`. A lead can carry only lead tags
+  (trigger); an account only account tags (composite FK). Account values are
+  RESTRICT on delete.
+- **Retired:** `crm_icp_types`, `crm_products`, their link and target tables,
+  and the ICP/product functions. Their rows were **carried** into "Whom to
+  Sell" (primary) and "What to Sell" (short name → name, full name →
+  description) **only in the workspace that had accounts**
+  (4385d843…, 2 groups, 18 values, 0 account assignments existed). Every other
+  workspace starts empty. `accounts.edit_icp_tags` + `edit_product_tags` →
+  `accounts.edit_tags`.
+- **Settings → Tags** (`/dashboard/settings/tags`, `config.manage`): create,
+  rename, disable, reorder groups and values; aliases and descriptions. Rename
+  never changes the slug (filter links survive). A group with values cannot be
+  deleted, nor a value accounts **or leads** carry (`crm_contact_tags`
+  cascades — the database would not stop that one). Every change audited.
+- **Accounts list**: one chip row and one column per enabled group, live
+  counts, `?tag=group:value` in the URL (unknown → matches nothing); bulk
+  "Add tag" over every enabled value. **Account page**: one editor per group;
+  a disabled group that still carries values is shown read-only.
+- **Writes refuse** a value from another workspace, another group, a disabled
+  value (an edit may keep one already there), a disabled group, and a missing
+  primary. Bulk add runs the same checks.
+- Legacy lead-tag lookups narrowed to `entity = 'contact' and group_id is
+  null`, so an account value never appears in a lead picker or matches a lead
+  tag by name.
+
+### Fixed from review
+
+- Bulk "Add tag" skipped validation: a crafted request could add a disabled
+  value or a value of a disabled group. Now checked like the editor.
+- Switching "primary" on for a group accounts already use would leave all of
+  them without one. Now refused with a sentence.
+
+### Deploy now
+
+Production's database is ahead of production's code: the deployed code reads
+the dropped tables, so **the Accounts pages error until this code ships**.
+Lead tagging is unaffected today — production has no lead tags, so no name can
+collide with an account value (checked 2026-10-02).
+
+### Verified
+
+typecheck clean · lint clean · build succeeds · unit 4470/4471 (+ tag-groups
+22, account-writes disabled-group/bulk cases). The one failure,
+`auth-shell-layout`, comes from a concurrent, unrelated edit to
+`components/auth/AuthShell.tsx` (not part of this phase).
+0153 smoke 17/17 · carry rehearsal 9/9 · production-order chain (0150 → 0152 →
+0153, without 0151) passes. Read-only production checks: 2 groups, 18 values,
+old tables gone; unknown tag → 0 rows; non-view_all unassigned viewer → 0
+rows; anon refused on the RPC and the table.
+verification-reviewer: PASS on all 9 criteria. product-risk-reviewer: ship
+with conditions — deploy promptly (above); two hardening items fixed above,
+two carried forward.
+
+**Not browser-verified by the agent**: the pages sit behind production
+sign-in, which the agent does not use.
+
+### Carried forward
+
+- `deleteTagValue` counts lead uses, then deletes, in two statements. A lead
+  tagged in that gap loses the tag via the cascade. Needs `config.manage` plus
+  a concurrent tag; to be closed by one SQL statement in phase B's migration.
+- `crm_set_company_tags` itself does not refuse a disabled group (the service
+  does). Same migration.
+- `crm_seed_account_config` still seeds healthcare function keywords for lead
+  roles in every new workspace (owner decision pending, flagged earlier).
+- 0153 is one-way once accounts are tagged; rollback is forward-fix.
+
+---
+
+## 2026-10-02 — Account workspace, build step 4 of 8: leads on the account + role suggestions
+
+**0152 is applied to production** (2026-10-02; types regenerated, an empty
+batch answered `{applied: 0}`). typecheck clean · build succeeds.
+
+### What was built
+
+- **0152** `crm_apply_auto_roles` (batch, one transaction, contact-id lock
+  order) and `crm_set_contact_roles` (a person's choice pins the lead; NULL
+  unpins). The "never overwrite a manual choice" check is made **inside the
+  state-row lock** both writers take — no check-then-write race.
+- **`lib/crm/lead-roles.ts`** — the pure classifier over the editable rules
+  (0144): a role is suggested when a title keyword matches and, if the role
+  has function keywords, one of those too; whole words and phrases; several
+  roles per lead; `other` when nothing matches; nothing when there is no title.
+  Tested against the **seed parsed from 0144**: CIO→Technical, VP Revenue
+  Cycle→Decision Maker, Revenue Cycle Manager→Champion, CFO→Decision Maker.
+- **Suggestions run** after extraction ingest, CSV import, manual add and the
+  workflow `job_title` update — via `applyAutoRolesQuietly`, which can never
+  fail the flow that called it — and on demand ("Refresh role suggestions").
+- **Account page → People**: Name (existing lead page), Title, Role(s)
+  (suggested ones dashed; editable; "Back to suggestions" on a pinned lead),
+  LinkedIn, Sales Nav, Lead status = the stage of the lead's open deal from
+  the existing pipeline (no second status system). Contact scope applies.
+- **Add lead / Import leads** with the account preselected, through the
+  EXISTING flows: `NewContactForm({ account })` and `/crm/import?company=`.
+  The account id is checked server-side like any input. A person who already
+  works at ANOTHER account is never moved by either — a page is not evidence
+  of a new employer. Import rows that name their own company keep it.
+- CSV header aliases: "Sales Nav Company URL" and similar map to the company
+  LinkedIn column, which since 0145 finds the account by either address.
+
+ADR-007: the two role tables left `KNOWN_UNUSED` on their exit.
+
+### Verified
+
+lint clean · unit **4440/4440** (+ lead-roles, lead-role-service,
+add-lead-at-account) · 0152 smoke 9/9 (incl. manual never overwritten, empty
+manual set survives, reset, disabled role, cross-workspace).
+verification-reviewer: PASS on all 8 criteria. product-risk-reviewer: ship with
+conditions; fixed — deadlock-prone lock order, import fallback moving people
+who work elsewhere, silent "account not visible" on Add lead, an orphan
+import job on a refused account id.
+
+### Carried forward
+
+- Undoing an import does not remove the account link it gave a MATCHED
+  person who had no account before (`crm_undo_batch` removes only people the
+  batch created — pre-existing behaviour for company columns too).
+- Existing leads have no roles until something triggers suggestions:
+  "Refresh role suggestions" per account, or the step-7 backfill.
+
+---
+
+## 2026-10-01 — Account workspace, build step 3 of 8: Accounts list + detail UI
+
+No migration. Depends on 0144–0150 (applied). **0151 still waits for deploy**
+(see step 2's deploy order — unchanged).
+
+### What was built
+
+- **`/crm/companies` is the Accounts list** (nav label "Accounts";
+  `/accounts` → here via `next.config.ts`, query string kept). My/All toggle
+  (only with `view_all`), search, ICP chip row and product chip row with live
+  counts (`crm_account_facets`), Assigned/Status/Priority/Source filters,
+  removable active-filter chips, Clear filters — all in the URL. The 13
+  spec columns, server-side sort and paging, designed empty states (none yet /
+  no match / past the end / nothing assigned to you).
+- **Bulk bar**: Assign / Set status / Add Whom to Sell / Add What to Sell,
+  each shown only with its permission, ≤100 per run, re-checked per account,
+  a failure skips one account rather than the batch.
+- **+ Add Account** dialog: every duplicate outcome answered — exact match
+  ("This account already exists" + Open existing account, only when the
+  viewer may open it), hidden match (says it exists, names nothing),
+  conflict, possible name match ("create anyway", or blocking when the
+  database would refuse anyway).
+- **Detail page**: Overview (Whom/What to Sell with primary first and full
+  product names, visible LinkedIn and Sales Navigator URLs, "Not Available"
+  for every empty value, provenance kept), inline edit, status select,
+  ICP/product editors, assignee editor (Add appears only when the workspace
+  allows several), delete with confirmation; People and Deals; Research &
+  notes with source records (rendered as text, never HTML); Activity for the
+  account and its people.
+- `lib/crm/account-actions.ts`: every action gates with
+  `assertAccountPermission` in its own body (now a recognised gate in
+  `action-authorization.test.ts`) and returns fixed sentences, never DB text.
+
+ADR-007: `lib/crm/account-writes.ts` left both module allowlists on its exit.
+
+### Fixed from the risk review — the contact rule on account pages
+
+A setter assigned an ACCOUNT still sees only their own CONTACTS there. Before
+the fix, the timeline (events about a person also carry the account's
+company_id), the list's people hover, deals and the People list (filtered
+after a LIMIT, so own contacts could vanish on large accounts) leaked or lost
+data. All now apply `dataScope` in the query; account notes are account-level
+only. Also: malformed ids are "not found", `Object.hasOwn` for bulk ops.
+
+### Verified
+
+typecheck clean · lint clean · unit **4415/4415** (+ account-actions,
+account-contact-scope, accountsHref) · build succeeds.
+verification-reviewer: PASS on all 10 criteria. product-risk-reviewer: ship
+with conditions; all conditions fixed above.
+
+**Not browser-verified by the agent**: the pages sit behind production
+sign-in, which the agent does not use. Owner checklist in the step report.
+
+### Carried forward
+
+- Member names fall back to email address (`listAssignableMembers`), so a
+  member with no full name shows their email to colleagues on notes/activity.
+  Pre-existing helper; decide whether that is acceptable.
+- Assigning an account away (replace) removes it from a non-view_all
+  assigner's own list. Behaves as designed; worth a sentence in the README.
+
+---
+
+## 2026-10-01 — Account workspace, build step 2 of 8: services, permissions, queries
+
+0144–0149 and **0150 are applied to production** (verified by regenerating
+`types/database.ts` from it). **0151 is NOT applied, and must not be until this
+step's code is deployed** — see "Deploy order" below.
+
+### What was built
+
+| File | What |
+|---|---|
+| `lib/crm/account-permissions.ts` | The account policy, PURE. 9 permissions; CRM module gate first; owner always granted; per-person override, else role default, else **denied**. `lib/workspaces/permissions.ts` is untouched. |
+| `lib/crm/account-access.ts` | Gathers the policy inputs. `accountAccessIfPermitted` (pages), `assertAccountPermission` (actions), `canSeeAccount` / `assertCanSeeAccount` — an invisible account is **NOT FOUND**, never forbidden. |
+| `lib/crm/account-filters.ts` | URL ⇄ filters. Slugs in the URL (survive renames); malformed params dropped; an **unknown slug filters to nothing**, never widens a shared view. |
+| `lib/crm/accounts.ts` | Vocabulary, `listAccounts`, `accountFacets` (chip counts), `getAccount`. |
+| `lib/crm/account-writes.ts` | create / edit / status / ICPs / products / assign / unassign / soft-delete. **Every function checks its own permission and visibility.** Create validates everything before inserting, assigns before tagging, and soft-deletes a half-made account on failure. |
+| `lib/crm/repository.ts` | Sales Navigator is its own identity. `findCrmCompanyMatches` (approved order Nav → LinkedIn → domain → name; two accounts = **conflict**, never merged). `upsertCrmCompany` keeps its old order so ingestion resolves the same company it did yesterday. Gap-fill survives an identity collision. |
+| `lib/crm/ingest.ts` | Passes BOTH company URLs; batching key unchanged. |
+| 0150 | `crm_account_matches` / `crm_list_accounts` / `crm_account_facets` (visibility is an argument the function enforces); `crm_set_company_icps` / `_products` (replace or merge, one transaction + activity); `crm_set_company_status`. Service-role only. |
+| 0151 | Clears the duplicated Navigator ids from the LinkedIn column, drops the 0145 mirror, adds a CHECK keeping them apart. Raises instead of losing a value. |
+
+Wired now: `/crm/companies` (list via `listAccounts`) and `/crm/companies/[id]`
+use the account visibility rule; the detail page shows the Sales Navigator
+link. `GET /api/v1/companies` keeps `linkedin_url` stable for existing
+consumers (falls back to the Navigator address) and adds `sales_navigator_url`.
+
+**No server actions yet, on purpose.** `action-reachability` forbids uncalled
+actions; they arrive in step 3 with their forms. `lib/crm/account-writes.ts` is
+in both module allowlists under ADR-007 with step 3 as its exit.
+`crm_company_products`, `crm_account_permission_overrides` and
+`crm_company_sources` left `KNOWN_UNUSED`.
+
+### Deploy order — owner
+
+1. Deploy this code (0150 is already applied, which it needs).
+2. When **every** running instance, including any worker, is on the new code,
+   apply **0151**. Older code writes Navigator ids into the LinkedIn column,
+   which 0151's CHECK refuses. Production on 2026-10-01: 44 such rows, all
+   exact duplicates, so nothing is lost.
+3. ⚠️ After 0151, rolling the code back needs 0151's ROLLBACK block first.
+
+### Verified
+
+- typecheck clean · lint clean · unit **4400/4400** · build succeeds.
+- 0150 smoke 26/26 (list, filters, AND between groups, chip counts, visibility,
+  tag writes incl. merge/disabled/cross-workspace, status); 0151 smoke 4/4 plus
+  a data rehearsal (duplicates cleared, public pages and `updated_at` untouched).
+- Read-only run of the new functions on production data: 68 accounts, one
+  workspace; view_all sees 68, no-view_all sees 0 (nobody is assigned yet —
+  the same set the old owner rule showed).
+- verification-reviewer: PASS on all criteria. product-risk-reviewer: ship with
+  conditions; every finding fixed (orphaned half-created accounts, gap-fill
+  losing facts on an identity collision, exact matches truncated behind
+  same-named rows, CHECK faults mislabelled as validation, a 500 on a
+  concurrent delete).
+
+### Carried forward
+
+- **No company has an owner today**, so "My Accounts" is empty for everyone
+  until accounts are assigned. Expected; worth saying before a demo.
+- Step 3: actions must map plain `Error`s through `toClientError` (raw
+  Postgres text must not reach the client).
+- `/crm/contacts` still lists every company name in its company filter,
+  ignoring account visibility — pre-existing; revisit with step 3/4.
+- The public API is workspace-scoped and ignores assignment visibility, as
+  before. A decision, not a regression.
+- Flaky `tests/unit/webhook-secret.test.ts` (failed once, unrelated) — spun
+  off as its own task.
+
+---
+
+## 2026-10-01 — Account workspace, build step 1 of 8: migrations + seeds (0144–0149)
+
+⚠️ **NOT APPLIED.** Six migrations written and validated on a throwaway
+Postgres 16; the owner applies them by hand, **as six separate pastes, in
+order, in a quiet window** (0145 holds an exclusive lock on `crm_companies`
+while it backfills from `crm_activities`). Then `npm run db:types`.
+
+Phase 1 plan approved 2026-10-01 with all six recommendations: the account IS
+`crm_companies`, extended in place at `/crm/companies` (nav label → Accounts,
+`/accounts` redirect); a lead IS `crm_contacts` and `primary_company_id` is
+already its account link; manager = admin defaults minus delete/config;
+viewer = read-only on assigned; Lead Status = stage of the lead's open deal;
+a row matching two accounts on different keys is a conflict, never a merge;
+XLSX via a new dependency (step 5); account-list extraction gets a "Send to
+Accounts" step.
+
+| Migration | What |
+|---|---|
+| 0144 | Editable vocabulary: `crm_icp_types`, `crm_products` (aliases), `crm_account_statuses`, `crm_lead_roles`, `crm_lead_role_rules`, `crm_icp_allocation_targets`, `crm_account_settings`, `crm_import_mappings`. Seeded for every workspace by trigger. Code finds New/Assigned/Other by `system_key`, never by name; system rows cannot be deleted. |
+| 0145 | `crm_companies` + `sales_navigator_url` (own unique identity), `summary`, `status_id`, `priority`, `last_activity_at`, `employee_count_range`. Location reuses `headquarters`. Navigator values are **copied, not moved** out of `normalized_linkedin_url` — current code still matches on it; step 2 clears them. `last_activity_at` maintained by trigger: non-system events only, capped at now, `skip locked`, and does **not** bump `updated_at` (exposed by `GET /api/v1/companies`). |
+| 0146 | `crm_company_icps` (exactly one primary, deferred check), `crm_company_products`, append-only `crm_company_sources` (parsed rows, never raw HTML). Vocabulary FKs are RESTRICT: in-use values can only be disabled. |
+| 0147 | `crm_company_assignments` history. `owner_user_id` stays the primary assignee and history follows it on **every** write path (ingest insert, 0129 handover, user deletion, membership removal) by trigger. `crm_assign_company` / `crm_unassign_company`. New↔Assigned auto-move. One assignee unless `allow_multiple_assignees`. |
+| 0148 | `crm_contact_role_assignments` (many roles per lead, `is_auto`) + `crm_contact_role_state.manual_at` — set once a person edits roles; the classifier never touches that lead again. |
+| 0149 | `crm_account_role_defaults` (full 4-role × 9-permission matrix, owner exempt) + per-member `crm_account_permission_overrides` (removed with the membership). Missing row = denied. `lib/workspaces/permissions.ts` unchanged. |
+
+Also: `scripts/check-migration.sh` now replays both 0143s (scaffold gained
+`extracted_leads.linkedin_url`); ADR-007 lists seven tables in `KNOWN_UNUSED`
+with the build step that removes each.
+
+### Verified
+
+- Each migration + its smoke file: 14 / 16 / 14 / 20 / 6 / 12 checks pass, and
+  each smoke also passes with all six applied.
+- Pre-existing smokes 0120–0129 and 0143 pass with all six applied (handover,
+  routing, round robin, task actions unaffected).
+- Every ROLLBACK block executed in reverse order against populated tables;
+  companies and workspaces remain insertable afterwards.
+- typecheck clean · lint clean · unit 4297/4297.
+- Independent product-risk review: no data-loss, tenant-leak or apply-time
+  failure. Its fixes are in (broken 0147 rollback, hot-path lock on
+  activity insert, `updated_at` churn, system events counting as activity,
+  rollback-order notes).
+
+### Before applying — owner
+
+1. Expect zero rows (Navigator-like values the copy would skip):
+   `select count(*) from crm_companies where normalized_linkedin_url like '%/sales/%' and normalized_linkedin_url !~ '^linkedin\.com/sales/company/[0-9]+$';`
+2. Apply 0144 → 0149 one file at a time; then `npm run db:types`.
+
+### Carried into later steps
+
+- Step 2: clear Navigator values from `normalized_linkedin_url` together with
+  the `upsertCrmCompany` change; unit test that the SQL permission list
+  matches the TypeScript one; permission edits require `workspace.settings.manage`
+  and write `crm_audit_logs`.
+- Step 5: `crm_company_sources.extraction_job_id` must be checked against the
+  workspace in code (the FK cannot); erasure does not yet reach
+  `crm_company_sources.raw_payload`.
+- Members can read tag/source/assignment rows of unassigned accounts through
+  RLS directly, as for contacts — "assigned only" is a query filter in code.
+
+---
+
 ## 2026-09-24 — Cleanup: one failing test, one lint warning, six dead modules
 
 - `scripts/check-migration.sh` did not replay `0142_email_signatures`, so
@@ -12089,3 +12630,445 @@ impeccable design hook is enabled and reported no findings on these edits.
 did for the previous six.** Spacing, contrast and responsive composition are
 checks on a rendered result, and the skill's own floor says so. The dashboard is
 behind sign-in and this session holds no credentials.
+
+---
+
+## Dashboard bug and scrolling repair pass (2026-10-03)
+
+### Reproduced and fixed
+
+- **Mobile navigation:** CSS hid the drawer on desktop without clearing its
+  body scroll lock. Crossing the desktop breakpoint now closes it. History and
+  programmatic route changes also close it; dismissal restores focus without
+  moving the page, and the underlying content is inert while it is open.
+- **Search palette:** now locks background scrolling, keeps keyboard-selected
+  results visible, and uses the same cleanup for Ctrl/⌘K as Escape. Tab + Enter
+  opens the focused result rather than the previous selection. Search does not
+  stack another focus trap over an existing dialog. Its mobile button has an
+  accessible name, and the panel/list fit short dynamic viewports.
+- **Settings:** the mobile grid's automatic minimum width let a wide table
+  expand a 390px page to **1,258px**. Explicit shrinkable tracks/content keep
+  scrolling inside the table. The sticky settings nav now scrolls within the
+  available desktop height, keeping its last links reachable on short screens.
+- **Form dialogs:** parent rerenders no longer reinstall the effect and steal
+  focus/scroll back to the first field. Initial focus and Tab wrapping exclude
+  hidden IDs and disabled controls; tall forms remain scrollable.
+- **Referral fallback:** clipboard denial no longer closes the mobile drawer
+  containing the manual-copy field.
+- **Overview:** reply-rate changes use percentage points (20% → 30% is +10 pp,
+  not +50%); unknown/zero rates do not acquire a false “New” badge. Removed the
+  raw-reply-count sparkline from the rate card. Zero usage/remaining credits draw
+  zero fill. Pipeline/task read failures stay local to the team panel, with
+  unknown figures and a visible error instead of taking down the dashboard.
+
+### Verification
+
+New isolated browser suite: `tests/browser/dashboard-scroll.spec.ts`, backed by
+real `ProductShell`, settings, palette and dialog components plus the production
+CSS. Framework/server boundaries and search responses are stubbed; all browser
+requests are intercepted and non-fixture hosts are blocked. No credentials,
+Next server, staging seed or production API writes are needed.
+
+```sh
+E2E_BROWSER_CHANNEL=chrome npx playwright test -c tests/browser/playwright.config.ts --workers=2
+```
+
+- **14 Chrome browser tests passed**, covering mobile, short desktop, keyboard
+  selection/focus, scroll restoration, tables, long forms and copy denial.
+  Eight initial cases failed before fixes; the hidden-field focus case was
+  reproduced separately before its fix. Existing desktop-sidebar scrolling
+  was already working and remains covered.
+- **17 new overview unit tests** in `overview-headline.test.ts` and
+  `dashboard-overview.test.ts`; all pass. Updated the quick-search structural
+  guard to recognize focus restoration with `preventScroll`.
+- Full `npm test`: **4,542 passed, 1 failed** (271 files). The remaining failure
+  is `tests/unit/auth-shell-layout.test.ts:63`, also present in the baseline
+  (4,525 passed, 1 failed). Its opening-tag assertion disagrees with existing,
+  uncommitted auth markup. Those unrelated auth changes were left untouched.
+- `npm run build` and `npm run typecheck` passed after the final component
+  changes. Full `npm run lint` passed, and focused lint was repeated after the
+  last edits. `git diff --check` passed.
+
+### Remaining boundary
+
+This is **local verification, not a production deployment or exhaustive live
+app audit**. `https://app.outlio.io/dashboard` redirects to sign-in; no authenticated
+production session was available. Authenticated staging journeys, real-data
+states, Safari and physical touch-device scrolling remain to be checked. Review
+the preexisting auth-test failure, then run an authenticated staging smoke pass
+before release. Existing unrelated working-tree changes were preserved.
+
+### Follow-up — authenticated staging and WebKit (2026-10-03)
+
+The owner agreed to staging checks first, **not a production deployment**.
+Staging auth health returned 200; the configured host matched ADR-005 and was
+checked before any fixture writes. No production writes or migrations ran.
+
+Added `e2e/dashboard-scroll.spec.ts` and a dedicated
+`e2e/dashboard.playwright.config.ts`. It starts a fresh staging-configured Next
+server, refuses non-staging fixture writes, blocks external/production browser
+requests, and disables traces so credentials are not persisted. Temporary
+approved users and six fabricated contacts are removed in `afterAll`; removal
+of the user profile, workspace and contacts is verified by database reads.
+
+```sh
+E2E_BROWSER_CHANNEL=chrome npx playwright test -c e2e/dashboard.playwright.config.ts
+E2E_BROWSER_CHANNEL=chrome npx playwright test -c tests/browser/playwright.config.ts --workers=1
+E2E_BROWSER=webkit npx playwright test -c tests/browser/playwright.config.ts --workers=2
+```
+
+**Actual results:**
+
+- The authenticated staging smoke test **fails**, and is intentionally not
+  marked skipped or expected-failing. Before that failure it verified real
+  sign-in, overview/usage rendering, mobile width, drawer dismissal and resize
+  scroll-unlocking, settings width/short-desktop navigation, six actual search
+  results, keyboard selection visibility and navigation to the selected URL.
+- **Release blocker:** contact details throw from
+  `lib/crm/contact-links.ts:34`: `public.crm_contact_links` cannot be found in
+  the staging schema cache. That table is defined in the preexisting
+  `supabase/migrations/0154_crm_decision_makers.sql`. Inspect staging's migration
+  state/schema cache and manually apply any missing reviewed migrations in
+  order before rerunning. Do not hide this error with an empty-results fallback.
+- Fixture profile/workspace/contact cleanup checks passed after the failed
+  journeys. The Playwright runner exited. A separate developer-owned `npm run dev`
+  started on port 3000 afterward; it was left untouched, and the follow-up build
+  was not started against its shared `.next` directory.
+- **14/14 isolated Chrome tests and 14/14 isolated WebKit tests passed.**
+  Playwright WebKit was installed using the existing test tooling; this is
+  WebKit engine coverage, **not a physical iPhone/Safari-device test**.
+- WebKit reproduced one additional product issue: clicking the search trigger
+  did not focus it, so Escape could not restore focus there. The trigger now
+  focuses itself with `preventScroll` before dispatching the shortcut.
+- Cross-engine tests now use Option+Tab for WebKit's macOS tab policy, keyboard
+  activation when testing focus restoration, and explicit scrolling before
+  filling the last form field (`fill` itself need not scroll). The selected-row
+  intersection allows rounded-edge/subpixel clipping, not an offscreen row.
+- One concurrent Chrome run hit two 30-second test timeouts while both engines
+  and staging compilation were running. Rerunning the full suite alone with one
+  worker passed all 14 in 14.9 seconds, without increasing its timeout.
+- Focused lint passed. The three quick-search/overview unit files passed all
+  **34 tests**. The earlier full-suite auth-layout failure remains outside this
+  dashboard repair; the full unit suite was not rerun in this follow-up.
+- Final `npm run typecheck -- --incremental false` **failed** in concurrently
+  changed `lib/companies/account-list-store.ts:186` and the newly added
+  `lib/crm/ingest-account-job.ts:82` onward. Their account-list queries/inserts
+  expect `page_kind` and snapshot fields missing from the current database
+  types. Those unrelated files were not edited by this dashboard pass. This
+  supersedes the earlier checkout's passing typecheck; resolve the current
+  account-import/type mismatch before release. Final `git diff --check` passed.
+
+**No-ship pending staging schema repair, typecheck repair, and a green
+authenticated smoke run.**
+Physical touch-device testing remains outstanding. Production is unchanged.
+
+### After owner-applied staging migrations (2026-10-03)
+
+The owner reported applying the staging SQL. Read-only catalog checks confirmed
+all 13 expected current account/tag/contact-link tables, all eight queried
+account/role/link/deal functions, and all six 0156 account-search columns are
+present. `crm_contact_links` has RLS enabled and its REST endpoint now returns
+HTTP 200. This resolves the missing-table blocker described above.
+
+Because a separate developer-owned server was running on port 3000, this pass
+copied application sources to a temporary directory and used port 3107 with a
+separate `.next` directory and explicit staging environment. The existing dev
+server, source files, production configuration and production database were not
+changed. Browser tests still ran the repository's
+`e2e/dashboard-scroll.spec.ts`, with a temporary config overriding only the
+local runtime/server address.
+
+Results:
+
+- **Authenticated Chrome journey passed**, including sign-in, overview/usage,
+  mobile width and scroll restoration, settings navigation, real quick-search
+  results and **opening the selected contact**. Also passed against a
+  production-mode build served locally over HTTPS with the staging backend.
+  Temporary user/profile/workspace/contact cleanup assertions passed on all runs.
+- The first dev run hit an upstream HTML error reading usage counters; an
+  unchanged rerun passed. Both successful Chrome runs logged a server-side
+  `destination stream closed early` during navigation, with no failing browser
+  assertions. These observations are not suppressed or described as fixed.
+- **WebKit is not fully green.** HTTP localhost assets were upgraded to HTTPS
+  by `upgrade-insecure-requests`; a local HTTPS server resolved that. Development
+  Fast Refresh interrupted navigation, so verification moved to the isolated
+  production-mode build. There all interaction assertions, including contact
+  details, passed, but the final no-browser-errors assertion failed on five
+  prefetched RSC requests reporting access-control errors. This needs a valid-TLS
+  staging-origin check to distinguish local certificate/runtime behavior from
+  an application issue. No CSP or TLS verification was weakened in product code.
+- `npm run typecheck -- --incremental false`: **passed**. The previous
+  account-import/type mismatch is no longer present in the current checkout.
+- `npm test -- --maxWorkers=2`: **4,570 passed, 2 failed** (273 files). Remaining
+  failures: `auth-shell-layout.test.ts:63` and
+  `auth-error-attribution.test.ts:185`, both in separately changed auth markup.
+- Focused dashboard/test ESLint and `git diff --check`: passed.
+- The isolated source snapshot's `next build --webpack`, with staging env:
+  **passed**. A first build attempt accidentally included a temporary Playwright
+  config in the snapshot's TypeScript scan; removing that test-only artifact
+  from the scan allowed the unchanged app to build. The developer's running
+  build/cache was not touched.
+
+**The migration and typecheck blockers are resolved; this is still not a blanket
+release approval.** Resolve the two auth test failures and the WebKit RSC error
+check before declaring the whole checkout green. No production deployment was
+performed. Port 3107 was confirmed stopped; the owner's port 3000 server was
+left running.
+
+### Auth guards and WebKit verification resolved (2026-10-03)
+
+The owner requested fixing the two remaining auth checks and investigating the
+WebKit errors. No deployed application styling, auth policy, CSP, or dependency
+versions were changed in this pass.
+
+**Auth: both were stale source scanners, not broken form behavior.**
+`auth-shell-layout.test.ts` assumed the artwork wrapper was a `<section>`;
+current markup uses a `<div>`. It now renders the real shell and checks the
+shared grid and exact mobile/desktop ordering tokens. The LinkedIn-input check
+sliced from LinkedIn to password in source text, but the redesign put password
+first. It now selects the actual rendered input by name, checks its attributes,
+and validates its real placeholder through `normalizeLinkedInUrl`. Attributed
+errors are checked against rendered, enabled, non-hidden inputs. Seven mutation
+checks in a disposable copy rejected lost ordering classes, wrong input type or
+name, and removed scheme normalization. Existing auth redesign preserved.
+
+**WebKit: the reported prefetch errors were caused by the test's document
+teardown.** The original journey forced a second `page.goto` while dashboard
+prefetches were still queued/streaming. Reproduced on the same frozen build over
+HTTPS: cancelled old-document requests produced WebKit access-control errors;
+other requests, including the same routes in the new document, returned 200.
+Replacing that forced reload with actual Settings → Developers link clicks
+passed the no-browser-errors assertion, without suppressing errors or disabling
+prefetch. A new-page direct-link check preserves URL-entry coverage without
+tearing down an active streaming document. Route waits allow 30 seconds like the
+other real-backend transitions; a first 5-second wait was too short.
+
+**Repeatable runtime:** `scripts/dashboard-test-server.mjs` and
+`e2e/dashboard.playwright.config.ts` now build a source snapshot and serve it in
+production mode over local HTTPS on **3107**. This avoids WebKit's upgrade of
+HTTP localhost assets under the production CSP and removes dev Fast Refresh
+from the measurement. It verifies the ADR-005 staging host, never copies
+`.env.local` or private inputs, and never shares the owner's `.next`. A temporary
+certificate is trusted only by the test runtime/browser, not installed into OS
+trust. The config uses SIGTERM with a grace period so the temporary server,
+build directory and certificate are removed after testing. Early diagnostic
+copies were also removed. The user's port-3000 dev server was left untouched.
+
+Verified commands/results:
+
+```sh
+npm test -- --maxWorkers=2
+# 273 files, 4,572 tests passed; zero failures/skips.
+npm run typecheck -- --incremental false
+npm run lint
+git diff --check
+# All passed.
+
+E2E_BROWSER=webkit npx playwright test -c e2e/dashboard.playwright.config.ts
+E2E_BROWSER_CHANNEL=chrome npx playwright test -c e2e/dashboard.playwright.config.ts
+# Both authenticated staging journeys passed, zero browser errors.
+```
+
+Each browser run includes a successful isolated `next build --webpack`, real
+sign-in, mobile scroll restoration/resize unlocking, Settings-link navigation,
+short-desktop settings scrolling, real quick search, opening a contact, and a
+fresh direct settings URL. Temporary user/profile/workspace/contact cleanup
+assertions passed. WebKit was repeated with graceful teardown and passed again;
+port 3107 and all test snapshot directories were confirmed gone afterward.
+
+**The previously identified release-check blockers are now resolved.** This is
+not a production deployment, exhaustive product audit, or physical-device Safari
+certification. A production release still needs the owner's explicit approval
+and review of the other uncommitted work in the checkout.
+
+## Production release — dashboard fixes and current account/auth work (2026-10-03)
+
+**Owner explicitly approved deployment. Promoted successfully.**
+
+- Vercel project: `outlio-website` (`prj_armCGAcDXXBKuuYEfrR6JN7sifYE`).
+- Live deployment: **`dpl_EZqB2oqjWYaovrL198sSHD7Um36j`**.
+- URL: `https://outlio-website-lrld0c3tb-blluemoon135791113-bytes-projects.vercel.app`.
+- Both **`https://app.outlio.io` and `https://outlio.io`** resolve to that
+  deployment (verified with Vercel inspect after promotion).
+- Previous deployment: `dpl_4gKJqPYKXoT7TNdYT5yzcJRpRHwQ`, URL
+  `https://outlio-website-500ren1qi-blluemoon135791113-bytes-projects.vercel.app`.
+- Release source: working tree based on `d3f390c`, including the existing
+  account/tag/import/auth work plus this session's dashboard repairs. No commit
+  or git push was made; all local changes remain in the working tree.
+- Source manifest SHA-256:
+  `d5c2dcc9c100eb7e29ae31f097e984c514650ce758edfb8c21a4a37ea74777a7`.
+  Recorded in Vercel deployment metadata with
+  `releaseSource=dashboard-scroll-import-fixes-2026-10-03`.
+
+### Two blockers caught before promotion, then fixed
+
+1. **Account-upload import stopped at PostgREST's 1,000-row cap.**
+   `lib/crm/ingest-account-job.ts` now reads 500-row pages with an immutable,
+   unique ID cursor and repeats the owner/upload scope on every query. It holds
+   one page at a time and stops only on an empty page. A failed later read rejects
+   rather than announcing truncated success. New tests reproduce 1,250 → 1,000
+   before the fix and cover zero/500/1,000/1,250 rows, repeated source indexes,
+   every row processed once, and a later-page failure.
+2. **Account-preselected CSV matches remained invisible in Account People.**
+   `runCsvImport` now deduplicates relationship pairs, verifies fallback-contact
+   reads, and fills only NULL `primary_company_id` values after linking. It
+   preserves existing/concurrent assignments and verifies placement before
+   completion. Nineteen tests exercise the real function with a stateful database
+   double: matches, new contacts, existing accounts, retries, scope, chunking,
+   read/write failures and races. Relationship/projection writes remain separate
+   (no transactional RPC exists); partial failures are reported and repairable,
+   not called success. Full atomicity would require a separately reviewed migration.
+
+`app/(product)/crm/import/actions.ts` also no longer claims “Nothing was changed”
+when an import fails after saving some rows. No SQL migration was introduced or
+applied by this release session.
+
+### Release verification and sequence
+
+- Read-only production metadata/zero-row queries confirmed the required
+  account/tag/contact-link schema, 0156 columns and eight account/role/deal RPCs.
+  Initial probes used `id` on three composite-key tables and returned column
+  errors; rechecking their actual key columns passed. No production records read
+  for this preflight and no production fixture data created.
+- Reviewed release was copied to a clean allowlisted source directory: **820
+  upload files**. No `.env*`, private inputs, `.staging*`, tests, browser auth state,
+  local build cache, or CLI credentials included. Dry-run upload manifest checked.
+- Final local checks: **4,597 tests passed across 274 files**, typecheck, lint,
+  and diff checks passed.
+- Final authenticated staging Chrome journey passed, with temporary
+  profile/workspace/contact cleanup verified. The preceding run failed on a
+  staging upstream HTML response for `storage_bytes`; the unchanged rerun passed.
+  This intermittent dependency issue is recorded, not claimed fixed.
+- Vercel production build passed on its Node 24 / Next 16.3 runtime. Built with
+  `vercel deploy --prod --skip-domain` so the live domains stayed on the previous
+  release while checks ran. The first candidate
+  `dpl_kMfXhCju1278qYwUvpK5hh9LYYUx` predates the import fixes and was **not promoted**.
+- Protected candidate checked using `vercel curl`: sign-in 200, signed-out
+  dashboard 307, signed-out quick-search 401/`ERR_UNAUTHENTICATED`. Vercel CLI
+  generated its deployment-protection bypass credential for this check; the
+  credential was not printed, copied into source, or included in the upload.
+- Then ran `vercel promote dpl_EZqB2oqjWYaovrL198sSHD7Um36j --yes` successfully.
+
+### Live smoke checks
+
+- `app.outlio.io/`, `/sign-in`, `/sign-up`, and `outlio.io/`: **HTTP 200**.
+- Signed-out `/dashboard` and `/crm/contacts`: **307 to sign-in**.
+- Signed-out quick-search API: **401**.
+- Chrome and WebKit at 390px: both sign-in and sign-up render, hydrate, toggle
+  password visibility, fit the viewport, and raise no uncaught page errors.
+  An initial smoke tried the toggle before remote JavaScript had finished
+  loading; the final check waited for assets rather than treating SSR as hydration.
+- A separate unfiltered browser check observed Cloudflare's injected analytics
+  beacon being blocked by CSP. Product hydration worked; no CSP permissions were
+  loosened for that external script.
+- Authenticated production workflows were **not** exercised with customer
+  credentials; they were tested against staging. No production signups, imports,
+  messages, or database mutations were performed by the smoke checks.
+
+### Rollback reference
+
+Emergency CLI reference (not executed):
+
+```sh
+vercel rollback dpl_4gKJqPYKXoT7TNdYT5yzcJRpRHwQ --yes
+```
+
+**Review compatibility before rollback:** production's schema was already ahead
+of that older code (0153 retired the old account tag tables). Returning to it may
+restore the known Accounts-page incompatibility; a forward fix is preferable for
+an account-specific issue. This deployment changed code only, not the database.
+
+---
+
+## 2026-10-03 — Extension 0.2.0: lead/account capture and persistent sidebar
+
+**Built and packaged locally; NOT store-published or production-deployed.**
+The production deployment recorded above is unchanged. Preserve the other
+sessions' substantial uncommitted work; no commit/reset or database migration
+was performed for this task. Port 3000 and its `.next` were left alone.
+
+### Repaired
+
+- `extensions/adapters/`: saved Lead Lists/search, Account Lists/Hub and account
+  search now have supported-route boundaries, readiness checks and all-row
+  fingerprints. Account changes no longer depend on person links. A first-page
+  lead list with no paginator now sends identifier `1`, not null (which the
+  server had rejected as a missing session). Account-search snapshots feed the
+  existing backend account parser, not a second extraction engine.
+- `extensions/shared/content.ts`: explicit local consent gates snapshots and
+  company observations. Handles navigation from Sales home, MAIN-world SPA
+  history, replaced containers, stop/restart and in-flight cancellation. Hidden
+  dormant tabs are not captured merely because another tab started a session;
+  they become observable when the user views them.
+- Removed synthetic hover interactions. Optional company facts are copied only
+  from already-visible, identity-matched cards into detached snapshots. The
+  sanitizer allowlists parser attributes and strips forms/controls, scripts,
+  volatile IDs, tracking/query state and session-scoped profile suffixes.
+- `extensions/core/api.ts` / `shared/background.ts`: direct `app.outlio.io`
+  pairing/API origin, single-flight token rotation, 30-second request bounds,
+  retained credentials on transient refresh outages, correct sending-tab
+  attribution, queued page changes, manual capture/retry and immediate local
+  stopping. Opening the panel never adopts another device's active session.
+  Stale identity polls cannot erase newly started local consent. Content-script
+  senders cannot invoke UI controls; trusted extension pages can, even when the
+  native runtime supplies a tab in their sender.
+- Chrome `sidePanel` and Firefox `sidebar_action` use one responsive UI, with a
+  popup fallback. Toolbar opens the panel; choices/focus survive polling; errors
+  retain stop/retry controls. **Right/left placement remains the user's browser
+  preference.** Chrome cannot be instructed to force the right side.
+- `lib/extension/capture.ts` / `lib/worker/process-job.ts`: account processing now
+  settles capture progress before its early return. Already-terminal pages do
+  not add counters again on serialized job retries. Panel and
+  `components/extension/LiveCapture.tsx` label mixed account/lead totals as
+  records, not leads. **These server/widget changes still need deployment.**
+
+### Verified
+
+- Final full unit suite: **4,674 passed across 280 files**; 77 new regressions
+  across six extension suites. Fabricated snapshots round-trip through the real
+  lead, account-list and account-search parsers.
+- Typecheck, full lint, and `git diff --check`: passed.
+- Isolated browser sidebar UI: **6 Chrome + 6 WebKit passed**, covering narrow /
+  short viewports, scrolling, persistent options/focus, connection and errors.
+- Real packaged native smoke in a disposable Chromium profile: manifest 0.2.0,
+  registered toolbar behavior, UI hydration without page errors, and native
+  `sidePanel.open` from an extension-page click all passed. Initial smoke caught
+  the UI-tab sender guard issue; fixed and rerun. Temporary profile removed.
+  Screenshot: `test-results/extension-native-panel.png` (no credentials).
+- Both production extension builds and ZIP preflights passed:
+  `extensions/packages/outlio-lead-capture-chrome-v0.2.0.zip` and
+  `extensions/packages/outlio-lead-capture-firefox-v0.2.0.zip`.
+
+### Install / remaining verification
+
+Chrome: `chrome://extensions` → Developer mode → Load unpacked →
+`extensions/dist/chrome` (or Reload that existing install). Confirm 0.2.0,
+refresh existing Sales Navigator tabs, then Connect account → open a loaded
+Lead/Account List → Start capture. Closing the panel does not finish capture;
+use Finish capture. View captures opens extraction jobs, not an automatic CRM
+import. Full instructions and store permission disclosures were updated in
+`docs/EXTENSION.md` and `docs/EXTENSION_STORE.md`.
+
+No real LinkedIn automation, customer-session capture, authenticated production
+import, or store submission was performed. Firefox builds/API unit tests passed,
+but its native sidebar was not exercised in Firefox. WebKit UI tests are not a
+Safari extension certification. The backend progress fix is tested locally but
+not live; no new migration is needed. An owner's manual capture on their actual
+saved lists remains the final real-page check.
+
+### Firefox package validation follow-up
+
+An upload attempt reported `manifest.json was not found`. The archive was
+inspected rather than assuming the suffix was the cause: `unzip -Z1` shows one
+root entry exactly named `manifest.json`; `unzip -tq` passes; the Mozilla
+`addons-linter` 10.13.0 reports **0 errors, 0 notices, 3 compatibility warnings**
+(the warnings concern `data_collection_permissions` before Firefox 140 and
+`sidePanel.setPanelBehavior`, not the manifest). The package builder now uses
+`zip -FS`, verifies the archive's manifest matches the build, and rejects a
+nested/missing/duplicate manifest. A copy was placed at
+`/Users/husnainrafiq/Downloads/Outlio-Capture-Firefox-v0.2.0.xpi`; SHA-256 is
+`ff9e55ad536fff93ed8413dd3b5f897f85157abf4666e09f2ad1444be739437b`. Upload
+that exact file at AMO, not an enclosing folder or the old `.zip`. If AMO still
+shows the same message for this exact checksum, the remaining failure is in the
+AMO upload/account path rather than this archive and needs the upload response
+or screenshot to distinguish it.

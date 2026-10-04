@@ -53,6 +53,8 @@ export type SubjectExport = {
   notes: Record<string, unknown>[]
   activities: Record<string, unknown>[]
   tasks: Record<string, unknown>[]
+  /** Other public profiles (0154) — typed or imported, each with who added it. */
+  links: Record<string, unknown>[]
   /** Named so a reader knows the absence of a section is deliberate. */
   excluded: readonly string[]
 }
@@ -76,7 +78,7 @@ export async function collectSubjectExport(
 ): Promise<SubjectExport> {
   const db = createAdminClient()
 
-  const [contact, notes, activities, tasks] = await Promise.all([
+  const [contact, notes, activities, tasks, links] = await Promise.all([
     db
       .from('crm_contacts')
       .select('*')
@@ -105,6 +107,13 @@ export async function collectSubjectExport(
       .eq('contact_id', contactId)
       .order('created_at', { ascending: true })
       .then((r) => r.data ?? []),
+    db
+      .from('crm_contact_links')
+      .select('id, kind, label, url, source, created_at, created_by')
+      .eq('workspace_id', workspaceId)
+      .eq('contact_id', contactId)
+      .order('created_at', { ascending: true })
+      .then((r) => r.data ?? []),
   ])
 
   return {
@@ -113,6 +122,7 @@ export async function collectSubjectExport(
     notes,
     activities,
     tasks,
+    links,
     excluded: ERASED_BUT_NOT_EXPORTED,
   }
 }

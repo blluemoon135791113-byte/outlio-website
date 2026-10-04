@@ -18,7 +18,23 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { load } from 'cheerio'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it, vi } from 'vitest'
+
+// Render the real form and its fields without importing server infrastructure.
+// No action is dispatched by these markup tests.
+vi.mock('@/lib/auth/actions', () => ({ signUpAction: vi.fn() }))
+
+import { SignUpForm } from '@/app/(auth)/sign-up/SignUpForm'
+import { normalizeLinkedInUrl } from '@/lib/auth/profile-fields'
+
+function renderSignUpForm() {
+  const $ = load(renderToStaticMarkup(createElement(SignUpForm)))
+  expect($('form')).toHaveLength(1)
+  return $
+}
 
 const ROOT = join(__dirname, '..', '..')
 const read = (relative: string) => readFileSync(join(ROOT, relative), 'utf8')
@@ -99,21 +115,9 @@ describe('sign-up attributes every validation failure to its own field', () => {
      * — `linkedIn` instead of `linkedin_url` — finds nothing, focuses nothing,
      * and looks exactly like the feature working on a fast machine.
      */
-    /*
-     * ⚠️ THE FORM FILE ALONE IS NOT THE ANSWER, and the first version of this
-     * test assumed it was. `phone` is rendered by `PhoneField`, not by
-     * `SignUpForm`, so checking one file reported a correctly-wired field as
-     * missing. What has to exist is an input with that name in the DOM the
-     * form produces — which spans the shared auth components too.
-     */
-    const rendered = [
-      'app/(auth)/sign-up/SignUpForm.tsx',
-      'components/auth/PhoneField.tsx',
-      'components/auth/Field.tsx',
-      'components/auth/PasswordField.tsx',
-    ]
-      .map(read)
-      .join('\n')
+    // Render shared fields too: a name in a prop or comment is not evidence
+    // that an input with that name actually reaches the form.
+    const $ = renderSignUpForm()
 
     const attributed = [...body.matchAll(/reject\([^,)]+, '([a-z_]+)',?\s*\)/g)].map(
       (match) => match[1]!,
@@ -121,15 +125,10 @@ describe('sign-up attributes every validation failure to its own field', () => {
 
     expect(attributed.length).toBeGreaterThanOrEqual(4)
     for (const field of attributed) {
-      /*
-       * `Field` and `PasswordField` pass `name` straight through from props, so
-       * a generic component satisfies this via the `{...props}` spread only if
-       * the caller supplies the name — which is why the form file is in the
-       * list and the components are there for the ones that hardcode it.
-       */
-      expect(rendered, `nothing renders an input named "${field}"`).toContain(
-        `name="${field}"`,
-      )
+      const input = $(`form input[name="${field}"]`)
+      expect(input, `nothing renders an input named "${field}"`).toHaveLength(1)
+      expect(input.attr('type')).not.toBe('hidden')
+      expect(input.is(':disabled')).toBe(false)
     }
   })
 
@@ -177,18 +176,22 @@ describe('the form renders what the action attributes', () => {
      * re-block every schemeless address AND every message this suite asserts,
      * because the form would never submit.
      */
-    const form = read('app/(auth)/sign-up/SignUpForm.tsx')
-    const field = form.slice(
-      form.indexOf('id="linkedin_url"'),
-      form.indexOf('id="password"'),
-    )
-    expect(field).toContain('type="text"')
-    expect(field).not.toContain('type="url"')
-    expect(field).toContain('inputMode="url"')
+    const $ = renderSignUpForm()
+    // Select the actual input, independent of whether password comes before
+    // or after it, and without letting comments satisfy these assertions.
+    const field = $('form input[name="linkedin_url"]')
+    expect(field).toHaveLength(1)
+    expect(field.attr('type')).toBe('text')
+    expect(field.attr('inputmode')).toBe('url')
+    expect(field.is('[required]')).toBe(true)
 
-    // And the server still does the real check, including the scheme it adds.
-    const normalizer = read('lib/auth/profile-fields.ts')
-    expect(normalizer).toContain('candidate = `https://${candidate}`')
+    const placeholder = field.attr('placeholder')
+    expect(placeholder).toBe('linkedin.com/in/your-name')
+    // Exercise the server validator, not the spelling of its implementation.
+    expect(normalizeLinkedInUrl(placeholder!)).toEqual({
+      ok: true,
+      value: 'https://www.linkedin.com/in/your-name',
+    })
   })
 })
 

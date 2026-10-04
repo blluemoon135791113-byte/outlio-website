@@ -177,18 +177,24 @@ describe('companies has the same branch', () => {
     readFileSync(join(ROOT, 'app/(product)/crm/companies/page.tsx'), 'utf8'),
   )
 
+  /*
+   * Since the account workspace (step 3) this page is the Accounts list. It now
+   * KNOWS its filtered total — `crm_list_accounts` returns it with the page,
+   * from a window count, not a second query — so it passes the real total to
+   * the shared reason instead of `null`, and gains the filter branches.
+   */
   it('does not claim the workspace is empty from page 9', () => {
-    expect(COMPANIES).toMatch(/Nothing on page \$\{page\}/)
+    expect(COMPANIES).toMatch(/Nothing on page \$\{query\.page\}/)
     expect(COMPANIES).toContain("reason === 'past_end'")
-    expect(COMPANIES).toContain('No companies yet')
+    expect(COMPANIES).toContain('No accounts yet')
   })
 
   it('uses the shared reason rather than its own page test', () => {
-    expect(COMPANIES).toContain("emptyReason({ search: '', filterCount: 0, page, total: null })")
+    expect(COMPANIES).toMatch(/emptyReason\(\{ search: query\.q \?\? '', filterCount: activeFilterCount\(query\), page: query\.page, total \}\)/)
     expect(COMPANIES, 'a count query was added').not.toMatch(/count: 'exact'/)
   })
 
   it('sends them to the first page rather than somewhere unrelated', () => {
-    expect(COMPANIES).toMatch(/reason === 'past_end' \? '\/crm\/companies' : '\/crm\/contacts'/)
+    expect(COMPANIES).toMatch(/reason === 'past_end'[\s\S]{0,300}accountsHref\(query, \{ page: 1 \}\)/)
   })
 })

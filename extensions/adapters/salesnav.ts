@@ -23,13 +23,15 @@
  *      billed twice for one page. Dropping `id` makes the hash stable.
  *   3. ~1 MB of markup per page is mostly styling the parser ignores.
  *
- * Class names ARE kept: the backend anchors rows on
- * `ol.artdeco-list > li.artdeco-list__item`, so stripping them would break the
- * parser. Only volatile and executable content is removed.
+ * Parser class hooks ARE kept: the backend anchors rows on
+ * `ol.artdeco-list > li.artdeco-list__item`, so stripping those would break the
+ * parser. Generated classes, volatile state and executable content are removed.
  */
 import type { CaptureOptions, CapturedPage, PageAdapter } from '../core/types'
-import { sanitizePageElement, sha256Hex } from '../core/page-snapshot'
+import { sanitizePageElement, sha256Hex, snapshotUrl } from '../core/page-snapshot'
 import { salesNavAccountListAdapter } from './salesnav-account-list'
+import { salesNavAccountSearchAdapter } from './salesnav-account-search'
+import { companyIdFromUrl, normaliseWebsite } from './salesnav-company'
 
 /** Row anchors, in the order the backend parser tries them. */
 const LIST_ROW = 'li.artdeco-list__item'
@@ -38,9 +40,6 @@ const TABLE_ROW = 'tr[data-x--people-list--row]'
 const PERSON_NAME = '[data-anonymize="person-name"]'
 
 const CONTAINER_CANDIDATES = ['ol.artdeco-list', 'table', 'main']
-const SETTLE_QUIET_MS = 600
-const SETTLE_MAX_MS = 3_000
-const COMPANY_HOVER_SETTLE_MS = 250
 
 function rowCount(): number {
   const rows = document.querySelectorAll(`${LIST_ROW}, ${TABLE_ROW}`)
@@ -57,22 +56,6 @@ function resultsContainer(): Element | null {
   for (const selector of CONTAINER_CANDIDATES) {
     for (const candidate of Array.from(document.querySelectorAll(selector))) {
       if (candidate.querySelector(PERSON_NAME)) return candidate
-    }
-  }
-  return null
-}
-
-function externalWebsiteFrom(root: ParentNode): string | null {
-  for (const anchor of Array.from(root.querySelectorAll<HTMLAnchorElement>('a[href]'))) {
-    try {
-      const url = new URL(anchor.href, window.location.href)
-      if (!['http:', 'https:'].includes(url.protocol)) continue
-      if (/(^|\.)linkedin\.com$/i.test(url.hostname)) continue
-      // licdn is LinkedIn's own asset CDN, not the company's site.
-      if (/(^|\.)licdn\.com$/i.test(url.hostname)) continue
-      return url.toString()
-    } catch {
-      // Ignore malformed page-owned links.
     }
   }
   return null
@@ -120,96 +103,47 @@ export function companyDetailsFrom(card: ParentNode): {
   return { industry, size, headquarters }
 }
 
-/**
- * Reads the company hover card for every company already on screen.
- *
- * ⚠️ NOTHING HERE NAVIGATES. It dispatches a hover on an element the user has
- * already loaded and reads what LinkedIn renders in response. No clicking, no
- * opening, no request of our own — CLAUDE.md rule 1 stands.
- *
- * This is the ONLY source of company industry, headcount and headquarters. A
- * results row carries the company's NAME and its LinkedIn URL and nothing
- * else — verified by an attribute census of a real saved page.
- */
-async function revealCompanyDetails(container: Element): Promise<void> {
-  const companies = Array.from(
-    container.querySelectorAll<HTMLElement>('[data-anonymize="company-name"]'),
-  )
-
-  for (const company of companies) {
-    const row = company.closest('tr, li') ?? company
-    let website = externalWebsiteFrom(row)
-    let details: ReturnType<typeof companyDetailsFrom> = {
-      industry: null,
-      size: null,
-      headquarters: null,
-    }
-
-    company.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }))
-    company.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, cancelable: true }))
-    await new Promise((resolve) => setTimeout(resolve, COMPANY_HOVER_SETTLE_MS))
-
-    const card = document.querySelector(
-      '[role="tooltip"], .artdeco-hoverable-content, .artdeco-hoverable-content__content, [id*="hovercard"]',
-    )
-
-    if (card) {
-      website = website ?? externalWebsiteFrom(card)
-      details = companyDetailsFrom(card)
-    }
-
-    company.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }))
-    company.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }))
-
-    /*
-     * Written onto the element so the SERVER parser reads them out of the saved
-     * markup like every other field. The extension extracts nothing itself; it
-     * only makes what LinkedIn rendered persist into the document.
-     */
-    if (website) company.dataset.outlioCompanyWebsite = website
-    if (details.industry) company.dataset.outlioCompanyIndustry = details.industry
-    if (details.size) company.dataset.outlioCompanySize = details.size
-    if (details.headquarters) company.dataset.outlioCompanyHq = details.headquarters
+/** No layout forcing or interactions: only cards already rendered by the user. */
+function isVisible(element: Element): boolean {
+  for (let current: Element | null = element; current; current = current.parentElement) {
+    if (current.hasAttribute('hidden') || current.getAttribute('aria-hidden') === 'true') return false
+    const style = window.getComputedStyle(current)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
   }
+  return true
 }
 
+/** Copy labelled facts from an already-visible, identity-matched card to the
+ * detached snapshot only. An unrelated tooltip must never enrich every row. */
+function copyVisibleCompanyDetails(cleaned: Element): void {
+  const cards = Array.from(document.querySelectorAll(
+    '[role="tooltip"], .artdeco-hoverable-content, [id*="hovercard"]',
+  )).filter(isVisible)
 
-/**
- * Names render before some company cells on slower connections. Capture after
- * a short quiet window so LinkedIn's own lazy rendering can finish. This only
- * observes the page the user opened; it never hovers, scrolls, clicks, or
- * initiates a request.
- */
-function waitForResultsToSettle(container: Element): Promise<void> {
-  return new Promise((resolve) => {
-    let settled = false
-    let quietTimer: ReturnType<typeof setTimeout>
+  for (const company of Array.from(cleaned.querySelectorAll('[data-anonymize="company-name"]'))) {
+    const id = companyIdFromUrl(company.closest('a')?.getAttribute('href') ?? '')
+    if (!id) continue
+    const card = cards.find((candidate) => Array.from(candidate.querySelectorAll('a[href]'))
+      .some((anchor) => companyIdFromUrl(snapshotUrl(anchor.getAttribute('href') ?? '') ?? '') === id))
+    if (!card) continue
 
-    const finish = () => {
-      if (settled) return
-      settled = true
-      clearTimeout(quietTimer)
-      clearTimeout(maxTimer)
-      observer.disconnect()
-      resolve()
+    for (const [selector, attribute] of [
+      ['[data-anonymize="industry"]', 'data-outlio-company-industry'],
+      ['[data-anonymize="company-size"]', 'data-outlio-company-size'],
+      ['[data-anonymize="location"]', 'data-outlio-company-hq'],
+    ]) {
+      const field = card.querySelector(selector!)
+      const value = field && isVisible(field) ? field.textContent?.replace(/\s+/g, ' ').trim() : null
+      if (value) company.setAttribute(attribute!, value)
     }
-
-    const scheduleQuiet = () => {
-      clearTimeout(quietTimer)
-      quietTimer = setTimeout(finish, SETTLE_QUIET_MS)
-    }
-
-    const observer = new MutationObserver(scheduleQuiet)
-    observer.observe(container, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['href', 'data-anonymize'],
-    })
-
-    const maxTimer = setTimeout(finish, SETTLE_MAX_MS)
-    scheduleQuiet()
-  })
+    const website = card.querySelector(
+      'a[data-control-name="visit_company_website"], a[data-anonymize="company-website"], [data-anonymize="company-website"] a[href]',
+    )
+    const url = website && isVisible(website)
+      ? normaliseWebsite(website.getAttribute('href'), window.location.href) : null
+    const safe = url ? snapshotUrl(url) : null
+    if (safe) company.setAttribute('data-outlio-company-website', safe)
+  }
 }
 
 export const salesNavAdapter: PageAdapter = {
@@ -219,9 +153,9 @@ export const salesNavAdapter: PageAdapter = {
   supports(url: string): boolean {
     try {
       const parsed = new URL(url)
-      if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return false
-      // Lead search results only — not company pages, not a single profile.
-      return /^\/sales\/(search\/people|lists\/people|people)/i.test(parsed.pathname)
+      if (parsed.protocol !== 'https:' || parsed.username || parsed.password || !/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return false
+      // Route boundaries matter: /peopleXYZ is not a results route.
+      return /^\/sales\/(search\/people|lists\/people|people)(?:\/|$)/i.test(parsed.pathname)
     } catch {
       return false
     }
@@ -244,12 +178,14 @@ export const salesNavAdapter: PageAdapter = {
 
     // Fall back to the paginator's current state.
     const current = document.querySelector(
-      '[data-test-pagination-page-btn].active, .artdeco-pagination__indicator--number.active',
+      '[aria-current="page"], [data-test-pagination-page-btn].active, .artdeco-pagination__indicator--number.active',
     )
     const text = current?.textContent?.trim()
     if (text && /^\d{1,4}$/.test(text)) return text
 
-    return null
+    // First/single-page saved lists often have no paginator. The capture claim
+    // requires an identifier; null misleadingly reports SESSION_NOT_FOUND.
+    return '1'
   },
 
   getPageName(): string {
@@ -273,25 +209,14 @@ export const salesNavAdapter: PageAdapter = {
   },
 
   async capture(options?: CaptureOptions): Promise<CapturedPage> {
-    const initialContainer = resultsContainer()
-    if (!initialContainer) throw new Error('no results container on this page')
-
-    await waitForResultsToSettle(initialContainer)
-
-    // The SPA may replace the whole list while it settles, so reacquire it.
+    // All DOM reads happen synchronously under the content script's session
+    // gate. The observer already debounces rendering; no delayed DOM pass may
+    // run after a user has ended the session.
     const container = resultsContainer()
-    if (!container) throw new Error('results disappeared before capture')
-
-    /*
-     * ⚠️ ON BY DEFAULT. This pass was opt-in and effectively never used —
-     * `company_website_url` was NULL on 400 of 400 real leads — so the company
-     * data users ask for most was the data nobody ever got. The popup can
-     * still switch it off for a faster capture.
-     */
-    if (options?.includeCompanyWebsites !== false) await revealCompanyDetails(container)
-
+    if (!container) throw new Error('no results container on this page')
     const cleaned = sanitizePageElement(container)
     if (!cleaned) throw new Error('results container could not be read')
+    if (options?.includeCompanyWebsites === true) copyVisibleCompanyDetails(cleaned)
 
     // Wrapped in a minimal document so the backend's content sniffing sees a
     // real HTML file, exactly as it would for an uploaded page.
@@ -303,7 +228,7 @@ export const salesNavAdapter: PageAdapter = {
     return {
       sourceType: 'salesnav_lead_results',
       html,
-      sourceUrl: window.location.href.split('#')[0]!,
+      sourceUrl: snapshotUrl(window.location.href)!,
       pageName: salesNavAdapter.getPageName(),
       pageIdentifier: salesNavAdapter.getPageIdentifier() ?? '1',
       contentHash: await sha256Hex(html),
@@ -311,8 +236,29 @@ export const salesNavAdapter: PageAdapter = {
   },
 }
 
-export const ADAPTERS: PageAdapter[] = [salesNavAccountListAdapter, salesNavAdapter]
+export const ADAPTERS: PageAdapter[] = [salesNavAccountListAdapter, salesNavAccountSearchAdapter, salesNavAdapter]
 
 export function adapterFor(url: string): PageAdapter | null {
   return ADAPTERS.find((a) => a.supports(url)) ?? null
+}
+
+/** Session-only fingerprint. Include EVERY row, not just the first and last
+ * person: account pages may contain no people, or only recommendations. */
+export function pageSignature(adapter: PageAdapter): string {
+  const selector = adapter.id === 'salesnav-account-list'
+    ? '[data-x--account-hub--table] [data-x--account-hub--table-data-row]'
+    : adapter.id === 'salesnav-account-search'
+      ? '[data-x-search-result="ACCOUNT"]'
+      : `${LIST_ROW}, ${TABLE_ROW}`
+  const marker = adapter.sourceType === 'salesnav_lead_results' ? PERSON_NAME : '[data-anonymize="company-name"]'
+  const identities = Array.from(document.querySelectorAll(selector)).flatMap((row) => {
+    const name = row.querySelector(marker)
+    if (!name) return []
+    const anchor = name.closest('a[href]') ?? row.querySelector(
+      adapter.sourceType === 'salesnav_lead_results' ? 'a[href*="/sales/lead/"]' : 'a[href*="/sales/company/"]',
+    )
+    const href = anchor?.getAttribute('href')
+    return [href ? snapshotUrl(href) : name.textContent?.replace(/\s+/g, ' ').trim()]
+  })
+  return JSON.stringify([adapter.id, snapshotUrl(window.location.href), adapter.getPageIdentifier(), identities])
 }

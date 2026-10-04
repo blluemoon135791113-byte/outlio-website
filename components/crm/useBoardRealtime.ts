@@ -98,6 +98,17 @@ export function useBoardRealtime(
               currency: (next.currency as string) ?? 'USD',
               ownerUserId: (next.owner_user_id as string | null) ?? null,
               contactId: (next.contact_id as string | null) ?? null,
+              companyId: (next.company_id as string | null) ?? null,
+              /*
+               * The payload carries the account's id, not its name. Kept from
+               * the card on screen when the account is unchanged; a card that
+               * arrives from elsewhere shows the name on the next full load
+               * rather than a guess.
+               */
+              companyName:
+                previousCard && previousCard.card.companyId === ((next.company_id as string | null) ?? null)
+                  ? previousCard.card.companyName
+                  : null,
               updatedAt: (next.updated_at as string) ?? new Date().toISOString(),
               stageEnteredAt:
                 previousCard && previousCard.stageId === stageId

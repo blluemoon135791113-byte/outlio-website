@@ -180,7 +180,20 @@ const HEADER_ALIASES: Record<ImportField, string[]> = {
   linkedin_url: ['linkedin', 'linkedinurl', 'linkedinprofile', 'profileurl', 'linkedinlink'],
   company_name: ['company', 'companyname', 'organization', 'organisation', 'account', 'employer'],
   company_domain: ['domain', 'companydomain', 'website', 'companywebsite', 'url', 'companyurl'],
-  company_linkedin_url: ['companylinkedin', 'companylinkedinurl', 'organizationlinkedin'],
+  /*
+   * A Sales Navigator company URL lands here too: since 0145 the importer
+   * files each address by its shape (public page vs /sales/company/), and
+   * either one finds the existing account it belongs to.
+   */
+  company_linkedin_url: [
+    'companylinkedin',
+    'companylinkedinurl',
+    'organizationlinkedin',
+    'salesnavcompanyurl',
+    'salesnavigatorcompanyurl',
+    'companysalesnavurl',
+    'companysalesnavigatorurl',
+  ],
   location: ['location', 'city', 'country', 'region', 'geo', 'address'],
   headline: ['headline', 'summary', 'bio', 'about', 'description'],
 }

@@ -23,7 +23,7 @@
  * decides what to do with `unknown`; this module refuses to guess.
  */
 
-export type SavedPageType = 'lead_search' | 'account_list' | 'unknown'
+export type SavedPageType = 'lead_search' | 'account_list' | 'account_search' | 'unknown'
 
 /**
  * Anchors, in the order they are tested.
@@ -38,6 +38,15 @@ const ACCOUNT_LIST_ANCHORS = [
   'data-x--account-hub--table-data-row',
   'data-x--account-hub--table',
   'data-x-accounts-dashboard-table-column-header',
+] as const
+
+/**
+ * Account SEARCH results (`/sales/search/company`), validated 2026-10-03.
+ * Each result card carries this hook; a lead search card says `LEAD`.
+ */
+const ACCOUNT_SEARCH_ANCHORS = [
+  'data-x-search-result="ACCOUNT"',
+  "data-x-search-result='ACCOUNT'",
 ] as const
 
 const LEAD_SEARCH_ANCHORS = [
@@ -59,6 +68,8 @@ export function detectSavedPageType(html: string): SavedPageType {
   if (!html) return 'unknown'
 
   if (ACCOUNT_LIST_ANCHORS.some((anchor) => html.includes(anchor))) return 'account_list'
+  // Before leads for the same reason as account lists: the specific test first.
+  if (ACCOUNT_SEARCH_ANCHORS.some((anchor) => html.includes(anchor))) return 'account_search'
   if (LEAD_SEARCH_ANCHORS.some((anchor) => html.includes(anchor))) return 'lead_search'
 
   return 'unknown'
@@ -71,6 +82,8 @@ export function savedPageTypeLabel(type: SavedPageType): string {
       return 'Sales Navigator lead search results'
     case 'account_list':
       return 'Sales Navigator account list'
+    case 'account_search':
+      return 'Sales Navigator account search results'
     default:
       return 'an unrecognised page'
   }

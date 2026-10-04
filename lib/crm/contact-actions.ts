@@ -12,7 +12,13 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { addNote, assignContact, bulkAssignContacts, eraseContact, NotAMemberError } from '@/lib/crm/activities'
-import { createContactManually } from '@/lib/crm/ingest'
+import { createContactManually, recordContactProfileUrls } from '@/lib/crm/ingest'
+import { addContactLinks, removeContactLink } from '@/lib/crm/contact-links'
+import { addContactRole } from '@/lib/crm/lead-role-service'
+import { normalizeContactLinkedInUrl, normalizeEmail, normalizePhoneNumber } from '@/lib/crm/normalize'
+import { MAX_LINKS_PER_LEAD, socialLinksFromForm } from '@/lib/crm/social-links'
+import { assertAccountPermission, canSeeAccount } from '@/lib/crm/account-access'
+import { linkContactToCompany } from '@/lib/crm/repository'
 import {
   STOP_REASONS,
   STOP_SCOPES,
@@ -28,8 +34,8 @@ import {
   requestReassignment,
 } from '@/lib/crm/collision'
 import { isAppError } from '@/lib/errors/catalog'
-import { assertWorkspacePermission } from '@/lib/workspaces/context'
-import { dataScope } from '@/lib/workspaces/permissions'
+import { assertWorkspacePermission, type WorkspaceContext } from '@/lib/workspaces/context'
+import { can, dataScope } from '@/lib/workspaces/permissions'
 
 export type ContactActionState =
   | { status: 'idle' }
@@ -202,76 +208,26 @@ export async function createContactAction(
   }
 
   try {
-    const result = await createContactManually(
-      ctx.workspace.id,
-      {
-        fullName: fullName || null,
-        emails: email ? [email] : [],
-        phones: phone ? [phone] : [],
-        jobTitle: jobTitle || null,
-        linkedInUrl: linkedInUrl || null,
-        // Whoever adds someone by hand is working them; that is a far better
-        // default than unassigned, which is right for a bulk import.
-        ownerUserId: ctx.userId,
-        source: 'manual',
-      },
-      ctx.userId,
+    const outcome = await addContact(
+      ctx,
+      { fullName, email, jobTitle, phone, identityUrl: linkedInUrl, profiles: {} },
+      String(formData.get('companyId') ?? ''),
     )
+    if (outcome.held) return HELD
+    const { result, placed } = outcome
 
-    /*
-     * ╔═══════════════════════════════════════════════════════════════════════╗
-     * ║  A MATCH THE CALLER CANNOT READ IS NOT AN ANSWER THEY GET.            ║
-     * ║                                                                       ║
-     * ║  Dedup runs on the service role, so it matches across the whole        ║
-     * ║  workspace — including records a setter's `assigned` scope hides.      ║
-     * ║  Returning that contact's id told them the person exists, who they     ║
-     * ║  are, and gave them the id to navigate to: an enumeration oracle for   ║
-     * ║  the entire contact list, one guessed email at a time.                 ║
-     * ║                                                                       ║
-     * ║  T04: no owner, name, id or count disclosure — and the admin review    ║
-     * ║  path must still prevent the unsafe duplicate. So the record is not    ║
-     * ║  created, nothing identifying is returned, and the existing            ║
-     * ║  reassignment queue carries the conflict to someone who may act on it. ║
-     * ╚═══════════════════════════════════════════════════════════════════════╝
-     */
-    const matchedSomeoneElses =
-      !result.created &&
-      dataScope(ctx.role) !== 'all' &&
-      result.ownerUserId !== ctx.userId
-
-    if (matchedSomeoneElses) {
-      try {
-        await requestReassignment(
-          ctx.workspace.id,
-          result.contactId,
-          ctx.userId,
-          'Opened automatically: tried to add a contact the workspace already has.',
-        )
-      } catch (error) {
-        // Already asked. The review path is open, which is all this needs — and
-        // the requester must not learn that a second attempt behaved
-        // differently from the first.
-        if (!(error instanceof DuplicateRequestError)) throw error
-      }
-
-      return {
-        ok: true,
-        held: true,
-        message:
-          'That contact needs an administrator to review it before it can be added. ' +
-          'They have been asked.',
-      }
-    }
-
-    revalidatePath('/crm/contacts')
+    let atAccount = ''
+    if (placed === 'kept_elsewhere') atAccount = ' They already work at another account, so they were not moved.'
+    if (placed === 'not_visible') atAccount = ' That account could not be found, so they were not added to it.'
 
     return {
       ok: true,
       contactId: result.contactId,
       created: result.created,
-      message: result.created
-        ? 'Contact added.'
-        : 'That person was already in your CRM — opening them instead.',
+      message:
+        (result.created
+          ? 'Contact added.'
+          : 'That person was already in your CRM — opening them instead.') + atAccount,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
@@ -280,6 +236,264 @@ export async function createContactAction(
     }
     return { ok: false, error: 'Could not add that contact.' }
   }
+}
+
+/**
+ * "Add decision maker" on an account page: the same deduplicating add as
+ * "Add lead", at that account, then the Decision Maker role (set by hand, so
+ * suggestions never take it away) and any other profile links.
+ *
+ * ⚠️ EVERYTHING IS VALIDATED BEFORE ANYTHING IS WRITTEN — the account, every
+ * address and every link — so a typo never leaves half a decision maker
+ * behind. Needs `crm.contact.create` AND `crm.contact.edit` (a role and links
+ * are edits to the lead).
+ */
+export async function addDecisionMakerAction(
+  _previous: CreateContactState,
+  formData: FormData,
+): Promise<CreateContactState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('crm.contact.create')
+  } catch {
+    return { ok: false, error: 'You do not have permission to add decision makers.' }
+  }
+  if (!can({ role: ctx.role, modules: ctx.modules }, 'crm.contact.edit')) {
+    return { ok: false, error: 'You do not have permission to add decision makers.' }
+  }
+
+  const fullName = String(formData.get('fullName') ?? '').trim()
+  const email = String(formData.get('email') ?? '').trim()
+  const jobTitle = String(formData.get('jobTitle') ?? '').trim()
+  const phone = String(formData.get('phone') ?? '').trim()
+  const linkedInRaw = String(formData.get('linkedInUrl') ?? '').trim()
+  const navigatorRaw = String(formData.get('salesNavigatorUrl') ?? '').trim()
+  const companyId = String(formData.get('companyId') ?? '')
+
+  if (!fullName) return { ok: false, error: 'Give the decision maker a name.' }
+  if (fullName.length > 140 || jobTitle.length > 140) return { ok: false, error: 'Keep the name and position under 140 characters.' }
+  if (email && !normalizeEmail(email)) return { ok: false, error: 'That email address is not valid.' }
+  if (phone) {
+    const parsed = normalizePhoneNumber(phone)
+    if (!parsed || parsed.reason === 'invalid') return { ok: false, error: 'That phone number is not valid.' }
+  }
+
+  const publicProfile = linkedInRaw ? normalizeContactLinkedInUrl(linkedInRaw) : null
+  if (linkedInRaw && publicProfile?.kind !== 'public_profile') {
+    return { ok: false, error: 'The LinkedIn field takes a profile address (linkedin.com/in/…).' }
+  }
+  const navigator = navigatorRaw ? normalizeContactLinkedInUrl(navigatorRaw) : null
+  if (navigatorRaw && navigator?.kind !== 'sales_navigator') {
+    return { ok: false, error: 'The Sales Navigator field takes a lead address (linkedin.com/sales/lead/…).' }
+  }
+  const navigatorUrl = navigator ? (/^https?:\/\//i.test(navigatorRaw) ? navigatorRaw : `https://${navigatorRaw}`) : null
+  const publicUrl = publicProfile?.canonicalUrl ?? null
+
+  const links = socialLinksFromForm(formData)
+  if (!links.ok) return { ok: false, error: links.error }
+
+  try {
+    // The account first: an add that would not land at it is refused whole.
+    const access = await assertAccountPermission(null)
+    if (access.ctx.workspace.id !== ctx.workspace.id || !(await canSeeAccount(access, companyId))) {
+      return { ok: false, error: 'That account could not be found.' }
+    }
+
+    /*
+     * ONE identity per lead. The Navigator address by default — it is how an
+     * extracted lead is keyed — unless both were typed and someone is ALREADY
+     * keyed by the public profile: matching on that one is what stops a
+     * second copy of a person typed in by hand earlier.
+     */
+    const byPublic =
+      navigator && publicProfile ? await identityKeyInUse(ctx.workspace.id, publicProfile.identityKey) : false
+    const identityUrl = byPublic ? publicUrl : (navigatorUrl ?? publicUrl)
+
+    const outcome = await addContact(
+      ctx,
+      {
+        fullName,
+        email,
+        jobTitle,
+        phone,
+        identityUrl: identityUrl ?? '',
+        profiles: {
+          // Always into its own column — even as the identity, ingest puts it
+          // only in `linkedin_url`.
+          salesNavigatorUrl: navigatorUrl,
+          // Ingest already stored the public profile when IT is the identity.
+          publicProfileUrl: identityUrl === publicUrl ? null : publicUrl,
+        },
+      },
+      companyId,
+    )
+    if (outcome.held) return HELD
+    const { result, placed } = outcome
+
+    const notes: string[] = []
+    if (placed === 'kept_elsewhere') {
+      notes.push('They already work at another account, so they were not moved or marked as a decision maker here.')
+    } else if (placed === 'linked') {
+      try {
+        await addContactRole(ctx, result.contactId, 'decision_maker')
+      } catch (error) {
+        if (isAppError(error) && error.code === 'ERR_VALIDATION') {
+          notes.push('The Decision Maker role is disabled in this workspace, so it was not set.')
+        } else {
+          console.error('[addDecisionMakerAction] role', error instanceof Error ? error.message : 'unknown error')
+          notes.push('The role could not be saved — set it from the People list.')
+        }
+      }
+    }
+
+    if (links.links.length > 0) {
+      try {
+        await addContactLinks(ctx, result.contactId, links.links)
+      } catch (error) {
+        if (isAppError(error) && error.code === 'ERR_VALIDATION') {
+          notes.push(`They already have ${MAX_LINKS_PER_LEAD} links, so the new ones were not added.`)
+        } else {
+          console.error('[addDecisionMakerAction] links', error instanceof Error ? error.message : 'unknown error')
+          notes.push('The other links could not be saved — add them from their page.')
+        }
+      }
+    }
+
+    revalidatePath(`/crm/contacts/${result.contactId}`)
+    return {
+      ok: true,
+      contactId: result.contactId,
+      created: result.created,
+      message: [
+        result.created ? 'Decision maker added.' : 'That person was already in your CRM — updated them instead.',
+        ...notes,
+      ].join(' '),
+    }
+  } catch (error) {
+    console.error('[addDecisionMakerAction]', error instanceof Error ? error.message : 'unknown error')
+    return { ok: false, error: 'Could not add that decision maker.' }
+  }
+}
+
+/** Is a live contact in this workspace already keyed by this LinkedIn identity? */
+async function identityKeyInUse(workspaceId: string, identityKey: string): Promise<boolean> {
+  const { data, error } = await createAdminClient()
+    .from('crm_contacts')
+    .select('id')
+    .eq('workspace_id', workspaceId)
+    .eq('linkedin_identity_key', identityKey)
+    .is('deleted_at', null)
+    .limit(1)
+  if (error) throw new Error(`identityKeyInUse failed: ${error.message}`)
+  return (data ?? []).length > 0
+}
+
+const HELD: CreateContactState = {
+  ok: true,
+  held: true,
+  message:
+    'That contact needs an administrator to review it before it can be added. ' +
+    'They have been asked.',
+}
+
+type Placement = 'linked' | 'kept_elsewhere' | 'not_visible'
+
+/**
+ * The add both actions share: dedup, the held-conflict rule, then placing the
+ * person at the account. ⚠️ ROUTED THROUGH THE DEDUPLICATING INGEST, not a
+ * plain insert — see `createContactManually`.
+ */
+async function addContact(
+  ctx: WorkspaceContext,
+  fields: {
+    fullName: string
+    email: string
+    jobTitle: string
+    phone: string
+    identityUrl: string
+    profiles: { salesNavigatorUrl?: string | null; publicProfileUrl?: string | null }
+  },
+  companyId: string,
+): Promise<
+  | { held: true }
+  | { held: false; result: { contactId: string; created: boolean }; placed: Placement | null }
+> {
+  const result = await createContactManually(
+    ctx.workspace.id,
+    {
+      fullName: fields.fullName || null,
+      emails: fields.email ? [fields.email] : [],
+      phones: fields.phone ? [fields.phone] : [],
+      jobTitle: fields.jobTitle || null,
+      linkedInUrl: fields.identityUrl || null,
+      // Whoever adds someone by hand is working them; that is a far better
+      // default than unassigned, which is right for a bulk import.
+      ownerUserId: ctx.userId,
+      source: 'manual',
+    },
+    ctx.userId,
+  )
+
+  /*
+   * ╔═══════════════════════════════════════════════════════════════════════╗
+   * ║  A MATCH THE CALLER CANNOT READ IS NOT AN ANSWER THEY GET.            ║
+   * ║                                                                       ║
+   * ║  Dedup runs on the service role, so it matches across the whole        ║
+   * ║  workspace — including records a setter's `assigned` scope hides.      ║
+   * ║  Returning that contact's id told them the person exists, who they     ║
+   * ║  are, and gave them the id to navigate to: an enumeration oracle for   ║
+   * ║  the entire contact list, one guessed email at a time.                 ║
+   * ║                                                                       ║
+   * ║  T04: no owner, name, id or count disclosure — and the admin review    ║
+   * ║  path must still prevent the unsafe duplicate. So the record is not    ║
+   * ║  created, nothing identifying is returned, and the existing            ║
+   * ║  reassignment queue carries the conflict to someone who may act on it. ║
+   * ╚═══════════════════════════════════════════════════════════════════════╝
+   */
+  const matchedSomeoneElses =
+    !result.created &&
+    dataScope(ctx.role) !== 'all' &&
+    result.ownerUserId !== ctx.userId
+
+  if (matchedSomeoneElses) {
+    try {
+      await requestReassignment(
+        ctx.workspace.id,
+        result.contactId,
+        ctx.userId,
+        'Opened automatically: tried to add a contact the workspace already has.',
+      )
+    } catch (error) {
+      // Already asked. The review path is open, which is all this needs — and
+      // the requester must not learn that a second attempt behaved
+      // differently from the first.
+      if (!(error instanceof DuplicateRequestError)) throw error
+    }
+    return { held: true }
+  }
+
+  /*
+   * "Add lead" on an account page: put the person AT that account.
+   *
+   * ⚠️ TWO CHECKS. The caller must be able to see the account (the account
+   * rule — an id in a hidden field is not a permission), and an EXISTING
+   * person who already works somewhere else is NOT moved: matching someone
+   * by email from an account page is not evidence they changed employer, and
+   * silently rewriting their company would be inventing that (rule 4).
+   */
+  // Only now — the contact is the caller's to edit (see recordContactProfileUrls).
+  if (fields.profiles.salesNavigatorUrl || fields.profiles.publicProfileUrl) {
+    await recordContactProfileUrls(ctx.workspace.id, result.contactId, fields.profiles)
+  }
+
+  let placed: Placement | null = null
+  if (companyId) {
+    placed = await placeAtAccount(ctx.workspace.id, result.contactId, companyId, result.created)
+    revalidatePath(`/crm/companies/${companyId}`)
+  }
+
+  revalidatePath('/crm/contacts')
+  return { held: false, result, placed }
 }
 
 // ---------------------------------------------------------------------------
@@ -439,6 +653,8 @@ export async function bulkTagAction(
     .select('id')
     .eq('workspace_id', ctx.workspace.id)
     .eq('id', tagId)
+    // A lead tag. An account tag's id in this form is refused here, not by the trigger.
+    .eq('entity', 'contact')
     .maybeSingle()
 
   if (!tag) return { ok: false, error: 'That tag no longer exists.' }
@@ -799,4 +1015,87 @@ export async function clearDoNotContactAction(
   } catch (error) {
     return toState(error)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Other profile links (0154)
+// ---------------------------------------------------------------------------
+
+/** Adds links typed on the contact page. Every link is validated before any is written. */
+export async function addContactLinksAction(
+  _previous: ContactActionState,
+  formData: FormData,
+): Promise<ContactActionState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('crm.contact.edit')
+  } catch (error) {
+    return toState(error)
+  }
+
+  const contactId = uuid.safeParse(formData.get('contactId'))
+  if (!contactId.success) return fail('That contact could not be found.')
+
+  const links = socialLinksFromForm(formData)
+  if (!links.ok) return fail(links.error)
+  if (links.links.length === 0) return fail('Add at least one address.')
+
+  try {
+    const added = await addContactLinks(ctx, contactId.data, links.links)
+    revalidatePath(`/crm/contacts/${contactId.data}`)
+    return ok(added === 0 ? 'They already had those links.' : added === 1 ? 'Link added.' : `${added} links added.`)
+  } catch (error) {
+    if (isAppError(error) && error.code === 'ERR_VALIDATION') {
+      return fail(`A lead can have at most ${MAX_LINKS_PER_LEAD} links. Remove one first.`)
+    }
+    return toState(error)
+  }
+}
+
+export async function removeContactLinkAction(
+  _previous: ContactActionState,
+  formData: FormData,
+): Promise<ContactActionState> {
+  let ctx
+  try {
+    ctx = await assertWorkspacePermission('crm.contact.edit')
+  } catch (error) {
+    return toState(error)
+  }
+
+  try {
+    const { contactId } = await removeContactLink(ctx, String(formData.get('linkId') ?? ''))
+    revalidatePath(`/crm/contacts/${contactId}`)
+    return ok('Link removed.')
+  } catch (error) {
+    return toState(error)
+  }
+}
+
+/**
+ * Links a just-added lead to the account it was added from.
+ * Returns what happened, so the caller can say so.
+ */
+async function placeAtAccount(
+  workspaceId: string,
+  contactId: string,
+  companyId: string,
+  created: boolean,
+): Promise<'linked' | 'kept_elsewhere' | 'not_visible'> {
+  const access = await assertAccountPermission(null)
+  if (access.ctx.workspace.id !== workspaceId || !(await canSeeAccount(access, companyId))) return 'not_visible'
+
+  if (!created) {
+    const { data } = await createAdminClient()
+      .from('crm_contacts')
+      .select('primary_company_id')
+      .eq('workspace_id', workspaceId)
+      .eq('id', contactId)
+      .maybeSingle()
+    if (data?.primary_company_id && data.primary_company_id !== companyId) return 'kept_elsewhere'
+    if (data?.primary_company_id === companyId) return 'linked'
+  }
+
+  await linkContactToCompany(workspaceId, contactId, companyId)
+  return 'linked'
 }

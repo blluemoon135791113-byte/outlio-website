@@ -83,9 +83,9 @@ export function LiveCapture({
 
   const stats: Array<[string, number]> = [
     ['Pages processed', session.pages_processed],
-    ['Leads found', session.leads_found],
-    ['Imported', session.leads_imported],
-    ['Duplicates', session.duplicates_skipped],
+    ['Records found', session.leads_found],
+    ['Records kept', session.leads_imported],
+    ['Skipped', session.duplicates_skipped],
   ]
 
   return (
@@ -101,7 +101,7 @@ export function LiveCapture({
       </div>
 
       <p className="mt-2 text-sm text-ink">
-        Capture active. Keep browsing — each page you open is processed automatically.
+        Capture active. Browse lead or account lists manually — loaded pages are processed automatically.
       </p>
 
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">

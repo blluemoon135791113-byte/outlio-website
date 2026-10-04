@@ -471,6 +471,9 @@ export type BoardCard = {
   currency: string
   ownerUserId: string | null
   contactId: string | null
+  /** The account the deal is for, and its name (NULL when it has none). */
+  companyId: string | null
+  companyName: string | null
   updatedAt: string
   /**
    * When this deal most recently entered its current stage.
@@ -524,7 +527,7 @@ export async function getBoard(
     let query = db
       .from('crm_opportunities')
       .select(
-        'id, title, version, value_amount, currency, owner_user_id, contact_id, updated_at, created_at',
+        'id, title, version, value_amount, currency, owner_user_id, contact_id, company_id, updated_at, created_at',
         { count: 'exact' },
       )
       .eq('workspace_id', workspaceId)
@@ -573,12 +576,29 @@ export async function getBoard(
           currency: row.currency,
           ownerUserId: row.owner_user_id,
           contactId: row.contact_id,
+          companyId: row.company_id,
+          companyName: null,
           updatedAt: row.updated_at,
           stageEnteredAt,
           isStale: staleBefore !== null && stageEnteredAt < staleBefore,
         }
       }),
     })
+  }
+
+  // One read for every card's account name, not one per card.
+  const companyIds = [...new Set(columns.flatMap((c) => c.cards.map((card) => card.companyId)).filter((id): id is string => id !== null))]
+  if (companyIds.length > 0) {
+    const { data, error } = await db
+      .from('crm_companies')
+      .select('id, name, domain')
+      .eq('workspace_id', workspaceId)
+      .in('id', companyIds)
+    if (error) throw new Error(`getBoard failed: ${error.message}`)
+    const names = new Map((data ?? []).map((c) => [c.id, c.name ?? c.domain ?? null]))
+    for (const column of columns) {
+      for (const card of column.cards) card.companyName = card.companyId ? (names.get(card.companyId) ?? null) : null
+    }
   }
 
   return columns

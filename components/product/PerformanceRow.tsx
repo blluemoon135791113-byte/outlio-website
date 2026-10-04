@@ -92,6 +92,8 @@ export function PerformanceRow({ data }: { data: OverviewPerformance }) {
             href={entry.href}
             delta={{
               change: entry.delta,
+              unit: entry.deltaUnit,
+              isNew: entry.isNew,
               previous: entry.previous,
               higherIsBetter: entry.higherIsBetter,
             }}

@@ -207,6 +207,10 @@ export function PipelineBoard({
                   } ${dragging === card.id ? 'opacity-50' : ''}`}
                 >
                   <p className="text-sm font-semibold leading-snug text-ink">{card.title}</p>
+                  {/* The account, unless the deal is already named after it. */}
+                  {card.companyName && card.companyName !== card.title ? (
+                    <p className="mt-0.5 truncate text-xs text-muted">{card.companyName}</p>
+                  ) : null}
 
                   <div className="mt-1.5 flex items-center gap-2">
                     {card.valueAmount !== null ? (

@@ -11,11 +11,11 @@ export type ExtensionState =
   | { kind: 'not_connected' }
   | { kind: 'no_subscription'; message: string }
   | { kind: 'disabled'; message: string }
-  | { kind: 'ready'; account: Account; supported: boolean }
-  | { kind: 'capturing'; account: Account; session: SessionTotals; supported: boolean }
+  | { kind: 'ready'; account: Account; supported: boolean; ready: boolean }
+  | { kind: 'capturing'; account: Account; session: SessionTotals; supported: boolean; ready: boolean }
   | { kind: 'processing'; account: Account; session: SessionTotals }
   | { kind: 'complete'; session: SessionTotals }
-  | { kind: 'error'; message: string; retryable: boolean }
+  | { kind: 'error'; message: string; retryable: boolean; sessionActive?: boolean }
 
 export type Account = {
   email: string | null
@@ -99,6 +99,7 @@ export type ExtensionMessage =
   | { type: 'CONNECT' }
   | { type: 'START_CAPTURE'; includeCompanyWebsites?: boolean; dedupeMode?: DedupeMode }
   | { type: 'FINISH_CAPTURE' }
+  | { type: 'CAPTURE_PAGE' }
   | { type: 'RETRY' }
   | { type: 'OPEN_DASHBOARD' }
   /** Content script → background: the user navigated to a new results page. */

@@ -64,14 +64,11 @@ export function PhoneField({
           maxLength={30}
           placeholder="Phone number"
           defaultValue={defaultValue}
-          aria-describedby={`phone-hint${error ? ' phone-error' : ''}`}
+          aria-describedby={error ? 'phone-error' : undefined}
           aria-invalid={error ? true : undefined}
           className="min-w-0 bg-transparent px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted/60"
         />
       </div>
-      <p id="phone-hint" className="text-xs leading-relaxed text-muted">
-        Choose your country, then enter the local number. We store it securely in international format.
-      </p>
       {error ? (
         <p id="phone-error" className="flex gap-1.5 text-xs leading-relaxed text-danger">
           <span aria-hidden="true">↳</span>
