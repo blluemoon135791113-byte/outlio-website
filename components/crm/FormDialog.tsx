@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useRef, type ReactNode } from 'react'
 
 /**
  * The overlay that "New deal" and "New pipeline" open into.
@@ -42,20 +42,29 @@ export function FormDialog({
   children: ReactNode
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
+  // Call the latest callback without reinstalling focus/scroll effects whenever
+  // a parent passes a new inline handler (e.g. when adding a form row).
+  const dismiss = useEffectEvent(onClose)
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
     const previouslyFocused = document.activeElement as HTMLElement | null
     document.body.style.overflow = 'hidden'
 
-    panelRef.current
-      ?.querySelector<HTMLElement>('input, select, textarea, button')
-      ?.focus()
+    const getFocusable = () => Array.from(
+      panelRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    ).filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0)
+
+    // Deal forms start with hidden IDs; those cannot receive keyboard focus.
+    const firstControl = getFocusable()[0] ?? panelRef.current
+    firstControl?.focus({ preventScroll: true })
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose()
+        dismiss()
         return
       }
       if (event.key !== 'Tab') return
@@ -65,10 +74,12 @@ export function FormDialog({
        * remove rows while open — "Add stage", "Remove" — so a list captured
        * once sends focus to a button that is no longer on screen.
        */
-      const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      )
-      if (!focusable?.length) return
+      const focusable = getFocusable()
+      if (!focusable.length) {
+        event.preventDefault()
+        panelRef.current?.focus({ preventScroll: true })
+        return
+      }
 
       const first = focusable[0]
       const last = focusable[focusable.length - 1]
@@ -86,13 +97,13 @@ export function FormDialog({
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
       // Back where they were, so the board does not scroll to the top.
-      previouslyFocused?.focus?.()
+      previouslyFocused?.focus?.({ preventScroll: true })
     }
-  }, [onClose])
+  }, [])
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/25 p-4 sm:p-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-ink/25 p-4 sm:p-8"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}

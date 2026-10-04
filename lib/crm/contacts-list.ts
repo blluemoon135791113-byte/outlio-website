@@ -516,7 +516,7 @@ export async function getContactDetail(
       ? db
           .from('crm_companies')
           .select(
-            'id, name, domain, employee_count, headquarters, linkedin_url, source, source_company_id',
+            'id, name, domain, employee_count, headquarters, linkedin_url, sales_navigator_url, source, source_company_id',
           )
           /*
            * ⚠️ SCOPED BY WORKSPACE, even though `primary_company_id` came off a
@@ -559,7 +559,9 @@ export async function getContactDetail(
           domain: company.data.domain,
           employeeCount: company.data.employee_count,
           headquarters: company.data.headquarters,
-          linkedInUrl: company.data.linkedin_url,
+          // The Navigator address moved to its own column (0145/0151); a company
+          // known only by it still shows a link here, as it did before.
+          linkedInUrl: company.data.linkedin_url ?? company.data.sales_navigator_url,
           source: company.data.source,
           sourceCompanyId: company.data.source_company_id,
         }

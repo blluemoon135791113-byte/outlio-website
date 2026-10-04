@@ -72,26 +72,43 @@ export function CommandPalette() {
     setOutcome(null)
     setActive(0)
     abortRef.current?.abort()
-    openerRef.current?.focus()
+    openerRef.current?.focus({ preventScroll: true })
   }, [])
 
-  /* ⌘K on mac, Ctrl+K elsewhere. Registered once, on the window, because the
-     point is that it works from any screen. */
+  /* ⌘K on mac, Ctrl+K elsewhere, available from every product screen. */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
-        openerRef.current = document.activeElement as HTMLElement | null
-        setOpen((was) => !was)
+        if (open) {
+          close()
+        } else {
+          // Do not stack a second focus trap/scroll lock over an open form or
+          // mobile drawer. Finish that interaction before starting a search.
+          if (document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]')) return
+          openerRef.current = document.activeElement as HTMLElement | null
+          setOpen(true)
+        }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [open, close])
 
   useEffect(() => {
-    if (open) inputRef.current?.focus()
+    if (!open) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    inputRef.current?.focus({ preventScroll: true })
+    return () => { document.body.style.overflow = previousOverflow }
   }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    paletteRef.current
+      ?.querySelector<HTMLElement>('button[aria-current="true"]')
+      ?.scrollIntoView({ block: 'nearest', behavior: 'instant' })
+  }, [open, active, outcome])
 
   /*
    * ⚠️ EVERY IN-FLIGHT REQUEST IS ABORTED BEFORE THE NEXT ONE. Without this,
@@ -186,7 +203,7 @@ export function CommandPalette() {
     } else if (event.key === 'ArrowUp') {
       event.preventDefault()
       setActive((i) => (i - 1 + results.length) % results.length)
-    } else if (event.key === 'Enter') {
+    } else if (event.key === 'Enter' && event.target === inputRef.current) {
       event.preventDefault()
       const chosen = results[active]
       if (chosen) go(chosen.href)
@@ -195,7 +212,7 @@ export function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/30 px-4 pt-[12vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-ink/30 px-4 pb-4 pt-[12dvh]"
       /* A click on the scrim is a dismissal; one inside the panel is not. */
       onMouseDown={close}
     >
@@ -206,9 +223,9 @@ export function CommandPalette() {
         aria-label="Search leads"
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={onKeyDown}
-        className="w-full max-w-xl overflow-hidden rounded-[var(--radius-lg)] border border-border bg-panel shadow-[var(--shadow-lg)]"
+        className="flex max-h-[80dvh] w-full max-w-xl flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border bg-panel shadow-[var(--shadow-lg)]"
       >
-        <div className="flex items-center gap-3 border-b border-border px-4">
+        <div className="flex shrink-0 items-center gap-3 border-b border-border px-4">
           <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-muted">
             <path
               d="M9 3a6 6 0 104.24 10.24l3.26 3.26 1.5-1.5-3.26-3.26A6 6 0 009 3zm0 2a4 4 0 110 8 4 4 0 010-8z"
@@ -231,7 +248,7 @@ export function CommandPalette() {
         </div>
 
         {/* Every state is designed — CLAUDE.md requires loading, empty and error. */}
-        <div className="max-h-[52vh] overflow-y-auto p-2">
+        <div className="min-h-0 max-h-[52dvh] overflow-y-auto overscroll-contain p-2">
           {state.kind === 'idle' ? (
             <p className="px-3 py-6 text-center text-sm text-muted">
               Type at least two characters to search your leads.
@@ -281,6 +298,7 @@ export function CommandPalette() {
               type="button"
               onClick={() => go(result.href)}
               onMouseEnter={() => setActive(index)}
+              onFocus={() => setActive(index)}
               aria-current={index === active ? 'true' : undefined}
               className={`flex w-full items-center gap-3 rounded-[var(--radius-md)] px-2 py-2.5 text-left transition-colors duration-150 ${
                 index === active ? 'bg-accent-soft' : 'hover:bg-surface-muted'
@@ -316,7 +334,11 @@ export function CommandPaletteTrigger() {
   return (
     <button
       type="button"
-      onClick={() => {
+      aria-label="Search leads"
+      onClick={(event) => {
+        // Safari does not focus buttons on pointer clicks. Establish the
+        // opener before dispatching so Escape can reliably return focus.
+        event.currentTarget.focus({ preventScroll: true })
         /*
          * ⚠️ DISPATCHES THE SHORTCUT RATHER THAN LIFTING STATE. The palette owns
          * its own open state and listens on the window, so the button can stay

@@ -35,7 +35,20 @@ vi.mock('next/cache', () => ({ revalidatePath: () => {} }))
 vi.mock('@/lib/workspaces/context', () => ({
   assertWorkspacePermission: async () => ({ userId: 'u1', role: 'manager', workspace: { id: WS } }),
 }))
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({}) }))
+// sendExtractionToCrm reads the upload's kind first; these are LEAD uploads.
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => ({
+    from: () => {
+      const chain: Record<string, unknown> = {}
+      Object.assign(chain, {
+        select: () => chain,
+        eq: () => chain,
+        maybeSingle: () => Promise.resolve({ data: { kind: 'lead_search' }, error: null }),
+      })
+      return chain
+    },
+  }),
+}))
 vi.mock('@/lib/crm/ingest', () => ({
   ingestExtractionJob: async () => {
     if (mocks.ingestThrows) throw new Error('no such extraction job')
@@ -162,6 +175,11 @@ describe('CSV import', () => {
     expect(helper).toMatch(/try \{\s*return await routeBatch\(workspaceId, batchId\)\s*\} catch \{\s*return null/)
     const directCalls = SRC.match(/await routeBatch\(/g) ?? []
     expect(directCalls, 'routeBatch is called outside the safe helper').toHaveLength(1)
+  })
+
+  it('does not claim rollback when a later import step fails after rows were saved', () => {
+    expect(CSV_BODY).not.toContain('Nothing was changed')
+    expect(CSV_BODY).toContain('Some rows may already be saved')
   })
 
   it('hands the routing result to the result screen', () => {

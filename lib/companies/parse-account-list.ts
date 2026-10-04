@@ -37,6 +37,20 @@ export type ParsedAccount = {
   /** The saved Account List name, when LinkedIn rendered it in the file. */
   sourceList?: string | null
   sourceRowIndex: number
+  /**
+   * Which saved page the row came from. Absent means an Account Hub list.
+   * The fields below are only ever set by `parse-account-search.ts`, from
+   * values the page printed — absent or NULL means the page did not show one.
+   */
+  pageKind?: 'account_hub' | 'account_search'
+  employeeCount?: number | null
+  /** A range as printed ("1.2K+"), never converted to a count. */
+  employeeCountRange?: string | null
+  /** The company's own About text. */
+  summary?: string | null
+  location?: string | null
+  /** LinkedIn spotlight keys on the row, e.g. `hiring_on_linkedin`. */
+  signals?: string[]
 }
 
 export type AccountListParseResult = {

@@ -17,8 +17,10 @@ import { profileReference } from '@/lib/linkedin/profile-reference'
 import { prospectMessages } from '@/lib/linkedin/prospect-messages'
 import { listWorkspaceSenders } from '@/lib/linkedin/senders'
 import { MoreDetails } from '@/components/crm/MoreDetails'
+import { ContactLinksEditor } from '@/components/crm/SocialLinks'
 import { ValueProvenance } from '@/components/crm/ValueProvenance'
 import { companyDetails, companyWebsite } from '@/lib/crm/company-details'
+import { listContactLinks } from '@/lib/crm/contact-links'
 import { getContactDetail, listAssignableMembers } from '@/lib/crm/contacts-list'
 import { citationsFor, safeSourceUrl, withProvenance } from '@/lib/crm/provenance'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -192,12 +194,15 @@ export default async function ContactDetailPage({
 
   const canEdit = can(policy, 'crm.contact.edit')
 
-  const [timeline, members, collision, notes] = await Promise.all([
+  const [timeline, members, collision, notes, linkMap] = await Promise.all([
     listContactTimeline(ctx.workspace.id, id, { limit: 25 }),
     canAssign ? listAssignableMembers(ctx.workspace.id) : Promise.resolve([]),
     checkCollision(ctx.workspace.id, id, ctx.userId),
     recentNotes(ctx.workspace.id, id),
+    listContactLinks(ctx.workspace.id, [id]),
   ])
+  // `href` decided here, on the server: http/https only, never a stored value as-is.
+  const otherProfiles = (linkMap.get(id) ?? []).map((link) => ({ ...link, href: safeSourceUrl(link.url) }))
 
   return (
     <div className="space-y-4">
@@ -411,6 +416,11 @@ export default async function ContactDetailPage({
                 ) : null}
               </div>
             ) : null}
+
+            <div className="mt-4">
+              <h3 className="mb-1.5 text-xs font-medium text-muted">Other profiles</h3>
+              <ContactLinksEditor contactId={contact.id} links={otherProfiles} canEdit={canEdit} />
+            </div>
 
             {contact.tags.length > 0 ? (
               <ul className="mt-4 flex flex-wrap gap-1.5">

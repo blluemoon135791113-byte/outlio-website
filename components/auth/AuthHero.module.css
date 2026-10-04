@@ -1,0 +1,25 @@
+/*
+ * Holds the fan artwork beside the form.
+ *
+ * ⚠️ FIXED SIZE, NOT STRETCHED TO THE FORM. The panel carries the artwork's own
+ * aspect ratio (its viewBox, 638 × 842), so its height is driven by the column
+ * width alone — never by the form. A taller sign-up form (or a validation error)
+ * no longer stretches it; the grid centres the form beside it instead. This is
+ * what keeps the modal "only as big as it is" rather than reacting to the form.
+ */
+
+.panel {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 638 / 842;
+  /* Curvy modal corners: rounds the cream card and clips the artwork to it. */
+  border-radius: 2.25rem;
+  overflow: hidden;
+}
+
+.art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}

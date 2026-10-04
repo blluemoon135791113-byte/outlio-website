@@ -27,7 +27,7 @@ const args = process.argv.slice(2)
 const dev = args.includes('--dev')
 const target = (args.find((a) => a.startsWith('--target='))?.split('=')[1] ?? 'chrome')
 
-const API_BASE = dev ? 'http://localhost:3000' : 'https://outlio.io'
+const API_BASE = dev ? 'http://localhost:3000' : 'https://app.outlio.io'
 
 const srcDir = join(root, target)
 const outDir = join(root, 'dist', target)
@@ -92,7 +92,9 @@ for (const [name, entry] of Object.entries(entries)) {
  * Static assets
  * ---------------------------------------------------------------------- */
 
-await cp(join(root, 'ui', 'popup', 'popup.html'), join(outDir, 'popup.html'))
+const uiHtml = await readFile(join(root, 'ui', 'popup', 'popup.html'), 'utf8')
+await writeFile(join(outDir, 'popup.html'), uiHtml)
+await writeFile(join(outDir, 'panel.html'), uiHtml.replace('<body>', '<body data-layout="panel">'))
 await cp(join(root, 'ui', 'popup', 'popup.css'), join(outDir, 'popup.css'))
 
 // Manifest, with the dev API origin injected so a local build can talk to a
@@ -102,12 +104,12 @@ const manifest = JSON.parse(await readFile(join(srcDir, 'manifest.json'), 'utf8'
 if (dev) {
   manifest.name = `${manifest.name} (dev)`
   manifest.host_permissions = manifest.host_permissions.map((p) =>
-    p.startsWith('https://outlio.io') ? p.replace('https://outlio.io', API_BASE) : p,
+    p.startsWith('https://app.outlio.io') ? p.replace('https://app.outlio.io', API_BASE) : p,
   )
   manifest.content_scripts = manifest.content_scripts.map((script) => ({
     ...script,
     matches: script.matches.map((m) =>
-      m.startsWith('https://outlio.io') ? m.replace('https://outlio.io', API_BASE) : m,
+      m.startsWith('https://app.outlio.io') ? m.replace('https://app.outlio.io', API_BASE) : m,
     ),
   }))
 }

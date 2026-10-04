@@ -55,6 +55,8 @@ export type PerformanceCard = {
    * (nothing before, nothing now).
    */
   delta: number | null
+  /** Rates compare by point difference; counts keep relative percent changes. */
+  deltaUnit?: 'percentage-points'
   isNew: boolean
   /**
    * ⚠️ PER-CARD, NOT GLOBAL. Up is good for all four of these, and stating it
@@ -334,7 +336,7 @@ export async function getHeadlineKpis(
         fromDay: range.fromDay,
         toDay: range.toDay,
         basis: 'workspace',
-        metrics: ['contacts_created', 'contacts_emailed', 'replies', 'won_deals'],
+        metrics: ['contacts_created', 'won_deals'],
       }),
     ])
   } catch {
@@ -388,16 +390,19 @@ export async function getHeadlineKpis(
          * offered when both periods produced a real rate.
          */
         delta:
-          rateNow === null || ratePrior === null || ratePrior === 0
+          rateNow === null || ratePrior === null
             ? null
-            : (rateNow - ratePrior) / ratePrior,
-        isNew: ratePrior === null && rateNow !== null,
+            : rateNow - ratePrior,
+        deltaUnit: 'percentage-points',
+        isNew: ratePrior === null && rateNow !== null && rateNow > 0,
         higherIsBetter: true,
         hint:
           rateNow === null
             ? 'Nobody emailed in this period'
             : `${count('contacts_emailed', now).toLocaleString()} emailed, ${count('replies', now).toLocaleString()} replied`,
-        series: series.replies ?? [],
+        // Daily reply counts are not daily rates. In particular, a day with
+        // no contacts emailed has an undefined rate, not a zero to plot.
+        series: [],
         href: '/crm/reports',
         icon: 'trend',
       },

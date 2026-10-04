@@ -29,6 +29,7 @@ const SECTIONS = [
   { href: '/dashboard/settings/security', label: 'Security' },
   { href: '/dashboard/settings/team', label: 'Team' },
   { href: '/dashboard/settings/routing', label: 'Lead routing' },
+  { href: '/dashboard/settings/tags', label: 'Tags' },
   { href: '/dashboard/settings/billing', label: 'Subscription and billing' },
   { href: '/dashboard/settings/integrations', label: 'Integrations' },
   { href: '/dashboard/settings/linkedin', label: 'LinkedIn accounts' },
@@ -50,8 +51,8 @@ export function SettingsShell({
   const pathname = usePathname()
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-      <nav aria-label="Settings sections" className="clay h-fit p-2 lg:sticky lg:top-24">
+    <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <nav aria-label="Settings sections" className="clay h-fit p-2 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto lg:overscroll-contain">
         {SECTIONS.map((section) => {
           /*
            * Exact match for the index, prefix for the rest — otherwise
@@ -79,7 +80,7 @@ export function SettingsShell({
         })}
       </nav>
 
-      <section className="clay p-5 sm:p-6">
+      <section className="clay min-w-0 p-5 sm:p-6">
         <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">{title}</h2>
         <p className="mt-1 text-sm text-muted">{description}</p>
         <div className="mt-6">{children}</div>

@@ -34,6 +34,8 @@ const replies = new Map<string, Reply>()
 const calls: Call[] = []
 /** Queued answers for the successive `select`s a single upsert performs. */
 const selectQueue: Reply[] = []
+/** Queued answers for successive UPDATEs; empty means success. */
+const updateQueue: Reply[] = []
 
 function builder(table: string) {
   const call: Call = { table, op: 'select', filters: {} }
@@ -70,7 +72,8 @@ function builder(table: string) {
     },
     then: (resolve: (r: Reply) => unknown) => {
       calls.push(call)
-      return Promise.resolve({ data: null, error: null }).then(resolve)
+      const reply = call.op === 'update' ? updateQueue.shift() : undefined
+      return Promise.resolve(reply ?? { data: null, error: null }).then(resolve)
     },
   }
 
@@ -87,6 +90,7 @@ beforeEach(() => {
   replies.clear()
   calls.length = 0
   selectQueue.length = 0
+  updateQueue.length = 0
 })
 
 /** A row that already exists, holding only what a name-only extraction saw. */
@@ -99,6 +103,8 @@ const BARE_EXISTING = {
   employee_count: null,
   headquarters: null,
   source_company_id: null,
+  sales_navigator_url: null,
+  normalized_sales_navigator_url: null,
 }
 
 /**
@@ -227,6 +233,39 @@ describe('never overwriting', () => {
     await upsertCrmCompany('w1', { name: 'Acme', employeeCount: 500 })
 
     expect(update()).toBeUndefined()
+  })
+})
+
+describe('an identity collision', () => {
+  /*
+   * ⚠️ Since 0145 a lead can carry a public page matching account A and a
+   * Navigator id already held by account B. Filling that id onto A violates
+   * the Navigator index; as ONE update it took the industry down with it.
+   */
+  it('keeps the plain facts when the identifier collides with another account', async () => {
+    existingCompany(BARE_EXISTING)
+    updateQueue.push({ data: null, error: { code: '23505', message: 'duplicate key' } })
+
+    await upsertCrmCompany('w1', {
+      name: 'Acme',
+      salesNavigatorUrl: 'https://www.linkedin.com/sales/company/999',
+      industry: 'Hospitals',
+    })
+
+    const updates = calls.filter((c) => c.op === 'update')
+    expect(updates).toHaveLength(2)
+    expect(updates[0]!.payload).toMatchObject({
+      industry: 'Hospitals',
+      normalized_sales_navigator_url: 'linkedin.com/sales/company/999',
+    })
+    expect(updates[1]!.payload).toEqual({ industry: 'Hospitals' })
+    expect(updates[1]!.filters.workspace_id).toBe('w1')
+  })
+
+  it('does not retry when the first update succeeded', async () => {
+    existingCompany(BARE_EXISTING)
+    await upsertCrmCompany('w1', { name: 'Acme', industry: 'Hospitals' })
+    expect(calls.filter((c) => c.op === 'update')).toHaveLength(1)
   })
 })
 

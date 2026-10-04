@@ -177,6 +177,7 @@ const KNOWN_UNREACHABLE = new Map<string, string>([
       'yet — enrollments can only be created from today, so a report would be a ' +
       'screen of zeroes pretending to be a finding.',
   ],
+  /* ADR-007's `lib/crm/account-writes.ts` left on its exit: the step-3 forms call it. */
 ])
 
 describe('the graph is real, not an artefact of a broken resolver', () => {

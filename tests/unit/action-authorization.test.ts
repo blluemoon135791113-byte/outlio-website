@@ -64,6 +64,12 @@ const stripComments = (s: string) =>
  */
 const GATES = [
   'assertWorkspacePermission',
+  /*
+   * The account workspace's gate. It calls `assertWorkspacePermission`
+   * ('crm.company.view') first, then decides the account permission from the
+   * role defaults and per-person overrides (lib/crm/account-permissions.ts).
+   */
+  'assertAccountPermission',
   'requireWorkspacePermission',
   'assertWorkspaceMembership',
   'requireWorkspace',

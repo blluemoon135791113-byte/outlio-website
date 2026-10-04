@@ -2,6 +2,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
+import { AuthHero } from '@/components/auth/AuthHero'
+
 /**
  * Unauthenticated page shell.
  *
@@ -21,7 +23,7 @@ export function AuthShell({
   footer?: ReactNode
 }) {
   return (
-    <main id="main-content" tabIndex={-1} className="auth-clay min-h-screen bg-app px-4 py-6 text-ink sm:px-6 sm:py-8 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="auth-clay min-h-screen bg-void px-4 py-6 text-ivory sm:px-6 sm:py-8 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col sm:min-h-[calc(100vh-4rem)]">
         <header className="flex items-center justify-between gap-4">
           <Link
@@ -41,91 +43,34 @@ export function AuthShell({
               Outlio
             </span>
           </Link>
-          <span className="rounded-full border border-border bg-surface-muted px-3 py-1.5 text-[11px] font-semibold text-muted">
-            Secure workspace
-          </span>
         </header>
 
-        <div className="my-auto grid items-center gap-8 py-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,1fr)] lg:gap-16">
+        <div className="my-auto grid items-center gap-6 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.95fr)] lg:gap-8">
           {/*
             ⚠️ SECOND ON A PHONE, FIRST ON A DESKTOP. Measured at 375×812 before
             this: the email field started at y=726 and the SIGN IN BUTTON SAT AT
             920 — below the fold on a 1142px page. A returning user on a phone
             landed on the pitch and had to scroll past it to submit, every time.
 
-            The pitch still belongs here: someone arriving at /sign-up has not
-            decided yet. But it is the second thing they need, and stacking
+            The brand panel still belongs here: someone arriving at /sign-up has
+            not decided yet. But it is the second thing they need, and stacking
             order is the only thing that was deciding otherwise.
+
+            The brand artwork stands alone now (see AuthHero): the image fills
+            the whole panel with no copy, on the page's black background. The
+            form is the only text surface.
           */}
-          <section className="order-2 max-w-lg lg:order-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
-              Outlio Lead Engine
-            </p>
-            <h2 className="mt-4 max-w-md font-heading text-[clamp(2.25rem,5vw,3.6rem)] font-semibold leading-[1.0] tracking-[-0.05em] text-ink">
-              Your prospect list, researched and sourced.
-            </h2>
-            <p className="mt-5 max-w-md text-[15px] leading-7 text-muted">
-              Upload a saved Sales Navigator page. Outlio researches the companies
-              and people behind it across public sources, and Hubble answers your
-              questions — with a source on every fact.
-            </p>
-
-            {/*
-             * ⚠️ CONCRETE, NOT ASPIRATIONAL. The previous panel read
-             * "Capture / Understand / Act", which is true of almost any B2B
-             * tool and told a returning user nothing. These are the three
-             * things this product does that most alternatives do not.
-             */}
-            <ol className="mt-8 hidden space-y-3 lg:block" aria-label="What Outlio does">
-              <AuthBenefit
-                number="01"
-                title="60+ researched fields"
-                detail="Registries, filings, funding, tech stack, hiring signals and public contacts."
-              />
-              <AuthBenefit
-                number="02"
-                title="A source on every fact"
-                detail="Each value links to the page it came from. Nothing is inferred or guessed."
-              />
-              <AuthBenefit
-                number="03"
-                title="Ask Hubble anything"
-                detail="Plain-English answers about a lead, quoting the passages behind them."
-              />
-            </ol>
-
-            <dl className="mt-8 flex flex-wrap gap-x-8 gap-y-3">
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-                  Deduplicated
-                </dt>
-                <dd className="mt-0.5 text-sm text-ink">Across every upload</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-                  Exports
-                </dt>
-                <dd className="mt-0.5 text-sm text-ink">CSV and XLSX</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-                  LinkedIn login
-                </dt>
-                <dd className="mt-0.5 text-sm text-ink">Never requested</dd>
-              </div>
-            </dl>
-          </section>
+          <div className="order-2 lg:order-1">
+            <AuthHero />
+          </div>
 
           <section
-            className="order-1 w-full clay-raised p-6 sm:p-8 lg:order-2"
+            className="auth-formdark order-1 flex w-full flex-col justify-center lg:order-2 lg:py-4"
             aria-labelledby="auth-title"
           >
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-              Outlio workspace
-            </p>
             <h1
               id="auth-title"
-              className="mt-2 font-heading text-[30px] font-semibold leading-tight tracking-[-0.04em] text-ink"
+              className="font-heading text-[30px] font-semibold leading-tight tracking-[-0.04em] text-ink"
             >
               {title}
             </h1>
@@ -143,31 +88,11 @@ export function AuthShell({
           </section>
         </div>
 
-        <footer className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 pb-2 text-center text-[11px] text-muted lg:justify-between">
+        <footer className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 pb-2 text-center text-[11px] text-ivory/55 lg:justify-between">
           <span>Encrypted sessions · MFA ready · No LinkedIn credentials stored</span>
           <span>© {new Date().getFullYear()} Outlio</span>
         </footer>
       </div>
     </main>
-  )
-}
-
-function AuthBenefit({
-  number,
-  title,
-  detail,
-}: {
-  number: string
-  title: string
-  detail: string
-}) {
-  return (
-    <li className="flex items-center gap-4 rounded-[var(--radius-lg)] border border-border bg-surface-muted px-4 py-3">
-      <span className="font-mono text-[11px] font-semibold text-accent">{number}</span>
-      <span className="min-w-0">
-        <span className="block text-sm font-semibold text-ink">{title}</span>
-        <span className="mt-0.5 block text-xs leading-5 text-muted">{detail}</span>
-      </span>
-    </li>
   )
 }

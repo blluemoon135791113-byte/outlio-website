@@ -294,9 +294,12 @@ create table public.rate_limits (
 create table public.extraction_jobs (id uuid primary key default gen_random_uuid());
 -- `user_id` is needed by 0114's backfill, which joins evidence to the lead it
 -- came from and scopes the join by owner. Real type and FK from 0006.
+-- `linkedin_url` is needed by 0143_clear_fabricated_profile_urls, which
+-- retracts fabricated profile URLs from it. Real type from 0006.
 create table public.extracted_leads (
-  id      uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade);
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  linkedin_url text);
 create table public.companies (id uuid primary key default gen_random_uuid());
 /*
  * 0113 adds `evidence_id` FKs pointing here and then ASSERTS the constraint
@@ -322,6 +325,33 @@ create table public.research_evidence (
   retrieved_at      timestamptz not null default now(),
   expires_at        timestamptz,
   created_at        timestamptz not null default now());
+/*
+ * 0156 adds columns and checks here. Created by 0067, which this harness does
+ * not replay. COPIED FROM 0067, column for column, with its keys — a scaffold
+ * missing a NOT NULL would accept rows the real table refuses.
+ */
+create table public.account_list_entries (
+  id                                  uuid primary key default gen_random_uuid(),
+  user_id                             uuid not null references auth.users(id) on delete cascade,
+  extraction_job_id                   uuid not null references public.extraction_jobs(id) on delete cascade,
+  company_id                          uuid not null references public.companies(id) on delete cascade,
+  source_row_index                    integer not null check (source_row_index >= 0),
+  source_list                         text,
+  company_name_snapshot               text not null,
+  company_sales_navigator_url         text not null,
+  industry_snapshot                   text,
+  connection_paths                    text,
+  alert                               text,
+  recommended_contact_name            text,
+  recommended_contact_job_title       text,
+  recommended_contact_sales_nav_url   text,
+  recommended_contact_member_id       text,
+  recommended_contact_connection      text,
+  recommended_lead_id                 uuid references public.extracted_leads(id) on delete set null,
+  created_at                          timestamptz not null default now(),
+  updated_at                          timestamptz not null default now(),
+  unique (id, user_id),
+  unique (extraction_job_id, company_id));
 SQL
 
 # ---------------------------------------------------------------------------
@@ -348,7 +378,7 @@ SQL
 # 0119_scheduler_diagnostics is included and passes: it reads cron.job through
 # a guard that tolerates the schema being absent.
 # ---------------------------------------------------------------------------
-for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api 0098_webhook_url_loopback 0099_notification_channels 0100_unified_inbox 0101_inbound_optional_args 0102_onboarding_state 0103_plan_module_entitlements 0104_email_reply_threading 0105_fix_claim_column_name 0106_restore_claim_safety 0107_dashboards 0108_flow_run_variables 0109_fix_user_fk_append_only 0110_restore_signup_gate 0111_sender_postal_address 0112_contact_list_sort_indexes 0113_contact_value_citations 0114_backfill_contact_citations 0115_rls_membership_setmembership 0116_due_webhook_deliveries 0117_worker_runs 0119_scheduler_diagnostics 0120_suppress_by_contact 0121_contact_dnc_and_timezone 0122_linkedin_senders 0123_crm_assign_contact_owner 0124_crm_tasks_opportunity 0125_crm_round_robin_assign 0126_crm_task_actions 0127_crm_intake_routing 0128_crm_routing_retry 0129_crm_owner_change_history 0130_deal_fx_snapshot 0131_rollups_convert_currency 0132_linkedin_tasks 0133_contact_version_columns 0134_linkedin_plan_entitlement 0135_linkedin_campaigns 0136_linkedin_observations 0137_linkedin_workflows 0138_crm_contacts_navigator_url 0139_linkedin_step_config 0140_linkedin_prospect_messages 0141_linkedin_analysis_entitlement 0142_email_signatures; do
+for m in 0070_workspaces 0071_crm_core_identity 0072_crm_ingestion 0073_fix_ingest_ambiguity 0074_crm_deduplication 0075_crm_operations 0076_crm_opportunities 0077_fix_move_errcode 0078_crm_realtime 0079_crm_collision_guard 0080_crm_contact_search 0081_ingest_contact_created 0082_reporting_aggregates 0083_crm_funnel 0084_crm_forecast 0085_email_accounts 0086_email_messages 0087_email_readiness 0088_email_campaigns 0089_email_templates 0090_email_events 0091_fix_event_fk_append_only 0092_email_reporting 0093_flow_engine 0094_hubble_credits 0095_meetings 0096_fix_meeting_status_cast 0097_public_api 0098_webhook_url_loopback 0099_notification_channels 0100_unified_inbox 0101_inbound_optional_args 0102_onboarding_state 0103_plan_module_entitlements 0104_email_reply_threading 0105_fix_claim_column_name 0106_restore_claim_safety 0107_dashboards 0108_flow_run_variables 0109_fix_user_fk_append_only 0110_restore_signup_gate 0111_sender_postal_address 0112_contact_list_sort_indexes 0113_contact_value_citations 0114_backfill_contact_citations 0115_rls_membership_setmembership 0116_due_webhook_deliveries 0117_worker_runs 0119_scheduler_diagnostics 0120_suppress_by_contact 0121_contact_dnc_and_timezone 0122_linkedin_senders 0123_crm_assign_contact_owner 0124_crm_tasks_opportunity 0125_crm_round_robin_assign 0126_crm_task_actions 0127_crm_intake_routing 0128_crm_routing_retry 0129_crm_owner_change_history 0130_deal_fx_snapshot 0131_rollups_convert_currency 0132_linkedin_tasks 0133_contact_version_columns 0134_linkedin_plan_entitlement 0135_linkedin_campaigns 0136_linkedin_observations 0137_linkedin_workflows 0138_crm_contacts_navigator_url 0139_linkedin_step_config 0140_linkedin_prospect_messages 0141_linkedin_analysis_entitlement 0142_email_signatures 0143_clear_fabricated_profile_urls 0143_optimization_audit_hardening 0144_crm_account_config 0145_crm_account_fields 0146_crm_account_tags 0147_crm_account_assignment 0148_crm_contact_roles 0149_crm_account_permissions 0150_crm_account_queries 0151_crm_navigator_out_of_linkedin 0152_crm_lead_role_writes 0153_crm_tag_groups 0154_crm_decision_makers 0155_crm_account_deals 0156_account_search_fields; do
   file="supabase/migrations/$m.sql"
   [ -f "$file" ] || continue
   [ "$(basename "$MIGRATION")" = "$m.sql" ] && break

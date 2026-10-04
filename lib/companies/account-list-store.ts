@@ -170,6 +170,13 @@ export async function persistAccountList(
       recommended_contact_member_id: recommendation?.memberId ?? null,
       recommended_contact_connection: recommendation?.connectionDegree ?? null,
       recommended_lead_id: key ? leadIdByKey.get(key) ?? null : null,
+      // Read off the page (account search); NULL / empty when it showed none.
+      page_kind: entry.account.pageKind ?? 'account_hub',
+      employee_count_snapshot: entry.account.employeeCount ?? null,
+      employee_count_range_snapshot: entry.account.employeeCountRange ?? null,
+      summary_snapshot: entry.account.summary ?? null,
+      location_snapshot: entry.account.location ?? null,
+      signals: entry.account.signals ?? [],
     }
   })
 

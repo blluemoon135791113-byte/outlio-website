@@ -20,6 +20,7 @@ import { CommandPalette, CommandPaletteTrigger } from '@/components/product/Comm
 function pageLabel(pathname: string) {
   if (pathname.startsWith('/admin')) return 'User administration'
   if (pathname.startsWith('/crm/contacts')) return 'Contacts'
+  if (pathname.startsWith('/crm/companies')) return 'Accounts'
   if (pathname.startsWith('/crm/pipeline')) return 'Pipeline'
   if (pathname.startsWith('/crm/reports')) return 'Reports'
   if (pathname.startsWith('/crm')) return 'CRM'
@@ -179,6 +180,12 @@ export function ProductShell({
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [previousPathname, setPreviousPathname] = useState(pathname)
+  // History and programmatic navigation bypass the sidebar's click handlers.
+  if (pathname !== previousPathname) {
+    setPreviousPathname(pathname)
+    setMobileOpen(false)
+  }
   const mobileTriggerRef = useRef<HTMLButtonElement>(null)
   const mobilePanelRef = useRef<HTMLElement>(null)
   const userInitials = useMemo(() => initials(fullName, email), [email, fullName])
@@ -202,6 +209,14 @@ export function ProductShell({
   useEffect(() => {
     if (!mobileOpen) return
 
+    // CSS hides the drawer at lg, but cannot clean up its body scroll lock.
+    const desktop = window.matchMedia('(min-width: 1024px)')
+    const onBreakpointChange = () => {
+      if (desktop.matches) setMobileOpen(false)
+    }
+    desktop.addEventListener('change', onBreakpointChange)
+
+    const trigger = mobileTriggerRef.current
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     mobilePanelRef.current
@@ -212,7 +227,6 @@ export function ProductShell({
       if (event.key === 'Escape') {
         event.preventDefault()
         setMobileOpen(false)
-        requestAnimationFrame(() => mobileTriggerRef.current?.focus())
         return
       }
       if (event.key !== 'Tab') return
@@ -235,7 +249,9 @@ export function ProductShell({
     window.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = previousOverflow
+      desktop.removeEventListener('change', onBreakpointChange)
       window.removeEventListener('keydown', onKeyDown)
+      if (!desktop.matches) trigger?.focus({ preventScroll: true })
     }
   }, [mobileOpen])
 
@@ -282,8 +298,8 @@ export function ProductShell({
               canUseScraper={canUseScraper}
               showCrm={showCrm}
               showEmail={showEmail}
-          showLinkedIn={showLinkedIn}
-          showFlows={showFlows}
+              showLinkedIn={showLinkedIn}
+              showFlows={showFlows}
               referralLink={referralLink}
               onNavigate={() => setMobileOpen(false)}
             />
@@ -291,7 +307,7 @@ export function ProductShell({
         </div>
       ) : null}
 
-      <div className="min-h-dvh lg:pl-[216px]">
+      <div inert={mobileOpen} className="min-h-dvh lg:pl-[216px]">
         {/*
           ⚠️ A BORDER, BECAUSE THE HEADER IS NOW WHITE ON WHITE. It was
           `border-0` on cream above cream-and-shadow panels, where the material

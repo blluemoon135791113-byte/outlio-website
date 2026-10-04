@@ -26,40 +26,65 @@ export function SignUpForm({ referralCode = '' }: { referralCode?: string }) {
     state.status === 'error' && state.field === name ? state.message : undefined
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-3.5">
       <FormFeedback state={state} />
 
       {/* Carried through the failed-submit round trip like every other field. */}
       <input type="hidden" name="referral_code" value={referralCode} />
 
-      <Field
-        id="full_name"
-        name="full_name"
-        label="Full name"
-        type="text"
-        autoComplete="name"
-        required
-        defaultValue={prior.full_name ?? ''}
-        error={errorFor('full_name')}
-      />
+      {/*
+        ⚠️ COMPACTED TO TWO COLUMNS. Five stacked fields read as a wall; the two
+        that match closest — name and email, both plain single-line identity
+        fields with no adornment — share a row. They collapse back to one column
+        on a phone. The LinkedIn field (a long URL with its own explanatory
+        hint) stays full-width on its own, as it reads differently from the rest.
+      */}
+      <div className="grid grid-cols-1 gap-x-3 gap-y-3.5 sm:grid-cols-2">
+        <Field
+          id="full_name"
+          name="full_name"
+          label="Full name"
+          type="text"
+          autoComplete="name"
+          required
+          defaultValue={prior.full_name ?? ''}
+          error={errorFor('full_name')}
+        />
 
-      <Field
-        id="email"
-        name="email"
-        label="Work email"
-        type="email"
-        autoComplete="email"
-        spellCheck={false}
-        required
-        defaultValue={prior.email ?? ''}
-        error={errorFor('email')}
-      />
+        <Field
+          id="email"
+          name="email"
+          label="Work email"
+          type="email"
+          autoComplete="email"
+          spellCheck={false}
+          required
+          defaultValue={prior.email ?? ''}
+          error={errorFor('email')}
+        />
+      </div>
 
-      <PhoneField
-        defaultCountry={prior.phone_country ?? 'US'}
-        defaultValue={prior.phone ?? ''}
-        error={errorFor('phone')}
-      />
+      {/* Phone and password share a row too — both single-line controls with a
+          trailing adornment (the country selector / the Show toggle). Phone gets
+          the wider column so the country name is not truncated; password needs
+          less. They collapse to one column on a phone. */}
+      <div className="grid grid-cols-1 gap-x-3 gap-y-3.5 sm:grid-cols-[1.4fr_1fr]">
+        <PhoneField
+          defaultCountry={prior.phone_country ?? 'US'}
+          defaultValue={prior.phone ?? ''}
+          error={errorFor('phone')}
+        />
+
+        <PasswordField
+          id="password"
+          name="password"
+          label="Password"
+          autoComplete="new-password"
+          required
+          minLength={MIN_PASSWORD_LENGTH}
+          error={errorFor('password')}
+        />
+      </div>
 
       {/*
         ⚠️ type="text", NOT type="url". `normalizeLinkedInUrl` deliberately
@@ -73,6 +98,9 @@ export function SignUpForm({ referralCode = '' }: { referralCode?: string }) {
         server's, which is the stricter and more useful rule: it also rejects a
         company page and a Sales Navigator link, which type="url" happily
         accepts.
+
+        Left full-width on its own — a long URL reads differently from the
+        paired fields above.
       */}
       <Field
         id="linkedin_url"
@@ -84,20 +112,8 @@ export function SignUpForm({ referralCode = '' }: { referralCode?: string }) {
         spellCheck={false}
         required
         placeholder="linkedin.com/in/your-name"
-        hint="Your own profile. We use it to verify your request and never visit or scrape it."
         defaultValue={prior.linkedin_url ?? ''}
         error={errorFor('linkedin_url')}
-      />
-
-      <PasswordField
-        id="password"
-        name="password"
-        label="Password"
-        autoComplete="new-password"
-        required
-        minLength={MIN_PASSWORD_LENGTH}
-        hint={`At least ${MIN_PASSWORD_LENGTH} characters. A memorable phrase beats a short complicated one.`}
-        error={errorFor('password')}
       />
 
       <SubmitButton>Create account</SubmitButton>

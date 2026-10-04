@@ -49,10 +49,29 @@ const SQL = readdirSync(MIGRATIONS)
   .join('\n')
 
 /** Every table created in the migrations. */
+/**
+ * Tables that EXIST after every migration has run, in migration order.
+ *
+ * ⚠️ A LATER `drop table` REMOVES ONE. 0153 retired `crm_icp_allocation_targets`
+ * and four other tables; reading only `create table` reported the retired ones
+ * as "declared and unused" forever, and the only way to quiet that would have
+ * been allowlisting a table that no longer exists — a lie in the one list
+ * that exists to stop lies. Comment lines are stripped first, so a ROLLBACK
+ * note in a migration header (`--   drop table …`) is not mistaken for a drop.
+ */
 function declaredTables(): string[] {
   const found = new Set<string>()
-  for (const m of SQL.matchAll(/create table (?:if not exists )?public\.(\w+)/g)) {
-    found.add(m[1]!)
+  const files = readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+  for (const file of files) {
+    const sql = readFileSync(join(MIGRATIONS, file), 'utf8').replace(/^\s*--.*$/gm, '')
+    const statements =
+      /create table (?:if not exists )?public\.(\w+)|drop table (?:if exists )?((?:public\.\w+\s*,?\s*)+)/g
+    for (const m of sql.matchAll(statements)) {
+      if (m[1]) found.add(m[1])
+      else for (const t of m[2]!.matchAll(/public\.(\w+)/g)) found.delete(t[1]!)
+    }
   }
   return [...found].sort()
 }
@@ -132,6 +151,13 @@ const KNOWN_UNUSED = new Set([
   'web_research_cache',
   'web_research_jobs',
   'web_research_lead_results',
+  /*
+   * ADR-007: the account workspace's migrations (0144–0149) land one build
+   * step ahead of the code that reads them. Each entry names the step that
+   * removes it; the both-direction check below enforces that it does.
+   */
+  'crm_import_mappings', // step 5
+  'crm_tag_allocation_targets', // step 6 (0153 replaced crm_icp_allocation_targets)
 ])
 
 describe('the scanner itself', () => {

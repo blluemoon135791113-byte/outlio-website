@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { CrmHeading } from '@/components/crm/CrmHeading'
+
 import { getWorkspaceContext } from '@/lib/workspaces/context'
 import { decidePermission } from '@/lib/workspaces/permissions'
 
@@ -62,11 +64,10 @@ export default async function CrmLayout({ children }: { children: ReactNode }) {
   return (
     <div className="space-y-6">
       <header>
-        {/* Named for what the sidebar calls it. "CRM" here while the nav said
-            Pipeline was the same feature answering to two names. */}
-        <h1 className="text-[30px] font-semibold tracking-[-0.035em] text-ink">
-          Pipeline
-        </h1>
+        {/* Named for what the sidebar calls it ("CRM" here while the nav said
+            Pipeline was one feature answering to two names) — except the
+            Accounts pages, which are named for themselves. */}
+        <CrmHeading />
       </header>
 
       {children}

@@ -1065,17 +1065,23 @@ export type Database = {
           company_sales_navigator_url: string
           connection_paths: string | null
           created_at: string
+          employee_count_range_snapshot: string | null
+          employee_count_snapshot: number | null
           extraction_job_id: string
           id: string
           industry_snapshot: string | null
+          location_snapshot: string | null
+          page_kind: string
           recommended_contact_connection: string | null
           recommended_contact_job_title: string | null
           recommended_contact_member_id: string | null
           recommended_contact_name: string | null
           recommended_contact_sales_nav_url: string | null
           recommended_lead_id: string | null
+          signals: string[]
           source_list: string | null
           source_row_index: number
+          summary_snapshot: string | null
           updated_at: string
           user_id: string
         }
@@ -1086,17 +1092,23 @@ export type Database = {
           company_sales_navigator_url: string
           connection_paths?: string | null
           created_at?: string
+          employee_count_range_snapshot?: string | null
+          employee_count_snapshot?: number | null
           extraction_job_id: string
           id?: string
           industry_snapshot?: string | null
+          location_snapshot?: string | null
+          page_kind?: string
           recommended_contact_connection?: string | null
           recommended_contact_job_title?: string | null
           recommended_contact_member_id?: string | null
           recommended_contact_name?: string | null
           recommended_contact_sales_nav_url?: string | null
           recommended_lead_id?: string | null
+          signals?: string[]
           source_list?: string | null
           source_row_index: number
+          summary_snapshot?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1107,17 +1119,23 @@ export type Database = {
           company_sales_navigator_url?: string
           connection_paths?: string | null
           created_at?: string
+          employee_count_range_snapshot?: string | null
+          employee_count_snapshot?: number | null
           extraction_job_id?: string
           id?: string
           industry_snapshot?: string | null
+          location_snapshot?: string | null
+          page_kind?: string
           recommended_contact_connection?: string | null
           recommended_contact_job_title?: string | null
           recommended_contact_member_id?: string | null
           recommended_contact_name?: string | null
           recommended_contact_sales_nav_url?: string | null
           recommended_lead_id?: string | null
+          signals?: string[]
           source_list?: string | null
           source_row_index?: number
+          summary_snapshot?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1636,6 +1654,158 @@ export type Database = {
           },
         ]
       }
+      crm_account_permission_overrides: {
+        Row: {
+          granted: boolean
+          permission: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          granted: boolean
+          permission: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          granted?: boolean
+          permission?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_account_permission_overrides_member_fk"
+            columns: ["workspace_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_memberships"
+            referencedColumns: ["workspace_id", "user_id"]
+          },
+        ]
+      }
+      crm_account_role_defaults: {
+        Row: {
+          granted: boolean
+          permission: string
+          role: Database["public"]["Enums"]["workspace_role"]
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          granted: boolean
+          permission: string
+          role: Database["public"]["Enums"]["workspace_role"]
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          granted?: boolean
+          permission?: string
+          role?: Database["public"]["Enums"]["workspace_role"]
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_account_role_defaults_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_account_settings: {
+        Row: {
+          allow_multiple_assignees: boolean
+          extraction: Json
+          import_delimiter: string
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          allow_multiple_assignees?: boolean
+          extraction?: Json
+          import_delimiter?: string
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          allow_multiple_assignees?: boolean
+          extraction?: Json
+          import_delimiter?: string
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_account_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_account_statuses: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          sort_order: number
+          system_key: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+          system_key?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+          system_key?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_account_statuses_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_activities: {
         Row: {
           activity_type: Database["public"]["Enums"]["crm_activity_type"]
@@ -1851,17 +2021,24 @@ export type Database = {
           deleted_at: string | null
           domain: string | null
           employee_count: number | null
+          employee_count_range: string | null
           headquarters: string | null
           id: string
           industry: string | null
+          last_activity_at: string | null
           linkedin_url: string | null
           name: string | null
           normalized_domain: string | null
           normalized_linkedin_url: string | null
           normalized_name: string | null
+          normalized_sales_navigator_url: string | null
           owner_user_id: string | null
+          priority: string | null
+          sales_navigator_url: string | null
           source: Database["public"]["Enums"]["crm_record_source"]
           source_company_id: string | null
+          status_id: string | null
+          summary: string | null
           updated_at: string
           workspace_id: string
         }
@@ -1871,17 +2048,24 @@ export type Database = {
           deleted_at?: string | null
           domain?: string | null
           employee_count?: number | null
+          employee_count_range?: string | null
           headquarters?: string | null
           id?: string
           industry?: string | null
+          last_activity_at?: string | null
           linkedin_url?: string | null
           name?: string | null
           normalized_domain?: string | null
           normalized_linkedin_url?: string | null
           normalized_name?: string | null
+          normalized_sales_navigator_url?: string | null
           owner_user_id?: string | null
+          priority?: string | null
+          sales_navigator_url?: string | null
           source?: Database["public"]["Enums"]["crm_record_source"]
           source_company_id?: string | null
+          status_id?: string | null
+          summary?: string | null
           updated_at?: string
           workspace_id: string
         }
@@ -1891,17 +2075,24 @@ export type Database = {
           deleted_at?: string | null
           domain?: string | null
           employee_count?: number | null
+          employee_count_range?: string | null
           headquarters?: string | null
           id?: string
           industry?: string | null
+          last_activity_at?: string | null
           linkedin_url?: string | null
           name?: string | null
           normalized_domain?: string | null
           normalized_linkedin_url?: string | null
           normalized_name?: string | null
+          normalized_sales_navigator_url?: string | null
           owner_user_id?: string | null
+          priority?: string | null
+          sales_navigator_url?: string | null
           source?: Database["public"]["Enums"]["crm_record_source"]
           source_company_id?: string | null
+          status_id?: string | null
+          summary?: string | null
           updated_at?: string
           workspace_id?: string
         }
@@ -1914,7 +2105,197 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "crm_companies_status_fk"
+            columns: ["status_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_account_statuses"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
             foreignKeyName: "crm_companies_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_company_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          company_id: string
+          end_reason: string | null
+          id: string
+          unassigned_at: string | null
+          unassigned_by: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          company_id: string
+          end_reason?: string | null
+          id?: string
+          unassigned_at?: string | null
+          unassigned_by?: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          company_id?: string
+          end_reason?: string | null
+          id?: string
+          unassigned_at?: string | null
+          unassigned_by?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_company_assignments_company_fk"
+            columns: ["company_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_companies"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_company_assignments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_company_sources: {
+        Row: {
+          company_id: string
+          extraction_job_id: string | null
+          id: string
+          import_job_id: string | null
+          imported_at: string
+          imported_by: string | null
+          raw_payload: Json | null
+          source_type: string
+          url: string | null
+          workspace_id: string
+        }
+        Insert: {
+          company_id: string
+          extraction_job_id?: string | null
+          id?: string
+          import_job_id?: string | null
+          imported_at?: string
+          imported_by?: string | null
+          raw_payload?: Json | null
+          source_type: string
+          url?: string | null
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string
+          extraction_job_id?: string | null
+          id?: string
+          import_job_id?: string | null
+          imported_at?: string
+          imported_by?: string | null
+          raw_payload?: Json | null
+          source_type?: string
+          url?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_company_sources_company_fk"
+            columns: ["company_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_companies"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_company_sources_extraction_job_id_fkey"
+            columns: ["extraction_job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_company_sources_import_fk"
+            columns: ["import_job_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_import_jobs"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_company_sources_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_company_tags: {
+        Row: {
+          company_id: string
+          confidence: number | null
+          created_at: string
+          created_by: string | null
+          entity: string
+          evidence: string | null
+          group_id: string
+          is_primary: boolean
+          source: string
+          tag_id: string
+          workspace_id: string
+        }
+        Insert: {
+          company_id: string
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          entity?: string
+          evidence?: string | null
+          group_id: string
+          is_primary?: boolean
+          source?: string
+          tag_id: string
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          entity?: string
+          evidence?: string | null
+          group_id?: string
+          is_primary?: boolean
+          source?: string
+          tag_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_company_tags_company_fk"
+            columns: ["company_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_companies"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_company_tags_tag_fk"
+            columns: ["tag_id", "workspace_id", "group_id", "entity"]
+            isOneToOne: false
+            referencedRelation: "crm_tags"
+            referencedColumns: ["id", "workspace_id", "group_id", "entity"]
+          },
+          {
+            foreignKeyName: "crm_company_tags_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2053,6 +2434,60 @@ export type Database = {
           },
         ]
       }
+      crm_contact_links: {
+        Row: {
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          label: string | null
+          source: string
+          url: string
+          url_key: string
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          label?: string | null
+          source?: string
+          url: string
+          url_key: string
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          label?: string | null
+          source?: string
+          url?: string
+          url_key?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_links_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_contact_links_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_contact_phones: {
         Row: {
           contact_id: string
@@ -2113,6 +2548,97 @@ export type Database = {
           },
           {
             foreignKeyName: "crm_contact_phones_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_contact_role_assignments: {
+        Row: {
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          is_auto: boolean
+          role_id: string
+          workspace_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          is_auto?: boolean
+          role_id: string
+          workspace_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          is_auto?: boolean
+          role_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_role_assignments_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_contact_role_assignments_role_fk"
+            columns: ["role_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_lead_roles"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_contact_role_assignments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_contact_role_state: {
+        Row: {
+          auto_classified_at: string | null
+          auto_title: string | null
+          contact_id: string
+          manual_at: string | null
+          manual_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          auto_classified_at?: string | null
+          auto_title?: string | null
+          contact_id: string
+          manual_at?: string | null
+          manual_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          auto_classified_at?: string | null
+          auto_title?: string | null
+          contact_id?: string
+          manual_at?: string | null
+          manual_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_role_state_contact_fk"
+            columns: ["contact_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_contact_role_state_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2550,6 +3076,47 @@ export type Database = {
           },
         ]
       }
+      crm_import_mappings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          entity: Database["public"]["Enums"]["crm_custom_field_entity"]
+          id: string
+          mapping: Json
+          name: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          entity: Database["public"]["Enums"]["crm_custom_field_entity"]
+          id?: string
+          mapping?: Json
+          name: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          entity?: Database["public"]["Enums"]["crm_custom_field_entity"]
+          id?: string
+          mapping?: Json
+          name?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_import_mappings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_lead_batches: {
         Row: {
           contacts_created: number
@@ -2612,6 +3179,104 @@ export type Database = {
           },
           {
             foreignKeyName: "crm_lead_batches_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_lead_role_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          keyword: string
+          match_kind: string
+          role_id: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          keyword: string
+          match_kind: string
+          role_id: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          keyword?: string
+          match_kind?: string
+          role_id?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_lead_role_rules_role_fk"
+            columns: ["role_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_lead_roles"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_lead_role_rules_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_lead_roles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          sort_order: number
+          system_key: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+          system_key?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+          system_key?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_lead_roles_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -3515,41 +4180,161 @@ export type Database = {
           },
         ]
       }
-      crm_tags: {
+      crm_tag_allocation_targets: {
         Row: {
-          color: string | null
+          notes: string | null
+          tag_id: string
+          target_percent: number
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          notes?: string | null
+          tag_id: string
+          target_percent: number
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          notes?: string | null
+          tag_id?: string
+          target_percent?: number
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_tag_allocation_targets_tag_fk"
+            columns: ["tag_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "crm_tags"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "crm_tag_allocation_targets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_tag_groups: {
+        Row: {
           created_at: string
           created_by: string | null
-          deleted_at: string | null
+          entity: string
+          has_primary: boolean
           id: string
+          is_active: boolean
           name: string
-          normalized_name: string
+          slug: string
+          sort_order: number
           updated_at: string
           workspace_id: string
         }
         Insert: {
-          color?: string | null
           created_at?: string
           created_by?: string | null
-          deleted_at?: string | null
+          entity: string
+          has_primary?: boolean
           id?: string
+          is_active?: boolean
           name: string
-          normalized_name: string
+          slug: string
+          sort_order?: number
           updated_at?: string
           workspace_id: string
         }
         Update: {
-          color?: string | null
           created_at?: string
           created_by?: string | null
-          deleted_at?: string | null
+          entity?: string
+          has_primary?: boolean
           id?: string
+          is_active?: boolean
           name?: string
-          normalized_name?: string
+          slug?: string
+          sort_order?: number
           updated_at?: string
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_tag_groups_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_tags: {
+        Row: {
+          aliases: string[]
+          color: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          entity: string
+          group_id: string | null
+          id: string
+          is_active: boolean
+          name: string
+          normalized_name: string
+          slug: string | null
+          sort_order: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          aliases?: string[]
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          entity?: string
+          group_id?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          normalized_name: string
+          slug?: string | null
+          sort_order?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          aliases?: string[]
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          entity?: string
+          group_id?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          normalized_name?: string
+          slug?: string | null
+          sort_order?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_tags_group_fk"
+            columns: ["group_id", "workspace_id", "entity"]
+            isOneToOne: false
+            referencedRelation: "crm_tag_groups"
+            referencedColumns: ["id", "workspace_id", "entity"]
+          },
           {
             foreignKeyName: "crm_tags_workspace_id_fkey"
             columns: ["workspace_id"]
@@ -8906,6 +9691,72 @@ export type Database = {
           used: number
         }[]
       }
+      crm_account_facets: {
+        Args: {
+          p_filters: Json
+          p_view_all: boolean
+          p_viewer: string
+          p_workspace_id: string
+        }
+        Returns: {
+          account_count: number
+          group_id: string
+          tag_id: string
+        }[]
+      }
+      crm_account_matches: {
+        Args: {
+          p_filters: Json
+          p_ignore_group?: string
+          p_view_all: boolean
+          p_viewer: string
+          p_workspace_id: string
+        }
+        Returns: {
+          company_id: string
+        }[]
+      }
+      crm_account_status_id: {
+        Args: { p_system_key: string; p_workspace_id: string }
+        Returns: string
+      }
+      crm_add_contact_links: {
+        Args: {
+          p_actor_id: string
+          p_contact_id: string
+          p_links: Json
+          p_source?: string
+          p_workspace_id: string
+        }
+        Returns: number
+      }
+      crm_add_contact_role: {
+        Args: {
+          p_actor_id: string
+          p_contact_id: string
+          p_system_key: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      crm_allow_multiple_assignees: {
+        Args: { p_workspace_id: string }
+        Returns: boolean
+      }
+      crm_apply_auto_roles: {
+        Args: { p_rows: Json; p_workspace_id: string }
+        Returns: Json
+      }
+      crm_assign_company: {
+        Args: {
+          p_actor_id?: string
+          p_company_id: string
+          p_mode?: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       crm_assign_contact_owner: {
         Args: {
           p_actor_id?: string
@@ -8951,6 +9802,20 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_create_account_deals: {
+        Args: {
+          p_actor_id: string
+          p_company_ids: string[]
+          p_owner_user_id: string
+          p_stage_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      crm_delete_tag_value: {
+        Args: { p_tag_id: string; p_workspace_id: string }
+        Returns: string
+      }
       crm_erase_contact: {
         Args: {
           p_actor_id?: string
@@ -8986,6 +9851,42 @@ export type Database = {
           matched_by: string
           ref: string
         }[]
+      }
+      crm_list_accounts: {
+        Args: {
+          p_desc?: boolean
+          p_filters: Json
+          p_limit?: number
+          p_offset?: number
+          p_sort?: string
+          p_view_all: boolean
+          p_viewer: string
+          p_workspace_id: string
+        }
+        Returns: {
+          assignee_ids: string[]
+          created_at: string
+          domain: string
+          employee_count: number
+          employee_count_range: string
+          headquarters: string
+          id: string
+          last_activity_at: string
+          lead_count: number
+          linkedin_url: string
+          name: string
+          owner_user_id: string
+          priority: string
+          sales_navigator_url: string
+          source: string
+          status_id: string
+          tags: Json
+          total_count: number
+        }[]
+      }
+      crm_lock_contact_role_state: {
+        Args: { p_contact_id: string; p_workspace_id: string }
+        Returns: string
       }
       crm_merge_contacts: {
         Args: {
@@ -9074,6 +9975,45 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_seed_account_config: {
+        Args: { p_workspace_id: string }
+        Returns: undefined
+      }
+      crm_seed_account_permissions: {
+        Args: { p_workspace_id: string }
+        Returns: undefined
+      }
+      crm_set_company_status: {
+        Args: {
+          p_actor_id: string
+          p_company_id: string
+          p_status_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      crm_set_company_tags: {
+        Args: {
+          p_actor_id: string
+          p_company_id: string
+          p_group_id: string
+          p_merge?: boolean
+          p_primary: string
+          p_source?: string
+          p_tag_ids: string[]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      crm_set_contact_roles: {
+        Args: {
+          p_actor_id: string
+          p_contact_id: string
+          p_role_ids: string[]
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       crm_snooze_task: {
         Args: {
           p_actor_id: string
@@ -9081,6 +10021,15 @@ export type Database = {
           p_restrict_to_assignee?: string
           p_task_id: string
           p_until: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      crm_unassign_company: {
+        Args: {
+          p_actor_id?: string
+          p_company_id: string
+          p_user_id?: string
           p_workspace_id: string
         }
         Returns: Json
@@ -9846,6 +10795,10 @@ export type Database = {
         | "COLLISION_OVERRIDE"
         | "TASK_SNOOZED"
         | "TASK_REASSIGNED"
+        | "ACCOUNT_ASSIGNED"
+        | "ACCOUNT_UNASSIGNED"
+        | "ACCOUNT_STATUS_CHANGED"
+        | "ACCOUNT_TAGS_CHANGED"
       crm_collision_mode: "off" | "warn" | "require_approval"
       crm_contact_dnc_reason:
         | "unsubscribed"
@@ -9873,6 +10826,7 @@ export type Database = {
         | "manual"
         | "api"
         | "flow"
+        | "extension"
       crm_stage_kind: "open" | "won" | "lost"
       crm_task_status: "open" | "completed" | "cancelled"
       dedupe_mode: "keep_all" | "remove_exact" | "remove_likely" | "review"
@@ -10272,6 +11226,10 @@ export const Constants = {
         "COLLISION_OVERRIDE",
         "TASK_SNOOZED",
         "TASK_REASSIGNED",
+        "ACCOUNT_ASSIGNED",
+        "ACCOUNT_UNASSIGNED",
+        "ACCOUNT_STATUS_CHANGED",
+        "ACCOUNT_TAGS_CHANGED",
       ],
       crm_collision_mode: ["off", "warn", "require_approval"],
       crm_contact_dnc_reason: [
@@ -10296,7 +11254,14 @@ export const Constants = {
       ],
       crm_opportunity_status: ["open", "won", "lost"],
       crm_reassignment_status: ["pending", "approved", "declined", "withdrawn"],
-      crm_record_source: ["lead_engine", "csv_import", "manual", "api", "flow"],
+      crm_record_source: [
+        "lead_engine",
+        "csv_import",
+        "manual",
+        "api",
+        "flow",
+        "extension",
+      ],
       crm_stage_kind: ["open", "won", "lost"],
       crm_task_status: ["open", "completed", "cancelled"],
       dedupe_mode: ["keep_all", "remove_exact", "remove_likely", "review"],

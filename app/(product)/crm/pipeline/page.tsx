@@ -4,6 +4,7 @@ import { PipelineBoard } from '@/components/crm/PipelineBoard'
 import { NewOpportunityButton } from '@/components/crm/NewOpportunity'
 import { PipelineManager } from '@/components/crm/PipelineManager'
 import { NewPipelineButton, PipelineSetup } from '@/components/crm/PipelineSetup'
+import { accountAccessIfPermitted, visibleAccountIds } from '@/lib/crm/account-access'
 import { getBoard, getPipeline, listPipelines } from '@/lib/crm/opportunities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
@@ -73,6 +74,22 @@ export default async function PipelinePage({
   const ownerUserId = scopedToSelf ? ctx.userId : (params.owner ?? null)
 
   const columns = await getBoard(ctx.workspace.id, pipelineId, { ownerUserId })
+
+  /*
+   * ⚠️ AN ACCOUNT'S NAME FOLLOWS THE ACCOUNT RULE, NOT THE DEAL'S. A setter
+   * owns a deal whose account may not be assigned to them (they were
+   * unassigned, or the deal took its account from a contact); the card then
+   * shows no account rather than one they could not open.
+   */
+  const access = await accountAccessIfPermitted()
+  const shown = access
+    ? await visibleAccountIds(access, columns.flatMap((c) => c.cards.flatMap((card) => (card.companyId ? [card.companyId] : []))))
+    : new Set<string>()
+  for (const column of columns) {
+    for (const card of column.cards) {
+      if (!card.companyId || !shown.has(card.companyId)) card.companyName = null
+    }
+  }
 
   return (
     <div className="space-y-4">

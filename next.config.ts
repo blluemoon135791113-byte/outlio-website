@@ -180,6 +180,14 @@ const nextConfig: NextConfig = {
       `public/leadengine/*` — the hero artwork among it. List the pages.
     */
     return [
+      /*
+        The account workspace lives at /crm/companies (approved 2026-10-01) so
+        existing links keep working; /accounts is the name people type. Not
+        permanent, so the route can move later without browsers having cached
+        this answer. Next carries the query string across, so a filtered
+        /accounts?icp=tpa link opens filtered.
+      */
+      { source: '/accounts', destination: '/crm/companies', permanent: false },
       { source: '/leadengine', destination: 'https://app.outlio.io', permanent: true },
       { source: '/leadengine/pricing', destination: 'https://app.outlio.io/pricing', permanent: true },
       { source: '/leadengine/product', destination: 'https://app.outlio.io/product', permanent: true },

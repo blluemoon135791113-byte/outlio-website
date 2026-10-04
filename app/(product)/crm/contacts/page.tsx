@@ -133,6 +133,10 @@ export default async function ContactsPage({
       .from('crm_tags')
       .select('id, name')
       .eq('workspace_id', ctx.workspace.id)
+      // Free lead tags only — account tags and grouped values are not offered here.
+      .eq('entity', 'contact')
+      .is('group_id', null)
+      .is('deleted_at', null)
       .order('name')
       .limit(50),
     db0
@@ -186,6 +190,9 @@ export default async function ContactsPage({
             .from('crm_tags')
             .select('id, name')
             .eq('workspace_id', ctx.workspace.id)
+            .eq('entity', 'contact')
+            .is('group_id', null)
+            .is('deleted_at', null)
             .order('name')
             .limit(200)
           return data ?? []

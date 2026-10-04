@@ -845,6 +845,28 @@ h6 {
   box-shadow: var(--neo-shadow-focus);
 }
 
+/*
+ * ⚠️ THE FORM NOW SITS DIRECTLY ON THE BLACK PAGE — NO CARD.
+ * Rather than re-colour every label, input and border by hand, this flips the
+ * token palette for the form subtree. Every auth control is already built from
+ * these tokens (text-ink, bg-panel, border-border-strong, text-cream on the
+ * button, --focus on the ring), so redefining the tokens here re-reads all of
+ * them for dark in one place. --accent stays blue (links, eyebrow, button), and
+ * the status-chip tokens stay as-is — a light danger/success chip still reads
+ * on black. Additive and scoped; nothing outside .auth-formdark changes.
+ */
+.auth-formdark {
+  --ink: var(--pure);
+  --muted: color-mix(in srgb, var(--pure) 60%, transparent);
+  --panel: color-mix(in srgb, var(--pure) 7%, transparent);
+  --surface-muted: color-mix(in srgb, var(--pure) 7%, transparent);
+  --border: color-mix(in srgb, var(--pure) 16%, transparent);
+  --border-strong: color-mix(in srgb, var(--pure) 26%, transparent);
+  --cream: var(--pure);
+  --focus: color-mix(in srgb, var(--pure) 85%, transparent);
+  --neo-shadow-focus: 0 0 0 2px var(--focus);
+}
+
 .auth-clay a {
   text-underline-offset: 0.2em;
 }

@@ -722,9 +722,11 @@ function JobHistoryRow({
               reach the CRM. Deliberately explicit — nothing moves until
               someone asks.
             */}
-            {job.kind !== 'account_list' ? (
+            {job.kind === 'account_list' ? (
+              <SendToCrmButton jobId={job.id} recordCount={job.accounts_parsed} noun="accounts" />
+            ) : (
               <SendToCrmButton jobId={job.id} recordCount={job.leads_kept} />
-            ) : null}
+            )}
             <TrashButton jobId={job.id} onTrashed={onPurged} />
             <DeleteRunButton jobId={job.id} onDeleted={onDeleted} />
           </div>

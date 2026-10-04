@@ -150,8 +150,10 @@ export default async function DashboardPage({
      * `ctx.userId` here would silently render one person's pipeline under a
      * heading that says "Team activity".
      */
-    canSeeTeam && workspace ? getPipelineTotals(workspace.workspace.id, null) : null,
-    canSeeTeam && workspace ? countOverdueTasks(workspace.workspace.id, null) : null,
+    // These live reads throw on failure. Keep each failure local to its figure,
+    // like the overview loaders, rather than taking down uploads and credits.
+    canSeeTeam && workspace ? getPipelineTotals(workspace.workspace.id, null).catch(() => null) : null,
+    canSeeTeam && workspace ? countOverdueTasks(workspace.workspace.id, null).catch(() => null) : null,
   ])
 
   const checklist =
@@ -545,7 +547,7 @@ function UsageCard({
                * mark rather than rounding away to an empty track — which would
                * read as "none used".
                */
-              style={{ width: `${Math.max(percent, 3)}%` }}
+              style={{ width: `${percent > 0 ? Math.max(percent, 3) : 0}%` }}
             />
           </div>
         ) : null}

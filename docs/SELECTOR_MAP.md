@@ -345,3 +345,36 @@ silently return the wrong field after any LinkedIn redesign.
 from the enrichment providers or they do not come at all. Any feature promising
 contact details from extraction alone is promising something the page cannot
 give.
+
+---
+
+## 7. Account SEARCH results (`/sales/search/company`) — validated 2026-10-03
+
+A third saved-page type, read by `lib/companies/parse-account-search.ts`. One
+real page (25 companies), kept locally under `private/` and never committed;
+`tests/fixtures/html/account-search-valid.html` is a fabricated copy of its
+structure. Detected by `lib/leads/page-type.ts` **before** lead search (an
+account card is the specific test).
+
+| Field | Anchor | Present (of 25) | Stored as |
+|---|---|---|---|
+| Row | `[data-x-search-result="ACCOUNT"]` | 25 | — |
+| Name + link | `a[data-anonymize="company-name"][href*="/sales/company/"]` | 25 | name; `https://www.linkedin.com/sales/company/{id}` (query stripped) |
+| Industry | `[data-anonymize="industry"]` | 25 | industry |
+| Headcount | `a[data-anonymize="company-size"]` text | 25 | "253 employees" → count (24); "1.2K+ employees" → **range as printed** (1). Never converted. |
+| Location | `[data-anonymize="location"]` | **0** — empty span in this save | headquarters when present; NULL otherwise |
+| About | `[data-anonymize="person-blurb"]` **`title` attribute** | 25 (46–1,984 chars) | summary |
+| Signals | `[data-control-name^="search_spotlight_"]` → key after the prefix | hiring_on_linkedin 16, aiq_strategic_priorities 3 | dated observation on the account's source row |
+
+### ⚠️ The About trap
+
+The visible description is a **truncated preview** (`data-truncated`, a
+"…see more" button). The full text is the element's `title`. Reading the
+visible text stores a clipped sentence as the company's summary. No `title` →
+NULL, never the preview.
+
+### Not on this page
+
+No people (the lead parser correctly finds none — that is why this page used to
+fail with `ERR_FILE_FORMAT`), no website, no founded year, no specialties, no
+revenue. Those live on the company page itself (section 5) and are not inferred.

@@ -1,9 +1,11 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { startTransition, useActionState, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 
-import { createContactAction, type CreateContactState } from '@/lib/crm/contact-actions'
+import { FormDialog } from '@/components/crm/FormDialog'
+import { SocialLinkFields } from '@/components/crm/SocialLinks'
+import { addDecisionMakerAction, createContactAction, type CreateContactState } from '@/lib/crm/contact-actions'
 
 /**
  * Adding one contact by hand — R2.
@@ -13,12 +15,38 @@ import { createContactAction, type CreateContactState } from '@/lib/crm/contact-
  * typing someone in is the most likely way a duplicate is created — it is what
  * people do when they cannot find a person who is already there.
  */
-export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
+export function NewContactForm({
+  onCancel,
+  account,
+  variant = 'lead',
+}: {
+  onCancel?: () => void
+  /** Add the lead AT this account (the account page's "Add lead"). */
+  account?: { id: string; name: string }
+  /**
+   * `decision_maker` (account page only): a name is required, both LinkedIn
+   * addresses and other profiles are asked for, and the lead gets the
+   * Decision Maker role, set by hand.
+   */
+  variant?: 'lead' | 'decision_maker'
+}) {
   const router = useRouter()
+  const decisionMaker = variant === 'decision_maker' && account !== undefined
   const [state, action, pending] = useActionState<CreateContactState, FormData>(
-    createContactAction,
+    decisionMaker ? addDecisionMakerAction : createContactAction,
     null,
   )
+
+  /*
+   * ⚠️ onSubmit, NOT `action={…}`. React 19 resets a form after its action
+   * runs, so a refused entry (a mistyped address) wiped everything typed —
+   * eight fields and a list of links, for one typo.
+   */
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    startTransition(() => action(data))
+  }
 
   /*
    * ⚠️ NO "OPEN CONTACT" ON A HELD RESULT. The entry matched somebody this
@@ -50,15 +78,23 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
   }
 
   return (
-    <form action={action} className="clay space-y-3 p-4">
-      <h3 className="text-sm font-semibold text-ink">Add a contact</h3>
+    <form onSubmit={submit} noValidate className="clay space-y-3 p-4">
+      <h3 className="text-sm font-semibold text-ink">
+        {decisionMaker
+          ? `Add a decision maker at ${account.name}`
+          : account
+            ? `Add a lead at ${account.name}`
+            : 'Add a contact'}
+      </h3>
+      {account ? <input type="hidden" name="companyId" value={account.id} /> : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="text-xs font-medium text-ink">Name</span>
+          <span className="text-xs font-medium text-ink">Name{decisionMaker ? ' (required)' : ''}</span>
           <input
             name="fullName"
             maxLength={140}
+            required={decisionMaker}
             autoComplete="name"
             className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
           />
@@ -78,7 +114,7 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
         </label>
 
         <label className="block">
-          <span className="text-xs font-medium text-ink">Job title</span>
+          <span className="text-xs font-medium text-ink">{decisionMaker ? 'Position' : 'Job title'}</span>
           <input
             name="jobTitle"
             maxLength={140}
@@ -100,19 +136,40 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
         </label>
       </div>
 
-      <label className="block">
-        <span className="text-xs font-medium text-ink">LinkedIn URL</span>
-        <input
-          name="linkedInUrl"
-          type="url"
-          spellCheck={false}
-          placeholder="https://www.linkedin.com/in/…"
-          className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
-        />
-      </label>
+      <div className={decisionMaker ? 'grid gap-3 sm:grid-cols-2' : ''}>
+        <label className="block">
+          <span className="text-xs font-medium text-ink">LinkedIn URL</span>
+          <input
+            name="linkedInUrl"
+            type="url"
+            spellCheck={false}
+            placeholder="https://www.linkedin.com/in/…"
+            className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
+          />
+        </label>
+
+        {decisionMaker ? (
+          <label className="block">
+            <span className="text-xs font-medium text-ink">Sales Navigator URL</span>
+            <input
+              name="salesNavigatorUrl"
+              type="url"
+              spellCheck={false}
+              placeholder="https://www.linkedin.com/sales/lead/…"
+              className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
+            />
+          </label>
+        ) : null}
+      </div>
+
+      {decisionMaker ? <SocialLinkFields /> : null}
 
       {/* Says the rule rather than waiting to reject the form. */}
-      <p className="text-xs text-muted">A name or an email is enough to start.</p>
+      <p className="text-xs text-muted">
+        {decisionMaker
+          ? 'A name is required. Everything else is optional — leave out what you do not know.'
+          : 'A name or an email is enough to start.'}
+      </p>
 
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -120,7 +177,7 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
           disabled={pending}
           className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep disabled:opacity-60"
         >
-          {pending ? 'Adding…' : 'Add contact'}
+          {pending ? 'Adding…' : decisionMaker ? 'Add decision maker' : 'Add contact'}
         </button>
 
         {onCancel ? (
@@ -143,9 +200,25 @@ export function NewContactForm({ onCancel }: { onCancel?: () => void }) {
   )
 }
 
-export function NewContactButton() {
+export function NewContactButton({
+  account,
+  variant = 'lead',
+}: { account?: { id: string; name: string }; variant?: 'lead' | 'decision_maker' } = {}) {
   const [open, setOpen] = useState(false)
-  if (open) return <NewContactForm onCancel={() => setOpen(false)} />
+  /*
+   * ⚠️ IN A LAYER, NOT IN PLACE — the `FormDialog` rule. Rendered in place, the
+   * form became a flex item in the account page's People header strip, beside
+   * the other buttons: squeezed, overlapping the table, half its fields hard
+   * to reach.
+   */
+  if (open) {
+    const label = variant === 'decision_maker' && account ? 'Add decision maker' : account ? 'Add lead' : 'Add contact'
+    return (
+      <FormDialog label={label} onClose={() => setOpen(false)}>
+        <NewContactForm account={account} variant={variant} onCancel={() => setOpen(false)} />
+      </FormDialog>
+    )
+  }
 
   return (
     <button
@@ -153,7 +226,7 @@ export function NewContactButton() {
       onClick={() => setOpen(true)}
       className="rounded-[var(--radius-md)] bg-accent px-3 py-1.5 text-xs font-semibold text-cream transition-colors duration-150 hover:bg-accent-deep"
     >
-      Add contact
+      {variant === 'decision_maker' && account ? 'Add decision maker' : account ? 'Add lead' : 'Add contact'}
     </button>
   )
 }

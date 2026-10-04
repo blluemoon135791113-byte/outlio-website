@@ -204,6 +204,10 @@ const KNOWN_ORPHANS = new Set(
      * to be a finding.
      */
     'lib/linkedin/metrics.ts',
+    /*
+     * ADR-007's `lib/crm/account-writes.ts` LEFT on 2026-10-01, on its stated
+     * exit: the step-3 Accounts forms call it through lib/crm/account-actions.ts.
+     */
   ].map((p) => p.replace(/\//g, sep)),
 )
 

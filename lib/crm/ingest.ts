@@ -33,6 +33,7 @@ import {
 } from '@/lib/crm/normalize'
 import { upsertCrmCompany, type ContactInput } from '@/lib/crm/repository'
 import { emitDomainEvent } from '@/lib/events/emit'
+import { applyAutoRolesQuietly } from '@/lib/crm/lead-role-service'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database, Json } from '@/types/database'
 
@@ -71,6 +72,8 @@ type CompanySeed = {
   name: string | null
   websiteUrl: string | null
   linkedInUrl: string | null
+  /** Kept apart from `linkedInUrl` since 0145; neither is derived from the other. */
+  salesNavigatorUrl?: string | null
   /*
    * ⚠️ OPTIONAL, BECAUSE MOST SOURCES GENUINELY DO NOT CARRY THEM. A Sales
    * Navigator search row gives a company NAME; the industry, headcount and
@@ -139,6 +142,7 @@ async function resolveCompanies(
           name: seed.name,
           websiteUrl: seed.websiteUrl,
           linkedInUrl: seed.linkedInUrl,
+          salesNavigatorUrl: seed.salesNavigatorUrl ?? null,
           industry: seed.industry ?? null,
           employeeCount: seed.employeeCount ?? null,
           headquarters: seed.headquarters ?? null,
@@ -237,7 +241,8 @@ function companyKey(seed: CompanySeed): string | null {
   const domain = normalizeDomain(seed.websiteUrl)
   if (domain) return `domain:${domain}`
 
-  const linkedIn = normalizeCompanyLinkedInUrl(seed.linkedInUrl)
+  // The same coalesce as before 0145, so batching groups leads exactly as it did.
+  const linkedIn = normalizeCompanyLinkedInUrl(seed.linkedInUrl ?? seed.salesNavigatorUrl)
   if (linkedIn) return `linkedin:${linkedIn}`
 
   const name = normalizeCompanyName(seed.name)
@@ -586,8 +591,14 @@ export async function ingestExtractionJob(
        * they can verify is preferred.
        */
       websiteUrl: lead.company_website_url ?? research?.domain ?? null,
-      linkedInUrl:
-        lead.company_public_linkedin_url ?? lead.company_url ?? research?.linkedinUrl ?? null,
+      /*
+       * ⚠️ BOTH ADDRESSES, NOT A COALESCE OF THEM. The coalesce kept whichever
+       * came first and discarded the other — so a lead whose company had a
+       * public page lost its Navigator link, the defect 0138 fixed for people.
+       * `resolveCrmCompanyIdentity` sorts each into its own column by shape.
+       */
+      linkedInUrl: lead.company_public_linkedin_url ?? research?.linkedinUrl ?? null,
+      salesNavigatorUrl: lead.company_url,
       sourceCompanyId: lead.company_id,
       /*
        * ⚠️ `company_employee_count`, NOT `company_size`. 0054 keeps them apart
@@ -673,6 +684,10 @@ export async function ingestExtractionJob(
       .map((row) => ({ contactId: returned.get(row.ref)!, companyId: row.company_id! })),
   )
 
+  // Role suggestions from each lead's title (0152). Quiet: a suggestion that
+  // fails must never fail the import that brought the people in.
+  await applyAutoRolesQuietly(workspaceId, [...returned.values()])
+
   /*
    * ⚠️ AFTER THE RPC RATHER THAN INSIDE IT, DELIBERATELY. `crm_ingest_contacts`
    * is "one implementation of what is this person's identity" — it matches,
@@ -730,7 +745,17 @@ export async function runCsvImport(
   workspaceId: string,
   importJobId: string,
   plan: ImportPlan,
-  options: { actorUserId?: string | null; name?: string } = {},
+  options: {
+    actorUserId?: string | null
+    name?: string
+    /**
+     * "Import leads" from an account page: rows that name NO company of their
+     * own are linked to this account. A row that does name one keeps it —
+     * the file is more specific than the page it was uploaded from. The
+     * caller has already checked the account is visible to the importer.
+     */
+    companyId?: string | null
+  } = {},
 ): Promise<IngestResult> {
   const db = createAdminClient()
 
@@ -790,22 +815,97 @@ export async function runCsvImport(
   )
 
   const payload: IngestPayloadRow[] = []
+  // Rows placed by the page's account rather than by the file — see below.
+  const fallbackRefs = new Set<string>()
   for (const row of plan.rows) {
     const key = rowCompanyKey.get(String(row.line))
+    if (!key && options.companyId) fallbackRefs.add(String(row.line))
     // `ref` is the spreadsheet line, so a result can be traced back to the row
     // the user can actually see.
-    const built = toPayloadRow(String(row.line), row.contact, (key ? companies.get(key) : null) ?? null)
+    const built = toPayloadRow(
+      String(row.line),
+      row.contact,
+      (key ? companies.get(key) : options.companyId) ?? null,
+    )
     if (built) payload.push(built)
   }
 
   const { created, matched, returned } = await runIngest(workspaceId, batchId, payload)
 
-  await linkCompanies(
-    workspaceId,
-    payload
-      .filter((row) => row.company_id && returned.has(row.ref))
-      .map((row) => ({ contactId: returned.get(row.ref)!, companyId: row.company_id! })),
-  )
+  /*
+   * ⚠️ THE PAGE'S ACCOUNT NEVER MOVES SOMEONE WHO WORKS ELSEWHERE. A row
+   * placed only because the file was uploaded from an account page can match
+   * a person the CRM already has at another account — and a page is not
+   * evidence they changed employer. The same rule as "Add lead" on that page.
+   */
+  const keptElsewhere = new Set<string>()
+  const fallbackContactIds = [...new Set(
+    [...fallbackRefs].map((ref) => returned.get(ref)).filter((id): id is string => Boolean(id)),
+  )]
+  if (options.companyId) {
+    for (let i = 0; i < fallbackContactIds.length; i += INGEST_CHUNK) {
+      const ids = fallbackContactIds.slice(i, i + INGEST_CHUNK)
+      const { data, error } = await db
+        .from('crm_contacts')
+        .select('id, primary_company_id')
+        .eq('workspace_id', workspaceId)
+        .in('id', ids)
+        .is('deleted_at', null)
+      if (error) throw new Error(`runCsvImport account lookup failed: ${error.message}`)
+      if (data?.length !== ids.length) throw new Error('runCsvImport: account contact no longer available')
+      for (const c of data) {
+        if (c.primary_company_id && c.primary_company_id !== options.companyId) keptElsewhere.add(c.id)
+      }
+    }
+  }
+
+  // Different CSV rows can match the same person. Insert each pair only once.
+  const pairs = new Map<string, { contactId: string; companyId: string }>()
+  for (const row of payload) {
+    const contactId = returned.get(row.ref)
+    if (!row.company_id || !contactId) continue
+    if (fallbackRefs.has(row.ref) && keptElsewhere.has(contactId)) continue
+    pairs.set(`${contactId}:${row.company_id}`, { contactId, companyId: row.company_id })
+  }
+  await linkCompanies(workspaceId, [...pairs.values()])
+
+  /*
+   * 0081 projects company_id only for NEW contacts. A match needs the same
+   * projection for Account People to find it. Write the relationship first:
+   * a competing primary relationship must fail before we claim its projection.
+   * There is no transactional link RPC; a failed projection leaves a repairable
+   * relationship, and must never mark this import completed.
+   */
+  if (options.companyId) {
+    const placedIds = fallbackContactIds.filter((id) => !keptElsewhere.has(id))
+    for (let i = 0; i < placedIds.length; i += INGEST_CHUNK) {
+      const ids = placedIds.slice(i, i + INGEST_CHUNK)
+      const { error } = await db
+        .from('crm_contacts')
+        .update({ primary_company_id: options.companyId })
+        .eq('workspace_id', workspaceId)
+        .in('id', ids)
+        .is('deleted_at', null)
+        // A concurrent account assignment wins; never replace it.
+        .is('primary_company_id', null)
+      if (error) throw new Error(`runCsvImport account projection failed: ${error.message}`)
+
+      const { data, error: readError } = await db
+        .from('crm_contacts')
+        .select('id, primary_company_id')
+        .eq('workspace_id', workspaceId)
+        .in('id', ids)
+        .is('deleted_at', null)
+      if (readError) throw new Error(`runCsvImport account verification failed: ${readError.message}`)
+      if (data?.length !== ids.length || data.some((c) => c.primary_company_id !== options.companyId)) {
+        throw new Error('runCsvImport: account placement changed during import')
+      }
+    }
+  }
+
+  // Role suggestions from each lead's title (0152). Quiet: a suggestion that
+  // fails must never fail the import that brought the people in.
+  await applyAutoRolesQuietly(workspaceId, [...returned.values()])
 
   const rowsSkipped = plan.rowsTotal - payload.length
 
@@ -1001,5 +1101,65 @@ export async function createContactManually(
     ownerUserId = matched?.owner_user_id ?? null
   }
 
+  await applyAutoRolesQuietly(workspaceId, [contactId])
+
   return { contactId, created, ownerUserId }
+}
+
+/**
+ * Records BOTH LinkedIn addresses a person typed, as attributes, each only
+ * where its column is empty (the identity was already chosen by the add).
+ *
+ * ⚠️ SEPARATE FROM `createContactManually`, AND CALLED ONLY AFTER THE CALLER
+ * HAS DECIDED THE CONTACT IS THEIRS TO EDIT. A manual add can match a contact
+ * the caller may not see ("held"); writing their typed addresses onto that
+ * record first would change someone else's data on a request that was refused.
+ */
+export async function recordContactProfileUrls(
+  workspaceId: string,
+  contactId: string,
+  profiles: { salesNavigatorUrl?: string | null; publicProfileUrl?: string | null },
+): Promise<void> {
+  if (profiles.salesNavigatorUrl) {
+    await recordNavigatorUrls(workspaceId, [{ contactId, url: profiles.salesNavigatorUrl }])
+  }
+  if (profiles.publicProfileUrl) await recordPublicProfileUrl(workspaceId, contactId, profiles.publicProfileUrl)
+}
+
+/**
+ * Puts a typed public profile in `linkedin_url` when that column is empty —
+ * or holds a Navigator address that `sales_navigator_url` holds TOO (the
+ * pre-0138 coalesce; see `recordNavigatorUrls`), so replacing it loses
+ * nothing. Anything else already there is never overwritten.
+ */
+async function recordPublicProfileUrl(workspaceId: string, contactId: string, url: string): Promise<void> {
+  const db = createAdminClient()
+  const { data: row, error } = await db
+    .from('crm_contacts')
+    .select('linkedin_url, sales_navigator_url')
+    .eq('workspace_id', workspaceId)
+    .eq('id', contactId)
+    .maybeSingle()
+  if (error || !row) {
+    console.error('recordPublicProfileUrl: read failed', { contactId, error: error?.message ?? 'no row' })
+    return
+  }
+
+  const current = row.linkedin_url
+  if (current) {
+    const here = normalizeContactLinkedInUrl(current)
+    const kept = normalizeContactLinkedInUrl(row.sales_navigator_url)
+    const duplicatedNavigator =
+      here?.kind === 'sales_navigator' && kept?.kind === 'sales_navigator' && here.identityKey === kept.identityKey
+    if (!duplicatedNavigator) return
+  }
+
+  // ⚠️ The value read is repeated in the predicate: a concurrent writer that
+  // changed it in between wins, rather than being overwritten.
+  let update = db.from('crm_contacts').update({ linkedin_url: url }).eq('workspace_id', workspaceId).eq('id', contactId)
+  update = current ? update.eq('linkedin_url', current) : update.is('linkedin_url', null)
+  const { error: updateError } = await update
+  // Same stance as recordNavigatorUrls: the person is in; a missing second
+  // address is a degraded record, not a failed add.
+  if (updateError) console.error('recordPublicProfileUrl: update failed', { contactId, error: updateError.message })
 }

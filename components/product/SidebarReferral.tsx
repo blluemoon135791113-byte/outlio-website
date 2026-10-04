@@ -30,13 +30,14 @@ export function SidebarReferral({
       await navigator.clipboard.writeText(link)
       setState('copied')
       window.setTimeout(() => setState('idle'), 2400)
+      onNavigate?.()
     } catch {
       // Clipboard access can be refused — insecure context, a permissions
       // policy, an unfocused document. Reveal the link so the user is never
       // left with a button that appears to do nothing.
       setState('manual')
+      // Keep a mobile drawer open so the fallback field stays reachable.
     }
-    onNavigate?.()
   }
 
   if (state === 'manual') {

@@ -149,6 +149,38 @@ export async function claimPage(input: {
   return { status: row.status as 'duplicate' | 'session_closed' | 'not_found' }
 }
 
+/**
+ * Settle either kind of extension job. SQL keeps the historical `leads_*`
+ * column names; the panel calls them records because an account is not a lead.
+ * Non-fatal: extracted data remains usable if the progress update is unavailable.
+ */
+export async function settleCaptureJob(input: {
+  userId: string
+  jobId: string
+  found: number
+  kept: number
+  status: 'processed' | 'failed'
+}): Promise<void> {
+  try {
+    const admin = createAdminClient()
+    const { data: page, error } = await admin.from('capture_pages')
+      .select('id, status')
+      .eq('extraction_job_id', input.jobId)
+      .eq('user_id', input.userId)
+      .maybeSingle()
+    // Job claims serialize processing; don't add counters again on a retry.
+    if (error || !page || page.status === 'processed' || page.status === 'failed') return
+    await admin.rpc('roll_capture_totals', {
+      p_page_id: page.id,
+      p_user_id: input.userId,
+      p_job_id: input.jobId,
+      p_leads_found: input.found,
+      p_leads_kept: input.kept,
+      p_status: input.status,
+    })
+  } catch { /* Progress is secondary to the persisted extraction. */ }
+}
+
 /** Marks a claimed page failed and frees nothing — the hash stays reserved. */
 export async function markPageFailed(
   userId: string,
