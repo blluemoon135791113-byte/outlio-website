@@ -21,18 +21,22 @@
 .copy h3 { margin:0; color:var(--ink); font-size:clamp(1.5rem,2.25vw,2.8rem); font-weight:400; letter-spacing:-.065em; line-height:1.12; text-wrap:balance; }
 .copy h3 span { color:#5c8066; }
 
-.zone { position:absolute; z-index:1; display:grid; place-items:center; }
+.zone { position:absolute; z-index:1; display:grid; place-items:center; container-type:inline-size;
+  /* logo unit scales with the lobe itself, not the viewport */
+  --u:clamp(2.3px, 1cqw, 4.2px); }
 .tr { left:45.7%; top:0; right:0; height:46.7%; }
 .bl { left:0; top:53%; width:54.3%; bottom:0; }
 .logoPosition { position:relative; z-index:2; display:grid; place-items:center; width:100%; transform:translateY(-6%); }
-/* every logo shares one VISIBLE height (width follows its aspect ratio); the
-   two-line wordmarks get a small optical bump, Bexa a padding compensation */
-.logo { display:block; width:auto; height:var(--logoH); max-width:100%; }
-.kcBadge { display:block; width:var(--logoH); height:var(--logoH); overflow:hidden; }
-.kcBadge img { display:block; height:var(--logoH); width:auto; }
-.mentorLogo { height:calc(var(--logoH) * 1.28); }
-.oeeLogo { color:#204c42; height:calc(var(--logoH) * 1.28 / 1.04); }
-.bexaLogo { height:calc(var(--logoH) / 0.87); }
+/* Optical sizing: each logo's VISIBLE height = 23u x aspect^-0.3, so compact
+   marks get a bit more height and wide wordmarks a bit less, giving every logo
+   a similar visual weight. Box heights divide by each file's measured vertical
+   fill (Bexa 0.87, OEE 0.88) so transparent padding doesn't shrink the mark. */
+.logo { display:block; width:auto; max-width:100%; }
+.kcBadge { width:calc(var(--u) * 23); height:calc(var(--u) * 23); overflow:hidden; }        /* aspect 1.0  */
+.kcBadge img { display:block; height:calc(var(--u) * 23); width:auto; max-width:none; } /* overflow so the span crops to the badge */
+.mentorLogo { height:calc(var(--u) * 18.2); }                                                /* aspect 2.17 */
+.bexaLogo { height:calc(var(--u) * 17.3 / 0.87); }                                           /* aspect 2.59 */
+.oeeLogo { color:#204c42; height:calc(var(--u) * 21.9 / 0.88); }                             /* aspect 1.19 */
 
 /* two KPIs pinned below the logo — slot-machine count-up, no lines */
 .kpis { position:absolute; left:7%; right:7%; bottom:9%; z-index:3; display:grid; grid-template-columns:1fr 1fr; gap:.9rem; }
