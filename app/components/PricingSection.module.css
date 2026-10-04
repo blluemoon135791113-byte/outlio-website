@@ -8,12 +8,12 @@
      the texture layers below multiply over this, so colour AND grain stay
      continuous across the join. */
   margin-top: -0.25rem;
-  background: linear-gradient(to bottom, #bdd5ae 0, rgba(189, 213, 174, 0) 8rem), #f4ecde;
+  background: linear-gradient(to bottom, #bdd5ae 0, rgba(189, 213, 174, 0) 8rem), #f0eff2;
   color: #1d2c2e;
   font-family: var(--font-manrope), sans-serif;
 }
 
-/* Sandy + grainy texture over the light cyan-grey field */
+/* Sandy + grainy texture over the cool light-grey field (#f0eff2) */
 .section::before {
   content: "";
   position: absolute;
