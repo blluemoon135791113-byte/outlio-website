@@ -28,7 +28,16 @@ export default function TechIndustryCard() {
       </div>
       <div className={styles.copy}>
         <h2>Tech/SaaS Industry</h2>
-        <p>Turn your ICP into qualified demos. Outlio finds the right accounts, runs targeted outreach, and qualifies replies to build your SaaS sales pipeline.</p>
+        <div>
+          <p>
+            More than 500+ SaaS launches every day. most of<br />
+            them nail the launch but get carried away by the<br />
+            hype, and fail to build a Sign-Up funnel around it.<br />
+            They struggle to get consistent paying users and<br />
+            see a huge churn-rate for their product.
+          </p>
+          <p>That’s where Outlio comes in.</p>
+        </div>
       </div>
     </div>
   );
