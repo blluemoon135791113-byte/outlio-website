@@ -26,7 +26,7 @@ export default function SalesStrategies() {
           <article className={styles.card}>
             <div className={`${styles.viz} ${styles.vizPhoto}`}>
               <Image
-                src="/tech/outbound-email-sand.png"
+                src="/tech/outbound-email-sand-plain-chips.png"
                 alt="An Outlio Campaign Email composer personalizing an outbound message with variables pulled from an Acme AI account record"
                 fill
                 quality={95}
