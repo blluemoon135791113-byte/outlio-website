@@ -3,6 +3,7 @@
    descriptions and visuals are placeholder slots for content added later. */
 
 .section {
+  margin-top: -0.25rem;
   padding-block: clamp(2.25rem, 5vw, 3.75rem);
   padding-inline: 1.2rem;
   background-color: #f8f2e5;

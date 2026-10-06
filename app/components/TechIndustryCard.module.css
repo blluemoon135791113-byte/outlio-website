@@ -1,0 +1,7 @@
+.grid{max-width:1106px;margin:0 auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.6%;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:#101318}
+.visual,.copy{aspect-ratio:1;min-width:0;position:relative;isolation:isolate;overflow:hidden;border-radius:16px;background:#f6f6f6;container-type:inline-size}
+.frame{position:absolute;inset:0;border:0;width:100%;height:100%;display:block}
+.copy{display:flex;flex-direction:column;justify-content:space-between;padding:3.9% 4.4% 3.6%}
+.copy h2{margin:0;font-size:6.95cqw;font-weight:400;letter-spacing:-.022em;line-height:1.08}
+.copy p{margin:0;font-size:4.15cqw;font-weight:400;letter-spacing:-.01em;line-height:1.2}
+@media(max-width:720px){.grid{grid-template-columns:1fr;gap:18px}.visual,.copy{border-radius:12px}}

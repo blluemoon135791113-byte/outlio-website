@@ -1,4 +1,5 @@
 .section {
+  margin-top: -0.25rem;
   scroll-margin-top: 6rem;
   padding: clamp(1.5rem, 4vw, 4rem) 1.5rem clamp(2rem, 3vw, 2.75rem);
   background: #f4ecde url("/hero/hero-sand-texture.png") center top / 100% auto repeat-y;

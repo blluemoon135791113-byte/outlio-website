@@ -1,78 +1,191 @@
 "use client";
 
-import type { PointerEvent, ReactNode } from "react";
+import { useEffect, useRef } from "react";
+import Image from "next/image";
 import styles from "./TechCaseStudies.module.css";
 
-function Bridge() {
+type Brand = "knowledgecity" | "mentor" | "oee" | "hirebexa";
+type Kpi = { prefix?: string; target: number; suffix?: string; dec?: number; anim?: number; label: string };
+
+// One connected glass surface per pair, drawn at the pair's real pixel size so
+// every corner is a true circular radius (no non-uniform SVG stretching).
+function Surface() {
+  const ref = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    const svg = ref.current;
+    const pair = svg?.parentElement;
+    const mass = svg?.querySelector<SVGPathElement>("path");
+    if (!svg || !pair || !mass) return;
+
+    const draw = () => {
+      const W = pair.clientWidth;
+      const H = pair.clientHeight;
+      if (!W || !H) return;
+      const i = 1; // keep the stroke inside the box
+      const a = W * 0.457, b = W * 0.543, y1 = H * 0.467, y2 = H * 0.53;
+      const R = Math.min(40, W * 0.06, (b - a) * 0.75);
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      mass.setAttribute(
+        "d",
+        `M ${a + R} ${i} H ${W - i - R} Q ${W - i} ${i} ${W - i} ${i + R} V ${y1 - R} Q ${W - i} ${y1} ${W - i - R} ${y1} H ${b + R} Q ${b} ${y1} ${b} ${y1 + R} V ${H - i - R} Q ${b} ${H - i} ${b - R} ${H - i} H ${i + R} Q ${i} ${H - i} ${i} ${H - i - R} V ${y2 + R} Q ${i} ${y2} ${i + R} ${y2} H ${a - R} Q ${a} ${y2} ${a} ${y2 - R} V ${i + R} Q ${a} ${i} ${a + R} ${i} Z`,
+      );
+    };
+
+    const ro = new ResizeObserver(draw);
+    ro.observe(pair);
+    draw();
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <svg className={styles.bridge} viewBox="0 0 700 700" preserveAspectRatio="none" aria-hidden="true">
-      <path className={styles.mass} d="M 360 2 H 659 Q 698 2 698 41 V 287 Q 698 327 659 327 H 419 Q 380 327 380 367 V 659 Q 380 698 341 698 H 41 Q 2 698 2 659 V 411 Q 2 371 42 371 H 280 Q 320 371 320 331 V 42 Q 320 2 360 2 Z" />
-      <path className={styles.shine} d="M 360 2 H 659 Q 698 2 698 41 V 287 Q 698 327 659 327 H 419" />
+    <svg ref={ref} className={styles.surface} aria-hidden="true">
+      <path className={styles.mass} />
     </svg>
   );
 }
 
-function Stage({ type, label, children }: { type: string; label: string; children: ReactNode }) {
-  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (event.pointerType === "touch" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const stage = event.currentTarget;
-    const rect = stage.getBoundingClientRect();
-    stage.style.setProperty("--ry", `${((event.clientX - rect.left) / rect.width - 0.5) * 8}deg`);
-    stage.style.setProperty("--rx", `${(0.5 - (event.clientY - rect.top) / rect.height) * 8}deg`);
-  }
+function Logo({ brand }: { brand: Brand }) {
+  // KnowledgeCity shown by its own "kc" badge (the square mark cropped from the
+  // official logo file) so every logo can sit at a matched, larger height.
+  if (brand === "knowledgecity") return <span className={`${styles.logo} ${styles.kcBadge}`} role="img" aria-label="KnowledgeCity"><Image src="/clients/kc-logo-full.svg" alt="" width={210} height={44} unoptimized /></span>;
+  // Official Mentor Global artwork, recoloured to its light-background variant.
+  if (brand === "mentor") return <Image className={`${styles.logo} ${styles.mentorLogo}`} src="/clients/mentor-global-ink.png" alt="Mentor Global" width={760} height={351} unoptimized />;
+  // OEE lockup, recentred about the viewBox centre.
+  if (brand === "oee") return <svg className={`${styles.logo} ${styles.oeeLogo}`} viewBox="0 0 400 210" role="img" aria-label="OEE intellisuite"><g transform="translate(36 19) scale(0.82)"><g transform="translate(57,7)"><g fill="none" stroke="currentColor" strokeWidth="7" strokeLinejoin="round" strokeLinecap="round"><path d="M 62 58 L 110.3 70.9 A 50 50 0 1 0 79.1 105 Z" /><path d="M 62 58 L 87 14.7" /><path d="M 68.6 64.1 L 116.9 77 A 50 50 0 0 1 85.7 111.1 Z" /></g><text x="130" y="59" fill="currentColor" fontFamily="Arial, sans-serif" fontSize="104" fontWeight="800" letterSpacing="-3" dominantBaseline="central">EE</text></g><text x="200" y="181" textAnchor="middle" fill="currentColor" fontFamily="Arial, sans-serif" fontSize="66" fontWeight="500" letterSpacing="-2" dominantBaseline="central">intellisuite</text></g></svg>;
+  return <Image className={`${styles.logo} ${styles.bexaLogo}`} src="/clients/hirebexa-transparent.png" alt="Bexa by Corebex" width={2014} height={780} unoptimized />;
+}
 
-  function resetTilt(event: PointerEvent<HTMLDivElement>) {
-    event.currentTarget.style.setProperty("--rx", "0deg");
-    event.currentTarget.style.setProperty("--ry", "0deg");
-  }
-
+function Zone({ brand, name, place, kpis }: { brand: Brand; name: string; place: "tr" | "bl"; kpis?: Kpi[] }) {
   return (
-    <div className={`${styles.stage} ${type}`} tabIndex={0} role="img" aria-label={label} onPointerMove={handlePointerMove} onPointerLeave={resetTilt}>
-      <div className={styles.visual}>{children}</div>
+    <div className={`${styles.zone} ${styles[place]}`} aria-label={`${name} case study visual`} {...(kpis ? { "data-kpi-zone": "" } : {})}>
+      <div className={styles.logoPosition}><Logo brand={brand} /></div>
+      {kpis && (
+        <div className={styles.kpis}>
+          {kpis.map((k) => (
+            <div className={styles.kpi} key={k.label}>
+              <div
+                className={styles.num}
+                data-num
+                data-prefix={k.prefix ?? ""}
+                data-target={k.target}
+                data-suffix={k.suffix ?? ""}
+                data-dec={k.dec ?? 0}
+                data-anim={k.anim ?? k.dec ?? 0}
+              >{`${k.prefix ?? ""}0${k.suffix ?? ""}`}</div>
+              <div className={styles.lbl}>{k.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function ProfileArtwork() {
-  return <><div className={`${styles.sheet} ${styles.back}`} /><div className={`${styles.sheet} ${styles.middle}`} /><div className={`${styles.sheet} ${styles.front}`}><div className={styles.brand}><span className={styles.brandMark}>✳</span> abc <span className={styles.email}>hello@abc.com</span></div><p className={styles.tiny}>ABC is a dynamic and innovative company founded in 2022, committed to creating unique and impactful experiences. With a team of specialists across digital, strategy, and design, we help ambitious teams take ideas to market. Our work brings together clear thinking, craft, and long-term partnerships.</p></div></>;
-}
-
-function IcpArtwork() {
-  return <><div className={`${styles.sheet} ${styles.back}`} /><div className={`${styles.sheet} ${styles.middle}`} /><div className={`${styles.sheet} ${styles.front}`}><h4>Sales Management</h4><dl><dt>Level</dt><dd>Manager</dd><dt>Range</dt><dd>10M–50M</dd><dt>Employees</dt><dd>25–100</dd></dl><div className={styles.tags}><i>Founder</i><i>CEO</i><i>+2</i></div></div></>;
-}
-
-const integrationRows = [["Y", "▣"], ["↗", "✳", "A"], ["☁", "M"], ["◉", "A"]];
-
-function IntegrationsArtwork() {
-  return <>{integrationRows.map((row, rowIndex) => <div className={styles.row} key={rowIndex}>{row.map((symbol, index) => <span className={`${styles.pill} ${rowIndex === 1 && index === 1 ? styles.selected : ""}`} key={`${symbol}-${index}`}><span className={styles.icon}>{symbol}</span><b /></span>)}</div>)}</>;
-}
-
-const people = [["MS", "Michael Smith", "Digital Marketing Specialist"], ["DB", "David Brown", "Tech Innovator"], ["ER", "Emily Roberts", "Business Development"]];
-
-function ConnectionsArtwork() {
-  return <><span className={styles.linked}>in</span><div className={styles.contactList}>{people.map(([initials, name, title]) => <div className={styles.person} key={name}><span className={styles.avatar}>{initials}</span><span><strong>{name}</strong><small>{title}</small></span><span className={styles.check}>✓</span></div>)}</div><span className={styles.linkDisc}>↗</span></>;
-}
+// Metrics per client, matched to their stage. Input rates are never shown bare;
+// only the outcomes they produced appear here.
+const KC: Kpi[] = [
+  { target: 12, suffix: "+", label: "meetings booked" },
+  { prefix: "$", target: 500, suffix: "K+", label: "expansion revenue" },
+];
+const BEXA: Kpi[] = [
+  { target: 30, suffix: "+", label: "demos booked" },
+  { prefix: "$", target: 6500, suffix: "/m", label: "ROI" },
+];
+const OEE: Kpi[] = [
+  { target: 40, suffix: "+", label: "meetings booked" },
+  { prefix: "$", target: 240, suffix: "K+", label: "qualified pipeline" },
+];
 
 export default function TechCaseStudies() {
-  return (
-    <section id="results" className={styles.section} aria-labelledby="results-heading">
-      <div className={styles.intro}><p>Outlio / Connected systems</p><h2 id="results-heading">Four moments, two connected surfaces.</h2></div>
-      <div className={styles.compositions}>
-        <div className={styles.pair}>
-          <Bridge />
-          <div className={styles.copy}><h3>Setup your company<br />profile with <span>important information.</span></h3></div>
-          <Stage type={styles.profile} label="Layered company profile cards"><ProfileArtwork /></Stage>
-          <Stage type={styles.icp} label="Layered ideal customer profile cards"><IcpArtwork /></Stage>
-          <div className={`${styles.copy} ${styles.bottom}`}><h3>Create your ideal ICP <span>based on the target criteria.</span></h3></div>
-        </div>
-        <div className={styles.pair}>
-          <Bridge />
-          <div className={styles.copy}><h3>Connect or get email from Outlio <span>to increase the reach.</span></h3></div>
-          <Stage type={styles.integrations} label="Floating integration rows"><IntegrationsArtwork /></Stage>
-          <Stage type={styles.connections} label="Floating prospect list and connection icon"><ConnectionsArtwork /></Stage>
-          <div className={`${styles.copy} ${styles.bottom}`}><h3>Connect your LinkedIn <span>to reach out to new prospects directly.</span></h3></div>
-        </div>
+  const rootRef = useRef<HTMLElement>(null);
+
+  // Slot-machine count-up that steps one modal at a time, once it scrolls in.
+  useEffect(() => {
+    const root = rootRef.current;
+    const comp = root?.querySelector<HTMLElement>("[data-compositions]");
+    if (!root || !comp) return;
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+    const fmt = (v: number, dec: number, prefix: string, suffix: string) =>
+      prefix + Number(v).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + suffix;
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    function roll(el: HTMLElement) {
+      const target = parseFloat(el.dataset.target || "0");
+      const dec = +(el.dataset.dec || 0);
+      const animDec = +(el.dataset.anim || dec);
+      const prefix = el.dataset.prefix || "";
+      const suffix = el.dataset.suffix || "";
+      if (reduce) { el.textContent = fmt(target, dec, prefix, suffix); return; }
+      const dur = 1700 + Math.random() * 400;
+      el.textContent = fmt(0, animDec, prefix, suffix);
+      const start = performance.now();
+      const frame = (now: number) => {
+        const p = Math.min(1, (now - start) / dur);
+        el.textContent = p < 1 ? fmt(target * easeOut(p), animDec, prefix, suffix) : fmt(target, dec, prefix, suffix);
+        if (p < 1) requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    }
+
+    const zones = [...root.querySelectorAll<HTMLElement>("[data-kpi-zone]")];
+    let started = false;
+    let cancelled = false;
+    async function cascade() {
+      if (started) return;
+      started = true;
+      for (const z of zones) {
+        if (cancelled) return;
+        z.querySelectorAll<HTMLElement>("[data-num]").forEach((n, i) => setTimeout(() => roll(n), i * 140));
+        await wait(1600);
+      }
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => entries.forEach((e) => { if (e.isIntersecting) cascade(); }),
+      { threshold: 0.2 },
+    );
+    io.observe(comp);
+
+    // Reveal each question once as it scrolls in. Copy already on screen at
+    // mount is never hidden, so there is no flash and no-JS stays readable.
+    const reveal = new IntersectionObserver(
+      (entries) => entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        const copy = e.target.parentElement;
+        if (copy) copy.dataset.reveal = "in";
+        reveal.unobserve(e.target);
+      }),
+      { rootMargin: "0px 0px -15% 0px" },
+    );
+    if (!reduce) {
+      for (const c of root.querySelectorAll<HTMLElement>("[data-copy]")) {
+        const h3 = c.querySelector("h3");
+        if (!h3 || h3.getBoundingClientRect().top < window.innerHeight) continue;
+        c.dataset.reveal = "pending";
+        reveal.observe(h3);
+      }
+    }
+    return () => { cancelled = true; io.disconnect(); reveal.disconnect(); };
+  }, []);
+
+  return <section ref={rootRef} id="results" className={styles.section} aria-labelledby="results-heading">
+    <div className={styles.intro}><h2 id="results-heading">Four moments, two connected surfaces.</h2></div>
+    <div className={styles.compositions} data-compositions>
+      <div className={styles.pair}><Surface />
+        <div className={`${styles.copy} ${styles.tl}`} data-copy><h3>Are you an enterprise struggling to secure <span>projected annual ARR?</span></h3></div>
+        <Zone brand="knowledgecity" name="KnowledgeCity" place="tr" kpis={KC} />
+        <Zone brand="mentor" name="Mentor Global" place="bl" />
+        <div className={`${styles.copy} ${styles.br}`} data-copy><h3>Closed your Series A, but need sales to support <span>your valuation?</span></h3></div>
       </div>
-    </section>
-  );
+      <div className={styles.pair}><Surface />
+        <div className={`${styles.copy} ${styles.tl}`} data-copy><h3>Launching at pre-seed and looking for signups <span>within weeks?</span></h3></div>
+        <Zone brand="hirebexa" name="Hirebexa.ai" place="tr" kpis={BEXA} />
+        <Zone brand="oee" name="EE intellisuite" place="bl" kpis={OEE} />
+        <div className={`${styles.copy} ${styles.br}`} data-copy><h3>Not enough inbound traction to balance <span>outbound revenue?</span></h3></div>
+      </div>
+    </div>
+  </section>;
 }

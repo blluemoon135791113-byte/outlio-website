@@ -1,13 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import TechIndustryCard from "./TechIndustryCard";
 import { useEffect, useRef, useState } from "react";
 import styles from "./UseModes.module.css";
 
 const MODES = ["Tech / SaaS", "Creative Agencies", "Enterprise"] as const;
 type Mode = (typeof MODES)[number];
 
-const DEFAULT_MODE: Mode = "Creative Agencies";
+const DEFAULT_MODE: Mode = "Tech / SaaS";
 // Modes with real content today. Others fall back to the default view + a hint.
 const BUILT: Partial<Record<Mode, boolean>> = { "Creative Agencies": true, "Tech / SaaS": true };
 
@@ -45,14 +46,7 @@ export default function UseModes() {
   const activeMode: Mode = BUILT[mode] ? mode : DEFAULT_MODE;
   const comingSoon = !BUILT[mode];
 
-  return (
-    <section
-      className={`${styles.section} ${activeMode === "Tech / SaaS" ? styles.bgTech : styles.bgAgency}`}
-      aria-label="Outlio use modes"
-    >
-      <div className={styles.grid}>
-        {/* LEFT */}
-        <div className={styles.left}>
+  const selector = (
           <div className={styles.selector} ref={selectorRef}>
             <span className={styles.slabel}>Outlio For</span>
             <div className={styles.triggerWrap}>
@@ -110,6 +104,23 @@ export default function UseModes() {
               )}
             </div>
           </div>
+  );
+  if (["Tech / SaaS"].includes(activeMode)) return (
+    <section id="industries" className={`${styles.section} ${styles.bgTech}`} aria-label="Outlio use modes">
+      <div style={{maxWidth:"1106px",margin:"0 auto 24px"}}>{selector}</div>
+      <TechIndustryCard />
+    </section>
+  );
+
+  return (
+    <section
+      className={`${styles.section} ${activeMode === "Tech / SaaS" ? styles.bgTech : styles.bgAgency}`}
+      aria-label="Outlio use modes"
+    >
+      <div className={styles.grid}>
+        {/* LEFT */}
+        <div className={styles.left}>
+          {selector}
 
           {activeMode === "Tech / SaaS" ? (
             <>

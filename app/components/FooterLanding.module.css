@@ -1,4 +1,5 @@
 .footer {
+  margin-top: -0.25rem;
   --footer-ink: #30271d;
   --footer-muted: #665749;
   --footer-rule: #c5b69f;

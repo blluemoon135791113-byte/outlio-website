@@ -72,6 +72,16 @@ const eslintConfig = defineConfig([
     // `.cjs` preview script using `require` is correct for what it is.
     ".codex-previews/**",
     ".codex/**",
+
+    // ⚠️ STATIC BROWSER ASSETS, SERVED AS-IS — AND THEY FAILED `verify`.
+    //
+    // `public/visuals/**` holds self-contained WebGL visuals loaded inside an
+    // isolated iframe: minified three.js (`vendor/three.core.min.js` alone
+    // raised 19 errors such as no-this-alias), the GameShell scene script, and
+    // its one-off mesh-extraction scripts (`prepare-keys.cjs` uses require()).
+    // None of it is compiled or imported by the app, so app lint rules do not
+    // describe it; vendored libraries are never edited to satisfy them.
+    "public/visuals/**",
   ]),
 ]);
 

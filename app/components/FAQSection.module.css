@@ -1,10 +1,12 @@
 .section {
   scroll-margin-top: 6rem;
-  background-color: #f4ecde;
-  background-image: url("/hero/hero-sand-texture.png");
-  background-position: center top;
-  background-size: 100% auto;
-  background-repeat: repeat-y;
+  /* Top edge starts as the pricing section's plain grey (matching its
+     masked-out bottom) and warps down into this sand-ivory — no seam. */
+  margin-top: -0.25rem;
+  background:
+    linear-gradient(to bottom, #f0eff2 0, rgba(240, 239, 242, 0) 8rem) top / 100% auto no-repeat,
+    url("/hero/hero-sand-texture.png") center top / 100% auto repeat-y,
+    #f4ecde;
   color: #363938;
   font-family: var(--font-manrope), Arial, sans-serif;
 }
