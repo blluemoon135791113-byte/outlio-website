@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {toCreasedNormals, mergeGeometries, mergeVertices} from './vendor/BufferGeometryUtils.js';
+import {toCreasedNormals, mergeGeometries} from './vendor/BufferGeometryUtils.js';
 
 // A geometric reconstruction of the supplied exploded handheld photograph.
 // Parts share one assembly axis; interrupted hover transitions keep their velocity.
@@ -8,6 +8,13 @@ const panel = host.closest('.panel');
 const status = panel.querySelector('.assembly-status');
 const hint = panel.querySelector('.assembly-hint');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+// Build in short slices, handing the main thread back to the page between them;
+// this document shares a thread with the landing page, so one long build froze scrolling.
+const yieldToPage=()=>new Promise(resolve=>setTimeout(resolve,0));
+// Start the key-mesh downloads now so they arrive while the casing is being built.
+const keyData=Object.fromEntries(['dpad','button-a','button-b','button-x','button-y'].map(name=>[name,
+  fetch(new URL('./gameshell-assets/'+name+'.bin',import.meta.url)).then(r=>{if(!r.ok)throw Error('Key geometry failed: '+name);return r.arrayBuffer();})]));
+for(const pending of Object.values(keyData))pending.catch(()=>{}); // surfaced when awaited below
 let renderer;
 try {
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
@@ -54,6 +61,7 @@ scene.environment = environment.texture;
 scene.environmentIntensity = 1.0;
 room.traverse(o=>{if(o.isMesh){o.geometry.dispose();o.material.dispose();}});
 pmrem.dispose();
+await yieldToPage();
 scene.add(new THREE.HemisphereLight(0xf6f6f3, 0x474743, .65));
 const key = new THREE.DirectionalLight(0xfffdf9, 1.8);
 key.position.set(-4, 8, 10);
@@ -161,6 +169,7 @@ function wire(parent,coords,mat=copper,radius=.009) {
 }
 
 // Eight independently assembled modules, following the supplied GameShell image.
+await yieldToPage();
 const face=assemblyPart('Front shell',[0,0,.43],[-.38,.42,3.65]);
 const shape=rounded(3.02,5.05,.22);
 shape.holes.push(rounded(2.40,1.98,.065,0,1.24,true));
@@ -194,6 +203,7 @@ function casePosts(parent,w,h,z){for(const x of [-w/2+.10,w/2-.10])for(const y o
 function casing(parent,w,h,depth=.20){plate(w,h,.09,.032,glass,parent,0,0,-depth/2);caseRim(parent,w,h,.09,0,glass,depth);casePosts(parent,w,h,depth/2-.03)}
 function outlineLine(parent,w,h,r,z,mat=bright){const a=rounded(w,h,r);a.holes.push(rounded(w-.024,h-.024,r-.008,0,0,true));solid(a,.009,mat,parent,z,.002)}
 
+await yieldToPage();
 const display=assemblyPart('LCD module',[0,1.24,.225],[-.16,.20,1.98]);
 casing(display,2.64,2.18,.17);
 plate(2.54,2.08,.04,.065,edge,display,0,0,.01);
@@ -221,7 +231,7 @@ function stopBlink(){clearTimeout(bootTimer);bootTimer=0;}
 function updateBoot(now){
   if(assembled!==1||target!==1){
     stopBlink();bootScreen.visible=screenName.visible=false;bootStarted=-1;
-    host.dataset.screenState='off';return;
+    if(host.dataset.screenState!=='off')host.dataset.screenState='off';return;
   }
   if(bootStarted<0)bootStarted=now;
   const elapsed=now-bootStarted,phase=elapsed%5000;
@@ -231,7 +241,8 @@ function updateBoot(now){
     const delay=dropout?110-phase:5000-phase;
     bootTimer=setTimeout(()=>{bootTimer=0;wake();},Math.max(1,delay+1));
   }
-  host.dataset.screenState=dropout?'logo-off':'ready';
+  const screenState=dropout?'logo-off':'ready';
+  if(host.dataset.screenState!==screenState)host.dataset.screenState=screenState;
 }
 
 outlineLine(display,2.52,2.055,.04,.06,bright);
@@ -240,6 +251,7 @@ box(.20,.075,.12,edge,display,1.32,-.70,0);
 box(.42,.39,.013,copper,display,.5,-1.16,-.045);
 for(let i=0;i<11;i++)box(.009,.35,.004,edge,display,.33+i*.03,-1.16,-.033);
 
+await yieldToPage();
 const mainboard=assemblyPart('Mainboard enclosure',[0,.52,-.09],[.10,.15,.17]);
 casing(mainboard,2.64,1.83,.23);
 const internalMetal=alloy.clone();internalMetal.color.set(0x9b8c75);internalMetal.roughness=.25;
@@ -255,6 +267,7 @@ const maker=rounded(1.54,.32,.13,0,-.16);maker.holes.push(rounded(1.48,.265,.11,
 label(mainboard,'CLOCKWORK',0,-.16,.151,1.37,.22,'#777c78','600 60px Arial');
 for(const x of [-1.20,1.20])box(.028,1.41,.045,bright,mainboard,x,0,.14);
 
+await yieldToPage();
 const controls=assemblyPart('Keypad module',[0,-.67,.22],[-.10,-.22,1.84]);
 casing(controls,2.68,1.88,.20);
 plate(2.43,1.62,.055,.024,pcbMat,controls,0,0,-.08);
@@ -263,8 +276,8 @@ disc(.49,.035,rubber,controls,-.76,0,.045);
 for(const [x,y] of buttons)disc(.19,.03,rubber,controls,x,y+.67,.05);
 // Original ClockworkPi geometry, extracted from their GPL-3.0 STL. No sprue.
 async function originalKey(name,x,y,z){
-  const response=await fetch(new URL('./gameshell-assets/'+name+'.bin',import.meta.url));if(!response.ok)throw Error('Key geometry failed: '+name);
-  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(await response.arrayBuffer()),3));geometry.computeVertexNormals();geometry.scale(100,100,100);toCreasedNormals(geometry,Math.PI/4);geometry.scale(.01,.01,.01);
+  const buffer=await keyData[name];await yieldToPage();
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(buffer),3));geometry.computeVertexNormals();geometry.scale(100,100,100);toCreasedNormals(geometry,Math.PI/4);geometry.scale(.01,.01,.01);
   const mesh=new THREE.Mesh(geometry,black);mesh.position.set(x,y,z);if(name!=='dpad')mesh.rotation.z=Math.PI*1.5;mesh.castShadow=true;mesh.receiveShadow=true;controls.add(mesh);
 }
 await Promise.all([originalKey('dpad',-.76,0,.070),...buttons.map(([x,y,char])=>originalKey(({X:'button-a',A:'button-y',Y:'button-b',B:'button-x'})[char],x,y+.67,.165))]);
@@ -272,6 +285,7 @@ for(const [x,y] of smallKeys){plate(.26,.12,.055,.13,black,controls,x,y+.67,.245
 label(controls,'GAME',.13,.32,.13,.49,.12,'#959b96','600 48px Arial');
 for(const x of [-1.24,1.24])for(const y of [-.81,.81])disc(.055,.25,glass,controls,x,y,.01);
 
+await yieldToPage();
 const battery=assemblyPart('Battery module',[0,-1.02,-.08],[.10,-.13,-.30]);
 casing(battery,2.63,1.69,.28);
 plate(2.31,1.34,.08,.18,internalMetal,battery,0,0,-.01);
@@ -282,11 +296,13 @@ label(battery,'3.7V   1200mAh',0,-.20,.112,1.14,.09,'#656d67','400 42px Arial');
 wire(battery,[[1.10,.55,.05],[1.18,.64,.09],[1.12,.86,.02]],black,.018);
 box(.17,.11,.08,bright,battery,1.13,.72,.045);
 
+await yieldToPage();
 const io=assemblyPart('Speaker module',[0,-2.05,-.03],[.025,-.36,.86]);
 casing(io,2.55,.43,.15);plate(2.31,.29,.025,.035,pcbMat,io,0,0,-.025);
 for(let i=0;i<2;i++){plate(.77,.19,.022,.045,black,io,-.60+i*1.02,0,.02);for(let j=0;j<8;j++)box(.01,.12,.02,bright,io,-.91+i*1.02+j*.09,0,.05)}
 for(let i=0;i<6;i++)box(.07,.05,.02,bright,io,-.99+i*.38,.13,.015);
 
+await yieldToPage();
 const rear=assemblyPart('Rear casing',[0,0,-.14],[.35,-.38,-1.86]);
 plate(3.02,5.05,.22,.038,smoke,rear,0,0,-.18);
 caseRim(rear,3.02,5.05,.22,0,smoke,.39);
@@ -302,6 +318,7 @@ label(rear,'CLOCKWORK',0,.36,-.145,1.42,.19,'#5c635e','600 62px Arial');
 plate(.29,.08,.026,.06,glass,rear,0,-2.19,-.13);
 box(.22,.09,.12,edge,rear,1.44,1.75,.015);
 
+await yieldToPage();
 const cap=assemblyPart('Case lock',[1.53,1.71,.20],[.57,1.06,-1.465]);
 const capRing=new THREE.Shape();capRing.absarc(0,0,.18,0,Math.PI*2);capRing.holes.push(circleHole(0,0,.10));solid(capRing,.115,black,cap,0,.007);
 for(let i=0;i<22;i++){const a=i*Math.PI/11;const tooth=box(.022,.046,.12,black,cap,Math.cos(a)*.181,Math.sin(a)*.181,0);tooth.rotation.z=a;}
@@ -310,6 +327,7 @@ box(.23,.063,.047,bright,cap,0,0,.065);box(.14,.019,.011,black,cap,0,0,.096);
 // Batch stationary opaque details within each moving module. Shapes and normals
 // remain unchanged; each shared material now costs one draw call per module.
 for(const part of parts){
+  await yieldToPage();
   const batches=new Map();
   for(const child of [...part.children]){
     if(!child.isMesh||Array.isArray(child.material)||child.material.transparent)continue;
@@ -325,8 +343,10 @@ for(const part of parts){
       if(!g.attributes.uv)g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(g.attributes.position.count*2),2));
       g.applyMatrix4(mesh.matrix);return g;
     });
-    const raw=mergeGeometries(geometries,false),geometry=mergeVertices(raw,1e-6);
-    raw.dispose();geometries.forEach(g=>g.dispose());
+    // Non-indexed merge: re-welding ~300k identical vertices only changed indexing,
+    // never shading, and was the longest single freeze while the card loaded.
+    const geometry=mergeGeometries(geometries,false);
+    geometries.forEach(g=>g.dispose());
     const combined=new THREE.Mesh(geometry,material);combined.castShadow=true;combined.receiveShadow=true;part.add(combined);
     for(const mesh of meshes){part.remove(mesh);mesh.geometry.dispose();}
   }
@@ -344,12 +364,30 @@ function setTarget() {
   panel.setAttribute('aria-pressed',String(Boolean(target)));
   status.textContent=target?'ASSEMBLING':'EXPLODED VIEW';
   hint.textContent=target?'Move away to separate':'Hover to Assemble';
+  if(!target)pointerX=pointerY=0;
   if(reduced.matches){assembled=target;velocity=0;}
   wake();
 }
 panel.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'){hovered=true;setTarget();}});
 panel.addEventListener('pointerleave',()=>{hovered=false;pointerX=pointerY=0;setTarget();});
-// Hover controls assembly; pointer movement does not continuously rerender the product.
+// Restored pointer tilt (same range and damping as the original study), now gated:
+// only once fully assembled, and only while the cursor is over the console itself.
+// Elsewhere in the panel it eases back to rest, and an idle pointer renders nothing.
+panel.addEventListener('pointermove',e=>{
+  if(e.pointerType!=='mouse')return;
+  let x=0,y=0;
+  if(assembled===1&&hostRect){
+    // Cached rect (refreshed on resize): no layout read per mouse event.
+    const r=hostRect;
+    const cx=camera.left+(e.clientX-r.left)/r.width*(camera.right-camera.left);
+    const cy=camera.top-(e.clientY-r.top)/r.height*(camera.top-camera.bottom);
+    if(cx>=onMinX&&cx<=onMaxX&&cy>=onMinY&&cy<=onMaxY){
+      x=((cx-onMinX)/(onMaxX-onMinX)-.5)*.05;
+      y=(.5-(cy-onMinY)/(onMaxY-onMinY))*.035;
+    }
+  }
+  if(x!==pointerX||y!==pointerY){pointerX=x;pointerY=y;wake();}
+});
 panel.addEventListener('focus',()=>{focused=true;setTarget();});
 panel.addEventListener('blur',()=>{focused=false;pinned=false;setTarget();});
 panel.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse'){pinned=!pinned;focused=false;setTarget();}});
@@ -377,8 +415,11 @@ pose();
 device.updateMatrixWorld(true);
 camera.updateMatrixWorld(true);
 let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+// The assembled console's own footprint, for the hover-tilt hit area.
+let onMinX=Infinity,onMaxX=-Infinity,onMinY=Infinity,onMaxY=-Infinity;
 const vertex=new THREE.Vector3();
 for(const fitState of [0,1]){
+await yieldToPage();
 assembled=fitState;pose();device.updateMatrixWorld(true);
 device.traverse(mesh=>{
   if(!mesh.isMesh)return;
@@ -387,6 +428,7 @@ device.traverse(mesh=>{
     vertex.fromBufferAttribute(positions,i).applyMatrix4(mesh.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
     minX=Math.min(minX,vertex.x);maxX=Math.max(maxX,vertex.x);
     minY=Math.min(minY,vertex.y);maxY=Math.max(maxY,vertex.y);
+    if(fitState===1){onMinX=Math.min(onMinX,vertex.x);onMaxX=Math.max(onMaxX,vertex.x);onMinY=Math.min(onMinY,vertex.y);onMaxY=Math.max(onMaxY,vertex.y);}
   }
 });
 }
@@ -409,24 +451,34 @@ const contactShadow=new THREE.Sprite(contactMaterial);
 contactShadow.position.set(centerX+.28,minY+.16,-24).applyMatrix4(camera.matrixWorld);
 contactShadow.scale.set((maxX-minX)*.62,(maxY-minY)*.14,1);scene.add(contactShadow);
 
-let lastWidth=0,lastHeight=0,lastPixelRatio=0;
+// Resting frames keep the supersampled finish. Frames in motion (assembling,
+// tilting) render at the display's own density, which is the bulk of the GPU
+// cost; the first still frame after motion restores full quality.
+let hostRect=null,restRatio=2,motionRatio=1,activeRatio=0,moving=false;
+function applyRatio(ratio) {
+  if(ratio===activeRatio||!hostRect)return;
+  activeRatio=ratio;renderer.setPixelRatio(ratio);renderer.setSize(hostRect.width,hostRect.height,false);
+}
 function resize() {
-  const {width,height}=host.getBoundingClientRect();if(!width||!height)return;
-  const pixelRatio=Math.min(Math.max(devicePixelRatio,2),2.5,Math.sqrt(2000000/(width*height)));
-  if(width===lastWidth&&height===lastHeight&&pixelRatio===lastPixelRatio)return;
-  lastWidth=width;lastHeight=height;lastPixelRatio=pixelRatio;
-  renderer.setPixelRatio(pixelRatio);
-  renderer.setSize(width,height,false);
-  const aspect=width/height,half=Math.max((maxY-minY)*.5,(maxX-minX)*.5/aspect)*1.10;
-  camera.left=centerX-half*aspect;camera.right=centerX+half*aspect;
-  camera.top=centerY+half;camera.bottom=centerY-half;camera.updateProjectionMatrix();wake();
+  const rect=host.getBoundingClientRect();if(!rect.width||!rect.height)return;
+  const {width,height}=rect,sizeChanged=!hostRect||width!==hostRect.width||height!==hostRect.height;
+  hostRect=rect;
+  restRatio=Math.min(Math.max(devicePixelRatio,2),2.5,Math.sqrt(2000000/(width*height)));
+  motionRatio=Math.min(Math.max(devicePixelRatio,1),restRatio);
+  if(sizeChanged){
+    activeRatio=0;
+    const aspect=width/height,half=Math.max((maxY-minY)*.5,(maxX-minX)*.5/aspect)*1.10;
+    camera.left=centerX-half*aspect;camera.right=centerX+half*aspect;
+    camera.top=centerY+half;camera.bottom=centerY-half;camera.updateProjectionMatrix();
+  }
+  applyRatio(moving?motionRatio:restRatio);wake();
 }
 new ResizeObserver(resize).observe(host);
 window.addEventListener('resize',resize,{passive:true});
 new IntersectionObserver(es=>{visible=es[0].isIntersecting;if(visible)wake();else{stopBlink();cancelAnimationFrame(frame);frame=0;}},{rootMargin:'0px'}).observe(panel);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)wake();else{stopBlink();cancelAnimationFrame(frame);frame=0;}});
 function wake(){if(!frame&&visible&&!document.hidden)frame=requestAnimationFrame(render);}
-let lastShadowPose="";
+let lastShadowPose="",shadowTilt="0,0",lastState="";
 function render(now){
   frame=0;if(!visible||document.hidden)return;const dt=Math.min((now-previous)/1000||.016,.05);previous=now;
   if(!reduced.matches){
@@ -440,18 +492,27 @@ function render(now){
   device.rotation.y=THREE.MathUtils.damp(device.rotation.y,reduced.matches?0:pointerX,6,dt);
   device.rotation.z=homeRotation.z;
   updateBoot(now);
+  const assembling=Math.abs(assembled-target)>.00001;
+  const tilting=Math.abs(device.rotation.x-(reduced.matches?0:pointerY))>.0001||Math.abs(device.rotation.y-(reduced.matches?0:pointerX))>.0001;
+  moving=assembling||tilting;
+  applyRatio(moving?motionRatio:restRatio);
   // Screen blinking does not change lighting: reuse the full-quality shadow map.
-  const shadowPose=[assembled,device.rotation.x,device.rotation.y].join(',');
+  // The tilt is only a degree or two, so its shadow refreshes once it settles
+  // rather than re-rendering the shadow pass on every pointer frame.
+  if(!tilting)shadowTilt=device.rotation.x.toFixed(4)+','+device.rotation.y.toFixed(4);
+  const shadowPose=assembled+','+shadowTilt;
   if(shadowPose!==lastShadowPose){renderer.shadowMap.needsUpdate=true;lastShadowPose=shadowPose;}
   renderer.render(scene,camera);
-  host.dataset.renderFrames=String(+(host.dataset.renderFrames||0)+1);
-  host.dataset.motionDelta=String(Math.abs(assembled-target)+Math.abs(device.rotation.x-(reduced.matches?0:pointerY))+Math.abs(device.rotation.y-(reduced.matches?0:pointerX)));
-  host.dataset.drawCalls=renderer.info.render.calls;host.dataset.triangles=renderer.info.render.triangles;
-  host.dataset.state=assembled===1?'assembled':assembled===0?'exploded':'transitioning';
+  // DOM writes only on change: per-frame attribute writes forced style recalcs.
+  const state=assembled===1?'assembled':assembled===0?'exploded':'transitioning';
+  if(state!==lastState){host.dataset.state=lastState=state;}
   const statusText=assembled===1?'ASSEMBLED':assembled===0?'EXPLODED VIEW':'ASSEMBLY / '+Math.round(assembled*100)+'%';
   if(status.textContent!==statusText)status.textContent=statusText;
-  if(Math.abs(assembled-target)>.00001||Math.abs(device.rotation.x-(reduced.matches?0:pointerY))>.0001||Math.abs(device.rotation.y-(reduced.matches?0:pointerX))>.0001)wake();
+  if(moving)wake();
 }
+// Compile every shader before the first frame (in parallel where the driver
+// allows it), so the card's first paint no longer freezes the page.
+await renderer.compileAsync(scene,camera);
 resize();
 host.classList.add('ready');
 panel.dataset.engine='three';
