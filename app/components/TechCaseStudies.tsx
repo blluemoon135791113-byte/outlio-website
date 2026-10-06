@@ -148,23 +148,43 @@ export default function TechCaseStudies() {
       { threshold: 0.2 },
     );
     io.observe(comp);
-    return () => { cancelled = true; io.disconnect(); };
+
+    // Reveal each question once as it scrolls in. Copy already on screen at
+    // mount is never hidden, so there is no flash and no-JS stays readable.
+    const reveal = new IntersectionObserver(
+      (entries) => entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        const copy = e.target.parentElement;
+        if (copy) copy.dataset.reveal = "in";
+        reveal.unobserve(e.target);
+      }),
+      { rootMargin: "0px 0px -15% 0px" },
+    );
+    if (!reduce) {
+      for (const c of root.querySelectorAll<HTMLElement>("[data-copy]")) {
+        const h3 = c.querySelector("h3");
+        if (!h3 || h3.getBoundingClientRect().top < window.innerHeight) continue;
+        c.dataset.reveal = "pending";
+        reveal.observe(h3);
+      }
+    }
+    return () => { cancelled = true; io.disconnect(); reveal.disconnect(); };
   }, []);
 
   return <section ref={rootRef} id="results" className={styles.section} aria-labelledby="results-heading">
     <div className={styles.intro}><h2 id="results-heading">Four moments, two connected surfaces.</h2></div>
     <div className={styles.compositions} data-compositions>
       <div className={styles.pair}><Surface />
-        <div className={`${styles.copy} ${styles.tl}`}><h3>Are you an enterprise struggling to secure <span>projected annual ARR?</span></h3></div>
+        <div className={`${styles.copy} ${styles.tl}`} data-copy><h3>Are you an enterprise struggling to secure <span>projected annual ARR?</span></h3></div>
         <Zone brand="knowledgecity" name="KnowledgeCity" place="tr" kpis={KC} />
         <Zone brand="mentor" name="Mentor Global" place="bl" />
-        <div className={`${styles.copy} ${styles.br}`}><h3>Closed your Series A, but need sales to support <span>your valuation?</span></h3></div>
+        <div className={`${styles.copy} ${styles.br}`} data-copy><h3>Closed your Series A, but need sales to support <span>your valuation?</span></h3></div>
       </div>
       <div className={styles.pair}><Surface />
-        <div className={`${styles.copy} ${styles.tl}`}><h3>Launching at pre-seed and looking for signups <span>within weeks?</span></h3></div>
+        <div className={`${styles.copy} ${styles.tl}`} data-copy><h3>Launching at pre-seed and looking for signups <span>within weeks?</span></h3></div>
         <Zone brand="hirebexa" name="Hirebexa.ai" place="tr" kpis={BEXA} />
         <Zone brand="oee" name="EE intellisuite" place="bl" kpis={OEE} />
-        <div className={`${styles.copy} ${styles.br}`}><h3>Not enough inbound traction to balance <span>outbound revenue?</span></h3></div>
+        <div className={`${styles.copy} ${styles.br}`} data-copy><h3>Not enough inbound traction to balance <span>outbound revenue?</span></h3></div>
       </div>
     </div>
   </section>;

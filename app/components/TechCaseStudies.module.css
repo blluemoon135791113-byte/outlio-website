@@ -18,8 +18,19 @@
 .copy { position:absolute; z-index:1; display:flex; align-items:center; padding:clamp(1rem,2.2vw,2.25rem); }
 .tl { left:0; top:0; width:45.7%; height:53%; }
 .br { left:54.3%; top:46.7%; right:0; bottom:0; padding-left:clamp(1rem,2.7vw,2.7rem); }
-.copy h3 { margin:0; color:var(--ink); font-size:clamp(1.5rem,2.25vw,2.8rem); font-weight:400; letter-spacing:-.065em; line-height:1.12; text-wrap:balance; }
-.copy h3 span { color:#5c8066; }
+/* Sharper reading: a touch more weight and looser tracking so letters stop
+   touching; the accent keeps its green hue (~135deg) at higher saturation for
+   punch and contrast (#3a7b4b ~3.4:1 on the field vs 2.8:1 before). */
+.copy h3 { margin:0; color:var(--ink); font-size:clamp(1.5rem,2.25vw,2.8rem); font-weight:480; letter-spacing:-.045em; line-height:1.12; text-wrap:balance; font-kerning:normal; text-rendering:optimizeLegibility; -webkit-font-smoothing:antialiased; }
+.copy h3 span { color:#3a7b4b; font-weight:520; }
+
+/* One-time reveal as each question scrolls in: it rises, then its accent
+   warms from ink to green. Only armed by JS for copy still below the fold. */
+.copy[data-reveal] h3 { transition:opacity 500ms cubic-bezier(.16,1,.3,1) var(--d,0ms), transform 600ms cubic-bezier(.16,1,.3,1) var(--d,0ms); }
+.copy[data-reveal] h3 span { transition:color 600ms ease-out calc(var(--d,0ms) + 320ms); }
+.copy[data-reveal="pending"] h3 { opacity:0; transform:translateY(.4em); }
+.copy[data-reveal="pending"] h3 span { color:var(--ink); }
+.br { --d:120ms; }
 
 .zone { position:absolute; z-index:1; display:grid; place-items:center; container-type:inline-size;
   /* logo unit scales with the lobe itself, not the viewport */
@@ -57,4 +68,4 @@
 @media(max-width:850px) { .compositions { grid-template-columns:1fr; max-width:42rem; gap:3rem; } .pair { height:calc(2 * max(18rem, 43vw) + .75rem); } .copy h3 { font-size:clamp(1.6rem,4vw,2.5rem); } }
 @media(max-width:490px) { .section { padding-inline:.65rem; } .intro { padding-inline:.35rem; } .pair { height:calc(2 * max(15rem, 65vw) + .25rem); } .copy { padding:.5rem; } .br { padding-left:.75rem; } .copy h3 { font-size:clamp(1.1rem,5vw,1.55rem); } .kpis { bottom:7%; gap:.6rem; } .num { font-size:clamp(1.2rem,5vw,1.6rem); } }
 @media(hover:none) { .learnMore { width:124px; } .linkIcon svg { transform:none; } .learnLabel { opacity:1; transform:none; } }
-@media(prefers-reduced-motion:reduce) { .logoPosition,.learnMore,.linkIcon svg,.learnLabel { transition:none; } }
+@media(prefers-reduced-motion:reduce) { .copy h3,.copy h3 span { transition:none !important; } .logoPosition,.learnMore,.linkIcon svg,.learnLabel { transition:none; } }
