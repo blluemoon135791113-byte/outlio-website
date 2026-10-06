@@ -23,6 +23,8 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = .86;
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 host.append(renderer.domElement);
 renderer.domElement.setAttribute('aria-hidden', 'true');
@@ -82,18 +84,18 @@ function grainTexture() {
   return t;
 }
 const micrograin = grainTexture();
-const alloy = new THREE.MeshPhysicalMaterial({ color: 0xaaa9a5, metalness: .72, roughness: .38, clearcoat: .16, clearcoatRoughness:.3, envMapIntensity:.72, bumpMap:micrograin, bumpScale:.003 });
-const edge = new THREE.MeshStandardMaterial({ color: 0x686865, metalness: .94, roughness: .22 });
-const bright = new THREE.MeshStandardMaterial({ color: 0xbcbcb8, metalness: .9, roughness: .26 });
-const black = new THREE.MeshPhysicalMaterial({ color: 0x141413, metalness: 0, roughness: .48, envMapIntensity:.25, clearcoat: .08, clearcoatRoughness:.32, bumpMap:micrograin, bumpScale:.0015 });
-const rubber = new THREE.MeshStandardMaterial({ color: 0x242423, roughness: .94, bumpMap:micrograin, bumpScale:.004 });
+const alloy = new THREE.MeshPhysicalMaterial({ color: 0xc4b69e, metalness: .72, roughness: .38, clearcoat: .16, clearcoatRoughness:.3, envMapIntensity:.72, bumpMap:micrograin, bumpScale:.003 });
+const edge = new THREE.MeshStandardMaterial({ color: 0x817462, metalness: .94, roughness: .22 });
+const bright = new THREE.MeshStandardMaterial({ color: 0xdfd3be, metalness: .9, roughness: .26 });
+const black = new THREE.MeshPhysicalMaterial({ color: 0x1d1a16, metalness: 0, roughness: .48, envMapIntensity:.25, clearcoat: .08, clearcoatRoughness:.32, bumpMap:micrograin, bumpScale:.0015 });
+const rubber = new THREE.MeshStandardMaterial({ color: 0x2b2721, roughness: .94, bumpMap:micrograin, bumpScale:.004 });
 // Alpha-blended resin with a clearcoat. Physical `transmission` was dropped: its
 // extra full-scene pass hung the GPU on Windows/ANGLE and the page never painted.
-const glass = new THREE.MeshPhysicalMaterial({ color: 0xc5c5c0, metalness: 0, roughness: .085, transparent: true, opacity: .20, depthWrite: false, clearcoat:.5, clearcoatRoughness:.12, side:THREE.DoubleSide });
-const smoke = new THREE.MeshPhysicalMaterial({ color: 0x858580, metalness: 0, roughness: .12, transparent: true, opacity: .24, depthWrite: false, clearcoat:.35, clearcoatRoughness:.16, side:THREE.DoubleSide });
-const pcbMat = new THREE.MeshPhysicalMaterial({ color: 0x2b2b29, metalness: .12, roughness: .52, clearcoat:.22, bumpMap:micrograin,bumpScale:.002 });
-const copper = new THREE.MeshStandardMaterial({ color: 0xa8aaa5, metalness: .88, roughness: .28 });
-const screenMat = new THREE.MeshStandardMaterial({color:0x181816,metalness:.18,roughness:.42,envMapIntensity:.15});
+const glass = new THREE.MeshPhysicalMaterial({ color: 0xe2d5bd, metalness: 0, roughness: .085, transparent: true, opacity: .20, depthWrite: false, clearcoat:.5, clearcoatRoughness:.12, side:THREE.DoubleSide });
+const smoke = new THREE.MeshPhysicalMaterial({ color: 0xa0927c, metalness: 0, roughness: .12, transparent: true, opacity: .24, depthWrite: false, clearcoat:.35, clearcoatRoughness:.16, side:THREE.DoubleSide });
+const pcbMat = new THREE.MeshPhysicalMaterial({ color: 0x353028, metalness: .12, roughness: .52, clearcoat:.22, bumpMap:micrograin,bumpScale:.002 });
+const copper = new THREE.MeshStandardMaterial({ color: 0xb9a78b, metalness: .88, roughness: .28 });
+const screenMat = new THREE.MeshStandardMaterial({color:0x242019,metalness:.18,roughness:.42,envMapIntensity:.15});
 glass.forceSinglePass = smoke.forceSinglePass = true;
 
 // Fine directional tool marks on the shield; moulded shell and rubber use finer grain.
@@ -197,7 +199,41 @@ casing(display,2.64,2.18,.17);
 plate(2.54,2.08,.04,.065,edge,display,0,0,.01);
 plate(2.41,1.95,.025,.018,rubber,display,0,0,.056);
 plate(2.30,1.82,.022,.018,screenMat,display,0,0,.077);
-label(display,'Outlio',0,0,.103,1.18,.33,'#eceee9','500 64px Arial');
+// A sharp monochrome boot screen: vector-drawn mark, no blur or glow.
+const bootBase=document.createElement('canvas');bootBase.width=1024;bootBase.height=768;
+const bootCtx=bootBase.getContext('2d');bootCtx.fillStyle='#eceee9';
+const cx=512,cy=285,radius=128,gap=5;
+bootCtx.beginPath();bootCtx.arc(cx-gap,cy,radius,Math.PI/2,Math.PI*1.5);bootCtx.closePath();bootCtx.fill();
+bootCtx.beginPath();bootCtx.arc(cx+gap,cy,radius,-Math.PI/2,Math.PI/2);bootCtx.closePath();bootCtx.fill();
+const textBase=document.createElement('canvas');textBase.width=1024;textBase.height=768;
+const textCtx=textBase.getContext('2d');textCtx.fillStyle='#eceee9';textCtx.font='500 112px Arial';textCtx.textAlign='center';textCtx.textBaseline='middle';textCtx.fillText('Outlio',512,525);
+const bootTexture=new THREE.CanvasTexture(bootBase);bootTexture.colorSpace=THREE.SRGBColorSpace;
+bootTexture.anisotropy=renderer.capabilities.getMaxAnisotropy();
+const bootMaterial=new THREE.MeshBasicMaterial({map:bootTexture,transparent:true,depthWrite:false,toneMapped:false});
+const bootScreen=new THREE.Mesh(new THREE.PlaneGeometry(2.05,1.54),bootMaterial);
+bootScreen.position.set(0,0,.103);bootScreen.visible=false;display.add(bootScreen);
+const textTexture=new THREE.CanvasTexture(textBase);textTexture.colorSpace=THREE.SRGBColorSpace;
+textTexture.anisotropy=bootTexture.anisotropy;
+const textMaterial=bootMaterial.clone();textMaterial.map=textTexture;
+const screenName=new THREE.Mesh(bootScreen.geometry,textMaterial);screenName.position.copy(bootScreen.position);screenName.visible=false;display.add(screenName);
+let bootStarted=-1,bootTimer=0;
+function stopBlink(){clearTimeout(bootTimer);bootTimer=0;}
+function updateBoot(now){
+  if(assembled!==1||target!==1){
+    stopBlink();bootScreen.visible=screenName.visible=false;bootStarted=-1;
+    host.dataset.screenState='off';return;
+  }
+  if(bootStarted<0)bootStarted=now;
+  const elapsed=now-bootStarted,phase=elapsed%5000;
+  const dropout=!reduced.matches&&elapsed>=5000&&phase<110;
+  screenName.visible=true;bootScreen.visible=!dropout;
+  if(!reduced.matches&&!bootTimer&&visible&&!document.hidden){
+    const delay=dropout?110-phase:5000-phase;
+    bootTimer=setTimeout(()=>{bootTimer=0;wake();},Math.max(1,delay+1));
+  }
+  host.dataset.screenState=dropout?'logo-off':'ready';
+}
+
 outlineLine(display,2.52,2.055,.04,.06,bright);
 for(const x of [-1.285,1.285])box(.021,1.8,.06,bright,display,x,0,.07);
 box(.20,.075,.12,edge,display,1.32,-.70,0);
@@ -206,7 +242,7 @@ for(let i=0;i<11;i++)box(.009,.35,.004,edge,display,.33+i*.03,-1.16,-.033);
 
 const mainboard=assemblyPart('Mainboard enclosure',[0,.52,-.09],[.10,.15,.17]);
 casing(mainboard,2.64,1.83,.23);
-const internalMetal=alloy.clone();internalMetal.color.set(0x797975);internalMetal.roughness=.25;
+const internalMetal=alloy.clone();internalMetal.color.set(0x9b8c75);internalMetal.roughness=.25;
 plate(2.44,1.61,.065,.027,internalMetal,mainboard,0,0,-.07);
 plate(.79,.59,.03,.07,black,mainboard,-.60,.27,.001);
 plate(.52,.43,.02,.06,black,mainboard,.36,.32,.009);
@@ -295,6 +331,8 @@ for(const part of parts){
     for(const mesh of meshes){part.remove(mesh);mesh.geometry.dispose();}
   }
 }
+// All mesh-local transforms are static; only their parent modules animate.
+device.traverse(node=>{if(node.isMesh){node.updateMatrix();node.matrixAutoUpdate=false;}});
 const progressControl=document.querySelector('#progress'),assembleControl=document.querySelector('#assemble'),explodeControl=document.querySelector('#explode');
 let lastProgress=-1;
 
@@ -305,13 +343,13 @@ function setTarget() {
   target=(pinned||hovered||focused)?1:0;
   panel.setAttribute('aria-pressed',String(Boolean(target)));
   status.textContent=target?'ASSEMBLING':'EXPLODED VIEW';
-  hint.textContent=target?'Move away to separate':'Hover to assemble';
+  hint.textContent=target?'Move away to separate':'Hover to Assemble';
   if(reduced.matches){assembled=target;velocity=0;}
   wake();
 }
 panel.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'){hovered=true;setTarget();}});
 panel.addEventListener('pointerleave',()=>{hovered=false;pointerX=pointerY=0;setTarget();});
-panel.addEventListener('pointermove',e=>{if(e.pointerType!=='mouse')return;const r=panel.getBoundingClientRect();pointerX=((e.clientX-r.left)/r.width-.5)*.05;pointerY=((e.clientY-r.top)/r.height-.5)*.035;wake();});
+// Hover controls assembly; pointer movement does not continuously rerender the product.
 panel.addEventListener('focus',()=>{focused=true;setTarget();});
 panel.addEventListener('blur',()=>{focused=false;pinned=false;setTarget();});
 panel.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse'){pinned=!pinned;focused=false;setTarget();}});
@@ -354,6 +392,23 @@ device.traverse(mesh=>{
 }
 assembled=0;pose();device.updateMatrixWorld(true);
 const centerX=(minX+maxX)/2,centerY=(minY+maxY)/2;
+// Subtle baked ambient shadows anchor the product inside its modal.
+// These two cached textures add no blur pass or additional shadow-map render.
+const shadowCanvas=document.createElement('canvas');shadowCanvas.width=256;shadowCanvas.height=256;
+const shadowCtx=shadowCanvas.getContext('2d');
+const falloff=shadowCtx.createRadialGradient(128,128,8,128,128,124);
+falloff.addColorStop(0,'rgba(64,53,37,.19)');falloff.addColorStop(.42,'rgba(64,53,37,.10)');falloff.addColorStop(1,'rgba(64,53,37,0)');
+shadowCtx.fillStyle=falloff;shadowCtx.fillRect(0,0,256,256);
+const ambientTexture=new THREE.CanvasTexture(shadowCanvas);ambientTexture.colorSpace=THREE.SRGBColorSpace;
+const ambientMaterial=new THREE.SpriteMaterial({map:ambientTexture,transparent:true,depthWrite:false,toneMapped:false});
+const ambientShadow=new THREE.Sprite(ambientMaterial);
+ambientShadow.position.set(centerX+.35,centerY-.40,-25).applyMatrix4(camera.matrixWorld);
+ambientShadow.scale.set((maxX-minX)*1.06,(maxY-minY)*.94,1);scene.add(ambientShadow);
+const contactMaterial=ambientMaterial.clone();contactMaterial.opacity=.65;
+const contactShadow=new THREE.Sprite(contactMaterial);
+contactShadow.position.set(centerX+.28,minY+.16,-24).applyMatrix4(camera.matrixWorld);
+contactShadow.scale.set((maxX-minX)*.62,(maxY-minY)*.14,1);scene.add(contactShadow);
+
 let lastWidth=0,lastHeight=0,lastPixelRatio=0;
 function resize() {
   const {width,height}=host.getBoundingClientRect();if(!width||!height)return;
@@ -368,9 +423,10 @@ function resize() {
 }
 new ResizeObserver(resize).observe(host);
 window.addEventListener('resize',resize,{passive:true});
-new IntersectionObserver(es=>{visible=es[0].isIntersecting;if(visible)wake();},{rootMargin:'120px'}).observe(panel);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)wake();});
+new IntersectionObserver(es=>{visible=es[0].isIntersecting;if(visible)wake();else{stopBlink();cancelAnimationFrame(frame);frame=0;}},{rootMargin:'0px'}).observe(panel);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)wake();else{stopBlink();cancelAnimationFrame(frame);frame=0;}});
 function wake(){if(!frame&&visible&&!document.hidden)frame=requestAnimationFrame(render);}
+let lastShadowPose="";
 function render(now){
   frame=0;if(!visible||document.hidden)return;const dt=Math.min((now-previous)/1000||.016,.05);previous=now;
   if(!reduced.matches){
@@ -383,13 +439,17 @@ function render(now){
   device.rotation.x=THREE.MathUtils.damp(device.rotation.x,reduced.matches?0:pointerY,6,dt);
   device.rotation.y=THREE.MathUtils.damp(device.rotation.y,reduced.matches?0:pointerX,6,dt);
   device.rotation.z=homeRotation.z;
+  updateBoot(now);
+  // Screen blinking does not change lighting: reuse the full-quality shadow map.
+  const shadowPose=[assembled,device.rotation.x,device.rotation.y].join(',');
+  if(shadowPose!==lastShadowPose){renderer.shadowMap.needsUpdate=true;lastShadowPose=shadowPose;}
   renderer.render(scene,camera);
   host.dataset.renderFrames=String(+(host.dataset.renderFrames||0)+1);
   host.dataset.motionDelta=String(Math.abs(assembled-target)+Math.abs(device.rotation.x-(reduced.matches?0:pointerY))+Math.abs(device.rotation.y-(reduced.matches?0:pointerX)));
   host.dataset.drawCalls=renderer.info.render.calls;host.dataset.triangles=renderer.info.render.triangles;
   host.dataset.state=assembled===1?'assembled':assembled===0?'exploded':'transitioning';
-  if(assembled===1)status.textContent='ASSEMBLED';
-  if(assembled===0)status.textContent='EXPLODED VIEW';if(assembled>0&&assembled<1)status.textContent='ASSEMBLY / '+Math.round(assembled*100)+'%';
+  const statusText=assembled===1?'ASSEMBLED':assembled===0?'EXPLODED VIEW':'ASSEMBLY / '+Math.round(assembled*100)+'%';
+  if(status.textContent!==statusText)status.textContent=statusText;
   if(Math.abs(assembled-target)>.00001||Math.abs(device.rotation.x-(reduced.matches?0:pointerY))>.0001||Math.abs(device.rotation.y-(reduced.matches?0:pointerX))>.0001)wake();
 }
 resize();
