@@ -8,11 +8,18 @@ export default function TechIndustryCard() {
   const root = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    // The scene builds on the page's main thread, so start it early and in an
+    // idle slot rather than mid-scroll right as the card arrives.
+    let idle = 0;
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) { setReady(true); observer.disconnect(); }
-    }, {rootMargin: "200px"});
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      const mount = () => setReady(true);
+      if ("requestIdleCallback" in window) idle = window.requestIdleCallback(mount, { timeout: 1200 });
+      else mount();
+    }, {rootMargin: "900px 0px"});
     if (root.current) observer.observe(root.current);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); if (idle) window.cancelIdleCallback(idle); };
   }, []);
   return (
     <div ref={root} className={styles.grid}>
