@@ -348,14 +348,13 @@ describe('BraveSearchProvider', () => {
 })
 
 describe('the search waterfall is ordered by cost', () => {
-  it('goes cached → operator-owned → free-no-card → free-with-card → paid', async () => {
+  it('goes cached → free monthly tiers (largest first) → card-backed → keyless → paid', async () => {
     /*
      * ⚠️ GETTING THIS BACKWARDS SPENDS MONEY WHILE A FREE PROVIDER SITS IDLE.
      *
-     * Brave sits below Google CSE deliberately: its free tier requires a card
-     * on file, which is not free in the way that matters to someone choosing
-     * a provider. Solr is first because reusing Hubble's indexed evidence is
-     * cheaper than a search.
+     * Solr is first because reusing Hubble's indexed evidence is cheaper than
+     * a search. Google CSE and the SearXNG MCP engine were removed 2026-10-12
+     * (see `lib/search/engines.ts`).
      */
     const source = await import('node:fs/promises').then((fs) =>
       fs.readFile('lib/search/engines.ts', 'utf8'),
@@ -363,8 +362,9 @@ describe('the search waterfall is ordered by cost', () => {
 
     const order = [
       'SolrSearchProvider()',
-      'McpWebResearchSearchProvider()',
-      'GoogleCseSearchProvider()',
+      'DiffbotSearchProvider()',
+      'YouComSearchProvider()',
+      'ExaSearchProvider()',
       'BraveSearchProvider()',
       // Keyless and uncapped: exhausted before a metered vendor is billed.
       'MojeekSearchProvider()',
@@ -375,51 +375,6 @@ describe('the search waterfall is ordered by cost', () => {
     for (let i = 1; i < order.length; i += 1) {
       expect(order[i]).toBeGreaterThan(order[i - 1]!)
     }
-  })
-})
-
-describe('GoogleCseSearchProvider', () => {
-  it('needs BOTH a key and an engine id', async () => {
-    /*
-     * ⚠️ A key without a `cx` can only ever return 400s. Counting it as
-     * configured would spend a waterfall slot on a provider guaranteed to
-     * fail, ahead of ones that would have worked.
-     */
-    const { GoogleCseSearchProvider } = await import('@/lib/hubble/providers/search')
-    const prevKey = process.env.GOOGLE_CSE_API_KEY
-    const prevMaps = process.env.GOOGLE_MAPS_API_KEY
-    const prevId = process.env.GOOGLE_CSE_ID
-
-    process.env.GOOGLE_CSE_API_KEY = 'key'
-    delete process.env.GOOGLE_CSE_ID
-    expect(new GoogleCseSearchProvider().isConfigured()).toBe(false)
-
-    process.env.GOOGLE_CSE_ID = 'engine'
-    expect(new GoogleCseSearchProvider().isConfigured()).toBe(true)
-
-    delete process.env.GOOGLE_CSE_API_KEY
-    delete process.env.GOOGLE_MAPS_API_KEY
-    expect(new GoogleCseSearchProvider().isConfigured()).toBe(false)
-
-    if (prevKey) process.env.GOOGLE_CSE_API_KEY = prevKey
-    else delete process.env.GOOGLE_CSE_API_KEY
-    if (prevMaps) process.env.GOOGLE_MAPS_API_KEY = prevMaps
-    if (prevId) process.env.GOOGLE_CSE_ID = prevId
-    else delete process.env.GOOGLE_CSE_ID
-  })
-
-  it('reuses the Maps key when no dedicated key is set', async () => {
-    // Same Google Cloud project; one key can serve both APIs.
-    const { GoogleCseSearchProvider } = await import('@/lib/hubble/providers/search')
-    const prevKey = process.env.GOOGLE_CSE_API_KEY
-    delete process.env.GOOGLE_CSE_API_KEY
-    process.env.GOOGLE_MAPS_API_KEY = 'maps-key'
-    process.env.GOOGLE_CSE_ID = 'engine'
-
-    expect(new GoogleCseSearchProvider().isConfigured()).toBe(true)
-
-    if (prevKey) process.env.GOOGLE_CSE_API_KEY = prevKey
-    delete process.env.GOOGLE_CSE_ID
   })
 })
 

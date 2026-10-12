@@ -269,27 +269,26 @@ describe('search budget', () => {
 
   it('defaults each metered tier to its real published cap', async () => {
     const { budgetFor } = await import('@/lib/search/budget')
-    // 100/day free Custom Search, ~2,000/month Brave.
-    expect(budgetFor('google-cse').perDay).toBe(100)
+    // ~2,000/month Brave.
     expect(budgetFor('brave').perDay).toBe(66)
     expect(budgetFor('tavily').metered).toBe(true)
   })
 
   it('lets an operator override a cap, including to unlimited', async () => {
-    vi.stubEnv('SERP_BUDGET_GOOGLE_CSE', '250')
+    vi.stubEnv('SERP_BUDGET_TAVILY', '250')
     vi.stubEnv('SERP_BUDGET_BRAVE', 'unlimited')
     const { budgetFor } = await import('@/lib/search/budget')
 
-    expect(budgetFor('google-cse').perDay).toBe(250)
+    expect(budgetFor('tavily').perDay).toBe(250)
     expect(budgetFor('brave').perDay).toBeNull()
     vi.unstubAllEnvs()
   })
 
   it('ignores a malformed override rather than disabling the engine', async () => {
-    vi.stubEnv('SERP_BUDGET_GOOGLE_CSE', 'lots')
+    vi.stubEnv('SERP_BUDGET_BRAVE', 'lots')
     const { budgetFor } = await import('@/lib/search/budget')
 
-    expect(budgetFor('google-cse').perDay).toBe(100)
+    expect(budgetFor('brave').perDay).toBe(66)
     vi.unstubAllEnvs()
   })
 })

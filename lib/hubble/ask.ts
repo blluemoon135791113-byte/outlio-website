@@ -255,7 +255,7 @@ export async function askHubble(
 
     /* ---- 2. What we already hold: previously fetched pages for this company. */
     const [pageChunks, typedEvidenceChunks, alreadyFetched] = await Promise.all([
-      loadCachedChunks(userId, subject.companyId),
+      loadCachedChunks(userId, subject.companyId, embedder.model),
       loadResearchEvidenceChunks(userId, subject.leadId, subject.companyId),
       knownUrls(userId, subject.companyId),
     ])
@@ -471,7 +471,7 @@ export async function askHubble(
     /* ---- 5. Retrieve. --------------------------------------------------- */
     const queryEmbedding = vectorsUsable
       ? Date.now() < researchDeadline
-        ? (await embedder.embed([question], { deadlineAt: researchDeadline }))?.[0] ?? null
+        ? (await embedder.embed([question], { deadlineAt: researchDeadline, purpose: 'query' }))?.[0] ?? null
         : null
       : null
 

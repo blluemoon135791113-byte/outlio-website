@@ -122,6 +122,32 @@ describe('every background worker has a trigger', () => {
       definedIn: 'lib/worker/process-job.ts',
       breaks: 'an upload orphaned by a dead after() callback is never processed',
     },
+    /*
+     * ⚠️ THE SAME DEFECT, IN THE RESEARCH QUEUE, FOUND 2026-10-12. Its
+     * untargeted claim (`claim_next_research_run`) had no caller from 0045
+     * on, so 17 automatic enrichments killed by the function limit sat
+     * `pending` for weeks with nothing looking for them.
+     */
+    {
+      name: 'drainResearchQueue',
+      definedIn: 'lib/worker/enrich-free.ts',
+      breaks: 'an enrichment batch cut short is never resumed and most uploads are never enriched',
+    },
+    {
+      name: 'claimNextResearchRun',
+      definedIn: 'lib/intelligence/run.ts',
+      breaks: 'a reaped research run is returned to pending and never claimed again',
+    },
+    {
+      name: 'reapStaleResearchRuns',
+      definedIn: 'lib/intelligence/run.ts',
+      breaks: 'a research run claimed by a dead function stays claimed forever',
+    },
+    {
+      name: 'continueAutoEnrichment',
+      definedIn: 'lib/worker/enrich-free.ts',
+      breaks: 'an upload only queues its first enrichment batch and waits minutes for the cron',
+    },
   ]
 
   for (const worker of WORKERS) {

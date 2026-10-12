@@ -12,9 +12,7 @@ import { describe, expect, it } from 'vitest'
 import { Crawl4AiPageFetcher, crawl4AiConfig } from '@/lib/hubble/fetch/crawl4ai'
 import { isFetchFailure } from '@/lib/hubble/providers/types'
 import { OllamaEmbeddingProvider } from '@/lib/hubble/providers/embedding'
-import { GoogleCseSearchProvider } from '@/lib/hubble/providers/search'
 import { SolrSearchProvider, solrConfig } from '@/lib/hubble/providers/solr'
-import { hasGoogleCseCredentials } from '@/lib/intelligence/providers/google-cse'
 
 const enabled = process.env.RUN_HUBBLE_SERVICES === '1'
 const describeIf = enabled ? describe : describe.skip
@@ -25,17 +23,10 @@ if (!enabled) {
 
 describeIf('Hubble operator services', () => {
   it('has every required endpoint configured', () => {
-    expect(hasGoogleCseCredentials(), 'GOOGLE_CSE_* are missing or unsafe').toBe(true)
     expect(new OllamaEmbeddingProvider().isConfigured(), 'OLLAMA_URL is missing or invalid').toBe(true)
     expect(solrConfig(), 'SOLR_URL/SOLR_COLLECTION are missing or unsafe').not.toBeNull()
     expect(crawl4AiConfig(), 'CRAWL4AI_URL or its required token is missing').not.toBeNull()
   })
-
-  it('gets live SearXNG results', async () => {
-    const results = await new GoogleCseSearchProvider().search('OpenAI official website', 3)
-    expect(results.length, 'SearXNG returned no usable JSON results').toBeGreaterThan(0)
-    expect(results.every((result) => result.url.startsWith('http'))).toBe(true)
-  }, 30_000)
 
   it('generates a real Ollama embedding', async () => {
     const provider = new OllamaEmbeddingProvider()

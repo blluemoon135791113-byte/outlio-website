@@ -139,6 +139,8 @@ export async function saveAnswer(input: {
 export async function loadCachedChunks(
   userId: string,
   companyId: string | null,
+  /** Vectors from any other model are dropped: mixing two spaces corrupts ranking. */
+  embedModel: string | null = null,
   limit = 400,
 ): Promise<Chunk[]> {
   if (!companyId) return []
@@ -147,7 +149,7 @@ export async function loadCachedChunks(
 
   const { data } = await supabase
     .from('hubble_chunks')
-    .select('id, page_id, ordinal, content, embedding, hubble_pages!inner(url, title, expires_at)')
+    .select('id, page_id, ordinal, content, embedding, embed_model, hubble_pages!inner(url, title, expires_at)')
     .eq('user_id', userId)
     .eq('company_id', companyId)
     .limit(limit)
@@ -168,7 +170,8 @@ export async function loadCachedChunks(
       title: page.title,
       ordinal: row.ordinal,
       content: row.content,
-      embedding: Array.isArray(row.embedding) ? (row.embedding as number[]) : null,
+      embedding:
+        Array.isArray(row.embedding) && row.embed_model === embedModel ? (row.embedding as number[]) : null,
     }))
 }
 

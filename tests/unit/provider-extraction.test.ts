@@ -297,7 +297,7 @@ describe('web research — no document, no claim', () => {
   })
 })
 
-describe('SearXNG company profile extraction', () => {
+describe('search-derived company profile extraction', () => {
   it('extracts a sourced SaaS model only from a result about the company', () => {
     const finding = extractBusinessModel(
       { type: 'company', id: 'acme', name: 'Acme Systems', domain: 'acme.test', linkedinUrl: null },

@@ -6,7 +6,7 @@ import 'server-only'
  * ╔══════════════════════════════════════════════════════════════════════════╗
  * ║  EVERY ONE OF THESE IS REPLACEABLE WITHOUT TOUCHING HUBBLE.              ║
  * ║                                                                          ║
- * ║  SearXNG today, something else tomorrow. Ollama when it is installed,    ║
+ * ║  Brave today, something else tomorrow. Ollama when it is installed,      ║
  * ║  a hosted model when it is not. That is the entire reason these are      ║
  * ║  interfaces rather than direct calls: the orchestration in `ask.ts` must ║
  * ║  never learn the name of a vendor.                                       ║
@@ -111,8 +111,14 @@ export interface EmbeddingProvider {
    * installed. Retrieval falls back to lexical scoring, which needs no service
    * at all. Hubble degrades to a worse ranker, never to no answer.
    */
-  embed(texts: readonly string[], options?: DeadlineOptions): Promise<number[][] | null>
+  embed(texts: readonly string[], options?: EmbedOptions): Promise<number[][] | null>
 }
+
+/**
+ * `purpose` lets a provider that distinguishes them embed a question and the
+ * passages it is matched against asymmetrically. Providers that do not, ignore it.
+ */
+export type EmbedOptions = DeadlineOptions & { purpose?: 'query' | 'document' }
 
 /* -------------------------------------------------------------------------- *
  * Budgets

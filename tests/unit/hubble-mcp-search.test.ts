@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  McpWebResearchSearchProvider,
-  webResearchMcpConfig,
-} from '@/lib/hubble/providers/mcp-web-research'
+import { webResearchMcpConfig } from '@/lib/hubble/providers/mcp-web-research'
 
 const previousUrl = process.env.WEB_RESEARCH_MCP_URL
 const previousToken = process.env.WEB_RESEARCH_MCP_TOKEN
@@ -19,7 +16,7 @@ afterEach(() => {
   else process.env.SUPABASE_SERVICE_ROLE_KEY = previousSupabaseServiceKey
 })
 
-describe('McpWebResearchSearchProvider', () => {
+describe('webResearchMcpConfig', () => {
   it('requires HTTPS and auth for a remote endpoint', () => {
     process.env.WEB_RESEARCH_MCP_URL = 'http://research.example.com/mcp'
     process.env.WEB_RESEARCH_MCP_TOKEN = 'secret'
@@ -46,41 +43,6 @@ describe('McpWebResearchSearchProvider', () => {
   it('allows unauthenticated loopback development', () => {
     process.env.WEB_RESEARCH_MCP_URL = 'http://127.0.0.1:8787/mcp'
     delete process.env.WEB_RESEARCH_MCP_TOKEN
-    expect(new McpWebResearchSearchProvider().isConfigured()).toBe(true)
-  })
-
-  it('maps structured MCP search output into Hubble hits', async () => {
-    process.env.WEB_RESEARCH_MCP_URL = 'https://research.example.com/mcp'
-    process.env.WEB_RESEARCH_MCP_TOKEN = 'secret'
-    const caller = vi.fn(async () => ({
-      provider: 'duckduckgo-html',
-      results: [{
-        query: 'Example funding',
-        title: 'Example raises funding',
-        url: 'https://news.example.org/example-funding',
-        snippet: 'Public result snippet',
-        rank: 1,
-      }],
-    }))
-
-    const provider = new McpWebResearchSearchProvider(caller)
-    await expect(provider.search('Example funding', 5)).resolves.toEqual([{
-      url: 'https://news.example.org/example-funding',
-      title: 'Example raises funding',
-      snippet: 'Public result snippet',
-      publishedDate: null,
-    }])
-    expect(caller).toHaveBeenCalledWith(expect.objectContaining({
-      query: 'Example funding',
-      limit: 5,
-      token: 'secret',
-    }))
-  })
-
-  it('degrades to no hits when the MCP is unavailable or malformed', async () => {
-    process.env.WEB_RESEARCH_MCP_URL = 'https://research.example.com/mcp'
-    process.env.WEB_RESEARCH_MCP_TOKEN = 'secret'
-    const broken = new McpWebResearchSearchProvider(async () => ({ results: 'not-an-array' }))
-    await expect(broken.search('Example', 5)).resolves.toEqual([])
+    expect(webResearchMcpConfig()?.url.toString()).toBe('http://127.0.0.1:8787/mcp')
   })
 })

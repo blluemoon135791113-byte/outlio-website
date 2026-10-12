@@ -1,7 +1,7 @@
 import 'server-only'
 
 /**
- * Free, source-backed company classification from the operator's SearXNG.
+ * Free, source-backed company classification from the shared SERP service.
  * This deliberately handles only business model: a snippet must state the
  * classification, and absence remains unknown rather than becoming a guess.
  */
