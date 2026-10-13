@@ -45,6 +45,7 @@ import {
   RESEARCH_FIELD_SPEC,
   type CompanyEntity,
   type EvidenceRecord,
+  type NormalizedEvidence,
   type PersonEntity,
   type ResearchField,
   type ResearchTask,
@@ -92,6 +93,23 @@ async function updateResearchProgress(
     .update(update as never)
     .eq('id', runId)
     .eq('user_id', userId)
+}
+
+/**
+ * PURE. Companies that started the run with no domain and gained one from
+ * this run's evidence — the ones whose contact lookup was declined against the
+ * start-of-run snapshot and must be asked again.
+ */
+export function companiesThatGainedADomain(
+  companies: readonly CompanyEntity[],
+  evidence: readonly NormalizedEvidence[],
+): CompanyEntity[] {
+  const gained = new Set(
+    evidence
+      .filter((item) => item.field === 'company_domain' && item.entityType === 'company')
+      .map((item) => item.entityId),
+  )
+  return companies.filter((company) => !company.domain && gained.has(company.id))
 }
 
 /** Overlapping tasks for a search-backed run. Env-tunable, clamped to 1–16. */
@@ -821,6 +839,58 @@ export async function processResearchRun(
     ])
   }
 
+  /*
+   * ---- 4a'. company contacts for domains discovered in 4a ----------------
+   *
+   * ⚠️ THE COMPANY PHASE IS ROUTED FROM THE SNAPSHOT TAKEN AT RUN START.
+   * `company-contact` needs a domain, so for a company whose domain was only
+   * discovered in 4a it had already declined — and nothing asked again. On
+   * production (2026-10-13) it ran 28 times for 104 companies that had a
+   * domain by the end, while being the best source of any contact (36%).
+   * Reload the companies that just gained a domain and ask for the contact
+   * fields alone.
+   */
+  let companyContactReport: ExecutionReport | null = null
+  const companyContactFields = companyFields.filter(
+    (field) => field === 'company_contact_email' || field === 'company_contact_phone',
+  )
+  if (companyReport && companyContactFields.length > 0) {
+    const candidates = companiesThatGainedADomain(companyEntities, [
+      ...companyReport.evidence,
+      ...companyReport.bonusEvidence,
+    ])
+    if (candidates.length > 0) {
+      // What was PERSISTED is the truth: a discovery that conflicted with an
+      // existing domain is not adopted, so it must not be read here either.
+      const refreshed: CompanyEntity[] = (await getCompaniesByIds(userId, candidates.map((c) => c.id)))
+        .filter((company) => company.normalizedDomain)
+        .map((company) => ({
+          type: 'company',
+          id: company.id,
+          name: company.name,
+          domain: company.normalizedDomain,
+          linkedinUrl: company.normalizedLinkedInUrl,
+        }))
+      const contactRouting = planToTasks({
+        companies: refreshed,
+        people: [],
+        requiredFields: companyContactFields,
+        filters: plan.filters,
+        knowledge,
+      })
+      if (contactRouting.tasks.length > 0) {
+        companyContactReport = await runChunk(contactRouting.tasks)
+        writtenTotal += (await writeEvidence(userId, runId, companyContactReport.evidence)).written
+        writtenTotal += (await writeEvidence(userId, runId, companyContactReport.bonusEvidence)).written
+        await recordToolCalls(userId, runId, companyContactReport.toolCalls)
+        await persistCompanyContacts(userId, [
+          ...companyContactReport.evidence,
+          ...companyContactReport.bonusEvidence,
+        ])
+      }
+    }
+  }
+
   // ---- 4b/5b. contact phase, against freshly resolved domains -------------
   let peopleForContact: PersonEntity[] = []
   let personReport: ExecutionReport | null = null
@@ -862,6 +932,7 @@ export async function processResearchRun(
   // ---- combined report ----------------------------------------------------
   const mergedResults = [
     ...(companyReport?.results ?? []),
+    ...(companyContactReport?.results ?? []),
     ...(personReport?.results ?? []),
   ]
   const report = {
@@ -869,9 +940,12 @@ export async function processResearchRun(
     externalCallCount:
       mcpStage.externalCalls +
       (companyReport?.externalCallCount ?? 0) +
+      (companyContactReport?.externalCallCount ?? 0) +
       (personReport?.externalCallCount ?? 0),
     estimatedCostMicros:
-      (companyReport?.estimatedCostMicros ?? 0) + (personReport?.estimatedCostMicros ?? 0),
+      (companyReport?.estimatedCostMicros ?? 0) +
+      (companyContactReport?.estimatedCostMicros ?? 0) +
+      (personReport?.estimatedCostMicros ?? 0),
   }
   const cacheHits = companyRouting.cacheHits + personCacheHits
   const categories: ToolCategory[] = [...new Set([

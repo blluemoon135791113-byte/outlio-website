@@ -24,6 +24,7 @@ import {
   type NormalizedEvidence,
   type ResearchTask,
 } from '@/lib/intelligence/types'
+import { hasWebSearch, serpSearch } from '@/lib/search'
 import { hasTavilyCredentials, tavilySearch, type SearchResult } from './tavily'
 
 /**
@@ -181,6 +182,74 @@ function confidenceFor(score: number): number {
   return 0.7
 }
 
+function domainEvidence(provider: string) {
+  return (candidate: DomainCandidate | null, task: ResearchTask): NormalizedEvidence[] => {
+    if (!candidate) return []
+
+    const retrievedAt = new Date()
+    return [
+      {
+        field: 'company_domain',
+        entityType: 'company',
+        entityId: task.entity.id,
+        value: { domain: candidate.domain },
+        sourceProvider: provider,
+        sourceUrl: candidate.sourceUrl,
+        // MEDIUM, never HIGH: the page is the company's own, but the MATCH
+        // between name and page is our inference, not the company's statement.
+        sourceConfidence: 'medium',
+        confidence: confidenceFor(candidate.score),
+        retrievedAt: retrievedAt.toISOString(),
+        expiresAt: expiresAtFor('company_domain', retrievedAt)?.toISOString() ?? null,
+      },
+    ]
+  }
+}
+
+/**
+ * The same discovery through the shared, FREE search stack (Diffbot first).
+ *
+ * ⚠️ ADDED 2026-10-13 because the free automatic pass had NO search-based
+ * domain finder: the Tavily one is metered, so it is excluded with paid
+ * providers off, and domains fell to Wikidata (2 of 188) and name-guessing.
+ * Measured on 25 production companies both of those had failed on, this found
+ * 4 (16%) at ~1.4s each. Same conservative `pickCompanyDomain` — a wrong
+ * domain is worse than none.
+ *
+ * Adding the leads' location to the query was measured too (3 vs 4, never a
+ * different answer) and is deliberately NOT done.
+ */
+export const searchDomainDiscoveryProvider: IntelligenceProvider<DomainCandidate | null> = {
+  name: 'search-domain-discovery',
+  category: 'company_profile',
+
+  canHandle: (task) =>
+    task.entity.type === 'company' &&
+    task.fields.includes('company_domain') &&
+    !task.entity.domain &&
+    Boolean(task.entity.name) &&
+    hasWebSearch(),
+
+  estimateCost: async () => 0,
+
+  execute: async (task: ResearchTask) => {
+    const company = task.entity as CompanyEntity
+    const hits = await serpSearch(`${company.name} official website`, { limit: 8 })
+    return pickCompanyDomain(
+      company.name,
+      hits.map((hit) => ({
+        title: hit.title ?? '',
+        url: hit.url,
+        content: hit.snippet ?? '',
+        score: 0,
+        publishedDate: hit.publishedDate,
+      })),
+    )
+  },
+
+  normalize: domainEvidence('search-domain-discovery'),
+}
+
 export const domainDiscoveryProvider: IntelligenceProvider<DomainCandidate | null> = {
   name: 'tavily-domain-discovery',
   category: 'company_profile',
@@ -204,25 +273,5 @@ export const domainDiscoveryProvider: IntelligenceProvider<DomainCandidate | nul
     return pickCompanyDomain(company.name, results)
   },
 
-  normalize: (candidate, task): NormalizedEvidence[] => {
-    if (!candidate) return []
-
-    const retrievedAt = new Date()
-    return [
-      {
-        field: 'company_domain',
-        entityType: 'company',
-        entityId: task.entity.id,
-        value: { domain: candidate.domain },
-        sourceProvider: 'tavily-domain-discovery',
-        sourceUrl: candidate.sourceUrl,
-        // MEDIUM, never HIGH: the page is the company's own, but the MATCH
-        // between name and page is our inference, not the company's statement.
-        sourceConfidence: 'medium',
-        confidence: confidenceFor(candidate.score),
-        retrievedAt: retrievedAt.toISOString(),
-        expiresAt: expiresAtFor('company_domain', retrievedAt)?.toISOString() ?? null,
-      },
-    ]
-  },
+  normalize: domainEvidence('tavily-domain-discovery'),
 }

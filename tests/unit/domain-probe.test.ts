@@ -6,7 +6,29 @@
  * guess — a wrong domain becomes the company's identity and can merge two
  * different companies into one row.
  */
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('server-only', () => ({}))
+
+/* The network edge. Each host answers after `ms` with `text`, or fails. */
+type Reply = { ms: number; text?: string; fail?: boolean }
+let replies: Record<string, Reply> = {}
+let inFlight = 0
+let peak = 0
+const requests: Array<{ url: string; maxRetries?: number }> = []
+vi.mock('@/lib/intelligence/http', () => ({
+  requestTextWithMeta: async (request: { url: string; maxRetries?: number }) => {
+    requests.push(request)
+    inFlight += 1
+    peak = Math.max(peak, inFlight)
+    const host = new URL(request.url).hostname
+    const reply = replies[host] ?? { ms: 1, fail: true }
+    await new Promise((resolve) => setTimeout(resolve, reply.ms))
+    inFlight -= 1
+    if (reply.fail) throw new Error('unreachable')
+    return { text: reply.text ?? '', finalUrl: request.url }
+  },
+}))
 
 import {
   candidateHosts,
@@ -158,3 +180,41 @@ describe('the domain-probe provider', () => {
     expect(evidence[0]!.sourceUrl).toContain('https://')
   })
 })
+
+describe('domain-probe execution', () => {
+  beforeEach(() => {
+    replies = {}
+    inFlight = 0
+    peak = 0
+    requests.length = 0
+  })
+
+  const SITE = '<h1>Fabricated Systems</h1><p>Fabricated Systems builds things.</p>'
+
+  it('probes every candidate AT ONCE, never retrying a host that did not answer', async () => {
+    // Four candidates; sequentially at 300ms each this would take ~1.2s.
+    for (const host of candidateHosts('Fabricated Systems')) replies[host] = { ms: 300, fail: true }
+    replies['fabricatedsystems.com'] = { ms: 300, text: SITE }
+
+    const started = Date.now()
+    const result = await domainProbeProvider.execute(task(['company_domain']))
+
+    expect(result).toEqual({ domain: 'fabricatedsystems.com', sourceUrl: 'https://fabricatedsystems.com/' })
+    expect(peak).toBe(4)
+    expect(Date.now() - started).toBeLessThan(900)
+    expect(requests.every((request) => request.maxRetries === 0)).toBe(true)
+  })
+
+  it('still REFUSES when two different hosts both verify', async () => {
+    replies['fabricatedsystems.com'] = { ms: 5, text: SITE }
+    replies['fabricatedsystems.io'] = { ms: 5, text: SITE }
+
+    await expect(domainProbeProvider.execute(task(['company_domain']))).resolves.toBeNull()
+  })
+
+  it('returns nothing when no candidate is the company speaking', async () => {
+    replies['fabricatedsystems.com'] = { ms: 5, text: '<h1>Domain for sale</h1>' }
+    await expect(domainProbeProvider.execute(task(['company_domain']))).resolves.toBeNull()
+  })
+})
+
