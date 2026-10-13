@@ -394,9 +394,10 @@ describe('the search circuit breaker', () => {
     const dead = {
       name: 'dead',
       isConfigured: () => true,
-      async search() {
+      // A dead host FAILS (throws). An empty answer no longer trips the breaker.
+      async search(): Promise<never> {
         calls += 1
-        return []
+        throw new Error('ERR_TIMEOUT')
       },
     }
     const alive = {
@@ -428,7 +429,8 @@ describe('the search circuit breaker', () => {
       name: 'flaky',
       isConfigured: () => true,
       async search() {
-        return healthy ? [{ url: 'https://ok.example', title: null, snippet: null, publishedDate: null }] : []
+        if (!healthy) throw new Error('ERR_PROVIDER_UNAVAILABLE')
+        return [{ url: 'https://ok.example', title: null, snippet: null, publishedDate: null }]
       },
     }
 

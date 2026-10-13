@@ -15,6 +15,15 @@ import {
 import { SerpService, resetSearchCircuitBreaker } from '@/lib/search/serp'
 import type { SearchHit, SearchProvider } from '@/lib/hubble/providers/types'
 
+/* The shared cache's storage edge. Most tests run with the cache off. */
+const cacheWrites: Array<{ key: string; value: unknown }> = []
+vi.mock('@/lib/intelligence/provider-state', () => ({
+  readProviderCache: async () => null,
+  writeProviderCache: async (_provider: string, key: string, value: unknown) => {
+    cacheWrites.push({ key, value })
+  },
+}))
+
 function hit(url: string, title = ''): SearchHit {
   return { url, title: title || null, snippet: null, publishedDate: null }
 }
@@ -122,8 +131,10 @@ describe('SerpService waterfall', () => {
     expect(third.calls).toEqual([])
   })
 
-  it('stops re-paying a dead engine within the cooldown', async () => {
-    const dead = fakeEngine('dead', () => [])
+  it('stops re-paying a FAILING engine within the cooldown', async () => {
+    const dead = fakeEngine('dead', () => {
+      throw new Error('503')
+    })
     const alive = fakeEngine('alive', () => [hit('https://ok.example')])
     const serp = service([dead, alive])
 
@@ -133,6 +144,21 @@ describe('SerpService waterfall', () => {
 
     // Asked once, then skipped without a request for the remaining queries.
     expect(dead.calls).toHaveLength(1)
+  })
+
+  it('never sidelines an engine for an EMPTY answer — the next query still asks it', async () => {
+    /*
+     * ⚠️ PRODUCTION, 2026-10-13: "zero hits = failure" let one obscure
+     * person-lookup switch Diffbot off for every parallel lookup; 87 of 164
+     * queries in one tick reached no engine at all.
+     */
+    const primary = fakeEngine('primary', (query) => (query.includes('obscure') ? [] : [hit('https://primary.example')]))
+    const fallback = fakeEngine('fallback', () => [hit('https://fallback.example')])
+    const serp = service([primary, fallback])
+
+    expect((await serp.search('obscure person email', 5))[0]!.url).toBe('https://fallback.example')
+    expect((await serp.search('well known company', 5))[0]!.url).toBe('https://primary.example')
+    expect(primary.calls).toEqual(['obscure person email', 'well known company'])
   })
 
   it('does not let a throwing engine escape as an error', async () => {
@@ -155,6 +181,34 @@ describe('SerpService waterfall', () => {
 
     const hits = await service([unconfigured as SearchProvider, alive]).search('acme', 5)
     expect(hits[0]!.url).toBe('https://ok.example')
+  })
+})
+
+describe('SerpService cache', () => {
+  beforeEach(() => {
+    resetSearchCircuitBreaker()
+    cacheWrites.length = 0
+  })
+
+  it('caches an empty answer an engine actually gave', async () => {
+    const empty = fakeEngine('empty', () => [])
+    await new SerpService([empty], { cache: true }).search('nobody has written about this', 5)
+    expect(cacheWrites).toHaveLength(1)
+    expect(cacheWrites[0]!.value).toEqual({ hits: [], engine: null })
+  })
+
+  it('caches NOTHING when no engine was asked — a bad minute is not "no results"', async () => {
+    const failing = fakeEngine('failing', () => {
+      throw new Error('429')
+    })
+    const serp = new SerpService([failing], { cache: true })
+
+    await serp.search('first query trips the breaker', 5)
+    cacheWrites.length = 0
+    // Now cooling down: nothing is asked, so nothing may be remembered.
+    await serp.search('second query reaches no engine', 5)
+    expect(failing.calls).toHaveLength(1)
+    expect(cacheWrites).toEqual([])
   })
 })
 
@@ -304,16 +358,16 @@ describe('keyless fallback engine', () => {
     vi.unstubAllEnvs()
   })
 
-  it('returns nothing rather than working around a refusal', async () => {
+  it('reports a refusal as a failure rather than working around it', async () => {
     const { MojeekSearchProvider } = await import('@/lib/search/engines')
     vi.stubEnv('SERP_KEYLESS_FALLBACK', 'true')
 
-    // The HTTP layer throws on a block; the engine steps aside. Nothing here
-    // retries through a disguise — that is the line between fallback and
-    // evasion (CLAUDE.md rule 1).
+    // The HTTP layer throws on a block and the engine passes it on, so the
+    // waterfall sidelines it. Nothing here retries through a disguise — that
+    // is the line between fallback and evasion (CLAUDE.md rule 1).
     await expect(
       new MojeekSearchProvider().search('acme', 5, { deadlineAt: Date.now() - 1 }),
-    ).resolves.toEqual([])
+    ).rejects.toThrow()
     vi.unstubAllEnvs()
   })
 })

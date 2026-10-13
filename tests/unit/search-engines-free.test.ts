@@ -3,7 +3,8 @@
  *
  * Pinned: each sends its credential the documented way and never in the URL;
  * each maps its own response shape onto `SearchHit`; a failure or malformed
- * payload is an empty list, never a throw; an unconfigured engine makes no
+ * payload is an empty list, while a FAILED request throws so the waterfall can
+ * sideline the engine (an empty answer must not); an unconfigured engine makes no
  * request; and the budgets keep each inside its free allowance.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -128,17 +129,21 @@ describe('ExaSearchProvider', () => {
   })
 })
 
-describe('every free engine degrades to nothing, never a throw', () => {
-  it('on an upstream failure or a malformed payload', async () => {
+describe('a failed request and an empty answer are told apart', () => {
+  it('a failed request THROWS, so the waterfall can sideline the engine', async () => {
     const { DiffbotSearchProvider, YouComSearchProvider, ExaSearchProvider } = await engines()
-    const providers = [new DiffbotSearchProvider(), new YouComSearchProvider(), new ExaSearchProvider()]
-
     fail = true
-    for (const provider of providers) await expect(provider.search('q', 5)).resolves.toEqual([])
+    for (const provider of [new DiffbotSearchProvider(), new YouComSearchProvider(), new ExaSearchProvider()]) {
+      await expect(provider.search('q', 5)).rejects.toThrow()
+    }
+  })
 
-    fail = false
+  it('a malformed or empty payload is an empty answer, not a failure', async () => {
+    const { DiffbotSearchProvider, YouComSearchProvider, ExaSearchProvider } = await engines()
     reply = { search_results: 'nope', results: 'nope' }
-    for (const provider of providers) await expect(provider.search('q', 5)).resolves.toEqual([])
+    for (const provider of [new DiffbotSearchProvider(), new YouComSearchProvider(), new ExaSearchProvider()]) {
+      await expect(provider.search('q', 5)).resolves.toEqual([])
+    }
   })
 })
 
