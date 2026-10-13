@@ -55,27 +55,23 @@ export class DiffbotSearchProvider implements SearchProvider {
     // 60 queries a minute on the free plan.
     setHostPacing('llm.diffbot.com', 1_050)
 
-    try {
-      const payload = await requestJson<{
-        search_results?: Array<{ pageUrl?: string; title?: string; content?: string; date?: string }>
-      }>({
-        url: url.toString(),
-        headers: { accept: 'application/json', authorization: `Bearer ${token}` },
-        deadlineAt: options.deadlineAt,
-      })
+    const payload = await requestJson<{
+      search_results?: Array<{ pageUrl?: string; title?: string; content?: string; date?: string }>
+    }>({
+      url: url.toString(),
+      headers: { accept: 'application/json', authorization: `Bearer ${token}` },
+      deadlineAt: options.deadlineAt,
+    })
 
-      return (payload.search_results ?? [])
-        .filter((result): result is { pageUrl: string } & typeof result => typeof result.pageUrl === 'string')
-        .slice(0, limit)
-        .map((result) => ({
-          url: result.pageUrl,
-          title: result.title?.trim() || null,
-          snippet: result.content?.trim() || null,
-          publishedDate: result.date ?? null,
-        }))
-    } catch {
-      return []
-    }
+    return (Array.isArray(payload.search_results) ? payload.search_results : [])
+      .filter((result): result is { pageUrl: string } & typeof result => typeof result.pageUrl === 'string')
+      .slice(0, limit)
+      .map((result) => ({
+        url: result.pageUrl,
+        title: result.title?.trim() || null,
+        snippet: result.content?.trim() || null,
+        publishedDate: result.date ?? null,
+      }))
   }
 }
 
@@ -106,40 +102,36 @@ export class YouComSearchProvider implements SearchProvider {
 
     setHostPacing('api.you.com', 1_000)
 
-    try {
-      const payload = await requestJson<{
-        results?: { web?: Array<{ url?: string; title?: string; description?: string; snippets?: unknown }> }
-      }>({
-        url: url.toString(),
-        headers: { accept: 'application/json' },
-        deadlineAt: options.deadlineAt,
-        // A throttled keyless call is a miss, not something to retry into.
-        maxRetries: 0,
-        /*
-         * Measured 2026-10-13: a throttled call can hang ~12s before returning
-         * nothing. It sits second in the waterfall, so every fallback would
-         * pay that wait; a healthy answer takes ~1.5-2s.
-         */
-        timeoutMs: 6_000,
-      })
+    const payload = await requestJson<{
+      results?: { web?: Array<{ url?: string; title?: string; description?: string; snippets?: unknown }> }
+    }>({
+      url: url.toString(),
+      headers: { accept: 'application/json' },
+      deadlineAt: options.deadlineAt,
+      // A throttled keyless call is a miss, not something to retry into.
+      maxRetries: 0,
+      /*
+       * Measured 2026-10-13: a throttled call can hang ~12s before returning
+       * nothing. It sits second in the waterfall, so every fallback would
+       * pay that wait; a healthy answer takes ~1.5-2s.
+       */
+      timeoutMs: 6_000,
+    })
 
-      return (payload.results?.web ?? [])
-        .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
-        .slice(0, limit)
-        .map((result) => {
-          const snippets = Array.isArray(result.snippets)
-            ? result.snippets.filter((part): part is string => typeof part === 'string')
-            : []
-          return {
-            url: result.url,
-            title: result.title?.trim() || null,
-            snippet: [result.description, ...snippets].filter(Boolean).join(' ').trim() || null,
-            publishedDate: null,
-          }
-        })
-    } catch {
-      return []
-    }
+    return (Array.isArray(payload.results?.web) ? payload.results.web : [])
+      .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
+      .slice(0, limit)
+      .map((result) => {
+        const snippets = Array.isArray(result.snippets)
+          ? result.snippets.filter((part): part is string => typeof part === 'string')
+          : []
+        return {
+          url: result.url,
+          title: result.title?.trim() || null,
+          snippet: [result.description, ...snippets].filter(Boolean).join(' ').trim() || null,
+          publishedDate: null,
+        }
+      })
   }
 }
 
@@ -166,41 +158,37 @@ export class ExaSearchProvider implements SearchProvider {
     if (!apiKey) return []
 
     const after = afterOperator(options.timeRange)
-    try {
-      const payload = await requestJson<{
-        results?: Array<{ url?: string; title?: string; highlights?: unknown; publishedDate?: string }>
-      }>({
-        url: 'https://api.exa.ai/search',
-        method: 'POST',
-        headers: { accept: 'application/json', 'x-api-key': apiKey },
-        body: {
-          query: query.slice(0, 400),
-          // 10 results is the price point; more costs extra per result.
-          numResults: Math.min(Math.max(limit, 1), 10),
-          type: 'auto',
-          contents: { highlights: { numSentences: 2 } },
-          ...(after ? { startPublishedDate: `${after.slice('after:'.length)}T00:00:00.000Z` } : {}),
-        },
-        deadlineAt: options.deadlineAt,
-      })
+    const payload = await requestJson<{
+      results?: Array<{ url?: string; title?: string; highlights?: unknown; publishedDate?: string }>
+    }>({
+      url: 'https://api.exa.ai/search',
+      method: 'POST',
+      headers: { accept: 'application/json', 'x-api-key': apiKey },
+      body: {
+        query: query.slice(0, 400),
+        // 10 results is the price point; more costs extra per result.
+        numResults: Math.min(Math.max(limit, 1), 10),
+        type: 'auto',
+        contents: { highlights: { numSentences: 2 } },
+        ...(after ? { startPublishedDate: `${after.slice('after:'.length)}T00:00:00.000Z` } : {}),
+      },
+      deadlineAt: options.deadlineAt,
+    })
 
-      return (payload.results ?? [])
-        .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
-        .slice(0, limit)
-        .map((result) => {
-          const highlights = Array.isArray(result.highlights)
-            ? result.highlights.filter((part): part is string => typeof part === 'string')
-            : []
-          return {
-            url: result.url,
-            title: result.title?.trim() || null,
-            snippet: highlights.join(' ').trim() || null,
-            publishedDate: result.publishedDate ?? null,
-          }
-        })
-    } catch {
-      return []
-    }
+    return (Array.isArray(payload.results) ? payload.results : [])
+      .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
+      .slice(0, limit)
+      .map((result) => {
+        const highlights = Array.isArray(result.highlights)
+          ? result.highlights.filter((part): part is string => typeof part === 'string')
+          : []
+        return {
+          url: result.url,
+          title: result.title?.trim() || null,
+          snippet: highlights.join(' ').trim() || null,
+          publishedDate: result.publishedDate ?? null,
+        }
+      })
   }
 }
 
@@ -238,32 +226,28 @@ export class BraveSearchProvider implements SearchProvider {
     // One request per second on the free tier; exceeding it returns 429.
     setHostPacing('api.search.brave.com', 1_100)
 
-    try {
-      const payload = await requestJson<{
-        web?: { results?: Array<{ url?: string; title?: string; description?: string; age?: string }> }
-      }>({
-        url: url.toString(),
-        headers: {
-          accept: 'application/json',
-          'accept-encoding': 'gzip',
-          'x-subscription-token': apiKey,
-        },
-        deadlineAt: options.deadlineAt,
-      })
+    const payload = await requestJson<{
+      web?: { results?: Array<{ url?: string; title?: string; description?: string; age?: string }> }
+    }>({
+      url: url.toString(),
+      headers: {
+        accept: 'application/json',
+        'accept-encoding': 'gzip',
+        'x-subscription-token': apiKey,
+      },
+      deadlineAt: options.deadlineAt,
+    })
 
-      return (payload.web?.results ?? [])
-        .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
-        .slice(0, limit)
-        .map((result) => ({
-          url: result.url,
-          title: result.title?.trim() || null,
-          // Brave's description is a snippet and may carry HTML emphasis tags.
-          snippet: result.description?.replace(/<[^>]+>/g, '').trim() || null,
-          publishedDate: result.age ?? null,
-        }))
-    } catch {
-      return []
-    }
+    return (Array.isArray(payload.web?.results) ? payload.web.results : [])
+      .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
+      .slice(0, limit)
+      .map((result) => ({
+        url: result.url,
+        title: result.title?.trim() || null,
+        // Brave's description is a snippet and may carry HTML emphasis tags.
+        snippet: result.description?.replace(/<[^>]+>/g, '').trim() || null,
+        publishedDate: result.age ?? null,
+      }))
   }
 }
 
@@ -278,19 +262,15 @@ export class TavilySearchProvider implements SearchProvider {
   async search(query: string, limit: number, options: EngineOptions = {}): Promise<SearchHit[]> {
     if (!this.isConfigured()) return []
 
-    try {
-      const results = await tavilySearch({ query, maxResults: limit, deadlineAt: options.deadlineAt })
-      return results.map((result) => ({
-        url: result.url,
-        title: result.title || null,
-        // Tavily's own extracted snippet — the only text a fact may be quoted
-        // from before the page itself is fetched.
-        snippet: result.content || null,
-        publishedDate: result.publishedDate,
-      }))
-    } catch {
-      return []
-    }
+    const results = await tavilySearch({ query, maxResults: limit, deadlineAt: options.deadlineAt })
+    return results.map((result) => ({
+      url: result.url,
+      title: result.title || null,
+      // Tavily's own extracted snippet — the only text a fact may be quoted
+      // from before the page itself is fetched.
+      snippet: result.content || null,
+      publishedDate: result.publishedDate,
+    }))
   }
 }
 
@@ -335,15 +315,11 @@ export class MojeekSearchProvider implements SearchProvider {
     setHostPacing('www.mojeek.com', 2_000)
 
     let html: string
-    try {
-      html = await requestText({
-        url: url.toString(),
-        headers: { accept: 'text/html' },
-        deadlineAt: options.deadlineAt,
-      })
-    } catch {
-      return []
-    }
+    html = await requestText({
+      url: url.toString(),
+      headers: { accept: 'text/html' },
+      deadlineAt: options.deadlineAt,
+    })
 
     // Parsed with cheerio, server-side only. Uploaded or fetched HTML is never
     // rendered in a browser (CLAUDE.md rule 3).

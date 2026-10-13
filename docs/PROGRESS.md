@@ -13318,3 +13318,37 @@ Vercel → Usage once ~500 leads have been enriched.
 
 Verified: typecheck · lint · unit 284 files / 4,713 tests (+4 limit cases) ·
 build.
+
+---
+
+## 2026-10-13 — Fix: an empty search answer no longer switches engines off
+
+**Found in production, first cron tick after #60 deployed (15:50 UTC).** Batches
+ran (10 finished in one tick, ~50–80 s per 10 leads — ~3–4× faster than the
+single-run pass), and stuck runs were re-planned. But 107 of 164 search
+queries reached NO engine: engines were called 77 times in all (Diffbot 57,
+You.com 15, Tavily 3, Exa 2).
+
+**Cause:** the SERP waterfall treated zero hits as an engine failure and
+sidelined it for 60 s. Person lookups often have no results, so one empty
+answer switched Diffbot off for every parallel lookup, then the next engine.
+Those never-sent queries were then cached as "no results" for 6 h.
+
+**Fix:**
+- Only a THROW (error, timeout, 429, 5xx) sidelines an engine; an empty answer
+  just tries the next engine for that query.
+- Engines (Diffbot, You.com, Exa, Brave, Tavily, Mojeek) now throw on a failed
+  request instead of returning `[]` — the swallowing is what made the two
+  indistinguishable. Contract documented on `SearchProvider`.
+- Nothing is cached when no engine was asked.
+- Malformed payloads (non-array results) are guarded — previously hidden by the
+  same blanket `catch`.
+
+**Verified:** unit 284 files / 4,717 tests · lint · typecheck · build. Live: 20
+parallel lookups for fabricated people through the real waterfall — Diffbot
+answered 19, 1 had no answer anywhere.
+
+**Expected leftovers:** the empty-cache rows written before the fix expire
+within 6 h of 15:50 UTC. Contact hit rates in the first batches were low
+(search email 0/55, phone 3/55; scout 0/29) — partly this bug; re-measure
+after the fix is live before tuning providers.

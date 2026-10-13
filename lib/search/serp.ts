@@ -216,8 +216,13 @@ export class SerpService implements SearchProvider {
     }
 
     const request = this.execute(normalized, limit, options)
-      .then(async (result) => {
-        if (useCache) await writeCache(key, result)
+      .then(async ({ asked, ...result }) => {
+        /*
+         * ⚠️ NOTHING IS CACHED WHEN NO ENGINE WAS ASKED. Every engine cooling
+         * down or out of budget is not "this query has no results" — caching it
+         * turned one bad minute into six hours of empty answers.
+         */
+        if (useCache && asked) await writeCache(key, result)
         return result
       })
       .finally(() => {
@@ -277,7 +282,9 @@ export class SerpService implements SearchProvider {
     query: string,
     limit: number,
     options: SerpOptions,
-  ): Promise<CachedSearch> {
+  ): Promise<CachedSearch & { asked: boolean }> {
+    // Whether any engine actually answered (even with nothing).
+    let asked = false
     for (const engine of this.engines) {
       if (!engine.isConfigured()) continue
       // Skipped without a request: the point is not to pay the timeout again.
@@ -294,31 +301,37 @@ export class SerpService implements SearchProvider {
         timeRange: options.timeRange,
       }
 
-      let hits: SearchHit[] = []
+      let hits: SearchHit[]
       try {
         hits = await engine.search(query, limit, engineOptions)
       } catch {
-        // A `SearchProvider` is contractually silent about upstream failure,
-        // but a thrown error must not escape the service either.
-        hits = []
+        /*
+         * A FAILURE — error, timeout, 429, 5xx. Only this sidelines the engine.
+         * A thrown error must not escape the service either.
+         */
+        FAILED_AT.set(engine.name, Date.now())
+        continue
       }
+      asked = true
 
       if (hits.length > 0) {
         // Recovered — clear any earlier failure rather than wait out the cooldown.
         FAILED_AT.delete(engine.name)
-        return { hits, engine: engine.name }
+        return { hits, engine: engine.name, asked }
       }
 
       /*
-       * ⚠️ ZERO HITS IS TREATED AS A FAILURE, and that is a deliberate
-       * over-reach. A genuinely obscure query can return nothing from a healthy
-       * engine, and this will briefly sideline it. That costs one minute of
-       * using the next engine down; the alternative costs seconds on every
-       * query for as long as a host stays down.
+       * ⚠️ ZERO HITS IS AN ANSWER, NOT A FAILURE (changed 2026-10-13).
+       *
+       * It used to sideline the engine for a minute. Contact discovery asks
+       * for one named person, where "nothing" is the common honest answer —
+       * and with batches running in parallel, one empty answer switched
+       * Diffbot off for EVERY lookup, then the next engine, until 87 of 164
+       * production queries in one tick were never sent to any engine at all.
+       * An empty answer now just tries the next engine for THIS query.
        */
-      FAILED_AT.set(engine.name, Date.now())
     }
 
-    return { hits: [], engine: null }
+    return { hits: [], engine: null, asked }
   }
 }

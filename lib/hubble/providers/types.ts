@@ -36,10 +36,17 @@ export interface SearchProvider {
   readonly name: string
   isConfigured(): boolean
   /**
-   * Returns hits, or an EMPTY ARRAY when the provider is unavailable.
+   * Two roles share this interface, with different failure contracts:
    *
-   * ⚠️ NEVER THROWS FOR AN UPSTREAM PROBLEM. A search engine being down must
-   * degrade the answer's confidence, not turn the user's question into a 500.
+   *   · The SERVICE callers use (`SerpService`, `resolveSearchProvider()`)
+   *     NEVER THROWS. A search engine being down must degrade the answer's
+   *     confidence, not turn the user's question into a 500.
+   *
+   *   · An ENGINE inside that waterfall (`lib/search/engines.ts`) THROWS when
+   *     the request failed (error, timeout, 429, 5xx) and returns an EMPTY
+   *     ARRAY only for a genuine "no results". The waterfall sidelines an
+   *     engine on a throw and never on an empty answer; swallowing failures
+   *     into `[]` made the two indistinguishable (2026-10-13).
    */
   search(query: string, limit: number, options?: DeadlineOptions): Promise<SearchHit[]>
 }
