@@ -7,7 +7,7 @@ import {
   extractPublicPhone,
   searchContactEmailProvider,
 } from '@/lib/intelligence/providers/search-contact'
-import type { GoogleSearchHit } from '@/lib/intelligence/providers/google-cse'
+import type { SearchHit } from '@/lib/hubble/providers/types'
 import type { PersonEntity, ResearchTask } from '@/lib/intelligence/types'
 
 const PERSON: PersonEntity = {
@@ -22,7 +22,7 @@ const PERSON: PersonEntity = {
   companyId: '00000000-0000-4000-8000-000000000002',
 }
 
-function hit(overrides: Partial<GoogleSearchHit> = {}): GoogleSearchHit {
+function hit(overrides: Partial<SearchHit> = {}): SearchHit {
   return {
     url: 'https://fabricated.example/team/jamie-rivera',
     title: 'Jamie Rivera — Founder at Fabricated Labs',

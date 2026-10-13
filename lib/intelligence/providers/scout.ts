@@ -39,8 +39,7 @@ import type {
   ResearchTask,
   SourceConfidence,
 } from '@/lib/intelligence/types'
-
-const CONTACT_PATHS = ['', '/contact', '/contact-us', '/about', '/about-us'] as const
+import { inParallel, siteReadingList } from '@/lib/intelligence/site-pages'
 
 /** Head of page is enough; these are identity-bearing pages, not downloads. */
 const HARVEST_MAX_BYTES = 300_000
@@ -184,7 +183,8 @@ export type HarvestedContacts = {
 /**
  * Reads the company's own contact-bearing pages.
  *
- * Deliberately bounded: five paths, one pass, no crawling.
+ * Deliberately bounded: five paths, one pass, no crawling — three at a time,
+ * because five sequential 8s reads used to overrun the provider's 15s budget.
  */
 export async function harvestWebsiteContacts(
   domain: string,
@@ -199,8 +199,10 @@ export async function harvestWebsiteContacts(
   const onDomain = new Set<string>()
   const other = new Set<string>()
 
-  for (const path of CONTACT_PATHS) {
-    const text = await fetched(`https://${registrable}${path}/`)
+  const pages = siteReadingList(registrable)
+  const texts = await inParallel(pages, 3, (url) => fetched(url))
+
+  for (const text of texts) {
     if (!text) continue
 
     for (const email of extractEmails(text)) {

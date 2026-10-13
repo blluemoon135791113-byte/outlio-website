@@ -7,7 +7,7 @@ import { consume } from '@/lib/auth/rate-limit'
 import { planQuery } from '@/lib/intelligence/planner'
 import { hubbleExecute } from '@/lib/hubble/execute'
 import { getWorkspaceContext } from '@/lib/workspaces/context'
-import { researchScopeSchema } from '@/lib/intelligence/plan'
+import { clientResearchScopeSchema } from '@/lib/intelligence/plan'
 import { estimateScope } from '@/lib/intelligence/results'
 import { claimAndProcessResearchRun, createResearchRun } from '@/lib/intelligence/run'
 import { toClientError } from '@/lib/errors/catalog'
@@ -25,7 +25,7 @@ export const maxDuration = 300
 
 const inputSchema = z.object({
   query: z.string().trim().min(3).max(2000),
-  scope: researchScopeSchema,
+  scope: clientResearchScopeSchema,
   qualificationProfileId: z.string().uuid().nullable().optional(),
   /**
    * Ask for the cost picture without starting anything. This is what makes the

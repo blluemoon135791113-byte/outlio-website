@@ -25,9 +25,11 @@ import type { SearchProvider } from '@/lib/hubble/providers/types'
 
 export {
   BraveSearchProvider,
-  GoogleCseSearchProvider,
+  DiffbotSearchProvider,
+  ExaSearchProvider,
   MojeekSearchProvider,
   TavilySearchProvider,
+  YouComSearchProvider,
 } from '@/lib/search/engines'
 export { resetSearchCircuitBreaker } from '@/lib/search/serp'
 export { resolveSearchProvider } from '@/lib/search'

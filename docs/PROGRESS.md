@@ -13072,3 +13072,249 @@ that exact file at AMO, not an enclosing folder or the old `.zip`. If AMO still
 shows the same message for this exact checksum, the remaining failure is in the
 AMO upload/account path rather than this archive and needs the upload response
 or screenshot to distinguish it.
+
+---
+
+## 2026-10-12 — Automatic enrichment reaches every lead, in resumable batches
+
+**Not deployed. No migration.** Applies on the next Vercel deploy.
+
+### Why
+
+Production (read-only, 2026-10-12): of 29 automatic enrichment runs, **17 sat
+`pending` forever** (oldest 2026-08-25), 1 was running, 11 finished. Each was
+one run over ≤60 leads, fired with `void` from `after()`. At ~25 s/lead
+(19 leads took 476 s; search-backed concurrency was hardcoded to **2**) the
+300 s function limit killed it; `reap_stale_research_runs` returned it to
+`pending`, and nothing ever claimed it again — `claim_next_research_run`
+(0045) had no caller. Most uploads since early September got no enrichment.
+
+### What changed
+
+- **No 60-lead ceiling.** An upload becomes a chain of 10-lead research runs
+  (`lib/worker/enrich-free.ts`). Each run's scope carries
+  `autoEnrich: { jobId, stage, next }`. Finishing a batch merges it into the
+  leads, rebuilds the CSV, then queues the next — strictly in that order, so
+  batches of one upload never overlap (two CSV rebuilds racing can land the
+  staler one last). Queuing is idempotent by key across all statuses.
+  Account lists chain recommended leads → company discovery → company contacts.
+- **The upload continues its own chain** after extraction (`processClaim`,
+  ~270 s window, a batch starts only with ≥140 s left). The extension capture
+  route now declares `maxDuration = 300` for this.
+- **`/api/cron` drains the research queue** in `after()` (`maxDuration` 60 →
+  300; the tick keeps its own 45 s budget): reap claims older than 330 s,
+  continue chains whose batch failed for good, then 3 workers claim via
+  `claim_next_research_run` and follow each upload's chain.
+- **Pre-batching runs** (matched by their old query text) are cancelled and
+  re-planned into batches, never processed whole — the 17 stuck runs finish
+  this way.
+- **Stranded console runs**: researched if queued <24 h ago (never
+  auto-merged); cancelled if older. Production had one: a `workspace` scope
+  over 8,325 leads from 2026-10-08, which will be cancelled.
+- **`autoEnrich` is server-only**: `/api/intelligence/query` validates with
+  `clientResearchScopeSchema`, which rejects it.
+- **Concurrency**: search-backed runs use `RESEARCH_SEARCH_CONCURRENCY`
+  (default 6, clamped 1–16), was 2. A search engine that pushes back records
+  zero results and trips the breaker — never worked around.
+
+### Measured provider waste (for follow-up, not changed)
+
+Across 263 auto-enriched leads: wikidata 3 hits / 191 calls; domain-probe
+avg 9.5 s, 29 timeouts; search-contact-email 2 / 88. The old
+`searxng-company-profile` (139/139 errors) is already renamed and working.
+
+### Ask Hubble reuse (checked, not changed)
+
+Ask Hubble loads fresh `research_evidence` for the lead and company
+(`lib/hubble/store.ts` `loadResearchEvidenceChunks`), but still searches unless
+the planner says enough is known or ≥2 distinct source URLs score well
+(`hasReusableEvidence`). An enriched email usually has one source, so it
+re-searches; the planner's `known` context (route.ts) omits enriched values.
+
+### Verified
+
+typecheck clean · lint clean · unit 281 files / 4,689 tests (new
+`auto-enrich-chain` 11; wiring guard +4) · build succeeds.
+verification-reviewer: PASS 11/11. product-risk-reviewer: ship with
+conditions — A (client could inject `autoEnrich`) and B (stranded console runs)
+fixed above.
+
+### Carried forward
+
+- Batch timing at concurrency 6 is **unmeasured**; check `research_runs.duration_ms`
+  for `(job_leads)` runs after deploy and tune `BATCH_SIZE` / the env var.
+- A batch killed three times fails and is skipped; its leads stay blank with no
+  user-facing indicator. No "enrichment in progress" state in the UI yet.
+- Every batch is a `research_runs` row kept forever; account-list chains copy
+  their remaining ids into each batch's scope. Needs a retention policy.
+- Two legacy runs of the same account-list job would re-plan into two chains
+  that can overlap (rare; accepted).
+
+---
+
+## 2026-10-13 — Contact-only automatic enrichment, Gemini vectors, dead search engines removed
+
+**Not deployed. No migration.** Builds on the 2026-10-12 batching entry.
+
+### What changed
+
+- **Automatic enrichment finds contact details only** (owner decision): work
+  email + status, mobile + status, company general email/phone, and
+  `company_domain` as the prerequisite the contact lookups route on. Industry,
+  company LinkedIn and social profiles are Hubble's, on request — asking for
+  them woke `social-scout-company` (avg 7.7 s) and `search-company-profile` on
+  every lead. Those CSV columns now stay NULL after extraction.
+- **Google Custom Search removed** (`google-cse.ts`, engine, budget, tests):
+  closed to new customers in 2025, discontinued 2027-01-01.
+- **SearXNG removed**: the web-research MCP *search engine* left the SERP
+  waterfall (localhost-only; `outlio-searxng.fly.dev` no longer answers) and
+  `deploy/searxng/` is deleted. `webResearchMcpConfig` stays for the MCP
+  lead-research client. Waterfall is now Solr → Brave → Mojeek (opt-in) → Tavily.
+- **Gemini embeddings for Ask Hubble** (`GeminiEmbeddingProvider`,
+  `gemini-embedding-001@768`): `VECTOR_SEARCH_API` first, then
+  `GEMINI_API_KEY`; key in a header; query vs document task types; batches of
+  100; a failed probe is retried after 60 s, never cached for good.
+  `EMBEDDING_PROVIDER=ollama` opts a machine back into Ollama. Production had no
+  vectors before — `OLLAMA_URL` is loopback.
+- **Cross-model guard**: `loadCachedChunks` drops stored vectors whose
+  `embed_model` differs from the current embedder. Ollama and Gemini are both
+  768-dim, so without it the two spaces would have been compared silently.
+- **Tavily default cap 200 → 30/day** — its free tier is 1,000 a month.
+- `.env.local`: the pasted OAuth JSON became `GOOGLE_PEOPLE_*` (nothing reads
+  them; People API held). Backup kept as `.env.local.backup.<timestamp>`.
+
+### Measured, 2026-10-12/13
+
+- `VECTOR_SEARCH_API` → 403: Generative Language API not enabled on project
+  155850803414. Vertex AI Vector Search rejects API keys. `GEMINI_API_KEY`
+  embeds today (768 dims).
+- With Outlio's honest User-Agent: **DuckDuckGo (html and lite) and Mojeek both
+  serve a bot challenge**, even from a residential IP. Working around that is
+  evasion (CLAUDE.md), so DuckDuckGo-primary was NOT built. You.com's keyless
+  free endpoint answers the honest UA.
+- Configured paid-or-trial engines all answer: Serper, Exa, Jina, Firecrawl,
+  Tavily (stripe.com/contact first in four of five).
+
+### Verified
+
+typecheck · lint · unit 282 files / 4,697 tests (new `gemini-embedding` 12) ·
+build. verification-reviewer PASS 8/8. product-risk-reviewer: ship with
+conditions — probe caching and Tavily cap fixed above.
+
+### Open — owner decisions
+
+- **Privacy:** Hubble questions (which can name a lead) and fetched page text
+  now go to Google for embedding. On Gemini's free tier Google may use inputs
+  to improve products; on a billing-enabled project it does not. Confirm the
+  key's tier, or name Google as a sub-processor in the privacy copy.
+- **Search engine** for production: see the options given to the owner
+  2026-10-13 (free recurring tiers: Diffbot, You.com keyless, Exa, Tavily).
+- Blank industry/LinkedIn/social columns have no "not yet enriched" indicator.
+
+---
+
+## 2026-10-13 — Free search waterfall: Diffbot primary, You.com, Exa
+
+**Not deployed. No migration.** Owner asked for free, permanent search engines.
+
+### Why these
+
+With Outlio's honest User-Agent, DuckDuckGo and Mojeek serve bot challenges;
+working around that is evasion (CLAUDE.md). The replacements are official APIs
+whose free tiers **refill monthly and need no card**, so they cannot bill:
+
+| Engine | Free allowance | Daily budget |
+|---|---|---|
+| Diffbot Web Search | 100,000/month, 60/min (diffbot.com/docs/web-search) | 3,200 |
+| You.com (keyless) | ~100/day per IP | 100 |
+| Exa | $10 credit/month (~1,400) | 45, metered |
+| Tavily | 1,000/month | 30, metered |
+
+Order: Solr → Diffbot → You.com → Exa → Brave → Mojeek → Tavily. An exhausted
+or throttled engine returns nothing; the breaker sidelines it for 60 s.
+Ruled out: Serper and Firecrawl (one-time credits), Brave (card, no cap), Jina
+and Marginalia (non-commercial free use), YaCy (only indexes what it crawls).
+
+### Code
+
+`DiffbotSearchProvider` (Bearer header; `after:` operator for time ranges),
+`YouComSearchProvider` (keyless; no retries; 6 s cap — a throttled call was
+measured hanging 12 s), `ExaSearchProvider` (key header; highlights as
+snippet; ≤10 results, the price point). Budgets in `lib/search/budget.ts`.
+
+### Verified
+
+Unit 283 files / 4,705 tests (new `search-engines-free` 9) · lint · typecheck ·
+build. **Live, through the real adapters** (temporary integration file, search
+keys only, no database): Diffbot 1.2–1.5 s, 5/5 hits, stripe.com and monzo.com
+first; Exa 1.8–2.0 s, 5/5; Tavily 1.8 s, 5/5; You.com 1.9 s, 5 hits on the
+first query, then 12 s and 0 on the second (throttled → now capped at 6 s).
+
+### Deploy checklist
+
+Set in Vercel production: `DIFFBOT_API_KEY`, `EXA_API_KEY`, `TAVILY_API_KEY`,
+`GEMINI_API_KEY` (and `VECTOR_SEARCH_API` once its project has the Generative
+Language API enabled). Do NOT copy `OLLAMA_URL` (loopback).
+
+---
+
+## 2026-10-13 — Common Crawl page discovery: built, measured, removed; parallel site reads kept
+
+**Not deployed. No migration.**
+
+### What was tried
+
+The website readers (`scout`, `company-contact`) read five fixed paths. Common
+Crawl's public index (free, keyless, answers an honest UA) was used to discover
+each company's real contact/team/imprint/about pages, which were then read LIVE
+from the company's site (never the archive). Built with ranking by whole page
+name, one page per kind preferring English/no-locale, 30-day cache, a 6 s cap
+on the reader's wait with the lookup finishing in the background.
+
+### Measured, then removed (owner decision)
+
+25 company domains sampled at random from production `companies` (read-only;
+aggregate only, no domain printed):
+
+| | Fixed paths | + Common Crawl |
+|---|---|---|
+| In the index with contact-type pages | — | 3 of 25 |
+| Own-domain emails | 16 | 16 |
+| All emails | 21 | 21 |
+| Companies 0 → ≥1 email | — | 0 |
+
+Ten large brands: 26 vs 26 emails. Cold lookups cost ~2–6 s per company and
+the index was intermittently slow. Sales Navigator leads are mostly too small
+to be crawled. **Do not rebuild without a lead mix that changes this.**
+
+### Kept
+
+`lib/intelligence/site-pages.ts`: the reading list and `inParallel`. Both
+readers now read their five pages **three at a time**: average read per company
+3.5 s → 2.5 s, and five sequential 8 s reads can no longer overrun the 15 s
+provider budget (the source of most `scout` timeouts in the 2026-10-12
+telemetry).
+
+### Verified
+
+typecheck · lint · unit 284 files / 4,709 tests (`site-pages` 4) · build.
+Staging `provider_cache` holds a few `common-crawl` rows from the live probes;
+nothing reads them and they expire within 30 days.
+
+---
+
+## 2026-10-13 — Monthly limit on automatic enrichment
+
+`AUTO_ENRICH_MONTHLY_LIMIT` (default 8,000; `0` pauses): leads — companies,
+for account-list stages — whose automatic batch STARTED this UTC month, across
+the deployment. Checked before each batch; past it the batch is deferred to the
+1st of next month (attempt refunded, `started_at` cleared so it counts against
+the month it runs in), never dropped. Usage unreadable → retry in 10 minutes.
+Hubble/console runs are not counted. Workers may overshoot by one batch each.
+
+Why: Vercel Hobby's caps (4 h active CPU, 360 GB-h) are HARD — hitting one
+stops the whole project until the month turns. 8,000 is a guess; set it from
+Vercel → Usage once ~500 leads have been enriched.
+
+Verified: typecheck · lint · unit 284 files / 4,713 tests (+4 limit cases) ·
+build.

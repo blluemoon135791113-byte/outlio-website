@@ -211,7 +211,6 @@ describe('extractTechnologies', () => {
 describe('the live registry', () => {
   const original = process.env.INTELLIGENCE_PROVIDER_ORDER
   const originalPaid = process.env.OUTLIO_ALLOW_PAID_PROVIDERS
-  const originalSearxngUrl = process.env.SEARXNG_URL
   const originalTavily = process.env.TAVILY_API_KEY
 
   /*
@@ -245,9 +244,6 @@ describe('the live registry', () => {
 
     if (originalPaid === undefined) delete process.env.OUTLIO_ALLOW_PAID_PROVIDERS
     else process.env.OUTLIO_ALLOW_PAID_PROVIDERS = originalPaid
-
-    if (originalSearxngUrl === undefined) delete process.env.SEARXNG_URL
-    else process.env.SEARXNG_URL = originalSearxngUrl
 
     if (originalTavily === undefined) delete process.env.TAVILY_API_KEY
     else process.env.TAVILY_API_KEY = originalTavily

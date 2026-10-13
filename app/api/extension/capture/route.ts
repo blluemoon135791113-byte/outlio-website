@@ -25,6 +25,11 @@ import { isAppError } from '@/lib/errors/catalog'
 
 /** Node runtime: the ingest path uses node:crypto and the service role. */
 export const runtime = 'nodejs'
+/**
+ * The page's `after()` extracts it and then continues its enrichment batches
+ * (`processClaim`), which plan against a 300s wake-up.
+ */
+export const maxDuration = 300
 
 /** A Sales Navigator results page is ~1 MB of HTML; 4 MB is generous. */
 const MAX_HTML_BYTES = 4 * 1024 * 1024

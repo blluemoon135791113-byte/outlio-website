@@ -14,10 +14,44 @@ import { z } from 'zod'
 
 import { RESEARCH_FIELDS, researchFieldSchema } from '@/lib/intelligence/types'
 
+/**
+ * One step still to do in an automatic post-extraction enrichment chain.
+ *
+ * `job_leads` walks the job's own leads by a stable order, so a large upload
+ * does not copy thousands of ids into every batch. The id-carrying stages
+ * exist for account lists, whose recommended leads can belong to older jobs.
+ */
+export const autoEnrichStepSchema = z.union([
+  z.object({ stage: z.literal('job_leads'), offset: z.number().int().min(0).max(1_000_000) }),
+  z.object({
+    stage: z.enum(['leads', 'company_discovery', 'company_contacts']),
+    ids: z.array(z.string().uuid()).min(1).max(10_000),
+  }),
+])
+
+export type AutoEnrichStep = z.infer<typeof autoEnrichStepSchema>
+
+/**
+ * Marks a run as one batch of an upload's automatic enrichment, and names what
+ * comes after it. Batches of one upload run strictly one after another: each
+ * rebuilds the same CSV, and two rebuilds racing can land the staler one last.
+ */
+export const autoEnrichSchema = z.object({
+  jobId: z.string().uuid(),
+  stage: z.enum(['job_leads', 'leads', 'company_discovery', 'company_contacts']),
+  next: z.array(autoEnrichStepSchema).max(4),
+})
+
+export type AutoEnrich = z.infer<typeof autoEnrichSchema>
+
 /** Which leads the question applies to (spec §31). */
 export const researchScopeSchema = z.discriminatedUnion('type', [
   /** Explicitly chosen leads. The safest scope, and the default from the UI. */
-  z.object({ type: z.literal('lead_ids'), leadIds: z.array(z.string().uuid()).min(1).max(10_000) }),
+  z.object({
+    type: z.literal('lead_ids'),
+    leadIds: z.array(z.string().uuid()).min(1).max(10_000),
+    autoEnrich: autoEnrichSchema.optional(),
+  }),
   /**
    * Explicitly chosen COMPANIES, whether or not any surviving lead points at
    * them.
@@ -29,6 +63,7 @@ export const researchScopeSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('company_ids'),
     companyIds: z.array(z.string().uuid()).min(1).max(10_000),
+    autoEnrich: autoEnrichSchema.optional(),
   }),
   /** Everything from one extraction run. */
   z.object({ type: z.literal('extraction_job'), extractionJobId: z.string().uuid() }),
@@ -75,6 +110,19 @@ export const researchScopeSchema = z.discriminatedUnion('type', [
 ])
 
 export type ResearchScope = z.infer<typeof researchScopeSchema>
+
+/**
+ * A scope as a CLIENT may send it.
+ *
+ * ⚠️ `autoEnrich` IS SERVER-ONLY. A run carrying it is merged into the leads
+ * automatically, rebuilds the CSV, and queues the batches named in `next` —
+ * so accepting it from a request would let a caller skip the console's
+ * deliberate merge and fan out work of their choosing.
+ */
+export const clientResearchScopeSchema = researchScopeSchema.refine(
+  (scope) => !('autoEnrich' in scope) || scope.autoEnrich === undefined,
+  { message: 'autoEnrich is not accepted from a client.' },
+)
 
 export const researchPlanSchema = z.object({
   /** Whether the question is about companies or the people at them. */

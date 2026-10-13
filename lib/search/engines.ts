@@ -9,9 +9,7 @@ import 'server-only'
  * engine be added in twenty lines.
  */
 import { requestJson, requestText, setHostPacing } from '@/lib/intelligence/http'
-import { googleCseSearch, hasGoogleCseCredentials } from '@/lib/intelligence/providers/google-cse'
 import { hasTavilyCredentials, tavilySearch } from '@/lib/intelligence/providers/tavily'
-import { McpWebResearchSearchProvider } from '@/lib/hubble/providers/mcp-web-research'
 import { SolrSearchProvider } from '@/lib/hubble/providers/solr'
 import type { DeadlineOptions, SearchHit, SearchProvider } from '@/lib/hubble/providers/types'
 import type { SerpTimeRange } from '@/lib/search/serp'
@@ -19,36 +17,188 @@ import type { SerpTimeRange } from '@/lib/search/serp'
 /** Deadline plus the one retrieval knob some engines can honour. */
 export type EngineOptions = DeadlineOptions & { timeRange?: SerpTimeRange }
 
+/** `after:YYYY-MM-DD` for a relative window, for engines that take operators. */
+function afterOperator(range: SerpTimeRange | undefined, now = Date.now()): string | null {
+  if (!range) return null
+  const days = { day: 1, week: 7, month: 31, year: 366 }[range]
+  return `after:${new Date(now - days * 86_400_000).toISOString().slice(0, 10)}`
+}
+
 /**
- * Google Programmable Search — free, no card, and it reuses a project you have.
+ * Diffbot Web Search — the primary engine (2026-10-13).
  *
- * The request itself lives in `lib/intelligence/providers/google-cse.ts`; this
- * is only the `SearchProvider` adapter around it. There used to be two separate
- * implementations of this call, one here and one there, which is exactly how
- * two callers end up with different `num` caps and different quota behaviour.
+ * Diffbot's own crawled index (the largest outside Google and Bing), reranked
+ * for factual relevance and primary sources. Free plan: 100,000 queries a
+ * month at 60 a minute, no card — so it cannot bill. Official API, honest
+ * key; nothing here is scraped.
  */
-export class GoogleCseSearchProvider implements SearchProvider {
-  readonly name = 'google-cse'
+export class DiffbotSearchProvider implements SearchProvider {
+  readonly name = 'diffbot'
+
+  private get token(): string | null {
+    return process.env.DIFFBOT_API_KEY?.trim() || null
+  }
 
   isConfigured(): boolean {
-    // ⚠️ BOTH key and engine id are required. A key without a `cx` is not a
-    // usable configuration, and treating it as one spends a waterfall slot on
-    // an engine that can only ever return 400s.
-    return hasGoogleCseCredentials()
+    return this.token !== null
   }
 
   async search(query: string, limit: number, options: EngineOptions = {}): Promise<SearchHit[]> {
+    const token = this.token
+    if (!token) return []
+
+    const url = new URL('https://llm.diffbot.com/api/v1/web_search')
+    const after = afterOperator(options.timeRange)
+    url.searchParams.set('text', [query.slice(0, 400), after].filter(Boolean).join(' '))
+    url.searchParams.set('size', String(Math.min(Math.max(limit, 1), 20)))
+
+    // 60 queries a minute on the free plan.
+    setHostPacing('llm.diffbot.com', 1_050)
+
     try {
-      return await googleCseSearch(query, limit, {
-        timeRange: options.timeRange,
+      const payload = await requestJson<{
+        search_results?: Array<{ pageUrl?: string; title?: string; content?: string; date?: string }>
+      }>({
+        url: url.toString(),
+        headers: { accept: 'application/json', authorization: `Bearer ${token}` },
         deadlineAt: options.deadlineAt,
       })
+
+      return (payload.search_results ?? [])
+        .filter((result): result is { pageUrl: string } & typeof result => typeof result.pageUrl === 'string')
+        .slice(0, limit)
+        .map((result) => ({
+          url: result.pageUrl,
+          title: result.title?.trim() || null,
+          snippet: result.content?.trim() || null,
+          publishedDate: result.date ?? null,
+        }))
     } catch {
-      /*
-       * Includes the daily quota being spent, which returns 429. The budget
-       * layer in `lib/search/budget.ts` is what stops that from silently
-       * looking like "this company does not exist".
-       */
+      return []
+    }
+  }
+}
+
+/**
+ * You.com — keyless, and an OFFICIAL free tier, not a scrape.
+ *
+ * About 100 queries a day per IP with no key or account. It answers Outlio's
+ * honest User-Agent (tested 2026-10-13), which DuckDuckGo and Mojeek do not.
+ * The cap is per IP and serverless egress IPs are shared, so a 429 is an
+ * ordinary miss and the waterfall moves on.
+ *
+ * `SERP_YOUCOM=off` removes it.
+ */
+export class YouComSearchProvider implements SearchProvider {
+  readonly name = 'youcom'
+
+  isConfigured(): boolean {
+    return process.env.SERP_YOUCOM?.trim().toLowerCase() !== 'off'
+  }
+
+  async search(query: string, limit: number, options: EngineOptions = {}): Promise<SearchHit[]> {
+    if (!this.isConfigured()) return []
+
+    const url = new URL('https://api.you.com/v1/agents/search')
+    url.searchParams.set('query', query.slice(0, 400))
+    url.searchParams.set('count', String(Math.min(Math.max(limit, 1), 20)))
+    if (options.timeRange) url.searchParams.set('freshness', options.timeRange)
+
+    setHostPacing('api.you.com', 1_000)
+
+    try {
+      const payload = await requestJson<{
+        results?: { web?: Array<{ url?: string; title?: string; description?: string; snippets?: unknown }> }
+      }>({
+        url: url.toString(),
+        headers: { accept: 'application/json' },
+        deadlineAt: options.deadlineAt,
+        // A throttled keyless call is a miss, not something to retry into.
+        maxRetries: 0,
+        /*
+         * Measured 2026-10-13: a throttled call can hang ~12s before returning
+         * nothing. It sits second in the waterfall, so every fallback would
+         * pay that wait; a healthy answer takes ~1.5-2s.
+         */
+        timeoutMs: 6_000,
+      })
+
+      return (payload.results?.web ?? [])
+        .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
+        .slice(0, limit)
+        .map((result) => {
+          const snippets = Array.isArray(result.snippets)
+            ? result.snippets.filter((part): part is string => typeof part === 'string')
+            : []
+          return {
+            url: result.url,
+            title: result.title?.trim() || null,
+            snippet: [result.description, ...snippets].filter(Boolean).join(' ').trim() || null,
+            publishedDate: null,
+          }
+        })
+    } catch {
+      return []
+    }
+  }
+}
+
+/**
+ * Exa — neural search over its own index.
+ *
+ * Free tier: $10 of credit every month with no payment method (~1,400 basic
+ * searches at $7/1k). With no card on file an exhausted month is refused,
+ * never billed; the daily budget keeps one busy day from spending the month.
+ */
+export class ExaSearchProvider implements SearchProvider {
+  readonly name = 'exa'
+
+  private get apiKey(): string | null {
+    return process.env.EXA_API_KEY?.trim() || null
+  }
+
+  isConfigured(): boolean {
+    return this.apiKey !== null
+  }
+
+  async search(query: string, limit: number, options: EngineOptions = {}): Promise<SearchHit[]> {
+    const apiKey = this.apiKey
+    if (!apiKey) return []
+
+    const after = afterOperator(options.timeRange)
+    try {
+      const payload = await requestJson<{
+        results?: Array<{ url?: string; title?: string; highlights?: unknown; publishedDate?: string }>
+      }>({
+        url: 'https://api.exa.ai/search',
+        method: 'POST',
+        headers: { accept: 'application/json', 'x-api-key': apiKey },
+        body: {
+          query: query.slice(0, 400),
+          // 10 results is the price point; more costs extra per result.
+          numResults: Math.min(Math.max(limit, 1), 10),
+          type: 'auto',
+          contents: { highlights: { numSentences: 2 } },
+          ...(after ? { startPublishedDate: `${after.slice('after:'.length)}T00:00:00.000Z` } : {}),
+        },
+        deadlineAt: options.deadlineAt,
+      })
+
+      return (payload.results ?? [])
+        .filter((result): result is { url: string } & typeof result => typeof result.url === 'string')
+        .slice(0, limit)
+        .map((result) => {
+          const highlights = Array.isArray(result.highlights)
+            ? result.highlights.filter((part): part is string => typeof part === 'string')
+            : []
+          return {
+            url: result.url,
+            title: result.title?.trim() || null,
+            snippet: highlights.join(' ').trim() || null,
+            publishedDate: result.publishedDate ?? null,
+          }
+        })
+    } catch {
       return []
     }
   }
@@ -57,8 +207,7 @@ export class GoogleCseSearchProvider implements SearchProvider {
 /**
  * Brave Search — a real index on a free tier, with nothing to host.
  *
- * ~2,000 queries a month (≈66/day). Exists alongside Google CSE because the two
- * caps are independent: exhausting one still leaves the other.
+ * ~2,000 queries a month (≈66/day).
  */
 export class BraveSearchProvider implements SearchProvider {
   readonly name = 'brave'
@@ -232,18 +381,35 @@ export class MojeekSearchProvider implements SearchProvider {
 /**
  * The default engine order for this deployment.
  *
- * ⚠️ ORDER IS COST, CHEAPEST FIRST. Reusable local knowledge, then the
- * operator's own research service, then capped free tiers, then the keyless
- * index, then anything metered.
+ * ⚠️ ORDER IS COST, CHEAPEST FIRST. Reusable local knowledge, then the free
+ * tiers that refill monthly and need no card (largest allowance first), then
+ * card-backed or metered vendors.
+ *
+ *   Diffbot  — 100,000/month free     You.com — ~100/day keyless
+ *   Exa      — $10/month free credit  Tavily  — 1,000/month free
+ *
+ * Every engine here is an official API answering an honest identity. When
+ * one is exhausted or throttled it returns nothing, the breaker sidelines it
+ * for a minute, and the next one answers.
  *
  * Mojeek sits ABOVE Tavily deliberately: an uncapped free index should be
  * exhausted before a metered vendor is billed.
+ *
+ * ⚠️ REMOVED 2026-10-12, AND WHY — do not re-add without re-checking:
+ *   · Google Custom Search JSON API: closed to new customers in 2025 and
+ *     discontinued on 2027-01-01. It could never be enabled on this account.
+ *   · The web-research MCP engine (SearXNG first, DuckDuckGo behind it): it
+ *     only ever ran on localhost, and the hosted SearXNG (outlio-searxng on
+ *     Fly) no longer answers. On Vercel it was a dead slot every query paid
+ *     for. The MCP's lead-research stage (`lib/intelligence/run.ts`) is a
+ *     separate client and is untouched.
  */
 export function defaultSearchEngines(): SearchProvider[] {
   return [
     new SolrSearchProvider(),
-    new McpWebResearchSearchProvider(),
-    new GoogleCseSearchProvider(),
+    new DiffbotSearchProvider(),
+    new YouComSearchProvider(),
+    new ExaSearchProvider(),
     new BraveSearchProvider(),
     new MojeekSearchProvider(),
     new TavilySearchProvider(),

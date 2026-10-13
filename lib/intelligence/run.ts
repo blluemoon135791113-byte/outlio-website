@@ -94,6 +94,12 @@ async function updateResearchProgress(
     .eq('user_id', userId)
 }
 
+/** Overlapping tasks for a search-backed run. Env-tunable, clamped to 1–16. */
+export function searchTaskConcurrency(): number {
+  const parsed = Number.parseInt(process.env.RESEARCH_SEARCH_CONCURRENCY ?? '', 10)
+  return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 16) : 6
+}
+
 function mcpEntityLimit(): number {
   const parsed = Number.parseInt(process.env.WEB_RESEARCH_MCP_MAX_ENTITIES ?? '3', 10)
   return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 10) : 3
@@ -750,9 +756,17 @@ export async function processResearchRun(
 
   const executionOptions = {
     registry: buildLiveRegistry(),
-    // The operator-owned service is paced at the HTTP layer. Eight overlapping
-    // requests keeps a visible 25-lead search responsive without bursting the
-    // upstream engines; third-party categories retain the conservative four.
+    /*
+     * Search-backed runs overlap `searchTaskConcurrency()` tasks; third-party
+     * categories keep the executor's conservative default.
+     *
+     * ⚠️ THIS WAS 2, and it was the main reason a 19-lead run took 476s on
+     * production (2026-10-12 telemetry): most of a task's time is a company
+     * site or a slow probe timing out, not the search engine. A search engine
+     * that pushes back records zero results and trips the circuit breaker —
+     * it is never worked around — so a too-high value costs hit rate, not
+     * a block evasion. Tune with RESEARCH_SEARCH_CONCURRENCY.
+     */
     concurrency:
       hasWebSearch() &&
       (companyFields.length > 0 ||
@@ -761,7 +775,7 @@ export async function processResearchRun(
             RESEARCH_FIELD_SPEC[field].category,
           ),
         ))
-        ? 2
+        ? searchTaskConcurrency()
         : undefined,
   }
 
@@ -1173,6 +1187,111 @@ export async function claimAndProcessResearchRun(
 
   const claim = Array.isArray(data) ? data[0] : null
   if (!claim) return null
+
+  return processClaimedResearchRun(runId, userId)
+}
+
+/**
+ * Claims the oldest due run of ANY user — the untargeted drain.
+ *
+ * ⚠️ WHY THIS EXISTS. `claim_next_research_run` sat uncalled from 0045 until
+ * 2026-10-12, so a run whose `after()` was cut short was reaped back to
+ * `pending` and then never picked up again: 17 automatic enrichments were
+ * found parked that way, the oldest for seven weeks. Same defect, same fix as
+ * `claimAndProcessOne` for extraction.
+ */
+export async function claimNextResearchRun(
+  claimedBy: string,
+): Promise<{ runId: string; userId: string } | null> {
+  const { data, error } = await createAdminClient().rpc('claim_next_research_run', {
+    p_claimed_by: claimedBy,
+  })
+  if (error) throw new Error(`research claim failed: ${concise(error.message)}`)
+
+  const claim = Array.isArray(data) ? data[0] : null
+  return claim ? { runId: claim.research_run_id, userId: claim.user_id } : null
+}
+
+/** Returns claimed-but-abandoned runs to the queue. Count of runs touched. */
+export async function reapStaleResearchRuns(timeoutSeconds: number): Promise<number> {
+  const { data, error } = await createAdminClient().rpc('reap_stale_research_runs', {
+    p_timeout_seconds: timeoutSeconds,
+  })
+  if (error) throw new Error(`research reap failed: ${concise(error.message)}`)
+  return data ?? 0
+}
+
+/**
+ * Retires a claimed run without researching it, e.g. one superseded by a
+ * re-planned chain. `cancelled` is terminal, so it can never be claimed again.
+ */
+export async function cancelClaimedResearchRun(
+  runId: string,
+  userId: string,
+  message: string,
+): Promise<void> {
+  const supabase = createAdminClient()
+  await supabase
+    .from('research_runs')
+    .update({
+      status: 'cancelled',
+      error_message: message,
+      completed_at: new Date().toISOString(),
+      progress_stage: 'cancelled',
+    })
+    .eq('id', runId)
+    .eq('user_id', userId)
+  await supabase.from('research_job_queue').update({ status: 'done' }).eq('research_run_id', runId)
+}
+
+/**
+ * Hands a claimed run back to the queue, not to be claimed before `until`.
+ *
+ * The claim's attempt is refunded: a run paused by a quota did not fail, and
+ * three pauses must not exhaust it into `failed`.
+ */
+export async function deferClaimedResearchRun(
+  runId: string,
+  userId: string,
+  until: Date,
+  message: string,
+): Promise<void> {
+  const supabase = createAdminClient()
+  const { data: queue } = await supabase
+    .from('research_job_queue')
+    .select('attempts')
+    .eq('research_run_id', runId)
+    .maybeSingle()
+
+  await supabase
+    .from('research_job_queue')
+    .update({
+      status: 'pending',
+      claimed_at: null,
+      claimed_by: null,
+      next_attempt_at: until.toISOString(),
+      attempts: Math.max(0, (queue?.attempts ?? 1) - 1),
+    })
+    .eq('research_run_id', runId)
+  await supabase
+    .from('research_runs')
+    // `started_at` cleared: usage is counted by start month, and a batch
+    // deferred into next month must count against next month.
+    .update({ status: 'pending', progress_stage: 'queued', error_message: message, started_at: null })
+    .eq('id', runId)
+    .eq('user_id', userId)
+}
+
+/**
+ * Processes a run this caller has ALREADY claimed. A failure goes back to the
+ * queue for another attempt, or fails the run once attempts are exhausted —
+ * then rethrows.
+ */
+export async function processClaimedResearchRun(
+  runId: string,
+  userId: string,
+): Promise<ResearchOutcome> {
+  const supabase = createAdminClient()
 
   try {
     return await processResearchRun(runId, userId)

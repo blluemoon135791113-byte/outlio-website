@@ -44,16 +44,23 @@ export type EngineBudget = {
  * who wants headroom sets the environment variable.
  */
 const DEFAULT_BUDGETS: Record<string, EngineBudget> = {
-  // 100 queries/day on the free Custom Search JSON API.
-  'google-cse': { perDay: 100, metered: false },
+  // Free plan: 100,000 queries/month at 60/minute, no card ≈ 3,200/day.
+  diffbot: { perDay: 3_200, metered: false },
+  // Keyless, ~100/day per IP.
+  youcom: { perDay: 100, metered: false },
+  // $10/month free credit at $7/1k ≈ 1,400/month ≈ 45/day. Metered: a card on
+  // file would turn overflow into a bill.
+  exa: { perDay: 45, metered: true },
   // 2,000 queries/month ≈ 66/day.
   brave: { perDay: 66, metered: false },
   // Paid per call. No free tier to reason about, so the default is deliberately
   // small — an unbounded default on a metered vendor is how bills happen.
-  tavily: { perDay: 200, metered: true },
+  // 1,000 free credits a month (no card) ≈ 32/day. A daily cap above that lets
+  // one busy day spend the month's free tier, after which every query fails
+  // and reads as "no results".
+  tavily: { perDay: 30, metered: true },
   // Operator-owned or keyless. Costs a request, not a credit.
   solr: { perDay: null, metered: false },
-  'web-research-mcp': { perDay: null, metered: false },
   mojeek: { perDay: null, metered: false },
 }
 

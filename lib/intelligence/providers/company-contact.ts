@@ -10,6 +10,7 @@ import 'server-only'
 import { normalizeDomain } from '@/lib/companies/normalize'
 import { extractReadable } from '@/lib/hubble/extract/readable'
 import { requestTextWithMeta } from '@/lib/intelligence/http'
+import { inParallel, siteReadingList } from '@/lib/intelligence/site-pages'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
 import type {
   CompanyEntity,
@@ -18,7 +19,6 @@ import type {
   ResearchTask,
 } from '@/lib/intelligence/types'
 
-const CONTACT_PATHS = ['', '/contact', '/contact-us', '/about', '/about-us'] as const
 const MAX_BYTES = 300_000
 const WANTED = new Set(['company_contact_email', 'company_contact_phone'])
 const GENERIC_LOCAL_PRIORITY = [
@@ -60,13 +60,13 @@ export function selectCompanyContacts(
   }
 }
 
+/** Reads the company's own contact-bearing pages, three at a time. */
 async function fetchContacts(company: CompanyEntity): Promise<CompanyContactResult | null> {
   const domain = normalizeDomain(company.domain)
   if (!domain) return null
-  const pages: Array<{ url: string; emails: string[]; phones: string[] }> = []
 
-  for (const path of CONTACT_PATHS) {
-    const requestedUrl = `https://${domain}${path}/`
+  const reading = siteReadingList(domain)
+  const read = await inParallel(reading, 3, async (requestedUrl) => {
     try {
       const response = await requestTextWithMeta({
         url: requestedUrl,
@@ -76,15 +76,17 @@ async function fetchContacts(company: CompanyEntity): Promise<CompanyContactResu
         truncateWhenTooLarge: true,
       })
       const readable = extractReadable(response.text, response.finalUrl || requestedUrl)
-      pages.push({
+      return {
         url: response.finalUrl || requestedUrl,
         emails: readable.structured.emails,
         phones: readable.structured.phones,
-      })
+      }
     } catch {
       // A missing /contact page does not make the company or the run fail.
+      return null
     }
-  }
+  })
+  const pages = read.filter((page): page is NonNullable<typeof page> => page !== null)
 
   const selected = selectCompanyContacts(domain, pages)
   return selected.email || selected.phone ? selected : null

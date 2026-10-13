@@ -35,9 +35,7 @@ import {
   mapInConcurrentBatches,
   resolveFileConcurrency,
 } from '@/lib/worker/concurrency'
-import { enrichAccountCompaniesFree, enrichJobFree } from '@/lib/worker/enrich-free'
-import { rebuildAccountListExport } from '@/lib/worker/rebuild-account-export'
-import { rebuildJobExport } from '@/lib/worker/rebuild-export'
+import { continueAutoEnrichment, startAutoEnrichment } from '@/lib/worker/enrich-free'
 
 /**
  * Exports live in their OWN bucket, not alongside uploads.
@@ -57,6 +55,8 @@ export type ProcessOutcome = {
   leadsKept: number
   filesProcessed: number
   filesFailed: number
+  /** First queued batch of automatic enrichment; null when none was queued. */
+  enrichmentRunId?: string | null
 }
 
 /**
@@ -354,21 +354,14 @@ export async function processJob(jobId: string, userId: string): Promise<Process
 
     /*
      * Company rows are researched even if LinkedIn supplied no person. Real
-     * recommendations use the ordinary lead contact pipeline. Both passes are
-     * free-only, bounded, and happen after the account list is already usable.
+     * recommendations use the ordinary lead contact pipeline. Free-only, and
+     * only QUEUED here: the account list is already usable, and the batches
+     * are continued by `processClaim` and the cron drain.
      */
-    void Promise.all([
-      enrichAccountCompaniesFree(jobId, userId, persisted.companyIds),
-      persisted.recommendedLeadIds.length > 0
-        ? enrichJobFree(jobId, userId, persisted.recommendedLeadIds)
-        : Promise.resolve(null),
-    ])
-      .then(async () => {
-        await rebuildAccountListExport(jobId, userId)
-      })
-      .catch(() => {
-        // Account membership and CRM export remain available without research.
-      })
+    const enrichmentRunId = await startAutoEnrichment(jobId, userId, {
+      leadIds: persisted.recommendedLeadIds,
+      companyIds: persisted.companyIds,
+    })
 
     if (job.capture_session_id) {
       await settleCaptureJob({ userId, jobId, found: allAccounts.length, kept: persisted.accountCount, status: 'processed' })
@@ -381,6 +374,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
       filesFailed,
       leadsParsed: 0,
       leadsKept: 0,
+      enrichmentRunId,
     }
   }
 
@@ -595,27 +589,15 @@ export async function processJob(jobId: string, userId: string): Promise<Process
    * ---- free enrichment, off the critical path ------------------------------
    *
    * FREE SOURCES ONLY. This runs on every extraction, so anything metered here
-   * would bill on every upload with nobody pressing a button. It fills company
-   * gaps the hover card missed and stands aside entirely if paid providers have
-   * been switched on.
+   * would bill on every upload with nobody pressing a button. It stands aside
+   * entirely if paid providers have been switched on.
    *
-   * The pass runs the ordinary research pipeline over the job's leads —
-   * company facts AND the free contact sources (scout: website-published
-   * emails; social-scout: bio emails and handle inventories). Only verified-
-   * by-publication addresses are ever stored; nothing is guessed.
-   *
-   * Not awaited: the user is already reading their leads. When the waterfall
-   * settles, the CSV is rewritten in place with whatever was found.
+   * Every lead of the job is researched — company facts AND the free contact
+   * sources — in batches. Only the first batch is QUEUED here; the user is
+   * already reading their leads, and `processClaim` continues the batches
+   * after this returns. Each finished batch rewrites the CSV in place.
    */
-  void enrichJobFree(jobId, userId)
-    .then(async (enriched) => {
-      if (enriched.evidenceWritten > 0 || enriched.leadsUpdated > 0) {
-        await rebuildJobExport(jobId, userId)
-      }
-    })
-    .catch(() => {
-      // The extraction stands on its own; enrichment is additive.
-    })
+  const enrichmentRunId = status === 'failed' ? null : await startAutoEnrichment(jobId, userId)
 
   /*
    * Extension captures only: roll the per-page result into its capture
@@ -639,6 +621,7 @@ export async function processJob(jobId: string, userId: string): Promise<Process
     leadsKept: report.uniqueKept,
     filesProcessed,
     filesFailed,
+    enrichmentRunId,
   }
 }
 
@@ -739,8 +722,17 @@ export async function claimAndProcessOne(claimedBy: string): Promise<ProcessOutc
   const claim = Array.isArray(data) ? data[0] : null
   if (!claim) return null
 
-  return processClaim(claim, claimedBy)
+  // The tick's 20s job budget has no room for research: the batches it queues
+  // are continued by the cron's research drain instead.
+  return processClaim(claim, claimedBy, { enrichFor: 0 })
 }
+
+/**
+ * How long a serverless wake-up keeps continuing its upload's enrichment after
+ * the extraction itself. Vercel ends the function at 300s; the batch reserve
+ * in `continueAutoEnrichment` keeps a started batch inside that.
+ */
+const ENRICH_WINDOW_MS = 270_000
 
 /** Atomically claims the exact job that caused this serverless wake-up. */
 export async function claimAndProcessJob(
@@ -767,12 +759,15 @@ export async function claimAndProcessJob(
 
 async function processClaim(
   claim: { job_id: string; user_id: string; attempts?: number },
-  _claimedBy: string,
+  claimedBy: string,
+  options: { enrichFor: number } = { enrichFor: ENRICH_WINDOW_MS },
 ): Promise<ProcessOutcome> {
   const supabase = createAdminClient()
+  const began = Date.now()
 
+  let outcome: ProcessOutcome
   try {
-    return await processJob(claim.job_id, claim.user_id)
+    outcome = await processJob(claim.job_id, claim.user_id)
   } catch (e) {
     const message = concise(e instanceof Error ? e.message : 'processing failed')
     const { data: queue } = await supabase
@@ -805,4 +800,19 @@ async function processClaim(
 
     throw e
   }
+
+  /*
+   * After the job is finished and recorded — never before, so a slow provider
+   * can neither hold the job at "Processing" nor turn a done job into a retry.
+   * Never throws; whatever does not fit stays queued for the cron drain.
+   */
+  if (options.enrichFor > 0) {
+    await continueAutoEnrichment(
+      outcome.enrichmentRunId ?? null,
+      claim.user_id,
+      began + options.enrichFor,
+      `${claimedBy}:enrich`,
+    )
+  }
+  return outcome
 }

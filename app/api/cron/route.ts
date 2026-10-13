@@ -1,7 +1,8 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import { after, NextResponse, type NextRequest } from 'next/server'
 
 import { isAuthorizedCronRequest } from '@/lib/workers/cron-auth'
 import { runTick } from '@/lib/workers/tick'
+import { drainResearchQueue } from '@/lib/worker/enrich-free'
 
 /**
  * The scheduled trigger for every background worker — R10.
@@ -18,8 +19,17 @@ import { runTick } from '@/lib/workers/tick'
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 
-// The tick does real network work — SMTP, IMAP, customer webhook endpoints.
-export const maxDuration = 60
+/*
+ * The tick does real network work — SMTP, IMAP, customer webhook endpoints —
+ * and holds itself to TICK_BUDGET_MS (45s). The rest of the 300s is the
+ * research drain below, which runs after the response so the scheduler's HTTP
+ * call is never held open for minutes.
+ */
+export const maxDuration = 300
+/** End of the window the research drain may START a batch inside. */
+const DRAIN_WINDOW_MS = 280_000
+/** Uploads whose enrichment advances in parallel per wake-up. */
+const DRAIN_WORKERS = 3
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
@@ -31,7 +41,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
+  const began = Date.now()
   const result = await runTick()
+
+  /*
+   * ⚠️ THE ONLY UNTARGETED CONSUMER OF THE RESEARCH QUEUE. Without it, an
+   * enrichment batch whose wake-up was cut short is reaped back to `pending`
+   * and never claimed again — 17 production runs sat that way for weeks.
+   */
+  after(async () => {
+    try {
+      await drainResearchQueue({
+        deadlineAt: began + DRAIN_WINDOW_MS,
+        workers: DRAIN_WORKERS,
+        claimedBy: `cron-${began}`,
+      })
+    } catch (error) {
+      console.error('[cron] research drain failed', {
+        message: error instanceof Error ? error.message : 'failed',
+      })
+    }
+  })
 
   /*
    * ⚠️ 200 WHENEVER THE TICK RAN, even if a job inside it failed. Schedulers
