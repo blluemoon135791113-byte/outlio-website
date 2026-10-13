@@ -314,8 +314,7 @@ export class MojeekSearchProvider implements SearchProvider {
 
     setHostPacing('www.mojeek.com', 2_000)
 
-    let html: string
-    html = await requestText({
+    const html = await requestText({
       url: url.toString(),
       headers: { accept: 'text/html' },
       deadlineAt: options.deadlineAt,
