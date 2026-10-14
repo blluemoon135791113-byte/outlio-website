@@ -33,7 +33,7 @@ import { apolloEmailProvider } from './apollo'
 import { companiesHouseProvider } from './companies-house'
 import { companyContactProvider } from './company-contact'
 import { dnsTechProvider } from './dns-tech'
-import { domainDiscoveryProvider } from './domain-discovery'
+import { domainDiscoveryProvider, searchDomainDiscoveryProvider } from './domain-discovery'
 import { domainProbeProvider } from './domain-probe'
 import { githubProvider } from './github'
 import { hackerNewsProvider } from './hackernews'
@@ -64,6 +64,7 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(companyContactProvider),
   eraseProviderType(gleifProvider),
   eraseProviderType(secEdgarProvider),
+  eraseProviderType(searchDomainDiscoveryProvider),
   eraseProviderType(domainDiscoveryProvider),
   eraseProviderType(domainProbeProvider),
   eraseProviderType(companyScoutProvider),
@@ -100,6 +101,9 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
     'gleif',
     'sec-edgar',
     'search-company-profile',
+    // Free search (Diffbot first) before the metered Tavily twin and before
+    // name-guessing: measured 16% of companies the guesser missed, ~1.4s.
+    'search-domain-discovery',
     'tavily-domain-discovery',
     // The keyless last line: probe the hosts the name implies and verify by
     // page content. Runs only when everything above declined or found nothing.
@@ -213,6 +217,7 @@ function isConfigured(name: string): boolean {
     case 'search-funding':
     case 'search-web':
     case 'search-company-profile':
+    case 'search-domain-discovery':
       return hasWebSearch()
     case 'search-contact-email':
     case 'search-contact-phone':
