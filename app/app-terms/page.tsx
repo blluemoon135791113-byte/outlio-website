@@ -55,7 +55,7 @@ export default function LeadEngineTerms() {
         <h1 className="mt-4 text-4xl font-bold uppercase tracking-tight sm:text-5xl">
           Lead Engine Terms of Service
         </h1>
-        <p className="mt-4 text-sm text-muted">Last updated: Monday, 10 August 2026</p>
+        <p className="mt-4 text-sm text-muted">Last updated: Thursday, 15 October 2026</p>
 
         <div className="mt-10 space-y-4 leading-relaxed text-ink/80">
           <p>
@@ -493,10 +493,12 @@ export default function LeadEngineTerms() {
           <p>
             We do not warrant that the Service will be uninterrupted or error-free, that any file
             will parse successfully, or that Extracted Data will be accurate, complete, or current.
-            Extracted Data reflects only what appeared in the file you uploaded at the moment you
-            saved it. <strong>We never infer, enrich, or invent missing values</strong> — a field
-            that was not in your file is returned empty. You are responsible for verifying Extracted
-            Data before relying on it.
+            Extracted Data reflects what appeared in the file you uploaded at the moment you saved
+            it, plus business contact details the Service found in public sources and records with
+            the page it found each one on. <strong>We never infer or invent missing values</strong> —
+            a field that neither your file nor a public source states is returned empty. Public
+            sources can be out of date or wrong, so contact details found there carry the same
+            disclaimer. You are responsible for verifying Extracted Data before relying on it.
           </p>
         </Section>
 
