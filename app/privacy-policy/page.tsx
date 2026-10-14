@@ -479,7 +479,8 @@ export default function LeadEnginePrivacy() {
         <Section title="9. Who We Share Data With">
           <p>
             We use a small number of infrastructure providers. Each is bound by a data processing
-            agreement and may use data only to provide its service to us.
+            agreement and may use data only to provide its service to us, except where the table
+            says otherwise.
           </p>
           <Table
             head={["Provider", "What it does", "Where"]}
@@ -491,7 +492,17 @@ export default function LeadEnginePrivacy() {
               ["Calendly", "Scheduling, if you book a call with us", "US"],
               [
                 "Google (Gemini API)",
-                "AI features: text embeddings and answers for questions you ask the Service. Receives public web page text and your question",
+                "AI features: text embeddings and answers for questions you ask the Service. Receives public web page text and your question. Used on Google's unpaid tier, under which Google may use this data to improve its products and its reviewers may read it",
+                "US",
+              ],
+              [
+                "Groq",
+                "AI answers for questions you ask the Service. Receives your question and the public text used to answer it. Does not train on it; may keep it up to 30 days for abuse monitoring",
+                "US",
+              ],
+              [
+                "OpenRouter",
+                "Routes AI answers to model providers that do not train on the data. Receives your question and the public text used to answer it",
                 "US",
               ],
               [
