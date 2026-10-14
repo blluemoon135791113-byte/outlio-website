@@ -1014,7 +1014,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -9029,6 +9029,7 @@ export type Database = {
       uploaded_files: {
         Row: {
           byte_size: number
+          content_purged_at: string | null
           content_sha256: string
           created_at: string
           deleted_at: string | null
@@ -9038,6 +9039,7 @@ export type Database = {
           id: string
           leads_found: number
           original_filename: string
+          parse_census: Json | null
           processed_at: string | null
           status: Database["public"]["Enums"]["file_status"]
           storage_path: string
@@ -9046,6 +9048,7 @@ export type Database = {
         }
         Insert: {
           byte_size: number
+          content_purged_at?: string | null
           content_sha256: string
           created_at?: string
           deleted_at?: string | null
@@ -9055,6 +9058,7 @@ export type Database = {
           id?: string
           leads_found?: number
           original_filename: string
+          parse_census?: Json | null
           processed_at?: string | null
           status?: Database["public"]["Enums"]["file_status"]
           storage_path: string
@@ -9063,6 +9067,7 @@ export type Database = {
         }
         Update: {
           byte_size?: number
+          content_purged_at?: string | null
           content_sha256?: string
           created_at?: string
           deleted_at?: string | null
@@ -9072,6 +9077,7 @@ export type Database = {
           id?: string
           leads_found?: number
           original_filename?: string
+          parse_census?: Json | null
           processed_at?: string | null
           status?: Database["public"]["Enums"]["file_status"]
           storage_path?: string

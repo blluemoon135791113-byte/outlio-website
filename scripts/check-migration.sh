@@ -326,6 +326,29 @@ create table public.research_evidence (
   expires_at        timestamptz,
   created_at        timestamptz not null default now());
 /*
+ * 0157 adds columns here. Created by 0005, which this harness does not
+ * replay. COPIED FROM 0005 (and 0001's enum), column for column — a scaffold
+ * missing a NOT NULL would accept rows the real table refuses.
+ */
+create type public.file_status as enum ('pending', 'processing', 'processed', 'failed');
+create table public.uploaded_files (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references auth.users(id) on delete cascade,
+  extraction_job_id uuid not null references public.extraction_jobs(id) on delete cascade,
+  original_filename text not null,
+  storage_path      text not null unique,
+  byte_size         bigint not null,
+  content_sha256    char(64) not null,
+  status            public.file_status not null default 'pending',
+  leads_found       int not null default 0,
+  error_code        text,
+  error_message     text,
+  processed_at      timestamptz,
+  deleted_at        timestamptz,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),
+  constraint uploaded_files_byte_size_check check (byte_size > 0));
+/*
  * 0156 adds columns and checks here. Created by 0067, which this harness does
  * not replay. COPIED FROM 0067, column for column, with its keys — a scaffold
  * missing a NOT NULL would accept rows the real table refuses.

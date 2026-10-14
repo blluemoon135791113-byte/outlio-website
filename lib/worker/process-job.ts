@@ -36,6 +36,8 @@ import {
   resolveFileConcurrency,
 } from '@/lib/worker/concurrency'
 import { continueAutoEnrichment, startAutoEnrichment } from '@/lib/worker/enrich-free'
+import { discardProcessedPages, pageCensus, scrubLinkedInCredentials } from '@/lib/upload/page-lifecycle'
+import type { Json } from '@/types/database'
 
 /**
  * Exports live in their OWN bucket, not alongside uploads.
@@ -352,6 +354,9 @@ export async function processJob(jobId: string, userId: string): Promise<Process
 
     await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
 
+    // The job is finished: its parsed pages have nothing left to give.
+    await discardProcessedPages(jobId, userId)
+
     /*
      * Company rows are researched even if LinkedIn supplied no person. Real
      * recommendations use the ordinary lead contact pipeline. Free-only, and
@@ -586,6 +591,13 @@ export async function processJob(jobId: string, userId: string): Promise<Process
   await supabase.from('job_queue').update({ status: 'done' }).eq('job_id', jobId)
 
   /*
+   * The job is finished and its leads and CSV are stored, so its parsed pages
+   * are removed now (failed ones are kept 14 days by the sweep). Never before
+   * this point: a retried job re-reads its files.
+   */
+  await discardProcessedPages(jobId, userId)
+
+  /*
    * ---- free enrichment, off the critical path ------------------------------
    *
    * FREE SOURCES ONLY. This runs on every extraction, so anything metered here
@@ -666,7 +678,30 @@ async function parseOne(storagePath: string, fileId: string, userId: string, job
 
   // Decode with the encoding the sniffer detected, not a hardcoded UTF-8 —
   // that assumption is defect G3 in the original scraper.
-  const html = new TextDecoder(sniff.encoding, { fatal: false }).decode(bytes)
+  const decoded = new TextDecoder(sniff.encoding, { fatal: false }).decode(bytes)
+
+  /*
+   * ⚠️ LINKEDIN SESSION VALUES NEVER STAY STORED (rule 2). A page saved while
+   * signed in can carry them in inline scripts. The parser never needs them,
+   * and a page that fails is kept 14 days — so the stored copy is replaced by
+   * the scrubbed one whenever anything was removed. `content_sha256` stays the
+   * hash of what was uploaded, so duplicate detection is unchanged.
+   */
+  const scrubbed = scrubLinkedInCredentials(decoded)
+  const html = scrubbed.html
+  let scrubWriteBackFailed = false
+  if (scrubbed.removed > 0) {
+    const { error: scrubError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      // Plain `text/html`, no charset: Supabase matches allowed_mime_types as
+      // a whole string (see the export upload below).
+      .upload(storagePath, new TextEncoder().encode(html), { upsert: true, contentType: 'text/html' })
+    if (scrubError) {
+      // Recorded, never silent: the stored copy still holds the values.
+      scrubWriteBackFailed = true
+      console.warn('[pages] scrubbed copy not written back', { fileId })
+    }
+  }
 
   /*
    * ⚠️ ROUTE BEFORE PARSING, SO A VALID FILE IS NOT CALLED BROKEN.
@@ -683,6 +718,23 @@ async function parseOne(storagePath: string, fileId: string, userId: string, job
    * that may be something else entirely.
    */
   const pageType = detectSavedPageType(html)
+
+  // The fingerprint kept in place of the page. Counts only; non-fatal.
+  await supabase
+    .from('uploaded_files')
+    .update({
+      parse_census: pageCensus({
+        html,
+        pageType,
+        bytes: bytes.byteLength,
+        encoding: sniff.encoding,
+        credentialsScrubbed: scrubbed.removed,
+        scrubWriteBackFailed,
+      }) as unknown as Json,
+    })
+    .eq('id', fileId)
+    .eq('extraction_job_id', jobId)
+    .eq('user_id', userId)
 
   if (pageType === 'account_list' || pageType === 'account_search') {
     try {
