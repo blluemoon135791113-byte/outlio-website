@@ -13352,3 +13352,71 @@ answered 19, 1 had no answer anywhere.
 within 6 h of 15:50 UTC. Contact hit rates in the first batches were low
 (search email 0/55, phone 3/55; scout 0/29) — partly this bug; re-measure
 after the fix is live before tuning providers.
+
+---
+
+## 2026-10-14 — Saved pages are deleted once processed
+
+**Not deployed. Needs migration 0157 applied by hand FIRST, then
+`RAW_PAGE_PURGE_FROM` set in Vercel — deletion is off until it is.**
+
+### Why
+
+Every uploaded or captured Sales Navigator page was kept in the private
+`uploads` bucket forever: 230 pages / 179 MB on 2026-10-14, each carrying the
+name, title, location and blurb of every person on it. Nothing reads a page
+after it parses. No credential stripping existed, although the privacy policy
+promised it. At ~0.8 MB a page the free tier's 1 GB fills in ~1,000 uploads.
+
+### What changed
+
+- **0157:** `uploaded_files.content_purged_at` + `parse_census` (object-only
+  check) + a partial index. `deleted_at` is NOT reused: the dashboard and the
+  Hubble run picker list files WHERE deleted_at IS NULL. Validated with
+  `scripts/check-migration.sh` (harness gains an `uploaded_files` scaffold
+  copied from 0005); smoke 4/4.
+- `lib/upload/page-lifecycle.ts`:
+  - `scrubLinkedInCredentials` on first read (cookie values, JSON CSRF/session
+    properties, `<meta name="csrf-token">` via a linear scan, `ajax:` values);
+    the stored copy is replaced only when something was removed, with the
+    write-back checked (`scrubWriteBackFailed` in the census if it fails).
+  - `parse_census`: page type, bytes, encoding, `data-anonymize` anchor counts,
+    scrub count. Counts only.
+  - `discardProcessedPages` after a job finishes (both success paths) — never
+    mid-job, because a retry re-reads its files. Mark first, then remove; a
+    failed mark removes nothing, a failed removal is un-marked.
+  - `purgeDuePages` in the tick (`purge_uploaded_pages`): parsed pages left
+    behind once their job is no longer running, and any page older than 14
+    days. Throws on a failed read so `worker_runs` records it.
+  - `RAW_PAGE_PURGE_FROM`: **off while unset**; only pages uploaded on or after
+    it are touched. The 230 existing pages are untouched until the owner
+    approves their deletion.
+- Extension captures use the same `createExtractionJob` path, so one policy
+  covers both.
+- Privacy policy: pages deleted once processed (14 days at the latest), tokens
+  removed on first processing, retention table split, Section 7→8 reference.
+
+### Review (product-risk-reviewer: ship with conditions — all fixed)
+
+Cut-off default would have deleted same-day pages → now off until set.
+Write-back used `text/html; charset=utf-8` (Supabase matches MIME as a whole
+string) and ignored errors → plain `text/html`, checked. Meta regexes were
+quadratic on unclosed tags (4 s on 4 MB even bounded; a naive scan 17 s) →
+linear scan, 7 ms. Sweep errors read as "0 removed" → thrown. Copy carved out
+pre-existing pages.
+
+### Found along the way (owner decisions, not changed)
+
+- Privacy policy still says "We do not append emails, phone numbers, or any
+  data from other sources" — false since automatic enrichment (rule 1, revised
+  2026-09-03).
+- Section 9 sub-processors omit Google (Gemini), Diffbot, You.com, Exa, Tavily.
+- The extension row says it reads only lead search pages; it also reads
+  company pages (SELECTOR_MAP §5).
+- CLAUDE.md's parser trap is stale for the current table layout, where
+  `data-anonymize="job-title"` IS the role (`lib/leads/parse.ts` handles both).
+
+### Verified
+
+typecheck · eslint (exit 0) · unit (see commit) · build · `test.html` scrubbed
+locally: 0 values found, 25/25 leads parse identically.

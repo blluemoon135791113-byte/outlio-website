@@ -84,7 +84,7 @@ export default function LeadEnginePrivacy() {
         <h1 className="mt-4 text-4xl font-bold uppercase tracking-tight sm:text-5xl">
           Lead Engine Privacy Policy
         </h1>
-        <p className="mt-4 text-sm text-muted">Last updated: Thursday, 24 September 2026</p>
+        <p className="mt-4 text-sm text-muted">Last updated: Wednesday, 14 October 2026</p>
 
         <div className="mt-10 space-y-4 leading-relaxed text-ink/80">
           <p>
@@ -109,8 +109,10 @@ export default function LeadEnginePrivacy() {
                 or captured with our extension during a session you started.
               </li>
               <li>
-                Your uploaded files and extracted records are deleted on a schedule set by your
-                plan, or sooner if you clear them.
+                The page you upload or capture is deleted once it has been processed, and within 14
+                days at the latest; a page we could not read is kept that long so it can be
+                retried. Extracted records are deleted on a schedule set by your plan, or sooner if
+                you clear them.
               </li>
               <li>
                 <strong>One thing does outlive that:</strong> a short duplicate-detection key per
@@ -169,8 +171,8 @@ export default function LeadEnginePrivacy() {
 
         <Section title="4. Uploaded Files and Extracted Records">
           <p>
-            When you upload a file, we store the file itself in a private bucket and, once
-            processed, the structured records extracted from it. Extracted records may include a
+            When you upload a file, we store the file itself in a private bucket until it has been
+            processed, and the structured records extracted from it after that. Extracted records may include a
             person&apos;s name, job title, employer, location, profile URL, public summary line, and
             time in role or at the company.
           </p>
@@ -189,12 +191,20 @@ export default function LeadEnginePrivacy() {
               other sources.
             </li>
             <li>
-              If a file contains authentication material such as cookies or tokens, it is stripped
-              and never stored.
+              If a file contains LinkedIn session values such as cookies or tokens, they are removed
+              when the file is first processed, and the file itself is deleted soon after (see
+              below).
             </li>
             <li>
-              Files and extracted records are deleted per the schedule in Section 7, or immediately
-              when you clear them.
+              <strong>The file itself is deleted once it has been processed</strong>, and within 14
+              days at the latest; a file we could not read is kept that long so it can be retried.
+              We keep only a count-based record of its structure, with no personal data, so we can
+              detect when LinkedIn changes its page layout. Files uploaded before 14 October 2026
+              are being deleted separately; ask us and we will delete yours straight away.
+            </li>
+            <li>
+              Extracted records are deleted per the schedule in Section 8, or immediately when you
+              clear them.
             </li>
           </ul>
         </Section>
@@ -237,8 +247,8 @@ export default function LeadEnginePrivacy() {
               [
                 "Retention",
                 <>
-                  Captured pages follow the same schedule as uploaded files in Section 8, and you
-                  can clear them at any time.
+                  A captured page is deleted once it has been processed, exactly like an uploaded
+                  file (Section 8). You can clear the records it produced at any time.
                 </>,
               ],
             ]}
@@ -401,7 +411,15 @@ export default function LeadEnginePrivacy() {
             head={["Data", "Retention"]}
             rows={[
               [
-                "Uploaded files and extracted records",
+                "Uploaded and captured pages",
+                <>
+                  Deleted once processed, and within 14 days at the latest (a page we could not read
+                  is kept that long so it can be retried). Pages uploaded before 14 October 2026 are
+                  being deleted separately.
+                </>,
+              ],
+              [
+                "Extracted records",
                 <>
                   Deleted on your plan&apos;s schedule — 3 days on the free trial, 30 days on Lead
                   Engine, 90 days on Pro, 365 days on Pro + Hubble — or immediately when you clear them.

@@ -38,6 +38,7 @@ import { syncContactEvidenceToCrm } from '@/lib/crm/evidence-bridge'
 import { rollupWorkspace } from '@/lib/crm/metrics'
 import { retryWaitingLeads } from '@/lib/crm/routing'
 import { claimAndProcessOne } from '@/lib/worker/process-job'
+import { purgeDuePages } from '@/lib/upload/page-lifecycle'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type TickResult = {
@@ -415,6 +416,17 @@ export async function runTick(): Promise<TickResult> {
     const outcome = await claimAndProcessOne(`tick-${began}`)
     if (!outcome) return 'queue empty'
     return `1 orphaned job ${outcome.status}, ${outcome.leadsKept} lead(s) kept`
+  }, began)
+
+  /*
+   * Saved pages are not kept once they have nothing left to give: parsed ones
+   * a finished job left behind, and anything older than FAILED_PAGE_DAYS.
+   * After the extraction drain, so a job it just finished is swept too.
+   * Bounded per tick; the rest wait for the next one.
+   */
+  await runJob(result, 'purge_uploaded_pages', async () => {
+    const outcome = await purgeDuePages()
+    return `${outcome.processed} parsed and ${outcome.expired} expired page(s) removed`
   }, began)
 
   /*

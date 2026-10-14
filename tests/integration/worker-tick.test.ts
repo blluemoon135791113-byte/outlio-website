@@ -73,6 +73,8 @@ const EXPECTED_JOBS = [
    */
   'retry_routing',
   'drain_extraction_queue',
+  /* Removes saved pages once processed, and failed ones after 14 days. */
+  'purge_uploaded_pages',
   'rollup_reporting',
 ] as const
 
