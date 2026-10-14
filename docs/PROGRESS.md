@@ -13355,6 +13355,65 @@ after the fix is live before tuning providers.
 
 ---
 
+## 2026-10-14 — Domain discovery: the step every contact source waits on
+
+**Not deployed. No migration.**
+
+### Why
+
+Funnel over the 261 leads enriched in production after #60: 97% linked to a
+company, **40% with a website domain**, 9% with any contact. Every contact
+source except search reads the company's own site, so the 60% without a domain
+were never looked up there. Three defects sat in front of the contact sources:
+
+1. **`domain-probe` lost what it found.** Up to four guessed hosts, probed one
+   after another with retries, routinely outran the executor's 15 s limit —
+   and the timeout discarded even a host that had already verified (59 of 188
+   calls timed out).
+2. **No free search-based domain finder.** The only one is Tavily's, which is
+   metered and excluded with paid providers off.
+3. **`company-contact` never saw a domain discovered in the same run.** The
+   company phase is routed from the start-of-run snapshot, so it declined and
+   nothing asked again (28 calls for 104 companies that had a domain by the
+   end — while it is the best contact source, 36%).
+
+### Fix
+
+- `domain-probe` probes all candidates at once with no retries; two verifying
+  hosts still refuse.
+- `search-domain-discovery`: the shared free search (Diffbot first) +
+  the existing conservative `pickCompanyDomain`, ordered before the guesser.
+- After the company phase, companies that gained a domain get a second,
+  contact-fields-only pass (`companiesThatGainedADomain`).
+
+### Measured before building, then after
+
+25 domain-less production companies (names only sent to search):
+
+| | Before | After |
+|---|---|---|
+| Domains found | 2 (8%) | 8 (32%) — 4 via search, 4 via parallel probe |
+| Timeouts | 16 | 0 |
+| Avg per company | 13.9 s | 4.0 s |
+
+**Tested and NOT built** (data said no): reusing same-user stored domains
+(0 of 2,225 domain-less companies had a namesake with one); adding lead
+location to the domain query (3 vs 4 found, never a different answer);
+verifying domains against LinkedIn About text by embedding (only 15
+domain-less companies have About text).
+
+**Extension website capture** already exists end to end (§5 of
+SELECTOR_MAP) but has observed 0 of 3,385 companies in production — nobody
+opens company pages during a session. Prompting for it is a separate change.
+
+### Verified
+
+typecheck · eslint (exit 0) · unit 286 files / 4,726 tests (new
+`search-domain-discovery` 4, `company-contact-pass` 2, `domain-probe` +3) ·
+build.
+
+---
+
 ## 2026-10-14 — Saved pages are deleted once processed
 
 **Not deployed. Needs migration 0157 applied by hand FIRST, then
