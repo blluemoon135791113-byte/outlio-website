@@ -15,6 +15,20 @@ vi.mock('server-only', () => ({}))
 let hits: Array<{ url: string; title: string | null; snippet: string | null; publishedDate: string | null }> = []
 let searchAvailable = true
 const queries: string[] = []
+/* The page fetcher behind content verification: host → html, or no answer. */
+let pages: Record<string, string> = {}
+vi.mock('@/lib/intelligence/providers/domain-probe', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/intelligence/providers/domain-probe')>()
+  return {
+    ...original,
+    verifyHostPage: async (host: string, name: string) => {
+      const html = pages[host]
+      if (!html || !original.verifyPageMentionsCompany(name, html)) return null
+      return { domain: host, sourceUrl: `https://${host}/`, html }
+    },
+  }
+})
+
 vi.mock('@/lib/search', () => ({
   hasWebSearch: () => searchAvailable,
   serpSearch: async (query: string) => {
@@ -42,6 +56,7 @@ const load = () => import('@/lib/intelligence/providers/domain-discovery')
 
 beforeEach(() => {
   hits = []
+  pages = {}
   searchAvailable = true
   queries.length = 0
 })
@@ -99,3 +114,46 @@ describe('searchDomainDiscoveryProvider', () => {
     expect(provider.normalize(null, task(['company_domain']))).toEqual([])
   })
 })
+
+describe('content verification when the name-shape picker refuses', () => {
+  const brandHits = [
+    { url: 'https://quillworks.example/', title: 'Quillworks', snippet: null, publishedDate: null },
+    { url: 'https://someblog.example/post', title: 'A post', snippet: null, publishedDate: null },
+  ]
+
+  it('accepts the ONE result site that is the company speaking as itself', async () => {
+    hits = brandHits
+    pages['quillworks.example'] = '<title>Fabricated Systems — Home</title><p>Fabricated Systems builds things.</p>'
+    const { searchDomainDiscoveryProvider: provider } = await load()
+    const candidate = await provider.execute(task(['company_domain']))
+    expect(candidate).toMatchObject({ domain: 'quillworks.example', score: 5, sourceUrl: 'https://quillworks.example/' })
+  })
+
+  it('refuses when two result sites verify — ambiguity is not an answer', async () => {
+    hits = brandHits
+    const page = '<title>Fabricated Systems</title><p>Fabricated Systems</p>'
+    pages['quillworks.example'] = page
+    pages['someblog.example'] = page
+    const { searchDomainDiscoveryProvider: provider } = await load()
+    expect(await provider.execute(task(['company_domain']))).toBeNull()
+  })
+
+  it("refuses a site that merely MENTIONS the company (a supplier's client list)", async () => {
+    hits = brandHits
+    pages['quillworks.example'] = '<title>Quillworks — design studio</title><p>Our clients include Fabricated Systems.</p>'
+    const { searchDomainDiscoveryProvider: provider } = await load()
+    expect(await provider.execute(task(['company_domain']))).toBeNull()
+  })
+})
+
+describe('presentsAsCompany', () => {
+  it('needs the name in the title, or a DISTINCTIVE name word in the domain', async () => {
+    const { presentsAsCompany } = await load()
+    expect(presentsAsCompany('Fabricated Systems', 'quillworks.example', '<title>Fabricated Systems Ltd</title>')).toBe(true)
+    expect(presentsAsCompany('Fabricated Systems', 'getfabricated.example', '<title>Home</title>')).toBe(true)
+    // "systems" is generic: a domain containing it says nothing.
+    expect(presentsAsCompany('Fabricated Systems', 'bestsystems.example', '<title>Home</title>')).toBe(false)
+    expect(presentsAsCompany('Fabricated Systems', 'quillworks.example', '<title>Quillworks</title>')).toBe(false)
+  })
+})
+

@@ -25,6 +25,7 @@ import {
   type ResearchTask,
 } from '@/lib/intelligence/types'
 import { hasWebSearch, serpSearch } from '@/lib/search'
+import { verifyHostPage } from './domain-probe'
 import { hasTavilyCredentials, tavilySearch, type SearchResult } from './tavily'
 
 /**
@@ -206,6 +207,67 @@ function domainEvidence(provider: string) {
   }
 }
 
+/** Words in a company name that say nothing about which company it is. */
+const GENERIC_NAME_WORDS = new Set([
+  'group', 'global', 'international', 'holdings', 'solutions', 'services', 'systems',
+  'technologies', 'technology', 'digital', 'consulting', 'consultancy', 'partners',
+  'agency', 'media', 'marketing', 'management', 'company', 'enterprises', 'industries',
+  'software', 'labs', 'studio', 'studios', 'ventures', 'capital', 'network', 'networks',
+])
+
+/**
+ * PURE. Beyond "the page carries the company's name": does this site actually
+ * present AS the company — its own name in the page title, or a distinctive
+ * word of the name in the domain? A supplier's homepage listing "our clients:
+ * Acme Robotics" carries the name too, and must not become Acme's identity.
+ */
+export function presentsAsCompany(companyName: string | null, host: string, html: string): boolean {
+  const name = normalizeCompanyName(companyName)
+  if (!name) return false
+  const title = /<title[^>]*>([^<]{0,300})<\/title>/i.exec(html)?.[1] ?? ''
+  const flat = (value: string) => value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+  if (title && flat(title).includes(flat(name))) return true
+  const label = flat(domainLabel(host))
+  return name
+    .split(' ')
+    .filter((word) => word.length >= 4 && !GENERIC_NAME_WORDS.has(word))
+    .some((word) => label.includes(flat(word)))
+}
+
+/**
+ * When the name-shape picker refuses, read the candidate sites themselves.
+ *
+ * ⚠️ MEASURED 2026-10-14: on a real job, 3 of 11 domain-less companies had
+ * exactly one search-result site that verified as the company by content,
+ * while its domain did not look like the legal name (a brand name), so
+ * `pickCompanyDomain` refused it. Accepted only when EXACTLY ONE candidate
+ * verifies — two is ambiguity, and ambiguity refuses.
+ */
+async function verifyCandidatesByContent(
+  companyName: string,
+  hits: ReadonlyArray<{ url: string }>,
+): Promise<DomainCandidate | null> {
+  const hosts = [...new Set(
+    hits
+      .map((hit) => normalizeDomain(hit.url))
+      .filter((host): host is string => {
+        if (!host) return false
+        const registrable = host.split('.').slice(-2).join('.')
+        return !NEVER_A_COMPANY_SITE.has(host) && !NEVER_A_COMPANY_SITE.has(registrable)
+      }),
+  )].slice(0, 5)
+
+  const verified = (await Promise.all(hosts.map(async (host) => {
+    const probed = await verifyHostPage(host, companyName)
+    return probed && presentsAsCompany(companyName, host, probed.html) ? probed : null
+  }))).filter((probed): probed is NonNullable<typeof probed> => probed !== null)
+
+  const distinct = [...new Map(verified.map((probed) => [probed.domain, probed])).values()]
+  if (distinct.length !== 1) return null
+  // Score 5: the floor of acceptance — content-verified, not name-shaped.
+  return { domain: distinct[0]!.domain, score: ACCEPT_THRESHOLD, sourceUrl: distinct[0]!.sourceUrl }
+}
+
 /**
  * The same discovery through the shared, FREE search stack (Diffbot first).
  *
@@ -235,7 +297,7 @@ export const searchDomainDiscoveryProvider: IntelligenceProvider<DomainCandidate
   execute: async (task: ResearchTask) => {
     const company = task.entity as CompanyEntity
     const hits = await serpSearch(`${company.name} official website`, { limit: 8 })
-    return pickCompanyDomain(
+    const picked = pickCompanyDomain(
       company.name,
       hits.map((hit) => ({
         title: hit.title ?? '',
@@ -245,6 +307,7 @@ export const searchDomainDiscoveryProvider: IntelligenceProvider<DomainCandidate
         publishedDate: hit.publishedDate,
       })),
     )
+    return picked ?? (company.name ? verifyCandidatesByContent(company.name, hits) : null)
   },
 
   normalize: domainEvidence('search-domain-discovery'),

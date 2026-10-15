@@ -146,6 +146,25 @@ describe('SerpService waterfall', () => {
     expect(dead.calls).toHaveLength(1)
   })
 
+  it('never sidelines an engine for a LOCAL failure (our own queue ran out of time)', async () => {
+    const { ProviderHttpError } = await import('@/lib/intelligence/http')
+    let calls = 0
+    const congested: SearchProvider & { calls: string[] } = {
+      ...fakeEngine('congested', () => [hit('https://c.example')]),
+      async search() {
+        calls += 1
+        if (calls === 1) throw new ProviderHttpError('ERR_TIMEOUT', 'congested.example', null, true)
+        return [hit('https://c.example')]
+      },
+    }
+    const fallback = fakeEngine('fallback', () => [hit('https://fallback.example')])
+    const serp = service([congested, fallback])
+
+    expect((await serp.search('first', 5))[0]!.url).toBe('https://fallback.example')
+    // Not benched: the very next query asks it again, and it answers.
+    expect((await serp.search('second', 5))[0]!.url).toBe('https://c.example')
+  })
+
   it('never sidelines an engine for an EMPTY answer — the next query still asks it', async () => {
     /*
      * ⚠️ PRODUCTION, 2026-10-13: "zero hits = failure" let one obscure

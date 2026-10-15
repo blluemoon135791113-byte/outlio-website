@@ -26,9 +26,25 @@ const GENERIC_LOCAL_PRIORITY = [
 ]
 
 export type CompanyContactResult = {
-  email: { value: string; sourceUrl: string } | null
+  /** `freemail`: published on the company's own page, on a free-mail domain. */
+  email: { value: string; sourceUrl: string; freemail?: boolean } | null
   phone: { value: string; sourceUrl: string } | null
 }
+
+/**
+ * Consumer mailbox domains a small business publishes as its contact address.
+ *
+ * ⚠️ ONLY THESE, NEVER ANOTHER COMPANY'S DOMAIN. An off-domain address on a
+ * company's site is often its web agency's credit in the footer; a free-mail
+ * address is not someone else's business. Measured 2026-10-14: one in five
+ * sites with a domain in a real job published only a free-mail address.
+ */
+const FREEMAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'hotmail.co.uk',
+  'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com',
+  'icloud.com', 'me.com', 'aol.com', 'proton.me', 'protonmail.com', 'zoho.com',
+  'gmx.com', 'gmx.de', 'web.de', 'mail.com',
+])
 
 function emailRank(email: string): number {
   const local = email.split('@')[0]?.toLowerCase() ?? ''
@@ -54,8 +70,20 @@ export function selectCompanyContacts(
 
   const phones = pages.flatMap((page) => page.phones.map((value) => ({ value, sourceUrl: page.url })))
 
+  /*
+   * Only when the company's own domain has NO published address: then a
+   * free-mail address on the company's own page is its contact address. It is
+   * observed and cited (rule 4) — and filed at lower confidence.
+   */
+  const freemail = emails.length > 0
+    ? []
+    : pages.flatMap((page) => page.emails
+        .filter((email) => FREEMAIL_DOMAINS.has((email.split('@')[1] ?? '').toLowerCase()))
+        .map((value) => ({ value: value.toLowerCase(), sourceUrl: page.url, freemail: true as const })))
+        .sort((left, right) => emailRank(left.value) - emailRank(right.value))
+
   return {
-    email: emails[0] ?? null,
+    email: emails[0] ?? freemail[0] ?? null,
     phone: phones[0] ?? null,
   }
 }
@@ -110,6 +138,9 @@ function companyContactEvidence(
   if (output.email && task.fields.includes('company_contact_email')) {
     evidence.push({
       ...common,
+      // A free-mail address names no company by itself: the company's page
+      // publishing it is the whole link, so it is filed below an on-domain one.
+      ...(output.email.freemail ? { sourceConfidence: 'medium' as const, confidence: 0.72 } : {}),
       field: 'company_contact_email',
       value: { email: output.email.value, status: 'publicly_found' },
       sourceUrl: output.email.sourceUrl,

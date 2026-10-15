@@ -40,14 +40,26 @@ export class ProviderHttpError extends Error {
   readonly status: number | null
   /** Host only. Never the path or query — those carry keys and lead data. */
   readonly host: string
+  /**
+   * True when the request never reached the host: it ran out of the CALLER's
+   * time while queued behind our own pacing. That is local congestion, not a
+   * fact about the provider — and a circuit breaker must never act on it.
+   */
+  readonly local: boolean
 
-  constructor(code: HttpFailureCode, host: string, status: number | null = null) {
-    super(`${code} from ${host}${status === null ? '' : ` (${status})`}`)
+  constructor(code: HttpFailureCode, host: string, status: number | null = null, local = false) {
+    super(`${code} from ${host}${status === null ? '' : ` (${status})`}${local ? ' (local queue)' : ''}`)
     this.name = 'ProviderHttpError'
     this.code = code
     this.status = status
     this.host = host
+    this.local = local
   }
+}
+
+/** True for a failure that happened on our side of the wire (see `local`). */
+export function isLocalFailure(error: unknown): boolean {
+  return error instanceof ProviderHttpError && error.local
 }
 
 function hostOf(url: string): string {
@@ -72,16 +84,34 @@ export function setHostPacing(host: string, minIntervalMs: number): void {
   hostPacing.set(host, Math.max(0, minIntervalMs))
 }
 
-async function paceHost(host: string): Promise<void> {
+/** Time a request needs after its turn comes, so a slot it cannot use is never taken. */
+const MIN_USABLE_MS = 1_000
+
+/**
+ * Waits for this host's next slot. Returns false — WITHOUT taking a slot —
+ * when that slot would come too late for the caller's deadline.
+ *
+ * ⚠️ MEASURED 2026-10-14: a job's person lookups queued behind Diffbot's
+ * 1-per-second pacing until their 13s deadline passed, then left with ~1ms to
+ * run, timed out instantly and were reported as "Diffbot failed" — which
+ * benched Diffbot for every lookup. Of ~200 searches the job needed, ~100
+ * reached Diffbot. A request that cannot run in time now gives up here,
+ * locally, and says so.
+ */
+async function paceHost(host: string, deadlineAt?: number): Promise<boolean> {
   const minInterval = hostPacing.get(host)
-  if (!minInterval) return
+  if (!minInterval) return true
 
   const last = lastRequestAt.get(host) ?? 0
-  const wait = last + minInterval - Date.now()
+  const slotAt = Math.max(Date.now(), last + minInterval)
+  if (deadlineAt !== undefined && slotAt + MIN_USABLE_MS > deadlineAt) return false
+
   // Reserve the slot BEFORE awaiting, so concurrent callers queue behind each
   // other instead of all reading the same stale timestamp and firing together.
-  lastRequestAt.set(host, Math.max(Date.now(), last + minInterval))
+  lastRequestAt.set(host, slotAt)
+  const wait = slotAt - Date.now()
   if (wait > 0) await sleep(wait)
+  return true
 }
 
 /** `Retry-After` is either seconds or an HTTP date. Both appear in the wild. */
@@ -212,7 +242,10 @@ async function requestOnce(
     return { ok: false, error: new ProviderHttpError('ERR_TIMEOUT', host) }
   }
 
-  await paceHost(host)
+  if (!(await paceHost(host, request.deadlineAt))) {
+    // No retry: the queue only gets longer, and the deadline only closer.
+    return { ok: false, error: new ProviderHttpError('ERR_TIMEOUT', host, null, true) }
+  }
   await request.beforeAttempt?.()
 
   const remainingMs =

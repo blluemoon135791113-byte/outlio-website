@@ -382,6 +382,18 @@ function evidence(
   ]
 }
 
+/**
+ * Phrasings searched per person, per contact type.
+ *
+ * ⚠️ WAS FOUR, AND THAT WAS THE QUEUE (2026-10-14). On a real 25-lead job, 18
+ * of the 25 people were never named in ANY search result: no phrasing finds a
+ * person the public web does not mention. Four phrasings for email plus four
+ * for phone made up to eight searches per lead, which is what backed up the
+ * pacing queue and starved the domain searches that DO find things. The first
+ * phrasing (name + employer + "email"/"phone number") stays.
+ */
+export const PHRASINGS_PER_CONTACT = 1
+
 const EMAIL_FIELDS = new Set(['work_email', 'email_status'])
 const PHONE_FIELDS = new Set(['mobile_phone', 'phone_status'])
 
@@ -392,7 +404,7 @@ export const searchContactEmailProvider: IntelligenceProvider<PublicContactFindi
   estimateCost: async () => 0,
   execute: async (task) => {
     const person = task.entity as PersonEntity
-    return publicSearch(person, contactSearchQueries(person, 'email'), extractPublicEmail)
+    return publicSearch(person, contactSearchQueries(person, 'email', PHRASINGS_PER_CONTACT), extractPublicEmail)
   },
   normalize: (finding, task) => evidence(finding, task, 'email'),
 }
@@ -404,7 +416,7 @@ export const searchContactPhoneProvider: IntelligenceProvider<PublicContactFindi
   estimateCost: async () => 0,
   execute: async (task) => {
     const person = task.entity as PersonEntity
-    return publicSearch(person, contactSearchQueries(person, 'phone'), extractPublicPhone)
+    return publicSearch(person, contactSearchQueries(person, 'phone', PHRASINGS_PER_CONTACT), extractPublicPhone)
   },
   normalize: (finding, task) => evidence(finding, task, 'phone'),
 }
