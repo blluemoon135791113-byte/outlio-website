@@ -406,3 +406,28 @@ with the form that calls it.
 `lib/crm/account-writes.ts` is in neither module allowlist after step 3. If one is still there,
 either its feature was dropped (then drop the table) or it was built against a
 second table (then that is the defect to fix).
+
+## ADR-008 — LinkedIn outreach removed; its tables kept until a manual drop
+
+**Status:** accepted, 2026-10-15 (owner).
+
+### Context
+
+The owner decided Outlio does not offer LinkedIn outreach (tasks, campaigns,
+strategy analysis, sender accounts). The code was deleted: `lib/linkedin/`,
+`components/linkedin/`, `/linkedin`, `/dashboard/settings/linkedin`, the
+contact-page panel and the tick's `release_linkedin_waits` job.
+`profile-reference.ts` moved to `lib/crm/` — it formats a lead's own profile
+link and was never outreach.
+
+### Decision
+
+The seven `linkedin_*` tables (0122, 0132, 0135–0137, 0140) and the `linkedin`
+plan module stay. Dropping them destroys rows customers created, and
+migrations here are applied by hand, so it is the owner's call, not an
+agent's. They sit in `schema-without-code.test.ts`'s `KNOWN_UNUSED` until then.
+
+### Exit
+
+A drop migration, applied by the owner, removes the tables and the
+`KNOWN_UNUSED` entries together.

@@ -37,11 +37,14 @@ export function UploadForm({
   maxFiles,
   maxFileBytes,
   leadsPerCredit,
+  onQueued,
 }: {
   maxFiles: number
   maxFileBytes: number
   /** `null` when the plan charges a flat 1 credit per extraction. */
   leadsPerCredit: number | null
+  /** Called once the run is queued, so the run list below can pick it up. */
+  onQueued?: () => void
 }) {
   const router = useRouter()
   const [items, setItems] = useState<FileState[]>([])
@@ -130,11 +133,14 @@ export function UploadForm({
       return
     }
 
+    // Upload and progress share one page now: clear the form and let the run
+    // list below show the new run.
     setStatus('done')
-    setMessage(
-      `${result.queued} file${result.queued === 1 ? '' : 's'} queued. Your CSV will appear on the Extractions page.`,
-    )
-    router.push('/dashboard/jobs')
+    setMessage(`${result.queued} file${result.queued === 1 ? '' : 's'} queued. Progress is shown below.`)
+    setItems([])
+    setConsent(false)
+    onQueued?.()
+    router.refresh()
   }
 
   const totalBytes = items.reduce((s, i) => s + i.file.size, 0)
@@ -171,7 +177,7 @@ export function UploadForm({
         <span aria-hidden className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-panel text-lg text-accent shadow-[var(--shadow-sm)]">
           ↑
         </span>
-        <p className="text-sm font-semibold text-ink">Drag and drop your saved pages here</p>
+        <p className="text-sm font-semibold text-ink">Drop saved pages here</p>
         <p className="mt-1 text-sm text-muted">
           or{' '}
           <button
@@ -195,8 +201,7 @@ export function UploadForm({
         />
 
         <p className="mt-4 text-xs leading-relaxed text-muted">
-          Upload only .html files you saved manually from a lead search-results
-          page or an account list. Do not upload files from any other source.
+          Lead search pages or account lists you saved as .html.
         </p>
         <p className="mt-1 text-xs text-muted">
           {/*
@@ -205,11 +210,8 @@ export function UploadForm({
             companies would report one number for two jobs. Saying so here
             costs a line; discovering it from a failed run costs an upload.
           */}
-          One kind per run — lead pages and account lists cannot be mixed.
-          Up to {maxFiles} files, {formatBytes(maxFileBytes)} each.
-          {leadsPerCredit
-            ? ` 1 credit per ${leadsPerCredit} leads, counted across the whole run.`
-            : ' 1 credit per run.'}
+          One kind per run · up to {maxFiles} files, {formatBytes(maxFileBytes)} each ·{' '}
+          {leadsPerCredit ? `1 credit per ${leadsPerCredit} leads` : '1 credit per run'}
         </p>
       </div>
 
@@ -228,8 +230,7 @@ export function UploadForm({
 
           {leadsPerCredit ? (
             <p className="border-b border-border bg-surface-muted/45 px-4 py-2 text-xs text-muted">
-              Assumes a full page of about {TYPICAL_LEADS_PER_PAGE} leads per file. You are
-              charged for the leads actually found, so part-full pages cost less.
+              Assumes ~{TYPICAL_LEADS_PER_PAGE} leads per file; you pay only for leads found.
             </p>
           ) : null}
           <ul className="divide-y divide-border">

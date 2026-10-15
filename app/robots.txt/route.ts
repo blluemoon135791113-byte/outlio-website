@@ -46,7 +46,7 @@ export async function GET() {
   const privatePaths = appSurface
     ? [
         '/admin', '/api', '/auth', '/crm', '/dashboard', '/email', '/extension',
-        '/flows', '/join', '/linkedin', '/mfa', '/reset-password', '/sign-in',
+        '/flows', '/join', '/mfa', '/reset-password', '/sign-in',
         '/sign-up', '/verify-email', '/welcome',
       ]
     : []

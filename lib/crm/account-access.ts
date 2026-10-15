@@ -30,7 +30,7 @@ import {
   getWorkspaceContext,
   type WorkspaceContext,
 } from '@/lib/workspaces/context'
-import { decidePermission } from '@/lib/workspaces/permissions'
+import { decidePermission, type WorkspaceRole } from '@/lib/workspaces/permissions'
 
 export type AccountAccess = {
   ctx: WorkspaceContext
@@ -41,24 +41,42 @@ export type AccountAccess = {
 }
 
 async function loadPolicyInput(ctx: WorkspaceContext): Promise<AccountPolicyInput> {
+  return loadAccountPolicyInput({
+    workspaceId: ctx.workspace.id,
+    userId: ctx.userId,
+    role: ctx.role,
+    modules: ctx.modules,
+  })
+}
+
+/**
+ * The account policy for one member, without a request. The worker uses this
+ * to act as the uploader — it has no cookies, so no `WorkspaceContext`.
+ */
+export async function loadAccountPolicyInput(member: {
+  workspaceId: string
+  userId: string
+  role: WorkspaceRole
+  modules: AccountPolicyInput['modules']
+}): Promise<AccountPolicyInput> {
   const db = createAdminClient()
 
   // The owner has no rows by design; skip two round trips that return nothing.
-  if (ctx.role === 'owner') {
-    return { role: ctx.role, modules: ctx.modules, roleDefaults: {}, overrides: {} }
+  if (member.role === 'owner') {
+    return { role: member.role, modules: member.modules, roleDefaults: {}, overrides: {} }
   }
 
   const [defaults, overrides] = await Promise.all([
     db
       .from('crm_account_role_defaults')
       .select('permission, granted')
-      .eq('workspace_id', ctx.workspace.id)
-      .eq('role', ctx.role),
+      .eq('workspace_id', member.workspaceId)
+      .eq('role', member.role),
     db
       .from('crm_account_permission_overrides')
       .select('permission, granted')
-      .eq('workspace_id', ctx.workspace.id)
-      .eq('user_id', ctx.userId),
+      .eq('workspace_id', member.workspaceId)
+      .eq('user_id', member.userId),
   ])
 
   // FAIL CLOSED: a read error is an error, never "no rows, so deny quietly"
@@ -75,8 +93,8 @@ async function loadPolicyInput(ctx: WorkspaceContext): Promise<AccountPolicyInpu
   }
 
   return {
-    role: ctx.role,
-    modules: ctx.modules,
+    role: member.role,
+    modules: member.modules,
     roleDefaults: toRecord(defaults.data),
     overrides: toRecord(overrides.data),
   }

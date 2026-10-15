@@ -6,7 +6,7 @@ import type { LeadBatch } from '@/lib/intelligence/batches'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const metadata: Metadata = {
-  title: 'Hubble | Outlio',
+  title: 'Leads | Outlio',
   robots: { index: false, follow: false },
 }
 

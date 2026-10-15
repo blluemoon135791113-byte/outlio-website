@@ -171,12 +171,7 @@ const KNOWN_UNREACHABLE = new Map<string, string>([
    * `metrics.ts` alone remains: it leaves when something REPORTS on LinkedIn
    * outcomes, and there is no outcome history to measure yet.
    */
-  [
-    'lib/linkedin/metrics.ts',
-    'Acceptance and reply rates (§4.18). Nothing reports on LinkedIn outcomes ' +
-      'yet — enrollments can only be created from today, so a report would be a ' +
-      'screen of zeroes pretending to be a finding.',
-  ],
+  // lib/linkedin/metrics.ts left when the module was deleted (ADR-008).
   /* ADR-007's `lib/crm/account-writes.ts` left on its exit: the step-3 forms call it. */
 ])
 

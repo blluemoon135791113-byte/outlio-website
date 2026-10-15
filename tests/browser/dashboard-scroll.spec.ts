@@ -25,6 +25,8 @@ export function identifyAnalyticsUser() {}
 export function resetAnalyticsIdentity() {}
 export function syncSessionReplayForPath() {}
 export async function signOutAction() {}
+export async function loadMyNotifications() { return { unread: 1, items: [{ id: 'n1', title: 'Reminder: Follow up with John', createdAt: '2026-10-15T10:00:00Z', read: false, href: '/crm/pipeline' }] }; }
+export async function markMyNotificationsRead() {}
 `
 
 test.beforeAll(async () => {
@@ -38,7 +40,7 @@ test.beforeAll(async () => {
     plugins: [{
       name: 'isolated-framework',
       setup(builder) {
-        builder.onResolve({ filter: /^(next\/(link|image|navigation)|@\/lib\/(analytics\/client|auth\/actions))$/ }, (args) => ({ path: args.path, namespace: 'fixture' }))
+        builder.onResolve({ filter: /^(next\/(link|image|navigation)|@\/lib\/(analytics\/client|auth\/actions|crm\/notification-actions))$/ }, (args) => ({ path: args.path, namespace: 'fixture' }))
         builder.onLoad({ filter: /.*/, namespace: 'fixture' }, (args) => ({
           contents: framework + (args.path === 'next/link' ? '\nexport default Link;' : args.path === 'next/image' ? '\nexport default Image;' : ''),
           resolveDir: root,
@@ -74,7 +76,7 @@ test('desktop navigation scrolls independently and keeps bottom links reachable'
   await page.setViewportSize({ width: 1280, height: 480 })
   await openDashboard(page)
   const nav = page.getByRole('navigation', { name: 'Product', exact: true })
-  for (const section of ['Pipeline', 'Outreach', 'LinkedIn', 'Automations']) {
+  for (const section of ['Pipeline', 'Email', 'Automations']) {
     await nav.getByRole('button', { name: `Expand ${section}`, exact: true }).click()
   }
   await nav.getByRole('link', { name: 'Settings', exact: true }).scrollIntoViewIfNeeded()

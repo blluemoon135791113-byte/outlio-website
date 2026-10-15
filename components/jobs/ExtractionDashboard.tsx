@@ -1,8 +1,8 @@
 'use client'
 
-import Link from 'next/link'
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DeleteRunButton, RowExportMenu } from '@/components/jobs/RowActions'
+import { UploadForm } from '@/components/upload/UploadForm'
 import {
   deleteJobAction,
   getDownloadUrlAction,
@@ -52,6 +52,7 @@ export function ExtractionDashboard({
   clayConnected,
   googleConnected,
   ghlConnected,
+  upload,
 }: {
   userId: string
   initialJobs: DashboardJob[]
@@ -60,6 +61,8 @@ export function ExtractionDashboard({
   clayConnected: boolean
   googleConnected: boolean
   ghlConnected: boolean
+  /** Plan limits for the upload form at the top of the page. */
+  upload: { maxFiles: number; maxFileBytes: number; leadsPerCredit: number | null }
 }) {
   const supabase = useMemo(() => createClient(), [])
   const [jobs, setJobs] = useState(initialJobs)
@@ -251,39 +254,54 @@ export function ExtractionDashboard({
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      {/*
+        One page for the whole job (owner, 2026-10-15): upload at the top,
+        every run and its progress underneath. "Find leads" and "Lead sources"
+        used to be two screens joined by a redirect.
+      */}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-              Lead Engine
-            </p>
-            <ConnectionBadge connection={connection} />
-          </div>
-          <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
-            Extraction workspace
+          <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.035em] text-ink sm:text-[30px]">
+            Find leads
           </h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
-            Every run, its files, and the leads kept.
-          </p>
+          <p className="mt-1 text-sm text-muted">Upload saved pages and track every run.</p>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-4 text-sm font-semibold text-ink transition-[border-color,background-color,transform] duration-150 ease-out hover:border-accent/35 hover:bg-accent-soft/40 active:scale-[0.97]"
-            >
-              Refresh now
-            </button>
-            <Link
-              href="/dashboard/extract/new"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-[var(--radius-md)] bg-accent px-4 text-sm font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-accent-deep active:scale-[0.97]"
-            >
-              <span aria-hidden className="text-base leading-none">+</span>
-              New extraction
-            </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <ConnectionBadge connection={connection} />
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="inline-flex h-9 items-center justify-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-3 text-sm font-semibold text-ink transition-[border-color,background-color,transform] duration-150 ease-out hover:border-accent/35 hover:bg-accent-soft/40 active:scale-[0.97]"
+          >
+            Refresh
+          </button>
         </div>
       </header>
+
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(260px,0.5fr)]">
+        <section aria-label="Upload saved pages" className="clay p-5 sm:p-6">
+          <UploadForm
+            maxFiles={upload.maxFiles}
+            maxFileBytes={upload.maxFileBytes}
+            leadsPerCredit={upload.leadsPerCredit}
+            onQueued={() => void refresh()}
+          />
+        </section>
+
+        <aside className="space-y-3">
+          <MetricCard
+            featured
+            label="Credits remaining"
+            value={credits?.remaining ?? null}
+            detail={credits ? `${credits.used} used of ${credits.allowance}` : 'Unavailable — refresh to retry'}
+          />
+          <ol className="clay space-y-3 p-5 text-sm">
+            <GuideStep number="1" body="Save a lead or account search page as HTML." />
+            <GuideStep number="2" body="Drop the files above and start." />
+            <GuideStep number="3" body="Leads are enriched automatically and added to your CRM." />
+          </ol>
+        </aside>
+      </div>
 
       {refreshError ? (
         <p
@@ -294,30 +312,18 @@ export function ExtractionDashboard({
         </p>
       ) : null}
 
-      {activeJob ? <ActiveRun job={activeJob} /> : <CaughtUp latestJob={jobs[0] ?? null} />}
+      {activeJob ? <ActiveRun job={activeJob} /> : null}
 
-      <section aria-label="Workspace totals" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {/* ⚠️ null is "unknown", 0 is "none left". `?? 0` conflated them. */}
-        <MetricCard
-          featured
-          label="Credits remaining"
-          value={credits?.remaining ?? null}
-          detail={
-            credits
-              ? `${credits.used} used of ${credits.allowance}`
-              : 'Balance unavailable — refresh to retry'
-          }
-        />
-        <MetricCard label="Completed extractions" value={totals.completed} detail={`${jobs.length} total in history`} />
-        <MetricCard label="Files processed" value={totals.files} detail="Across extraction history" />
-        <MetricCard label="Leads extracted" value={totals.leads} detail="Unique leads kept" />
-        <MetricCard label="Companies added" value={totals.companies} detail="From saved account lists" />
-        <MetricCard label="Duplicates removed" value={totals.duplicates} detail="Automatically cleaned" />
-      </section>
+      {jobs.length > 0 ? (
+        <section aria-label="Totals" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="Runs completed" value={totals.completed} detail={`${totals.files.toLocaleString()} files`} />
+          <MetricCard label="Leads" value={totals.leads} detail="Unique, kept" />
+          <MetricCard label="Companies" value={totals.companies} detail="From account lists" />
+          <MetricCard label="Duplicates removed" value={totals.duplicates} detail="Cleaned automatically" />
+        </section>
+      ) : null}
 
-      {jobs.length === 0 ? (
-        <EmptyState />
-      ) : (
+      {jobs.length === 0 ? null : (
         <div className="space-y-6">
           {/*
            * ⚠️ TWO BOARDS, EACH HALF THE WIDTH — not one list with a "kind"
@@ -471,43 +477,20 @@ function RunStat({ label, value, suffix }: { label: string; value: number; suffi
   )
 }
 
-/*
- * ⚠️ SAGE, BECAUSE THIS IS THE "ALL CLEAR" CARD.
- *
- * Sage was defined but invisible — only `--success-soft` referenced it, and at
- * that tint it reads as off-white. A settled, positive state is the one thing
- * sage should mean, so this card wears it properly. It is the ONLY sage
- * surface on the page; that restraint is what keeps it a signal.
- */
-function CaughtUp({ latestJob }: { latestJob: DashboardJob | null }) {
+function GuideStep({ number, body }: { number: string; body: string }) {
   return (
-    <section className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-clay)] bg-sage-soft p-5 shadow-[var(--neo-shadow)] ring-1 ring-sage/30 sm:p-6">
-      <div>
-        <div className="flex items-center gap-2">
-          <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-full bg-sage text-ivory">
-            ✓
-          </span>
-          <h2 className="text-lg font-semibold text-ink">Your workspace is caught up</h2>
-        </div>
-        <p className="mt-2 text-sm text-muted">
-          {latestJob
-            ? `Last extraction: ${latestJob.leads_kept.toLocaleString()} leads from ${latestJob.file_count.toLocaleString()} file${latestJob.file_count === 1 ? '' : 's'}`
-            : 'Start an extraction to build your first clean lead list.'}
-        </p>
-      </div>
-      <Link
-        href="/dashboard/extract/new"
-        className="rounded-[var(--radius-md)] border border-border px-4 py-2 text-sm font-semibold text-ink transition-[border-color,transform] duration-150 hover:border-border-strong active:scale-[0.97]"
-      >
-        Start another extraction
-      </Link>
-    </section>
+    <li className="flex gap-3">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
+        {number}
+      </span>
+      <span className="text-muted">{body}</span>
+    </li>
   )
 }
 
 function MetricCard({ label, value, detail, featured = false }: { label: string; value: number | null; detail: string; featured?: boolean }) {
   return (
-    <div className={featured ? 'min-h-32 rounded-[var(--radius-clay)] bg-accent p-4 text-white shadow-[var(--neo-shadow)]' : 'clay min-h-32 p-4'}>
+    <div className={featured ? 'min-h-24 rounded-[var(--radius-clay)] bg-accent p-4 text-white shadow-[var(--neo-shadow)]' : 'clay min-h-24 p-4'}>
       <p className={featured ? 'text-xs font-medium text-white/84' : 'text-xs font-medium text-muted'}>{label}</p>
       <p className="mt-4 font-heading text-[28px] font-semibold leading-none tabular-nums tracking-[-0.04em]">{value === null ? '—' : value.toLocaleString()}</p>
       <p className={featured ? 'mt-3 text-xs text-white/80' : 'mt-3 text-xs text-muted'}>{detail}</p>
@@ -755,24 +738,6 @@ function StatusBadge({ status }: { status: JobStatus }) {
     <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${item.className}`}>
       {item.label}
     </span>
-  )
-}
-
-function EmptyState() {
-  return (
-    <section className="rounded-[var(--radius-xl)] border border-dashed border-border bg-panel px-6 py-14 text-center">
-      <h2 className="text-lg font-semibold text-ink">Your first pipeline starts here</h2>
-      <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">
-        Upload saved lead-search pages. Outlio will show each file moving through the
-        pipeline, clean the results, and build your downloadable CSV.
-      </p>
-      <Link
-        href="/dashboard/extract/new"
-        className="mt-5 inline-block rounded-[var(--radius-md)] bg-accent px-4 py-2.5 text-sm font-semibold text-cream transition-[background-color,transform] duration-150 hover:bg-accent-deep active:scale-[0.97]"
-      >
-        Start your first extraction
-      </Link>
-    </section>
   )
 }
 

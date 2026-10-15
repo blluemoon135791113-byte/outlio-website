@@ -133,6 +133,9 @@ export function useBoardRealtime(
                 previousCard && previousCard.stageId === stageId
                   ? previousCard.card.isStale
                   : false,
+              // Tasks are not in this payload; keep what the card showed.
+              nextTask: previousCard?.card.nextTask ?? null,
+              openTasks: previousCard?.card.openTasks ?? 0,
             }
 
             return without.map((column) =>

@@ -74,7 +74,14 @@ export type Pipeline = {
   id: string
   name: string
   isDefault: boolean
-  stages: { id: string; name: string; kind: StageKind; sortOrder: number; defaultProbability: number }[]
+  stages: {
+    id: string
+    name: string
+    kind: StageKind
+    sortOrder: number
+    defaultProbability: number
+    staleAfterDays: number | null
+  }[]
 }
 
 /**
@@ -152,7 +159,7 @@ export async function getPipeline(
 
   const { data: stages, error: stageError } = await db
     .from('crm_pipeline_stages')
-    .select('id, name, kind, sort_order, default_probability')
+    .select('id, name, kind, sort_order, default_probability, stale_after_days')
     .eq('workspace_id', workspaceId)
     .eq('pipeline_id', pipelineId)
     .is('archived_at', null)
@@ -170,6 +177,7 @@ export async function getPipeline(
       kind: s.kind,
       sortOrder: s.sort_order,
       defaultProbability: s.default_probability,
+      staleAfterDays: s.stale_after_days,
     })),
   }
 }
@@ -486,6 +494,9 @@ export type BoardCard = {
   stageEnteredAt: string
   /** True when the deal has sat here longer than the stage allows. */
   isStale: boolean
+  /** The soonest open task on this deal, and how many are open. */
+  nextTask: { title: string; dueAt: string | null } | null
+  openTasks: number
 }
 
 export type BoardColumn = {
@@ -521,69 +532,104 @@ export async function getBoard(
   const pipeline = await getPipeline(workspaceId, pipelineId)
   if (!pipeline) return []
 
-  const columns: BoardColumn[] = []
+  /*
+   * Columns load in parallel, not one after another: three round trips per
+   * column in sequence made a 7-list board wait on 21 queries in a row.
+   */
+  const columns: BoardColumn[] = await Promise.all(
+    pipeline.stages.map(async (stage) => {
+      let query = db
+        .from('crm_opportunities')
+        .select(
+          'id, title, version, value_amount, currency, owner_user_id, contact_id, company_id, updated_at, created_at',
+          { count: 'exact' },
+        )
+        .eq('workspace_id', workspaceId)
+        .eq('pipeline_id', pipelineId)
+        .eq('stage_id', stage.id)
+        .eq('status', 'open')
+        .is('deleted_at', null)
 
-  for (const stage of pipeline.stages) {
-    let query = db
-      .from('crm_opportunities')
-      .select(
-        'id, title, version, value_amount, currency, owner_user_id, contact_id, company_id, updated_at, created_at',
-        { count: 'exact' },
+      if (scope.ownerUserId) query = query.eq('owner_user_id', scope.ownerUserId)
+
+      const { data, count, error } = await query
+        .order('updated_at', { ascending: false })
+        .limit(perColumn)
+
+      if (error) throw new Error(`getBoard failed: ${error.message}`)
+
+      const staleBefore = stage.staleAfterDays
+        ? new Date(Date.now() - stage.staleAfterDays * 86_400_000).toISOString()
+        : null
+      const enteredAt = await stageEntryTimes(
+        workspaceId,
+        stage.id,
+        (data ?? []).map((row) => row.id),
       )
+
+      return {
+        stageId: stage.id,
+        stageName: stage.name,
+        kind: stage.kind,
+        totalCards: count ?? 0,
+        cards: (data ?? []).map((row) => {
+          /*
+           * ⚠️ STAGE ENTRY, NOT `updated_at`. A deal that has sat in Proposal
+           * since March is stale whether or not somebody fixed a typo in its
+           * title this morning. A deal that has never moved has no history
+           * row, so its creation IS its stage entry.
+           */
+          const stageEnteredAt = enteredAt.get(row.id) ?? row.created_at
+
+          return {
+            id: row.id,
+            title: row.title,
+            version: row.version,
+            valueAmount: row.value_amount,
+            currency: row.currency,
+            ownerUserId: row.owner_user_id,
+            contactId: row.contact_id,
+            companyId: row.company_id,
+            companyName: null,
+            updatedAt: row.updated_at,
+            stageEnteredAt,
+            isStale: staleBefore !== null && stageEnteredAt < staleBefore,
+            nextTask: null,
+            openTasks: 0,
+          }
+        }),
+      }
+    }),
+  )
+
+  // One read for every card's open tasks, not one per card.
+  const cardIds = columns.flatMap((c) => c.cards.map((card) => card.id))
+  if (cardIds.length > 0) {
+    const { data: tasks, error: taskError } = await db
+      .from('crm_tasks')
+      .select('opportunity_id, title, due_at')
       .eq('workspace_id', workspaceId)
-      .eq('pipeline_id', pipelineId)
-      .eq('stage_id', stage.id)
+      .in('opportunity_id', cardIds)
       .eq('status', 'open')
       .is('deleted_at', null)
+      .order('due_at', { ascending: true, nullsFirst: false })
+    if (taskError) throw new Error(`getBoard failed: ${taskError.message}`)
 
-    if (scope.ownerUserId) query = query.eq('owner_user_id', scope.ownerUserId)
-
-    const { data, count, error } = await query
-      .order('updated_at', { ascending: false })
-      .limit(perColumn)
-
-    if (error) throw new Error(`getBoard failed: ${error.message}`)
-
-    const staleBefore = await staleCutoff(workspaceId, stage.id)
-    const enteredAt = await stageEntryTimes(
-      workspaceId,
-      stage.id,
-      (data ?? []).map((row) => row.id),
-    )
-
-    columns.push({
-      stageId: stage.id,
-      stageName: stage.name,
-      kind: stage.kind,
-      totalCards: count ?? 0,
-      cards: (data ?? []).map((row) => {
-        /*
-         * ⚠️ STAGE ENTRY, NOT `updated_at`. A deal that has sat in Proposal
-         * since March is stale whether or not somebody fixed a typo in its
-         * title this morning.
-         *
-         * A deal that has never moved has no history row — `createOpportunity`
-         * sets the first stage directly rather than through
-         * `crm_move_opportunity_stage` — so its creation IS its stage entry.
-         */
-        const stageEnteredAt = enteredAt.get(row.id) ?? row.created_at
-
-        return {
-          id: row.id,
-          title: row.title,
-          version: row.version,
-          valueAmount: row.value_amount,
-          currency: row.currency,
-          ownerUserId: row.owner_user_id,
-          contactId: row.contact_id,
-          companyId: row.company_id,
-          companyName: null,
-          updatedAt: row.updated_at,
-          stageEnteredAt,
-          isStale: staleBefore !== null && stageEnteredAt < staleBefore,
-        }
-      }),
-    })
+    const byCard = new Map<string, { title: string; dueAt: string | null; count: number }>()
+    for (const task of tasks ?? []) {
+      if (!task.opportunity_id) continue
+      const seen = byCard.get(task.opportunity_id)
+      if (seen) seen.count += 1
+      else byCard.set(task.opportunity_id, { title: task.title, dueAt: task.due_at, count: 1 })
+    }
+    for (const column of columns) {
+      for (const card of column.cards) {
+        const found = byCard.get(card.id)
+        if (!found) continue
+        card.nextTask = { title: found.title, dueAt: found.dueAt }
+        card.openTasks = found.count
+      }
+    }
   }
 
   // One read for every card's account name, not one per card.
@@ -653,21 +699,6 @@ async function stageEntryTimes(
   }
 
   return entered
-}
-
-/** ISO timestamp before which a card in this stage counts as rotting. */
-async function staleCutoff(workspaceId: string, stageId: string): Promise<string | null> {
-  const { data, error } = await createAdminClient()
-    .from('crm_pipeline_stages')
-    .select('stale_after_days')
-    .eq('workspace_id', workspaceId)
-    .eq('id', stageId)
-    .maybeSingle()
-
-  if (error) throw new Error(`staleCutoff failed: ${error.message}`)
-  if (!data?.stale_after_days) return null
-
-  return new Date(Date.now() - data.stale_after_days * 86_400_000).toISOString()
 }
 
 /** A deal's full stage history, oldest first — the basis of every velocity metric. */

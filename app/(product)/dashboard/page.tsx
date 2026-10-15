@@ -258,10 +258,10 @@ export default async function DashboardPage({
             href="/dashboard/intelligence"
             className="inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] border border-border-strong bg-panel px-4 text-sm font-semibold text-ink transition-[border-color,background-color,transform] duration-150 ease-out hover:border-accent/35 hover:bg-accent-soft/40 active:scale-[0.97]"
           >
-            Research with Hubble
+            View leads
           </Link>
           <Link
-            href="/dashboard/extract/new"
+            href="/dashboard/jobs"
             className="product-gradient inline-flex h-10 items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 text-sm font-semibold text-white transition-[filter,transform] duration-150 ease-out hover:brightness-95 active:scale-[0.97]"
           >
             <span aria-hidden className="text-base leading-none">+</span>
@@ -345,7 +345,7 @@ export default async function DashboardPage({
             */}
             <div className="mt-6">
               <Link
-                href="/dashboard/extract/new"
+                href="/dashboard/jobs"
                 className="product-gradient inline-flex h-10 items-center justify-center rounded-[var(--radius-md)] px-4 text-sm font-semibold text-white transition-[filter,transform] duration-150 ease-out hover:brightness-95 active:scale-[0.97]"
               >
                 Find your first leads

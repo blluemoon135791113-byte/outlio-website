@@ -3,6 +3,7 @@ import { after } from 'next/server'
 
 import { ExtractionDashboard } from '@/components/jobs/ExtractionDashboard'
 import { requireAccess } from '@/lib/auth/access'
+import { resolveUploadLimits } from '@/lib/upload/limits'
 import {
   DASHBOARD_FILE_SELECT,
   DASHBOARD_JOB_SELECT,
@@ -17,18 +18,20 @@ import { getGoogleConnectionMetadata } from '@/lib/integrations/google-repositor
 import { getGhlConnectionMetadata } from '@/lib/integrations/ghl-repository'
 
 export const metadata: Metadata = {
-  title: 'Lead sources | Outlio',
+  title: 'Find leads | Outlio',
   robots: { index: false, follow: false },
 }
 
 // Job state changes in the background and must never be served from a route cache.
 export const dynamic = 'force-dynamic'
+// Upload actions run from this page; after() may keep processing the batch.
 export const maxDuration = 300
 
 export default async function JobsPage() {
   const ctx = await requireAccess()
   const userId = ctx.userId!
   const supabase = createAdminClient()
+  const limits = resolveUploadLimits(ctx.plan?.limits ?? null)
 
   /*
    * Recover abandoned claims before presenting the live state. Both functions
@@ -98,6 +101,11 @@ export default async function JobsPage() {
       clayConnected={clayConnection?.status === 'connected'}
       googleConnected={googleConnection?.status === 'connected'}
       ghlConnected={ghlConnection?.status === 'connected'}
+      upload={{
+        maxFiles: limits.maxFiles,
+        maxFileBytes: limits.maxFileBytes,
+        leadsPerCredit: limits.leadsPerCredit,
+      }}
     />
   )
 }

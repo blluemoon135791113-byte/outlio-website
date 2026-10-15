@@ -36,6 +36,7 @@ import {
   resolveFileConcurrency,
 } from '@/lib/worker/concurrency'
 import { continueAutoEnrichment, startAutoEnrichment } from '@/lib/worker/enrich-free'
+import { ExtractionCrmSync } from '@/lib/crm/auto-sync'
 import { discardProcessedPages, pageCensus, scrubLinkedInCredentials } from '@/lib/upload/page-lifecycle'
 import type { Json } from '@/types/database'
 
@@ -368,6 +369,9 @@ export async function processJob(jobId: string, userId: string): Promise<Process
       companyIds: persisted.companyIds,
     })
 
+    // Companies appear under Organizations without a "Send to CRM" click.
+    await new ExtractionCrmSync(jobId, userId, 'accounts').run()
+
     if (job.capture_session_id) {
       await settleCaptureJob({ userId, jobId, found: allAccounts.length, kept: persisted.accountCount, status: 'processed' })
     }
@@ -610,6 +614,9 @@ export async function processJob(jobId: string, userId: string): Promise<Process
    * after this returns. Each finished batch rewrites the CSV in place.
    */
   const enrichmentRunId = status === 'failed' ? null : await startAutoEnrichment(jobId, userId)
+
+  // People and their companies appear in the CRM without a "Send to CRM" click.
+  if (status !== 'failed') await new ExtractionCrmSync(jobId, userId, 'leads').run()
 
   /*
    * Extension captures only: roll the per-page result into its capture

@@ -90,14 +90,12 @@ describe('every destination has a door', () => {
     ).toEqual([])
   })
 
-  it('the LinkedIn surface is in the nav specifically', () => {
-    /*
-     * ⚠️ NAMED, NOT JUST COVERED BY THE SWEEP ABOVE. This is the one that was
-     * actually missed, and a generic assertion passing tells you less than a
-     * specific one failing.
-     */
-    expect(NAV).toMatch(/href: '\/linkedin'/)
-    expect(NAV).toMatch(/href: '\/dashboard\/settings\/linkedin'/)
+  it('the CRM records are top-level links (owner layout, 2026-10-15)', () => {
+    expect(NAV).toMatch(/href: '\/crm\/companies', label: 'Organizations'/)
+    expect(NAV).toMatch(/href: '\/crm\/contacts', label: 'People'/)
+    expect(NAV).toMatch(/href: '\/crm\/pipeline', label: 'Opportunities'/)
+    // LinkedIn outreach was removed (ADR-008); a link back to it would 404.
+    expect(NAV).not.toMatch(/href: '\/linkedin/)
   })
 
   it('a module-gated section is hidden when the plan excludes it', () => {
@@ -107,13 +105,13 @@ describe('every destination has a door', () => {
      * and clicking it lands on "not enabled on your plan", which reads as the
      * product being broken rather than as an upsell.
      */
-    expect(NAV).toMatch(/showLinkedIn \? \[LINKEDIN_SECTION\] : \[\]/)
-    expect(NAV).toMatch(/showLinkedIn\?: boolean/)
+    expect(NAV).toMatch(/showCrm \? CRM_LINKS : \[\]/)
+    expect(NAV).toMatch(/showEmail \? \[EMAIL_SECTION\] : \[\]/)
   })
 
   it('the flag comes from the workspace modules, not a hardcoded true', () => {
     const layout = readFileSync(join(ROOT, 'app/(product)/layout.tsx'), 'utf8')
-    expect(layout).toMatch(/showLinkedIn=\{workspace\?\.modules\.has\('linkedin'\) \?\? false\}/)
+    expect(layout).toMatch(/showCrm=\{workspace\?\.modules\.has\('crm'\) \?\? false\}/)
   })
 
   it('every recorded exception still exists', () => {

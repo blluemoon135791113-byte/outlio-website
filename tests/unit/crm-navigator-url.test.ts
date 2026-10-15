@@ -19,7 +19,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { profileReference } from '@/lib/linkedin/profile-reference'
+import { profileReference } from '@/lib/crm/profile-reference'
 
 const ROOT = join(__dirname, '..', '..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')

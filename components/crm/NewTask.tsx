@@ -17,11 +17,14 @@ export type TaskDealOption = { id: string; title: string }
 export function NewTaskForm({
   contactId,
   contactName,
+  opportunityId,
   deals,
   onCancel,
 }: {
   contactId?: string
   contactName?: string
+  /** Fixes the task to one deal (an Opportunities card); hides the deal picker. */
+  opportunityId?: string
   deals?: TaskDealOption[]
   onCancel?: () => void
 }) {
@@ -29,6 +32,9 @@ export function NewTaskForm({
     createTaskAction,
     null,
   )
+  // The browser knows the reader's timezone; the server does not.
+  const [dueLocal, setDueLocal] = useState('')
+  const dueIso = dueLocal && !Number.isNaN(new Date(dueLocal).getTime()) ? new Date(dueLocal).toISOString() : ''
 
   if (state?.ok) {
     return <p role="status" aria-live="polite" className="text-xs font-medium text-success">{state.message}</p>
@@ -37,6 +43,8 @@ export function NewTaskForm({
   return (
     <form action={action} className="clay space-y-3 p-4">
       {contactId ? <input type="hidden" name="contactId" value={contactId} /> : null}
+      {opportunityId ? <input type="hidden" name="opportunityId" value={opportunityId} /> : null}
+      <input type="hidden" name="dueAtIso" value={dueIso} />
 
       <div>
         <h3 className="text-sm font-semibold text-ink">New task</h3>
@@ -64,7 +72,7 @@ export function NewTaskForm({
         it against the workspace, and 0124's composite FK makes a cross-tenant
         link unrepresentable regardless of what this select is made to submit.
       */}
-      {deals && deals.length > 0 ? (
+      {!opportunityId && deals && deals.length > 0 ? (
         <label className="block">
           <span className="text-xs font-medium text-ink">Deal</span>
           <select
@@ -79,23 +87,28 @@ export function NewTaskForm({
               </option>
             ))}
           </select>
-          <span className="mt-1 block text-xs text-muted">
-            Linking it here is what makes this the deal&rsquo;s next action.
-          </span>
         </label>
       ) : null}
 
       <label className="block">
         <span className="text-xs font-medium text-ink">Due</span>
         <input
-          name="dueAt"
-          type="date"
+          type="datetime-local"
+          value={dueLocal}
+          onChange={(event) => setDueLocal(event.target.value)}
           className="mt-1 w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm text-ink"
         />
-        {/* Explains the end-of-day rule, so "today" does not look overdue. */}
-        <span className="mt-1 block text-xs text-muted">
-          Due at the end of that day. Leave blank if there is no deadline.
-        </span>
+      </label>
+
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          name="remind"
+          defaultChecked
+          disabled={!dueIso}
+          className="h-4 w-4 rounded-[var(--radius-sm)] accent-[var(--accent)]"
+        />
+        <span className="text-xs text-ink">Remind me at this time</span>
       </label>
 
       <label className="block">
@@ -138,7 +151,9 @@ export function NewTaskForm({
 export function NewTaskButton(props: {
   contactId?: string
   contactName?: string
+  opportunityId?: string
   deals?: TaskDealOption[]
+  label?: string
 }) {
   const [open, setOpen] = useState(false)
   if (open) return <NewTaskForm {...props} onCancel={() => setOpen(false)} />
@@ -149,7 +164,7 @@ export function NewTaskButton(props: {
       onClick={() => setOpen(true)}
       className="rounded-[var(--radius-md)] bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink transition-colors duration-150 hover:opacity-90"
     >
-      New task
+      {props.label ?? 'New task'}
     </button>
   )
 }
