@@ -13479,3 +13479,58 @@ pre-existing pages.
 
 typecheck · eslint (exit 0) · unit (see commit) · build · `test.html` scrubbed
 locally: 0 values found, 25/25 leads parse identically.
+---
+
+## 2026-10-15 — Enrichment rate: our own queue stops benching search; domains by content
+
+**Not deployed. No migration.** Built in a separate worktree: another session
+had uncommitted work in the main checkout.
+
+### Dissection (25-lead production job b2429caa, traced lead by lead)
+
+- **Domains (5 of 16 companies).** Of the 11 without one: 5 were accepted by
+  the picker on a fresh search but never reached Diffbot during the job; 3 had
+  exactly one result site verifying by content under a brand-name domain the
+  picker refused; 3 have no site of their own.
+- **Why searches never reached Diffbot:** up to 8 person searches per lead × 6
+  concurrent tasks queued behind our 1-per-second Diffbot pacing; queued past
+  their 13 s deadline they left with ~1 ms, timed out locally, and the SERP
+  breaker benched Diffbot for everyone. Diffbot: ~103 asked, 44 answered, of
+  ~200 needed.
+- **People:** 18 of 25 never named in any search result; 4 only namesakes.
+  Public-web person contact has a hard ceiling here.
+- **Company sites with a domain:** contact forms, JavaScript-rendered pages,
+  free-mail only, one refused.
+
+### Fixes
+
+1. `paceHost` is deadline-aware: a request whose slot would come too late
+   gives up without taking it, as a LOCAL `ProviderHttpError`; the SERP
+   breaker never benches an engine for a local failure.
+2. `PHRASINGS_PER_CONTACT = 1` (was 4): one email and one phone search per lead.
+3. `search-domain-discovery` falls back to content verification: exactly one
+   non-directory result site whose homepage is the company speaking and that
+   presents as it (name in `<title>`, or a distinctive name word in the domain).
+4. `company-contact` files a free-mail address published on the company's own
+   page when its domain publishes none, at MEDIUM / 0.72.
+
+### Measured on the same 25 leads, from no known domains
+
+| | Production job | New code |
+|---|---|---|
+| Companies with a domain | 5/16 | 11/16 |
+| Leads at a company with a domain | 12/25 | 18/25 |
+| Company phone / email | 8 / 0 | 9 / 2 |
+| Person email / phone | 2 / 0 | 1 / 0 |
+| Any contact | 9/25 | 9/25 |
+| Wall time | 148 s | 79 s |
+
+**Contacts did not rise on this sample**: the newly found companies mostly
+publish no email/phone on the five pages read. Next ceiling, not built:
+JavaScript-rendered sites (needs a renderer), contact pages outside the five
+fixed paths (a first-party `sitemap.xml` would list them).
+
+### Verified
+
+typecheck · eslint (exit 0, no warnings) · unit 288 files / 4,752 tests ·
+build.

@@ -121,7 +121,16 @@ export function servedDirectly(host: string, finalUrl: string | null | undefined
   return final.replace(/^www\./, '') === host.replace(/^www\./, '')
 }
 
-async function probeHost(host: string, companyName: string): Promise<ProbedDomain | null> {
+/**
+ * Fetches `https://host/` and returns it — with the page it read — only if it
+ * is the company speaking about itself (served directly, carrying the full
+ * company name). Shared with search-based discovery, which verifies its
+ * candidates the same way and needs the page for a stricter check.
+ */
+export async function verifyHostPage(
+  host: string,
+  companyName: string,
+): Promise<(ProbedDomain & { html: string }) | null> {
   let text: string
   let finalUrl: string
   try {
@@ -151,7 +160,13 @@ async function probeHost(host: string, companyName: string): Promise<ProbedDomai
   // normalizeDomain re-validates what we constructed, keeping the stored value
   // inside the same identity space as every other domain source.
   const domain = normalizeDomain(host)
-  return domain ? { domain, sourceUrl: `https://${host}/` } : null
+  return domain ? { domain, sourceUrl: `https://${host}/`, html: text } : null
+}
+
+/** `verifyHostPage` without the page: what the probe files as evidence. */
+async function probeHost(host: string, companyName: string): Promise<ProbedDomain | null> {
+  const verified = await verifyHostPage(host, companyName)
+  return verified ? { domain: verified.domain, sourceUrl: verified.sourceUrl } : null
 }
 
 export const domainProbeProvider: IntelligenceProvider<ProbedDomain | null> = {

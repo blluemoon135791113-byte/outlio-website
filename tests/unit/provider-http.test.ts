@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { requestJson } from '@/lib/intelligence/http'
+import { isLocalFailure, ProviderHttpError, requestJson, setHostPacing } from '@/lib/intelligence/http'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -74,3 +74,29 @@ describe('provider HTTP attempt hooks', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('pacing never spends a request it cannot finish', () => {
+  it('gives up LOCALLY, without fetching, when its turn would come after its deadline', async () => {
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    setHostPacing('paced.example', 5_000)
+
+    // The first request takes the slot; the second would wait ~5s.
+    await requestJson({ url: 'https://paced.example/a', deadlineAt: Date.now() + 10_000 })
+    const started = Date.now()
+    const second = requestJson({ url: 'https://paced.example/b', deadlineAt: Date.now() + 2_000, maxRetries: 3 })
+
+    const error = await second.catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(ProviderHttpError)
+    expect(isLocalFailure(error)).toBe(true)
+    expect(Date.now() - started).toBeLessThan(500)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a real remote failure is NOT local', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('down', { status: 503 })))
+    const error = await requestJson({ url: 'https://remote.example/x', maxRetries: 0 }).catch((caught: unknown) => caught)
+    expect(isLocalFailure(error)).toBe(false)
+  })
+})
+
