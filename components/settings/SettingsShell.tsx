@@ -32,7 +32,6 @@ const SECTIONS = [
   { href: '/dashboard/settings/tags', label: 'Tags' },
   { href: '/dashboard/settings/billing', label: 'Subscription and billing' },
   { href: '/dashboard/settings/integrations', label: 'Integrations' },
-  { href: '/dashboard/settings/linkedin', label: 'LinkedIn accounts' },
   { href: '/dashboard/settings/extension', label: 'Browser extension' },
   { href: '/dashboard/settings/notifications', label: 'Notifications' },
   { href: '/dashboard/settings/developers', label: 'Developers' },

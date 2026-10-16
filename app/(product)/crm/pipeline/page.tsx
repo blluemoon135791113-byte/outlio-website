@@ -11,7 +11,7 @@ import { workspaceContextIfPermitted } from '@/lib/workspaces/context'
 import { can, dataScope } from '@/lib/workspaces/permissions'
 
 export const metadata: Metadata = {
-  title: 'Pipeline | Outlio',
+  title: 'Opportunities | Outlio',
   robots: { index: false, follow: false },
 }
 
@@ -151,8 +151,14 @@ export default async function PipelinePage({
       </div>
 
       <PipelineBoard
+        // Remount when lists or card tasks change, so server state replaces local state.
+        key={columns
+          .map((c) => `${c.stageId}:${c.stageName}:${c.cards.map((card) => `${card.id}.${card.openTasks}`).join(',')}`)
+          .join('|')}
         columns={columns}
         canMove={can({ role: ctx.role, modules: ctx.modules }, 'crm.opportunity.edit')}
+        canManageLists={canManage}
+        canAddTasks={can({ role: ctx.role, modules: ctx.modules }, 'crm.task.manage')}
         workspaceId={ctx.workspace.id}
         pipelineId={pipelineId}
       />

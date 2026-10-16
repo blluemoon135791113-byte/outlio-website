@@ -158,6 +158,18 @@ const KNOWN_UNUSED = new Set([
    */
   'crm_import_mappings', // step 5
   'crm_tag_allocation_targets', // step 6 (0153 replaced crm_icp_allocation_targets)
+  /*
+   * ADR-008: the LinkedIn module's code was deleted on the owner's decision
+   * (2026-10-15); its tables stay until the owner applies a drop by hand,
+   * because dropping them destroys customer history. Remove with the drop.
+   */
+  'linkedin_campaigns',
+  'linkedin_enrollments',
+  'linkedin_observations',
+  'linkedin_prospect_messages',
+  'linkedin_senders',
+  'linkedin_tasks',
+  'linkedin_workflow_steps',
 ])
 
 describe('the scanner itself', () => {

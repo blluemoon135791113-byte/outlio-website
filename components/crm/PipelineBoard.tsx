@@ -2,7 +2,10 @@
 
 import { useCallback, useState, useTransition } from 'react'
 
+import { AddList, ListMenu } from '@/components/crm/BoardLists'
+import { NewTaskButton } from '@/components/crm/NewTask'
 import { useBoardRealtime } from '@/components/crm/useBoardRealtime'
+import { LocalTime } from '@/components/ui/LocalTime'
 import { moveCardAction, type MoveCardState } from '@/lib/crm/board-actions'
 import { formatMoney as sharedFormatMoney } from '@/lib/format/money'
 import type { BoardColumn } from '@/lib/crm/opportunities'
@@ -29,11 +32,17 @@ import type { BoardColumn } from '@/lib/crm/opportunities'
 export function PipelineBoard({
   columns,
   canMove,
+  canManageLists = false,
+  canAddTasks = false,
   workspaceId,
   pipelineId,
 }: {
   columns: BoardColumn[]
   canMove: boolean
+  /** `crm.pipeline.manage`: add, rename, reorder and remove lists. */
+  canManageLists?: boolean
+  /** `crm.task.manage`: add a task (with a reminder) to a card. */
+  canAddTasks?: boolean
   workspaceId: string
   pipelineId: string
 }) {
@@ -126,26 +135,13 @@ export function PipelineBoard({
 
   const totalCards = board.reduce((n, c) => n + c.totalCards, 0)
 
-  if (totalCards === 0) {
-    return (
-      <div className="clay p-10 text-center">
-        <h2 className="text-base font-semibold text-ink">No deals yet</h2>
-        {/*
-          ⚠️ THIS COPY CONTRADICTED THE SCREEN. It said deals come "from a
-          contact" — written before R4 put a "New deal" button directly above
-          it. Telling someone to go elsewhere while the button is in view is
-          how a working feature reads as unfinished.
-        */}
-        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
-          Add one with <strong className="text-ink">New deal</strong> above, or from any
-          contact. They appear here as cards, one column per stage.
-        </p>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-3">
+      {/* Columns stay visible on an empty board so lists can be set up first. */}
+      {totalCards === 0 ? (
+        <p className="text-sm text-muted">No opportunities yet. Add one with <strong className="text-ink">New deal</strong>.</p>
+      ) : null}
+
       {feedback.status === 'error' ? (
         <div
           role="alert"
@@ -167,7 +163,7 @@ export function PipelineBoard({
       {/* Horizontal scroll, not a wrap: columns keep their identity as the
           pipeline grows, and each column scrolls its own cards. */}
       <div className="flex gap-3 overflow-x-auto pb-2" aria-busy={pending}>
-        {board.map((column) => (
+        {board.map((column, index) => (
           <section
             key={column.stageId}
             aria-label={column.stageName}
@@ -187,9 +183,20 @@ export function PipelineBoard({
               over === column.stageId ? 'bg-accent-soft' : 'bg-surface-muted'
             }`}
           >
-            <header className="flex items-baseline justify-between px-2 py-1.5">
-              <h2 className="text-[13px] font-semibold text-ink">{column.stageName}</h2>
-              <span className="text-[11px] font-medium text-muted">{column.totalCards}</span>
+            <header className="flex items-center justify-between gap-2 px-2 py-1.5">
+              <h2 className="truncate text-[13px] font-semibold text-ink">{column.stageName}</h2>
+              <div className="flex shrink-0 items-center gap-1">
+                <span className="text-[11px] font-medium text-muted">{column.totalCards}</span>
+                {canManageLists ? (
+                  <ListMenu
+                    pipelineId={pipelineId}
+                    stageId={column.stageId}
+                    name={column.stageName}
+                    isFirst={index === 0}
+                    isLast={index === board.length - 1}
+                  />
+                ) : null}
+              </div>
             </header>
 
             <ul className="space-y-2">
@@ -225,6 +232,25 @@ export function PipelineBoard({
                     ) : null}
                   </div>
 
+                  {card.nextTask ? (
+                    <p className="mt-2 truncate rounded-[var(--radius-sm)] bg-surface-muted px-2 py-1 text-[11px] text-muted">
+                      <span className="font-medium text-ink">{card.nextTask.title}</span>
+                      {card.nextTask.dueAt ? (
+                        <>
+                          {' · '}
+                          <LocalTime iso={card.nextTask.dueAt} />
+                        </>
+                      ) : null}
+                      {card.openTasks > 1 ? ` · +${card.openTasks - 1}` : ''}
+                    </p>
+                  ) : null}
+
+                  {canAddTasks ? (
+                    <div className="mt-2">
+                      <NewTaskButton opportunityId={card.id} label="+ Task" />
+                    </div>
+                  ) : null}
+
                   {canMove ? (
                     <label className="mt-2.5 block">
                       <span className="sr-only">Move {card.title} to another stage</span>
@@ -258,6 +284,8 @@ export function PipelineBoard({
             </ul>
           </section>
         ))}
+
+        {canManageLists ? <AddList pipelineId={pipelineId} /> : null}
       </div>
     </div>
   )

@@ -4,6 +4,64 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-10-15 — Dashboard revamp: one Find leads page, CRM records top-level, Opportunities board, reminders, LinkedIn removed
+
+**0158 is NOT applied.** Validated locally (`check-migration.sh`, smoke 4/4).
+`types/database.ts` was hand-edited to match it. Apply 0158 BEFORE deploying:
+the tick's `task_reminders` job and the task form's reminder both need it.
+
+### Owner decisions (2026-10-15)
+
+- Sidebar: Overview · Find leads · Leads · Organizations · People ·
+  Opportunities · Pipeline ▸ (My Work, Tasks, Lists, Import, Duplicates,
+  Reports, Dashboards) · Email ▸ · Automations · Settings.
+- Every finished extraction goes into the CRM automatically. This reverses
+  "explicit, not automatic" on `sendExtractionToCrm`, which remains as the
+  manual retry.
+- Opportunities extends the existing deals board (no new tables).
+- LinkedIn outreach is removed: code deleted, tables kept (ADR-008).
+
+### What was built
+
+- **Find leads** (`/dashboard/jobs`): upload form + credits + live runs on one
+  page; `/dashboard/extract/new` redirects. The upload stays on the page and
+  refreshes the run list. Six metric cards → credits + four totals.
+- **Leads**: renamed from Hubble Intelligence (route unchanged).
+- **Auto CRM sync** (`lib/crm/auto-sync.ts`, `ExtractionCrmSync`): runs after
+  both worker completion paths, acting as the uploader: `crm.import`, plus
+  `accounts.import` for account runs. Never throws. **Only for uploaders in
+  exactly one workspace**: `extraction_jobs` has no `workspace_id`, so for
+  anyone in two the target is ambiguous and they keep using "Send to CRM".
+  Recording the workspace on the job would lift this (product-risk review). Enrichment already reaches
+  CRM contacts through the tick's evidence bridge.
+- **Opportunities board**: Trello-style lists (`lib/crm/stages.ts`,
+  `PipelineLists`: add before Won/Lost, rename, move, remove = archive; refuses
+  a list with open cards or the last open list), gated on
+  `crm.pipeline.manage`. Cards show their next open task and "+ Task".
+  `getBoard` loads columns in parallel and reads stale thresholds with the
+  stages (was three sequential queries per column).
+- **Reminders**: tasks take a date + time; "Remind me" sets `remind_at`. The
+  tick claims due reminders with `crm_claim_due_task_reminders` (claims once)
+  → `crm_notifications` → a header bell (`NotificationBell`, polls 60s).
+- **LinkedIn removed**: `lib/linkedin`, `components/linkedin`, `/linkedin`,
+  `/dashboard/settings/linkedin`, the contact-page panel, the tick job.
+  `profile-reference.ts` moved to `lib/crm/` (it formats a lead's own link).
+
+### Not done
+
+- **Reminder emails.** The app has no transactional email provider (auth mail
+  is Supabase's; campaigns send from customers' mailboxes). Reminders are
+  in-app only until a provider is chosen.
+- The `linkedin` plan module and `senderLimit` remain in entitlements code.
+
+### Verified
+
+typecheck clean · lint clean · build succeeds · unit 4467/4467 (new:
+pipeline-lists 7, task-reminders 2, crm-auto-sync 5) · browser shell suite
+14/14 · 0158 smoke 4/4.
+
+---
+
 ## 2026-10-03 — Sales Navigator account SEARCH results: a third saved-page type
 
 **0156 is applied to production** (2026-10-03; types regenerated, the columns

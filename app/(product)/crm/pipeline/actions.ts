@@ -22,6 +22,7 @@ import {
   setDefaultPipeline,
   type StageInput,
 } from '@/lib/crm/opportunities'
+import { ListRuleError, PipelineLists } from '@/lib/crm/stages'
 import { assertWorkspacePermission } from '@/lib/workspaces/context'
 
 export type PipelineActionState =
@@ -211,5 +212,52 @@ export async function setDefaultPipelineAction(
     return { ok: true, message: 'This is now the pipeline the board opens on.' }
   } catch {
     return { ok: false, error: 'Could not change the default.' }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lists (stages) on the Opportunities board — Trello-style editing.
+// ---------------------------------------------------------------------------
+
+/**
+ * One action for the four list edits, so the board needs a single form
+ * handler. `op` is checked against a fixed set; ids are re-checked against
+ * this workspace's board inside `PipelineLists`.
+ */
+export async function editListAction(
+  _previous: PipelineActionState,
+  formData: FormData,
+): Promise<PipelineActionState> {
+  try {
+    const ctx = await assertWorkspacePermission('crm.pipeline.manage')
+    const lists = new PipelineLists(ctx.workspace.id, String(formData.get('pipelineId') ?? ''))
+    const stageId = String(formData.get('stageId') ?? '')
+    const name = String(formData.get('name') ?? '')
+
+    switch (formData.get('op')) {
+      case 'add':
+        await lists.add(name)
+        break
+      case 'rename':
+        await lists.rename(stageId, name)
+        break
+      case 'left':
+        await lists.move(stageId, -1)
+        break
+      case 'right':
+        await lists.move(stageId, 1)
+        break
+      case 'remove':
+        await lists.remove(stageId)
+        break
+      default:
+        return { ok: false, error: 'Unknown change.' }
+    }
+
+    revalidatePath(PATH)
+    return { ok: true, message: 'Saved.' }
+  } catch (error) {
+    if (error instanceof ListRuleError) return { ok: false, error: error.message }
+    return { ok: false, error: 'Could not change that list.' }
   }
 }

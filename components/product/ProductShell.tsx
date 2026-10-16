@@ -13,42 +13,30 @@ import {
 } from '@/lib/analytics/client'
 import { ProductIcon, ProductNav } from '@/components/product/ProductNav'
 import { NavigationProgress } from '@/components/product/NavigationProgress'
+import { NotificationBell } from '@/components/product/NotificationBell'
 import { SidebarReferral } from '@/components/product/SidebarReferral'
 import { signOutAction } from '@/lib/auth/actions'
 import { CommandPalette, CommandPaletteTrigger } from '@/components/product/CommandPalette'
 
 function pageLabel(pathname: string) {
-  if (pathname.startsWith('/admin')) return 'User administration'
-  if (pathname.startsWith('/crm/contacts')) return 'Contacts'
-  if (pathname.startsWith('/crm/companies')) return 'Accounts'
-  if (pathname.startsWith('/crm/pipeline')) return 'Pipeline'
-  if (pathname.startsWith('/crm/reports')) return 'Reports'
-  if (pathname.startsWith('/crm')) return 'CRM'
-  if (pathname.startsWith('/dashboard/extract/new')) return 'Find leads'
-  if (pathname.startsWith('/dashboard/jobs')) return 'Lead sources'
-  if (pathname.startsWith('/dashboard/intelligence')) return 'Intelligence'
-  if (pathname.startsWith('/dashboard/access')) return 'Access status'
-  if (pathname.startsWith('/dashboard/settings')) return 'Settings'
-  /*
-   * ⚠️ EMAIL AND FLOWS WERE MISSING, so both fell through to "Overview" —
-   * every screen in two whole modules announced itself as the dashboard. The
-   * fallback is meant for `/dashboard` itself, and a fallback that silently
-   * catches new top-level sections is why nobody noticed for two milestones.
-   */
-  if (pathname.startsWith('/email')) return 'Email'
-  if (pathname.startsWith('/flows')) return 'Flows'
-  /*
-   * ⚠️ THE WHOLE LINKEDIN SECTION HAD NO ENTRY, so `/linkedin` fell through to
-   * the "Overview" fallback and the header contradicted the page under it.
-   * Pre-existing, not new: the section was built after this map, the same way
-   * it was built without a layout. Longest match first, matching `/crm/reports`
-   * above.
-   */
-  if (pathname.startsWith('/linkedin/campaigns')) return 'Campaigns'
-  if (pathname.startsWith('/linkedin/analysis')) return 'Strategy analysis'
-  if (pathname.startsWith('/linkedin')) return 'LinkedIn'
-  if (pathname.startsWith('/extension')) return 'Extension'
-  return 'Overview'
+  // Longest prefix first: `/crm/reports/dashboards` before `/crm/reports`.
+  const labels: Array<[string, string]> = [
+    ['/admin', 'User administration'],
+    ['/crm/contacts', 'People'],
+    ['/crm/companies', 'Organizations'],
+    ['/crm/pipeline', 'Opportunities'],
+    ['/crm/reports', 'Reports'],
+    ['/crm', 'Pipeline'],
+    ['/dashboard/extract', 'Find leads'],
+    ['/dashboard/jobs', 'Find leads'],
+    ['/dashboard/intelligence', 'Leads'],
+    ['/dashboard/access', 'Access status'],
+    ['/dashboard/settings', 'Settings'],
+    ['/email', 'Email'],
+    ['/flows', 'Automations'],
+    ['/extension', 'Extension'],
+  ]
+  return labels.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? 'Overview'
 }
 
 function initials(name: string | null, email: string) {
@@ -62,7 +50,6 @@ function SidebarContent({
   canUseScraper,
   showCrm,
   showEmail,
-  showLinkedIn,
   showFlows,
   referralLink,
   onNavigate,
@@ -71,7 +58,6 @@ function SidebarContent({
   canUseScraper: boolean
   showCrm: boolean
   showEmail: boolean
-  showLinkedIn: boolean
   showFlows: boolean
   /** `null` until a profile has a code allocated. */
   referralLink: string | null
@@ -117,7 +103,6 @@ function SidebarContent({
           canUseScraper={canUseScraper}
           showCrm={showCrm}
           showEmail={showEmail}
-          showLinkedIn={showLinkedIn}
           showFlows={showFlows}
           onNavigate={onNavigate}
         />
@@ -156,7 +141,6 @@ export function ProductShell({
   canUseScraper,
   showCrm = false,
   showEmail = false,
-  showLinkedIn = false,
   showFlows = false,
   avatarUrl,
   referralLink = null,
@@ -173,7 +157,6 @@ export function ProductShell({
   canUseScraper: boolean
   showCrm?: boolean
   showEmail?: boolean
-  showLinkedIn?: boolean
   showFlows?: boolean
   avatarUrl?: string | null
   referralLink?: string | null
@@ -264,7 +247,6 @@ export function ProductShell({
           canUseScraper={canUseScraper}
           showCrm={showCrm}
           showEmail={showEmail}
-          showLinkedIn={showLinkedIn}
           showFlows={showFlows}
           referralLink={referralLink}
         />
@@ -298,8 +280,7 @@ export function ProductShell({
               canUseScraper={canUseScraper}
               showCrm={showCrm}
               showEmail={showEmail}
-              showLinkedIn={showLinkedIn}
-              showFlows={showFlows}
+                  showFlows={showFlows}
               referralLink={referralLink}
               onNavigate={() => setMobileOpen(false)}
             />
@@ -349,13 +330,14 @@ export function ProductShell({
                   {pageLabel(pathname)}
                 </p>
                 <p className="hidden truncate text-[11px] text-muted sm:block">
-                  Outlio Lead Engine{planName ? ` · ${planName}` : ''}
+                  Outlio{planName ? ` · ${planName}` : ''}
                 </p>
               </div>
             </div>
 
             <div className="ml-auto flex items-center gap-2 sm:gap-3">
               <CommandPaletteTrigger />
+              {showCrm ? <NotificationBell /> : null}
 
             <details className="group relative">
               <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-xl p-1.5 pr-2 transition-[background-color,transform] duration-150 hover:bg-surface-muted active:scale-[0.98] [&::-webkit-details-marker]:hidden">

@@ -93,7 +93,7 @@ describe('the scanner sees what it polices', () => {
   it('finds the pages that defer', () => {
     // Vacuity: if the sentence is reworded, this list empties and the
     // assertion below passes over nothing.
-    expect(DEFERRING.length).toBeGreaterThanOrEqual(20)
+    expect(DEFERRING.length).toBeGreaterThanOrEqual(15)
   })
 
   it('does not count the shell layout as a refusal', () => {
@@ -122,26 +122,6 @@ describe('every deferring page has a layout that actually refuses', () => {
         'which reads as broken rather than refused. Add a section layout.',
     ).toEqual([])
   })
-
-  it('linkedin specifically, since it is the one that was missing', () => {
-    /*
-     * Named rather than left to the sweep: it is the newest section and the
-     * only one ever built without a layout, so a future rewrite is most likely
-     * to drop it again here.
-     */
-    const layout = join(PRODUCT, 'linkedin/layout.tsx')
-    expect(existsSync(layout), '/linkedin lost its layout again').toBe(true)
-    const source = readFileSync(layout, 'utf8')
-    expect(source).toContain('decidePermission')
-    expect(source, 'the layout no longer supplies the page heading').toMatch(/<h1/)
-    /*
-     * ⚠️ THE SAME PERMISSION THE PAGE ASKS FOR. `linkedin` is a module with no
-     * permission of its own; gating the layout on something else would put the
-     * two on different questions and reintroduce the blank panel for anyone in
-     * the gap between them.
-     */
-    expect(source).toContain("'crm.contact.view'")
-  })
 })
 
 describe('each product section supplies exactly one page heading', () => {
@@ -151,7 +131,7 @@ describe('each product section supplies exactly one page heading', () => {
      * no layout has neither, which is how `/linkedin` came to start its
      * document outline at `<h2>`.
      */
-    for (const section of ['crm', 'email', 'flows', 'linkedin', 'dashboard/settings']) {
+    for (const section of ['crm', 'email', 'flows', 'dashboard/settings']) {
       const layout = join(PRODUCT, section, 'layout.tsx')
       expect(existsSync(layout), `${section} has no layout`).toBe(true)
       expect(readFileSync(layout, 'utf8'), `${section}'s layout has no h1`).toMatch(/<h1/)

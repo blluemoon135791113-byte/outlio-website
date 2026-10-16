@@ -154,57 +154,6 @@ const KNOWN_ORPHANS = new Set(
      */
     'lib/fastspring/access.ts',
     /*
-     * ⚠️ THE LINKEDIN BUILD, AND THIS GUARD CAUGHT EVERY PIECE IMMEDIATELY —
-     * which is correct. Phase 8's message set and phase 7's decision layer are
-     * both logic with no surface yet: the Action Inbox that will call them
-     * needs the sender model (phase 4) and the task state split (phase 5),
-     * neither of which exists. The brief is explicit that a live-looking
-     * button backed by a stub is worse than an absent one.
-     *
-     * ⚠️ ONLY THE ENTRY POINTS ARE LISTED. `templates.ts` and `variables.ts`
-     * are imported by `render.ts`, so they have a production importer and are
-     * not orphans — the guard rejected them from this list, correctly, on
-     * exactly that basis.
-     *
-     * ⚠️ `outcomes.ts` AND `budget.ts` BOTH LEFT THIS LIST WITHOUT ANYONE
-     * DECIDING TO REMOVE THEM. Each acquired a production importer — `budget`
-     * imports `TaskKind` from `outcomes`, and `senders` imports from `budget` —
-     * and the both-directions assertion failed until the entries were deleted.
-     * The list shrinks because the code changes, not because somebody
-     * remembers to tidy it.
-     *
-     * ⚠️ `senders.ts` HAS SINCE LEFT TOO, and with it the whole chain
-     * `senders → budget → outcomes` is now reachable from a real screen:
-     * `/dashboard/settings/linkedin` links accounts and reads budgets through
-     * it. Three entries removed by the code changing, none by anyone tidying.
-     *
-     * ╔═══════════════════════════════════════════════════════════════════╗
-     * ║  ⚠️ FOUR MORE LEFT ON 2026-09-13, ON THE EXIT CONDITION THIS LIST  ║
-     * ║  WROTE DOWN FOR ITSELF.                                            ║
-     * ║                                                                    ║
-     * ║  The condition was: "they leave when the Action Inbox renders a     ║
-     * ║  draft and its result form... and `preflight.ts` additionally when  ║
-     * ║  the release job calls it." 0132 built the task tables,             ║
-     * ║  `lib/linkedin/tasks.ts` calls `preflight` before releasing, and    ║
-     * ║  `components/linkedin/ActionInbox.tsx` renders the draft and offers ║
-     * ║  `allowedOutcomes(kind)`.                                          ║
-     * ║                                                                    ║
-     * ║  The same note warned what a bad exit would look like: an inbox     ║
-     * ║  that shipped with "its own renderer, its own outcome vocabulary,   ║
-     * ║  its own idea of a safe profile link, or — worst — its own idea of  ║
-     * ║  when an approval is still valid." It has none of those. The card   ║
-     * ║  imports the vocabulary, the release path imports the preflight,    ║
-     * ║  and `enroll.ts` imports the renderer and the link allowlist.       ║
-     * ╚═══════════════════════════════════════════════════════════════════╝
-     *
-     * `metrics.ts` remains, and its exit condition is different: it leaves when
-     * something REPORTS on LinkedIn outcomes. Nothing does — the first
-     * enrollment can only be created today, so there is no history to measure
-     * and a report over an empty table would be a screen of zeroes pretending
-     * to be a finding.
-     */
-    'lib/linkedin/metrics.ts',
-    /*
      * ADR-007's `lib/crm/account-writes.ts` LEFT on 2026-10-01, on its stated
      * exit: the step-3 Accounts forms call it through lib/crm/account-actions.ts.
      */
