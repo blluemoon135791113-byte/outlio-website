@@ -123,7 +123,7 @@ export async function loadFirstRun(
       body:
         'Upload a saved Sales Navigator page, import a CSV, or add someone by hand. ' +
         'Everything else in Outlio hangs off having people in the CRM.',
-      href: '/dashboard/extract/new',
+      href: '/dashboard/jobs',
       cta: 'Add contacts',
       done: contacts > 0,
       lockedBy: null,

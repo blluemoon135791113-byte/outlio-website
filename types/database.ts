@@ -4358,6 +4358,8 @@ export type Database = {
           due_at: string | null
           id: string
           opportunity_id: string | null
+          remind_at: string | null
+          reminded_at: string | null
           outcome: string | null
           snoozed_until: string | null
           status: Database["public"]["Enums"]["crm_task_status"]
@@ -4379,6 +4381,8 @@ export type Database = {
           due_at?: string | null
           id?: string
           opportunity_id?: string | null
+          remind_at?: string | null
+          reminded_at?: string | null
           outcome?: string | null
           snoozed_until?: string | null
           status?: Database["public"]["Enums"]["crm_task_status"]
@@ -4400,6 +4404,8 @@ export type Database = {
           due_at?: string | null
           id?: string
           opportunity_id?: string | null
+          remind_at?: string | null
+          reminded_at?: string | null
           outcome?: string | null
           snoozed_until?: string | null
           status?: Database["public"]["Enums"]["crm_task_status"]
@@ -9807,6 +9813,18 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: Json
+      }
+      crm_claim_due_task_reminders: {
+        Args: { p_limit: number }
+        Returns: {
+          assigned_to_user_id: string | null
+          contact_id: string | null
+          id: string
+          opportunity_id: string | null
+          remind_at: string
+          title: string
+          workspace_id: string
+        }[]
       }
       crm_create_account_deals: {
         Args: {

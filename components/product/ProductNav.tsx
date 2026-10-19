@@ -5,10 +5,9 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import type { ComponentProps, ReactNode } from 'react'
 
-import { HubbleLogo } from '@/components/brand/HubbleLogo'
-
 type IconName =
   | 'admin'
+  | 'board'
   | 'crm'
   | 'dashboard'
   | 'email'
@@ -18,41 +17,49 @@ type IconName =
   | 'history'
   | 'intelligence'
   | 'lock'
+  | 'organization'
+  | 'people'
   | 'settings'
   | 'website'
 
-const PRODUCT_LINKS: Array<{
-  href: string
-  label: string
-  exact?: boolean
-  icon: IconName
-}> = [
+type NavLink = { href: string; label: string; exact?: boolean; icon: IconName }
+
+/*
+ * Revised 2026-10-15 (owner): one "Find leads" screen uploads AND tracks runs —
+ * the old "Lead sources" page is now its lower half. "Hubble Intelligence" is
+ * "Leads": the people you extracted, enriched automatically.
+ */
+const PRODUCT_LINKS: NavLink[] = [
   { href: '/dashboard', label: 'Overview', exact: true, icon: 'dashboard' },
-  { href: '/dashboard/extract/new', label: 'Find leads', icon: 'extract' },
-  { href: '/dashboard/jobs', label: 'Lead sources', icon: 'history' },
-  { href: '/dashboard/intelligence', label: 'Hubble Intelligence', icon: 'intelligence' },
+  { href: '/dashboard/jobs', label: 'Find leads', icon: 'extract' },
+  { href: '/dashboard/intelligence', label: 'Leads', icon: 'intelligence' },
 ]
 
-const ACCESS_LINK = {
+/*
+ * The CRM records people work with every day, promoted out of the Pipeline
+ * section so each is one click away. Routes are unchanged so existing links
+ * keep working.
+ */
+const CRM_LINKS: NavLink[] = [
+  { href: '/crm/companies', label: 'Organizations', icon: 'organization' },
+  { href: '/crm/contacts', label: 'People', icon: 'people' },
+  { href: '/crm/pipeline', label: 'Opportunities', icon: 'board' },
+]
+
+const ACCESS_LINK: NavLink = {
   href: '/dashboard/access',
   label: 'Access status',
-  icon: 'lock' as const,
+  icon: 'lock',
 }
 
-const SETTINGS_LINK = {
+const SETTINGS_LINK: NavLink = {
   href: '/dashboard/settings',
   label: 'Settings',
-  icon: 'settings' as const,
+  icon: 'settings',
 }
 
 /**
- * ⚠️ A SECTION, NOT A LINK. Every feature inside CRM used to live behind one
- * nav entry and a row of tabs on the page — which meant the sidebar told you
- * nothing about what the product could do, and finding Duplicates required
- * knowing it was a tab on a page you had to open first.
- *
- * Expanding here puts the whole surface in view. The parent is still a link:
- * clicking "Pipeline" should go to the pipeline, not merely toggle a menu.
+ * A SECTION, NOT A LINK: the parent navigates, the chevron expands.
  */
 type NavSection = {
   href: string
@@ -61,23 +68,13 @@ type NavSection = {
   children: { href: string; label: string }[]
 }
 
-/*
- * "CRM" is what the software is; "Pipeline" is what the customer is doing.
- * The label people scan for is the job, not the category.
- */
+// People, Organizations and Opportunities moved to the top level (above).
 const CRM_SECTION: NavSection = {
-  href: '/crm/contacts',
+  href: '/crm/my-work',
   label: 'Pipeline',
   icon: 'crm',
   children: [
-    // First, because §7 makes it the daily entry point — the screen you open
-    // before you decide anything, not one you navigate to afterwards.
     { href: '/crm/my-work', label: 'My Work' },
-    { href: '/crm/contacts', label: 'People' },
-    // Named for the workspace it now is (approved 2026-10-01); the route is
-    // unchanged so every existing link keeps working, and /accounts redirects.
-    { href: '/crm/companies', label: 'Accounts' },
-    { href: '/crm/pipeline', label: 'Deals' },
     { href: '/crm/tasks', label: 'Tasks' },
     { href: '/crm/lists', label: 'Lists' },
     { href: '/crm/import', label: 'Import' },
@@ -89,7 +86,7 @@ const CRM_SECTION: NavSection = {
 
 const EMAIL_SECTION: NavSection = {
   href: '/email',
-  label: 'Outreach',
+  label: 'Email',
   icon: 'email',
   children: [
     { href: '/email', label: 'Mailboxes' },
@@ -99,38 +96,6 @@ const EMAIL_SECTION: NavSection = {
   ],
 }
 
-/*
- * ⚠️ ITS OWN SECTION RATHER THAN A CHILD OF "OUTREACH", because the work is
- * different in kind. Email outreach is something Outlio does for you; a
- * LinkedIn task is something YOU do, in LinkedIn, and the queue only moves when
- * a person works it. Filing it under a heading that means "the software is
- * sending" would be the wrong promise in the one place it matters most.
- */
-const LINKEDIN_SECTION: NavSection = {
-  href: '/linkedin',
-  label: 'LinkedIn',
-  icon: 'crm',
-  children: [
-    { href: '/linkedin', label: 'Tasks' },
-    /*
-     * ⚠️ CAMPAIGNS WAS MISSING ENTIRELY UNTIL PHASE 20 — the section was built
-     * before the page existed, so the only way to reach a workflow was to know
-     * the URL. Same class of omission as the section having no layout.
-     */
-    { href: '/linkedin/campaigns', label: 'Campaigns' },
-    /*
-     * ⚠️ SHOWN TO EVERYONE THOUGH IT NEEDS `report.team.view` AND A PLAN, which
-     * matches `/crm/reports` directly above in CRM_SECTION: the page refuses
-     * independently and renders a designed explanation. Hiding a nav item is
-     * not access control (CLAUDE.md rule 8), and a link that silently vanishes
-     * is how a manager concludes a feature they pay for does not exist.
-     */
-    { href: '/linkedin/analysis', label: 'Strategy analysis' },
-    { href: '/dashboard/settings/linkedin', label: 'Accounts' },
-  ],
-}
-
-// "Flows" is jargon until you have used one. "Automations" says what it is.
 const FLOWS_SECTION: NavSection = {
   href: '/flows',
   label: 'Automations',
@@ -138,77 +103,83 @@ const FLOWS_SECTION: NavSection = {
   children: [{ href: '/flows', label: 'All automations' }],
 }
 
+const LINK_CLASS = {
+  active:
+    'group relative flex h-9 items-center gap-3 rounded-lg bg-surface-muted px-3 text-[13px] font-semibold text-ink shadow-[var(--clay-shadow-inset)]',
+  idle:
+    'group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]',
+}
+
+function isActive(pathname: string, link: NavLink) {
+  return link.exact
+    ? pathname === link.href
+    : pathname === link.href || pathname.startsWith(`${link.href}/`)
+}
+
+function NavItem({
+  link,
+  pathname,
+  onNavigate,
+}: {
+  link: NavLink
+  pathname: string
+  onNavigate?: () => void
+}) {
+  const active = isActive(pathname, link)
+  return (
+    <Link
+      href={link.href}
+      aria-current={active ? 'page' : undefined}
+      onClick={onNavigate}
+      className={active ? LINK_CLASS.active : LINK_CLASS.idle}
+    >
+      <ProductIcon name={link.icon} className="h-[17px] w-[17px] shrink-0" />
+      <span>{link.label}</span>
+    </Link>
+  )
+}
+
 export function ProductNav({
   isAdmin,
   canUseScraper,
   showCrm = false,
   showEmail = false,
-  showLinkedIn = false,
   showFlows = false,
   onNavigate,
 }: {
   isAdmin: boolean
   canUseScraper: boolean
   /**
-   * Entitlement, resolved on the server. A workspace whose plan does not
-   * include CRM never sees the link — and the routes refuse it anyway, because
-   * hiding a nav item is not access control (CLAUDE.md rule 8).
+   * Module entitlements, resolved on the server. Hiding a link is not access
+   * control — each route refuses independently (CLAUDE.md rule 8).
    */
   showCrm?: boolean
-  /**
-   * Same rule as `showCrm`: a workspace whose plan excludes email never sees
-   * the link, and `/email` refuses it anyway — hiding a nav item is not access
-   * control (CLAUDE.md rule 8).
-   */
   showEmail?: boolean
-  /** Same module gate again; `/flows` refuses independently. */
-  /** Same rule as the others: a plan without the module never sees the nav. */
-  showLinkedIn?: boolean
   showFlows?: boolean
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
-  const base = canUseScraper ? PRODUCT_LINKS : [ACCESS_LINK]
+
+  const links: NavLink[] = [
+    ...(canUseScraper ? PRODUCT_LINKS : [ACCESS_LINK]),
+    ...(showCrm ? CRM_LINKS : []),
+  ]
 
   const sections: NavSection[] = [
     ...(showCrm ? [CRM_SECTION] : []),
     ...(showEmail ? [EMAIL_SECTION] : []),
-    ...(showLinkedIn ? [LINKEDIN_SECTION] : []),
     ...(showFlows ? [FLOWS_SECTION] : []),
   ]
 
-  const tail = isAdmin
-    ? [SETTINGS_LINK, { href: '/admin', label: 'User admin', icon: 'admin' as const }]
+  const tail: NavLink[] = isAdmin
+    ? [SETTINGS_LINK, { href: '/admin', label: 'User admin', icon: 'admin' }]
     : [SETTINGS_LINK]
 
   return (
     <nav aria-label="Product" className="space-y-0.5">
-      {base.map((link) => {
-        const active = 'exact' in link && link.exact
-          ? pathname === link.href
-          : pathname === link.href || pathname.startsWith(`${link.href}/`)
-
-        return (
-          <Link
-            key={link.href}
-            href={link.href}
-            aria-current={active ? 'page' : undefined}
-            onClick={onNavigate}
-            className={
-              active
-                ? 'group relative flex h-9 items-center gap-3 rounded-lg bg-surface-muted px-3 text-[13px] font-semibold text-ink shadow-[var(--clay-shadow-inset)]'
-                : 'group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]'
-            }
-          >
-            {link.icon === 'intelligence' ? (
-              <HubbleLogo size="nav" />
-            ) : (
-              <ProductIcon name={link.icon} className="h-[17px] w-[17px] shrink-0" />
-            )}
-            <span>{link.label}</span>
-          </Link>
-        )
-      })}
+      {links.map((link) => (
+        <NavItem key={link.href} link={link} pathname={pathname} onNavigate={onNavigate} />
+      ))}
 
       {sections.map((section) => (
         <NavSectionGroup
@@ -219,26 +190,9 @@ export function ProductNav({
         />
       ))}
 
-      {tail.map((link) => {
-        const active = pathname === link.href || pathname.startsWith(`${link.href}/`)
-
-        return (
-          <Link
-            key={link.href}
-            href={link.href}
-            aria-current={active ? 'page' : undefined}
-            onClick={onNavigate}
-            className={
-              active
-                ? 'group relative flex h-9 items-center gap-3 rounded-lg bg-surface-muted px-3 text-[13px] font-semibold text-ink shadow-[var(--clay-shadow-inset)]'
-                : 'group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]'
-            }
-          >
-            <ProductIcon name={link.icon} className="h-[17px] w-[17px] shrink-0" />
-            <span>{link.label}</span>
-          </Link>
-        )
-      })}
+      {tail.map((link) => (
+        <NavItem key={link.href} link={link} pathname={pathname} onNavigate={onNavigate} />
+      ))}
     </nav>
   )
 }
@@ -294,11 +248,7 @@ function NavSectionGroup({
           href={section.href}
           onClick={onNavigate}
           aria-current={inSection ? 'page' : undefined}
-          className={
-            inSection
-              ? 'group relative flex h-9 flex-1 items-center gap-3 rounded-lg bg-surface-muted px-3 text-[13px] font-semibold text-ink shadow-[var(--clay-shadow-inset)]'
-              : 'group relative flex h-9 flex-1 items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-ink active:scale-[0.98]'
-          }
+          className={`${inSection ? LINK_CLASS.active : LINK_CLASS.idle} flex-1`}
         >
           <ProductIcon name={section.icon} className="h-[17px] w-[17px] shrink-0" />
           <span>{section.label}</span>
@@ -428,6 +378,28 @@ export function ProductIcon({
         <rect x="3" y="4" width="5" height="16" rx="1.5" />
         <rect x="10" y="4" width="5" height="10" rx="1.5" />
         <rect x="17" y="4" width="4" height="7" rx="1.5" />
+      </>
+    ),
+    organization: (
+      <>
+        <rect x="4" y="3" width="11" height="18" rx="1.5" />
+        <path d="M15 9h4a1 1 0 0 1 1 1v11h-5" />
+        <path d="M8 7h3M8 11h3M8 15h3" />
+      </>
+    ),
+    people: (
+      <>
+        <circle cx="9" cy="8" r="3.5" />
+        <path d="M3 20a6 6 0 0 1 12 0" />
+        <path d="M16 4.5a3.5 3.5 0 0 1 0 7" />
+        <path d="M18 14.5a6 6 0 0 1 3 5.5" />
+      </>
+    ),
+    board: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M9 4v16M15 4v16" />
+        <path d="M5.5 8h1.5M11.5 8h1.5M17.5 8h1.5M11.5 11h1.5" />
       </>
     ),
     admin: (

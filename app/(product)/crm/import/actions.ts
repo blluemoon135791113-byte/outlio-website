@@ -314,9 +314,9 @@ export type SendToCrmState =
 /**
  * Moves an extraction's leads into the CRM.
  *
- * ⚠️ EXPLICIT, NOT AUTOMATIC. The brief is firm that thousands of contacts must
- * not appear in someone's CRM without them asking. The extraction stays in the
- * Lead Engine until a person decides to bring it across.
+ * Revised 2026-10-15 (owner): extractions now sync automatically when they
+ * finish (`lib/crm/auto-sync.ts`). This stays as the manual retry, and for a
+ * manager bringing across an upload whose uploader could not import.
  */
 export async function sendExtractionToCrm(
   _previous: SendToCrmState,

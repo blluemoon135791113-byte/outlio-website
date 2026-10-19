@@ -1,5 +1,7 @@
 'use server'
 
+import { z } from 'zod'
+
 /**
  * Task actions — M9 screens over M2 Phase 5's schema, and §7's My Work actions.
  *
@@ -360,6 +362,14 @@ export async function createTaskAction(
   const contactId = String(formData.get('contactId') ?? '') || null
   const opportunityId = String(formData.get('opportunityId') ?? '') || null
   const dueAt = String(formData.get('dueAt') ?? '').trim() || null
+  /*
+   * A due TIME, converted to UTC by the browser (it alone knows the reader's
+   * timezone). When present it wins over the date-only `dueAt`, and
+   * `remind=on` turns it into a reminder the cron tick delivers (0158).
+   */
+  const dueAtIso = z.string().datetime({ offset: true }).safeParse(formData.get('dueAtIso'))
+  const remind = formData.get('remind') === 'on'
+  if (remind && !dueAtIso.success) return { ok: false, error: 'Pick a date and time for the reminder.' }
 
   const db = createAdminClient()
 
@@ -414,7 +424,12 @@ export async function createTaskAction(
     assigned_to_user_id: ctx.userId,
     // A date input gives a local day; storing it as end-of-day avoids a task
     // created for "today" reading as already overdue.
-    due_at: dueAt ? new Date(`${dueAt}T23:59:59`).toISOString() : null,
+    due_at: dueAtIso.success
+      ? new Date(dueAtIso.data).toISOString()
+      : dueAt
+        ? new Date(`${dueAt}T23:59:59`).toISOString()
+        : null,
+    remind_at: remind && dueAtIso.success ? new Date(dueAtIso.data).toISOString() : null,
     status: 'open',
     created_by: ctx.userId,
   })
@@ -422,6 +437,7 @@ export async function createTaskAction(
   if (error) return { ok: false, error: 'Could not create that task.' }
 
   revalidatePath('/crm/tasks')
+  revalidatePath('/crm/pipeline')
   revalidatePath('/dashboard')
-  return { ok: true, message: 'Task created.' }
+  return { ok: true, message: remind ? 'Task created. You will be reminded.' : 'Task created.' }
 }

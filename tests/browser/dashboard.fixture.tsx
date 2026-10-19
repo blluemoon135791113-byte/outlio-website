@@ -43,7 +43,6 @@ function DashboardFixture() {
       canUseScraper
       showCrm
       showEmail
-      showLinkedIn
       showFlows
       referralLink="https://example.com/ref/fabricated"
     >
