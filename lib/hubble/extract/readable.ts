@@ -21,6 +21,37 @@ import * as cheerio from 'cheerio'
 
 import { decodeCfEmail, decodeCfEmailHref } from '@/lib/hubble/extract/cfemail'
 
+/**
+ * `telephone` and `email` a page states about itself in JSON-LD — Schema.org
+ * `Organization`, `LocalBusiness`, `ContactPoint` — anywhere in the tree.
+ * Bounded in depth and count: this is a stranger's JSON.
+ */
+function jsonLdContacts(nodes: readonly unknown[]): { emails: string[]; phones: string[] } {
+  const emails: string[] = []
+  const phones: string[] = []
+  const visit = (node: unknown, depth: number) => {
+    if (depth > 6 || emails.length + phones.length > 40) return
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child, depth + 1)
+      return
+    }
+    if (!node || typeof node !== 'object') return
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === 'telephone' && typeof value === 'string') phones.push(value.trim())
+      else if (key === 'email' && typeof value === 'string') emails.push(value.replace(/^mailto:/i, '').trim())
+      else if (value && typeof value === 'object') visit(value, depth + 1)
+    }
+  }
+  visit(nodes, 0)
+  return { emails, phones }
+}
+
+/**
+ * Where a site puts its address and switchboard when it does not link them —
+ * read before STRIP removes exactly these regions.
+ */
+const CHROME = 'header, footer, nav, aside, [role="banner"], [role="contentinfo"], [role="navigation"]'
+
 /** Boilerplate that is never the substance of a page. */
 const STRIP = [
   'script',
@@ -200,6 +231,23 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
     }
   })
 
+  /*
+   * ⚠️ CONTACTS IN THE PAGE CHROME, SCANNED BEFORE IT IS STRIPPED.
+   *
+   * STRIP removes header, footer, nav and aside so the model reads the page's
+   * substance — and a small company's phone and address are written, as plain
+   * text, in exactly those regions. Only `mailto:`/`tel:` links survived, so a
+   * footer reading "Tel 0161 496 0000" was never seen. The readable `text`
+   * below is unchanged; only the contact lists gain these.
+   */
+  $('script, style, noscript, template').remove()
+  const chromeText = $(CHROME)
+    .map((_, element) => $(element).text())
+    .get()
+    .join(' ')
+    .replace(/\s+/g, ' ')
+  const declared = jsonLdContacts(jsonLd)
+
   // Strip boilerplate, then take the densest remaining root.
   for (const selector of STRIP) $(selector).remove()
 
@@ -215,8 +263,19 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
 
   const bodyText = text || $.root().text().replace(/\s+/g, ' ').trim()
 
-  emails.push(...(bodyText.match(EMAIL) ?? []))
-  const phones = [...linkedPhones, ...(bodyText.match(PHONE) ?? [])].filter((value) => {
+  emails.push(...declared.emails, ...(bodyText.match(EMAIL) ?? []), ...(chromeText.match(EMAIL) ?? []))
+  /*
+   * Chrome and JSON-LD carry order numbers, tracking IDs and timestamps as
+   * well as phones. From there, a run of bare digits is not trusted: a phone
+   * is written with a leading `+` or with separators.
+   */
+  const written = (value: string) => /^\s*\+/.test(value) || /\d[\s().-]+\d/.test(value)
+  const phones = [
+    ...linkedPhones,
+    ...declared.phones.filter(written),
+    ...(bodyText.match(PHONE) ?? []),
+    ...(chromeText.match(PHONE) ?? []).filter(written),
+  ].filter((value) => {
     const digits = value.replace(/\D/g, '')
     // Years, prices and IDs all match a loose phone pattern.
     return digits.length >= 9 && digits.length <= 15

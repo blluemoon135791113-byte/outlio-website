@@ -431,6 +431,53 @@ export interface IntelligenceProvider<TOutput = unknown> {
 }
 
 /**
+ * Why a provider that ran found nothing.
+ *
+ * ⚠️ A BARE `not_found` CANNOT BE ACTED ON. On 2026-10-14 a 25-lead job came
+ * back with 2 work emails and 0 company emails, and nothing recorded whether
+ * the site was unreachable, refused us, was built in JavaScript, or simply
+ * published no contact. Each of those has a different fix — or none.
+ * A provider returns a `ProviderMiss` instead of `null` to say which; the
+ * executor stores it as `research_tool_calls.error_code` (`MISS_…`).
+ */
+export const MISS_REASONS = [
+  /** No page of the company's site answered at all. */
+  'site_unreachable',
+  /** Pages answered 401/403/429/503 or with a bot check. Never worked around. */
+  'site_refused',
+  /** Pages answered with no readable text: built by JavaScript in a browser. */
+  'site_js_rendered',
+  /** Pages were read and published no email or phone. */
+  'site_no_contact',
+  /** Pages carried emails, but none on the company's domain or a free-mail one. */
+  'site_off_domain_only',
+  /** The search engines returned nothing at all — out of budget, failing, or no page matched. */
+  'search_empty',
+  /** Results came back, and none of them identified the person. */
+  'not_named',
+  /** Results named the person, but neither they nor the pages behind them had a contact. */
+  'named_no_contact',
+  /** The only value seen was partly hidden (`j***@acme.com`), which is not an address. */
+  'masked_only',
+] as const
+export type MissReason = (typeof MISS_REASONS)[number]
+
+export type ProviderMiss = { miss: MissReason }
+
+export function isProviderMiss(value: unknown): value is ProviderMiss {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    MISS_REASONS.includes((value as { miss?: MissReason }).miss as MissReason),
+  )
+}
+
+/** The catalog code a miss is stored under. */
+export function missCode(reason: MissReason): string {
+  return `MISS_${reason.toUpperCase()}`
+}
+
+/**
  * A provider with its output type sealed away.
  *
  * `IntelligenceProvider<T>` is invariant in `T` — the type appears both as a
@@ -444,7 +491,7 @@ export type AnyIntelligenceProvider = {
   readonly category: ToolCategory
   canHandle(task: ResearchTask): boolean
   estimateCost(task: ResearchTask): Promise<number>
-  run(task: ResearchTask): Promise<NormalizedEvidence[]>
+  run(task: ResearchTask): Promise<{ evidence: NormalizedEvidence[]; miss: MissReason | null }>
 }
 
 /** Seals a provider's output type so it can be registered alongside others. */
@@ -456,6 +503,12 @@ export function eraseProviderType<T>(
     category: provider.category,
     canHandle: (task) => provider.canHandle(task),
     estimateCost: (task) => provider.estimateCost(task),
-    run: async (task) => provider.normalize(await provider.execute(task), task),
+    run: async (task) => {
+      const output = await provider.execute(task)
+      return {
+        evidence: provider.normalize(output, task),
+        miss: isProviderMiss(output) ? output.miss : null,
+      }
+    },
   }
 }

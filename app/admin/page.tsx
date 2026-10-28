@@ -202,6 +202,20 @@ export default async function AdminPage() {
       </section>
 
       <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Enrichment</h2>
+        <p className="text-sm text-muted">
+          For each recent upload, how many companies and people got a contact and where the
+          search stopped for the rest.
+        </p>
+        <Link
+          href="/admin/enrichment"
+          className="inline-flex w-fit rounded-[var(--radius-md)] border border-border px-3 py-1.5 text-sm font-medium text-ink transition-colors duration-150 hover:border-border-strong"
+        >
+          Open the enrichment report
+        </Link>
+      </section>
+
+      <section className="space-y-3 rounded-[var(--radius-xl)] border border-border bg-panel p-5 shadow-[var(--shadow-sm)]">
         <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Background workers</h2>
         <SchedulerStatus health={health} lastJobs={lastJobs} />
 
