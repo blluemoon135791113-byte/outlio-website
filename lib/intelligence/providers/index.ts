@@ -32,6 +32,7 @@ import { hasWebSearch } from '@/lib/search'
 import { apolloEmailProvider } from './apollo'
 import { companiesHouseProvider } from './companies-house'
 import { companyContactProvider } from './company-contact'
+import { searchCompanyContactProvider } from './search-company-contact'
 import { dnsTechProvider } from './dns-tech'
 import { domainDiscoveryProvider, searchDomainDiscoveryProvider } from './domain-discovery'
 import { domainProbeProvider } from './domain-probe'
@@ -62,6 +63,7 @@ export const ALL_PROVIDERS: readonly AnyIntelligenceProvider[] = [
   eraseProviderType(hackerNewsProvider),
   eraseProviderType(companiesHouseProvider),
   eraseProviderType(companyContactProvider),
+  eraseProviderType(searchCompanyContactProvider),
   eraseProviderType(gleifProvider),
   eraseProviderType(secEdgarProvider),
   eraseProviderType(searchDomainDiscoveryProvider),
@@ -113,6 +115,9 @@ export const DEFAULT_PROVIDER_ORDER: Partial<Record<ToolCategory, string[]>> = {
     // LinkedIn recorded first-class, never fetched.
     'social-scout-company',
     'company-contact',
+    // Declines everything except its own pass (externalContactTask), which
+    // processResearchRun runs after the company's site has been read.
+    'search-company-contact',
     'usaspending',
   ],
   funding: ['search-funding', 'tavily-funding', 'gdelt-funding'],
@@ -218,6 +223,7 @@ function isConfigured(name: string): boolean {
     case 'search-web':
     case 'search-company-profile':
     case 'search-domain-discovery':
+    case 'search-company-contact':
       return hasWebSearch()
     case 'search-contact-email':
     case 'search-contact-phone':

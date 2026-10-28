@@ -336,3 +336,12 @@ describe('review follow-ups', () => {
     vi.unstubAllEnvs()
   })
 })
+
+describe('footer addresses', () => {
+  it('does not read a ZIP+4 in a footer address as a phone', async () => {
+    const { extractReadable } = await import('@/lib/hubble/extract/readable')
+    const html = `<html><body><main><p>${'Fabricated content for fabricated readers. '.repeat(12)}</p></main>
+      <footer>1 Fabricated Way, Providence, RI 02908-3700</footer></body></html>`
+    expect(extractReadable(html, 'https://fabricated.example/').structured.phones).not.toContain('02908-3700')
+  })
+})

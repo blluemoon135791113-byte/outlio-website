@@ -30,6 +30,8 @@ export type CompanyEntity = {
   name: string | null
   domain: string | null
   linkedinUrl: string | null
+  /** Headquarters as captured, when known. Narrows a search; never a match on its own. */
+  location?: string | null
 }
 
 /**
@@ -459,6 +461,12 @@ export const MISS_REASONS = [
   'named_no_contact',
   /** The only value seen was partly hidden (`j***@acme.com`), which is not an address. */
   'masked_only',
+  /** The company's name is too generic to search for ("Global Solutions"). */
+  'name_ambiguous',
+  /** Results came back, and none of them named the company. */
+  'company_not_listed',
+  /** Listings named the company, and none stated a phone or email beside its name. */
+  'listed_no_contact',
 ] as const
 export type MissReason = (typeof MISS_REASONS)[number]
 

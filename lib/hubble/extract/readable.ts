@@ -269,7 +269,9 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
    * well as phones. From there, a run of bare digits is not trusted: a phone
    * is written with a leading `+` or with separators.
    */
-  const written = (value: string) => /^\s*\+/.test(value) || /\d[\s().-]+\d/.test(value)
+  // Ten digits or more without a `+`: a footer address carries a ZIP+4 ("02908-3700").
+  const written = (value: string) =>
+    /^\s*\+/.test(value) || (/\d[\s().-]+\d/.test(value) && value.replace(/\D/g, '').length >= 10)
   const phones = [
     ...linkedPhones,
     ...declared.phones.filter(written),

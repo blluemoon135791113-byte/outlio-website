@@ -40,6 +40,7 @@ import { buildLiveRegistry } from '@/lib/intelligence/providers'
 import { planToTasks } from '@/lib/intelligence/router'
 import { hasWebSearch } from '@/lib/search'
 import { McpLeadResearchClient } from '@/lib/intelligence/providers/mcp-research'
+import { externalContactTask } from '@/lib/intelligence/providers/search-company-contact'
 import { preserveExplicitConstraints } from '@/lib/intelligence/filters'
 import {
   RESEARCH_FIELD_SPEC,
@@ -650,6 +651,41 @@ async function persistCompanyContacts(
   }
 }
 
+/**
+ * Which requested company-contact fields each company still lacks, with what
+ * the off-site search needs to know about it. Read from the row
+ * `persistCompanyContacts` keeps current, scoped to the user.
+ */
+async function companiesMissingContacts(
+  userId: string,
+  companyIds: readonly string[],
+  fields: readonly ResearchField[],
+): Promise<Map<string, { fields: ResearchField[]; domain: string | null; location: string | null }>> {
+  const supabase = createAdminClient()
+  const missing = new Map<string, { fields: ResearchField[]; domain: string | null; location: string | null }>()
+  for (let i = 0; i < companyIds.length; i += 200) {
+    const { data, error } = await supabase
+      .from('companies')
+      .select('id, normalized_domain, headquarters, contact_email, contact_phone')
+      .eq('user_id', userId)
+      .in('id', companyIds.slice(i, i + 200))
+    // A failed read skips the pass rather than searching blind.
+    if (error) return new Map()
+    for (const row of data ?? []) {
+      const lacking = fields.filter((field) =>
+        field === 'company_contact_email' ? !row.contact_email : !row.contact_phone)
+      if (lacking.length > 0) {
+        missing.set(row.id as string, {
+          fields: lacking,
+          domain: (row.normalized_domain as string | null) ?? null,
+          location: (row.headquarters as string | null) ?? null,
+        })
+      }
+    }
+  }
+  return missing
+}
+
 /** Processes one claimed run end to end. Never throws for a provider problem. */
 export async function processResearchRun(
   runId: string,
@@ -891,6 +927,42 @@ export async function processResearchRun(
     }
   }
 
+  /*
+   * ---- 4a''. company contacts from OTHER sources --------------------------
+   *
+   * The company's own site has now been read wherever one is known. A company
+   * still without a requested contact — no website, or a site that publishes
+   * none (14 of 30 measured 2026-10-29) — is searched for by name in the
+   * listings that state it elsewhere. Last, so a search is never spent on a
+   * company whose site would have answered.
+   */
+  let externalContactReport: ExecutionReport | null = null
+  if (companyContactFields.length > 0 && companyEntities.length > 0) {
+    const stillMissing = await companiesMissingContacts(
+      userId,
+      companyEntities.map((company) => company.id),
+      companyContactFields,
+    )
+    const tasks = companyEntities.flatMap((company) => {
+      const missing = stillMissing.get(company.id)
+      if (!missing || missing.fields.length === 0) return []
+      return [externalContactTask(
+        { ...company, domain: missing.domain ?? company.domain, location: missing.location },
+        missing.fields,
+      )]
+    })
+    if (tasks.length > 0) {
+      externalContactReport = await runChunk(tasks)
+      writtenTotal += (await writeEvidence(userId, runId, externalContactReport.evidence)).written
+      writtenTotal += (await writeEvidence(userId, runId, externalContactReport.bonusEvidence)).written
+      await recordToolCalls(userId, runId, externalContactReport.toolCalls)
+      await persistCompanyContacts(userId, [
+        ...externalContactReport.evidence,
+        ...externalContactReport.bonusEvidence,
+      ])
+    }
+  }
+
   // ---- 4b/5b. contact phase, against freshly resolved domains -------------
   let peopleForContact: PersonEntity[] = []
   let personReport: ExecutionReport | null = null
@@ -933,6 +1005,7 @@ export async function processResearchRun(
   const mergedResults = [
     ...(companyReport?.results ?? []),
     ...(companyContactReport?.results ?? []),
+    ...(externalContactReport?.results ?? []),
     ...(personReport?.results ?? []),
   ]
   const report = {
@@ -941,10 +1014,12 @@ export async function processResearchRun(
       mcpStage.externalCalls +
       (companyReport?.externalCallCount ?? 0) +
       (companyContactReport?.externalCallCount ?? 0) +
+      (externalContactReport?.externalCallCount ?? 0) +
       (personReport?.externalCallCount ?? 0),
     estimatedCostMicros:
       (companyReport?.estimatedCostMicros ?? 0) +
       (companyContactReport?.estimatedCostMicros ?? 0) +
+      (externalContactReport?.estimatedCostMicros ?? 0) +
       (personReport?.estimatedCostMicros ?? 0),
   }
   const cacheHits = companyRouting.cacheHits + personCacheHits

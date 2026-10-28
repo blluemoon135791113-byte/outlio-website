@@ -67,12 +67,18 @@ export type PersonFacts = {
 }
 
 export const COMPANY_CONTACT_PROVIDERS = new Set(['company-contact'])
+export const EXTERNAL_CONTACT_PROVIDERS = new Set(['search-company-contact'])
 export const PERSON_EMAIL_PROVIDERS = new Set(['search-contact-email'])
 export const PERSON_PHONE_PROVIDERS = new Set(['search-contact-phone'])
 
-/** PURE. Where one company's contact search ended. */
+/**
+ * PURE. Where one company's contact search ended: the off-site search when it
+ * ran (it runs last), otherwise the company's own site.
+ */
 export function companyOutcome(company: CompanyFacts, calls: readonly ToolCallRow[]): Outcome {
   if (company.hasEmail || company.hasPhone) return 'found'
+  const external = lastOutcome(calls, EXTERNAL_CONTACT_PROVIDERS)
+  if (external !== 'not_attempted') return external
   if (!company.hasDomain) return 'no_website'
   return lastOutcome(calls, COMPANY_CONTACT_PROVIDERS)
 }
@@ -106,6 +112,9 @@ export type JobFunnel = {
   personPhones: number
   /** Companies with neither an email nor a phone, by where they stopped. */
   company: Tally
+  /** Companies the off-site search ran for, and what it came to. */
+  companiesSearchedExternally: number
+  companyExternal: Tally
   personEmail: Tally
   personPhone: Tally
 }
@@ -138,6 +147,14 @@ export function summarizeJob(input: {
     personEmails: input.people.filter((person) => person.hasEmail).length,
     personPhones: input.people.filter((person) => person.hasPhone).length,
     company: tally(input.companies.map((company) => companyOutcome(company, of(company.id)))),
+    ...(() => {
+      const searched = input.companies.filter((company) =>
+        of(company.id).some((call) => EXTERNAL_CONTACT_PROVIDERS.has(call.provider)))
+      return {
+        companiesSearchedExternally: searched.length,
+        companyExternal: tally(searched.map((company) => lastOutcome(of(company.id), EXTERNAL_CONTACT_PROVIDERS))),
+      }
+    })(),
     personEmail: tally(
       input.people.map((person) => personOutcome(person.hasEmail, of(person.id), PERSON_EMAIL_PROVIDERS)),
     ),
@@ -231,6 +248,7 @@ export async function loadEnrichmentFunnels(limit = 10): Promise<JobFunnel[]> {
         .in('research_run_id', chunk)
         .in('provider', [
           ...COMPANY_CONTACT_PROVIDERS,
+          ...EXTERNAL_CONTACT_PROVIDERS,
           ...PERSON_EMAIL_PROVIDERS,
           ...PERSON_PHONE_PROVIDERS,
         ])

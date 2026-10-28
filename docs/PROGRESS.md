@@ -13646,3 +13646,36 @@ free tier), 0.7–3.5 s, filters mostly empty.
 
 - Privacy policy (PR #64) does not yet list xAI as an AI vendor; must be
   added before `LLM_PROVIDER=xai` is set in production.
+
+## 2026-10-29 — Company contacts from listings off the company's own site
+
+`search-company-contact` (lib/intelligence/providers/search-company-contact.ts)
+searches for a company by name (+ city when captured) and reads the listings
+that state its phone/email elsewhere: directories, registries, associations,
+map listings. Runs as its own pass in `processResearchRun` (4a''), only for
+companies still missing a requested contact AFTER their own site was read —
+never in the ordinary waterfall (`externalContactTask` prefix).
+
+### Rules, each from a wrong value seen live
+
+| Seen | Rule |
+|---|---|
+| `02908-3700` filed as a phone (US ZIP+4) | National numbers: ≥10 digits, valid in a listed country, short leading group; also applied to footer/JSON-LD phones in `readable.ts` |
+| `86830610-720` (an ID) | Leading digit group ≤5 when separated |
+| `800) 422-4641` | Phone pattern keeps an opening bracket |
+| `first.last@`, `filast@`, `lastfir@` from an email-format site | Format placeholders and "format/pattern" paragraphs are never addresses |
+| Okta's number beside "WorkOS" on "WorkOS \| Okta" | Title and snippet are separate paragraphs; a window naming the source site's brand is skipped |
+| A different "Ascend" on Yellow Pages | A third-party value needs a second site stating it, or the company's domain/city in the same paragraph; the company's own site needs neither |
+| Directory pages list many companies | Only the paragraph around the company's whole name; exactly one value of a kind there; page must be ABOUT the company (name leads the title, or own host); comparison pages excluded |
+
+### Measured live (read-only), 40 real companies with no stored contact
+
+9 found (~5 distinct companies; duplicates are the same company in several
+accounts), every one checked by hand as the company's own number or inbox:
+own-site 3, corroborated listings 2. 26 listed without a stated contact,
+5 not listed. ~1.7 s per company. Recall was traded for precision: single
+uncorroborated listings (e.g. a correct number on one directory) are no
+longer taken.
+
+Note: the 60 most recently updated companies without a contact were mostly
+seeded volume-test rows ("… at Test Corp 1610"); measure on real names.

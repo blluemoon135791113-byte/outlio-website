@@ -30,6 +30,9 @@ const OUTCOME_LABEL: Record<Outcome, string> = {
   not_named: 'Search results were about other people',
   named_no_contact: 'Person found online — no contact shown',
   masked_only: 'Only a partly hidden value was shown',
+  name_ambiguous: 'Company name too generic to search for',
+  company_not_listed: 'No listing named the company',
+  listed_no_contact: 'Listed elsewhere — no phone or email beside its name',
   unrecorded: 'Not found — reason not recorded (enriched before reasons existed)',
   timed_out: 'Ran out of time',
   failed: 'Lookup failed',
@@ -94,8 +97,13 @@ function JobCard({ job }: { job: JobFunnel }) {
         <Stat label="Work email" value={job.personEmails} of={job.leads} />
         <Stat label="Mobile phone" value={job.personPhones} of={job.leads} />
       </div>
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-2">
         <Breakdown title="Companies with no contact" tally={job.company} total={job.companies} />
+        <Breakdown
+          title={`Searched in other listings (${job.companiesSearchedExternally})`}
+          tally={job.companyExternal}
+          total={job.companiesSearchedExternally}
+        />
         <Breakdown title="People with no work email" tally={job.personEmail} total={job.leads} />
         <Breakdown title="People with no mobile phone" tally={job.personPhone} total={job.leads} />
       </div>
