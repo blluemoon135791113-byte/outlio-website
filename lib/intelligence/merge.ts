@@ -259,6 +259,25 @@ export function enrichmentColumnHeader(field: string): string {
  * Tolerant of anything: this is read back out of JSONB written by an older
  * build, so a shape that does not match is skipped rather than thrown on.
  */
+/**
+ * The one key a contact field's cell shows.
+ *
+ * ⚠️ A CONTACT CELL IS THE CONTACT. These values carry their status, source
+ * title, corroborating pages and identity score beside the address, and the
+ * generic flattening printed all of it — "email: info@acme.com | status:
+ * publicly_found" in a column a customer imports into their CRM (job a6c2e8a3,
+ * 2026-10-29). The rest stays on the evidence, which is where it is cited.
+ */
+const CELL_KEY: Readonly<Record<string, string>> = {
+  work_email: 'email',
+  company_contact_email: 'email',
+  mobile_phone: 'phone',
+  company_contact_phone: 'phone',
+  email_status: 'status',
+  phone_status: 'status',
+  company_domain: 'domain',
+}
+
 export function enrichmentCells(enrichment: unknown): Record<string, string> {
   if (!enrichment || typeof enrichment !== 'object' || Array.isArray(enrichment)) return {}
 
@@ -267,7 +286,12 @@ export function enrichmentCells(enrichment: unknown): Record<string, string> {
   for (const [field, entry] of Object.entries(enrichment as Record<string, unknown>)) {
     if (!entry || typeof entry !== 'object') continue
 
-    const flat = flattenEnrichmentValue((entry as { value?: unknown }).value)
+    const value = (entry as { value?: unknown }).value
+    const key = CELL_KEY[field]
+    const primary = key && value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)[key]
+      : undefined
+    const flat = flattenEnrichmentValue(primary ?? value)
     if (flat) cells[enrichmentColumnHeader(field)] = flat
   }
 
