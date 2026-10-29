@@ -48,6 +48,8 @@ export type ContactFacts = {
 const MAX_PEOPLE = 200
 const MAX_POSTS = 200
 const MAX_POST_CHARS = 5_000
+/** All posts on one page together: a long thread is read, not held whole. */
+const MAX_PAGE_POST_CHARS = 100_000
 
 const clean = (value: string | null | undefined): string =>
   (value ?? '').replace(/\s+/g, ' ').trim()
@@ -66,32 +68,68 @@ const asPhone = (value: string | null | undefined): string | null => {
  * Disguised addresses
  * -------------------------------------------------------------------------- */
 
-/** `[at]`, `(at)`, `{at}`, `<at>`, ` @ ` — bracketed, so never ordinary prose. */
-const AT = String.raw`\s*(?:\[\s*at\s*\]|\(\s*at\s*\)|\{\s*at\s*\}|<\s*at\s*>|\s@\s)\s*`
-/** The same for dots, plus a plain `.` once the `at` was disguised. */
-const DOT = String.raw`\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\{\s*dot\s*\}|<\s*dot\s*>|\.)\s*`
-const BRACKETED = new RegExp(
-  String.raw`([a-z0-9._%+-]{1,64})${AT}([a-z0-9-]{1,63}(?:${DOT}[a-z0-9-]{1,63}){1,4})`,
-  'gi',
-)
 /**
- * Spelled out in full — "jane at acme dot com". Both words required: "visit
- * us at acme.com" names a site, not a mailbox.
+ * `[at]`, `(at)`, `{at}`, `<at>` — bracketed, so a deliberate disguise, never
+ * ordinary prose. The spaced ` @ ` and spelled ` at ` forms ARE prose-shaped
+ * ("follow us @ twitter.com", "write to us at acme dot com") and are only read
+ * right after a word that introduces an address (CONTEXT).
  */
-const SPELLED = /\b([a-z0-9._%+-]{1,64})\s+at\s+([a-z0-9-]{1,63}(?:\s+dot\s+[a-z0-9-]{1,63}){1,4})\b/gi
+const BRACKET_AT = String.raw`\s*(?:\[\s*at\s*\]|\(\s*at\s*\)|\{\s*at\s*\}|<\s*at\s*>)\s*`
+/**
+ * A disguised dot, or a plain `.` with NO space either side.
+ *
+ * ⚠️ A SPACED PLAIN DOT IS A SENTENCE BREAK. "Jane [at] Acme. Thanks" must
+ * not become jane@acme.thanks — a decoded address is a reading, never a
+ * reconstruction (rule 4).
+ */
+const DOT = String.raw`(?:\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\{\s*dot\s*\}|<\s*dot\s*>)\s*|\.)`
+const LABEL = String.raw`[a-z0-9-]{1,63}`
+const LOCAL = String.raw`([a-z0-9._%+-]{2,64})`
+const BRACKETED = new RegExp(String.raw`${LOCAL}${BRACKET_AT}(${LABEL}(?:${DOT}${LABEL}){1,4})`, 'gi')
+/** Introduces an address: only after one of these is a prose-shaped form read. */
+const CONTEXT = String.raw`(?:e-?mail|mail|contact|write(?:\s+to)?|reach(?:\s+me)?)\b[^a-z0-9]{0,12}`
+const SPACED = new RegExp(String.raw`${CONTEXT}${LOCAL}\s@\s(${LABEL}(?:\.${LABEL}){1,4})`, 'gi')
+const SPELLED = new RegExp(String.raw`${CONTEXT}${LOCAL}\s+at\s+(${LABEL}(?:\s+dot\s+${LABEL}){1,4})\b`, 'gi')
+
+/** Local parts that are prose or placeholders, never a mailbox someone published. */
+const NOT_A_LOCAL = new Set([
+  'us', 'me', 'we', 'you', 'him', 'her', 'them', 'it', 'name', 'yourname', 'your', 'email',
+  'mail', 'user', 'username', 'someone', 'anyone', 'first', 'last', 'firstname', 'lastname',
+  'address', 'here', 'xxx',
+])
+/** Domains that are placeholders in "format" examples. */
+const NOT_A_DOMAIN = /^(?:domain|yourdomain|company|yourcompany|example|email|website|site|mysite|yoursite)\./i
+/** Top-level domains accepted beyond two-letter country codes. */
+const LONG_TLDS = new Set([
+  'com', 'org', 'net', 'edu', 'gov', 'mil', 'int', 'info', 'biz', 'io', 'ai', 'app', 'dev',
+  'tech', 'xyz', 'online', 'site', 'store', 'agency', 'company', 'studio', 'design', 'digital',
+  'consulting', 'solutions', 'services', 'group', 'global', 'health', 'law', 'finance', 'capital',
+  'ventures', 'partners', 'media', 'team', 'world', 'network', 'systems', 'software', 'cloud',
+  'email', 'pro', 'name', 'coop', 'museum', 'travel', 'eu', 'asia',
+])
+
+/** At most this much page text is scanned for disguised addresses. */
+const DISGUISE_SCAN_CHARS = 500_000
+/** Cheap gate: a page with none of these markers has no disguised address. */
+const MARKER = /\[\s*at\s*\]|\(\s*at\s*\)|\{\s*at\s*\}|<\s*at\s*>|\s@\s|\sat\s+\S+\s+dot\s/i
 
 function rebuild(local: string, domain: string): string | null {
-  const labels = domain.split(/\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\{\s*dot\s*\}|<\s*dot\s*>|\s+dot\s+|\.)\s*/i).filter(Boolean)
-  const tld = labels.at(-1) ?? ''
-  if (labels.length < 2 || !/^[a-z]{2,24}$/i.test(tld)) return null
-  return asEmail(`${local}@${labels.join('.')}`)
+  if (NOT_A_LOCAL.has(local.toLowerCase()) || !/[a-z]/i.test(local)) return null
+  const labels = domain.split(/\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\{\s*dot\s*\}|<\s*dot\s*>)\s*|\s+dot\s+|\./i).filter(Boolean)
+  const tld = (labels.at(-1) ?? '').toLowerCase()
+  if (labels.length < 2) return null
+  if (!(/^[a-z]{2}$/.test(tld) || LONG_TLDS.has(tld))) return null
+  const address = asEmail(`${local}@${labels.join('.')}`)
+  return address && !NOT_A_DOMAIN.test(address.split('@')[1] ?? '') ? address : null
 }
 
 /** PURE. Addresses written to dodge harvesters, decoded exactly as written. */
 export function decodeDisguisedEmails(text: string): string[] {
+  const scanned = text.slice(0, DISGUISE_SCAN_CHARS)
+  if (!MARKER.test(scanned)) return []
   const found = new Set<string>()
-  for (const pattern of [BRACKETED, SPELLED]) {
-    for (const match of text.matchAll(pattern)) {
+  for (const pattern of [BRACKETED, SPACED, SPELLED]) {
+    for (const match of scanned.matchAll(pattern)) {
       const address = rebuild(match[1]!, match[2]!)
       if (address) found.add(address)
     }
@@ -221,15 +259,31 @@ function readPosts($: CheerioAPI): { platform: string | null; posts: Post[] } {
   if (!forum) return { platform: null, posts: [] }
 
   const posts: Post[] = []
+  let total = 0
   $(forum.shape.post).slice(0, MAX_POSTS).each((_, element) => {
     const post = $(element)
-    const author =
-      clean(forum.shape.authorAttr ? post.attr(forum.shape.authorAttr) : null) ||
-      clean(post.find(forum.shape.author).first().text()) ||
-      null
     const bodyNode = post.find(forum.shape.body).first()
-    const text = clean((bodyNode.length > 0 ? bodyNode : post).text()).slice(0, MAX_POST_CHARS)
-    if (text) posts.push({ author, text })
+    // No body of its own: the post's whole text would include its replies.
+    if (bodyNode.length === 0) return
+    /*
+     * ⚠️ THE AUTHOR COMES FROM THE POST'S OWN HEADER. A quote inside the body
+     * carries the QUOTED user's name in the same markup, and Stack Exchange
+     * shows an editor beside the author. Names inside the body are ignored;
+     * two different names outside it make the post's author unknown.
+     */
+    const outsideBody = post
+      .find(forum.shape.author)
+      .filter((_, node) => $(node).closest(forum.shape.body).length === 0)
+      .map((_, node) => clean($(node).text()))
+      .get()
+      .filter(Boolean)
+    const fromAttr = clean(forum.shape.authorAttr ? post.attr(forum.shape.authorAttr) : null)
+    const names = new Set(fromAttr ? [fromAttr] : outsideBody)
+    const author = names.size === 1 ? [...names][0]! : null
+    const text = clean(bodyNode.text()).slice(0, MAX_POST_CHARS)
+    if (!text || total >= MAX_PAGE_POST_CHARS) return
+    total += text.length
+    posts.push({ author, text })
   })
   return { platform: forum.platform, posts }
 }

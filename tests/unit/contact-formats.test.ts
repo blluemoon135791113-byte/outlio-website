@@ -23,14 +23,14 @@ const body = (inner: string) =>
 describe('disguised and assembled addresses', () => {
   it('decodes bracketed and spelled-out forms', async () => {
     const { decodeDisguisedEmails } = await import('@/lib/hubble/extract/contacts')
-    expect(decodeDisguisedEmails('Mail jamie [at] fabricated [dot] example please')).toEqual(['jamie@fabricated.example'])
-    expect(decodeDisguisedEmails('jamie(at)fabricated.example')).toEqual(['jamie@fabricated.example'])
-    expect(decodeDisguisedEmails('write to jamie at fabricated dot example')).toEqual(['jamie@fabricated.example'])
+    expect(decodeDisguisedEmails('Mail jamie [at] fabricated [dot] example [dot] com please')).toEqual(['jamie@fabricated.example.com'])
+    expect(decodeDisguisedEmails('jamie(at)fabricated.example.com')).toEqual(['jamie@fabricated.example.com'])
+    expect(decodeDisguisedEmails('write to jamie at fabricated dot example dot com')).toEqual(['jamie@fabricated.example.com'])
   })
 
   it('does not read a site address in prose as a mailbox', async () => {
     const { decodeDisguisedEmails } = await import('@/lib/hubble/extract/contacts')
-    expect(decodeDisguisedEmails('Find us at fabricated.example or visit our team at the office.')).toEqual([])
+    expect(decodeDisguisedEmails('Find us at fabricated.example.com or visit our team at the office.')).toEqual([])
   })
 
   it('reads data-email and data-user/data-domain', async () => {
@@ -79,8 +79,13 @@ describe('forums', () => {
       { author: 'Sam Ortiz', text: 'Thanks Jamie Rivera! My line is +1 415 555 0147.' },
     ]
     expect(authoredPostPhones(person, posts, hit, accepted)).toEqual([])
-    const own = [...posts, { author: 'Jamie Rivera', text: 'Call me on +1 415 555 0132.' }]
-    expect(authoredPostPhones(person, own, hit, accepted)[0]?.value).toBe('+14155550132')
+    // Their own post, but nothing in it ties it to their employer: a name is self-asserted.
+    const bare = [...posts, { author: 'Jamie Rivera', text: 'Call me on +1 415 555 0132.' }]
+    expect(authoredPostPhones(person, bare, hit, accepted)).toEqual([])
+    const own = [...posts, { author: 'Jamie Rivera', text: 'Fabricated Labs here — call me on +1 415 555 0132.' }]
+    const [found] = authoredPostPhones(person, own, hit, accepted)
+    expect(found?.value).toBe('+14155550132')
+    expect(found?.base.sourceConfidence).toBe('low')
   })
 })
 
@@ -130,5 +135,74 @@ describe('the company team page', () => {
       'https://fabricated.example/press-kit',
       'https://fabricated.example/team/',
     ])
+  })
+})
+
+describe('review: what a decoder must never build', () => {
+  it('does not turn prose into an address', async () => {
+    const { decodeDisguisedEmails } = await import('@/lib/hubble/extract/contacts')
+    for (const prose of [
+      'Jane [at] Acme. Thanks for coming',
+      'Follow us @ twitter.com for news',
+      'write to us at acme dot com',
+      'Format: name [at] yourcompany [dot] com',
+      'me (at) work. Then we left',
+    ]) expect(decodeDisguisedEmails(prose)).toEqual([])
+  })
+
+  it('still reads the real disguises', async () => {
+    const { decodeDisguisedEmails } = await import('@/lib/hubble/extract/contacts')
+    expect(decodeDisguisedEmails('Email: jamie @ fabricated.example.com')).toEqual(['jamie@fabricated.example.com'])
+    expect(decodeDisguisedEmails('jamie{at}fabricated{dot}example{dot}com')).toEqual(['jamie@fabricated.example.com'])
+  })
+})
+
+describe('review: whose post it is', () => {
+  it('ignores a quoted user inside the body, and drops a post with two names outside it', async () => {
+    const page = await read(`<html><head><meta name="generator" content="Discourse"></head><body>
+      <div class="topic-post"><span class="username">Sam Ortiz</span>
+        <div class="cooked"><aside class="quote"><span class="username">Jamie Rivera</span> said hi</aside> Reply text here.</div></div>
+      <div class="topic-post"><span class="username">Sam Ortiz</span><span class="username">Alex Moreno</span><div class="cooked">Edited post.</div></div>
+      </body></html>`)
+    expect(page.structured.posts.map((post) => post.author)).toEqual(['Sam Ortiz', null])
+  })
+})
+
+describe('review: cards', () => {
+  const person = {
+    type: 'person', id: 'p', fullName: 'Jamie Rivera', linkedinUrl: null, location: null,
+    jobTitle: 'Founder', companyName: 'Fabricated Labs', companyDomain: null, companyId: null,
+  } as PersonEntity
+  const hit = { url: 'https://events.example/speakers', title: 'Speakers', snippet: null, publishedDate: null } as SearchHit
+  const accepted = { verdict: 'match', score: 0.8, signals: ['name_exact', 'company'], reason: null } as never
+
+  it('takes no card email without a known employer domain, nor a card with another job', async () => {
+    const { cardCandidates, titlesAgree } = await import('@/lib/intelligence/providers/search-contact')
+    const card = { name: 'Jamie Rivera', email: 'jamie@fabricated.example', phone: '+1 415 555 0132', title: 'Dentist', source: 'json-ld' as const }
+    expect(cardCandidates(person, [card], 'email', hit, accepted)).toEqual([])
+    expect(cardCandidates(person, [card], 'phone', hit, accepted)).toEqual([])
+    expect(titlesAgree('Co-Founder & CEO', 'Founder')).toBe(true)
+    expect(titlesAgree('Cofounder', 'Founder')).toBe(true)
+    expect(titlesAgree('Senior Consultant', 'Consultant')).toBe(true)
+  })
+
+  it('takes no team-page address when two cards share the name', async () => {
+    const { cardEmailFor } = await import('@/lib/intelligence/providers/scout')
+    const card = (email: string) => ({ name: 'Jamie Rivera', email, phone: null, title: null, source: 'hcard' as const })
+    expect(cardEmailFor([card('a@fabricated.example'), card('b@fabricated.example')], 'Jamie Rivera', 'fabricated.example')).toBeNull()
+  })
+
+  it("keeps the company's line when a card repeats the footer number", async () => {
+    const page = await read(`<html><body><main><p>${'Fabricated filler text for the page. '.repeat(10)}</p>
+      <div class="h-card"><span class="p-name">Jamie Rivera</span><span class="p-tel">+1 415 555 0100</span></div></main>
+      <footer>Fabricated Labs · +1 415 555 0100</footer></body></html>`)
+    expect(page.structured.phones).toContain('+1 415 555 0100')
+  })
+})
+
+describe('review: link kinds', () => {
+  it('reads "contact our team" as a contact page', async () => {
+    const page = await read(body('<a href="/contact-our-team">Contact our team</a><a href="/our-people">Our people</a>'))
+    expect(page.structured.interestingLinks.map((link) => link.kind)).toEqual(['contact', 'team'])
   })
 })

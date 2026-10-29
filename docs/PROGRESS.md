@@ -13756,3 +13756,19 @@ databases). This widens what a public page can yield.
   XenForo.com, a vBulletin forum) — recorded as refused, never worked around.
 - Job b2429caa (25 leads): no new person contacts — 24 of 25 are not named in
   any result. The ceiling for that list is public presence, not page format.
+
+### Review (product-risk-reviewer: ship with conditions — all fixed)
+
+- Decoder reads, never rebuilds: a spaced plain dot is a sentence break; ` @ `
+  and spelled `at` only after "email/mail/contact/write/reach"; prose and
+  placeholder locals (`us`, `name`, …) and domains (`yourcompany`, …) refused;
+  TLD must be two letters or a known one; ≤500k chars, only when a marker exists.
+- Forum author from the post's own header (names inside the body — quotes —
+  ignored; two names → unknown); no whole-post fallback. A forum phone also
+  needs the employer named in the post, and is filed LOW (≤0.6).
+- Cards: email only at a known employer domain; titles must agree when both
+  known; scout needs exactly one matching card.
+- `contact` link kind before `team`; company-contact still follows team links.
+- A card's phone leaves page phones only when one card states it and the
+  header/footer does not; decoded emails go last under the 20-address cap.
+- Opened-page cache: 100 pages, ≤100k post characters per page.

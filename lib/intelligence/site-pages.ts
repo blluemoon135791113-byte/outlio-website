@@ -59,6 +59,8 @@ export function followUpPages(
   const linked = [
     ...links.filter((link) => link.kind === 'contact'),
     ...links.filter((link) => link.kind === 'about'),
+    // "Team" and "Our story" were `about` links until 2026-10-29; still read.
+    ...links.filter((link) => link.kind === 'team'),
   ].map((link) => link.url).filter(onSite)
 
   const seen = new Set([homepage])

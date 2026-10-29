@@ -264,11 +264,13 @@ export function cardEmailFor(
 ): string | null {
   const wanted = (fullName ?? '').normalize('NFKD').toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim()
   if (!wanted) return null
-  const card = people.find((person) =>
+  const matching = people.filter((person) =>
     person.email &&
     person.name.normalize('NFKD').toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim() === wanted &&
     (person.email.endsWith(`@${domain}`) || person.email.endsWith(`.${domain}`)))
-  return card?.email ?? null
+  // Two different addresses for one name on the company's site: no answer.
+  const addresses = new Set(matching.map((person) => person.email!.toLowerCase()))
+  return addresses.size === 1 ? [...addresses][0]! : null
 }
 
 // ---------------------------------------------------------------------------

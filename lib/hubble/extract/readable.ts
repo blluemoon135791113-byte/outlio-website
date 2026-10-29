@@ -107,10 +107,11 @@ export type ReadablePage = {
 const LINK_KINDS: Array<[string, RegExp]> = [
   ['careers', /careers?|jobs?|hiring|join-us|work-with-us|vacanc/i],
   ['pricing', /pricing|plans|subscribe/i],
+  // Before `team`: "contact-our-team" and "support-team" are contact pages.
+  ['contact', /contact|get-in-touch|support/i],
   // Before `about`: where a small company names its people, one by one.
   ['team', /team|people|leadership|founders|staff|our-story|who-we-are/i],
   ['about', /about|company/i],
-  ['contact', /contact|get-in-touch|support/i],
   ['news', /news|press|blog|announcement|media/i],
   ['investors', /investors?|funding|shareholders/i],
 ]
@@ -278,11 +279,13 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
 
   const bodyText = text || $.root().text().replace(/\s+/g, ' ').trim()
 
+  // Decoded and attribute addresses LAST: the list is capped, and what the
+  // page states plainly must never be crowded out by them.
   emails.push(
     ...declared.emails,
-    ...facts.emails,
     ...(bodyText.match(EMAIL) ?? []),
     ...(chromeText.match(EMAIL) ?? []),
+    ...facts.emails,
   )
   /*
    * Chrome and JSON-LD carry order numbers, tracking IDs and timestamps as
@@ -290,8 +293,15 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
    * is written with a leading `+` or with separators.
    */
   // Ten digits or more without a `+`: a footer address carries a ZIP+4 ("02908-3700").
+  /*
+   * A number one person card states is that person's, not the page's — unless
+   * the page ALSO prints it in its header or footer, where a company puts its
+   * own line, or several cards share it (a switchboard on every profile).
+   */
+  const cardDigits = facts.people.flatMap((person) => (person.phone ? [person.phone.replace(/\D/g, '')] : []))
+  const chromeDigits = new Set((chromeText.match(PHONE) ?? []).map((value) => value.replace(/\D/g, '')))
   const personDigits = new Set(
-    facts.people.flatMap((person) => (person.phone ? [person.phone.replace(/\D/g, '')] : [])),
+    cardDigits.filter((digits) => cardDigits.indexOf(digits) === cardDigits.lastIndexOf(digits) && !chromeDigits.has(digits)),
   )
   const written = (value: string) =>
     /^\s*\+/.test(value) || (/\d[\s().-]+\d/.test(value) && value.replace(/\D/g, '').length >= 10)

@@ -388,7 +388,7 @@ export function pageIdentity(
  */
 const OPENED = new Map<string, { at: number; page: Promise<FetchedPage | null> }>()
 const OPENED_TTL_MS = 10 * 60_000
-const OPENED_MAX = 500
+const OPENED_MAX = 100
 const OPENED_CONTENT_CHARS = 200_000
 
 function openPage(url: string, deadlineAt: number): Promise<FetchedPage | null> {
@@ -402,12 +402,10 @@ function openPage(url: string, deadlineAt: number): Promise<FetchedPage | null> 
     .then((result): FetchedPage | null => (isFetchFailure(result) ? null : {
       ...result,
       content: result.content.slice(0, OPENED_CONTENT_CHARS),
-      structured: {
-        emails: pageEmails(result),
-        people: pagePeople(result),
-        posts: pagePosts(result).posts,
-        platform: pagePosts(result).platform,
-      },
+      structured: (() => {
+        const forum = pagePosts(result)
+        return { emails: pageEmails(result), people: pagePeople(result), posts: forum.posts, platform: forum.platform }
+      })(),
     }))
     .catch(() => null)
   OPENED.set(url, { at: now, page })
@@ -596,6 +594,25 @@ function sameName(left: string | null | undefined, right: string | null | undefi
   return a.length > 0 && a === norm(right)
 }
 
+/** Words in a job title that say nothing about which job it is. */
+const TITLE_FILLER = new Set(['and', 'of', 'the', 'at', 'a', 'senior', 'sr', 'jr', 'head', 'lead', 'chief', 'officer', 'co'])
+
+/**
+ * PURE. A card's title is compatible with the lead's: either is unknown, or
+ * they share a meaningful word ("Founder" and "Co-Founder & CEO"). A namesake
+ * on a speaker list is usually someone with a different job.
+ */
+export function titlesAgree(cardTitle: string | null, leadTitle: string | null): boolean {
+  const words = (value: string | null) => new Set(
+    (value ?? '').toLowerCase().split(/[^\p{L}]+/u).filter((word) => word.length >= 2 && !TITLE_FILLER.has(word))
+      .map((word) => (word === 'cofounder' ? 'founder' : word)),
+  )
+  const card = words(cardTitle)
+  const lead = words(leadTitle)
+  if (card.size === 0 || lead.size === 0) return true
+  return [...card].some((word) => lead.has(word))
+}
+
 /**
  * PURE. Values a person card states for this person: the card's name is
  * theirs. An email must still be at their employer when we know it — a card
@@ -613,10 +630,11 @@ export function cardCandidates(
   const employerDomain = domain(person.companyDomain)
   const values = new Set<string>()
   for (const card of people) {
-    if (!sameName(card.name, person.fullName)) continue
-    if (kind === 'email' && card.email) {
+    if (!sameName(card.name, person.fullName) || !titlesAgree(card.title, person.jobTitle)) continue
+    // Only at the employer's own domain: without one, a card's address could be anyone's.
+    if (kind === 'email' && card.email && employerDomain) {
       const emailDomain = domain(card.email.split('@')[1] ?? '')
-      if (!employerDomain || emailDomain === employerDomain || emailDomain.endsWith(`.${employerDomain}`)) {
+      if (emailDomain === employerDomain || emailDomain.endsWith(`.${employerDomain}`)) {
         values.add(card.email.toLowerCase())
       }
     }
@@ -630,7 +648,14 @@ export function cardCandidates(
   return [...values].map((value) => ({ value, hit, base: provenance(person, hit, identity) }))
 }
 
-/** PURE. One phone, from posts this person wrote — never from posts about them. */
+/**
+ * PURE. One phone, from posts this person wrote — never from posts about them.
+ *
+ * ⚠️ A FORUM NAME IS SELF-ASSERTED. Anyone can register as "Jamie Rivera", so
+ * the post must ALSO name Jamie's employer (its name or domain), and the
+ * value is filed LOW: a person's own post is a weaker citation than a page
+ * an organisation published.
+ */
 export function authoredPostPhones(
   person: PersonEntity,
   posts: readonly Post[],
@@ -638,16 +663,28 @@ export function authoredPostPhones(
   identity: IdentityMatch,
 ): Candidate[] {
   if (!identityAccepted(identity)) return []
+  const employer = (person.companyName ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  const employerDomain = domain(person.companyDomain)
+  const namesEmployer = (text: string) => {
+    const lower = text.toLowerCase()
+    return Boolean(
+      (employerDomain && lower.includes(employerDomain)) ||
+      (employer.length >= 4 && lower.replace(/[^\p{L}\p{N}]+/gu, ' ').includes(employer)),
+    )
+  }
   const values = new Set<string>()
   for (const post of posts) {
-    if (!sameName(post.author, person.fullName)) continue
+    if (!sameName(post.author, person.fullName) || !namesEmployer(post.text)) continue
     for (const raw of post.text.match(PHONE) ?? []) {
       const phone = normalizedPublicPhone(raw)
       if (phone) values.add(phone)
     }
   }
   if (values.size !== 1) return []
-  return [...values].map((value) => ({ value, hit, base: provenance(person, hit, identity) }))
+  return [...values].map((value) => {
+    const base = provenance(person, hit, identity)
+    return { value, hit, base: { ...base, sourceConfidence: 'low' as const, confidence: Math.min(base.confidence, 0.6) } }
+  })
 }
 
 /** The emails `extractReadable` pulled from the page's links and markup. */
