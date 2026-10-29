@@ -74,6 +74,50 @@ export function followUpPages(
   return pages
 }
 
+/** People pages read per company, after the homepage. */
+export const PEOPLE_PAGES = 3
+
+/** Guessed when the homepage links no team page. */
+const PEOPLE_PATHS = ['/team', '/about', '/about-us'] as const
+
+/**
+ * The pages where a company names its people: the team, people and press
+ * pages its homepage LINKS to, then guessed paths. On-site only.
+ *
+ * A founder's address is rarely on /contact — that page carries the shared
+ * inbox. It is on "Team", "Our story", or a press release's media contact.
+ */
+export function peoplePages(
+  host: string,
+  links: readonly { url: string; kind: string }[],
+): string[] {
+  const registrable = host.replace(/^www\./, '')
+  const onSite = (url: string) => {
+    try {
+      const linked = new URL(url).hostname.toLowerCase().replace(/^www\./, '')
+      return linked === registrable || linked.endsWith(`.${registrable}`)
+    } catch {
+      return false
+    }
+  }
+  const linked = [
+    ...links.filter((link) => link.kind === 'team'),
+    ...links.filter((link) => link.kind === 'news' && /press|media/i.test(link.url)),
+  ].map((link) => link.url).filter(onSite)
+
+  const seen = new Set<string>()
+  const pages: string[] = []
+  for (const url of [...linked, ...PEOPLE_PATHS.map((path) => `https://${registrable}${path}/`)]) {
+    const page = url.split('#')[0]!
+    const id = page.replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')
+    if (seen.has(id)) continue
+    seen.add(id)
+    pages.push(page)
+    if (pages.length === PEOPLE_PAGES) break
+  }
+  return pages
+}
+
 /** Runs `work` over `items`, at most `limit` at once, preserving order. */
 export async function inParallel<T, R>(
   items: readonly T[],

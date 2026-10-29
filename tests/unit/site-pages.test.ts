@@ -45,11 +45,13 @@ describe('inParallel', () => {
 })
 
 describe('the website reader', () => {
-  it('reads its five pages three at a time, not one after another', async () => {
+  it('reads the homepage first, then the rest at most four at a time', async () => {
     const { harvestWebsiteContacts } = await import('@/lib/intelligence/providers/scout')
     let running = 0
     let peak = 0
+    const order: string[] = []
     const contacts = await harvestWebsiteContacts('fabricated.example', async (url) => {
+      order.push(url)
       running += 1
       peak = Math.max(peak, running)
       await new Promise((resolve) => setTimeout(resolve, 10))
@@ -57,7 +59,8 @@ describe('the website reader', () => {
       return url.endsWith('/contact/') ? 'Write to hello@fabricated.example' : null
     })
 
-    expect(peak).toBe(3)
+    expect(order[0]).toBe('https://fabricated.example/')
+    expect(peak).toBe(4)
     expect(contacts.onDomain).toEqual(['hello@fabricated.example'])
   })
 })
