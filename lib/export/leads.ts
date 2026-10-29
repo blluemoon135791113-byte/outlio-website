@@ -184,10 +184,25 @@ export const ALWAYS_EXPORTED: readonly string[] = [
 export function toCanonicalExportRecord(
   lead: ExportLead,
 ): Record<string, string | null> {
+  const record = coreExportRecord(lead)
+  /*
+   * ⚠️ A CORE COLUMN WITH NO VALUE TAKES THE ENRICHED ONE UNDER ITS HEADER.
+   *
+   * `work_email` merges in as "Work Email" — exactly the core header — and the
+   * core value is the lead row's own column, which automatic enrichment never
+   * writes. Spread first and then overwritten by that empty column, every
+   * found work email, mobile and their statuses vanished from the CSV
+   * (job a6c2e8a3, 2026-10-29: 1 email and 1 mobile found, 0 exported).
+   * A core value that IS present still wins: the capture outranks research.
+   */
+  for (const [header, value] of Object.entries(lead.enrichment ?? {})) {
+    if (record[header] === null || record[header] === undefined) record[header] = value
+  }
+  return record
+}
+
+function coreExportRecord(lead: ExportLead): Record<string, string | null> {
   return {
-    // Merged columns first in the literal, so a research field that somehow
-    // collided with a core header could never overwrite one.
-    ...(lead.enrichment ?? {}),
     [EXPORT_COLUMN_HEADERS.companyIndustry]: lead.companyIndustry ?? null,
     [EXPORT_COLUMN_HEADERS.companySize]: lead.companySize ?? null,
     [EXPORT_COLUMN_HEADERS.companyPublicLinkedIn]: lead.companyPublicLinkedIn ?? null,
