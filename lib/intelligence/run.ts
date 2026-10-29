@@ -628,6 +628,12 @@ async function persistDiscoveredDomains(
 async function persistCompanyContacts(
   userId: string,
   evidence: readonly { field: string; entityId: string; value: Record<string, unknown> }[],
+  /**
+   * Fill an empty column only. For third-party listings: the column was empty
+   * when the pass chose the company, but a concurrent run or a person may have
+   * filled it since, and a medium-confidence listing must not replace that.
+   */
+  onlyIfEmpty = false,
 ): Promise<void> {
   const supabase = createAdminClient()
   for (const item of evidence) {
@@ -644,11 +650,51 @@ async function persistCompanyContacts(
         : null
     if (!patch || (!patch.contact_email && !patch.contact_phone)) continue
     try {
-      await supabase.from('companies').update(patch).eq('id', item.entityId).eq('user_id', userId)
+      let update = supabase.from('companies').update(patch).eq('id', item.entityId).eq('user_id', userId)
+      if (onlyIfEmpty) update = update.is(patch.contact_email ? 'contact_email' : 'contact_phone', null)
+      await update
     } catch {
       // Evidence is durable; this projection can be repaired later.
     }
   }
+}
+
+/**
+ * The off-site search's bounds.
+ *
+ * ⚠️ A MISS IS NOT FREE TO REPEAT. Up to two searches and three page reads per
+ * company, and nothing about a company's listings changes overnight; without
+ * a cooldown every run re-searched every company that had no contact. The cap
+ * keeps one run inside the 300 s function window: 25 tasks at the search
+ * concurrency is a few 13 s rounds, after the site passes have run.
+ */
+const EXTERNAL_RESEARCH_COOLDOWN_DAYS = 30
+const EXTERNAL_CONTACT_TASKS_PER_RUN = 25
+
+/** Companies the off-site search already ran for, recently, whatever it found. */
+async function searchedExternallyWithin(
+  userId: string,
+  companyIds: readonly string[],
+  days: number,
+): Promise<Set<string>> {
+  const searched = new Set<string>()
+  if (companyIds.length === 0) return searched
+  const supabase = createAdminClient()
+  const since = new Date(Date.now() - days * 86_400_000).toISOString()
+  for (let i = 0; i < companyIds.length; i += 200) {
+    const { data, error } = await supabase
+      .from('research_tool_calls')
+      .select('entity_id')
+      .eq('user_id', userId)
+      .eq('provider', 'search-company-contact')
+      .in('status', ['success', 'not_found'])
+      .gte('created_at', since)
+      .in('entity_id', companyIds.slice(i, i + 200))
+    // Unknown history: search rather than silently skip a company forever.
+    if (error) return new Set()
+    for (const row of data ?? []) if (row.entity_id) searched.add(row.entity_id as string)
+  }
+  return searched
 }
 
 /**
@@ -943,23 +989,29 @@ export async function processResearchRun(
       companyEntities.map((company) => company.id),
       companyContactFields,
     )
+    const recentlySearched = await searchedExternallyWithin(
+      userId,
+      [...stillMissing.keys()],
+      EXTERNAL_RESEARCH_COOLDOWN_DAYS,
+    )
     const tasks = companyEntities.flatMap((company) => {
       const missing = stillMissing.get(company.id)
       if (!missing || missing.fields.length === 0) return []
+      if (recentlySearched.has(company.id)) return []
       return [externalContactTask(
         { ...company, domain: missing.domain ?? company.domain, location: missing.location },
         missing.fields,
       )]
     })
     if (tasks.length > 0) {
-      externalContactReport = await runChunk(tasks)
+      externalContactReport = await runChunk(tasks.slice(0, EXTERNAL_CONTACT_TASKS_PER_RUN))
       writtenTotal += (await writeEvidence(userId, runId, externalContactReport.evidence)).written
       writtenTotal += (await writeEvidence(userId, runId, externalContactReport.bonusEvidence)).written
       await recordToolCalls(userId, runId, externalContactReport.toolCalls)
       await persistCompanyContacts(userId, [
         ...externalContactReport.evidence,
         ...externalContactReport.bonusEvidence,
-      ])
+      ], true)
     }
   }
 

@@ -206,11 +206,17 @@ export function listingFor(
    */
   const brand = (sourceUrl ? hostOf(sourceUrl).split('.').at(-2) : '') ?? ''
   const brandIsOther = brand.length >= 4 && !words.join('').includes(brand)
-  const brandPattern = brandIsOther ? new RegExp(`(?<![\\p{L}\\p{N}])${brand}(?![\\p{L}\\p{N}])`, 'iu') : null
+  const brandPattern = brandIsOther
+    ? new RegExp(`(?<![\\p{L}\\p{N}])${brand.replace(/[^a-z0-9]/gi, '')}(?![\\p{L}\\p{N}])`, 'iu')
+    : null
   const city = (company.location ?? '').split(',')[0]?.trim().toLowerCase() ?? ''
   const anchoredBy = (window: string) => {
     const lower = window.toLowerCase()
-    return Boolean((domain && lower.includes(domain)) || (city.length >= 3 && lower.includes(city)))
+    // Whole words: "Reno" is not in "Renovation".
+    const cityWord = city.length >= 3
+      ? new RegExp(`(?<![\\p{L}\\p{N}])${city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'u')
+      : null
+    return Boolean((domain && lower.includes(domain)) || cityWord?.test(lower))
   }
   const phones = new Map<string, boolean>()
   const emails = new Map<string, boolean>()
@@ -308,7 +314,7 @@ export function aboutCompany(
   if (
     (lead.length >= 5 && !GENERIC_WORDS.has(lead) && label === lead) ||
     label === words.join('') ||
-    (words.length >= 2 && label.startsWith(words.slice(0, 2).join('')))
+    (words.length >= 2 && label === words.slice(0, 2).join(''))
   ) return true
   // A directory's page leads its title with the company; a comparison does not.
   if (COMPARISON.test(source.title)) return false

@@ -13679,3 +13679,13 @@ longer taken.
 
 Note: the 60 most recently updated companies without a contact were mostly
 seeded volume-test rows ("… at Test Corp 1610"); measure on real names.
+
+### Review (product-risk-reviewer: ship with conditions — conditions fixed)
+
+- Listing values fill an EMPTY company column only (`persistCompanyContacts(…, true)`):
+  a concurrent run or a manual edit is never replaced by a third-party listing.
+- A company searched off-site in the last 30 days (success or miss, per
+  `research_tool_calls`) is not searched again; at most 25 such searches per run.
+- City anchor is a whole-word match; own-host match is exact; host brand escaped.
+- Recorded trade: 9-digit national numbers in JSON-LD/footers are dropped
+  (ZIP+4 shape); `tel:` links and body text are unaffected.

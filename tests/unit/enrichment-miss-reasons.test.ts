@@ -345,3 +345,20 @@ describe('footer addresses', () => {
     expect(extractReadable(html, 'https://fabricated.example/').structured.phones).not.toContain('02908-3700')
   })
 })
+
+describe('declared phones without a country code', () => {
+  /*
+   * A deliberate precision-for-recall trade, recorded so it is not undone by
+   * accident: a 9-digit national number in JSON-LD or a footer is dropped,
+   * because a ZIP+4 has the same shape. Linked (`tel:`) and body-text numbers
+   * are unaffected.
+   */
+  it('drops a 9-digit JSON-LD number, keeps a linked one', async () => {
+    const { extractReadable } = await import('@/lib/hubble/extract/readable')
+    const html = `<html><head><script type="application/ld+json">{"@type":"Organization","telephone":"912 345 678"}</script></head>
+      <body><main><p>${'Fabricated content for fabricated readers. '.repeat(12)}</p><a href="tel:912345678">Call</a></main></body></html>`
+    const phones = extractReadable(html, 'https://fabricated.example/').structured.phones
+    expect(phones).not.toContain('912 345 678')
+    expect(phones).toContain('912345678')
+  })
+})

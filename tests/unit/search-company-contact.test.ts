@@ -220,3 +220,12 @@ describe('corroboration', () => {
       .toMatchObject({ phone: { value: '+14155550132', hosts: 2 } })
   })
 })
+
+describe('anchors are whole words', () => {
+  it('does not take "Reno" from "Renovation"', async () => {
+    const { listingFor } = await load()
+    const reno = { ...COMPANY, location: 'Reno, NV' }
+    expect(listingFor('Brightwater Joinery renovation services, +1 415 555 0132', reno).phoneAnchored).toBe(false)
+    expect(listingFor('Brightwater Joinery, Reno NV, +1 415 555 0132', reno).phoneAnchored).toBe(true)
+  })
+})
