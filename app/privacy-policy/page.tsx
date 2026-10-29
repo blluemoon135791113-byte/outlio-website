@@ -84,7 +84,7 @@ export default function LeadEnginePrivacy() {
         <h1 className="mt-4 text-4xl font-bold uppercase tracking-tight sm:text-5xl">
           Lead Engine Privacy Policy
         </h1>
-        <p className="mt-4 text-sm text-muted">Last updated: Wednesday, 14 October 2026</p>
+        <p className="mt-4 text-sm text-muted">Last updated: Thursday, 15 October 2026</p>
 
         <div className="mt-10 space-y-4 leading-relaxed text-ink/80">
           <p>
@@ -119,6 +119,13 @@ export default function LeadEnginePrivacy() {
                 record, so we can tell you who you have already seen. It is pseudonymous, not
                 anonymous. Section 5 explains precisely what it contains.
               </li>
+              <li>
+                For the people in your results, the Service also looks up{' '}
+                <strong>publicly available business contact details</strong> — a company&apos;s
+                website, its published email and phone, and a person&apos;s work email or phone
+                where it is publicly listed. Every value is stored with the page it was found on;
+                nothing is guessed or generated. Section 4 explains how.
+              </li>
               <li>We do not sell personal data, and we do not train AI models on your data.</li>
             </ul>
           </Callout>
@@ -134,9 +141,10 @@ export default function LeadEnginePrivacy() {
             </li>
             <li>
               <strong>Data inside uploaded files</strong> — the professional details of the people
-              in your search results. For this, <strong>you are the controller</strong> and Outlio
-              acts as your <strong>processor</strong>. You choose which files to upload, why, and
-              what happens to the output. We only process on your instructions.
+              in your search results, and the business contact details the Service finds for them
+              in public sources. For this, <strong>you are the controller</strong> and Outlio acts
+              as your <strong>processor</strong>. You choose which files to upload, why, and what
+              happens to the output. We only process on your instructions.
             </li>
           </ul>
           <p>
@@ -186,9 +194,18 @@ export default function LeadEnginePrivacy() {
               server-side only, which means uploaded content cannot execute against you or us.
             </li>
             <li>
-              <strong>We never infer, enrich, or invent values.</strong> A field absent from your
-              file is stored as empty. We do not append emails, phone numbers, or any data from
-              other sources.
+              <strong>We never infer or invent values.</strong> A field absent from your file is
+              stored as empty unless a public source states it.
+            </li>
+            <li>
+              <strong>Public business contact details are looked up for you.</strong> After a file
+              is processed, the Service searches public sources — the company&apos;s own website
+              and the search providers listed in Section 9 — for a company&apos;s website, its
+              published email and phone, and a person&apos;s work email or phone where it is
+              publicly listed. To do so it sends the person&apos;s name and their employer&apos;s
+              name or website to those search providers. Every value found is stored with the
+              address of the page it came from. Nothing is guessed: we never build an email
+              address from a name pattern, and a value no source states stays empty.
             </li>
             <li>
               If a file contains LinkedIn session values such as cookies or tokens, they are removed
@@ -227,7 +244,11 @@ export default function LeadEnginePrivacy() {
               ],
               [
                 "Only supported pages",
-                <>Restricted to lead search-results pages. It has no access to any other site.</>,
+                <>
+                  Restricted to Sales Navigator. It captures lead search results, account lists and
+                  account search results. On a company page you open during a session, it reads only
+                  the company&apos;s website address. It has no access to any other site.
+                </>,
               ],
               [
                 "Only page content",
@@ -458,7 +479,8 @@ export default function LeadEnginePrivacy() {
         <Section title="9. Who We Share Data With">
           <p>
             We use a small number of infrastructure providers. Each is bound by a data processing
-            agreement and may use data only to provide its service to us.
+            agreement and may use data only to provide its service to us, except where the table
+            says otherwise.
           </p>
           <Table
             head={["Provider", "What it does", "Where"]}
@@ -468,6 +490,31 @@ export default function LeadEnginePrivacy() {
               ["Resend", "Transactional email — verification, password reset, notices", "EU / US"],
               ["FastSpring", "Merchant of record and subscription payment processing", "EU / US"],
               ["Calendly", "Scheduling, if you book a call with us", "US"],
+              [
+                "Google (Gemini API)",
+                "AI features: text embeddings and answers for questions you ask the Service. Receives public web page text and your question. Used on Google's unpaid tier, under which Google may use this data to improve its products and its reviewers may read it",
+                "US",
+              ],
+              [
+                "Groq",
+                "AI answers for questions you ask the Service. Receives your question and the public text used to answer it. Does not train on it; may keep it up to 30 days for abuse monitoring",
+                "US",
+              ],
+              [
+                "xAI (Grok API)",
+                "AI planning and answers for questions you ask the Service. Receives your question and the public text used to answer it. Does not train on it without permission; keeps it up to 30 days for abuse auditing, then deletes it",
+                "US",
+              ],
+              [
+                "OpenRouter",
+                "Routes AI answers to model providers that do not train on the data. Receives your question and the public text used to answer it",
+                "US",
+              ],
+              [
+                "Diffbot, You.com, Exa, Tavily",
+                "Web search for public business contact details and company websites. Receives a person's name with their employer's name or website, or a company's name",
+                "US",
+              ],
               [
                 "PostHog",
                 "Product analytics, error reports and masked session replays (Section 6)",

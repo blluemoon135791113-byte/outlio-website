@@ -13539,6 +13539,36 @@ typecheck · eslint (exit 0) · unit (see commit) · build · `test.html` scrubb
 locally: 0 values found, 25/25 leads parse identically.
 ---
 
+## 2026-10-15 — Privacy policy and terms match what the product does
+
+**Not deployed.** Copy only; legal text the owner asked to correct.
+
+- **Enrichment disclosed.** The policy said "We do not append emails, phone
+  numbers, or any data from other sources" and the terms said "We never
+  infer, enrich, or invent missing values" — both false since automatic
+  enrichment (CLAUDE.md rule 1, revised 2026-09-03). Now: public business
+  contact details are looked up (company site and the search providers in §9),
+  the person's name and employer are sent to those providers, every value is
+  stored with its source page, nothing is pattern-guessed, unstated stays empty.
+  Added to the short version and to "Our role" (customer remains controller).
+- **§9 sub-processors** gain Google (Gemini API) and Diffbot, You.com, Exa,
+  Tavily, with what each receives.
+- **Extension scope** corrected: it captures lead search results, account
+  lists and account search results, and reads only the website from a company
+  page opened during a session (it said "lead search-results pages" only).
+- Terms §16 warranty keeps its disclaimer and extends it to public-source
+  values.
+
+**Still the owner's to confirm:** §9 says each provider may use data only to
+serve Outlio. On Gemini's FREE tier Google may use inputs to improve its
+products — true only if the key's project has billing enabled. LLM vendors
+other than Google (Groq, OpenRouter, Cerebras, Backboard — keys exist) are not
+listed because which are enabled in production is not visible from the repo.
+
+**Not done (blocked):** deleting the 230 pre-existing pages — the agent's bulk
+storage delete was refused by the session's permission policy. The owner path:
+set RAW_PAGE_PURGE_FROM earlier than 2026-08-08 and redeploy; the tick sweep
+then removes them (200 per tick; failed ones once 14 days old).
 ## 2026-10-15 — Enrichment rate: our own queue stops benching search; domains by content
 
 **Not deployed. No migration.** Built in a separate worktree: another session
