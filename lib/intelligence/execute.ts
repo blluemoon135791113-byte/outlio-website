@@ -16,12 +16,13 @@
 import { validateEvidence } from '@/lib/intelligence/evidence'
 import type { ProviderRegistry } from '@/lib/intelligence/registry'
 import { sumMicros } from '@/lib/intelligence/costs'
-import type {
-  AnyIntelligenceProvider,
-  NormalizedEvidence,
-  ResearchField,
-  ResearchTask,
-  ToolCallRecord,
+import {
+  missCode,
+  type AnyIntelligenceProvider,
+  type NormalizedEvidence,
+  type ResearchField,
+  type ResearchTask,
+  type ToolCallRecord,
 } from '@/lib/intelligence/types'
 import { mapInConcurrentBatches } from '@/lib/worker/concurrency'
 
@@ -220,17 +221,19 @@ async function attempt(
 
     // Provider output is untrusted input, exactly like a request body. It is
     // validated before it can become a stored fact.
-    const { valid } = validateEvidence(output)
+    const { valid } = validateEvidence(output.evidence)
     const { requested, bonus } = acceptableEvidence(task, valid)
+    const found = requested.length > 0
 
     return {
       call: {
         ...base,
         estimatedCostMicros,
         // A provider that returned only bonus data did not answer the question.
-        status: requested.length > 0 ? 'success' : 'not_found',
+        status: found ? 'success' : 'not_found',
         latencyMs: Date.now() - startedAt,
-        errorCode: null,
+        // Why it missed, when the provider knows — the enrichment report's input.
+        errorCode: !found && output.miss ? missCode(output.miss) : null,
       },
       evidence: requested,
       bonus,

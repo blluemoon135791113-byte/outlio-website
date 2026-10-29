@@ -13592,3 +13592,100 @@ fixed paths (a first-party `sitemap.xml` would list them).
 
 typecheck · eslint (exit 0, no warnings) · unit 288 files / 4,752 tests ·
 build.
+
+## 2026-10-29 — Enrichment: every miss says why; three readers that miss less; Grok
+
+### Why
+
+A 25-lead job came back with 2 work emails and 0 company emails, and
+`research_tool_calls` recorded only `not_found`: no way to tell an
+unreachable site from a refusal, a JavaScript page, or a site with no contact.
+
+### Built
+
+1. **Miss reasons.** A provider returns `{ miss }` instead of `null`
+   (`MISS_REASONS`, lib/intelligence/types.ts); the executor stores it as
+   `research_tool_calls.error_code` = `MISS_<REASON>`. No migration.
+2. **`/admin/enrichment`.** Counts-only funnel for the last ten finished
+   uploads: website / company email / phone / work email / mobile, and where
+   the rest stopped. Older jobs show `unrecorded`.
+3. **Company site reader** follows the homepage's own on-site contact and
+   about links (fixed paths fill what is left), stops after the homepage when
+   it already has both, `maxRetries: 0`, 13 s whole-site deadline.
+4. **Extractor** collects emails/phones from header/footer/nav/aside text
+   (before STRIP removes it) and from JSON-LD `telephone`/`email`. The
+   readable `text` is unchanged.
+5. **Person search opens up to 2 result pages** (guarded `httpPageFetcher`;
+   LinkedIn never fetched) when snippets carry nothing — results that identify
+   the person, or that name them and whose PAGE then identifies them with the
+   same resolver. Email: name + employer-domain rules as before. Phone: exactly
+   one number within a window of the full name. Masked values → `masked_only`.
+6. **xAI (Grok)** LLM vendor: `X_AI_API_KEY`, `XAI_MODEL`
+   (default `grok-4.20-0309-non-reasoning`), `LLM_PROVIDER=xai`; obeys
+   `LLM_ALLOWED_VENDORS`.
+
+### Measured live (read-only)
+
+| 30 most recent companies with a domain | Stored (old reader) | New reader |
+|---|---|---|
+| Any company contact | 8 | 16 (11 email, 14 phone) |
+| Gained / lost | — | 9 / 1 |
+| Misses | — | 6 no contact · 3 refused · 3 unreachable · 1 JS · 1 off-domain |
+| Average / slowest | — | 2.2 s / 13.0 s (was 71 s before the deadline) |
+
+People (job b2429caa, 25 leads): 200 results, 6 contain the full name
+(5 people), 0 identify them — 3 name + city only, 3 namesakes. Opening
+pages could not change that batch: **personal contact is limited by public
+presence, not by the reader.**
+
+Planner, 6 questions each: Grok 6/6 planned, 0.75–1.9 s, filled filters
+(UK, >50 employees, Germany/logistics); Gemini 4/6 (2 "unavailable" on the
+free tier), 0.7–3.5 s, filters mostly empty.
+
+### Open
+
+- Privacy policy (PR #64) does not yet list xAI as an AI vendor; must be
+  added before `LLM_PROVIDER=xai` is set in production.
+
+## 2026-10-29 — Company contacts from listings off the company's own site
+
+`search-company-contact` (lib/intelligence/providers/search-company-contact.ts)
+searches for a company by name (+ city when captured) and reads the listings
+that state its phone/email elsewhere: directories, registries, associations,
+map listings. Runs as its own pass in `processResearchRun` (4a''), only for
+companies still missing a requested contact AFTER their own site was read —
+never in the ordinary waterfall (`externalContactTask` prefix).
+
+### Rules, each from a wrong value seen live
+
+| Seen | Rule |
+|---|---|
+| `02908-3700` filed as a phone (US ZIP+4) | National numbers: ≥10 digits, valid in a listed country, short leading group; also applied to footer/JSON-LD phones in `readable.ts` |
+| `86830610-720` (an ID) | Leading digit group ≤5 when separated |
+| `800) 422-4641` | Phone pattern keeps an opening bracket |
+| `first.last@`, `filast@`, `lastfir@` from an email-format site | Format placeholders and "format/pattern" paragraphs are never addresses |
+| Okta's number beside "WorkOS" on "WorkOS \| Okta" | Title and snippet are separate paragraphs; a window naming the source site's brand is skipped |
+| A different "Ascend" on Yellow Pages | A third-party value needs a second site stating it, or the company's domain/city in the same paragraph; the company's own site needs neither |
+| Directory pages list many companies | Only the paragraph around the company's whole name; exactly one value of a kind there; page must be ABOUT the company (name leads the title, or own host); comparison pages excluded |
+
+### Measured live (read-only), 40 real companies with no stored contact
+
+9 found (~5 distinct companies; duplicates are the same company in several
+accounts), every one checked by hand as the company's own number or inbox:
+own-site 3, corroborated listings 2. 26 listed without a stated contact,
+5 not listed. ~1.7 s per company. Recall was traded for precision: single
+uncorroborated listings (e.g. a correct number on one directory) are no
+longer taken.
+
+Note: the 60 most recently updated companies without a contact were mostly
+seeded volume-test rows ("… at Test Corp 1610"); measure on real names.
+
+### Review (product-risk-reviewer: ship with conditions — conditions fixed)
+
+- Listing values fill an EMPTY company column only (`persistCompanyContacts(…, true)`):
+  a concurrent run or a manual edit is never replaced by a third-party listing.
+- A company searched off-site in the last 30 days (success or miss, per
+  `research_tool_calls`) is not searched again; at most 25 such searches per run.
+- City anchor is a whole-word match; own-host match is exact; host brand escaped.
+- Recorded trade: 9-digit national numbers in JSON-LD/footers are dropped
+  (ZIP+4 shape); `tel:` links and body text are unaffected.
