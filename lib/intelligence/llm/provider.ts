@@ -19,7 +19,7 @@ import 'server-only'
  */
 import { requestJson, setHostPacing, ProviderHttpError } from '@/lib/intelligence/http'
 
-export const LLM_VENDORS = ['gemini', 'groq', 'openrouter', 'cerebras', 'backboard'] as const
+export const LLM_VENDORS = ['gemini', 'groq', 'openrouter', 'cerebras', 'backboard', 'xai'] as const
 export type LlmVendor = (typeof LLM_VENDORS)[number]
 
 export type LlmRequest = {
@@ -73,6 +73,7 @@ const GROQ_HOST = 'api.groq.com'
 const OPENROUTER_HOST = 'openrouter.ai'
 const CEREBRAS_HOST = 'api.cerebras.ai'
 const BACKBOARD_HOST = 'app.backboard.io'
+const XAI_HOST = 'api.x.ai'
 
 /**
  * Pin the production default so planner behaviour cannot drift under an alias.
@@ -81,12 +82,19 @@ const BACKBOARD_HOST = 'app.backboard.io'
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.6-flash'
 /** Current Cerebras public-endpoint default. Do not pin a retired model. */
 export const DEFAULT_CEREBRAS_MODEL = 'gpt-oss-120b'
+/**
+ * Non-reasoning on purpose: planning is classification under a 30s budget, and
+ * a reasoning model spends that budget thinking. Listed by /v1/models for our
+ * key on 2026-10-29; roll forward with `XAI_MODEL`.
+ */
+export const DEFAULT_XAI_MODEL = 'grok-4.20-0309-non-reasoning'
 
 setHostPacing(GEMINI_HOST, 200)
 setHostPacing(GROQ_HOST, 200)
 setHostPacing(OPENROUTER_HOST, 200)
 setHostPacing(CEREBRAS_HOST, 200)
 setHostPacing(BACKBOARD_HOST, 200)
+setHostPacing(XAI_HOST, 200)
 
 /** Long enough for a planning call, short enough not to stall a request. */
 const LLM_TIMEOUT_MS = 30_000
@@ -491,6 +499,63 @@ export function createBackboardProvider(
   }
 }
 
+// ---------------------------------------------------------------------------
+// xAI (Grok) — OpenAI-compatible contract with structured outputs
+// ---------------------------------------------------------------------------
+
+export function createXaiProvider(
+  model = process.env.XAI_MODEL ?? DEFAULT_XAI_MODEL,
+): LLMProvider {
+  return {
+    vendor: 'xai',
+    model,
+
+    isConfigured: () => Boolean(process.env.X_AI_API_KEY),
+
+    generateJson: async (request) => {
+      const apiKey = process.env.X_AI_API_KEY
+      if (!apiKey) {
+        return { ok: false, code: 'not_configured', detail: 'X_AI_API_KEY is not set' }
+      }
+
+      try {
+        const response = await requestJson<{
+          choices?: Array<{ message?: { content?: string } }>
+        }>({
+          url: `https://${XAI_HOST}/v1/chat/completions`,
+          method: 'POST',
+          headers: { authorization: `Bearer ${apiKey}` },
+          timeoutMs: llmTimeout(request),
+          deadlineAt: request.deadlineAt,
+          maxRetries: 0,
+          body: {
+            model,
+            temperature: request.temperature ?? 0,
+            max_tokens: request.maxOutputTokens ?? 2048,
+            response_format: structuredResponseFormat(request.schema),
+            messages: [
+              { role: 'system', content: request.system },
+              { role: 'user', content: request.user },
+            ],
+          },
+        })
+
+        const text = response.choices?.[0]?.message?.content
+        if (!text) return { ok: false, code: 'unparseable', detail: 'empty completion' }
+
+        const json = safeParse(text)
+        if (json === undefined) {
+          return { ok: false, code: 'unparseable', detail: 'completion was not JSON' }
+        }
+
+        return { ok: true, json, vendor: 'xai', model }
+      } catch (error) {
+        return { ok: false, code: 'unavailable', detail: describe(error) }
+      }
+    },
+  }
+}
+
 const LLM_FAILED_AT = new Map<string, number>()
 const LLM_COOLDOWN_MS = 60_000
 
@@ -611,6 +676,7 @@ export function resolveLlmProvider(
     openrouter: createOpenRouterProvider(),
     cerebras: createCerebrasProvider(),
     backboard: createBackboardProvider(),
+    xai: createXaiProvider(),
   }
 
   const configuredAllowlist = process.env.LLM_ALLOWED_VENDORS
@@ -620,8 +686,13 @@ export function resolveLlmProvider(
 
   // When an allowlist is present, fail closed: a malformed/empty value must
   // not silently re-enable a provider that may incur charges.
+  /*
+   * ⚠️ xAI IS OPT-IN, NEVER A SILENT FALLBACK. It is a paid vendor added for
+   * comparison; with no allowlist set, a key alone must not start routing
+   * planning prompts to it. Naming it in LLM_PROVIDER or the allowlist does.
+   */
   const allowedVendors = process.env.LLM_ALLOWED_VENDORS === undefined
-    ? [...LLM_VENDORS]
+    ? LLM_VENDORS.filter((vendor) => vendor !== 'xai' || preferred === 'xai')
     : configuredAllowlist ?? []
 
   const usableVendors = allowedVendors.length > 0 ? allowedVendors : ['gemini' as const]

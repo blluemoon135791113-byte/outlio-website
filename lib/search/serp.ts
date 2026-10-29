@@ -27,6 +27,7 @@ import 'server-only'
  * it does not turn a user's question into a 500. Every failure path here
  * returns empty hits and records which engine (if any) answered.
  */
+import { isLocalFailure } from '@/lib/intelligence/http'
 import { reserveSearch } from '@/lib/search/budget'
 import {
   dedupeQueries,
@@ -304,12 +305,17 @@ export class SerpService implements SearchProvider {
       let hits: SearchHit[]
       try {
         hits = await engine.search(query, limit, engineOptions)
-      } catch {
+      } catch (error) {
         /*
          * A FAILURE — error, timeout, 429, 5xx. Only this sidelines the engine.
          * A thrown error must not escape the service either.
+         *
+         * ⚠️ EXCEPT A LOCAL ONE. A request that ran out of time in OUR pacing
+         * queue never reached the engine; benching the engine for it turned
+         * our own congestion into a minute-long outage for every lookup
+         * (2026-10-14). The next engine is tried for this query only.
          */
-        FAILED_AT.set(engine.name, Date.now())
+        if (!isLocalFailure(error)) FAILED_AT.set(engine.name, Date.now())
         continue
       }
       asked = true

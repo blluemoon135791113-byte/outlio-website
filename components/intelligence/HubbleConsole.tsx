@@ -13,7 +13,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { HubbleLogo } from '@/components/brand/HubbleLogo'
 import { BatchFilter } from '@/components/intelligence/BatchFilter'
 import {
   HubbleLeadList,
@@ -600,27 +599,10 @@ export function HubbleConsole({
       */
     <div className="hubble-page -mx-4 -my-6 min-h-[calc(100dvh-4rem)] space-y-7 bg-clay-bg px-4 py-6 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
       <header>
-        <div className="flex items-center gap-3">
-          <HubbleLogo size="lg" priority />
-          <h1 className="text-[34px] font-semibold leading-[1.1] tracking-[-0.04em] text-ink">
-            Hubble
-          </h1>
-        </div>
-        {/*
-          * ⚠️ THE TWO SCALES ARE NAMED SEPARATELY BECAUSE THEY ANSWER
-          * DIFFERENT QUESTIONS, AND THIS PAGE IS ONLY ONE OF THEM.
-          *
-          * This prompt bar is MACRO: it aggregates across companies — the ones
-          * behind lead extractions and the ones from saved account lists, one
-          * set, because they are the same firms in the same table. MICRO is a
-          * single person, and lives in the lead modal below, not here. Saying
-          * "micro and macro" on the macro bar invited people to ask it about
-          * one individual and get a distribution back.
-          */}
-        <p className="mt-2 text-[15px] leading-relaxed text-muted">
-          Analysis across every company you hold — from lead extractions and
-          saved account lists alike. Open a lead below to ask about one person.
-        </p>
+        <h1 className="text-[30px] font-semibold leading-[1.1] tracking-[-0.035em] text-ink">
+          Leads
+        </h1>
+        {/* The prompt bar asks across every company; open a lead to ask about one person. */}
         <p className="mt-1 text-[13px] text-muted">
           {workspace.companies.toLocaleString()} compan
           {workspace.companies === 1 ? 'y' : 'ies'} ·{' '}

@@ -501,6 +501,11 @@ export default function LeadEnginePrivacy() {
                 "US",
               ],
               [
+                "xAI (Grok API)",
+                "AI planning and answers for questions you ask the Service. Receives your question and the public text used to answer it. Does not train on it without permission; keeps it up to 30 days for abuse auditing, then deletes it",
+                "US",
+              ],
+              [
                 "OpenRouter",
                 "Routes AI answers to model providers that do not train on the data. Receives your question and the public text used to answer it",
                 "US",

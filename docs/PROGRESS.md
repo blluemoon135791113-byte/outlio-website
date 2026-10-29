@@ -4,6 +4,64 @@ Append-only log. Read this before writing any code.
 
 ---
 
+## 2026-10-15 — Dashboard revamp: one Find leads page, CRM records top-level, Opportunities board, reminders, LinkedIn removed
+
+**0158 is NOT applied.** Validated locally (`check-migration.sh`, smoke 4/4).
+`types/database.ts` was hand-edited to match it. Apply 0158 BEFORE deploying:
+the tick's `task_reminders` job and the task form's reminder both need it.
+
+### Owner decisions (2026-10-15)
+
+- Sidebar: Overview · Find leads · Leads · Organizations · People ·
+  Opportunities · Pipeline ▸ (My Work, Tasks, Lists, Import, Duplicates,
+  Reports, Dashboards) · Email ▸ · Automations · Settings.
+- Every finished extraction goes into the CRM automatically. This reverses
+  "explicit, not automatic" on `sendExtractionToCrm`, which remains as the
+  manual retry.
+- Opportunities extends the existing deals board (no new tables).
+- LinkedIn outreach is removed: code deleted, tables kept (ADR-008).
+
+### What was built
+
+- **Find leads** (`/dashboard/jobs`): upload form + credits + live runs on one
+  page; `/dashboard/extract/new` redirects. The upload stays on the page and
+  refreshes the run list. Six metric cards → credits + four totals.
+- **Leads**: renamed from Hubble Intelligence (route unchanged).
+- **Auto CRM sync** (`lib/crm/auto-sync.ts`, `ExtractionCrmSync`): runs after
+  both worker completion paths, acting as the uploader: `crm.import`, plus
+  `accounts.import` for account runs. Never throws. **Only for uploaders in
+  exactly one workspace**: `extraction_jobs` has no `workspace_id`, so for
+  anyone in two the target is ambiguous and they keep using "Send to CRM".
+  Recording the workspace on the job would lift this (product-risk review). Enrichment already reaches
+  CRM contacts through the tick's evidence bridge.
+- **Opportunities board**: Trello-style lists (`lib/crm/stages.ts`,
+  `PipelineLists`: add before Won/Lost, rename, move, remove = archive; refuses
+  a list with open cards or the last open list), gated on
+  `crm.pipeline.manage`. Cards show their next open task and "+ Task".
+  `getBoard` loads columns in parallel and reads stale thresholds with the
+  stages (was three sequential queries per column).
+- **Reminders**: tasks take a date + time; "Remind me" sets `remind_at`. The
+  tick claims due reminders with `crm_claim_due_task_reminders` (claims once)
+  → `crm_notifications` → a header bell (`NotificationBell`, polls 60s).
+- **LinkedIn removed**: `lib/linkedin`, `components/linkedin`, `/linkedin`,
+  `/dashboard/settings/linkedin`, the contact-page panel, the tick job.
+  `profile-reference.ts` moved to `lib/crm/` (it formats a lead's own link).
+
+### Not done
+
+- **Reminder emails.** The app has no transactional email provider (auth mail
+  is Supabase's; campaigns send from customers' mailboxes). Reminders are
+  in-app only until a provider is chosen.
+- The `linkedin` plan module and `senderLimit` remain in entitlements code.
+
+### Verified
+
+typecheck clean · lint clean · build succeeds · unit 4467/4467 (new:
+pipeline-lists 7, task-reminders 2, crm-auto-sync 5) · browser shell suite
+14/14 · 0158 smoke 4/4.
+
+---
+
 ## 2026-10-03 — Sales Navigator account SEARCH results: a third saved-page type
 
 **0156 is applied to production** (2026-10-03; types regenerated, the columns
@@ -13511,3 +13569,153 @@ listed because which are enabled in production is not visible from the repo.
 storage delete was refused by the session's permission policy. The owner path:
 set RAW_PAGE_PURGE_FROM earlier than 2026-08-08 and redeploy; the tick sweep
 then removes them (200 per tick; failed ones once 14 days old).
+## 2026-10-15 — Enrichment rate: our own queue stops benching search; domains by content
+
+**Not deployed. No migration.** Built in a separate worktree: another session
+had uncommitted work in the main checkout.
+
+### Dissection (25-lead production job b2429caa, traced lead by lead)
+
+- **Domains (5 of 16 companies).** Of the 11 without one: 5 were accepted by
+  the picker on a fresh search but never reached Diffbot during the job; 3 had
+  exactly one result site verifying by content under a brand-name domain the
+  picker refused; 3 have no site of their own.
+- **Why searches never reached Diffbot:** up to 8 person searches per lead × 6
+  concurrent tasks queued behind our 1-per-second Diffbot pacing; queued past
+  their 13 s deadline they left with ~1 ms, timed out locally, and the SERP
+  breaker benched Diffbot for everyone. Diffbot: ~103 asked, 44 answered, of
+  ~200 needed.
+- **People:** 18 of 25 never named in any search result; 4 only namesakes.
+  Public-web person contact has a hard ceiling here.
+- **Company sites with a domain:** contact forms, JavaScript-rendered pages,
+  free-mail only, one refused.
+
+### Fixes
+
+1. `paceHost` is deadline-aware: a request whose slot would come too late
+   gives up without taking it, as a LOCAL `ProviderHttpError`; the SERP
+   breaker never benches an engine for a local failure.
+2. `PHRASINGS_PER_CONTACT = 1` (was 4): one email and one phone search per lead.
+3. `search-domain-discovery` falls back to content verification: exactly one
+   non-directory result site whose homepage is the company speaking and that
+   presents as it (name in `<title>`, or a distinctive name word in the domain).
+4. `company-contact` files a free-mail address published on the company's own
+   page when its domain publishes none, at MEDIUM / 0.72.
+
+### Measured on the same 25 leads, from no known domains
+
+| | Production job | New code |
+|---|---|---|
+| Companies with a domain | 5/16 | 11/16 |
+| Leads at a company with a domain | 12/25 | 18/25 |
+| Company phone / email | 8 / 0 | 9 / 2 |
+| Person email / phone | 2 / 0 | 1 / 0 |
+| Any contact | 9/25 | 9/25 |
+| Wall time | 148 s | 79 s |
+
+**Contacts did not rise on this sample**: the newly found companies mostly
+publish no email/phone on the five pages read. Next ceiling, not built:
+JavaScript-rendered sites (needs a renderer), contact pages outside the five
+fixed paths (a first-party `sitemap.xml` would list them).
+
+### Verified
+
+typecheck · eslint (exit 0, no warnings) · unit 288 files / 4,752 tests ·
+build.
+
+## 2026-10-29 — Enrichment: every miss says why; three readers that miss less; Grok
+
+### Why
+
+A 25-lead job came back with 2 work emails and 0 company emails, and
+`research_tool_calls` recorded only `not_found`: no way to tell an
+unreachable site from a refusal, a JavaScript page, or a site with no contact.
+
+### Built
+
+1. **Miss reasons.** A provider returns `{ miss }` instead of `null`
+   (`MISS_REASONS`, lib/intelligence/types.ts); the executor stores it as
+   `research_tool_calls.error_code` = `MISS_<REASON>`. No migration.
+2. **`/admin/enrichment`.** Counts-only funnel for the last ten finished
+   uploads: website / company email / phone / work email / mobile, and where
+   the rest stopped. Older jobs show `unrecorded`.
+3. **Company site reader** follows the homepage's own on-site contact and
+   about links (fixed paths fill what is left), stops after the homepage when
+   it already has both, `maxRetries: 0`, 13 s whole-site deadline.
+4. **Extractor** collects emails/phones from header/footer/nav/aside text
+   (before STRIP removes it) and from JSON-LD `telephone`/`email`. The
+   readable `text` is unchanged.
+5. **Person search opens up to 2 result pages** (guarded `httpPageFetcher`;
+   LinkedIn never fetched) when snippets carry nothing — results that identify
+   the person, or that name them and whose PAGE then identifies them with the
+   same resolver. Email: name + employer-domain rules as before. Phone: exactly
+   one number within a window of the full name. Masked values → `masked_only`.
+6. **xAI (Grok)** LLM vendor: `X_AI_API_KEY`, `XAI_MODEL`
+   (default `grok-4.20-0309-non-reasoning`), `LLM_PROVIDER=xai`; obeys
+   `LLM_ALLOWED_VENDORS`.
+
+### Measured live (read-only)
+
+| 30 most recent companies with a domain | Stored (old reader) | New reader |
+|---|---|---|
+| Any company contact | 8 | 16 (11 email, 14 phone) |
+| Gained / lost | — | 9 / 1 |
+| Misses | — | 6 no contact · 3 refused · 3 unreachable · 1 JS · 1 off-domain |
+| Average / slowest | — | 2.2 s / 13.0 s (was 71 s before the deadline) |
+
+People (job b2429caa, 25 leads): 200 results, 6 contain the full name
+(5 people), 0 identify them — 3 name + city only, 3 namesakes. Opening
+pages could not change that batch: **personal contact is limited by public
+presence, not by the reader.**
+
+Planner, 6 questions each: Grok 6/6 planned, 0.75–1.9 s, filled filters
+(UK, >50 employees, Germany/logistics); Gemini 4/6 (2 "unavailable" on the
+free tier), 0.7–3.5 s, filters mostly empty.
+
+### Open
+
+- Privacy policy (PR #64) does not yet list xAI as an AI vendor; must be
+  added before `LLM_PROVIDER=xai` is set in production.
+
+## 2026-10-29 — Company contacts from listings off the company's own site
+
+`search-company-contact` (lib/intelligence/providers/search-company-contact.ts)
+searches for a company by name (+ city when captured) and reads the listings
+that state its phone/email elsewhere: directories, registries, associations,
+map listings. Runs as its own pass in `processResearchRun` (4a''), only for
+companies still missing a requested contact AFTER their own site was read —
+never in the ordinary waterfall (`externalContactTask` prefix).
+
+### Rules, each from a wrong value seen live
+
+| Seen | Rule |
+|---|---|
+| `02908-3700` filed as a phone (US ZIP+4) | National numbers: ≥10 digits, valid in a listed country, short leading group; also applied to footer/JSON-LD phones in `readable.ts` |
+| `86830610-720` (an ID) | Leading digit group ≤5 when separated |
+| `800) 422-4641` | Phone pattern keeps an opening bracket |
+| `first.last@`, `filast@`, `lastfir@` from an email-format site | Format placeholders and "format/pattern" paragraphs are never addresses |
+| Okta's number beside "WorkOS" on "WorkOS \| Okta" | Title and snippet are separate paragraphs; a window naming the source site's brand is skipped |
+| A different "Ascend" on Yellow Pages | A third-party value needs a second site stating it, or the company's domain/city in the same paragraph; the company's own site needs neither |
+| Directory pages list many companies | Only the paragraph around the company's whole name; exactly one value of a kind there; page must be ABOUT the company (name leads the title, or own host); comparison pages excluded |
+
+### Measured live (read-only), 40 real companies with no stored contact
+
+9 found (~5 distinct companies; duplicates are the same company in several
+accounts), every one checked by hand as the company's own number or inbox:
+own-site 3, corroborated listings 2. 26 listed without a stated contact,
+5 not listed. ~1.7 s per company. Recall was traded for precision: single
+uncorroborated listings (e.g. a correct number on one directory) are no
+longer taken.
+
+Note: the 60 most recently updated companies without a contact were mostly
+seeded volume-test rows ("… at Test Corp 1610"); measure on real names.
+
+### Review (product-risk-reviewer: ship with conditions — conditions fixed)
+
+- Listing values fill an EMPTY company column only (`persistCompanyContacts(…, true)`):
+  a concurrent run or a manual edit is never replaced by a third-party listing.
+- A company searched off-site in the last 30 days (success or miss, per
+  `research_tool_calls`) is not searched again; at most 25 such searches per run.
+- City anchor is a whole-word match; own-host match is exact; host brand escaped.
+- Recorded trade: 9-digit national numbers in JSON-LD/footers are dropped
+  (ZIP+4 shape); `tel:` links and body text are unaffected.

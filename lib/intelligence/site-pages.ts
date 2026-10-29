@@ -26,6 +26,54 @@ export function siteReadingList(host: string | null): string[] {
   return CONTACT_PATHS.map((path) => `https://${registrable}${path}/`)
 }
 
+/** Pages read after the homepage. */
+export const FOLLOW_UP_PAGES = 4
+
+/**
+ * The pages to read after the homepage: the contact and about pages it LINKS
+ * to first, then the guessed paths to fill what is left.
+ *
+ * ⚠️ GUESSED PATHS MISS REAL SITES. `/contact-us/` 404s on a site whose page
+ * is `/get-in-touch`, `/kontakt` or `/pages/contact`; the homepage's own link
+ * does not. Only links on the company's own host are followed — never a
+ * third-party booking or form service.
+ */
+export function followUpPages(
+  host: string,
+  links: readonly { url: string; kind: string }[],
+): string[] {
+  const registrable = host.replace(/^www\./, '')
+  const onSite = (url: string) => {
+    try {
+      const linked = new URL(url).hostname.toLowerCase().replace(/^www\./, '')
+      return linked === registrable || linked.endsWith(`.${registrable}`)
+    } catch {
+      return false
+    }
+  }
+  const key = (url: string) => {
+    const parsed = new URL(url)
+    return `${parsed.hostname.replace(/^www\./, '')}${parsed.pathname.replace(/\/+$/, '')}`
+  }
+  const homepage = `${registrable}`
+  const linked = [
+    ...links.filter((link) => link.kind === 'contact'),
+    ...links.filter((link) => link.kind === 'about'),
+  ].map((link) => link.url).filter(onSite)
+
+  const seen = new Set([homepage])
+  const pages: string[] = []
+  for (const url of [...linked, ...siteReadingList(registrable).slice(1)]) {
+    const page = url.split('#')[0]!
+    const id = key(page)
+    if (seen.has(id)) continue
+    seen.add(id)
+    pages.push(page)
+    if (pages.length === FOLLOW_UP_PAGES) break
+  }
+  return pages
+}
+
 /** Runs `work` over `items`, at most `limit` at once, preserving order. */
 export async function inParallel<T, R>(
   items: readonly T[],

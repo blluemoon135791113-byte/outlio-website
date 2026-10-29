@@ -179,7 +179,7 @@ const PRODUCT_SURFACES = [
   'components/intelligence',
   'components/settings',
   'components/flows',
-  'components/linkedin',
+  // components/linkedin removed with the LinkedIn module (2026-10-15, ADR-008).
   'components/reports',
   'components/jobs',
   'app/(auth)',

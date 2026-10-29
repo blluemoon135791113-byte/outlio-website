@@ -559,7 +559,7 @@ function EmptyContacts({
         </Link>
         {reason === 'none_yet' ? (
           <Link
-            href="/dashboard/extract/new"
+            href="/dashboard/jobs"
             className="product-gradient inline-flex h-9 items-center rounded-[var(--radius-md)] px-3.5 text-sm font-semibold text-white transition-[filter] duration-150 hover:brightness-95"
           >
             Find leads
