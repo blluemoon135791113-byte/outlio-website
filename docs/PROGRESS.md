@@ -13719,3 +13719,56 @@ seeded volume-test rows ("… at Test Corp 1610"); measure on real names.
 - City anchor is a whole-word match; own-host match is exact; host brand escaped.
 - Recorded trade: 9-digit national numbers in JSON-LD/footers are dropped
   (ZIP+4 shape); `tel:` links and body text are unaffected.
+
+## 2026-10-29 — Contacts in more page formats: forums, people cards, disguised addresses
+
+Owner decision: enrichment stays on **public data only** (no paid contact
+databases). This widens what a public page can yield.
+
+### Built
+
+- **`lib/hubble/extract/contacts.ts`** — read inside `extractReadable`, before
+  boilerplate is stripped:
+  - disguised addresses decoded as written (`[at]`/`(at)`/`{at}`/` @ `,
+    `[dot]`; spelled "x at y dot z" only with both words) — prose like "visit
+    us at acme.com" is not read as a mailbox;
+  - `data-email`, `data-user` + `data-domain`;
+  - **people**: Schema.org `Person` in JSON-LD and microdata, hCard/h-card —
+    name, email, phone, title per person. Their phones are kept OUT of the
+    page's `phones`, so a founder's mobile on a team page is never the company
+    switchboard;
+  - **forums**: Discourse, XenForo, phpBB, vBulletin, Invision, Flarum, MyBB,
+    Stack Exchange, Reddit and any `DiscussionForumPosting`/`Comment` markup —
+    split into posts with their author.
+- **Person search** (`search-contact`): adds `"@domain" "Full Name"` when the
+  employer domain is known; on opened pages takes a value from a person card
+  whose name is the lead's (email still at the employer); on a forum, a phone
+  only from a post the lead WROTE, never one that mentions them.
+- **Scout** reads the homepage, then the contact/about pages plus the team,
+  people and press pages it links to (≤4 at once, 13 s budget), and files a
+  team-page card's on-domain address for that person.
+
+### Measured
+
+- Real Discourse thread (discuss.python.org): platform recognised, 18/18 posts
+  with authors, 18 people.
+- 3 of 6 forum hosts sampled refused automated reads (HTTP 403: phpBB.com,
+  XenForo.com, a vBulletin forum) — recorded as refused, never worked around.
+- Job b2429caa (25 leads): no new person contacts — 24 of 25 are not named in
+  any result. The ceiling for that list is public presence, not page format.
+
+### Review (product-risk-reviewer: ship with conditions — all fixed)
+
+- Decoder reads, never rebuilds: a spaced plain dot is a sentence break; ` @ `
+  and spelled `at` only after "email/mail/contact/write/reach"; prose and
+  placeholder locals (`us`, `name`, …) and domains (`yourcompany`, …) refused;
+  TLD must be two letters or a known one; ≤500k chars, only when a marker exists.
+- Forum author from the post's own header (names inside the body — quotes —
+  ignored; two names → unknown); no whole-post fallback. A forum phone also
+  needs the employer named in the post, and is filed LOW (≤0.6).
+- Cards: email only at a known employer domain; titles must agree when both
+  known; scout needs exactly one matching card.
+- `contact` link kind before `team`; company-contact still follows team links.
+- A card's phone leaves page phones only when one card states it and the
+  header/footer does not; decoded emails go last under the 20-address cap.
+- Opened-page cache: 100 pages, ≤100k post characters per page.
