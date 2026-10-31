@@ -165,7 +165,11 @@ export function UploadForm({
 
     if (!result) {
       setStatus('error')
-      setMessage('Your files are uploaded, but we could not start processing from this page. It will start automatically within a few minutes — no need to upload again.')
+      setMessage(
+        failedFileIds.length > 0
+          ? `${failedFileIds.length} file${failedFileIds.length === 1 ? '' : 's'} did not finish uploading, and we could not start processing from this page. Upload the run again to include ${failedFileIds.length === 1 ? 'it' : 'them'}.`
+          : 'Your files are uploaded, but we could not start processing from this page. It will start automatically within a few minutes — no need to upload again.',
+      )
       setItems([])
       setConsent(false)
       onQueued?.()

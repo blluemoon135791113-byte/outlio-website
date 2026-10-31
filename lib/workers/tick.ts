@@ -41,10 +41,8 @@ import { claimAndProcessOne } from '@/lib/worker/process-job'
 import { pruneEnrichmentLogs } from '@/lib/intelligence/observe'
 import { purgeDuePages } from '@/lib/upload/page-lifecycle'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { recoverStalledUploads } from '@/lib/upload/recover'
 
-
-/** An upload whose start request never arrived is recovered after this long. */
-const ORPHANED_UPLOAD_MINUTES = 5
 
 export type TickResult = {
   /** Per job: what it did, or why it could not. */
@@ -388,21 +386,15 @@ export async function runTick(): Promise<TickResult> {
    */
   /*
    * ⚠️ AN UPLOAD MUST NOT WAIT FOR A PAGE VIEW. Starting a job is the
-   * browser's second request; when it never arrives (a stalled upload, a
-   * deploy mid-upload, a closed tab) the job sat in `uploaded` until someone
-   * opened the dashboard, whose sweep only rescues uploads 10+ minutes old —
-   * measured 2026-10-31: 11 minutes. The tick sweeps every run instead, BEFORE
-   * the drain so a recovered job is processed in the same tick. 5 minutes, not
-   * less: file rows exist before their bytes finish uploading, and a large
-   * batch on a slow link must not be started half-arrived.
+   * browser's second request; when it never arrived the job sat in `uploaded`
+   * until someone opened the dashboard (measured 2026-10-31: 11 minutes).
+   * Every tick now starts uploads whose files have ALL arrived, through the
+   * same finalize the browser uses (lib/upload/recover.ts). Before the drain,
+   * so a recovered job is processed in this tick.
    */
   await runJob(result, 'recover_orphaned_uploads', async () => {
-    const { data, error } = await createAdminClient().rpc('reap_orphaned_uploads', {
-      p_older_than_minutes: ORPHANED_UPLOAD_MINUTES,
-    })
-    if (error) throw new Error(`reap_orphaned_uploads failed: ${error.code ?? 'unknown'}`)
-    const row = (Array.isArray(data) ? data[0] : data) as { enqueued?: number; failed?: number } | null
-    return `${row?.enqueued ?? 0} upload(s) recovered, ${row?.failed ?? 0} with no files failed`
+    const outcome = await recoverStalledUploads()
+    return `${outcome.started} stalled upload(s) started, ${outcome.waiting} still receiving files, ${outcome.refused} refused`
   }, began)
 
   await runJob(result, 'drain_extraction_queue', async () => {

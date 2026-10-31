@@ -13869,14 +13869,17 @@ so the start request never reached the server. The only fallback was the
 dashboard's `reap_orphaned_uploads` on page load, for uploads 10+ minutes old.
 
 **Fix:**
-- Tick job `recover_orphaned_uploads` runs `reap_orphaned_uploads(5)` every
-  tick, before the extraction drain (worst case ~10 min unattended, instead of
-  "10+ min and only if someone opens the dashboard"). 5 not 2: file rows exist
-  before their bytes finish uploading. A credit refusal marks the job `failed`,
-  so the sweep never bypasses the credit gate.
+- Tick job `recover_orphaned_uploads` (`lib/upload/recover.ts`) every run:
+  an upload unstarted for 2+ minutes is started ONLY when storage holds every
+  one of its files, and ONLY via `finalize_upload_job` — the browser's own
+  call, so the credit gate and the daily-limit metering apply. A job still
+  receiving files waits; one whose files never came is still failed by the
+  dashboard's `reap_orphaned_uploads` (10 min).
+  (First version swept by age through `reap_orphaned_uploads(5)`; review found
+  it could start a slow multi-file upload half-arrived and skip metering.)
 - `UploadForm`: each storage upload has a 2-minute limit; the start request is
-  retried 3 times (server-side idempotent); if all fail the user is told the
-  files are stored and processing starts automatically — no stuck "finalising".
+  retried 3 times (server-side idempotent); if all fail the user is told what
+  happens next — and is NOT told every file arrived when some timed out.
 
 **Same upload, report vs the run before (fixes from #71):** enrichment 151 s →
 89 s, pages read 323 → 219, "unreachable" 76 → 0 (31 were pages that do not
