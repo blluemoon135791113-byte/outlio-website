@@ -113,21 +113,25 @@ describe('company site diagnosis', () => {
 })
 
 describe('which pages the site reader follows', () => {
-  it("reads the homepage's own contact link first, on-site only, then fills with guesses", async () => {
-    const { followUpPages, FOLLOW_UP_PAGES } = await import('@/lib/intelligence/site-pages')
-    const next = followUpPages('www.fabricated.example', [
+  it("reads the homepage's own links, on-site only, and guesses nothing when it gave directions", async () => {
+    const { followUpPages } = await import('@/lib/intelligence/site-pages')
+    const links = [
       { url: 'https://booking.thirdparty.example/fabricated', kind: 'contact' },
       { url: 'https://www.fabricated.example/about#team', kind: 'about' },
       { url: 'https://fabricated.example/get-in-touch', kind: 'contact' },
       { url: 'https://fabricated.example/careers', kind: 'careers' },
+    ]
+    expect(followUpPages('www.fabricated.example', links)).toEqual([
+      'https://fabricated.example/get-in-touch',
+      'https://www.fabricated.example/about',
     ])
-    expect(next).toEqual([
+    // The homepage could not be read: its links are unknown, so guess as well.
+    expect(followUpPages('www.fabricated.example', links, true)).toEqual([
       'https://fabricated.example/get-in-touch',
       'https://www.fabricated.example/about',
       'https://fabricated.example/contact/',
       'https://fabricated.example/contact-us/',
     ])
-    expect(next).toHaveLength(FOLLOW_UP_PAGES)
   })
 
   it('falls back to the guessed paths when the homepage links nothing', async () => {

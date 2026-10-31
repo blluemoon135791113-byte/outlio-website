@@ -13820,3 +13820,42 @@ databases). This widens what a public page can yield.
   code; admin summary paged deterministically with a "truncated" flag.
 - Known and accepted: a dropped contact leaves no evidence, so the next run may
   search for it again.
+
+## 2026-11-01 — Export waits for enrichment; report fixes from the first logged upload
+
+### Bug: an upload offered its export before enrichment finished
+
+`extraction_jobs.status` turns `completed` once the page is PARSED; enrichment
+runs afterwards for minutes. The dashboard offered the CSV, the export menu and
+"send to CRM" the whole time. Now an upload with a live enrichment run (pending,
+planning or running, under 30 minutes old — `lib/jobs/enrichment-state.ts`)
+shows **Enriching**, keeps the 2.5 s poll, hides export and CRM, and
+`getDownloadUrlAction` refuses its CSV server-side. A stuck run stops holding
+the export after 30 minutes.
+
+### From the first upload logged after 0159 (job 7157533c, 25 leads)
+
+- 0 of 103 searches empty — Diffbot answered every one; the historic 63% is old.
+- **`not_found`** outcome (migration **0160**, apply by hand): 404/410 were
+  logged as `unreachable` (53 of 146 team-page reads). Until 0160 is applied the
+  app retries a refused batch with them as `unreachable`.
+- **No guessed paths when the homepage gave directions**: company-contact and
+  scout follow the homepage's own links and guess `/contact-us`, `/team`, … only
+  when it linked nothing on-site or could not be read.
+- **Company phone country from its leads** when the headquarters is blank
+  (7 of 11 company phones had gone unchecked).
+- **A name that does not resolve is `unreachable`**, not `blocked` — `blocked`
+  now means only our own policy (LinkedIn, people-search, private addresses).
+
+### Review (product-risk-reviewer: ship with conditions — fixed)
+
+- The hold is server-side everywhere: CSV download, Clay / Google Sheets /
+  HighLevel exports (lead selections traced to their uploads) and Send to CRM
+  all refuse while the upload is enriching (`isStillEnriching`).
+- The handoff between batches no longer flashes "Completed": a run that
+  finished under 2 minutes ago with batches still after it holds the upload.
+  Staleness is measured from a run's last update.
+- A run that cannot be read never locks the customer out (fail open).
+- `/team` and `/about` are still guessed unless the homepage links a team or
+  about page itself — linking only /careers or /blog is not a direction.
+- 0160 checks itself: exactly one outcome check, and it admits `not_found`.

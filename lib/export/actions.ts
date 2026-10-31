@@ -1,5 +1,6 @@
 'use server'
 
+import { isStillEnriching, STILL_ENRICHING_MESSAGE } from '@/lib/jobs/enrichment-state'
 import { z } from 'zod'
 
 import { assertAccess } from '@/lib/auth/access'
@@ -73,6 +74,17 @@ async function exportSelectionFromForm(
   return { userId, leadIds: data.map((row) => row.id) }
 }
 
+/** A selection is held while the upload it came from is still being enriched. */
+async function selectionStillEnriching(userId: string, selection: ExportSelectionInput): Promise<boolean> {
+  const admin = createAdminClient()
+  if ('accountListJobId' in selection && selection.accountListJobId) {
+    return isStillEnriching(admin, userId, { jobId: selection.accountListJobId })
+  }
+  return 'leadIds' in selection && selection.leadIds
+    ? isStillEnriching(admin, userId, { leadIds: selection.leadIds })
+    : false
+}
+
 export async function exportSelectedLeadsToClayAction(
   _previous: LeadExportActionState,
   formData: FormData,
@@ -87,6 +99,9 @@ export async function exportSelectedLeadsToClayAction(
   const selection = await exportSelectionFromForm(userId, formData)
   if (!selection) {
     return { status: 'error', message: 'Select between 1 and 1,000 records to export.' }
+  }
+  if (await selectionStillEnriching(userId, selection)) {
+    return { status: 'error', message: STILL_ENRICHING_MESSAGE }
   }
 
   try {
@@ -133,6 +148,7 @@ export async function exportSelectedLeadsToGoogleAction(
   const destination = z.enum(['google_sheets', 'google_drive']).safeParse(formData.get('destination'))
   const selection = await exportSelectionFromForm(userId, formData)
   if (!destination.success || !selection) return { status: 'error', message: 'Select between 1 and 1,000 records to export.' }
+  if (await selectionStillEnriching(userId, selection)) return { status: 'error', message: STILL_ENRICHING_MESSAGE }
 
   try {
     const result = await exportSelectedLeadsToGoogle({
@@ -167,6 +183,7 @@ export async function exportSelectedLeadsToGhlAction(
   if (!limit.allowed) return { status: 'error', message: 'Too many export requests. Please wait and try again.' }
   const selection = await exportSelectionFromForm(userId, formData)
   if (!selection) return { status: 'error', message: 'Select between 1 and 1,000 records to export.' }
+  if (await selectionStillEnriching(userId, selection)) return { status: 'error', message: STILL_ENRICHING_MESSAGE }
   try {
     const result = await exportSelectedLeadsToGhl(selection)
     if (result.status === 'failed') return { status: 'error', message: `HighLevel did not accept ${result.failedCount.toLocaleString()} ${recordNoun(selection, result.failedCount)}. Update the token or check its scopes.` }

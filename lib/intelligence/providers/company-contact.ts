@@ -158,7 +158,9 @@ async function readPage(requestedUrl: string, deadlineAt: number): Promise<PageR
     pageKind: pageKindOf(page.kind === 'read' ? page.url : requestedUrl),
     outcome: page.kind === 'read'
       ? page.jsRendered ? 'js_rendered' : page.emails.length + page.phones.length > 0 ? 'read_contact' : 'read_empty'
-      : page.kind === 'refused' ? 'refused' : page.timedOut ? 'timeout' : 'unreachable',
+      : page.kind === 'refused' ? 'refused'
+        : page.timedOut ? 'timeout'
+          : page.status === 404 || page.status === 410 ? 'not_found' : 'unreachable',
     httpStatus: page.kind === 'read' ? 200 : page.status ?? null,
     latencyMs: Date.now() - startedAt,
   })
@@ -222,7 +224,7 @@ async function fetchContacts(company: CompanyEntity): Promise<CompanyContactResu
   const done = Boolean(fromHome?.phone && fromHome.email && !fromHome.email.freemail)
   const next = done
     ? []
-    : followUpPages(domain, homepage.kind === 'read' ? homepage.links : [])
+    : followUpPages(domain, homepage.kind === 'read' ? homepage.links : [], homepage.kind !== 'read')
   const rest = Date.now() < deadlineAt
     ? await inParallel(next, FOLLOW_UP_PAGES, (url) => readPage(url, deadlineAt))
     : []

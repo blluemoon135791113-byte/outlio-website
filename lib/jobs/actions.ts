@@ -6,6 +6,8 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
+import { isStillEnriching, STILL_ENRICHING_MESSAGE } from '@/lib/jobs/enrichment-state'
+
 import { assertAccess, assertUser } from '@/lib/auth/access'
 import { consume } from '@/lib/auth/rate-limit'
 import { ACTION_LIMITS } from '@/lib/security/action-limits'
@@ -62,6 +64,11 @@ export async function getDownloadUrlAction(
 
   if (!job?.export_storage_path) {
     return { status: 'error', message: 'That export is not ready yet.' }
+  }
+
+  // Parsed is not finished: a CSV taken mid-enrichment has no contacts in it.
+  if (await isStillEnriching(supabase, ctx.userId!, { jobId: jobId.data })) {
+    return { status: 'error', message: STILL_ENRICHING_MESSAGE }
   }
 
   // Defence in depth: the path must be inside this user's prefix.

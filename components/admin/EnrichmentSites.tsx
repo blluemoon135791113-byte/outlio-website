@@ -9,6 +9,7 @@ const OUTCOME_LABEL: Record<PageOutcome, string> = {
   refused: 'Refused us',
   js_rendered: 'JavaScript only',
   blocked: 'Blocked by policy',
+  not_found: 'Page does not exist',
   unreachable: 'Unreachable',
   timeout: 'Timed out',
   not_html: 'Not a web page',

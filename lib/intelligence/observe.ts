@@ -31,6 +31,7 @@ export const PAGE_OUTCOMES = [
   'refused', // 401/403/429/503 or a bot check — never worked around
   'js_rendered', // answered with no readable text
   'blocked', // refused by OUR policy: LinkedIn, people-search, private address
+  'not_found', // 404/410: the page does not exist (usually a guessed path)
   'unreachable', // DNS, TLS, connection, other HTTP errors
   'timeout',
   'not_html', // a PDF, an image
@@ -113,12 +114,15 @@ export function fetchOutcome(result: FetchedPage | FetchFailure): { outcome: Pag
   }
   const status = Number(/HTTP (\d{3})/.exec(result.detail)?.[1]) || null
   switch (result.code) {
-    case 'blocked': return { outcome: 'blocked', httpStatus: null }
+    // A name that does not resolve is unreachable; only a policy refusal is `blocked`.
+    case 'blocked': return { outcome: /does not resolve/.test(result.detail) ? 'unreachable' : 'blocked', httpStatus: null }
     case 'timeout': return { outcome: 'timeout', httpStatus: null }
     case 'not_html': return { outcome: 'not_html', httpStatus: null }
     case 'too_large': return { outcome: 'too_large', httpStatus: null }
     case 'empty': return { outcome: /javascript/i.test(result.detail) ? 'js_rendered' : 'read_empty', httpStatus: null }
-    default: return { outcome: REFUSAL.test(result.detail) ? 'refused' : 'unreachable', httpStatus: status }
+    default:
+      if (status === 404 || status === 410) return { outcome: 'not_found', httpStatus: status }
+      return { outcome: REFUSAL.test(result.detail) ? 'refused' : 'unreachable', httpStatus: status }
   }
 }
 
@@ -166,7 +170,7 @@ async function flush(context: Context): Promise<void> {
   try {
     const db = createAdminClient()
     if (visits.length > 0) {
-      const { error } = await db.from('enrichment_page_visits').insert(visits.map((visit) => ({
+      const rows = visits.map((visit) => ({
         user_id: context.userId,
         research_run_id: context.runId,
         provider: visit.provider,
@@ -176,7 +180,18 @@ async function flush(context: Context): Promise<void> {
         http_status: visit.httpStatus ?? null,
         latency_ms: visit.latencyMs ?? null,
         created_at: visit.at,
-      })))
+      }))
+      let { error } = await db.from('enrichment_page_visits').insert(rows)
+      /*
+       * `not_found` arrives with migration 0160. Until it is applied the check
+       * constraint refuses the whole batch, so retry once with those rows filed
+       * as `unreachable` — what they were called before — rather than lose all.
+       */
+      if (error?.code === '23514') {
+        ;({ error } = await db.from('enrichment_page_visits').insert(
+          rows.map((row) => (row.outcome === 'not_found' ? { ...row, outcome: 'unreachable' as const } : row)),
+        ))
+      }
       if (error) console.warn('[observe] visits not recorded', { code: error.code ?? 'unknown' })
     }
     if (searches.length > 0) {

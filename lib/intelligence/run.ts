@@ -43,7 +43,7 @@ import { McpLeadResearchClient } from '@/lib/intelligence/providers/mcp-research
 import { externalContactTask } from '@/lib/intelligence/providers/search-company-contact'
 import { withRunObservation } from '@/lib/intelligence/observe'
 import { verifyEmail as verifySmtpMailbox } from '@/lib/intelligence/providers/scout'
-import { verifyContactEvidence, type MailboxProbe } from '@/lib/intelligence/verify-contact'
+import { regionFromLocation, verifyContactEvidence, type MailboxProbe } from '@/lib/intelligence/verify-contact'
 import { preserveExplicitConstraints } from '@/lib/intelligence/filters'
 import {
   RESEARCH_FIELD_SPEC,
@@ -668,6 +668,16 @@ async function contactLocations(
       .eq('user_id', userId)
       .in('id', ids.slice(i, i + 200))
     for (const row of data ?? []) locations.set(row.id as string, (row.headquarters as string | null) ?? null)
+  }
+  /*
+   * A company with no captured headquarters takes the country its leads are
+   * in. Measured 2026-10-31: 7 of 11 company phones went unchecked for want
+   * of one, on a list whose every lead named their US city.
+   */
+  for (const company of companies) {
+    if (regionFromLocation(locations.get(company.id))) continue
+    const fromLead = people.find((person) => person.companyId === company.id && regionFromLocation(person.location))
+    if (fromLead) locations.set(company.id, fromLead.location)
   }
   return locations
 }
