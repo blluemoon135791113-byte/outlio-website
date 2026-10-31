@@ -115,7 +115,7 @@ export const searchCompanyProfileProvider: IntelligenceProvider<SearchProfileFin
     hasWebSearch(),
 
   estimateCost: async () => 0,
-  execute: async (task) => extractSearchProfile(task.entity as CompanyEntity, await serpSearch(query(task), { limit: 8 })),
+  execute: async (task) => extractSearchProfile(task.entity as CompanyEntity, await serpSearch(query(task), { limit: 8, purpose: 'company_profile' })),
   normalize: (finding, task): NormalizedEvidence[] => {
     if (!finding) return []
     const retrievedAt = new Date()

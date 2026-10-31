@@ -27,6 +27,7 @@ import type {
   PageFetcher,
 } from '@/lib/hubble/providers/types'
 import { USER_AGENT } from '@/lib/intelligence/http'
+import { isPeopleSearchSource } from '@/lib/intelligence/source-policy'
 
 /** 12s is long enough for a slow marketing site, short enough not to stall. */
 const TIMEOUT_MS = 12_000
@@ -119,6 +120,10 @@ export class HttpPageFetcher implements PageFetcher {
       // Rule 1. Not a network decision — a product one.
       return { url: rawUrl, code: 'blocked', detail: 'linkedin.com is never fetched' }
     }
+    if (isPeopleSearchSource(verdict.host)) {
+      // Consumer people-search sites: private individuals' records, never a source.
+      return { url: rawUrl, code: 'blocked', detail: 'people-search site' }
+    }
 
     const controller = new AbortController()
     const timeoutMs = timeoutFor(options)
@@ -149,7 +154,7 @@ export class HttpPageFetcher implements PageFetcher {
         const next = new URL(location, verdict.url).toString()
         // One hop only: a redirect chain is a loop waiting to happen.
         const hop = await assertFetchable(next)
-        if (!hop.allowed || bannedHost(hop.host)) {
+        if (!hop.allowed || bannedHost(hop.host) || isPeopleSearchSource(hop.host)) {
           return { url: rawUrl, code: 'blocked', detail: `redirect to ${hop.allowed ? hop.host : 'blocked target'}` }
         }
         return this.fetchOnce(hop.url, options)

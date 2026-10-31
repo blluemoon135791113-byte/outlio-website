@@ -11,6 +11,7 @@ import { normalizeDomain } from '@/lib/companies/normalize'
 import { extractReadable } from '@/lib/hubble/extract/readable'
 import { needsBrowser } from '@/lib/hubble/fetch/fetcher'
 import { ProviderHttpError, requestTextWithMeta } from '@/lib/intelligence/http'
+import { pageKindOf, recordPageVisit } from '@/lib/intelligence/observe'
 import { FOLLOW_UP_PAGES, followUpPages, inParallel, siteReadingList } from '@/lib/intelligence/site-pages'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
 import {
@@ -102,8 +103,8 @@ export type PageRead =
       jsRendered: boolean
       links: { url: string; kind: string }[]
     }
-  | { kind: 'refused' }
-  | { kind: 'unreachable' }
+  | { kind: 'refused'; status?: number | null }
+  | { kind: 'unreachable'; status?: number | null; timedOut?: boolean }
 
 /** Statuses a site answers with when it is turning automated readers away. */
 const REFUSAL_STATUSES = new Set([401, 403, 429, 503])
@@ -141,8 +142,30 @@ export function diagnoseSite(pages: readonly PageRead[]): MissReason {
  */
 const SITE_BUDGET_MS = 13_000
 
-/** Reads one page of the company's site. Never throws. */
+/** Reads one page of the company's site, and logs the visit. Never throws. */
 async function readPage(requestedUrl: string, deadlineAt: number): Promise<PageRead> {
+  const startedAt = Date.now()
+  const page = await readPageUnlogged(requestedUrl, deadlineAt)
+  let host = ''
+  try {
+    host = new URL(page.kind === 'read' ? page.url : requestedUrl).hostname
+  } catch {
+    return page
+  }
+  recordPageVisit({
+    provider: 'company-contact',
+    host,
+    pageKind: pageKindOf(page.kind === 'read' ? page.url : requestedUrl),
+    outcome: page.kind === 'read'
+      ? page.jsRendered ? 'js_rendered' : page.emails.length + page.phones.length > 0 ? 'read_contact' : 'read_empty'
+      : page.kind === 'refused' ? 'refused' : page.timedOut ? 'timeout' : 'unreachable',
+    httpStatus: page.kind === 'read' ? 200 : page.status ?? null,
+    latencyMs: Date.now() - startedAt,
+  })
+  return page
+}
+
+async function readPageUnlogged(requestedUrl: string, deadlineAt: number): Promise<PageRead> {
   try {
     const response = await requestTextWithMeta({
       url: requestedUrl,
@@ -168,9 +191,14 @@ async function readPage(requestedUrl: string, deadlineAt: number): Promise<PageR
     }
   } catch (error) {
     // A missing /contact page does not make the company or the run fail.
-    return error instanceof ProviderHttpError && error.status !== null && REFUSAL_STATUSES.has(error.status)
-      ? { kind: 'refused' }
-      : { kind: 'unreachable' }
+    if (error instanceof ProviderHttpError && error.status !== null && REFUSAL_STATUSES.has(error.status)) {
+      return { kind: 'refused', status: error.status }
+    }
+    return {
+      kind: 'unreachable',
+      status: error instanceof ProviderHttpError ? error.status : null,
+      timedOut: error instanceof ProviderHttpError && error.code === 'ERR_TIMEOUT',
+    }
   }
 }
 

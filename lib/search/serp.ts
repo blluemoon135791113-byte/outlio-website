@@ -28,6 +28,7 @@ import 'server-only'
  * returns empty hits and records which engine (if any) answered.
  */
 import { isLocalFailure } from '@/lib/intelligence/http'
+import { queryShape, recordSearch, type SearchObservation } from '@/lib/intelligence/observe'
 import { reserveSearch } from '@/lib/search/budget'
 import {
   dedupeQueries,
@@ -52,6 +53,11 @@ export type SerpOptions = DomainFilter & {
   preferDomains?: readonly string[]
   /** Bypass the cache READ. The write still happens. */
   fresh?: boolean
+  /**
+   * What the search is for (`contact_email`, `domain_discovery`, …), for the
+   * enrichment search log. Never the query — that carries a person's name.
+   */
+  purpose?: string
 }
 
 export type SerpResult = {
@@ -157,7 +163,18 @@ export function resetSearchCircuitBreaker(): void {
  * response has been written back. This map is what turns those twenty requests
  * into six.
  */
-const INFLIGHT = new Map<string, Promise<CachedSearch>>()
+/** One engine's part in answering a query, for the search log. */
+type EngineStep = SearchObservation['engines'][number]
+
+function observe(
+  query: string,
+  options: SerpOptions,
+  result: { cached: boolean; hits: number; engines: EngineStep[] },
+): void {
+  recordSearch({ purpose: options.purpose ?? 'other', ...queryShape(query), ...result })
+}
+
+const INFLIGHT = new Map<string, Promise<CachedSearch & { engines: EngineStep[] }>>()
 
 /* -------------------------------------------------------------------------- *
  * The service
@@ -204,7 +221,9 @@ export class SerpService implements SearchProvider {
     if (useCache && !options.fresh) {
       const cached = await readCache(key)
       if (cached) {
-        return { ...this.shape(cached.hits, options), engine: cached.engine, cached: true }
+        const shaped = this.shape(cached.hits, options)
+        observe(normalized, options, { cached: true, hits: shaped.hits.length, engines: [] })
+        return { ...shaped, engine: cached.engine, cached: true }
       }
     }
 
@@ -213,18 +232,20 @@ export class SerpService implements SearchProvider {
     const existing = INFLIGHT.get(key)
     if (existing) {
       const shared = await existing
-      return { ...this.shape(shared.hits, options), engine: shared.engine, cached: true }
+      const shaped = this.shape(shared.hits, options)
+      observe(normalized, options, { cached: true, hits: shaped.hits.length, engines: [] })
+      return { ...shaped, engine: shared.engine, cached: true }
     }
 
     const request = this.execute(normalized, limit, options)
-      .then(async ({ asked, ...result }) => {
+      .then(async ({ asked, engines, ...result }) => {
         /*
          * ⚠️ NOTHING IS CACHED WHEN NO ENGINE WAS ASKED. Every engine cooling
          * down or out of budget is not "this query has no results" — caching it
          * turned one bad minute into six hours of empty answers.
          */
         if (useCache && asked) await writeCache(key, result)
-        return result
+        return { ...result, engines }
       })
       .finally(() => {
         INFLIGHT.delete(key)
@@ -233,7 +254,9 @@ export class SerpService implements SearchProvider {
     INFLIGHT.set(key, request)
 
     const result = await request
-    return { ...this.shape(result.hits, options), engine: result.engine, cached: false }
+    const shaped = this.shape(result.hits, options)
+    observe(normalized, options, { cached: false, hits: shaped.hits.length, engines: result.engines })
+    return { ...shaped, engine: result.engine, cached: false }
   }
 
   /**
@@ -283,16 +306,25 @@ export class SerpService implements SearchProvider {
     query: string,
     limit: number,
     options: SerpOptions,
-  ): Promise<CachedSearch & { asked: boolean }> {
+  ): Promise<CachedSearch & { asked: boolean; engines: EngineStep[] }> {
     // Whether any engine actually answered (even with nothing).
     let asked = false
+    // What each engine did with this query — the answer to "why was it empty".
+    const engines: EngineStep[] = []
     for (const engine of this.engines) {
       if (!engine.isConfigured()) continue
       // Skipped without a request: the point is not to pay the timeout again.
-      if (isCoolingDown(engine.name, Date.now())) continue
+      if (isCoolingDown(engine.name, Date.now())) {
+        engines.push({ engine: engine.name, outcome: 'cooling_down' })
+        continue
+      }
 
       const reservation = await reserveSearch(engine.name)
-      if (!reservation.allowed) continue
+      if (!reservation.allowed) {
+        engines.push({ engine: engine.name, outcome: 'over_budget' })
+        continue
+      }
+      const startedAt = Date.now()
 
       // Not an inline literal: engines accept a wider option type than the
       // `SearchProvider` interface declares, and an excess property on a fresh
@@ -316,14 +348,21 @@ export class SerpService implements SearchProvider {
          * (2026-10-14). The next engine is tried for this query only.
          */
         if (!isLocalFailure(error)) FAILED_AT.set(engine.name, Date.now())
+        engines.push({ engine: engine.name, outcome: 'failed', ms: Date.now() - startedAt })
         continue
       }
       asked = true
+      engines.push({
+        engine: engine.name,
+        outcome: hits.length > 0 ? 'hits' : 'empty',
+        hits: hits.length,
+        ms: Date.now() - startedAt,
+      })
 
       if (hits.length > 0) {
         // Recovered — clear any earlier failure rather than wait out the cooldown.
         FAILED_AT.delete(engine.name)
-        return { hits, engine: engine.name, asked }
+        return { hits, engine: engine.name, asked, engines }
       }
 
       /*
@@ -338,6 +377,6 @@ export class SerpService implements SearchProvider {
        */
     }
 
-    return { hits: [], engine: null, asked }
+    return { hits: [], engine: null, asked, engines }
   }
 }

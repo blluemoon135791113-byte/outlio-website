@@ -5535,6 +5535,103 @@ export type Database = {
           },
         ]
       }
+      enrichment_page_visits: {
+        Row: {
+          created_at: string
+          host: string
+          http_status: number | null
+          id: string
+          latency_ms: number | null
+          outcome: string
+          page_kind: string
+          provider: string
+          research_run_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          host: string
+          http_status?: number | null
+          id?: string
+          latency_ms?: number | null
+          outcome: string
+          page_kind: string
+          provider: string
+          research_run_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          host?: string
+          http_status?: number | null
+          id?: string
+          latency_ms?: number | null
+          outcome?: string
+          page_kind?: string
+          provider?: string
+          research_run_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrichment_page_visits_research_run_id_fkey"
+            columns: ["research_run_id"]
+            isOneToOne: false
+            referencedRelation: "research_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enrichment_searches: {
+        Row: {
+          cached: boolean
+          created_at: string
+          engines: Json
+          hits: number
+          id: string
+          operators: string[]
+          purpose: string
+          quoted: boolean
+          research_run_id: string | null
+          user_id: string | null
+          words: number
+        }
+        Insert: {
+          cached?: boolean
+          created_at?: string
+          engines?: Json
+          hits?: number
+          id?: string
+          operators?: string[]
+          purpose: string
+          quoted?: boolean
+          research_run_id?: string | null
+          user_id?: string | null
+          words: number
+        }
+        Update: {
+          cached?: boolean
+          created_at?: string
+          engines?: Json
+          hits?: number
+          id?: string
+          operators?: string[]
+          purpose?: string
+          quoted?: boolean
+          research_run_id?: string | null
+          user_id?: string | null
+          words?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrichment_searches_research_run_id_fkey"
+            columns: ["research_run_id"]
+            isOneToOne: false
+            referencedRelation: "research_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       export_destinations: {
         Row: {
           access_token: string | null

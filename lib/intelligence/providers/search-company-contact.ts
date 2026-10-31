@@ -28,6 +28,8 @@ import { parsePhoneNumberFromString } from 'libphonenumber-js/min'
 
 import { normalizeCompanyName, normalizeDomain } from '@/lib/companies/normalize'
 import { httpPageFetcher } from '@/lib/hubble/fetch/fetcher'
+import { recordFetch } from '@/lib/intelligence/observe'
+import { isPeopleSearchSource } from '@/lib/intelligence/source-policy'
 import { isFetchFailure, type FetchedPage, type SearchHit } from '@/lib/hubble/providers/types'
 import { hasWebSearch, serpSearch } from '@/lib/search'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
@@ -373,6 +375,17 @@ function choose(sources: readonly Source[], company: CompanyEntity): ExternalCon
   return { email: pick(found.email), phone: pick(found.phone) }
 }
 
+async function fetchListing(url: string, deadlineAt: number): Promise<FetchedPage | null> {
+  const startedAt = Date.now()
+  try {
+    const page = await httpPageFetcher.fetchPage(url, { deadlineAt })
+    recordFetch('search-company-contact', 'listing', page, startedAt)
+    return isFetchFailure(page) ? null : page
+  } catch {
+    return null
+  }
+}
+
 async function searchExternally(
   company: CompanyEntity,
   fields: readonly ResearchField[],
@@ -387,8 +400,8 @@ async function searchExternally(
 
   const hits = new Map<string, SearchHit>()
   for (const query of externalContactQueries(company)) {
-    for (const hit of await serpSearch(query, { limit: 8, deadlineAt })) {
-      if (!hits.has(hit.url)) hits.set(hit.url, hit)
+    for (const hit of await serpSearch(query, { limit: 8, deadlineAt, purpose: 'company_contact_offsite' })) {
+      if (!hits.has(hit.url) && !isPeopleSearchSource(hit.url)) hits.set(hit.url, hit)
     }
     const fromSnippets = choose(
       [...hits.values()].map((hit) => ({ url: hit.url, title: hit.title ?? '', text: snippetText(hit) })),
@@ -407,7 +420,7 @@ async function searchExternally(
   const toOpen = listed.slice(0, EXTERNAL_PAGES_OPENED)
   const pages = Date.now() < deadlineAt
     ? await Promise.all(toOpen.map((hit) =>
-        httpPageFetcher.fetchPage(hit.url, { deadlineAt }).then((page) => (isFetchFailure(page) ? null : page)).catch(() => null)))
+        fetchListing(hit.url, deadlineAt)))
     : []
   const sources: Source[] = [
     ...[...hits.values()].map((hit) => ({ url: hit.url, title: hit.title ?? '', text: snippetText(hit) })),
