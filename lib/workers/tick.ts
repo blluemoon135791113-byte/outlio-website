@@ -42,6 +42,10 @@ import { pruneEnrichmentLogs } from '@/lib/intelligence/observe'
 import { purgeDuePages } from '@/lib/upload/page-lifecycle'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+
+/** An upload whose start request never arrived is recovered after this long. */
+const ORPHANED_UPLOAD_MINUTES = 5
+
 export type TickResult = {
   /** Per job: what it did, or why it could not. */
   jobs: Record<string, { ok: boolean; detail: string }>
@@ -382,6 +386,25 @@ export async function runTick(): Promise<TickResult> {
    * called from nowhere until now. One per tick, deliberately: this is a
    * safety net, not the road, and extraction is the most expensive work here.
    */
+  /*
+   * ⚠️ AN UPLOAD MUST NOT WAIT FOR A PAGE VIEW. Starting a job is the
+   * browser's second request; when it never arrives (a stalled upload, a
+   * deploy mid-upload, a closed tab) the job sat in `uploaded` until someone
+   * opened the dashboard, whose sweep only rescues uploads 10+ minutes old —
+   * measured 2026-10-31: 11 minutes. The tick sweeps every run instead, BEFORE
+   * the drain so a recovered job is processed in the same tick. 5 minutes, not
+   * less: file rows exist before their bytes finish uploading, and a large
+   * batch on a slow link must not be started half-arrived.
+   */
+  await runJob(result, 'recover_orphaned_uploads', async () => {
+    const { data, error } = await createAdminClient().rpc('reap_orphaned_uploads', {
+      p_older_than_minutes: ORPHANED_UPLOAD_MINUTES,
+    })
+    if (error) throw new Error(`reap_orphaned_uploads failed: ${error.code ?? 'unknown'}`)
+    const row = (Array.isArray(data) ? data[0] : data) as { enqueued?: number; failed?: number } | null
+    return `${row?.enqueued ?? 0} upload(s) recovered, ${row?.failed ?? 0} with no files failed`
+  }, began)
+
   await runJob(result, 'drain_extraction_queue', async () => {
     const outcome = await claimAndProcessOne(`tick-${began}`)
     if (!outcome) return 'queue empty'

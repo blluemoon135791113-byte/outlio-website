@@ -13859,3 +13859,26 @@ the export after 30 minutes.
 - `/team` and `/about` are still guessed unless the homepage links a team or
   about page itself — linking only /careers or /blog is not a direction.
 - 0160 checks itself: exactly one outcome check, and it admits `not_found`.
+
+## 2026-11-01 — An upload no longer waits for a page view to start
+
+**Bug (job 3cc3edda):** uploaded 20:54:23, started 21:05:32 — 11 minutes in
+`uploaded`. Starting a job is the browser's SECOND request (`finalizeUploadAction`
+after the storage upload); the upload counter for that window shows one request,
+so the start request never reached the server. The only fallback was the
+dashboard's `reap_orphaned_uploads` on page load, for uploads 10+ minutes old.
+
+**Fix:**
+- Tick job `recover_orphaned_uploads` runs `reap_orphaned_uploads(5)` every
+  tick, before the extraction drain (worst case ~10 min unattended, instead of
+  "10+ min and only if someone opens the dashboard"). 5 not 2: file rows exist
+  before their bytes finish uploading. A credit refusal marks the job `failed`,
+  so the sweep never bypasses the credit gate.
+- `UploadForm`: each storage upload has a 2-minute limit; the start request is
+  retried 3 times (server-side idempotent); if all fail the user is told the
+  files are stored and processing starts automatically — no stuck "finalising".
+
+**Same upload, report vs the run before (fixes from #71):** enrichment 151 s →
+89 s, pages read 323 → 219, "unreachable" 76 → 0 (31 were pages that do not
+exist), same contacts. Seven company phones remain unchecked: Sales Navigator
+locations such as "Greater Phoenix Area" name no country.
