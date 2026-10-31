@@ -13806,3 +13806,17 @@ databases). This widens what a public page can yield.
 - Verifier on the 36 companies with stored contacts: 24 emails mail-server
   verified, 2 unverified (DNS gave no answer); 25 phones valid (2 mobile,
   3 toll-free, 20 national with unknown HQ country). None would be dropped.
+
+### Review (product-risk-reviewer: ship with conditions — fixed)
+
+- Status companions pair by entity: kept while ANY of that person's contacts
+  is kept, with the first kept one's status.
+- Phone country from country names only (no state codes or cities); a
+  national number that will not parse is kept `unverified`, never dropped —
+  only a `+`-prefixed invalid number is.
+- Email: IPv6-only domains count as deliverable; an SMTP refusal never drops
+  (anti-probe policies look identical); the probe never runs on Vercel.
+- Verification bounded at 10 contacts at once; log insert errors logged by
+  code; admin summary paged deterministically with a "truncated" flag.
+- Known and accepted: a dropped contact leaves no evidence, so the next run may
+  search for it again.

@@ -32,6 +32,8 @@ export type SitesSummary =
   | {
       state: 'ok'
       visits: number
+      /** The window held more rows than were read; counts cover the newest only. */
+      truncated: boolean
       byOutcome: OutcomeCounts
       byProvider: Array<{ provider: string; visits: number; outcomes: OutcomeCounts }>
       topSites: SiteRow[]
@@ -124,10 +126,10 @@ export async function loadSitesSummary(now = new Date()): Promise<SitesSummary> 
   const since = new Date(now.getTime() - SITES_WINDOW_DAYS * 86_400_000).toISOString()
 
   const visits = await readAll<VisitRow>((from, to) =>
-    db.from('enrichment_page_visits').select('host, provider, outcome').gte('created_at', since).range(from, to) as never)
+    db.from('enrichment_page_visits').select('host, provider, outcome').gte('created_at', since).order('created_at', { ascending: false }).order('id').range(from, to) as never)
   if (visits === 'not_applied') return { state: 'not_applied' }
   const searches = await readAll<SearchRow>((from, to) =>
-    db.from('enrichment_searches').select('purpose, hits, cached, engines').gte('created_at', since).range(from, to) as never)
+    db.from('enrichment_searches').select('purpose, hits, cached, engines').gte('created_at', since).order('created_at', { ascending: false }).order('id').range(from, to) as never)
   if (searches === 'not_applied') return { state: 'not_applied' }
 
   const evidence = await readAll<{ field: string; source_url: string | null }>((from, to) =>
@@ -135,6 +137,8 @@ export async function loadSitesSummary(now = new Date()): Promise<SitesSummary> 
       .select('field, source_url')
       .gte('created_at', since)
       .in('field', ['work_email', 'mobile_phone', 'company_contact_email', 'company_contact_phone'])
+      .order('created_at', { ascending: false })
+      .order('id')
       .range(from, to) as never)
   const sources = new Map<string, { host: string; values: number; kinds: Record<string, number> }>()
   for (const row of evidence === 'not_applied' ? [] : evidence) {
@@ -148,6 +152,7 @@ export async function loadSitesSummary(now = new Date()): Promise<SitesSummary> 
 
   return {
     state: 'ok',
+    truncated: visits.length >= MAX_ROWS || searches.length >= MAX_ROWS,
     ...summariseVisits(visits.filter((row) => (PAGE_OUTCOMES as readonly string[]).includes(row.outcome))),
     searches: summariseSearches(searches),
     valueSources: [...sources.values()].sort((left, right) => right.values - left.values).slice(0, 20),

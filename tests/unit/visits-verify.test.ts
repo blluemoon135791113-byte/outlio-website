@@ -126,28 +126,32 @@ describe('email verification', () => {
     const { checkEmail } = await import('@/lib/intelligence/verify-contact')
     const lookup = async () => 'mx' as const
     expect((await checkEmail('a@p.example', { lookup, mailbox: async () => ({ probed: true, exists: true, acceptAll: false }) })).status).toBe('mailbox_verified')
-    expect((await checkEmail('b@p.example', { lookup, mailbox: async () => ({ probed: true, exists: false, acceptAll: false }) })).status).toBe('mailbox_rejected')
+    // A refusal is often an anti-probe policy, not a dead mailbox: the DNS verdict stands.
+    expect((await checkEmail('b@p.example', { lookup, mailbox: async () => ({ probed: true, exists: false, acceptAll: false }) })).status).toBe('mail_server_verified')
     expect((await checkEmail('c@p.example', { lookup, mailbox: async () => ({ probed: true, exists: true, acceptAll: true }) })).status).toBe('accept_all')
   })
 })
 
 describe('phone verification', () => {
-  it('tells mobiles, landlines and toll-free apart, and refuses a number that is not real', async () => {
+  it('tells mobiles, landlines and toll-free apart, and refuses only a +number that is not real', async () => {
     const { checkPhone, regionFromLocation } = await import('@/lib/intelligence/verify-contact')
     expect(checkPhone('+447911123456', null).status).toBe('valid_mobile')
     expect(checkPhone('020 7946 0958', regionFromLocation('London, England, United Kingdom')).status).toBe('valid_landline')
     expect(checkPhone('+18005550199', null).status).toBe('valid_toll_free')
     expect(checkPhone('+44 7700 900123', null).status).toBe('invalid')
-    expect(checkPhone('02908-3700', 'US').status).toBe('invalid')
-    // National format, country unknown: cannot be judged, so not dropped.
-    expect(checkPhone('020 7946 0958', null).status).toBe('valid_number')
+    // National format: judged against a GUESSED country, so never dropped — kept unchecked.
+    expect(checkPhone('02908-3700', 'US').status).toBe('unverified')
+    expect(checkPhone('020 7946 0958', null).status).toBe('unverified')
   })
 
   it('reads the country from a Sales Navigator location', async () => {
     const { regionFromLocation } = await import('@/lib/intelligence/verify-contact')
-    expect(regionFromLocation('Greater Boston')).toBe('US')
     expect(regionFromLocation('Rotterdam, South Holland, Netherlands')).toBe('NL')
-    expect(regionFromLocation('Prague Metropolitan Area')).toBe('CZ')
+    expect(regionFromLocation('Fort Wayne, Indiana, United States')).toBe('US')
+    // Country names only: no state code or city is mistaken for a country.
+    expect(regionFromLocation('London, Ontario, Canada')).toBe('CA')
+    expect(regionFromLocation('Berlin, DE')).toBeNull()
+    expect(regionFromLocation('Greater Boston')).toBeNull()
     expect(regionFromLocation('Mars')).toBeNull()
   })
 })
@@ -181,6 +185,24 @@ describe('verifying evidence', () => {
     expect(phone).toMatchObject({ phone: '+447911123456', status: 'valid_mobile' })
     // The address is stored exactly as found.
     expect((kept[0]!.value as Record<string, unknown>).email).toBe('sam@live.example')
+  })
+})
+
+describe('two contacts for one person', () => {
+  it('keeps the status when one of them survives', async () => {
+    const { verifyContactEvidence, resetMailCache } = await import('@/lib/intelligence/verify-contact')
+    resetMailCache()
+    const lookup = async (domain: string) => (domain === 'gone.example' ? 'nxdomain' as const : 'mx' as const)
+    const item = (field: string, value: Record<string, unknown>) =>
+      ({ field, entityId: 'p1', entityType: 'person', sourceProvider: 'test', sourceUrl: 'https://fabricated.example/', sourceConfidence: 'medium', confidence: 0.7, retrievedAt: '2026-11-01T00:00:00Z', expiresAt: null, value }) as NormalizedEvidence
+    const { kept } = await verifyContactEvidence([
+      item('work_email', { email: 'jamie@live.example' }),
+      item('email_status', { status: 'publicly_found' }),
+      item('work_email', { email: 'jamie@gone.example' }),
+      item('email_status', { status: 'publicly_found' }),
+    ], new Map(), { lookup })
+    expect(kept.map((entry) => entry.field)).toEqual(['work_email', 'email_status', 'email_status'])
+    expect(kept.filter((entry) => entry.field === 'email_status').every((entry) => (entry.value as { status: string }).status === 'mail_server_verified')).toBe(true)
   })
 })
 

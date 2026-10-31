@@ -28,6 +28,7 @@ import { Resolver } from 'node:dns/promises'
 
 import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js/max'
 
+import { inParallel } from '@/lib/intelligence/site-pages'
 import { isPeopleSearchSource } from '@/lib/intelligence/source-policy'
 import type { NormalizedEvidence } from '@/lib/intelligence/types'
 
@@ -36,7 +37,7 @@ import type { NormalizedEvidence } from '@/lib/intelligence/types'
  * -------------------------------------------------------------------------- */
 
 export const EMAIL_KEPT = ['mailbox_verified', 'accept_all', 'mail_server_verified', 'mail_domain_only', 'unverified'] as const
-export const EMAIL_DROPPED = ['invalid_syntax', 'disposable', 'domain_not_found', 'no_mail_server', 'mailbox_rejected'] as const
+export const EMAIL_DROPPED = ['invalid_syntax', 'disposable', 'domain_not_found', 'no_mail_server'] as const
 export type EmailStatus = (typeof EMAIL_KEPT)[number] | (typeof EMAIL_DROPPED)[number]
 
 export type EmailCheck = { status: EmailStatus; method: 'syntax' | 'dns' | 'smtp'; checkedAt: string }
@@ -67,13 +68,17 @@ const dnsMailLookup: MailLookup = async (domain) => {
     if (code !== 'ENODATA') return 'error'
   }
   // No MX: mail falls back to the domain's own address (RFC 5321 §5.1).
-  try {
-    const a = await resolver.resolve4(domain)
-    return a.length > 0 ? 'a_only' : 'none'
-  } catch (error) {
-    const code = (error as { code?: string }).code
-    return code === 'ENOTFOUND' ? 'nxdomain' : code === 'ENODATA' ? 'none' : 'error'
+  // …then its IPv4 or IPv6 address; only with neither is there nowhere to deliver.
+  for (const resolve of [() => resolver.resolve4(domain), () => resolver.resolve6(domain)]) {
+    try {
+      if ((await resolve()).length > 0) return 'a_only'
+    } catch (error) {
+      const code = (error as { code?: string }).code
+      if (code === 'ENOTFOUND') return 'nxdomain'
+      if (code !== 'ENODATA') return 'error'
+    }
   }
+  return 'none'
 }
 
 /** Lookups are per DOMAIN and reused: a batch shares a handful of employers. */
@@ -118,7 +123,13 @@ export async function checkEmail(
       const verdict = await options.mailbox(email)
       if (verdict.probed) {
         if (verdict.acceptAll) return { status: 'accept_all', method: 'smtp', checkedAt }
-        return { status: verdict.exists ? 'mailbox_verified' : 'mailbox_rejected', method: 'smtp', checkedAt }
+        if (verdict.exists) return { status: 'mailbox_verified', method: 'smtp', checkedAt }
+        /*
+         * ⚠️ A REJECTION IS NOT PROOF THE MAILBOX IS GONE. Microsoft 365 and
+         * Google refuse probes from unfamiliar IPs with a 5.7.x policy error
+         * that looks identical to "no such user" here. The probe can upgrade
+         * a contact; it never drops one — the DNS verdict stands.
+         */
       }
     } catch {
       // A probe that cannot run leaves the DNS verdict standing.
@@ -131,7 +142,7 @@ export async function checkEmail(
  * Phone
  * -------------------------------------------------------------------------- */
 
-export type PhoneStatus = 'valid_mobile' | 'valid_landline' | 'valid_toll_free' | 'valid_number' | 'invalid'
+export type PhoneStatus = 'valid_mobile' | 'valid_landline' | 'valid_toll_free' | 'valid_number' | 'unverified' | 'invalid'
 export type PhoneCheck = {
   status: PhoneStatus
   /** libphonenumber's line type, when it can tell. */
@@ -141,42 +152,55 @@ export type PhoneCheck = {
   checkedAt: string
 }
 
-/** Country names as a Sales Navigator location writes them → ISO code. */
+/**
+ * Country names as a Sales Navigator location writes them → ISO code.
+ *
+ * ⚠️ COUNTRY NAMES ONLY — no city, no two-letter state. "Berlin, DE" is not
+ * Delaware, "London, Ontario" is not England, "Georgia" may be either. A
+ * wrong guess is harmless only because a national number that will not parse
+ * is kept as `unverified`, never dropped (checkPhone).
+ */
 const COUNTRY: ReadonlyArray<[RegExp, CountryCode]> = [
-  [/\b(united states|usa|u\.s\.|us)\b|, (?:al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)$|greater (boston|phoenix|chicago|seattle)|los angeles|san francisco|new york|houston|texas|california|indiana|georgia/i, 'US'],
-  [/\b(united kingdom|uk|england|scotland|wales|northern ireland|london|manchester)\b/i, 'GB'],
-  [/\bcanada|toronto|vancouver|montreal\b/i, 'CA'],
-  [/\baustralia|sydney|melbourne\b/i, 'AU'],
-  [/\bireland|dublin\b/i, 'IE'],
+  [/\b(united states|united states of america|usa)\b/i, 'US'],
+  [/\b(united kingdom|england|scotland|wales|northern ireland)\b/i, 'GB'],
+  [/\bcanada\b/i, 'CA'],
+  [/\baustralia\b/i, 'AU'],
+  [/\bireland\b/i, 'IE'],
   [/\bnew zealand\b/i, 'NZ'],
-  [/\bgermany|deutschland|berlin|munich|hamburg\b/i, 'DE'],
-  [/\bnetherlands|holland|amsterdam|rotterdam\b/i, 'NL'],
-  [/\bfrance|paris\b/i, 'FR'],
-  [/\bspain|madrid|barcelona\b/i, 'ES'],
-  [/\bitaly|milan|rome\b/i, 'IT'],
-  [/\bdenmark|copenhagen\b/i, 'DK'],
-  [/\bsweden|stockholm\b/i, 'SE'],
-  [/\bnorway|oslo\b/i, 'NO'],
-  [/\bpoland|warsaw\b/i, 'PL'],
-  [/\bczechia|czech republic|prague\b/i, 'CZ'],
-  [/\bswitzerland|zurich|geneva\b/i, 'CH'],
-  [/\bbelgium|brussels\b/i, 'BE'],
-  [/\bportugal|lisbon\b/i, 'PT'],
-  [/\bindia|bengaluru|bangalore|mumbai|delhi\b/i, 'IN'],
-  [/\bpakistan|karachi|lahore|islamabad\b/i, 'PK'],
-  [/\bunited arab emirates|uae|dubai|abu dhabi\b/i, 'AE'],
+  [/\bgermany|deutschland\b/i, 'DE'],
+  [/\bnetherlands\b/i, 'NL'],
+  [/\bfrance\b/i, 'FR'],
+  [/\bspain\b/i, 'ES'],
+  [/\bitaly\b/i, 'IT'],
+  [/\bdenmark\b/i, 'DK'],
+  [/\bsweden\b/i, 'SE'],
+  [/\bnorway\b/i, 'NO'],
+  [/\bpoland\b/i, 'PL'],
+  [/\b(czechia|czech republic)\b/i, 'CZ'],
+  [/\bswitzerland\b/i, 'CH'],
+  [/\bbelgium\b/i, 'BE'],
+  [/\bportugal\b/i, 'PT'],
+  [/\bindia\b/i, 'IN'],
+  [/\bpakistan\b/i, 'PK'],
+  [/\b(united arab emirates|uae)\b/i, 'AE'],
   [/\bsingapore\b/i, 'SG'],
   [/\bmexico\b/i, 'MX'],
-  [/\bbrazil|são paulo|sao paulo\b/i, 'BR'],
-  [/\bsouth africa|johannesburg|cape town\b/i, 'ZA'],
-  [/\bisrael|tel aviv\b/i, 'IL'],
+  [/\bbrazil\b/i, 'BR'],
+  [/\bsouth africa\b/i, 'ZA'],
+  [/\bisrael\b/i, 'IL'],
 ]
 
 /** PURE. The country a location names, when it names one we know. */
 export function regionFromLocation(location: string | null | undefined): CountryCode | null {
   const text = (location ?? '').trim()
   if (!text) return null
-  return COUNTRY.find(([pattern]) => pattern.test(text))?.[1] ?? null
+  // The last segment first: "Toronto, Ontario, Canada" ends in its country.
+  const last = text.split(',').at(-1) ?? ''
+  return (
+    COUNTRY.find(([pattern]) => pattern.test(last))?.[1] ??
+    COUNTRY.find(([pattern]) => pattern.test(text))?.[1] ??
+    null
+  )
 }
 
 const LINE_STATUS: Readonly<Record<string, PhoneStatus>> = {
@@ -201,11 +225,15 @@ export function checkPhone(raw: string, region: CountryCode | null): PhoneCheck 
     parsed = undefined
   }
   if (!parsed?.isValid()) {
-    // A national number with no known country cannot be judged — kept, unchecked.
-    if (!international.startsWith('+') && !region) {
-      return { status: 'valid_number', lineType: null, e164: null, region: null, checkedAt }
+    /*
+     * Only a number that states its own country (`+…`) can be judged invalid.
+     * A national one is checked against a country GUESSED from a location —
+     * a wrong guess must not drop a good number, so it is kept, unchecked.
+     */
+    if (!international.startsWith('+')) {
+      return { status: 'unverified', lineType: null, e164: null, region: region ?? null, checkedAt }
     }
-    return { status: 'invalid', lineType: null, e164: null, region: region ?? null, checkedAt }
+    return { status: 'invalid', lineType: null, e164: null, region: null, checkedAt }
   }
   const lineType = parsed.getType() ?? null
   return {
@@ -220,6 +248,9 @@ export function checkPhone(raw: string, region: CountryCode | null): PhoneCheck 
 /* -------------------------------------------------------------------------- *
  * Evidence
  * -------------------------------------------------------------------------- */
+
+/** Contacts checked at once. */
+const VERIFY_CONCURRENCY = 10
 
 const EMAIL_FIELDS = new Set(['work_email', 'company_contact_email'])
 const PHONE_FIELDS = new Set(['mobile_phone', 'company_contact_phone'])
@@ -253,7 +284,8 @@ export async function verifyContactEvidence(
   const drop = (reason: string) => { dropped[reason] = (dropped[reason] ?? 0) + 1 }
   const verdicts = new Map<NormalizedEvidence, { keep: boolean; status: string; verification: object }>()
 
-  await Promise.all(items.map(async (item) => {
+  // Bounded: DNS lookups (and any mailbox probes) for a large batch are not fired at once.
+  await inParallel(items, VERIFY_CONCURRENCY, async (item) => {
     const isEmail = EMAIL_FIELDS.has(item.field)
     const isPhone = PHONE_FIELDS.has(item.field)
     if (!isEmail && !isPhone) return
@@ -275,13 +307,22 @@ export async function verifyContactEvidence(
       const check = checkPhone(phone, regionFromLocation(locations.get(item.entityId)))
       verdicts.set(item, { keep: check.status !== 'invalid', status: check.status, verification: check })
     }
-  }))
+  })
 
-  // Person contacts' status companions follow their contact.
+  /*
+   * Person contacts' status companions follow their contact. ⚠️ BY ENTITY,
+   * NOT BY LAST WRITE: one person can have two emails in a batch. The status
+   * survives when ANY of them is kept, and says what the first kept one passed;
+   * it goes only when every one was dropped.
+   */
   const companion = new Map<string, { keep: boolean; status: string }>()
-  for (const [item, verdict] of verdicts) {
+  for (const item of items) {
+    const verdict = verdicts.get(item)
     const statusField = STATUS_FOR[item.field]
-    if (statusField) companion.set(`${item.entityId}:${statusField}`, verdict)
+    if (!verdict || !statusField) continue
+    const key = `${item.entityId}:${statusField}`
+    const current = companion.get(key)
+    if (!current || (!current.keep && verdict.keep)) companion.set(key, verdict)
   }
 
   const kept: NormalizedEvidence[] = []

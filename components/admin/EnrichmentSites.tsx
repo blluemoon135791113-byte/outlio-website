@@ -94,6 +94,9 @@ export function EnrichmentSites({ summary }: { summary: SitesSummary | null }) {
         <p className="text-sm text-ink">
           {summary.visits} pages · <Outcomes counts={summary.byOutcome} total={summary.visits} />
         </p>
+        {summary.truncated ? (
+          <p className="text-xs text-muted">More rows than one read covers — counts show the newest 20,000.</p>
+        ) : null}
         <ul className="space-y-1">
           {summary.byProvider.map((row) => (
             <li key={row.provider} className="flex flex-wrap justify-between gap-2 text-sm">

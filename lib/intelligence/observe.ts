@@ -166,7 +166,7 @@ async function flush(context: Context): Promise<void> {
   try {
     const db = createAdminClient()
     if (visits.length > 0) {
-      await db.from('enrichment_page_visits').insert(visits.map((visit) => ({
+      const { error } = await db.from('enrichment_page_visits').insert(visits.map((visit) => ({
         user_id: context.userId,
         research_run_id: context.runId,
         provider: visit.provider,
@@ -177,9 +177,10 @@ async function flush(context: Context): Promise<void> {
         latency_ms: visit.latencyMs ?? null,
         created_at: visit.at,
       })))
+      if (error) console.warn('[observe] visits not recorded', { code: error.code ?? 'unknown' })
     }
     if (searches.length > 0) {
-      await db.from('enrichment_searches').insert(searches.map((search) => ({
+      const { error } = await db.from('enrichment_searches').insert(searches.map((search) => ({
         user_id: context.userId,
         research_run_id: context.runId,
         purpose: search.purpose,
@@ -191,6 +192,7 @@ async function flush(context: Context): Promise<void> {
         engines: search.engines,
         created_at: search.at,
       })))
+      if (error) console.warn('[observe] searches not recorded', { code: error.code ?? 'unknown' })
     }
   } catch {
     // Observability is never worth failing a run over.

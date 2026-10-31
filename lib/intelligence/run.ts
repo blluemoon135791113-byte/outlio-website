@@ -630,7 +630,10 @@ async function persistDiscoveredDomains(
 
 /** The SMTP mailbox probe, only where outbound port 25 exists (a self-hosted worker). */
 function mailboxProbe(): MailboxProbe | null {
-  return process.env.SCOUT_SMTP_VERIFY === 'true' ? (email) => verifySmtpMailbox(email) : null
+  // Never on Vercel: outbound port 25 is blocked there, so a probe only burns the run's time.
+  return process.env.SCOUT_SMTP_VERIFY === 'true' && !process.env.VERCEL
+    ? (email) => verifySmtpMailbox(email)
+    : null
 }
 
 /** Verifies a phase's contacts; drops what fails. Counts only are logged. */
