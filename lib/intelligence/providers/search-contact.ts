@@ -20,6 +20,8 @@ import {
   type IdentitySubject,
 } from '@/lib/intelligence/identity'
 import { httpPageFetcher } from '@/lib/hubble/fetch/fetcher'
+import { recordFetch } from '@/lib/intelligence/observe'
+import { isPeopleSearchSource } from '@/lib/intelligence/source-policy'
 import type { PersonCard, Post } from '@/lib/hubble/extract/contacts'
 import { isFetchFailure, type FetchedPage, type SearchHit } from '@/lib/hubble/providers/types'
 import {
@@ -396,8 +398,13 @@ function openPage(url: string, deadlineAt: number): Promise<FetchedPage | null> 
   const cached = OPENED.get(url)
   if (cached && now - cached.at < OPENED_TTL_MS) return cached.page
   if (OPENED.size >= OPENED_MAX) OPENED.delete(OPENED.keys().next().value as string)
+  const startedAt = Date.now()
   const page = httpPageFetcher
     .fetchPage(url, { deadlineAt })
+    .then((result) => {
+      recordFetch('search-contact', 'search_result', result, startedAt)
+      return result
+    })
     // Kept bounded: up to 500 cached pages must not each hold megabytes.
     .then((result): FetchedPage | null => (isFetchFailure(result) ? null : {
       ...result,
@@ -502,11 +509,16 @@ async function publicSearch(
    */
   for (const query of queries.slice(0, 4)) {
     const hits = await serpSearch(query, {
+      purpose: /"@[^"]+"/.test(query) ? 'contact_domain_email' : `contact_${kind}`,
       limit: 8,
       deadlineAt,
       preferDomains: employer ? [employer] : [],
     })
-    for (const hit of hits) if (!collected.has(hit.url)) collected.set(hit.url, hit)
+    for (const hit of hits) {
+      // Never a source for a person's contact: consumer people-search records.
+      if (isPeopleSearchSource(hit.url) || collected.has(hit.url)) continue
+      collected.set(hit.url, hit)
+    }
 
     const finding = corroborated(fromSnippets(person, [...collected.values()]))
     if (finding) return finding

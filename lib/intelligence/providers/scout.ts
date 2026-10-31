@@ -41,6 +41,7 @@ import type {
 } from '@/lib/intelligence/types'
 import { inParallel, peoplePages, siteReadingList } from '@/lib/intelligence/site-pages'
 import { extractReadable } from '@/lib/hubble/extract/readable'
+import { pageKindOf, recordPageVisit } from '@/lib/intelligence/observe'
 import type { PersonCard } from '@/lib/hubble/extract/contacts'
 
 /** Head of page is enough; these are identity-bearing pages, not downloads. */
@@ -160,6 +161,14 @@ export function isPersonMailbox(email: string, fullName: string | null): boolean
   return candidates.has(local) || candidates.has(compactLocal)
 }
 
+function hostOfUrl(url: string): string {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return ''
+  }
+}
+
 /** Pages of one small company's site read at once: fast, without hammering it. */
 const HARVEST_CONCURRENCY = 4
 
@@ -229,9 +238,19 @@ export async function harvestWebsiteContacts(
   const urls = [homepageUrl, ...rest]
 
   texts.forEach((text, index) => {
-    if (!text) return
-    const structured = extractReadable(text, urls[index] ?? `https://${registrable}/`).structured
+    const url = urls[index] ?? `https://${registrable}/`
+    if (!text) {
+      recordPageVisit({ provider: 'scout', host: hostOfUrl(url), pageKind: pageKindOf(url), outcome: 'unreachable' })
+      return
+    }
+    const structured = extractReadable(text, url).structured
     people.push(...structured.people)
+    recordPageVisit({
+      provider: 'scout',
+      host: hostOfUrl(url),
+      pageKind: pageKindOf(url),
+      outcome: structured.emails.length > 0 || structured.people.some((person) => person.email) ? 'read_contact' : 'read_empty',
+    })
 
     // Raw-HTML matches and the reader's decoded ones ("jane [at] acme [dot] com").
     for (const email of new Set([...extractEmails(text), ...structured.emails.filter(isHarvestableEmail)])) {

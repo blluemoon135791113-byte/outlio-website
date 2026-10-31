@@ -38,6 +38,7 @@ import { rollupWorkspace } from '@/lib/crm/metrics'
 import { retryWaitingLeads } from '@/lib/crm/routing'
 import { TaskReminderDispatcher } from '@/lib/crm/reminders'
 import { claimAndProcessOne } from '@/lib/worker/process-job'
+import { pruneEnrichmentLogs } from '@/lib/intelligence/observe'
 import { purgeDuePages } from '@/lib/upload/page-lifecycle'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -396,6 +397,14 @@ export async function runTick(): Promise<TickResult> {
   await runJob(result, 'purge_uploaded_pages', async () => {
     const outcome = await purgeDuePages()
     return `${outcome.processed} parsed and ${outcome.expired} expired page(s) removed`
+  }, began)
+
+  // The enrichment visit and search logs are kept 30 days (migration 0159).
+  await runJob(result, 'prune_enrichment_logs', async () => {
+    const removed = await pruneEnrichmentLogs()
+    return removed === 'not_applied'
+      ? 'skipped: migration 0159 not applied yet'
+      : `${removed} enrichment log row(s) older than 30 days removed`
   }, began)
 
   /*

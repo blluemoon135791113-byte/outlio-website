@@ -290,7 +290,7 @@ export const searchWebResearchProvider: IntelligenceProvider<WebResearchOutput> 
     const output: WebResearchOutput = []
 
     for (const field of task.fields.filter((candidate) => WEB_FIELDS.includes(candidate))) {
-      const hits = await serpSearch(queryFor(field, company, task), { limit: 8 })
+      const hits = await serpSearch(queryFor(field, company, task), { limit: 8, purpose: 'web_research' })
       output.push({ field, documents: searchDocuments(hits) })
     }
 

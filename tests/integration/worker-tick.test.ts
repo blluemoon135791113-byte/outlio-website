@@ -69,6 +69,8 @@ const EXPECTED_JOBS = [
   'drain_extraction_queue',
   /* Removes saved pages once processed, and failed ones after 14 days. */
   'purge_uploaded_pages',
+  /* Drops enrichment visit and search logs older than 30 days (0159). */
+  'prune_enrichment_logs',
   'rollup_reporting',
 ] as const
 

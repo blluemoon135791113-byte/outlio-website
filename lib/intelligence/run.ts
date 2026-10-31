@@ -41,6 +41,9 @@ import { planToTasks } from '@/lib/intelligence/router'
 import { hasWebSearch } from '@/lib/search'
 import { McpLeadResearchClient } from '@/lib/intelligence/providers/mcp-research'
 import { externalContactTask } from '@/lib/intelligence/providers/search-company-contact'
+import { withRunObservation } from '@/lib/intelligence/observe'
+import { verifyEmail as verifySmtpMailbox } from '@/lib/intelligence/providers/scout'
+import { verifyContactEvidence, type MailboxProbe } from '@/lib/intelligence/verify-contact'
 import { preserveExplicitConstraints } from '@/lib/intelligence/filters'
 import {
   RESEARCH_FIELD_SPEC,
@@ -233,7 +236,8 @@ async function runMcpAcquisitionStage(input: {
         company: candidate.company,
         person: candidate.person,
       })
-      evidenceWritten += (await writeEvidence(input.userId, input.runId, evidence)).written
+      const verified = (await verifyContactEvidence(evidence, new Map(input.people.map((person) => [person.id, person.location])), { mailbox: mailboxProbe() })).kept
+      evidenceWritten += (await writeEvidence(input.userId, input.runId, verified)).written
       await persistMcpDocuments(input.userId, candidate.company.id, attempt.result).catch(() => ({
         pages: 0,
         chunks: 0,
@@ -624,6 +628,50 @@ async function persistDiscoveredDomains(
   }
 }
 
+/** The SMTP mailbox probe, only where outbound port 25 exists (a self-hosted worker). */
+function mailboxProbe(): MailboxProbe | null {
+  // Never on Vercel: outbound port 25 is blocked there, so a probe only burns the run's time.
+  return process.env.SCOUT_SMTP_VERIFY === 'true' && !process.env.VERCEL
+    ? (email) => verifySmtpMailbox(email)
+    : null
+}
+
+/** Verifies a phase's contacts; drops what fails. Counts only are logged. */
+async function vetReport(
+  report: ExecutionReport,
+  locations: ReadonlyMap<string, string | null>,
+): Promise<ExecutionReport> {
+  const options = { mailbox: mailboxProbe() }
+  const [evidence, bonus] = await Promise.all([
+    verifyContactEvidence(report.evidence, locations, options),
+    verifyContactEvidence(report.bonusEvidence, locations, options),
+  ])
+  const dropped = { ...evidence.dropped }
+  for (const [reason, count] of Object.entries(bonus.dropped)) dropped[reason] = (dropped[reason] ?? 0) + count
+  if (Object.keys(dropped).length > 0) console.info('[verify] contacts dropped', dropped)
+  return { ...report, evidence: evidence.kept, bonusEvidence: bonus.kept }
+}
+
+/** Where each lead is, and where each company is headquartered — for phone countries. */
+async function contactLocations(
+  userId: string,
+  companies: readonly CompanyEntity[],
+  people: readonly PersonEntity[],
+): Promise<Map<string, string | null>> {
+  const locations = new Map<string, string | null>(people.map((person) => [person.id, person.location]))
+  const ids = companies.map((company) => company.id)
+  const supabase = createAdminClient()
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await supabase
+      .from('companies')
+      .select('id, headquarters')
+      .eq('user_id', userId)
+      .in('id', ids.slice(i, i + 200))
+    for (const row of data ?? []) locations.set(row.id as string, (row.headquarters as string | null) ?? null)
+  }
+  return locations
+}
+
 /** Projects public company contacts for bounded list/export reads. */
 async function persistCompanyContacts(
   userId: string,
@@ -640,12 +688,12 @@ async function persistCompanyContacts(
     const patch = item.field === 'company_contact_email'
       ? {
           contact_email: typeof item.value.email === 'string' ? item.value.email : null,
-          contact_email_status: 'publicly_found',
+          contact_email_status: typeof item.value.status === 'string' ? item.value.status : 'publicly_found',
         }
       : item.field === 'company_contact_phone'
         ? {
             contact_phone: typeof item.value.phone === 'string' ? item.value.phone : null,
-            contact_phone_status: 'publicly_found',
+            contact_phone_status: typeof item.value.status === 'string' ? item.value.status : 'publicly_found',
           }
         : null
     if (!patch || (!patch.contact_email && !patch.contact_phone)) continue
@@ -732,8 +780,20 @@ async function companiesMissingContacts(
   return missing
 }
 
-/** Processes one claimed run end to end. Never throws for a provider problem. */
+/**
+ * Processes one claimed run end to end. Never throws for a provider problem.
+ *
+ * Every page read and search made inside is logged for /admin/enrichment
+ * (lib/intelligence/observe.ts) and written once when the run ends.
+ */
 export async function processResearchRun(
+  runId: string,
+  userId: string,
+): Promise<ResearchOutcome> {
+  return withRunObservation(userId, runId, () => processResearchRunObserved(runId, userId))
+}
+
+async function processResearchRunObserved(
   runId: string,
   userId: string,
 ): Promise<ResearchOutcome> {
@@ -800,6 +860,16 @@ export async function processResearchRun(
   }))
 
   const peopleEntities: PersonEntity[] = await loadPeople(userId, leadIds, plan)
+
+  /*
+   * ⚠️ EVERY CONTACT IS VERIFIED BEFORE IT IS STORED (lib/intelligence/verify-contact.ts).
+   * Each phase's report is vetted as it returns, so the evidence written, the
+   * company row's contact columns and the export all see only contacts that
+   * passed: an address on a domain with no mail server, or a number that is
+   * not a real one for its country, is dropped.
+   */
+  const locations = await contactLocations(userId, companyEntities, peopleEntities)
+  const vet = (report: ExecutionReport) => vetReport(report, locations)
 
   await supabase
     .from('research_runs')
@@ -897,7 +967,7 @@ export async function processResearchRun(
       : { tasks: [], cacheHits: 0, categories: [] as ToolCategory[] }
 
   const companyReport =
-    companyRouting.tasks.length > 0 ? await runChunk(companyRouting.tasks) : null
+    companyRouting.tasks.length > 0 ? await vet(await runChunk(companyRouting.tasks)) : null
 
   // ---- 5. persist with provenance (spec §16) -----------------------------
   let writtenTotal = mcpStage.evidenceWritten
@@ -961,7 +1031,7 @@ export async function processResearchRun(
         knowledge,
       })
       if (contactRouting.tasks.length > 0) {
-        companyContactReport = await runChunk(contactRouting.tasks)
+        companyContactReport = await vet(await runChunk(contactRouting.tasks))
         writtenTotal += (await writeEvidence(userId, runId, companyContactReport.evidence)).written
         writtenTotal += (await writeEvidence(userId, runId, companyContactReport.bonusEvidence)).written
         await recordToolCalls(userId, runId, companyContactReport.toolCalls)
@@ -1004,7 +1074,7 @@ export async function processResearchRun(
       )]
     })
     if (tasks.length > 0) {
-      externalContactReport = await runChunk(tasks.slice(0, EXTERNAL_CONTACT_TASKS_PER_RUN))
+      externalContactReport = await vet(await runChunk(tasks.slice(0, EXTERNAL_CONTACT_TASKS_PER_RUN)))
       writtenTotal += (await writeEvidence(userId, runId, externalContactReport.evidence)).written
       writtenTotal += (await writeEvidence(userId, runId, externalContactReport.bonusEvidence)).written
       await recordToolCalls(userId, runId, externalContactReport.toolCalls)
@@ -1038,7 +1108,7 @@ export async function processResearchRun(
     personCategories = personRouting.categories
 
     if (personRouting.tasks.length > 0) {
-      personReport = await runChunk(personRouting.tasks)
+      personReport = await vet(await runChunk(personRouting.tasks))
       writtenTotal += (await writeEvidence(userId, runId, personReport.evidence)).written
       writtenTotal += (await writeEvidence(userId, runId, personReport.bonusEvidence)).written
       await recordToolCalls(userId, runId, personReport.toolCalls)

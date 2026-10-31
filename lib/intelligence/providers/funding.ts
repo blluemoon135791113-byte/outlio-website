@@ -390,7 +390,7 @@ export const searchFundingProvider: IntelligenceProvider<FundingFacts | null> = 
 
   execute: async (task) => {
     const company = task.entity as CompanyEntity
-    const hits = await serpSearch(fundingQuery(task), {
+    const hits = await serpSearch(fundingQuery(task), { purpose: 'funding',
       limit: 10,
       timeRange: searchTimeRange(task.filters ?? {}),
     })

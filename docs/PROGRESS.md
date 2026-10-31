@@ -13772,3 +13772,51 @@ databases). This widens what a public page can yield.
 - A card's phone leaves page phones only when one card states it and the
   header/footer does not; decoded emails go last under the 20-address cap.
 - Opened-page cache: 100 pages, ≤100k post characters per page.
+
+## 2026-11-01 — Enrichment visibility, people-search block, contact verifier
+
+### Built
+
+1. **Page-visit and search logs** (migration **0159**, apply by hand):
+   `enrichment_page_visits` (host, page kind, provider, outcome, status, ms)
+   and `enrichment_searches` (purpose, shape, cached, hits, each engine's
+   outcome: hits/empty/failed/cooling_down/over_budget). No content, names or
+   query text. Recorded per research run via AsyncLocalStorage
+   (`lib/intelligence/observe.ts`), written once at the end; 30-day prune in
+   the tick (`prune_enrichment_logs`, skips cleanly until 0159 is applied).
+   Shown at `/admin/enrichment` → pages read by provider and outcome, sites read
+   most and their yield, sites refusing us, searches by purpose with empty rate
+   and per-engine outcomes, sites contacts came from.
+2. **People-search sites blocked** (`lib/intelligence/source-policy.ts`):
+   Spokeo, Whitepages, BeenVerified and ~40 more — refused by the page fetcher,
+   dropped from contact search results, and dropped at verification.
+   Contact-data directories (ContactOut, ZoomInfo) remain valid sources.
+3. **Contact verifier** (`lib/intelligence/verify-contact.ts`), run on every
+   phase's evidence before it is written: email syntax, disposable domain, DNS
+   MX (A fallback), optional SMTP mailbox (SCOUT_SMTP_VERIFY, self-hosted only);
+   phone validity and line type (libphonenumber max) with the country from the
+   lead location or company HQ. Failures are dropped with their status
+   companion; kept values carry `verification` and a verified status
+   (Email/Phone Status columns, companies.contact_*_status). Values unaltered.
+
+### Measured
+
+- Diffbot answered 12/12 people in every query wording; budgets never near
+  their caps — the 63% empty searches need the new log to diagnose.
+- Verifier on the 36 companies with stored contacts: 24 emails mail-server
+  verified, 2 unverified (DNS gave no answer); 25 phones valid (2 mobile,
+  3 toll-free, 20 national with unknown HQ country). None would be dropped.
+
+### Review (product-risk-reviewer: ship with conditions — fixed)
+
+- Status companions pair by entity: kept while ANY of that person's contacts
+  is kept, with the first kept one's status.
+- Phone country from country names only (no state codes or cities); a
+  national number that will not parse is kept `unverified`, never dropped —
+  only a `+`-prefixed invalid number is.
+- Email: IPv6-only domains count as deliverable; an SMTP refusal never drops
+  (anti-probe policies look identical); the probe never runs on Vercel.
+- Verification bounded at 10 contacts at once; log insert errors logged by
+  code; admin summary paged deterministically with a "truncated" flag.
+- Known and accepted: a dropped contact leaves no evidence, so the next run may
+  search for it again.

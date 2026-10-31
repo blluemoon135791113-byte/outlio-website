@@ -296,7 +296,7 @@ export const searchDomainDiscoveryProvider: IntelligenceProvider<DomainCandidate
 
   execute: async (task: ResearchTask) => {
     const company = task.entity as CompanyEntity
-    const hits = await serpSearch(`${company.name} official website`, { limit: 8 })
+    const hits = await serpSearch(`${company.name} official website`, { limit: 8, purpose: 'domain_discovery' })
     const picked = pickCompanyDomain(
       company.name,
       hits.map((hit) => ({

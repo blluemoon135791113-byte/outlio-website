@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { EnrichmentSites } from '@/components/admin/EnrichmentSites'
 import { LocalTime } from '@/components/ui/LocalTime'
+import { loadSitesSummary } from '@/lib/admin/enrichment-sites'
 import {
   loadEnrichmentFunnels,
   type JobFunnel,
@@ -121,14 +123,20 @@ function JobCard({ job }: { job: JobFunnel }) {
 export default async function AdminEnrichmentPage() {
   await requireAdmin()
 
-  let funnels: JobFunnel[] | null = null
-  try {
-    funnels = await loadEnrichmentFunnels(10)
-  } catch (error) {
-    console.error('[admin/enrichment] load failed', {
-      message: error instanceof Error ? error.message : 'unknown',
-    })
-  }
+  const [funnels, sites] = await Promise.all([
+    loadEnrichmentFunnels(10).catch((error: unknown) => {
+      console.error('[admin/enrichment] load failed', {
+        message: error instanceof Error ? error.message : 'unknown',
+      })
+      return null
+    }),
+    loadSitesSummary().catch((error: unknown) => {
+      console.error('[admin/enrichment] sites load failed', {
+        message: error instanceof Error ? error.message : 'unknown',
+      })
+      return null
+    }),
+  ])
 
   return (
     <div className="space-y-6">
@@ -156,6 +164,8 @@ export default async function AdminEnrichmentPage() {
       ) : (
         funnels.map((job) => <JobCard key={job.jobId} job={job} />)
       )}
+
+      <EnrichmentSites summary={sites} />
     </div>
   )
 }

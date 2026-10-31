@@ -135,6 +135,9 @@ export const TABLE_TENANCY: Record<string, Tenancy> = {
   research_evidence: 'user',
   research_runs: 'user',
   research_tool_calls: 'user',
+  // Admin-only to read; written by the service role per research run (0159).
+  enrichment_page_visits: 'user',
+  enrichment_searches: 'user',
   signup_device_claims: 'user',
   signup_identity_claims: 'user',
   signup_ip_claims: 'user',
