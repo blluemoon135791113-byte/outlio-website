@@ -39,7 +39,9 @@ import type {
   ResearchTask,
   SourceConfidence,
 } from '@/lib/intelligence/types'
-import { inParallel, siteReadingList } from '@/lib/intelligence/site-pages'
+import { inParallel, peoplePages, siteReadingList } from '@/lib/intelligence/site-pages'
+import { extractReadable } from '@/lib/hubble/extract/readable'
+import type { PersonCard } from '@/lib/hubble/extract/contacts'
 
 /** Head of page is enough; these are identity-bearing pages, not downloads. */
 const HARVEST_MAX_BYTES = 300_000
@@ -158,12 +160,20 @@ export function isPersonMailbox(email: string, fullName: string | null): boolean
   return candidates.has(local) || candidates.has(compactLocal)
 }
 
-async function fetchPageText(url: string): Promise<string | null> {
+/** Pages of one small company's site read at once: fast, without hammering it. */
+const HARVEST_CONCURRENCY = 4
+
+/** Both waves of a site harvest, inside the executor's 15 s provider budget. */
+const HARVEST_BUDGET_MS = 13_000
+
+async function fetchPageText(url: string, deadlineAt?: number): Promise<string | null> {
   try {
     const { text } = await requestTextWithMeta({
       url,
       method: 'GET',
-      timeoutMs: 8_000,
+      timeoutMs: deadlineAt === undefined ? 8_000 : Math.max(1, Math.min(8_000, deadlineAt - Date.now())),
+      deadlineAt,
+      maxRetries: 0,
       maxBytes: HARVEST_MAX_BYTES,
       truncateWhenTooLarge: true,
     })
@@ -178,34 +188,53 @@ export type HarvestedContacts = {
   onDomain: string[]
   /** Other real addresses published on the site (generic inboxes etc.). */
   other: string[]
+  /** People the site's pages describe, each with what the page states about them. */
+  people: PersonCard[]
 }
 
 /**
- * Reads the company's own contact-bearing pages.
+ * Reads the company's own pages: the homepage first, then its contact and
+ * about pages AND the team, people and press pages it links to, together.
  *
- * Deliberately bounded: five paths, one pass, no crawling — three at a time,
- * because five sequential 8s reads used to overrun the provider's 15s budget.
+ * ⚠️ A FOUNDER'S ADDRESS IS RARELY ON /contact. That page carries the shared
+ * inbox; the person is on "Team" or in a press release's media contact. The
+ * five fixed paths alone never reached either.
+ *
+ * Bounded: two waves (homepage, then the rest in parallel), 13 s in all, no
+ * crawling beyond the pages the homepage itself links to.
  */
 export async function harvestWebsiteContacts(
   domain: string,
-  fetched: (url: string) => Promise<string | null> = fetchPageText,
+  /** Injected page fetcher for tests; the live one shares the harvest deadline. */
+  fetched?: (url: string) => Promise<string | null>,
 ): Promise<HarvestedContacts> {
   const host = normalizeDomain(domain)
-  if (!host) return { onDomain: [], other: [] }
+  if (!host) return { onDomain: [], other: [], people: [] }
 
   const registrable = host.replace(/^www\./, '')
   const suffix = registrable.split('.').slice(-2).join('.')
+  const deadlineAt = Date.now() + HARVEST_BUDGET_MS
+  const read = fetched === undefined ? (url: string) => fetchPageText(url, deadlineAt) : fetched
 
   const onDomain = new Set<string>()
   const other = new Set<string>()
+  const people: PersonCard[] = []
 
-  const pages = siteReadingList(registrable)
-  const texts = await inParallel(pages, 3, (url) => fetched(url))
+  const fixed = siteReadingList(registrable)
+  const homepageUrl = fixed[0]
+  const homepage = homepageUrl ? await read(homepageUrl) : null
+  const homeLinks = homepage && homepageUrl ? extractReadable(homepage, homepageUrl).structured.interestingLinks : []
+  const rest = [...new Set([...fixed.slice(1), ...peoplePages(registrable, homeLinks)])]
+  const texts = [homepage, ...(Date.now() < deadlineAt ? await inParallel(rest, HARVEST_CONCURRENCY, (url) => read(url)) : [])]
+  const urls = [homepageUrl, ...rest]
 
-  for (const text of texts) {
-    if (!text) continue
+  texts.forEach((text, index) => {
+    if (!text) return
+    const structured = extractReadable(text, urls[index] ?? `https://${registrable}/`).structured
+    people.push(...structured.people)
 
-    for (const email of extractEmails(text)) {
+    // Raw-HTML matches and the reader's decoded ones ("jane [at] acme [dot] com").
+    for (const email of new Set([...extractEmails(text), ...structured.emails.filter(isHarvestableEmail)])) {
       const emailDomain = email.split('@')[1] ?? ''
       if (
         emailDomain === registrable ||
@@ -218,9 +247,30 @@ export async function harvestWebsiteContacts(
         other.add(email)
       }
     }
-  }
+  })
 
-  return { onDomain: [...onDomain], other: [...other] }
+  return { onDomain: [...onDomain], other: [...other], people }
+}
+
+/**
+ * PURE. The address a person card on the company's own site states for THIS
+ * person — the card's name is theirs, and the address is on the company's
+ * domain. A card is the page saying "this is Jamie, this is Jamie's email".
+ */
+export function cardEmailFor(
+  people: readonly PersonCard[],
+  fullName: string | null,
+  domain: string,
+): string | null {
+  const wanted = (fullName ?? '').normalize('NFKD').toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim()
+  if (!wanted) return null
+  const matching = people.filter((person) =>
+    person.email &&
+    person.name.normalize('NFKD').toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim() === wanted &&
+    (person.email.endsWith(`@${domain}`) || person.email.endsWith(`.${domain}`)))
+  // Two different addresses for one name on the company's site: no answer.
+  const addresses = new Set(matching.map((person) => person.email!.toLowerCase()))
+  return addresses.size === 1 ? [...addresses][0]! : null
 }
 
 // ---------------------------------------------------------------------------
@@ -478,7 +528,9 @@ export async function executeScout(
   const contacts = await harvestWebsiteContacts(effectiveDomain, options.fetched)
 
   let published: string | null =
-    contacts.onDomain.find((email) => isPersonMailbox(email, person.fullName)) ?? null
+    contacts.onDomain.find((email) => isPersonMailbox(email, person.fullName)) ??
+    cardEmailFor(contacts.people, person.fullName, effectiveDomain) ??
+    null
 
   // A published address ends the job. Probing pattern candidates afterwards
   // would spend somebody else's mail server on an answer we cannot use.

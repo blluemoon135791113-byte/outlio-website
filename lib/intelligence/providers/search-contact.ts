@@ -20,6 +20,7 @@ import {
   type IdentitySubject,
 } from '@/lib/intelligence/identity'
 import { httpPageFetcher } from '@/lib/hubble/fetch/fetcher'
+import type { PersonCard, Post } from '@/lib/hubble/extract/contacts'
 import { isFetchFailure, type FetchedPage, type SearchHit } from '@/lib/hubble/providers/types'
 import {
   isProviderMiss,
@@ -387,7 +388,7 @@ export function pageIdentity(
  */
 const OPENED = new Map<string, { at: number; page: Promise<FetchedPage | null> }>()
 const OPENED_TTL_MS = 10 * 60_000
-const OPENED_MAX = 500
+const OPENED_MAX = 100
 const OPENED_CONTENT_CHARS = 200_000
 
 function openPage(url: string, deadlineAt: number): Promise<FetchedPage | null> {
@@ -401,7 +402,10 @@ function openPage(url: string, deadlineAt: number): Promise<FetchedPage | null> 
     .then((result): FetchedPage | null => (isFetchFailure(result) ? null : {
       ...result,
       content: result.content.slice(0, OPENED_CONTENT_CHARS),
-      structured: { emails: pageEmails(result) },
+      structured: (() => {
+        const forum = pagePosts(result)
+        return { emails: pageEmails(result), people: pagePeople(result), posts: forum.posts, platform: forum.platform }
+      })(),
     }))
     .catch(() => null)
   OPENED.set(url, { at: now, page })
@@ -439,6 +443,18 @@ export function contactSearchQueries(
         `${quoted} contact phone`,
       ]
   return [...new Set(queries.map((query) => query.replace(/\s+/g, ' ').trim()))].slice(0, max)
+}
+
+/**
+ * PURE. The search for the employer's MAILBOX domain beside the person's name:
+ * `"@acme.com" "Jamie Rivera"`. It finds the pages that print addresses at
+ * that company — press releases, speaker lists, member directories, PDFs —
+ * which a name-and-company search ranks below profiles. Null without a domain.
+ */
+export function domainEmailQuery(person: PersonEntity): string | null {
+  const employer = domain(person.companyDomain)
+  const name = (person.fullName ?? '').replace(/"/g, '').trim()
+  return employer && name ? `"@${employer}" "${name}"` : null
 }
 
 export function contactSearchQuery(person: PersonEntity, kind: 'email' | 'phone'): string {
@@ -529,9 +545,23 @@ async function publicSearch(
     if (!identityAccepted(identity)) return
     identified = true
     masked ||= maskedPattern.test(page.content)
-    candidates.push(...(kind === 'email'
-      ? pageEmailCandidates(person, { ...page, emails: pageEmails(page) }, hit, identity)
-      : pagePhoneCandidates(person, page, hit, identity)))
+    const pageHit: SearchHit = { url: page.url, title: page.title ?? hit.title, snippet: null, publishedDate: null }
+    // What the page states about THIS person, card by card.
+    candidates.push(...cardCandidates(person, pagePeople(page), kind, pageHit, identity))
+    const forum = pagePosts(page)
+    if (kind === 'email') {
+      candidates.push(...pageEmailCandidates(person, { ...page, emails: pageEmails(page) }, hit, identity))
+    } else if (forum.platform) {
+      /*
+       * ⚠️ ON A FORUM, ONLY THE PERSON'S OWN POSTS. A reply that mentions
+       * "Jamie Rivera" and signs off with its author's number would put that
+       * number beside Jamie's name — the proximity rule cannot see whose post
+       * it is. Here a phone counts only from a post Jamie wrote.
+       */
+      candidates.push(...authoredPostPhones(person, forum.posts, pageHit, identity))
+    } else {
+      candidates.push(...pagePhoneCandidates(person, page, hit, identity))
+    }
   })
   if (!identified) return { miss: 'not_named' }
 
@@ -539,6 +569,122 @@ async function publicSearch(
   if (finding) return finding
   const reason: MissReason = masked ? 'masked_only' : 'named_no_contact'
   return { miss: reason }
+}
+
+/** The people `extractReadable` read off the page (JSON-LD, microdata, hCard). */
+function pagePeople(page: FetchedPage): PersonCard[] {
+  const people = (page.structured as { people?: unknown }).people
+  return Array.isArray(people) ? (people as PersonCard[]).slice(0, 200) : []
+}
+
+/** The forum posts `extractReadable` read off the page, with their authors. */
+function pagePosts(page: FetchedPage): { platform: string | null; posts: Post[] } {
+  const structured = page.structured as { platform?: unknown; posts?: unknown }
+  return {
+    platform: typeof structured.platform === 'string' ? structured.platform : null,
+    posts: Array.isArray(structured.posts) ? (structured.posts as Post[]).slice(0, 200) : [],
+  }
+}
+
+/** Whole-name equality, ignoring case, accents and honorifics' punctuation. */
+function sameName(left: string | null | undefined, right: string | null | undefined): boolean {
+  const norm = (value: string | null | undefined) =>
+    (value ?? '').normalize('NFKD').toLowerCase().replace(/[^\p{L}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+  const a = norm(left)
+  return a.length > 0 && a === norm(right)
+}
+
+/** Words in a job title that say nothing about which job it is. */
+const TITLE_FILLER = new Set(['and', 'of', 'the', 'at', 'a', 'senior', 'sr', 'jr', 'head', 'lead', 'chief', 'officer', 'co'])
+
+/**
+ * PURE. A card's title is compatible with the lead's: either is unknown, or
+ * they share a meaningful word ("Founder" and "Co-Founder & CEO"). A namesake
+ * on a speaker list is usually someone with a different job.
+ */
+export function titlesAgree(cardTitle: string | null, leadTitle: string | null): boolean {
+  const words = (value: string | null) => new Set(
+    (value ?? '').toLowerCase().split(/[^\p{L}]+/u).filter((word) => word.length >= 2 && !TITLE_FILLER.has(word))
+      .map((word) => (word === 'cofounder' ? 'founder' : word)),
+  )
+  const card = words(cardTitle)
+  const lead = words(leadTitle)
+  if (card.size === 0 || lead.size === 0) return true
+  return [...card].some((word) => lead.has(word))
+}
+
+/**
+ * PURE. Values a person card states for this person: the card's name is
+ * theirs. An email must still be at their employer when we know it — a card
+ * on a conference page can carry a personal address, and with a known
+ * employer that is too ambiguous to call a work email.
+ */
+export function cardCandidates(
+  person: PersonEntity,
+  people: readonly PersonCard[],
+  kind: ContactKind,
+  hit: SearchHit,
+  identity: IdentityMatch,
+): Candidate[] {
+  if (!identityAccepted(identity)) return []
+  const employerDomain = domain(person.companyDomain)
+  const values = new Set<string>()
+  for (const card of people) {
+    if (!sameName(card.name, person.fullName) || !titlesAgree(card.title, person.jobTitle)) continue
+    // Only at the employer's own domain: without one, a card's address could be anyone's.
+    if (kind === 'email' && card.email && employerDomain) {
+      const emailDomain = domain(card.email.split('@')[1] ?? '')
+      if (emailDomain === employerDomain || emailDomain.endsWith(`.${employerDomain}`)) {
+        values.add(card.email.toLowerCase())
+      }
+    }
+    if (kind === 'phone' && card.phone) {
+      const phone = normalizedPublicPhone(card.phone)
+      if (phone) values.add(phone)
+    }
+  }
+  // Two cards, two values, one name: a namesake on the same page. No answer.
+  if (values.size !== 1) return []
+  return [...values].map((value) => ({ value, hit, base: provenance(person, hit, identity) }))
+}
+
+/**
+ * PURE. One phone, from posts this person wrote — never from posts about them.
+ *
+ * ⚠️ A FORUM NAME IS SELF-ASSERTED. Anyone can register as "Jamie Rivera", so
+ * the post must ALSO name Jamie's employer (its name or domain), and the
+ * value is filed LOW: a person's own post is a weaker citation than a page
+ * an organisation published.
+ */
+export function authoredPostPhones(
+  person: PersonEntity,
+  posts: readonly Post[],
+  hit: SearchHit,
+  identity: IdentityMatch,
+): Candidate[] {
+  if (!identityAccepted(identity)) return []
+  const employer = (person.companyName ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  const employerDomain = domain(person.companyDomain)
+  const namesEmployer = (text: string) => {
+    const lower = text.toLowerCase()
+    return Boolean(
+      (employerDomain && lower.includes(employerDomain)) ||
+      (employer.length >= 4 && lower.replace(/[^\p{L}\p{N}]+/gu, ' ').includes(employer)),
+    )
+  }
+  const values = new Set<string>()
+  for (const post of posts) {
+    if (!sameName(post.author, person.fullName) || !namesEmployer(post.text)) continue
+    for (const raw of post.text.match(PHONE) ?? []) {
+      const phone = normalizedPublicPhone(raw)
+      if (phone) values.add(phone)
+    }
+  }
+  if (values.size !== 1) return []
+  return [...values].map((value) => {
+    const base = provenance(person, hit, identity)
+    return { value, hit, base: { ...base, sourceConfidence: 'low' as const, confidence: Math.min(base.confidence, 0.6) } }
+  })
 }
 
 /** The emails `extractReadable` pulled from the page's links and markup. */
@@ -619,7 +765,12 @@ export const searchContactEmailProvider: IntelligenceProvider<PublicContactFindi
   estimateCost: async () => 0,
   execute: async (task) => {
     const person = task.entity as PersonEntity
-    return publicSearch(person, contactSearchQueries(person, 'email', PHRASINGS_PER_CONTACT), 'email')
+    const byDomain = domainEmailQuery(person)
+    return publicSearch(
+      person,
+      [...contactSearchQueries(person, 'email', PHRASINGS_PER_CONTACT), ...(byDomain ? [byDomain] : [])],
+      'email',
+    )
   },
   normalize: (finding, task) => evidence(finding, task, 'email'),
 }

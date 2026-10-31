@@ -20,6 +20,7 @@ import 'server-only'
 import * as cheerio from 'cheerio'
 
 import { decodeCfEmail, decodeCfEmailHref } from '@/lib/hubble/extract/cfemail'
+import { readContactFacts, type PersonCard, type Post } from '@/lib/hubble/extract/contacts'
 
 /**
  * `telephone` and `email` a page states about itself in JSON-LD — Schema.org
@@ -84,6 +85,16 @@ export type StructuredFacts = {
   /** Pages worth reading next: careers, pricing, about, contact. */
   interestingLinks: { url: string; label: string; kind: string }[]
   metaDescription: string | null
+  /**
+   * People the page describes (JSON-LD, microdata, hCard), each with what it
+   * states about THEM. Their phones are deliberately not in `phones`: a
+   * founder's mobile on a team page is not the company's switchboard.
+   */
+  people: PersonCard[]
+  /** Forum software recognised, or null. */
+  platform: string | null
+  /** Forum/comment posts with their authors — attribution is per post. */
+  posts: Post[]
 }
 
 export type ReadablePage = {
@@ -96,8 +107,11 @@ export type ReadablePage = {
 const LINK_KINDS: Array<[string, RegExp]> = [
   ['careers', /careers?|jobs?|hiring|join-us|work-with-us|vacanc/i],
   ['pricing', /pricing|plans|subscribe/i],
-  ['about', /about|company|who-we-are|our-story|team|leadership/i],
+  // Before `team`: "contact-our-team" and "support-team" are contact pages.
   ['contact', /contact|get-in-touch|support/i],
+  // Before `about`: where a small company names its people, one by one.
+  ['team', /team|people|leadership|founders|staff|our-story|who-we-are/i],
+  ['about', /about|company/i],
   ['news', /news|press|blog|announcement|media/i],
   ['investors', /investors?|funding|shareholders/i],
 ]
@@ -241,6 +255,8 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
    * below is unchanged; only the contact lists gain these.
    */
   $('script, style, noscript, template').remove()
+  // People and forum posts, read while their names and authors are still here.
+  const facts = readContactFacts($, jsonLd)
   const chromeText = $(CHROME)
     .map((_, element) => $(element).text())
     .get()
@@ -263,13 +279,30 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
 
   const bodyText = text || $.root().text().replace(/\s+/g, ' ').trim()
 
-  emails.push(...declared.emails, ...(bodyText.match(EMAIL) ?? []), ...(chromeText.match(EMAIL) ?? []))
+  // Decoded and attribute addresses LAST: the list is capped, and what the
+  // page states plainly must never be crowded out by them.
+  emails.push(
+    ...declared.emails,
+    ...(bodyText.match(EMAIL) ?? []),
+    ...(chromeText.match(EMAIL) ?? []),
+    ...facts.emails,
+  )
   /*
    * Chrome and JSON-LD carry order numbers, tracking IDs and timestamps as
    * well as phones. From there, a run of bare digits is not trusted: a phone
    * is written with a leading `+` or with separators.
    */
   // Ten digits or more without a `+`: a footer address carries a ZIP+4 ("02908-3700").
+  /*
+   * A number one person card states is that person's, not the page's — unless
+   * the page ALSO prints it in its header or footer, where a company puts its
+   * own line, or several cards share it (a switchboard on every profile).
+   */
+  const cardDigits = facts.people.flatMap((person) => (person.phone ? [person.phone.replace(/\D/g, '')] : []))
+  const chromeDigits = new Set((chromeText.match(PHONE) ?? []).map((value) => value.replace(/\D/g, '')))
+  const personDigits = new Set(
+    cardDigits.filter((digits) => cardDigits.indexOf(digits) === cardDigits.lastIndexOf(digits) && !chromeDigits.has(digits)),
+  )
   const written = (value: string) =>
     /^\s*\+/.test(value) || (/\d[\s().-]+\d/.test(value) && value.replace(/\D/g, '').length >= 10)
   const phones = [
@@ -280,7 +313,8 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
   ].filter((value) => {
     const digits = value.replace(/\D/g, '')
     // Years, prices and IDs all match a loose phone pattern.
-    return digits.length >= 9 && digits.length <= 15
+    // A number the page states for one of its PEOPLE is that person's, not the page's.
+    return digits.length >= 9 && digits.length <= 15 && !personDigits.has(digits)
   })
 
   return {
@@ -297,6 +331,9 @@ export function extractReadable(html: string, baseUrl: string): ReadablePage {
       headings: uniq(headings, 40),
       interestingLinks: interestingLinks.slice(0, 40),
       metaDescription,
+      people: facts.people,
+      platform: facts.platform,
+      posts: facts.posts,
     },
   }
 }
