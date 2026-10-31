@@ -11,6 +11,7 @@ import {
   type DashboardFile,
   type DashboardJob,
 } from '@/lib/jobs/dashboard-types'
+import { loadEnrichingJobIds } from '@/lib/jobs/enrichment-state'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { claimAndProcessJob } from '@/lib/worker/process-job'
 import { getClayConnectionMetadata } from '@/lib/integrations/repository'
@@ -68,7 +69,9 @@ export default async function JobsPage() {
   ])
 
   const balanceRow = Array.isArray(balanceResult.data) ? balanceResult.data[0] : null
-  const jobs = (jobResult.data ?? []) as DashboardJob[]
+  // A parsed upload whose contacts are still being enriched is not finished yet.
+  const enriching = await loadEnrichingJobIds(supabase, userId)
+  const jobs = ((jobResult.data ?? []) as DashboardJob[]).map((job) => ({ ...job, enriching: enriching.has(job.id) }))
 
   // The upload callback normally starts this exact job. Loading the workspace
   // provides a second, atomic wake-up path if the serverless callback was cut

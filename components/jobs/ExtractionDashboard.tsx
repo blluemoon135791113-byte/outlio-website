@@ -2,6 +2,7 @@
 
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DeleteRunButton, RowExportMenu } from '@/components/jobs/RowActions'
+import { loadEnrichingJobIds } from '@/lib/jobs/enrichment-state'
 import { UploadForm } from '@/components/upload/UploadForm'
 import {
   deleteJobAction,
@@ -91,14 +92,15 @@ export function ExtractionDashboard({
   const refreshing = useRef(false)
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const hasActiveJobs = jobs.some(isActiveJob)
+  // Enrichment has no realtime channel, so a run being enriched keeps the fast poll.
+  const hasActiveJobs = jobs.some((job) => isActiveJob(job) || job.enriching)
 
   const refresh = useCallback(async () => {
     if (refreshing.current) return
     refreshing.current = true
 
     try {
-      const [jobResult, fileResult] = await Promise.all([
+      const [jobResult, fileResult, enriching] = await Promise.all([
         supabase
           .from('extraction_jobs')
           .select(DASHBOARD_JOB_SELECT)
@@ -112,13 +114,14 @@ export function ExtractionDashboard({
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(500),
+        loadEnrichingJobIds(supabase, userId),
       ])
 
       if (jobResult.error || fileResult.error) {
         throw new Error('Dashboard refresh failed')
       }
 
-      setJobs((jobResult.data ?? []) as DashboardJob[])
+      setJobs(((jobResult.data ?? []) as DashboardJob[]).map((job) => ({ ...job, enriching: enriching.has(job.id) })))
       setFiles((fileResult.data ?? []) as DashboardFile[])
       setRefreshError(null)
     } catch {
@@ -653,7 +656,7 @@ function JobHistoryRow({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={job.status} />
+            {job.enriching ? <EnrichingBadge /> : <StatusBadge status={job.status} />}
             <span className="text-sm font-semibold text-ink">{label}</span>
             <time dateTime={job.created_at} className="text-xs text-muted">
               {formatDate(job.created_at)}
@@ -688,7 +691,11 @@ function JobHistoryRow({
           ) : null}
         </div>
 
-        {!isActiveJob(job) ? (
+        {job.enriching ? (
+          <p className="max-w-xs text-right text-xs text-muted">
+            Finding contacts for these leads. Export and CRM unlock when it finishes.
+          </p>
+        ) : !isActiveJob(job) ? (
           <div className="flex flex-wrap items-center justify-end gap-2">
             <RowExportMenu
               jobId={job.id}
@@ -716,6 +723,15 @@ function JobHistoryRow({
         ) : null}
       </div>
     </li>
+  )
+}
+
+/** Parsed, still being enriched: not finished, so not "Completed". */
+function EnrichingBadge() {
+  return (
+    <span className="inline-flex rounded-full border border-accent/25 bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent">
+      Enriching
+    </span>
   )
 }
 

@@ -70,6 +70,9 @@ describe('the visit and search log', () => {
     expect(fetchOutcome({ url: 'u', code: 'http_error', detail: 'HTTP 403' })).toEqual({ outcome: 'refused', httpStatus: 403 })
     expect(fetchOutcome({ url: 'u', code: 'empty', detail: 'content is JavaScript-rendered' }).outcome).toBe('js_rendered')
     expect(fetchOutcome({ url: 'u', code: 'blocked', detail: 'people-search site' }).outcome).toBe('blocked')
+    // A page that does not exist, and a name that does not resolve, are not policy refusals.
+    expect(fetchOutcome({ url: 'u', code: 'http_error', detail: 'HTTP 404' })).toEqual({ outcome: 'not_found', httpStatus: 404 })
+    expect(fetchOutcome({ url: 'u', code: 'blocked', detail: 'gone.example does not resolve' }).outcome).toBe('unreachable')
     expect(fetchOutcome({ url: 'u', status: 200, title: null, content: 'x', method: 'fetch', structured: { emails: ['a@fabricated.example'] } }).outcome)
       .toBe('read_contact')
   })

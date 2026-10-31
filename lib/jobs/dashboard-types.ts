@@ -47,7 +47,15 @@ export type DashboardJob = Pick<
   | 'completed_at'
   | 'created_at'
   | 'updated_at'
-> & { trashed_at: string | null }
+> & {
+  trashed_at: string | null
+  /**
+   * Parsed, but automatic enrichment is still adding contacts. Not a column:
+   * derived from live research runs (lib/jobs/enrichment-state.ts). While
+   * true, the run is NOT finished and its export is not offered.
+   */
+  enriching?: boolean
+}
 
 export type DashboardFile = Pick<
   UploadedFileRow,

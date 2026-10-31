@@ -41,6 +41,8 @@ export const FOLLOW_UP_PAGES = 4
 export function followUpPages(
   host: string,
   links: readonly { url: string; kind: string }[],
+  /** Guess paths even when the homepage linked some: true when it could not be read. */
+  forceGuesses = false,
 ): string[] {
   const registrable = host.replace(/^www\./, '')
   const onSite = (url: string) => {
@@ -63,9 +65,15 @@ export function followUpPages(
     ...links.filter((link) => link.kind === 'team'),
   ].map((link) => link.url).filter(onSite)
 
+  /*
+   * ⚠️ GUESS ONLY WHEN THE SITE GAVE NO DIRECTIONS. Measured 2026-10-31: of
+   * 323 pages read for one upload, most "unreachable" ones were guessed paths
+   * that 404 on a site whose homepage had already linked its real pages.
+   */
+  const guesses = linked.length === 0 || forceGuesses ? siteReadingList(registrable).slice(1) : []
   const seen = new Set([homepage])
   const pages: string[] = []
-  for (const url of [...linked, ...siteReadingList(registrable).slice(1)]) {
+  for (const url of [...linked, ...guesses]) {
     const page = url.split('#')[0]!
     const id = key(page)
     if (seen.has(id)) continue
@@ -92,6 +100,8 @@ const PEOPLE_PATHS = ['/team', '/about', '/about-us'] as const
 export function peoplePages(
   host: string,
   links: readonly { url: string; kind: string }[],
+  /** Guess /team and /about even when the homepage linked pages: true when it could not be read. */
+  forceGuesses = false,
 ): string[] {
   const registrable = host.replace(/^www\./, '')
   const onSite = (url: string) => {
@@ -109,7 +119,10 @@ export function peoplePages(
 
   const seen = new Set<string>()
   const pages: string[] = []
-  for (const url of [...linked, ...PEOPLE_PATHS.map((path) => `https://${registrable}${path}/`)]) {
+  // The homepage linked its pages: none of them is a team page, so there is none to guess at.
+  const directions = links.some((link) => onSite(link.url))
+  const guesses = !directions || forceGuesses ? PEOPLE_PATHS.map((path) => `https://${registrable}${path}/`) : []
+  for (const url of [...linked, ...guesses]) {
     const page = url.split('#')[0]!
     const id = page.replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')
     if (seen.has(id)) continue

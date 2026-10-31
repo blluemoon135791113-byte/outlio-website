@@ -124,7 +124,7 @@ describe('the company team page', () => {
     expect(cardEmailFor(people, 'Sam Ortiz', 'fabricated.example')).toBeNull()
   })
 
-  it('picks linked team and press pages before guessed ones, on-site only', async () => {
+  it('reads linked team and press pages, on-site only, and guesses only without directions', async () => {
     const { peoplePages } = await import('@/lib/intelligence/site-pages')
     expect(peoplePages('fabricated.example', [
       { url: 'https://fabricated.example/our-people', kind: 'team' },
@@ -133,7 +133,12 @@ describe('the company team page', () => {
     ])).toEqual([
       'https://fabricated.example/our-people',
       'https://fabricated.example/press-kit',
+    ])
+    // A homepage that linked nothing on-site gives no directions: guess.
+    expect(peoplePages('fabricated.example', [])).toEqual([
       'https://fabricated.example/team/',
+      'https://fabricated.example/about/',
+      'https://fabricated.example/about-us/',
     ])
   })
 })

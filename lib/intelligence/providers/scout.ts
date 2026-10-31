@@ -30,7 +30,7 @@ import { promises as dns } from 'node:dns'
 import { connect as tcpConnect } from 'node:net'
 
 import { normalizeDomain } from '@/lib/companies/normalize'
-import { requestTextWithMeta, setHostPacing, USER_AGENT } from '@/lib/intelligence/http'
+import { ProviderHttpError, requestTextWithMeta, setHostPacing, USER_AGENT } from '@/lib/intelligence/http'
 import { expiresAtFor } from '@/lib/intelligence/ttl'
 import type {
   IntelligenceProvider,
@@ -39,7 +39,7 @@ import type {
   ResearchTask,
   SourceConfidence,
 } from '@/lib/intelligence/types'
-import { inParallel, peoplePages, siteReadingList } from '@/lib/intelligence/site-pages'
+import { followUpPages, inParallel, peoplePages, siteReadingList } from '@/lib/intelligence/site-pages'
 import { extractReadable } from '@/lib/hubble/extract/readable'
 import { pageKindOf, recordPageVisit } from '@/lib/intelligence/observe'
 import type { PersonCard } from '@/lib/hubble/extract/contacts'
@@ -176,6 +176,7 @@ const HARVEST_CONCURRENCY = 4
 const HARVEST_BUDGET_MS = 13_000
 
 async function fetchPageText(url: string, deadlineAt?: number): Promise<string | null> {
+  const startedAt = Date.now()
   try {
     const { text } = await requestTextWithMeta({
       url,
@@ -187,7 +188,18 @@ async function fetchPageText(url: string, deadlineAt?: number): Promise<string |
       truncateWhenTooLarge: true,
     })
     return text
-  } catch {
+  } catch (error) {
+    const status = error instanceof ProviderHttpError ? error.status : null
+    recordPageVisit({
+      provider: 'scout',
+      host: hostOfUrl(url),
+      pageKind: pageKindOf(url),
+      outcome: status === 404 || status === 410 ? 'not_found'
+        : status !== null && [401, 403, 429, 503].includes(status) ? 'refused'
+          : error instanceof ProviderHttpError && error.code === 'ERR_TIMEOUT' ? 'timeout' : 'unreachable',
+      httpStatus: status,
+      latencyMs: Date.now() - startedAt,
+    })
     return null
   }
 }
@@ -233,16 +245,19 @@ export async function harvestWebsiteContacts(
   const homepageUrl = fixed[0]
   const homepage = homepageUrl ? await read(homepageUrl) : null
   const homeLinks = homepage && homepageUrl ? extractReadable(homepage, homepageUrl).structured.interestingLinks : []
-  const rest = [...new Set([...fixed.slice(1), ...peoplePages(registrable, homeLinks)])]
+  // The homepage's own directions first; guessed paths only when it gave none.
+  const unreadHome = homepage === null
+  const rest = [...new Set([
+    ...followUpPages(registrable, homeLinks, unreadHome),
+    ...peoplePages(registrable, homeLinks, unreadHome),
+  ])]
   const texts = [homepage, ...(Date.now() < deadlineAt ? await inParallel(rest, HARVEST_CONCURRENCY, (url) => read(url)) : [])]
   const urls = [homepageUrl, ...rest]
 
   texts.forEach((text, index) => {
     const url = urls[index] ?? `https://${registrable}/`
-    if (!text) {
-      recordPageVisit({ provider: 'scout', host: hostOfUrl(url), pageKind: pageKindOf(url), outcome: 'unreachable' })
-      return
-    }
+    // A page that could not be read was logged by the live reader with its real status.
+    if (!text) return
     const structured = extractReadable(text, url).structured
     people.push(...structured.people)
     recordPageVisit({
