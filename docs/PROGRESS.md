@@ -13846,3 +13846,16 @@ the export after 30 minutes.
   (7 of 11 company phones had gone unchecked).
 - **A name that does not resolve is `unreachable`**, not `blocked` — `blocked`
   now means only our own policy (LinkedIn, people-search, private addresses).
+
+### Review (product-risk-reviewer: ship with conditions — fixed)
+
+- The hold is server-side everywhere: CSV download, Clay / Google Sheets /
+  HighLevel exports (lead selections traced to their uploads) and Send to CRM
+  all refuse while the upload is enriching (`isStillEnriching`).
+- The handoff between batches no longer flashes "Completed": a run that
+  finished under 2 minutes ago with batches still after it holds the upload.
+  Staleness is measured from a run's last update.
+- A run that cannot be read never locks the customer out (fail open).
+- `/team` and `/about` are still guessed unless the homepage links a team or
+  about page itself — linking only /careers or /blog is not a direction.
+- 0160 checks itself: exactly one outcome check, and it admits `not_found`.

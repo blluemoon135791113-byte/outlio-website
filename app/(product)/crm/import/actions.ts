@@ -12,6 +12,7 @@
  * ║  arriving with an existing contact list had no way in at all.             ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
+import { isStillEnriching, STILL_ENRICHING_MESSAGE } from '@/lib/jobs/enrichment-state'
 import { createHash } from 'node:crypto'
 
 import { revalidatePath } from 'next/cache'
@@ -331,6 +332,12 @@ export async function sendExtractionToCrm(
 
   const jobId = String(formData.get('jobId') ?? '')
   if (!jobId) return { ok: false, error: 'No extraction selected.' }
+
+  // A CRM fed mid-enrichment gets contacts with no email or phone. Server-side,
+  // because hiding the button is not access control (CLAUDE.md rule 8).
+  if (await isStillEnriching(createAdminClient(), ctx.userId, { jobId })) {
+    return { ok: false, error: STILL_ENRICHING_MESSAGE }
+  }
 
   /*
    * An ACCOUNT upload becomes accounts, not contacts — and creating accounts

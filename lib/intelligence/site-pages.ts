@@ -119,8 +119,9 @@ export function peoplePages(
 
   const seen = new Set<string>()
   const pages: string[] = []
-  // The homepage linked its pages: none of them is a team page, so there is none to guess at.
-  const directions = links.some((link) => onSite(link.url))
+  // Only a linked team or about page is a direction here: a homepage linking
+  // just /careers or /blog says nothing about where its people are.
+  const directions = links.some((link) => (link.kind === 'team' || link.kind === 'about') && onSite(link.url))
   const guesses = !directions || forceGuesses ? PEOPLE_PATHS.map((path) => `https://${registrable}${path}/`) : []
   for (const url of [...linked, ...guesses]) {
     const page = url.split('#')[0]!

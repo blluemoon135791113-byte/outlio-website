@@ -13,3 +13,25 @@ alter table public.enrichment_page_visits
   add constraint enrichment_page_visits_outcome_check check (outcome in (
     'read_contact', 'read_empty', 'refused', 'js_rendered', 'blocked',
     'not_found', 'unreachable', 'timeout', 'not_html', 'too_large'));
+
+-- Self-check: exactly one outcome check remains, and it admits not_found.
+do $$
+declare
+  checks int;
+begin
+  select count(*) into checks
+  from pg_constraint
+  where conrelid = 'public.enrichment_page_visits'::regclass
+    and contype = 'c'
+    and pg_get_constraintdef(oid) like '%outcome%';
+  if checks <> 1 then
+    raise exception '0160: expected one outcome check on enrichment_page_visits, found %', checks;
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'enrichment_page_visits_outcome_check'
+      and pg_get_constraintdef(oid) like '%not_found%'
+  ) then
+    raise exception '0160: the outcome check does not admit not_found';
+  end if;
+end $$;
