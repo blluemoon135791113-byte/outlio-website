@@ -91,7 +91,8 @@ describe('isPrivateAddress', () => {
   })
 
   it('allows genuine public addresses', () => {
-    for (const ip of ['8.8.8.8', '1.1.1.1', '93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946']) {
+    // 192.0.66.227 is WordPress VIP — public, despite sharing 192.0 with reserved /24s.
+    for (const ip of ['8.8.8.8', '1.1.1.1', '93.184.216.34', '192.0.66.227', '2606:2800:220:1:248:1893:25c8:1946']) {
       expect(isPrivateAddress(ip), ip).toBe(false)
     }
   })
@@ -100,5 +101,9 @@ describe('isPrivateAddress', () => {
     // `::ffff:169.254.169.254` reaches metadata by another name.
     expect(isPrivateAddress('::ffff:169.254.169.254')).toBe(true)
     expect(isPrivateAddress('::ffff:127.0.0.1')).toBe(true)
+  })
+
+  it('still refuses the reserved 192.0.0.0/24 and TEST-NET-1', () => {
+    for (const ip of ['192.0.0.8', '192.0.2.1']) expect(isPrivateAddress(ip), ip).toBe(true)
   })
 })
