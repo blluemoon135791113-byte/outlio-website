@@ -154,8 +154,31 @@ describe('phone verification', () => {
     // Country names only: no state code or city is mistaken for a country.
     expect(regionFromLocation('London, Ontario, Canada')).toBe('CA')
     expect(regionFromLocation('Berlin, DE')).toBeNull()
-    expect(regionFromLocation('Greater Boston')).toBeNull()
     expect(regionFromLocation('Mars')).toBeNull()
+  })
+
+  it('reads US metros and states that Sales Navigator writes without a country', async () => {
+    const { regionFromLocation } = await import('@/lib/intelligence/verify-contact')
+    expect(regionFromLocation('Greater Phoenix Area')).toBe('US')
+    expect(regionFromLocation('San Francisco Bay Area')).toBe('US')
+    expect(regionFromLocation('Detroit Metropolitan Area')).toBe('US')
+    expect(regionFromLocation('Greater Minneapolis-St. Paul Area')).toBe('US')
+    expect(regionFromLocation('Portland, Oregon Metropolitan Area')).toBe('US')
+    expect(regionFromLocation('Dallas-Fort Worth Metroplex')).toBe('US')
+    expect(regionFromLocation('Washington DC-Baltimore Area')).toBe('US')
+    expect(regionFromLocation('Greater Boston')).toBe('US')
+    expect(regionFromLocation('New Mexico')).toBe('US')
+    expect(regionFromLocation('Vienna, Vienna, Austria')).toBe('AT')
+    // A city outside metro phrasing is not a place; a country always wins.
+    expect(regionFromLocation('Phoenix')).toBeNull()
+    expect(regionFromLocation('Washington, England, United Kingdom')).toBe('GB')
+    expect(regionFromLocation('Richmond, British Columbia, Canada')).toBe('CA')
+    // Metros that share a name abroad are not guessed.
+    expect(regionFromLocation('Greater Manchester')).toBeNull()
+    expect(regionFromLocation('Greater Melbourne Area')).toBeNull()
+    expect(regionFromLocation('Greater Paris Metropolitan Region')).toBeNull()
+    expect(regionFromLocation('Tbilisi, Georgia')).toBeNull()
+    expect(regionFromLocation('Mexico City Metropolitan Area')).toBe('MX')
   })
 })
 

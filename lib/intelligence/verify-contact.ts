@@ -155,7 +155,7 @@ export type PhoneCheck = {
 /**
  * Country names as a Sales Navigator location writes them → ISO code.
  *
- * ⚠️ COUNTRY NAMES ONLY — no city, no two-letter state. "Berlin, DE" is not
+ * ⚠️ COUNTRY NAMES FIRST — no two-letter state, ever. "Berlin, DE" is not
  * Delaware, "London, Ontario" is not England, "Georgia" may be either. A
  * wrong guess is harmless only because a national number that will not parse
  * is kept as `unverified`, never dropped (checkPhone).
@@ -178,17 +178,61 @@ const COUNTRY: ReadonlyArray<[RegExp, CountryCode]> = [
   [/\bpoland\b/i, 'PL'],
   [/\b(czechia|czech republic)\b/i, 'CZ'],
   [/\bswitzerland\b/i, 'CH'],
+  [/\baustria\b/i, 'AT'],
   [/\bbelgium\b/i, 'BE'],
   [/\bportugal\b/i, 'PT'],
   [/\bindia\b/i, 'IN'],
   [/\bpakistan\b/i, 'PK'],
   [/\b(united arab emirates|uae)\b/i, 'AE'],
   [/\bsingapore\b/i, 'SG'],
-  [/\bmexico\b/i, 'MX'],
+  [/(?<!new )\bmexico\b/i, 'MX'],
   [/\bbrazil\b/i, 'BR'],
   [/\bsouth africa\b/i, 'ZA'],
   [/\bisrael\b/i, 'IL'],
 ]
+
+/**
+ * US state names in full. Read only after every country name has had its
+ * chance, so "Washington, England, United Kingdom" stays British.
+ * Georgia is left out — it is also a country.
+ */
+const US_STATE = new RegExp(
+  `\\b(${[
+    'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware',
+    'florida', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana',
+    'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri', 'montana',
+    'nebraska', 'nevada', 'new hampshire', 'new jersey', 'new mexico', 'new york', 'north carolina',
+    'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina',
+    'south dakota', 'tennessee', 'texas', 'utah', 'vermont', 'virginia', 'washington', 'west virginia',
+    'wisconsin', 'wyoming',
+  ].join('|')})\\b`,
+  'i',
+)
+
+/**
+ * Sales Navigator names US metros without a country: "Greater Phoenix Area",
+ * "San Francisco Bay Area", "Dallas-Fort Worth Metroplex". A core city counts
+ * only inside that metro phrasing — a bare "Phoenix" is not read as a place.
+ *
+ * ⚠️ Cities that are also a metro abroad are left out on purpose: Birmingham,
+ * Manchester, Cambridge, Melbourne, Perth, Paris, Athens, Durham, Kingston,
+ * London, Dublin. "Greater Manchester" is in England.
+ */
+const US_METRO_SHAPE = /^greater\b|\b(area|metropolitan|metroplex|metro|region)\b/i
+const US_METRO = new RegExp(
+  `\\b(${[
+    'new york city', 'los angeles', 'san francisco', 'silicon valley', 'chicago', 'dallas', 'fort worth',
+    'houston', 'washington dc', 'baltimore', 'miami', 'fort lauderdale',
+    'philadelphia', 'atlanta', 'boston', 'phoenix', 'seattle', 'minneapolis', 'st\\.? paul', 'san diego',
+    'denver', 'tampa', 'detroit', 'st\\.? louis', 'orlando', 'charlotte', 'san antonio', 'austin',
+    'sacramento', 'pittsburgh', 'las vegas', 'cincinnati', 'kansas city', 'columbus', 'cleveland',
+    'indianapolis', 'nashville', 'raleigh', 'salt lake city', 'milwaukee', 'jacksonville',
+    'oklahoma city', 'louisville', 'memphis', 'new orleans', 'hartford', 'buffalo', 'richmond',
+    'grand rapids', 'tucson', 'honolulu', 'omaha', 'albuquerque', 'boise', 'des moines', 'madison',
+    'knoxville', 'greenville', 'spokane', 'tulsa', 'el paso', 'chattanooga', 'reno', 'anchorage',
+  ].join('|')})\\b`,
+  'i',
+)
 
 /** PURE. The country a location names, when it names one we know. */
 export function regionFromLocation(location: string | null | undefined): CountryCode | null {
@@ -199,7 +243,7 @@ export function regionFromLocation(location: string | null | undefined): Country
   return (
     COUNTRY.find(([pattern]) => pattern.test(last))?.[1] ??
     COUNTRY.find(([pattern]) => pattern.test(text))?.[1] ??
-    null
+    (US_STATE.test(text) || (US_METRO_SHAPE.test(text) && US_METRO.test(text)) ? 'US' : null)
   )
 }
 
