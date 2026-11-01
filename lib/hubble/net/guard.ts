@@ -41,7 +41,7 @@ function isPrivateIpv4(ip: string): boolean {
   const parts = ip.split('.').map((part) => Number.parseInt(part, 10))
   if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) return true
 
-  const [a, b] = parts as [number, number, number, number]
+  const [a, b, c] = parts as [number, number, number, number]
 
   if (a === 0) return true // 0.0.0.0/8 "this network"
   if (a === 10) return true // private
@@ -50,7 +50,9 @@ function isPrivateIpv4(ip: string): boolean {
   if (a === 172 && b >= 16 && b <= 31) return true // private
   if (a === 192 && b === 168) return true // private
   if (a === 100 && b >= 64 && b <= 127) return true // carrier-grade NAT
-  if (a === 192 && b === 0) return true // IETF protocol assignments
+  // ⚠️ /24s, not 192.0.0.0/16: 192.0.64.0/18 is WordPress VIP, which hosts
+  // real company sites (measured 2026-11-01: gainwelltechnologies.com).
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return true // IETF assignments, TEST-NET-1
   if (a >= 224) return true // multicast, reserved, broadcast
 
   return false

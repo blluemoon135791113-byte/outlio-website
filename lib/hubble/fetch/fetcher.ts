@@ -101,6 +101,9 @@ export function needsBrowser(html: string, extractedChars: number): boolean {
   return /<div[^>]+id=["'](root|app|__next)["']/i.test(html) || /<app-root/i.test(html)
 }
 
+/** Redirect hops followed before a chain is treated as a loop. */
+const MAX_REDIRECT_HOPS = 4
+
 export class HttpPageFetcher implements PageFetcher {
   readonly name = 'fetch'
 
@@ -151,13 +154,7 @@ export class HttpPageFetcher implements PageFetcher {
         if (!location) {
           return { url: rawUrl, code: 'http_error', detail: 'redirect without location' }
         }
-        const next = new URL(location, verdict.url).toString()
-        // One hop only: a redirect chain is a loop waiting to happen.
-        const hop = await assertFetchable(next)
-        if (!hop.allowed || bannedHost(hop.host) || isPeopleSearchSource(hop.host)) {
-          return { url: rawUrl, code: 'blocked', detail: `redirect to ${hop.allowed ? hop.host : 'blocked target'}` }
-        }
-        return this.fetchOnce(hop.url, options)
+        return this.followRedirect(rawUrl, new URL(location, verdict.url).toString(), options, new Set([verdict.url]))
       }
 
       return this.finish(response, verdict.url)
@@ -173,22 +170,46 @@ export class HttpPageFetcher implements PageFetcher {
     }
   }
 
-  /** A single request with no further redirect following. */
-  private async fetchOnce(
-    url: string,
+  /**
+   * Screens and follows one redirect hop, then any after it.
+   *
+   * ⚠️ EVERY HOP IS SCREENED, AND THE CHAIN IS BOUNDED. `example.com` →
+   * `www.example.com` → `/home` is the ordinary shape of a company site, so
+   * one hop was not enough — measured 2026-11-01, healthnet.com read nothing.
+   * A hop to a private address, LinkedIn or a people-search site still stops
+   * the chain, and a repeated URL or a fifth hop ends it.
+   */
+  private async followRedirect(
+    rawUrl: string,
+    next: string,
     options: DeadlineOptions,
+    seen: Set<string>,
   ): Promise<FetchedPage | FetchFailure> {
+    const hop = await assertFetchable(next)
+    if (!hop.allowed || bannedHost(hop.host) || isPeopleSearchSource(hop.host)) {
+      return { url: rawUrl, code: 'blocked', detail: `redirect to ${hop.allowed ? hop.host : 'blocked target'}` }
+    }
+    if (seen.has(hop.url) || seen.size >= MAX_REDIRECT_HOPS) {
+      return { url: rawUrl, code: 'http_error', detail: 'redirect loop or chain too long' }
+    }
+    seen.add(hop.url)
+
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutFor(options))
     try {
-      const response = await fetch(url, {
+      const response = await fetch(hop.url, {
         signal: controller.signal,
         headers: { 'user-agent': USER_AGENT, accept: 'text/html' },
-        redirect: 'error',
+        redirect: 'manual',
       })
-      return this.finish(response, url)
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location')
+        if (!location) return { url: rawUrl, code: 'http_error', detail: 'redirect without location' }
+        return this.followRedirect(rawUrl, new URL(location, hop.url).toString(), options, seen)
+      }
+      return this.finish(response, hop.url)
     } catch {
-      return { url, code: 'http_error', detail: 'request failed after redirect' }
+      return { url: rawUrl, code: 'http_error', detail: 'request failed after redirect' }
     } finally {
       clearTimeout(timer)
     }
