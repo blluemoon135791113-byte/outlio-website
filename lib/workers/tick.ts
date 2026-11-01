@@ -41,6 +41,8 @@ import { claimAndProcessOne } from '@/lib/worker/process-job'
 import { pruneEnrichmentLogs } from '@/lib/intelligence/observe'
 import { purgeDuePages } from '@/lib/upload/page-lifecycle'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { recoverStalledUploads } from '@/lib/upload/recover'
+
 
 export type TickResult = {
   /** Per job: what it did, or why it could not. */
@@ -382,6 +384,19 @@ export async function runTick(): Promise<TickResult> {
    * called from nowhere until now. One per tick, deliberately: this is a
    * safety net, not the road, and extraction is the most expensive work here.
    */
+  /*
+   * ⚠️ AN UPLOAD MUST NOT WAIT FOR A PAGE VIEW. Starting a job is the
+   * browser's second request; when it never arrived the job sat in `uploaded`
+   * until someone opened the dashboard (measured 2026-10-31: 11 minutes).
+   * Every tick now starts uploads whose files have ALL arrived, through the
+   * same finalize the browser uses (lib/upload/recover.ts). Before the drain,
+   * so a recovered job is processed in this tick.
+   */
+  await runJob(result, 'recover_orphaned_uploads', async () => {
+    const outcome = await recoverStalledUploads()
+    return `${outcome.started} stalled upload(s) started, ${outcome.waiting} still receiving files, ${outcome.refused} refused`
+  }, began)
+
   await runJob(result, 'drain_extraction_queue', async () => {
     const outcome = await claimAndProcessOne(`tick-${began}`)
     if (!outcome) return 'queue empty'

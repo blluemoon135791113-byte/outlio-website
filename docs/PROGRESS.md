@@ -13859,3 +13859,29 @@ the export after 30 minutes.
 - `/team` and `/about` are still guessed unless the homepage links a team or
   about page itself — linking only /careers or /blog is not a direction.
 - 0160 checks itself: exactly one outcome check, and it admits `not_found`.
+
+## 2026-11-01 — An upload no longer waits for a page view to start
+
+**Bug (job 3cc3edda):** uploaded 20:54:23, started 21:05:32 — 11 minutes in
+`uploaded`. Starting a job is the browser's SECOND request (`finalizeUploadAction`
+after the storage upload); the upload counter for that window shows one request,
+so the start request never reached the server. The only fallback was the
+dashboard's `reap_orphaned_uploads` on page load, for uploads 10+ minutes old.
+
+**Fix:**
+- Tick job `recover_orphaned_uploads` (`lib/upload/recover.ts`) every run:
+  an upload unstarted for 2+ minutes is started ONLY when storage holds every
+  one of its files, and ONLY via `finalize_upload_job` — the browser's own
+  call, so the credit gate and the daily-limit metering apply. A job still
+  receiving files waits; one whose files never came is still failed by the
+  dashboard's `reap_orphaned_uploads` (10 min).
+  (First version swept by age through `reap_orphaned_uploads(5)`; review found
+  it could start a slow multi-file upload half-arrived and skip metering.)
+- `UploadForm`: each storage upload has a 2-minute limit; the start request is
+  retried 3 times (server-side idempotent); if all fail the user is told what
+  happens next — and is NOT told every file arrived when some timed out.
+
+**Same upload, report vs the run before (fixes from #71):** enrichment 151 s →
+89 s, pages read 323 → 219, "unreachable" 76 → 0 (31 were pages that do not
+exist), same contacts. Seven company phones remain unchecked: Sales Navigator
+locations such as "Greater Phoenix Area" name no country.

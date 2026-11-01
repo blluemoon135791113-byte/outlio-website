@@ -33,6 +33,22 @@ type FileState = {
 const inputClass =
   'w-full field px-3 py-2.5 text-sm text-ink'
 
+/** Longest a single file may take to upload before it is counted as failed. */
+const FILE_UPLOAD_TIMEOUT_MS = 120_000
+/** Tries for the start request; the server ignores repeats. */
+const FINALIZE_ATTEMPTS = 3
+
+/** Rejects if `work` has not settled within `ms`. */
+function withinTime<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out')), ms)
+    work.then(
+      (value) => { clearTimeout(timer); resolve(value) },
+      (error: unknown) => { clearTimeout(timer); reject(error) },
+    )
+  })
+}
+
 export function UploadForm({
   maxFiles,
   maxFileBytes,
@@ -104,11 +120,16 @@ export function UploadForm({
       if (!ticket || !item) continue
 
       try {
-        const { error } = await supabase.storage
-          .from(session.bucket)
-          .uploadToSignedUrl(ticket.path, ticket.token, item.file, {
-            contentType: 'text/html',
-          })
+        // A stalled upload never settles on its own, and the start request
+        // below waits for it — so it gets a time limit.
+        const { error } = await withinTime(
+          supabase.storage
+            .from(session.bucket)
+            .uploadToSignedUrl(ticket.path, ticket.token, item.file, {
+              contentType: 'text/html',
+            }),
+          FILE_UPLOAD_TIMEOUT_MS,
+        )
 
         if (error) throw error
 
@@ -125,7 +146,36 @@ export function UploadForm({
 
     setStatus('finalising')
 
-    const result = await finalizeUploadAction({ jobId: session.jobId, failedFileIds })
+    /*
+     * ⚠️ THE START REQUEST IS RETRIED, AND ITS FAILURE IS SHOWN. It used to be
+     * one unguarded call: if it threw (a network blip, a deploy mid-upload),
+     * the form stopped at "finalising" with no message and the job waited for
+     * the server's sweep. The server treats a repeat as a no-op, so retrying
+     * is safe; if every try fails, the files are already stored and the
+     * scheduler starts the job within minutes.
+     */
+    let result: Awaited<ReturnType<typeof finalizeUploadAction>> | null = null
+    for (let attempt = 0; attempt < FINALIZE_ATTEMPTS && !result; attempt += 1) {
+      try {
+        result = await finalizeUploadAction({ jobId: session.jobId, failedFileIds })
+      } catch {
+        if (attempt < FINALIZE_ATTEMPTS - 1) await new Promise((resolve) => setTimeout(resolve, 1_500 * (attempt + 1)))
+      }
+    }
+
+    if (!result) {
+      setStatus('error')
+      setMessage(
+        failedFileIds.length > 0
+          ? `${failedFileIds.length} file${failedFileIds.length === 1 ? '' : 's'} did not finish uploading, and we could not start processing from this page. Upload the run again to include ${failedFileIds.length === 1 ? 'it' : 'them'}.`
+          : 'Your files are uploaded, but we could not start processing from this page. It will start automatically within a few minutes — no need to upload again.',
+      )
+      setItems([])
+      setConsent(false)
+      onQueued?.()
+      router.refresh()
+      return
+    }
 
     if (!result.ok) {
       setStatus('error')

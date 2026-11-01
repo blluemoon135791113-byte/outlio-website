@@ -66,6 +66,8 @@ const EXPECTED_JOBS = [
    * exactly the shape of job that goes unnoticed when it stops running.
    */
   'retry_routing',
+  /* Starts uploads whose browser never sent the start request (5 min). */
+  'recover_orphaned_uploads',
   'drain_extraction_queue',
   /* Removes saved pages once processed, and failed ones after 14 days. */
   'purge_uploaded_pages',
