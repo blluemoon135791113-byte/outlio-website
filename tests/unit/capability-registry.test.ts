@@ -75,6 +75,8 @@ const SHIPPED_IDS = [
   'linkedin.draft',
   'linkedin.analysis',
   'email.analysis',
+  // Registry version 6, 2026-11-01 — the research agent in upload enrichment.
+  'enrichment.research',
 ] as const
 
 describe('the registry may only grow', () => {
