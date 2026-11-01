@@ -50,3 +50,37 @@ export function isPeopleSearchSource(hostOrUrl: string | null | undefined): bool
   }
   return false
 }
+
+/**
+ * Email-pattern and email-finder sites.
+ *
+ * ⚠️ NOT A SOURCE FOR THE RESEARCH AGENT, AND ONLY FOR IT. Their pages state
+ * an "email format" or a guessed, masked address — a pattern applied to a
+ * name is the fabrication CLAUDE.md rule 4 forbids. Measured 2026-11-01: the
+ * agent's first live run opened LeadIQ "email-format" pages for two leads, and
+ * a masked `*******@` address on a finder's profile page for another.
+ *
+ * Profile directories (ContactOut, ZoomInfo, RocketReach) stay readable, per
+ * the owner decision above; the deterministic providers are unchanged.
+ */
+export const CONTACT_DATA_VENDOR_DOMAINS: ReadonlySet<string> = new Set([
+  'leadiq.com', 'hunter.io', 'snov.io', 'voilanorbert.com', 'findymail.com', 'anymailfinder.com',
+  'skrapp.io', 'emailformat.com', 'email-format.com', 'getemail.io', 'muraena.ai', 'prospeo.io',
+  'getprospect.com', 'nymeria.io',
+])
+
+/** True when `hostOrUrl` is, or is under, a contact-data vendor's site. */
+export function isContactDataVendor(hostOrUrl: string | null | undefined): boolean {
+  if (!hostOrUrl) return false
+  let host = hostOrUrl.toLowerCase()
+  try {
+    if (host.includes('/')) host = new URL(host).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+  const labels = host.replace(/^www\./, '').split('.')
+  for (let i = 0; i < labels.length - 1; i += 1) {
+    if (CONTACT_DATA_VENDOR_DOMAINS.has(labels.slice(i).join('.'))) return true
+  }
+  return false
+}

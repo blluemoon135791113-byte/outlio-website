@@ -42,6 +42,14 @@ import { hasWebSearch } from '@/lib/search'
 import { McpLeadResearchClient } from '@/lib/intelligence/providers/mcp-research'
 import { externalContactTask } from '@/lib/intelligence/providers/search-company-contact'
 import { withRunObservation } from '@/lib/intelligence/observe'
+import { hubbleExecute } from '@/lib/hubble/execute'
+import {
+  liveAgentTools,
+  researchSubject,
+  type AgentOutcome,
+  type AgentSubject,
+  type ContactKind,
+} from '@/lib/intelligence/research-agent'
 import { verifyEmail as verifySmtpMailbox } from '@/lib/intelligence/providers/scout'
 import { regionFromLocation, verifyContactEvidence, type MailboxProbe } from '@/lib/intelligence/verify-contact'
 import { preserveExplicitConstraints } from '@/lib/intelligence/filters'
@@ -53,6 +61,7 @@ import {
   type PersonEntity,
   type ResearchField,
   type ResearchTask,
+  type ToolCallRecord,
   type ToolCategory,
 } from '@/lib/intelligence/types'
 import { getProfile, saveResults } from '@/lib/qualification/repository'
@@ -265,6 +274,226 @@ async function runMcpAcquisitionStage(input: {
   }
 
   return { evidenceWritten, externalCalls, gaps }
+}
+
+/**
+ * Leads the research agent works per run. One enrichment batch is 10 leads,
+ * so by default every lead still missing a contact gets the agent.
+ */
+function agentSubjectLimit(): number {
+  const value = Number(process.env.ENRICHMENT_AGENT_LEADS_PER_RUN ?? 10)
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 10
+}
+
+/** Leads researched at once. */
+const AGENT_CONCURRENCY = 3
+
+/**
+ * ⚠️ THE STAGE GETS WHAT IS LEFT OF THE BATCH'S WINDOW, NOT A FIXED SLICE.
+ *
+ * A batch is started only with 140 s left of its function (BATCH_RESERVE_MS
+ * in lib/worker/enrich-free.ts), and the phases before this stage have
+ * already spent part of it. The stage ends TAIL_MS before that window closes,
+ * so verification, writing and the derive step still fit; with less than
+ * AGENT_MIN_MS to work in, it does not start. A killed function would lose
+ * the stage's work and retry the batch, searches and model calls included.
+ */
+const RUN_WINDOW_MS = 140_000
+const AGENT_STAGE_MS = 90_000
+const AGENT_TAIL_MS = 20_000
+const AGENT_MIN_MS = 30_000
+
+/** A lead or company the agent researched recently is not researched again. */
+const AGENT_COOLDOWN_DAYS = 30
+
+const PERSON_KIND: Partial<Record<ResearchField, ContactKind>> = { work_email: 'person_email', mobile_phone: 'person_phone' }
+const COMPANY_KIND: Partial<Record<ResearchField, ContactKind>> = {
+  company_contact_email: 'company_email',
+  company_contact_phone: 'company_phone',
+}
+
+/** The workspace a user's metered calls are attributed to: their own, else their first. */
+async function workspaceFor(userId: string): Promise<string | null> {
+  const supabase = createAdminClient()
+  const { data: owned } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('owner_user_id', userId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+  if (owned?.[0]?.id) return owned[0].id as string
+  const { data: member } = await supabase
+    .from('workspace_memberships')
+    .select('workspace_id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+  return (member?.[0]?.workspace_id as string | undefined) ?? null
+}
+
+/**
+ * ⚠️ THE MODEL IN UPLOAD ENRICHMENT — after every deterministic pass, for
+ * what they left missing (lib/intelligence/research-agent.ts).
+ *
+ * The providers above are fixed phrasings and fixed page guesses; for a lead
+ * the public web names only in a press release or a speaker page they find
+ * nothing. The agent reads the lead's title, employer and location, decides
+ * where such a person is named, and follows the trail a few steps. What it
+ * proposes is checked by code against the page before it is stored, then
+ * verified like every other contact.
+ *
+ * One metered `hubbleExecute` call covers the stage. No workspace, no model,
+ * or a refused call: the stage records why and the run carries on with what
+ * the deterministic passes found.
+ */
+async function runResearchAgentStage(input: {
+  runId: string
+  userId: string
+  /** When the run's window closes; the stage ends AGENT_TAIL_MS before it. */
+  windowEndsAt: number
+  people: readonly PersonEntity[]
+  companies: readonly CompanyEntity[]
+  personFields: readonly ResearchField[]
+  companyFields: readonly ResearchField[]
+}): Promise<{ evidenceWritten: number; externalCalls: number }> {
+  const none = { evidenceWritten: 0, externalCalls: 0 }
+  const limit = agentSubjectLimit()
+  const personKinds = input.personFields.flatMap((field) => PERSON_KIND[field] ?? [])
+  const companyKinds = input.companyFields.flatMap((field) => COMPANY_KIND[field] ?? [])
+  if (limit === 0 || personKinds.length + companyKinds.length === 0 || !hasWebSearch()) return none
+
+  const knowledge = await readEvidence(input.userId, [
+    { entityType: 'person', entityIds: input.people.map((person) => person.id), fields: ['work_email', 'mobile_phone'] },
+    { entityType: 'company', entityIds: input.companies.map((company) => company.id), fields: ['company_contact_email', 'company_contact_phone'] },
+  ])
+  const missing = (type: 'person' | 'company', id: string, field: ResearchField) => !knowledgeHas(knowledge, type, id, field)
+  // ⚠️ A MISS IS NOT FREE TO REPEAT: every batch of every upload would
+  // otherwise re-research the same leads and the same company lines.
+  const recently = await searchedExternallyWithin(
+    input.userId,
+    [...input.people.map((person) => person.id), ...input.companies.map((company) => company.id)],
+    AGENT_COOLDOWN_DAYS,
+    'research-agent',
+  )
+  const companyById = new Map(input.companies.map((company) => [company.id, company]))
+  const companyClaimed = new Set<string>()
+  const subjects: AgentSubject[] = []
+
+  for (const person of input.people) {
+    if (subjects.length >= limit) break
+    const company = person.companyId ? companyById.get(person.companyId) : undefined
+    if (!person.fullName || !company || !(company.name || company.domain || person.companyName)) continue
+    if (recently.has(person.id)) continue
+    const subjectCompany: CompanyEntity = {
+      ...company,
+      name: company.name ?? person.companyName,
+      domain: company.domain ?? person.companyDomain,
+    }
+    const wants: ContactKind[] = [
+      ...(personKinds.includes('person_email') && missing('person', person.id, 'work_email') ? ['person_email' as const] : []),
+      ...(personKinds.includes('person_phone') && missing('person', person.id, 'mobile_phone') ? ['person_phone' as const] : []),
+    ]
+    // A company's line is looked for once per run, with its first lead.
+    if (!companyClaimed.has(company.id) && !recently.has(company.id)) {
+      if (companyKinds.includes('company_email') && missing('company', company.id, 'company_contact_email')) wants.push('company_email')
+      if (companyKinds.includes('company_phone') && missing('company', company.id, 'company_contact_phone')) wants.push('company_phone')
+      companyClaimed.add(company.id)
+    }
+    if (wants.length > 0) subjects.push({ person, company: subjectCompany, wants })
+  }
+  if (subjects.length === 0) return none
+
+  // A skipped stage is logged per lead, so the enrichment report says why.
+  const skipped = async (errorCode: string) => {
+    await recordToolCalls(input.userId, input.runId, subjects.map((subject) => ({
+      provider: 'research-agent',
+      tool: 'web_research' as const,
+      entityType: 'person' as const,
+      entityId: subject.person!.id,
+      status: 'skipped' as const,
+      latencyMs: 0,
+      estimatedCostMicros: 0,
+      errorCode,
+    })))
+    return none
+  }
+
+  const workspaceId = await workspaceFor(input.userId)
+  if (!workspaceId) return skipped('AGENT_NO_WORKSPACE')
+
+  const deadlineAt = Math.min(Date.now() + AGENT_STAGE_MS, input.windowEndsAt - AGENT_TAIL_MS)
+  if (deadlineAt - Date.now() < AGENT_MIN_MS) return skipped('AGENT_NO_TIME')
+
+  await updateResearchProgress(input.runId, input.userId, 'web_research', 0, subjects.length)
+  const tools = liveAgentTools(deadlineAt)
+  const outcomes = new Map<AgentSubject, AgentOutcome & { latencyMs: number }>()
+  const failed = new Set<AgentSubject>()
+
+  const metered = await hubbleExecute(
+    'enrichment.research',
+    { workspaceId, userId: input.userId, source: 'worker:upload-enrichment-agent' },
+    async ({ llm }) => {
+      if (!llm.isConfigured()) return 'not_configured' as const
+      let next = 0
+      let done = 0
+      await Promise.all(Array.from({ length: Math.min(AGENT_CONCURRENCY, subjects.length) }, async () => {
+        while (next < subjects.length) {
+          const subject = subjects[next++]!
+          const startedAt = Date.now()
+          // One lead failing must not discard what the others found.
+          try {
+            const outcome = await researchSubject(llm, subject, tools, deadlineAt)
+            outcomes.set(subject, { ...outcome, latencyMs: Date.now() - startedAt })
+          } catch {
+            failed.add(subject)
+          }
+          done += 1
+          await updateResearchProgress(input.runId, input.userId, 'web_research', done, subjects.length).catch(() => undefined)
+        }
+      }))
+      return 'ran' as const
+    },
+  )
+
+  if (!metered.ok) return skipped(metered.reason === 'no_credits' ? 'AGENT_NO_CREDITS' : `AGENT_${metered.code}`)
+  if (metered.result === 'not_configured') return skipped('AGENT_MODEL_NOT_CONFIGURED')
+
+  const found = [...outcomes.values()].flatMap((outcome) => outcome.evidence)
+  const locations = await contactLocations(input.userId, subjects.map((subject) => subject.company), input.people)
+  const verified = (await verifyContactEvidence(found, locations, { mailbox: mailboxProbe() })).kept
+  const evidenceWritten = (await writeEvidence(input.userId, input.runId, verified)).written
+  // Fill an empty company column only: the agent ran because it was empty.
+  await persistCompanyContacts(input.userId, verified, true)
+  const calls: ToolCallRecord[] = []
+  for (const [subject, outcome] of outcomes) {
+    const status = outcome.found.length > 0 ? ('success' as const) : outcome.stoppedBy === 'model_unavailable' ? ('error' as const) : ('not_found' as const)
+    const row = {
+      provider: 'research-agent',
+      tool: 'web_research' as const,
+      status,
+      latencyMs: outcome.latencyMs,
+      estimatedCostMicros: 0,
+      errorCode: outcome.found.length > 0 ? null : `AGENT_${outcome.stoppedBy.toUpperCase()}`,
+    }
+    calls.push({ ...row, entityType: 'person', entityId: subject.person!.id })
+    // The company's line was looked for too: its own row starts its cooldown.
+    if (subject.wants.some((kind) => kind.startsWith('company_'))) {
+      calls.push({ ...row, entityType: 'company', entityId: subject.company.id })
+    }
+  }
+  for (const subject of failed) {
+    calls.push({
+      provider: 'research-agent', tool: 'web_research', entityType: 'person', entityId: subject.person!.id,
+      status: 'error', latencyMs: 0, estimatedCostMicros: 0, errorCode: 'AGENT_FAILED',
+    })
+  }
+  await recordToolCalls(input.userId, input.runId, calls)
+
+  return {
+    evidenceWritten,
+    externalCalls: [...outcomes.values()].reduce((sum, outcome) => sum + outcome.searches + outcome.pagesOpened, 0),
+  }
 }
 
 export type ResearchOutcome = {
@@ -734,6 +963,7 @@ async function searchedExternallyWithin(
   userId: string,
   companyIds: readonly string[],
   days: number,
+  provider = 'search-company-contact',
 ): Promise<Set<string>> {
   const searched = new Set<string>()
   if (companyIds.length === 0) return searched
@@ -744,7 +974,7 @@ async function searchedExternallyWithin(
       .from('research_tool_calls')
       .select('entity_id')
       .eq('user_id', userId)
-      .eq('provider', 'search-company-contact')
+      .eq('provider', provider)
       .in('status', ['success', 'not_found'])
       .gte('created_at', since)
       .in('entity_id', companyIds.slice(i, i + 200))
@@ -807,6 +1037,7 @@ async function processResearchRunObserved(
   runId: string,
   userId: string,
 ): Promise<ResearchOutcome> {
+  const runStartedAt = Date.now()
   const supabase = createAdminClient()
   const startedAt = Date.now()
 
@@ -1133,6 +1364,22 @@ async function processResearchRunObserved(
     }
   }
 
+  // ---- 4c. the research agent, for what every pass above left missing ------
+  // Upload batches only: a console run is not chunked into 10 leads, and its
+  // window is the request's, not a batch's.
+  const agentStage = 'autoEnrich' in scope && scope.autoEnrich && (personFields.length > 0 || companyFields.length > 0)
+    ? await runResearchAgentStage({
+        runId,
+        userId,
+        windowEndsAt: runStartedAt + RUN_WINDOW_MS,
+        people: peopleForContact.length > 0 ? peopleForContact : await loadPeople(userId, leadIds, plan),
+        companies: companyEntities,
+        personFields,
+        companyFields,
+      })
+    : { evidenceWritten: 0, externalCalls: 0 }
+  writtenTotal += agentStage.evidenceWritten
+
   // ---- combined report ----------------------------------------------------
   const mergedResults = [
     ...(companyReport?.results ?? []),
@@ -1144,6 +1391,7 @@ async function processResearchRunObserved(
     results: mergedResults,
     externalCallCount:
       mcpStage.externalCalls +
+      agentStage.externalCalls +
       (companyReport?.externalCallCount ?? 0) +
       (companyContactReport?.externalCallCount ?? 0) +
       (externalContactReport?.externalCallCount ?? 0) +

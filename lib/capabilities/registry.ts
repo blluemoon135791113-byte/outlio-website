@@ -41,7 +41,8 @@ import type { Permission } from '@/lib/workspaces/permissions'
  * pin at all, and absent is not stale, so none of them starts warning.
  */
 /*
- * ⚠️ 5 SINCE 2026-09-19, when `email.analysis` landed. (4 was 2026-09-16, for
+ * ⚠️ 6 SINCE 2026-11-01, when `enrichment.research` landed (no stored flow
+ * carried a pin, checked). 5 was 2026-09-19, for `email.analysis`. (4 was 2026-09-16, for
  * `linkedin.draft` and `linkedin.analysis`.) A published flow definition pins
  * this number, so it only ever grows.
  *
@@ -58,7 +59,7 @@ import type { Permission } from '@/lib/workspaces/permissions'
  * for this bump — any flow published since then and pinned at 4 will show the
  * warning until it is re-saved.
  */
-export const CAPABILITY_REGISTRY_VERSION = 5
+export const CAPABILITY_REGISTRY_VERSION = 6
 
 export type CapabilityStatus = 'active' | 'deprecated'
 
@@ -222,6 +223,24 @@ export const CAPABILITIES = {
    * `hubble_calls` fill with real rows before a number is chosen.
    */
   'email.analysis': { isAi: true, credits: 0, label: 'Analyse email sequence performance', permission: 'email.campaign.view', status: 'active', since: 5 },
+
+  /*
+   * ⚠️ THE MODEL IN UPLOAD ENRICHMENT. Added at registry version 6, 2026-11-01.
+   *
+   * Upload enrichment was searches, page readers and code rules only; the model
+   * ran solely in Hubble. This is the research agent that now navigates for
+   * each lead's missing contacts — what to search, which result to open, which
+   * link to follow — and proposes values that code then checks on the page.
+   *
+   * One metered call per enrichment batch, not per lead. Priced 0 on
+   * DECISION-16's standing rule: meter it, charge nothing, let `hubble_calls`
+   * fill with real rows before a number is chosen. The batch itself is already
+   * paid for by the enrichment allowance.
+   *
+   * Checked before bumping: the five `flow_versions` rows in production carry
+   * no registry pin, so none of them starts warning.
+   */
+  'enrichment.research': { isAi: true, credits: 0, label: 'Research contact details for uploaded leads', permission: 'hubble.use', status: 'active', since: 6 },
 } as const satisfies Record<string, Capability>
 
 export type CapabilityId = keyof typeof CAPABILITIES
